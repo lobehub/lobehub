@@ -1,3 +1,4 @@
+import { DEFAULT_TOOL_RESULT_MAX_LENGTH, truncateToolResult } from '@lobechat/prompts/toolResult';
 import { type ChatToolPayload } from '@lobechat/types';
 import { isLocalOrPrivateUrl, safeParseJSON } from '@lobechat/utils';
 import debug from 'debug';
@@ -14,18 +15,17 @@ import {
   getConnectorToolPermission,
 } from '@/libs/mcp/connectorPermissionCheck';
 import { deviceGateway } from '@/server/services/deviceGateway';
+import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
+import { resolveDeviceDispatchAuthorizationFailure } from '@/server/services/deviceGateway/dispatchAuthorization';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { contentBlocksToString } from '@/server/services/mcp/contentProcessor';
-import {
-  DEFAULT_TOOL_RESULT_MAX_LENGTH,
-  truncateToolResult,
-} from '@/server/utils/truncateToolResult';
 
 import { DiscoverService } from '../discover';
 import { type MCPService } from '../mcp';
 import { type BuiltinToolsExecutor } from './builtin';
-import { classifyToolError } from './errorClassification';
+import { classifyToolError, getToolAccessDeniedError } from './errorClassification';
 import { resolveRunWorkspaceId } from './serverRuntimes/resolveWorkspaceScope';
+import { withoutDeviceReplay } from './serverRuntimes/withoutDeviceReplay';
 import {
   type ToolExecutionContext,
   type ToolExecutionResult,
@@ -39,16 +39,33 @@ interface ToolExecutionServiceDeps {
   mcpService: MCPService;
 }
 
+/**
+ * Hard bound on the `error.message` of a failed tool call. The (already
+ * truncated) `content` is what the LLM reads; the error is metadata, so it
+ * never needs the full payload — and an unbounded one is dangerous: a tool
+ * that fails with megabytes of output (e.g. `rm -rf` on a read-only sandbox
+ * FS, one `cannot remove` line per file) rides the step's `nextContext` into
+ * the QStash publish body and blows the provider's 10 MB message quota, which
+ * fails the whole operation at the step boundary instead of just that one tool
+ * call. Deliberately NOT subject to `skipResultTruncation` — that opt-out is
+ * about the LLM context budget, this is a transport safety bound.
+ */
+const TOOL_ERROR_MESSAGE_MAX_LENGTH = 4000;
+
+const clampErrorMessage = (message: string | undefined): string | undefined =>
+  message === undefined ? undefined : truncateToolResult(message, TOOL_ERROR_MESSAGE_MAX_LENGTH);
+
 const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
   const normalized = classifyToolError(error || fallbackMessage);
-  const message = fallbackMessage || normalized.message;
+  // Classification reads the raw error above; only the carried copy is clamped.
+  const message = clampErrorMessage(fallbackMessage || normalized.message);
 
   if (error && typeof error === 'object') {
     if (error instanceof Error) {
       return {
         code: normalized.code,
         kind: normalized.kind,
-        message: error.message || message,
+        message: clampErrorMessage(error.message) || message,
         name: error.name,
       };
     }
@@ -58,16 +75,52 @@ const normalizeExecutionError = (error: unknown, fallbackMessage: string) => {
     return {
       ...plainError,
       code: (plainError.code as string | undefined) || normalized.code,
-      kind: normalized.kind,
-      message: (plainError.message as string | undefined) || message,
+      // A runtime may know that side effects already happened; retry keywords
+      // must not override its explicit refusal to replay the operation.
+      kind: plainError.kind === 'stop' ? 'stop' : normalized.kind,
+      message: clampErrorMessage(plainError.message as string | undefined) || message,
     };
   }
 
   if (typeof error === 'string') {
-    return { code: normalized.code, kind: normalized.kind, message: error };
+    return { code: normalized.code, kind: normalized.kind, message: clampErrorMessage(error) };
   }
 
   return { code: normalized.code, kind: normalized.kind, message };
+};
+
+/**
+ * Readable text for a thrown tool failure. Model runtimes reject with plain
+ * objects (e.g. `{ errorType: 'InsufficientBudgetForModel', error: { message } }`)
+ * that have no top-level `message`; reading only `.message` turned those into
+ * an undefined tool result, which the model then saw as `<empty_content>`.
+ */
+const getThrownErrorText = (error: unknown): string => {
+  if (typeof error === 'string') return error;
+  if (error instanceof Error) return error.message || error.name;
+  if (!error || typeof error !== 'object') return String(error);
+
+  const raw = error as {
+    error?: { message?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+    type?: unknown;
+  };
+  const message = [raw.message, raw.error?.message].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+  const errorType = [raw.errorType, raw.type].find(
+    (value): value is string => typeof value === 'string' && value.length > 0,
+  );
+
+  if (message && errorType) return `${errorType}: ${message}`;
+  if (message || errorType) return (message || errorType)!;
+
+  try {
+    return JSON.stringify(error);
+  } catch {
+    return 'Unknown tool execution error';
+  }
 };
 
 export class ToolExecutionService {
@@ -129,6 +182,13 @@ export class ToolExecutionService {
 
       const executionTime = Date.now() - startTime;
 
+      const denial = !data.success
+        ? getToolAccessDeniedError(data.errorData ?? data.error, data.content)
+        : undefined;
+      if (denial) {
+        data = { ...data, content: JSON.stringify({ error: denial }), error: denial };
+      }
+
       // Truncate result content to prevent context overflow
       // Use agent-specific config if provided, otherwise use default
       const truncatedContent = context.skipResultTruncation
@@ -152,7 +212,7 @@ export class ToolExecutionService {
         return {
           ...data,
           content: truncatedContent,
-          error: normalizeExecutionError(data.error, data.content),
+          error: normalizeExecutionError(data.errorData ?? data.error, data.content),
           executionTime,
         };
       }
@@ -167,11 +227,13 @@ export class ToolExecutionService {
     } catch (error) {
       const executionTime = Date.now() - startTime;
       log('Error executing tool %s:%s: %O', identifier, apiName, error);
-      const errorMessage = (error as Error).message;
+      const errorMessage = getThrownErrorText(error);
+      const denial = getToolAccessDeniedError(error, errorMessage);
+      const content = denial ? JSON.stringify({ error: denial }) : errorMessage;
 
       return {
-        content: context.skipResultTruncation ? errorMessage : truncateToolResult(errorMessage),
-        error: normalizeExecutionError(error, errorMessage),
+        content: context.skipResultTruncation ? content : truncateToolResult(content),
+        error: denial || normalizeExecutionError(error, errorMessage),
         executionTime,
         success: false,
       };
@@ -246,7 +308,7 @@ export class ToolExecutionService {
           : undefined;
         if (!tunnelTarget) {
           log('Device-only MCP %s:%s has no reachable device — failing fast', identifier, apiName);
-          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online device was found to run it — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
+          const message = `MCP server '${identifier}' only your own machine can reach (stdio or local network). No online LobeHub desktop app was found to run it (a device connected only through the \`lh connect\` CLI cannot run MCP servers) — open the LobeHub desktop app on the machine that hosts this MCP server, then retry.`;
           return {
             content: message,
             error: { code: 'MCP_DEVICE_UNAVAILABLE', message },
@@ -308,7 +370,18 @@ export class ToolExecutionService {
     // do (respects a personal-scope active device, recovers the agent's
     // workspace when the run context lost it).
     const workspaceId = await resolveRunWorkspaceId(context);
-    if (context.activeDeviceId) return { deviceId: context.activeDeviceId, workspaceId };
+    if (context.activeDeviceId) {
+      // Only the desktop app handles `mcp` tool calls; a device whose only
+      // live connection is `lh connect` answers them with `Unknown tool API`.
+      // Such an active device is skipped: personal runs fall through to the
+      // newest desktop device below, workspace runs fail closed.
+      const clientKind =
+        context.userId !== undefined
+          ? await resolveDeviceClientKind(context.userId, context.activeDeviceId, workspaceId)
+          : 'unknown';
+      if (clientKind !== 'cli-only') return { deviceId: context.activeDeviceId, workspaceId };
+      log('Active device %s is CLI-only; not tunneling MCP to it', context.activeDeviceId);
+    }
     // The implicit fallback is PERSONAL-scope only. In a workspace run the
     // connector may have been authorized by ANOTHER member, and tunneling its
     // params (stdio env / HTTP auth) to the caller's own newest device would
@@ -354,6 +427,21 @@ export class ToolExecutionService {
     target: { deviceId: string; workspaceId?: string },
   ): Promise<ToolExecutionResult> {
     const { identifier, apiName, arguments: args } = payload;
+
+    const authorizationError = await resolveDeviceDispatchAuthorizationFailure(
+      context.serverDB,
+      context.userId!,
+      target.deviceId,
+      target.workspaceId,
+    );
+    if (authorizationError) {
+      return {
+        content: 'The workspace device is no longer registered or visible for this run.',
+        error: 'DEVICE_NOT_FOUND',
+        errorData: authorizationError,
+        success: false,
+      };
+    }
 
     log(
       'Executing %s MCP tool via device: %s:%s (device=%s, workspace=%s)',
@@ -404,14 +492,17 @@ export class ToolExecutionService {
     );
 
     if (!result.success) {
-      return {
+      // The device may already be running the call, so never let the retry
+      // classifier replay it (see withoutDeviceReplay).
+      return withoutDeviceReplay({
         content: result.content,
-        error: {
+        error: result.errorData ?? {
           code: 'MCP_DEVICE_EXECUTION_ERROR',
           message: result.error || result.content,
         },
+        errorData: result.errorData,
         success: false,
-      };
+      });
     }
 
     return {

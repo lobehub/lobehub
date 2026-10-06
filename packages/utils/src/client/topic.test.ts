@@ -309,6 +309,142 @@ describe('working directory topic helpers', () => {
     });
   });
 
+  /** @example Identical basenames expose only the distinguishing suffix, retaining membership. */
+  it('disambiguates duplicate project names without changing group identity or topic order', () => {
+    // ROOT CAUSE:
+    //
+    // groupTopicsByProject used only the final path segment for each title.
+    // Separate IDs therefore rendered as the same "lobehub" in GroupedAccordion.
+    // Expanding colliding names to a unique path suffix fixes the visible labels
+    // while preserving the source-path IDs and topic sorting.
+    const gitPath = '/Users/me/Git/lobehub/lobehub';
+    const workPath = '/Users/me/work/lobehub/lobehub';
+    const topics = [
+      createTopic('git-old', { workingDirectory: gitPath }, 1),
+      createTopic('work', { workingDirectory: workPath }, 3),
+      createTopic('git-new', { workingDirectory: gitPath }, 4),
+      createTopic('unique', { workingDirectory: '/Users/me/private/other' }, 2),
+      createTopic('none', undefined, 5),
+    ];
+
+    const result = groupTopicsByProject(topics, 'updatedAt');
+
+    /** @example The user's two checkouts keep their IDs, sorted children, and private ancestors hidden. */
+    expect(result).toEqual([
+      { children: [topics[2], topics[0]], id: `project:${gitPath}`, title: 'Git/lobehub/lobehub' },
+      { children: [topics[1]], id: `project:${workPath}`, title: 'work/lobehub/lobehub' },
+      { children: [topics[3]], id: 'project:/Users/me/private/other', title: 'other' },
+      { children: [topics[4]], id: 'no-project', title: undefined },
+    ]);
+    /** @example Reversing input does not change the labels or time-sorted groups. */
+    expect(groupTopicsByProject([...topics].reverse(), 'updatedAt')).toEqual(result);
+  });
+
+  /** @example A manager with 1,000 same-name projects retains unique labels and exact topic ownership. */
+  it('disambiguates a large project list without changing membership', () => {
+    // ROOT CAUSE:
+    //
+    // Each label previously split every other project's path, making the growing
+    // manager list quadratic. Shared suffix counts remove that repeated work;
+    // this case protects the resulting labels and membership at the reported scale.
+    const topics = Array.from({ length: 1000 }, (_, index) =>
+      createTopic(String(index), { workingDirectory: `/private/parent-${index}/repo` }, index),
+    );
+    const result = groupTopicsByProject(topics, 'updatedAt');
+
+    /** @example All 1,000 independently owned projects remain visible and distinguishable. */
+    expect(new Set(result.map(({ title }) => title)).size).toBe(1000);
+    /** @example Each label reveals only its distinguishing parent and keeps the original ID and child. */
+    expect(result).toEqual(
+      [...topics].reverse().map((topic) => ({
+        children: [topic],
+        id: `project:/private/parent-${topic.id}/repo`,
+        title: `parent-${topic.id}/repo`,
+      })),
+    );
+  });
+
+  /** @example A lone checkout keeps its basename even after a collision disappears. */
+  it('keeps a unique project name compact', () => {
+    const topics = [createTopic('single', { workingDirectory: '/Users/me/Git/lobehub/lobehub' })];
+
+    /** @example No parent path is exposed without another same-name project. */
+    expect(groupTopicsByProject(topics, 'createdAt')).toEqual([
+      { children: topics, id: 'project:/Users/me/Git/lobehub/lobehub', title: 'lobehub' },
+    ]);
+  });
+
+  /** @example Windows spelling remains part of identity; trailing separators retain existing normalization. */
+  it('retains case-sensitive path identities and normalizes trailing separators', () => {
+    const topics = [
+      createTopic('upper', { workingDirectory: 'C:/Work/repo/' }),
+      createTopic('lower', { workingDirectory: 'c:/work/repo' }),
+      createTopic('same', { workingDirectory: ' C:/Work/repo// ' }),
+    ];
+
+    /** @example Display suffixes distinguish parents while existing matching paths stay together. */
+    expect(groupTopicsByProject(topics, 'createdAt')).toEqual([
+      { children: [topics[0], topics[2]], id: 'project:C:/Work/repo', title: 'Work/repo' },
+      { children: [topics[1]], id: 'project:c:/work/repo', title: 'work/repo' },
+    ]);
+  });
+
+  /** @example Drive letters and UNC server names remain available when nearer ancestors collide. */
+  it('disambiguates Windows drives and remote shares', () => {
+    const paths = [
+      String.raw`C:\work\repo`,
+      'D:/work/repo',
+      String.raw`\\server-a\share\repo`,
+      String.raw`\\server-b\share\repo`,
+    ];
+    const topics = paths.map((path, index) =>
+      createTopic(String(index), { workingDirectory: path }),
+    );
+
+    /** @example Separators are consistent for display without altering path identity. */
+    expect(
+      groupTopicsByProject(topics, 'createdAt').map(({ id, title }) => ({ id, title })),
+    ).toEqual([
+      { id: `project:${paths[0]}`, title: 'C:/work/repo' },
+      { id: `project:${paths[1]}`, title: 'D:/work/repo' },
+      { id: `project:${paths[2]}`, title: 'server-a/share/repo' },
+      { id: `project:${paths[3]}`, title: 'server-b/share/repo' },
+    ]);
+  });
+
+  /** @example A path that is itself another path's suffix still has a distinct visible label. */
+  it('preserves raw path distinctions when no unique segment suffix exists', () => {
+    const paths = ['/repo', '/home/repo', 'home/repo', String.raw`home\repo`];
+    const topics = paths.map((path, index) =>
+      createTopic(String(index), { workingDirectory: path }),
+    );
+
+    /** @example The absolute root and separator spelling distinguish otherwise identical suffixes. */
+    expect(groupTopicsByProject(topics, 'createdAt').map((group) => group.title)).toEqual(paths);
+  });
+
+  /** @example Worktree locations must not determine the source project's display suffix. */
+  it('uses source repository paths when disambiguating worktree projects', () => {
+    const topics = [
+      createTopic('worktree', {
+        workingDirectory: '/tmp/checkout',
+        workingDirectoryConfig: {
+          git: { activeWorktree: '/tmp/checkout', branch: 'fix', isWorktree: true },
+          path: '/Git/repo',
+          repoType: 'git',
+        },
+      }),
+      createTopic('source', { workingDirectory: '/Git/repo' }),
+      createTopic('other', { workingDirectory: '/work/repo' }),
+    ];
+
+    /** @example The worktree stays with its source; only the two project labels expand. */
+    expect(groupTopicsByProject(topics, 'createdAt')).toEqual([
+      { children: [topics[0], topics[1]], id: 'project:/Git/repo', title: 'Git/repo' },
+      { children: [topics[2]], id: 'project:/work/repo', title: 'work/repo' },
+    ]);
+  });
+
   it('groups worktree topics under the source project', () => {
     const topics = [
       createTopic(

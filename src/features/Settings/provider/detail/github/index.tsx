@@ -51,7 +51,7 @@ const useProviderCard = (): ProviderItem => {
           </Markdown>
         ),
         label: t('github.personalAccessToken.title'),
-        name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
       },
     ],
   };

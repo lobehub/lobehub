@@ -1,3 +1,5 @@
+import { HTTPStatusError } from './errorType';
+
 const ERROR_BODY_SNIPPET_LIMIT = 200;
 
 const normalizeBodySnippet = (body: string) => body.replaceAll(/\s+/g, ' ').trim();
@@ -38,12 +40,13 @@ export const parseJSONResponse = async <T>(response: Response, provider: string)
 export const createHTTPStatusError = async (
   response: Response,
   provider: string,
-): Promise<Error> => {
+): Promise<HTTPStatusError> => {
   const bodySnippet = await getBodySnippet(response);
 
-  return new Error(
+  return new HTTPStatusError(
     bodySnippet
       ? `${provider} request failed with status ${response.status}: ${response.statusText}. Response: ${bodySnippet}`
       : `${provider} request failed with status ${response.status}: ${response.statusText}`,
+    response.status,
   );
 };

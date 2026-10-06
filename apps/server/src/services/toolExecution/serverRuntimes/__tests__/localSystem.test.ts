@@ -7,12 +7,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
 
-// Mock deviceGateway
 const mockExecuteToolCall = vi.fn();
-vi.mock('@/server/services/deviceGateway', () => ({
-  deviceGateway: {
-    executeToolCall: (...args: any[]) => mockExecuteToolCall(...args),
-  },
+vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
+  executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
+    mockExecuteToolCall(...args),
 }));
 
 // Import after mock setup
@@ -39,15 +37,57 @@ describe('localSystemRuntime', () => {
       );
     });
 
-    it('should throw when activeDeviceId is missing', () => {
+    it('should return a structured NO_ACTIVE_DEVICE result per API when activeDeviceId is missing', async () => {
       const context: ToolExecutionContext = {
-        toolManifestMap: {},
+        // Device-unrouted run WITH the picker still advertised: recovery via
+        // lobe-remote-device activation is possible.
+        toolManifestMap: { 'lobe-remote-device': {} as any },
         userId: 'user-1',
       };
 
-      expect(() => localSystemRuntime.factory(context)).toThrow(
-        'activeDeviceId is required for Local System device proxy execution',
-      );
+      const proxy = localSystemRuntime.factory(context) as Record<
+        string,
+        (args: any) => Promise<any>
+      >;
+
+      // Every manifest API is present (not a throw), and each returns the
+      // structured, recoverable error instead of an opaque failure.
+      for (const api of LocalSystemManifest.api) {
+        expect(proxy[api.name]).toBeDefined();
+        expect(typeof proxy[api.name]).toBe('function');
+      }
+
+      const result = await proxy[LocalSystemManifest.api[0].name]({});
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: 'NO_ACTIVE_DEVICE' });
+      expect(result.content).toContain('lobe-remote-device.listOnlineDevices');
+      expect(result.content).toContain('activateDevice');
+      expect(result.content).toContain('desktop application or cli');
+      // No device dispatch happened.
+      expect(mockExecuteToolCall).not.toHaveBeenCalled();
+    });
+
+    it('should point at user reconnection when the remote-device picker is not in the manifest', async () => {
+      const context: ToolExecutionContext = {
+        toolManifestMap: {
+          // Device-locked run: only local-system is present, the picker is
+          // physically stripped, so recovery via activation is impossible.
+          'lobe-local-system': {} as any,
+        },
+        userId: 'user-1',
+      };
+
+      const proxy = localSystemRuntime.factory(context) as Record<
+        string,
+        (args: any) => Promise<any>
+      >;
+      const result = await proxy[LocalSystemManifest.api[0].name]({});
+
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ code: 'NO_ACTIVE_DEVICE' });
+      expect(result.content).toContain('locked to a specific device');
+      expect(result.content).not.toContain('activateDevice');
     });
 
     it('should create a proxy with a function for each API in LocalSystemManifest', () => {
@@ -65,7 +105,7 @@ describe('localSystemRuntime', () => {
       }
     });
 
-    it('should call deviceGateway.executeToolCall with correct arguments when a proxy function is invoked', async () => {
+    it('should dispatch the authorized device tool call with correct arguments', async () => {
       const context: ToolExecutionContext = {
         activeDeviceId: 'device-1',
         operationId: 'op-1',

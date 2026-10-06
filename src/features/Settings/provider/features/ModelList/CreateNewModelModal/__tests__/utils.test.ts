@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
-import { hasDuplicateModelId } from '../utils';
+import { CUSTOM_MODEL_TYPES, hasDuplicateModelId } from '../utils';
+
+describe('CUSTOM_MODEL_TYPES', () => {
+  it('should not offer image or video, which require a parameters schema', () => {
+    expect(CUSTOM_MODEL_TYPES).not.toContain('image');
+    expect(CUSTOM_MODEL_TYPES).not.toContain('video');
+  });
+
+  it('should keep the other generation types selectable', () => {
+    expect(CUSTOM_MODEL_TYPES).toContain('text2music');
+  });
+});
 
 describe('hasDuplicateModelId', () => {
   it('should detect an existing model id', () => {

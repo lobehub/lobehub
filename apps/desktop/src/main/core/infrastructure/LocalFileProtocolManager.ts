@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { readFile, realpath, stat } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, realpath, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
+import { EXTERNAL_PUBLISH_ASSET_MAX_BYTES } from '@lobechat/device-control/file-preview';
 import { getMimeType, resolveMimeType } from '@lobechat/utils/mimeType';
 import { app, protocol } from 'electron';
 
@@ -42,6 +43,11 @@ const DOCUMENT_PREVIEW_MIME_TYPES = new Set([
 ]);
 const MAX_DOCUMENT_PREVIEW_BYTES = 20 * 1024 * 1024;
 export const PREVIEW_CONTENT_SIZE_HEADER = 'X-Preview-Content-Size';
+/**
+ * The file's mtime in ms. Lets the renderer tell a replaced file from the
+ * previous one at the same path when a preview is refreshed.
+ */
+export const PREVIEW_MODIFIED_AT_HEADER = 'X-Preview-Modified-At';
 
 // Edited-file records can carry `~`-prefixed paths (the file tools expand the
 // home directory at write time) — expand them here so previews resolve the
@@ -218,6 +224,9 @@ export class LocalFileProtocolManager {
           const contentType = await resolveMimeType(realResolvedPath, buffer);
           headers.set('Content-Type', contentType);
           headers.set('Content-Length', String(buffer.byteLength));
+          if (Number.isFinite(fileStat.mtimeMs)) {
+            headers.set(PREVIEW_MODIFIED_AT_HEADER, String(fileStat.mtimeMs));
+          }
           // Module scripts, styles, media, and fonts require CORS when loaded
           // by the opaque sandbox origin. Do not grant arbitrary text files
           // (for example .env) readable cross-origin access.
@@ -318,12 +327,14 @@ export class LocalFileProtocolManager {
     accept,
     allowExternalFile,
     filePath,
+    persistExternalApproval = true,
     resourceScope,
     workspaceRoot,
   }: {
     accept?: PreviewFileAccept;
     allowExternalFile?: boolean;
     filePath: string;
+    persistExternalApproval?: boolean;
     resourceScope?: 'workspace';
     workspaceRoot: string;
   }): Promise<string | null> {
@@ -339,7 +350,12 @@ export class LocalFileProtocolManager {
             workspaceRoot,
           })
         )?.realPath
-      : await this.resolveApprovedPreviewPath({ allowExternalFile, filePath, workspaceRoot });
+      : await this.resolveApprovedPreviewPath({
+          allowExternalFile,
+          filePath,
+          persistExternalApproval,
+          workspaceRoot,
+        });
     if (!realFilePath) return null;
 
     this.cleanupExpiredTokens();
@@ -428,6 +444,71 @@ export class LocalFileProtocolManager {
       contentType,
       realPath: realFilePath,
     };
+  }
+
+  async readExternalFileForPublish({
+    filePath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    workspaceRoot: string;
+  }): Promise<PreviewFileReadResult | null> {
+    const realFilePath = await this.resolveApprovedPreviewPath({
+      allowExternalFile: true,
+      filePath,
+      persistExternalApproval: false,
+      workspaceRoot,
+    });
+    if (!realFilePath) return null;
+
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return null;
+    // Reject by size before reading: the renderer's limit check only runs after
+    // the whole file has been read and base64-encoded into a gateway response.
+    if (fileStat.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      throw new Error('File is too large to publish');
+    }
+    const buffer = await readFile(realFilePath);
+
+    return {
+      buffer,
+      contentType: await resolveMimeType(realFilePath, buffer),
+      realPath: realFilePath,
+    };
+  }
+
+  async copyExternalFileForPublish({
+    filePath,
+    targetPath,
+    workspaceRoot,
+  }: {
+    filePath: string;
+    targetPath: string;
+    workspaceRoot: string;
+  }): Promise<boolean> {
+    const normalizedTarget = normalizeAbsolutePath(targetPath);
+    const normalizedRoot = normalizeAbsolutePath(workspaceRoot);
+    if (!normalizedTarget || !normalizedRoot) return false;
+    const realRoot = normalizeAbsolutePath(await realpath(normalizedRoot));
+    if (!realRoot || !isPathWithinRoot(normalizedTarget, realRoot)) return false;
+
+    const realFilePath = await this.resolveApprovedPreviewPath({
+      allowExternalFile: true,
+      filePath,
+      persistExternalApproval: false,
+      workspaceRoot,
+    });
+    if (!realFilePath) return false;
+
+    const fileStat = await stat(realFilePath);
+    if (!fileStat.isFile()) return false;
+    if (fileStat.size > EXTERNAL_PUBLISH_ASSET_MAX_BYTES) {
+      throw new Error('File is too large to publish');
+    }
+
+    await mkdir(path.dirname(normalizedTarget), { recursive: true });
+    await copyFile(realFilePath, normalizedTarget);
+    return true;
   }
 
   /**
@@ -583,11 +664,16 @@ export class LocalFileProtocolManager {
     const workspaceRootApproved =
       this.approvedWorkspaceRoots.has(normalizedRealWorkspaceRoot) ||
       this.indexedProjectRoots.has(normalizedRealWorkspaceRoot);
-    if (
-      workspaceRootApproved &&
-      isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)
-    ) {
-      return normalizedRealFilePath;
+    if (workspaceRootApproved) {
+      // Realpath containment: file resolved inside the real workspace root.
+      if (isPathWithinRoot(normalizedRealFilePath, normalizedRealWorkspaceRoot)) {
+        return normalizedRealFilePath;
+      }
+      // Non-resolved containment: file appears inside the workspace root even
+      // when the resolved path points elsewhere (symlinked directories).
+      if (isPathWithinRoot(normalizedFilePath, normalizedWorkspaceRoot)) {
+        return normalizedRealFilePath;
+      }
     }
 
     if (this.hasExternalPreviewApproval(normalizedRealFilePath)) return normalizedRealFilePath;

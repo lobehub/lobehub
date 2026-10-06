@@ -5,12 +5,12 @@ import {
   getTopicMetadataWorkingDirectoryEffectivePath,
   getTopicMetadataWorkingDirectorySourcePath,
 } from '@lobechat/utils/client/topic';
-import { Flexbox, Icon, Popover, Skeleton, Tooltip } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, useTheme } from 'antd-style';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
-import { MessageSquareDashed, PencilLine } from 'lucide-react';
+import { MessageSquareDashed } from 'lucide-react';
 import type { CSSProperties, DragEvent, RefObject } from 'react';
 import { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -41,7 +41,12 @@ import { useTopicNavigation } from '../../hooks/useTopicNavigation';
 import ThreadList from '../../TopicListContent/ThreadList';
 import Actions from './Actions';
 import TopicItemContextMenu from './ContextMenu';
-import { getPullRequestState, getTopicMetaCard, PR_STATE_VISUAL } from './metaCardData';
+import {
+  getCiVisual,
+  getPullRequestState,
+  getTopicMetaCard,
+  PR_STATE_VISUAL,
+} from './metaCardData';
 import MetaHoverCard from './MetaHoverCard';
 
 // Base UI Popover plays an opacity/scale enter+exit transition driven by these
@@ -58,6 +63,37 @@ const META_HOVER_CARD_STYLES = {
 };
 
 const styles = createStaticStyles(({ css }) => ({
+  ciBadge: css`
+    position: absolute;
+    inset-block-end: -3px;
+    inset-inline-end: -3px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+
+    line-height: 0;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+  ciPending: css`
+    animation: ci-spin 1s linear infinite;
+
+    @keyframes ci-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  `,
+  prIcon: css`
+    position: relative;
+    display: inline-flex;
+    flex: none;
+  `,
   runningElapsedTime: css`
     flex: none;
 
@@ -75,6 +111,23 @@ const styles = createStaticStyles(({ css }) => ({
 // Per-item refs can't do that, which lets rapid clicks across items all
 // fire — each racing to write activeTopicId (see ).
 let pendingSingleClickTimer: ReturnType<typeof setTimeout> | null = null;
+
+/**
+ * The mobile surface renders its topic list in a modal and never mounts the
+ * working sidebar — the desktop host of a topic's thread list. Without nesting
+ * the rows under the topic row, mobile users can't reach an existing subtopic
+ * at all, so the nesting lives here on that surface only.
+ *
+ * Scoped to the route's topic (`showThreadList`): opening a thread under an
+ * inactive topic would call `openThreadInPortal` while `activeTopicId` still
+ * points at another topic, so the thread would resolve against the wrong topic's
+ * context — and every mounted list would fetch its own threads.
+ *
+ * Read per call rather than once at module load so a test can stub `__MOBILE__`.
+ */
+const isMobileSurface = () => typeof __MOBILE__ !== 'undefined' && __MOBILE__;
+// Nesting cue: keeps the rows visually under their topic row.
+const NESTED_THREAD_LIST_INDENT = 32;
 
 const cancelPendingSingleClick = () => {
   if (pendingSingleClickTimer) {
@@ -105,15 +158,32 @@ const getWorkingDirectoryDisplay = (metadata: ChatTopicMetadata | undefined) => 
 
 interface RunningElapsedTimeProps {
   agentId?: string;
+  /**
+   * Server-side start of the topic's current run (list query's
+   * `runStartedAt`). Fallback for topics that are running on the server but
+   * have no local operation — after a page refresh only the ACTIVE topic is
+   * reconnected into the in-memory store, so every other running row would
+   * otherwise render no timer at all.
+   */
+  runStartedAt?: Date | string | number | null;
   topicId: string;
 }
 
-const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, topicId }) => {
-  const startTime = useChatStore(
+const RunningElapsedTime = memo<RunningElapsedTimeProps>(({ agentId, runStartedAt, topicId }) => {
+  const localStartTime = useChatStore(
     agentId
       ? operationSelectors.getVisibleAgentRuntimeStartTimeByContext({ agentId, topicId })
       : () => undefined,
   );
+
+  // Prefer the in-memory operation: it tracks the local run precisely and
+  // updates the moment a run starts/stops. The server stamp only covers the
+  // refresh case above. Normalize like the server fallback does — the value
+  // crosses the wire as an ISO string.
+  const serverStartTimeMs = runStartedAt == null ? undefined : new Date(runStartedAt).getTime();
+  const startTime =
+    localStartTime ?? (Number.isFinite(serverStartTimeMs) ? serverStartTimeMs : undefined);
+
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -139,7 +209,13 @@ interface TopicItemProps {
   id?: string;
   metadata?: ChatTopicMetadata;
   /**
-   * Show the topic's project directory as a second line under the title. Used by
+   * Server-side start of the topic's current run (list query's
+   * `runStartedAt`). Lets running topics that have no local operation
+   * (refreshed, non-active) still show an elapsed timer — see
+   * `RunningElapsedTime`.
+   */
+  runStartedAt?: Date | string | number | null;
+  /** Show the topic's project directory as a second line under the title. Used by
    * the by-status grouping, where the row otherwise carries no project context
    * (by-project mode already puts the directory in the group header).
    */
@@ -159,6 +235,7 @@ interface TopicItemRowProps extends TopicItemProps {
   defaultTopicActive: boolean;
   isTopicActive: boolean;
   navRef: RefObject<TopicNavigationActions>;
+  /** Route's topic — only its row may carry its thread list (see the mobile mount). */
   showThreadList: boolean;
 }
 
@@ -168,6 +245,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     title,
     fav,
     metadata,
+    runStartedAt,
     status,
     showWorkingDirectory,
     userId,
@@ -296,25 +374,19 @@ const TopicItemRow = memo<TopicItemRowProps>(
         .prefetchMessages({ agentId: activeAgentId, scope: 'main', topicId: id });
     }, [activeAgentId, hasLocalRunningRuntime, id, isUnreadCompleted]);
 
-    // Surface a pencil before the title when this topic holds unsent input.
-    // Drafts live in localStorage keyed by messageMapKey; the default topic (no
-    // id) maps to the new-topic draft. `useHasDraft` re-renders the row only when
-    // the draft appears or clears.
+    // Surface a WeChat-style red "[Draft]" hint when this topic holds unsent
+    // input. Drafts live in localStorage keyed by messageMapKey; the default
+    // topic (no id) maps to the new-topic draft. `useHasDraft` re-renders the
+    // row only when the draft appears or clears.
     const draftKey = useMemo(
       () => (activeAgentId ? messageMapKey({ agentId: activeAgentId, topicId: id }) : undefined),
       [activeAgentId, id],
     );
     const hasDraft = useHasDraft(draftKey);
-    const draftIndicator = hasDraft ? (
-      <Tooltip title={t('draft')}>
-        <Icon
-          aria-label={t('draft')}
-          color={cssVar.colorError}
-          icon={PencilLine}
-          role={'img'}
-          size={'small'}
-        />
-      </Tooltip>
+    const draftPrefix = hasDraft ? (
+      <Text fontSize={12} style={{ color: cssVar.colorError, flex: 'none' }}>
+        {t('draft')}
+      </Text>
     ) : undefined;
 
     // Codex-style hover detail card: when the topic carries git context, hovering
@@ -327,7 +399,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
       return (
         <NavItem
           active={defaultTopicActive}
-          slots={{ titlePrefix: draftIndicator }}
+          slots={{ titlePrefix: draftPrefix }}
           titleColor={cssVar.colorText}
           icon={
             isLoading ? (
@@ -422,9 +494,27 @@ const TopicItemRow = memo<TopicItemRowProps>(
       // as the leading icon.
       if (metaCard?.pullRequest) {
         const prVisual = PR_STATE_VISUAL[getPullRequestState(metaCard.pullRequest)];
+        const ciStatus = metaCard.pullRequest.ciStatus;
+        const ciVisual = getCiVisual(ciStatus);
+        const showCiBadge = ciStatus !== undefined && ciStatus !== 'unknown';
+        const tooltip = showCiBadge
+          ? `${t(prVisual.labelKey)} · ${t(ciVisual.labelKey)}`
+          : t(prVisual.labelKey);
         return (
-          <Tooltip title={t(prVisual.labelKey)}>
-            <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
+          <Tooltip title={tooltip}>
+            <span className={styles.prIcon}>
+              <Icon icon={prVisual.icon} size={'small'} style={{ color: prVisual.color }} />
+              {showCiBadge && (
+                <span className={styles.ciBadge}>
+                  <Icon
+                    className={ciStatus === 'pending' ? styles.ciPending : undefined}
+                    icon={ciVisual.icon}
+                    size={9}
+                    style={{ color: ciVisual.color }}
+                  />
+                </span>
+              )}
+            </span>
           </Tooltip>
         );
       }
@@ -460,13 +550,26 @@ const TopicItemRow = memo<TopicItemRowProps>(
           description={workingDirectoryNode}
           href={href}
           icon={leadingIconNode}
-          slots={{ titlePrefix: draftIndicator }}
+          slots={{ titlePrefix: draftPrefix }}
           title={title === '...' ? <DotsLoading gap={3} size={4} /> : title}
           titleColor={cssVar.colorText}
           extra={
             <>
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
-              <RunningElapsedTime agentId={activeAgentId} topicId={id} />
+              {/* Gated on the SAME boolean that draws the running ring: both say
+                  "this row is visibly running", and a row that stopped spinning
+                  must not keep counting. The server `runStartedAt` fallback only
+                  knows the persisted `running` status, which outlives the answer
+                  — it stays set through the post-visible-output tail where the
+                  ring is deliberately masked (#16518) and the terminal
+                  bookkeeping can run for tens of seconds. */}
+              {shouldShowRunningIcon && (
+                <RunningElapsedTime
+                  agentId={activeAgentId}
+                  runStartedAt={runStartedAt}
+                  topicId={id}
+                />
+              )}
             </>
           }
           onClick={handleClick}
@@ -477,7 +580,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     );
 
     return (
-      <Flexbox data-testid="topic-item" style={{ position: 'relative' }}>
+      <Flexbox data-testid="topic-item" data-topic-id={id} style={{ position: 'relative' }}>
         {metaCard ? (
           <Popover
             arrow={false}
@@ -492,16 +595,18 @@ const TopicItemRow = memo<TopicItemRowProps>(
         ) : (
           navItem
         )}
-        {showThreadList && (
+        {isMobileSurface() && showThreadList && id && (
           <Suspense
             fallback={
               <Flexbox gap={8} paddingBlock={8} paddingInline={24} width={'100%'}>
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
-                <Skeleton.Button active size={'small'} style={{ height: 18, width: '100%' }} />
+                <Skeleton height={18} width={'100%'} />
+                <Skeleton height={18} width={'100%'} />
               </Flexbox>
             }
           >
-            <ThreadList topicId={id} />
+            <Flexbox style={{ paddingInlineStart: NESTED_THREAD_LIST_INDENT }} width={'100%'}>
+              <ThreadList topicId={id} />
+            </Flexbox>
           </Suspense>
         )}
       </Flexbox>

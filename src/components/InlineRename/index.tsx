@@ -1,18 +1,17 @@
 'use client';
 
-import { type InputProps } from '@lobehub/ui';
-import { Input, Popover, stopPropagation } from '@lobehub/ui';
-import { type InputRef, type PopoverProps } from 'antd';
+import { Popover, stopPropagation } from '@lobehub/ui';
+import { Input, type InputProps, type PopoverPlacement } from '@lobehub/ui/base-ui';
 import { type KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import { useOverlayPopoverPortalProps } from '@/features/NavPanel/OverlayContainer';
 
 function FocusableInput(props: InputProps) {
-  const ref = useRef<InputRef>(null);
+  const ref = useRef<HTMLInputElement>(null);
   useEffect(() => {
     queueMicrotask(() => {
-      ref.current?.input?.focus();
+      ref.current?.focus();
     });
   }, []);
   return <Input {...props} ref={ref} />;
@@ -38,7 +37,7 @@ export interface InlineRenameProps {
   /**
    * Popover placement
    */
-  placement?: PopoverProps['placement'];
+  placement?: PopoverPlacement;
   /**
    * Current title
    */

@@ -1,6 +1,5 @@
 const ONBOARDING_PATH = '/onboarding';
 const CALLBACK_STORAGE_KEY = 'onboarding-callback-url';
-export const POST_ONBOARDING_HOME_TASK_URL = '/?onboarding=task';
 
 /**
  * Only same-site relative paths are allowed as post-onboarding redirect
@@ -10,6 +9,14 @@ export const POST_ONBOARDING_HOME_TASK_URL = '/?onboarding=task';
  */
 export const isSafeRedirectPath = (url: string): boolean =>
   url.startsWith('/') && !url.startsWith('//') && !url.includes('\\');
+
+/**
+ * Better Auth resolves relative callbacks against its server base URL, but auth pages can run on a
+ * different origin. Bind safe web paths to the browser's current origin before sending them to the
+ * server, while preserving explicit absolute URLs and mobile schemes.
+ */
+export const toAbsoluteAuthCallbackUrl = (callbackUrl: string, origin: string): string =>
+  isSafeRedirectPath(callbackUrl) ? new URL(callbackUrl, origin).toString() : callbackUrl;
 
 /**
  * Auth detours can produce same-origin absolute callback URLs (e.g. the
@@ -106,5 +113,4 @@ export const consumeOnboardingCallbackUrl = (): string | undefined => {
   return url;
 };
 
-export const resolvePostOnboardingTargetUrl = (): string =>
-  consumeOnboardingCallbackUrl() || POST_ONBOARDING_HOME_TASK_URL;
+export const resolvePostOnboardingTargetUrl = (): string => consumeOnboardingCallbackUrl() || '/';

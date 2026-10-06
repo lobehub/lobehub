@@ -50,13 +50,19 @@ export class ResourceManagerStoreActionImpl {
     const { libraryId, resolveSelectedResourceIds, selectAllState, selectedFileIds } = this.#get();
     const { useFileStore } = await import('@/store/file');
     const { useKnowledgeBaseStore } = await import('@/store/library');
-    const { isChunkingUnsupported } = await import('@/utils/isChunkingUnsupported');
+    const { isChunkingSupported } = await import('@/libs/document-loaders/loaderType');
 
     const fileStore = useFileStore.getState();
     const kbStore = useKnowledgeBaseStore.getState();
 
     switch (type) {
       case 'delete': {
+        // The explorer's own list is optimistic, but the sidebar tree keeps a
+        // separate per-folder cache: without this it holds deleted folders
+        // until the next full load.
+        const { useTreeStore } = await import('@/store/tree');
+        const currentFolderKey = fileStore.queryParams?.parentId ?? '';
+
         if (selectAllState === 'all' && fileStore.queryParams) {
           const { resourceService } = await import('@/services/resource');
 
@@ -70,6 +76,9 @@ export class ResourceManagerStoreActionImpl {
           // Revalidate so any surviving rows immediately reappear.
           const { revalidateResources } = await import('@/store/file/slices/resource/hooks');
           await revalidateResources(fileStore.queryParams);
+          // The deleted set is only known to the server here, and every row in
+          // it was a child of the listed folder, so refetch that one folder.
+          void useTreeStore.getState().revalidate(currentFolderKey);
 
           this.clearSelectAllState();
           return;
@@ -79,6 +88,7 @@ export class ResourceManagerStoreActionImpl {
           selectAllState === 'all' ? await resolveSelectedResourceIds() : selectedFileIds;
 
         await fileStore.deleteResources(resourceIds);
+        void useTreeStore.getState().dropNodes(resourceIds, currentFolderKey);
 
         this.clearSelectAllState();
         return;
@@ -105,7 +115,7 @@ export class ResourceManagerStoreActionImpl {
           // For server-resolved IDs not yet in the local map, include them
           // and let the server handle unsupported type filtering
           if (!resource) return selectAllState === 'all';
-          return !isChunkingUnsupported(resource.fileType);
+          return isChunkingSupported(resource);
         });
 
         await fileStore.parseFilesToChunks(chunkableFileIds, { skipExist: true });
@@ -185,8 +195,23 @@ export class ResourceManagerStoreActionImpl {
     this.#set({ currentViewItemId });
   };
 
+  closeDetailPanel = (): void => {
+    this.#set({ detailPanelId: undefined, detailPanelIsPage: false });
+  };
+
+  openDetailPanel = (detailPanelId: string, isPage = false): void => {
+    this.#set({ detailPanelId, detailPanelIsPage: isPage });
+  };
+
   setLibraryId = (libraryId?: string): void => {
-    this.#set({ libraryId });
+    if (this.#get().libraryId === libraryId) return;
+    // A sidebar search is scoped to one library; carrying it over to the next
+    // library would show results the user never asked for.
+    this.#set({ libraryId, librarySearchQuery: '' });
+  };
+
+  setLibrarySearchQuery = (librarySearchQuery: string): void => {
+    this.#set({ librarySearchQuery });
   };
 
   setListVisibility = (
@@ -246,6 +271,10 @@ export class ResourceManagerStoreActionImpl {
 
   setPendingRenameItemId = (pendingRenameItemId: string | null): void => {
     this.#set({ pendingRenameItemId });
+  };
+
+  setPendingTreeRenameItemId = (pendingTreeRenameItemId: string | null): void => {
+    this.#set({ pendingTreeRenameItemId });
   };
 
   setSearchQuery = (searchQuery: string | null): void => {

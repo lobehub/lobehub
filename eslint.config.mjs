@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 import { eslint } from '@lobehub/lint';
@@ -8,11 +9,47 @@ const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
 const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
 
+// Shared by every src/** no-restricted-imports block: flat config replaces a
+// rule per file instead of merging it, so a scoped override would otherwise
+// drop these.
 const performanceRestrictedImportPaths = [
+  {
+    allowTypeImports: true,
+    importNames: ['ModelIcon', 'ModelTag', 'ProviderCombine', 'ProviderIcon'],
+    message:
+      'These features statically import every brand icon (~3 MB). Import them from "@/components/LobeIcons", which mounts them through lazy().',
+    name: '@lobehub/icons',
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Import ProviderIcon / ProviderCombine from "@/components/LobeIcons", which mounts them through lazy().',
+    name: '@/libs/providerIcon',
+  },
+  {
+    allowTypeImports: true,
+    importNames: ['EmojiPicker'],
+    message:
+      'EmojiPicker carries the emoji-mart dataset. Use "@/components/EmojiPicker", which mounts it through lazy().',
+    name: '@lobehub/ui',
+  },
   {
     message:
       'Import the imperative facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
     name: '@/features/ShareModal/Modal',
+  },
+  {
+    allowTypeImports: true,
+    importNames: ['motion', 'm'],
+    message:
+      'The app runs under <LazyMotion features={domMax}>; `motion` bundles every feature again and `m` from the barrel drags it along. Use `import * as m from "motion/react-m"`.',
+    name: 'motion/react',
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Do not import the model-bank root barrel; it re-exports the full aiModels catalog (1.4 MB raw). Use a subpath such as "model-bank/aiModel", "model-bank/modelProvider", "model-bank/standardParameters" or "model-bank/utils".',
+    name: 'model-bank',
   },
 ];
 
@@ -44,18 +81,99 @@ const shellRouterRestrictedPaths = [
   },
 ];
 
-const createRestrictedImportRule = ({ paths = [], patterns } = {}) => [
+// Runtime boundary of @lobechat/heterogeneous-agents: browser code may import
+// values only from the entries listed in browser-entries.json; every other
+// subpath is Node-only (spawn, rpc, quota-sampler, ...). New entries are
+// Node-only until listed there, and the package's runtimeBoundary test keeps
+// the listed entries free of Node code.
+const heteroBrowserEntries = JSON.parse(
+  readFileSync(
+    new URL('packages/heterogeneous-agents/browser-entries.json', import.meta.url),
+    'utf8',
+  ),
+);
+const heteroBrowserSubpaths = heteroBrowserEntries
+  .filter((entry) => entry !== '.')
+  .map((entry) => entry.slice(2));
+const runtimeRestrictedImportPatterns = [
+  {
+    allowTypeImports: true,
+    message:
+      'This @lobechat/heterogeneous-agents entry is Node-only. Browser code may import values only from the entries in packages/heterogeneous-agents/browser-entries.json; type imports are fine.',
+    regex: `^@lobechat/heterogeneous-agents/(?!(?:${heteroBrowserSubpaths.join('|')})$)`,
+  },
+];
+
+// Browser runtime boundary for the SPA and the Electron renderer: server code,
+// database access and Node built-ins never run there. Vite stubs a Node
+// built-in with a module that throws on first access, and a server import
+// drags its whole graph (database drivers, env) into the bundle. Type imports
+// are erased and stay allowed. Server-side trees under src/ (Next.js shells,
+// src/libs, instrumentation, proxy) opt out with `serverSide: true`.
+// Whether a third-party package needs Node is a judgement call; the alint
+// rule `lobehub/no-node-in-browser` covers that part.
+const NODE_BUILTINS = [
+  'child_process',
+  'cluster',
+  'dgram',
+  'dns',
+  'fs',
+  'fs/promises',
+  'http',
+  'http2',
+  'https',
+  'module',
+  'net',
+  'os',
+  'path',
+  'readline',
+  'stream',
+  'tls',
+  'v8',
+  'vm',
+  'worker_threads',
+  'zlib',
+];
+const browserRuntimeRestrictedImportPaths = NODE_BUILTINS.flatMap((name) => [
+  name,
+  `node:${name}`,
+]).map((name) => ({
+  allowTypeImports: true,
+  message:
+    'Node built-ins do not exist in the browser. Move the work behind a server endpoint or an Electron IPC call; type imports are fine.',
+  name,
+}));
+const browserRuntimeRestrictedImportPatterns = [
+  {
+    allowTypeImports: true,
+    message:
+      'Server code does not run in the browser. Call it through a TRPC service, or move a pure helper into a shared package; type imports are fine.',
+    regex: String.raw`^@/(server|app/\(backend\))/`,
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Database models, repositories and clients are server-only. Read through a TRPC service; schemas and type imports are fine.',
+    regex: '^(@/database|@lobechat/database)/(models|repositories|server|core)(/|$)',
+  },
+];
+
+const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false } = {}) => [
   'error',
   {
     ...baseRestrictedImportOptions,
     paths: [
       ...(baseRestrictedImportOptions.paths ?? []),
       ...performanceRestrictedImportPaths,
+      ...(serverSide ? [] : browserRuntimeRestrictedImportPaths),
       ...paths,
     ],
-    ...(patterns?.length
-      ? { patterns: [...(baseRestrictedImportOptions.patterns ?? []), ...patterns] }
-      : {}),
+    patterns: [
+      ...(baseRestrictedImportOptions.patterns ?? []),
+      ...runtimeRestrictedImportPatterns,
+      ...(serverSide ? [] : browserRuntimeRestrictedImportPatterns),
+      ...(patterns ?? []),
+    ],
   },
 ];
 
@@ -85,9 +203,28 @@ const useRefLazyInitRestrictedSyntax = [
   },
 ];
 
+// Review rule: no all-caps labels. stylelint covers stylesheets; this covers
+// inline style objects.
+const uppercaseRestrictedSyntax = [
+  {
+    message: "Do not set textTransform: 'uppercase'; write the label in the case it should read.",
+    selector: "Property[key.name='textTransform'][value.value='uppercase']",
+  },
+];
+
+const electronIpcRemoveListenerRestrictedSyntax = {
+  message:
+    'Do not use removeListener in renderer code. Electron contextBridge does not preserve listener identity across calls; use the disposer returned by ipcRenderer.on().',
+  selector: "CallExpression > MemberExpression.callee[property.name='removeListener']",
+};
+
 export default eslint(
   {
     ignores: [
+      // Generated skill release; maintained in lobehub/acceptance.
+      '.agents/skills/acceptance/**',
+      // Generated by `bun run shell:vendor` in apps/desktop.
+      'apps/desktop/shell/rescue/electron-updater.cjs',
       // dependencies
       'node_modules',
       // ci
@@ -147,6 +284,114 @@ export default eslint(
     files: ['src/**/*.{ts,tsx}'],
     rules: {
       'no-restricted-imports': createRestrictedImportRule(),
+    },
+  },
+  {
+    // Server-side trees under src/: Next.js shells and route handlers, server
+    // helpers, instrumentation and the proxy may import server code.
+    files: [
+      'src/app/**/*.{ts,tsx}',
+      'src/libs/**/*.{ts,tsx}',
+      'src/scripts/**/*.{ts,tsx}',
+      'src/*.{ts,tsx}',
+      'src/**/*.server.{ts,tsx}',
+    ],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({ serverSide: true }),
+    },
+  },
+  {
+    // Bundle-size restrictions target shipped code; tests may reach the barrels.
+    files: ['src/**/*.test.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': ['error', baseRestrictedImportOptions],
+    },
+  },
+  {
+    // Boot-path trees are statically reachable from the SPA entry. A heavy
+    // @lobehub/ui member imported here lands in the first-screen chunk together
+    // with shiki / katex / elkjs / emoji data; the CI entry-graph gate catches
+    // the regression, this rule explains it at the import site.
+    files: [
+      'src/layout/**/*.{ts,tsx}',
+      'src/spa/**/*.{ts,tsx}',
+      'src/store/**/*.{ts,tsx}',
+      'src/utils/**/*.{ts,tsx}',
+      // The main layout and the home route are the first navigation's closure.
+      'src/routes/**/_layout/**/*.{ts,tsx}',
+      'src/routes/(main)/home/**/*.{ts,tsx}',
+      'src/features/Home/**/*.{ts,tsx}',
+      'src/features/HomeSidebar/**/*.{ts,tsx}',
+      'src/features/NavPanel/**/*.{ts,tsx}',
+    ],
+    ignores: ['src/**/*.test.{ts,tsx}', 'src/layout/AuthProvider/MarketAuth/ProfileSetupModal.tsx'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            importNames: [
+              'CodeDiff',
+              'CodeEditor',
+              'EmojiPicker',
+              'Highlighter',
+              'HtmlPreview',
+              'Markdown',
+              'Mermaid',
+              'PatchDiff',
+              'Snippet',
+              'SortableList',
+              'SyntaxHighlighter',
+              'SyntaxMermaid',
+            ],
+            message:
+              'Boot-path modules must not statically import heavy @lobehub/ui members. Load them with lazy(() => import("@lobehub/ui/es/<Member>/index")) or move the consumer into a route tree.',
+            name: '@lobehub/ui',
+          },
+          {
+            message:
+              'Boot-path modules must load EmojiPicker with lazy(); it carries the emoji-mart dataset.',
+            name: '@/components/EmojiPicker',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/analytics; it bundles posthog-js. Use "@/libs/analytics/client", which loads it after first paint and queues events.',
+            name: '@lobehub/analytics',
+          },
+          {
+            allowTypeImports: true,
+            message:
+              'Boot-path modules must not import @lobehub/analytics/react; use useAnalytics from "@/libs/analytics/client".',
+            name: '@lobehub/analytics/react',
+          },
+        ],
+        patterns: [
+          {
+            message:
+              'The builtin tool client barrel exports the whole render registry. Import the dedicated subpath (e.g. "/client/displayControls") or resolve renders lazily.',
+            regex: '^@lobechat/builtin-tool-[^/]+/client(?:$|/index$)',
+          },
+        ],
+      }),
+    },
+  },
+  {
+    files: ['src/components/Skeleton/**/*.{ts,tsx}'],
+    rules: {
+      'no-restricted-imports': createRestrictedImportRule({
+        paths: [
+          {
+            name: '@/components/Skeleton',
+            message:
+              'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
+          },
+          {
+            name: '@/components/Skeleton/index',
+            message:
+              'Skeleton internals must import sibling components directly to avoid a cycle through their own barrel.',
+          },
+        ],
+      }),
     },
   },
   {
@@ -357,7 +602,27 @@ export default eslint(
           fixStyle: 'separate-type-imports',
         },
       ],
-      'no-restricted-syntax': ['error', ...useRefLazyInitRestrictedSyntax],
+      'no-restricted-syntax': [
+        'error',
+        ...useRefLazyInitRestrictedSyntax,
+        ...uppercaseRestrictedSyntax,
+      ],
+    },
+  },
+  {
+    files: [
+      'apps/desktop/src/overlay/**/*.{ts,tsx}',
+      'packages/electron-client-ipc/src/**/*.{ts,tsx}',
+      'src/**/*.{ts,tsx}',
+    ],
+    ignores: ['src/hooks/usePWAInstall.ts'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        ...useRefLazyInitRestrictedSyntax,
+        ...uppercaseRestrictedSyntax,
+        electronIpcRemoveListenerRestrictedSyntax,
+      ],
     },
   },
   // MDX files
@@ -390,6 +655,7 @@ export default eslint(
       'no-restricted-syntax': [
         'error',
         ...useRefLazyInitRestrictedSyntax,
+        ...uppercaseRestrictedSyntax,
         {
           message: 'Chinese characters are not allowed in aiModels files. Use English instead.',
           selector: 'Literal[value=/[\\u4e00-\\u9fff]/]',
@@ -450,7 +716,7 @@ export default eslint(
   },
   // CommonJS files rely on `require()` by design
   {
-    files: ['**/*.cjs'],
+    files: ['**/*.cjs', 'apps/desktop/shell/**/*.js'],
     rules: {
       '@typescript-eslint/no-require-imports': 0,
     },

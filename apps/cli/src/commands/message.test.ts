@@ -52,7 +52,7 @@ describe('message command', () => {
   }
 
   describe('list', () => {
-    it('should use listAll when no filters', async () => {
+    it('should use listAll with a default page size of 50 when no filters', async () => {
       mockTrpcClient.message.listAll.query.mockResolvedValue([
         { content: 'Hello', createdAt: new Date().toISOString(), id: 'm1', role: 'user' },
       ]);
@@ -60,25 +60,60 @@ describe('message command', () => {
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'message', 'list']);
 
-      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalled();
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 50 }),
+      );
       expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
       expect(consoleSpy).toHaveBeenCalledTimes(2);
     });
 
-    it('should filter by topic-id using getMessages', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+    it('should push topic-id filter to listAll', async () => {
+      mockTrpcClient.message.listAll.query.mockResolvedValue([]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'message', 'list', '--topic-id', 't1']);
 
-      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
         expect.objectContaining({ topicId: 't1' }),
       );
-      expect(mockTrpcClient.message.listAll.query).not.toHaveBeenCalled();
+      expect(mockTrpcClient.message.getMessages.query).not.toHaveBeenCalled();
+    });
+
+    it('should push role and date range filters to listAll', async () => {
+      mockTrpcClient.message.listAll.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'message',
+        'list',
+        '--role',
+        'user',
+        '--start',
+        '2026-08-31',
+        '--end',
+        '2026-09-01',
+      ]);
+
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
+        expect.objectContaining({ endDate: '2026-09-01', role: 'user', startDate: '2026-08-31' }),
+      );
+    });
+
+    it('should treat --user as --role user on the server side', async () => {
+      mockTrpcClient.message.listAll.query.mockResolvedValue([]);
+
+      const program = createProgram();
+      await program.parseAsync(['node', 'test', 'message', 'list', '--user']);
+
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
+        expect.objectContaining({ role: 'user' }),
+      );
     });
 
     it('should keep first page on the backend default offset for filtered queries', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+      mockTrpcClient.message.listAll.query.mockResolvedValue([]);
 
       const program = createProgram();
       await program.parseAsync([
@@ -92,13 +127,13 @@ describe('message command', () => {
         '200',
       ]);
 
-      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
         expect.objectContaining({ pageSize: 200, topicId: 't1' }),
       );
     });
 
     it('should convert page 2 to current 1 for filtered queries', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+      mockTrpcClient.message.listAll.query.mockResolvedValue([]);
 
       const program = createProgram();
       await program.parseAsync([
@@ -112,18 +147,18 @@ describe('message command', () => {
         '2',
       ]);
 
-      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
         expect.objectContaining({ current: 1, topicId: 't1' }),
       );
     });
 
     it('should support the short page flag for filtered queries', async () => {
-      mockTrpcClient.message.getMessages.query.mockResolvedValue([]);
+      mockTrpcClient.message.listAll.query.mockResolvedValue([]);
 
       const program = createProgram();
       await program.parseAsync(['node', 'test', 'message', 'list', '--topic-id', 't1', '-P', '2']);
 
-      expect(mockTrpcClient.message.getMessages.query).toHaveBeenCalledWith(
+      expect(mockTrpcClient.message.listAll.query).toHaveBeenCalledWith(
         expect.objectContaining({ current: 1, topicId: 't1' }),
       );
     });

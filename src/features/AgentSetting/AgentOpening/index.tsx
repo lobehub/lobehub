@@ -1,24 +1,19 @@
 'use client';
 
-import { Form } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import OpeningMessage from './OpeningMessage';
 import OpeningQuestions from './OpeningQuestions';
 
-const wrapperCol = {
-  style: {
-    maxWidth: '100%',
-    width: '100%',
-  },
-};
-
 const AgentOpening = memo(() => {
   const { t } = useTranslation('setting');
+  const form = useForm();
 
   return (
     <Form
+      form={form}
       itemsType={'flat'}
       variant={'borderless'}
       items={[
@@ -27,14 +22,12 @@ const AgentOpening = memo(() => {
           desc: t('settingOpening.openingMessage.desc'),
           label: t('settingOpening.openingMessage.title'),
           layout: 'vertical',
-          wrapperCol,
         },
         {
           children: <OpeningQuestions />,
           desc: t('settingOpening.openingQuestions.desc'),
           label: t('settingOpening.openingQuestions.title'),
           layout: 'vertical',
-          wrapperCol,
         },
       ]}
     />

@@ -2,6 +2,7 @@ import type { AgentContextDocument } from '@lobechat/context-engine';
 import type { PartialDeep } from 'type-fest';
 
 import { type AgentSettingsInstance } from '@/features/AgentSetting';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { type AvailableAgentItem } from '@/services/agent';
 import { type AgentItem } from '@/types/agent';
 import { type MetaData } from '@/types/meta';
@@ -19,6 +20,8 @@ export interface AgentSliceState {
    * (e.g. 401s are not retried by SWR). Cleared on successful fetch / retry.
    */
   agentConfigErrorMap: Record<string, string>;
+  /** Replica bookkeeping for agent configs (`agentMap` is its view). */
+  agentConfigReplica: ReplicaState<PartialDeep<AgentItem>>;
   agentDocumentsMap: Record<string, AgentContextDocument[]>;
   agentMap: Record<string, PartialDeep<AgentItem>>;
   /**
@@ -76,6 +79,7 @@ export interface AgentSliceState {
 
 export const initialAgentSliceState: AgentSliceState = {
   agentConfigErrorMap: {},
+  agentConfigReplica: createReplicaState(),
   agentDocumentsMap: {},
   agentMap: {},
   agentNotFoundMap: {},

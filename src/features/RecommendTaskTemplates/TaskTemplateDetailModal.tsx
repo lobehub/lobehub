@@ -6,11 +6,11 @@ import {
   ActionIcon,
   Button,
   createModal,
+  Divider,
   type ModalInstance,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
 import { cssVar } from 'antd-style';
 import { Clock, X } from 'lucide-react';
 import { memo, useEffect, useMemo } from 'react';
@@ -80,7 +80,7 @@ const TaskTemplateDetailContent = memo<TaskTemplateDetailContentProps>(
 
         {instruction.trim().length > 0 && (
           <>
-            <Divider dashed style={{ marginBlock: 0 }} />
+            <Divider dashed />
             <Markdown variant={'chat'}>{instruction}</Markdown>
           </>
         )}

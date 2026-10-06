@@ -10,6 +10,7 @@ import pMap from 'p-map';
 import { type SWRResponse } from 'swr';
 
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { fileKeys } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
@@ -20,7 +21,6 @@ import { uploadFileListReducer } from '@/store/file/reducers/uploadFileList';
 import { type StoreSetter } from '@/store/types';
 import { type FileListItem, type QueryFileListParams } from '@/types/files';
 import { type ResourceItem } from '@/types/resource';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 import { unzipFile } from '@/utils/unzipFile';
 
 import { type FileStore } from '../../store';
@@ -195,7 +195,7 @@ export class FileManageActionImpl {
       if (!result) return;
       await this.#get().refreshFileList({ revalidateResources: true });
 
-      if (!isChunkingUnsupported(item.file.type)) {
+      if (isChunkingSupported({ fileType: item.file.type, name: item.file.name })) {
         await this.#get().parseFilesToChunks([result.id], { skipExist: false });
       }
     } catch (error) {
@@ -243,6 +243,7 @@ export class FileManageActionImpl {
     try {
       const response = await serverFileService.getKnowledgeItems({
         ...queryListParams,
+        includeContentPreview: queryListParams.includeContentPreview ?? false,
         limit: queryListParams.limit ?? 50,
         offset: fileListOffset,
       });
@@ -414,7 +415,10 @@ export class FileManageActionImpl {
 
     // 5. auto-embed files that support chunking
     const fileIdsToEmbed = uploadResults
-      .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
+      .filter(
+        ({ file, fileId }) =>
+          fileId && isChunkingSupported({ fileType: file.type, name: file.name }),
+      )
       .map(({ fileId }) => fileId!);
 
     if (fileIdsToEmbed.length > 0) {
@@ -524,10 +528,6 @@ export class FileManageActionImpl {
 
   setPendingRenameItemId = (id: string | null): void => {
     this.#set({ pendingRenameItemId: id }, false, 'setPendingRenameItemId');
-  };
-
-  setUploadDockExpanded = (expanded: boolean): void => {
-    this.#set({ uploadDockExpanded: expanded }, false, 'setUploadDockExpanded');
   };
 
   toggleEmbeddingIds = (ids: string[], loading?: boolean): void => {
@@ -736,7 +736,10 @@ export class FileManageActionImpl {
 
       // 9. Auto-embed files that support chunking
       const fileIdsToEmbed = uploadResults
-        .filter(({ fileType, fileId }) => fileId && !isChunkingUnsupported(fileType))
+        .filter(
+          ({ file, fileId }) =>
+            fileId && isChunkingSupported({ fileType: file.type, name: file.name }),
+        )
         .map(({ fileId }) => fileId!);
 
       if (fileIdsToEmbed.length > 0) {
@@ -773,6 +776,7 @@ export class FileManageActionImpl {
     return useClientDataSWR<FileListItem[]>(fileKeys.knowledgeItems(params), async () => {
       const response = await serverFileService.getKnowledgeItems({
         ...params,
+        includeContentPreview: params.includeContentPreview ?? false,
         limit: params.limit ?? 50,
         offset: 0,
       });

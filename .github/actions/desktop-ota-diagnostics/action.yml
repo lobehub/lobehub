@@ -1,0 +1,59 @@
+name: Desktop OTA Diagnostics
+description: Preserve compatibility inputs and explicit build/publication outcomes, including failures
+inputs:
+  kind:
+    description: gate, core-build, core-publish, build or release
+    default: gate
+  channel:
+    description: Desktop update channel
+    required: true
+  steps-json:
+    description: Caller step outcomes (only selected metadata is persisted)
+    required: true
+  job-status:
+    description: Caller job status before diagnostics
+    required: true
+  suffix:
+    description: Extra artifact-name segment for matrix legs sharing job id, os and arch
+    required: false
+    default: ''
+outputs:
+  published:
+    description: Whether a core release was published
+    value: ${{ steps.report.outputs.published }}
+  reason:
+    description: Publication or skip reason
+    value: ${{ steps.report.outputs.reason }}
+  requires_full_release:
+    description: Whether compatibility requires a full release
+    value: ${{ steps.report.outputs.requires_full_release }}
+  version:
+    description: Published core version
+    value: ${{ steps.report.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - name: Record diagnostic summary
+      id: report
+      shell: bash
+      env:
+        CHANNEL: ${{ inputs.channel }}
+        DIAGNOSTIC_KIND: ${{ inputs.kind }}
+        JOB_STATUS: ${{ inputs.job-status }}
+        STEPS_JSON: ${{ inputs.steps-json }}
+      # Keep this script compatible with the ambient Node runtime if setup failed.
+      run: node apps/desktop/scripts/reportRendererOta.mjs
+    - name: Preserve diagnostic artifacts
+      if: always()
+      uses: actions/upload-artifact@v6
+      with:
+        name: desktop-ota-diagnostics-${{ github.job }}-${{ runner.os }}-${{ runner.arch }}${{ inputs.suffix && format('-{0}', inputs.suffix) || '' }}-${{ github.run_attempt }}
+        if-no-files-found: warn
+        retention-days: 14
+        path: |
+          desktop-ota-diagnostics/
+          apps/desktop/release/core-ota/core*/*/latest.json
+          release/core-ota/core*/*/latest.json
+          release/shell.json
+          ${{ runner.temp }}/shell.json
+          ${{ runner.temp }}/previous-core.json

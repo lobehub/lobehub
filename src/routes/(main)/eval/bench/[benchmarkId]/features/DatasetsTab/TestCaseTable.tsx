@@ -1,9 +1,15 @@
-import { DropdownMenu, Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
-import { Pagination, Table } from 'antd';
-import { type ColumnsType } from 'antd/es/table';
+import { DropdownMenu, Flexbox } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Input,
+  Pagination,
+  Table,
+  type TableColumn,
+  Text,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Ellipsis, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Ellipsis, ExternalLink, FileUp, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -92,30 +98,14 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorText};
   `,
   table: css`
-    .ant-table {
-      font-size: ${cssVar.fontSize};
+    .row-selected > td,
+    .row-selected:hover > td {
+      background: ${cssVar.colorPrimaryBg};
     }
-
-    .ant-table-thead > tr > th {
-      font-size: ${cssVar.fontSizeSM};
-      font-weight: 500;
-      color: ${cssVar.colorTextTertiary};
-      background: ${cssVar.colorFillQuaternary};
-    }
-
-    .ant-table-tbody > tr {
-      &.row-clickable {
-        cursor: pointer;
-      }
-
-      &:hover {
-        background: ${cssVar.colorFillQuaternary};
-      }
-
-      &.row-selected {
-        background: ${cssVar.colorPrimaryBg};
-      }
-    }
+  `,
+  tableHeader: css`
+    font-size: ${cssVar.fontSizeSM};
+    color: ${cssVar.colorTextTertiary};
   `,
 }));
 
@@ -127,6 +117,8 @@ interface TestCaseTableProps {
   onDiffFilterChange: (filter: 'all' | 'easy' | 'medium' | 'hard') => void;
   onEdit?: (testCase: any) => void;
   onImport?: () => void;
+  /** Navigate to the case definition page. */
+  onOpen?: (testCase: any) => void;
   onPageChange: (page: number, pageSize: number) => void;
   onPreview?: (testCase: any) => void;
   onSearchChange: (value: string) => void;
@@ -151,6 +143,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
     onPageChange,
     onPreview,
     onEdit,
+    onOpen,
     onDelete,
     onAddCase,
     onImport,
@@ -179,8 +172,8 @@ const TestCaseTable = memo<TestCaseTableProps>(
       };
     }, [testCases]);
 
-    const columns: ColumnsType<any> = useMemo(() => {
-      const base: ColumnsType<any> = [
+    const columns: TableColumn<any>[] = useMemo(() => {
+      const base: TableColumn<any>[] = [
         {
           dataIndex: 'id',
           key: 'index',
@@ -199,9 +192,8 @@ const TestCaseTable = memo<TestCaseTableProps>(
           width: 48,
         },
         {
-          dataIndex: ['content', 'input'],
           key: 'input',
-          render: (text: string) => (
+          render: (_: any, record: any) => (
             <p
               style={{
                 color: cssVar.colorText,
@@ -210,17 +202,18 @@ const TestCaseTable = memo<TestCaseTableProps>(
                 wordBreak: 'break-word',
               }}
             >
-              {text}
+              {record.content?.input}
             </p>
           ),
           title: t('table.columns.input'),
         },
         {
-          dataIndex: ['content', 'expected'],
           ellipsis: true,
           key: 'expected',
-          render: (text: string) => (
-            <span style={{ color: cssVar.colorTextSecondary }}>{text || '-'}</span>
+          render: (_: any, record: any) => (
+            <span style={{ color: cssVar.colorTextSecondary }}>
+              {record.content?.expected || '-'}
+            </span>
           ),
           title: t('table.columns.expected'),
           width: 200,
@@ -248,10 +241,11 @@ const TestCaseTable = memo<TestCaseTableProps>(
           width: 120,
         },
         {
-          dataIndex: ['content', 'category'],
           key: 'category',
-          render: (text: string) => (
-            <span style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>{text || '-'}</span>
+          render: (_: any, record: any) => (
+            <span style={{ color: cssVar.colorTextTertiary, fontSize: 12 }}>
+              {record.content?.category || '-'}
+            </span>
           ),
           title: t('table.columns.category'),
           width: 120,
@@ -266,6 +260,17 @@ const TestCaseTable = memo<TestCaseTableProps>(
               <DropdownMenu
                 trigger={['click']}
                 items={[
+                  ...(onOpen
+                    ? [
+                        {
+                          icon: <ExternalLink size={14} />,
+                          key: 'open',
+                          label: t('testCaseDetail.open'),
+                          onClick: () => onOpen(record),
+                        },
+                        { type: 'divider' as const },
+                      ]
+                    : []),
                   {
                     icon: <Pencil size={14} />,
                     key: 'edit',
@@ -291,7 +296,7 @@ const TestCaseTable = memo<TestCaseTableProps>(
       }
 
       return base;
-    }, [pagination, readOnly, onEdit, onDelete, t, datasetEvalMode]);
+    }, [pagination, readOnly, onEdit, onOpen, onDelete, t, datasetEvalMode]);
 
     return (
       <>
@@ -330,31 +335,16 @@ const TestCaseTable = memo<TestCaseTableProps>(
         </div>
         <div className={styles.filtersRow}>
           <Flexbox horizontal align="center" gap={8}>
-            <div style={{ position: 'relative' }}>
-              <Search
-                size={14}
-                style={{
-                  color: cssVar.colorTextTertiary,
-                  left: 12,
-                  position: 'absolute',
-                  top: '50%',
-                  transform: 'translateY(-50%)',
-                }}
-              />
-              <Input
-                placeholder={t('testCase.search.placeholder')}
-                size="small"
-                value={search}
-                style={{
-                  fontSize: 12,
-                  paddingLeft: 32,
-                  width: 192,
-                }}
-                onChange={(e) => {
-                  onSearchChange(e.target.value);
-                }}
-              />
-            </div>
+            <Input
+              placeholder={t('testCase.search.placeholder')}
+              prefix={<Search size={14} />}
+              size="small"
+              style={{ fontSize: 12, width: 192 }}
+              value={search}
+              onChange={(e) => {
+                onSearchChange(e.target.value);
+              }}
+            />
             <div className={styles.filterContainer}>
               {(['all', 'easy', 'medium', 'hard'] as const).map((f) => (
                 <button
@@ -383,17 +373,13 @@ const TestCaseTable = memo<TestCaseTableProps>(
         </div>
         <div className={styles.table}>
           <Table
+            classNames={{ header: styles.tableHeader }}
             columns={columns}
             dataSource={testCases}
             pagination={false}
+            rowClassName={(record) => (record.id === selectedId ? 'row-selected' : '')}
             rowKey="id"
             size="small"
-            rowClassName={(record) => {
-              const classes: string[] = [];
-              if (!readOnly) classes.push('row-clickable');
-              if (record.id === selectedId) classes.push('row-selected');
-              return classes.join(' ');
-            }}
             onRow={
               readOnly
                 ? undefined
@@ -411,7 +397,6 @@ const TestCaseTable = memo<TestCaseTableProps>(
             style={{ paddingBlock: 12, paddingInline: 16 }}
           >
             <Pagination
-              simple
               current={pagination.current}
               pageSize={pagination.pageSize}
               size="small"

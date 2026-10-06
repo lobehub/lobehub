@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Select } from '@lobehub/ui/base-ui';
+import { Empty, Flexbox } from '@lobehub/ui';
+import { Avatar, Button, Input, Select, Spin, TextArea } from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { useMutation } from '@tanstack/react-query';
-import { Empty, Form, Input, Spin } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -46,7 +46,7 @@ interface FormValues {
 
 const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
   const { t } = useTranslation('setting');
-  const [form] = Form.useForm<FormValues>();
+  const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
 
   const { data: connectionsData, isLoading } = credsApi.query.listOAuthConnections.useQuery();
 
@@ -112,45 +112,41 @@ const OAuthCredForm: FC<OAuthCredFormProps> = ({ credsApi, disabled, onBack, onS
   }
 
   return (
-    <Form<FormValues> form={form} layout="vertical" onFinish={handleSubmit}>
-      <Form.Item
+    <Form form={form} layout="vertical">
+      <Form.Field
         label={t('creds.form.selectConnection')}
         name="oauthConnectionId"
-        rules={[{ required: true, message: t('creds.form.connectionRequired') }]}
+        required={t('creds.form.connectionRequired')}
       >
         <Select
           disabled={disabled}
           options={connectionOptions}
           placeholder={t('creds.form.selectConnectionPlaceholder')}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
+      <Form.Field
         label={t('creds.form.key')}
         name="key"
-        rules={[
-          { required: true, message: t('creds.form.keyRequired') },
-          { pattern: /^[\w-]+$/, message: t('creds.form.keyPattern') },
-        ]}
+        required={t('creds.form.keyRequired')}
+        validate={(value?: string) =>
+          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
+        }
       >
         <Input disabled={disabled} placeholder="e.g., github-oauth" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
-        label={t('creds.form.name')}
-        name="name"
-        rules={[{ required: true, message: t('creds.form.nameRequired') }]}
-      >
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
         <Input disabled={disabled} placeholder="e.g., GitHub Connection" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+      <Form.Field label={t('creds.form.description')} name="description">
+        <TextArea
           disabled={disabled}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}
         />
-      </Form.Item>
+      </Form.Field>
 
       <div className={styles.footer}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>

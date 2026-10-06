@@ -74,17 +74,16 @@ describe('memoryRouter.reEmbedMemories', () => {
     const updateExperienceVectors = vi.fn().mockResolvedValue(undefined);
     const updateActivityVectors = vi.fn().mockResolvedValue(undefined);
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          updateContextVectors,
-          updateExperienceVectors,
-          updateIdentityVectors,
-          updateActivityVectors,
-          updatePreferenceVectors,
-          updateUserMemoryVectors,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        updateContextVectors,
+        updateExperienceVectors,
+        updateIdentityVectors,
+        updateActivityVectors,
+        updatePreferenceVectors,
+        updateUserMemoryVectors,
+      } as any;
+    });
 
     const userMemoriesRows = [{ id: 'memory-1', details: 'detail text', summary: 'summary text' }];
     const contextsRows = [{ id: 'context-1', description: 'context text' }];
@@ -178,12 +177,11 @@ describe('userMemories.queryMemories', () => {
       total: 1,
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          queryMemories,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        queryMemories,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -224,12 +222,11 @@ describe('userMemories.queryMemories', () => {
       total: 0,
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          queryMemories,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        queryMemories,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -246,7 +243,9 @@ describe('userMemories.queryMemories', () => {
     const providerError = new Error('Elasticsearch unavailable');
     const queryMemories = vi.fn().mockRejectedValue(new FtsSearchCandidateError(providerError));
 
-    vi.mocked(UserMemoryModel).mockImplementation(() => ({ queryMemories }) as any);
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return { queryMemories } as any;
+    });
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
     const caller = userMemoriesRouter.createCaller(mockCtx as any);
@@ -265,12 +264,11 @@ describe('userMemories.getMemoryDetail', () => {
   it('forwards memory id to model and returns detail', async () => {
     const getMemoryDetail = vi.fn().mockResolvedValue({ id: 'mem-1', layer: 'experience' });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          getMemoryDetail,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        getMemoryDetail,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -291,12 +289,11 @@ describe('userMemories.getMemoryDetail', () => {
   it('returns null when model throws', async () => {
     const getMemoryDetail = vi.fn().mockRejectedValue(new Error('boom'));
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          getMemoryDetail,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        getMemoryDetail,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -381,12 +378,11 @@ describe('userMemories.retrieveMemory', () => {
       ],
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          searchMemory,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        searchMemory,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -404,7 +400,9 @@ describe('userMemories.retrieveMemory', () => {
     );
     expect(searchMemory.mock.calls[0][0]).toStrictEqual({
       queries: ['Project Atlas'],
-      topK: { activities: 1, contexts: 0, experiences: 0, identities: 1, preferences: 1 },
+      // An explicit topK.contexts opts in to context memories even at medium
+      // effort; experience memory stays retired.
+      topK: { activities: 1, contexts: 1, experiences: 0, identities: 1, preferences: 1 },
     });
     expect(searchMemory.mock.calls[0][1]).toStrictEqual([[1]]);
 
@@ -443,12 +441,11 @@ describe('userMemories.retrieveMemory', () => {
       preferences: [],
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          searchMemory,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        searchMemory,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -506,12 +503,11 @@ describe('userMemories.retrieveMemory', () => {
       preferences: [],
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          searchMemory,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        searchMemory,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -534,7 +530,7 @@ describe('userMemories.retrieveMemory', () => {
         },
         topK: {
           activities: 3,
-          contexts: 0,
+          contexts: 2,
           experiences: 0,
           identities: 2,
           preferences: 3,
@@ -574,12 +570,11 @@ describe('userMemories.retrieveMemory', () => {
       preferences: [],
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          searchMemory,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        searchMemory,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 
@@ -620,12 +615,11 @@ describe('userMemories.toolAddActivityMemory', () => {
       memory: { id: 'memory-1' },
     });
 
-    vi.mocked(UserMemoryModel).mockImplementation(
-      () =>
-        ({
-          createActivityMemory,
-        }) as any,
-    );
+    vi.mocked(UserMemoryModel).mockImplementation(function () {
+      return {
+        createActivityMemory,
+      } as any;
+    });
 
     vi.mocked(getServerDB).mockResolvedValue(makeServerDBMock() as any);
 

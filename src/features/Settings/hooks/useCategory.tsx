@@ -1,3 +1,4 @@
+import { ENABLE_TOOL_CHANNEL_SETTINGS } from '@lobechat/business-const';
 import { isDesktop } from '@lobechat/const';
 import { Avatar } from '@lobehub/ui/base-ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
@@ -5,6 +6,7 @@ import {
   AppWindowIcon,
   BellIcon,
   Blocks,
+  BlocksIcon,
   Brain,
   BrainCircuit,
   ChartColumnBigIcon,
@@ -26,6 +28,8 @@ import {
   Sparkles,
   TagIcon,
   TerminalSquare,
+  Trash2,
+  Wrench,
 } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -44,6 +48,7 @@ import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors';
 
 export enum SettingsGroupKey {
+  Account = 'account',
   Agent = 'agent',
   Developer = 'developer',
   General = 'general',
@@ -79,6 +84,7 @@ export const useCategory = () => {
   const remoteServerUrl = useElectronStore(electronSyncSelectors.remoteServerUrl);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
   const enableOAuthApps = useUserStore(labPreferSelectors.enableOAuthApps);
+  const enableIntegrations = useUserStore(labPreferSelectors.enableIntegrations);
 
   const avatarUrl = useMemo(() => {
     if (!avatar) return undefined;
@@ -91,34 +97,61 @@ export const useCategory = () => {
   const categoryGroups: CategoryGroup[] = useMemo(() => {
     const groups: CategoryGroup[] = [];
 
-    // General group
-    const generalItems: CategoryItem[] = [
+    // Account group — settings that follow the user everywhere (profile,
+    // appearance, hotkeys, messenger bindings). Kept as its own group so the
+    // workspace settings sidebar can mirror exactly this set.
+    const accountItems: CategoryItem[] = [
       {
         icon: avatarUrl ? <Avatar avatar={avatarUrl} shape={'square'} size={26} /> : undefined,
         key: SettingsTabs.Profile,
         label: username || tAuth('tab.profile'),
       },
       {
-        icon: ChartColumnBigIcon,
-        key: SettingsTabs.Stats,
-        label: tAuth('tab.stats'),
-      },
-      {
         icon: PaletteIcon,
         key: SettingsTabs.Appearance,
         label: t('tab.appearance'),
-      },
-      {
-        icon: MonitorSmartphoneIcon,
-        key: SettingsTabs.Devices,
-        label: t('tab.devices'),
       },
       !mobile && {
         icon: KeyboardIcon,
         key: SettingsTabs.Hotkey,
         label: t('tab.hotkey'),
       },
-      enableBusinessFeatures && {
+      // Messenger bindings are a per-user identity (owned by userId), so they
+      // live with the account rather than the agent configuration.
+      {
+        icon: MessageCircleIcon,
+        key: SettingsTabs.Messenger,
+        label: t('tab.messenger'),
+      },
+      // Third-party integrations (the GitHub App today) are bound to the user
+      // or workspace that connected them, so they sit with the account. Labs
+      // alpha: hidden until the closed loop is ready for everyone.
+      enableIntegrations && {
+        icon: BlocksIcon,
+        key: SettingsTabs.Integrations,
+        label: t('tab.integrations'),
+      },
+    ].filter(Boolean) as CategoryItem[];
+
+    groups.push({
+      items: accountItems,
+      key: SettingsGroupKey.Account,
+      title: t('group.profile'),
+    });
+
+    // Personal group — personal-scoped data (stats, devices, notifications).
+    const generalItems: CategoryItem[] = [
+      {
+        icon: ChartColumnBigIcon,
+        key: SettingsTabs.Stats,
+        label: tAuth('tab.stats'),
+      },
+      {
+        icon: MonitorSmartphoneIcon,
+        key: SettingsTabs.Devices,
+        label: t('tab.devices'),
+      },
+      (enableBusinessFeatures || isDesktop) && {
         icon: BellIcon,
         key: SettingsTabs.Notification,
         label: t('tab.notification'),
@@ -128,7 +161,7 @@ export const useCategory = () => {
     groups.push({
       items: generalItems,
       key: SettingsGroupKey.General,
-      title: t('group.common'),
+      title: t('group.personal'),
     });
 
     // Personal subscription / billing items. Always shown when business
@@ -184,6 +217,11 @@ export const useCategory = () => {
         key: SettingsTabs.Memory,
         label: t('tab.memory'),
       },
+      ENABLE_TOOL_CHANNEL_SETTINGS && {
+        icon: Wrench,
+        key: SettingsTabs.Tools,
+        label: t('tab.tools'),
+      },
       {
         icon: KeyRound,
         key: SettingsTabs.Creds,
@@ -193,11 +231,6 @@ export const useCategory = () => {
         icon: KeyIcon,
         key: SettingsTabs.APIKey,
         label: tAuth('tab.apikey'),
-      },
-      {
-        icon: MessageCircleIcon,
-        key: SettingsTabs.Messenger,
-        label: t('tab.messenger'),
       },
     ].filter(Boolean) as CategoryItem[];
 
@@ -223,6 +256,11 @@ export const useCategory = () => {
         icon: Database,
         key: SettingsTabs.Storage,
         label: t('tab.storage'),
+      },
+      {
+        icon: Trash2,
+        key: SettingsTabs.Trash,
+        label: t('tab.trash'),
       },
       !hideDocs && {
         icon: Info,
@@ -281,6 +319,7 @@ export const useCategory = () => {
     showProvider,
     isDevMode,
     enableOAuthApps,
+    enableIntegrations,
     avatarUrl,
     username,
   ]);

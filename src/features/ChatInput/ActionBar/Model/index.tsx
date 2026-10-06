@@ -1,8 +1,12 @@
 import { Tooltip } from '@lobehub/ui';
+import { Alert } from '@lobehub/ui/base-ui';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
+import { useAgentShareSupported } from '@/business/client/useAgentShareSupported';
 import ModelSwitchPanel from '@/features/ModelSwitchPanel';
+import { useEnabledChatModels } from '@/hooks/useEnabledChatModels';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
@@ -16,7 +20,7 @@ import { useActionBarContext } from '../context';
 import SelectorMenu from './SelectorMenu';
 
 const ModelSwitch = memo(() => {
-  const { t } = useTranslation('chat');
+  const { t } = useTranslation(['chat', 'agent']);
   const { dropdownPlacement } = useActionBarContext();
   const agentId = useAgentId();
   const {
@@ -32,6 +36,20 @@ const ModelSwitch = memo(() => {
   // default; a switch pins to the active topic, otherwise updates the agent
   // (via selectModel, which honors workspace member overrides).
   const activeTopicId = useChatStore((s) => s.activeTopicId);
+  const { isShared } = useAgentShareSupported(agentId);
+  const chatModels = useEnabledChatModels();
+  const enabledList =
+    !activeTopicId && isShared && AGENT_SHARE_ALLOWED_PROVIDERS
+      ? chatModels.filter((item) => AGENT_SHARE_ALLOWED_PROVIDERS?.includes(item.id))
+      : undefined;
+  const modelNotice = enabledList ? (
+    <Alert
+      showIcon
+      description={t('share.settings.modelRestriction.description', { ns: 'agent' })}
+      title={t('share.settings.modelRestriction.title', { ns: 'agent' })}
+      type={'info'}
+    />
+  ) : undefined;
   const topicModel = useChatStore(topicSelectors.activeTopicModel);
   const updateTopicModel = useChatStore((s) => s.updateTopicModel);
   const model = topicModel?.model ?? agentModel;
@@ -40,9 +58,10 @@ const ModelSwitch = memo(() => {
   const enabledModel = useAiInfraStore(aiModelSelectors.getEnabledModelById(model, provider));
   const displayName = enabledModel?.displayName || model;
   const lockTooltip = useModelLockTooltip(displayName, selectionLockReason);
-  // Reasoning effort is a per-model user preference, so it rides along with the
-  // model trigger instead of claiming a second action slot.
-  const effort = useReasoningEffortControl(model, provider);
+  // Reasoning effort rides along with the model trigger instead of claiming a
+  // second action slot. Like the model, it pins to the active topic when there
+  // is one and edits the user's per-model default otherwise.
+  const effort = useReasoningEffortControl(model, provider, activeTopicId ?? undefined);
   // A pinned model still opens the menu when there is an effort to pick there.
   const interactive = canSelectModel || effort.hasReasoningParams;
 
@@ -56,8 +75,9 @@ const ModelSwitch = memo(() => {
     [activeTopicId, canSelectModel, selectModel, updateTopicModel],
   );
 
-  // Both current values in one label, the way the heterogeneous selector reads:
-  // "GPT-5.6 Sol 中". The effort half is dropped for models without one.
+  // Both current values on one chip, the way the heterogeneous selector reads:
+  // "GPT-5.6 Sol 中". The effort half is dropped for models without one; the
+  // chip keeps the two halves apart so the effort is never ellipsised away.
   const effortLabel = effort.effortValue
     ? t(`reasoningEffort.levels.${effort.effortValue}`)
     : undefined;
@@ -67,7 +87,8 @@ const ModelSwitch = memo(() => {
     <SelectorTrigger
       aria-disabled={!interactive}
       ariaLabel={triggerText}
-      text={triggerText}
+      secondaryText={effortLabel}
+      text={displayName}
       {...(interactive ? {} : { style: { cursor: 'default' } })}
     />
   );
@@ -82,7 +103,9 @@ const ModelSwitch = memo(() => {
         canSelectModel={canSelectModel}
         displayName={displayName}
         effort={effort}
+        enabledList={enabledList}
         model={model}
+        modelNotice={modelNotice}
         placement={dropdownPlacement ?? 'topRight'}
         provider={provider}
         onModelChange={handleModelChange}
@@ -97,7 +120,9 @@ const ModelSwitch = memo(() => {
 
   return (
     <ModelSwitchPanel
+      enabledList={enabledList}
       model={model}
+      notice={modelNotice}
       openOnHover={false}
       placement={dropdownPlacement ?? 'topRight'}
       provider={provider}

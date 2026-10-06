@@ -1,5 +1,7 @@
 import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
+import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
+import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import {
   type CreateMessageParams,
   type HeterogeneousToolStateSnapshot,
@@ -12,6 +14,16 @@ import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 import { MessageModel } from '@/database/models/message';
 
 import { FileService } from '../file';
+import { resolveMessageFileUrls } from './resolveMessageFileUrls';
+
+/** Apply the same error contract to single and batched message writes. */
+const normalizeMessageError = <T extends Pick<UpdateMessageParams, 'error'>>(value: T): T =>
+  value.error
+    ? {
+        ...value,
+        error: normalizeHeterogeneousMessageError(normalizeChatMessageError(value.error)),
+      }
+    : value;
 
 interface QueryOptions {
   agentId?: string | null;
@@ -163,8 +175,79 @@ export class MessageService {
    * so server-internal callers (e.g. agent runtime stream events) can push
    * the same payload the client would otherwise fetch.
    */
-  async queryMessages(params: QueryMessageParams): Promise<UIChatMessage[]> {
-    return this.messageModel.query(params, this.getQueryOptions());
+  async queryMessages(
+    params: QueryMessageParams,
+    options?: {
+      /**
+       * Include agent-share visitor rows. `MessageModel.query()` hides them by
+       * default (they live under the creator's account but belong to the
+       * visitor); only run-execution seams whose topic is already resolved and
+       * authorized may opt in.
+       */
+      allowShareVisitor?: boolean;
+    },
+  ): Promise<UIChatMessage[]> {
+    return this.messageModel.query(params, {
+      ...this.getQueryOptions(),
+      ...(options?.allowShareVisitor && { allowShareVisitor: true }),
+    });
+  }
+
+  /**
+   * Build the UI view from an already authorized, unprocessed DB snapshot.
+   *
+   * Never projects: this is the PUSH path, and a pushed snapshot is only ever
+   * sent to a client that did not declare protocol 2 — an older bundle that
+   * cannot fetch an omitted payload back. Protocol-2 clients receive a
+   * `message_patch` revision instead and read through `message.getMessages`,
+   * which is where the projection decision is made.
+   */
+  async prepareUiMessages(messages: UIChatMessage[]) {
+    return resolveMessageFileUrls(messages, (file) => this.fileService.getFileAccessUrl(file));
+  }
+
+  /**
+   * The stored tool payload behind a projected message.
+   *
+   * The UI read path hands back a view model (see `@lobechat/tool-view-model`),
+   * which is all the inline card renders. Surfaces that show the real thing —
+   * the crawl detail portal, the raw/debug viewer — call this when the message
+   * they hold is flagged `payloadOmitted`.
+   *
+   * Ownership is enforced by the two model reads, so a foreign message id
+   * resolves to `undefined` rather than another user's tool output.
+   */
+  async getToolResultPayload(
+    messageId: string,
+  ): Promise<{ content: string; pluginState?: unknown } | undefined> {
+    const [message, plugin] = await Promise.all([
+      this.messageModel.findById(messageId),
+      this.messageModel.findMessagePlugin(messageId),
+    ]);
+
+    if (!message) return undefined;
+
+    return { content: message.content ?? '', pluginState: plugin?.state };
+  }
+
+  /**
+   * Stored tool payloads for several messages at once.
+   *
+   * A topic can hold hundreds of projected tool rows, and an export needs every
+   * one of them; asking per row would be that many authenticated round trips,
+   * each repeating the same authorization and joins. Ownership is enforced by
+   * the model read, so ids the caller may not see simply do not come back.
+   */
+  async getToolResultPayloads(
+    messageIds: string[],
+  ): Promise<Record<string, { content: string; pluginState?: unknown }>> {
+    if (messageIds.length === 0) return {};
+
+    const rows = await this.messageModel.queryByIds(messageIds);
+
+    return Object.fromEntries(
+      rows.map((row) => [row.id, { content: row.content ?? '', pluginState: row.pluginState }]),
+    );
   }
 
   /**
@@ -193,7 +276,10 @@ export class MessageService {
     for (const [index, operation] of operations.entries()) {
       try {
         if (operation.type === 'createMessage') {
-          const item = await this.messageModel.create(operation.message, operation.message.id);
+          const item = await this.messageModel.create(
+            normalizeMessageError(operation.message),
+            operation.message.id,
+          );
           results.push({ id: item.id, index, success: true, type: operation.type });
           continue;
         }
@@ -204,7 +290,10 @@ export class MessageService {
           continue;
         }
 
-        const result = await this.messageModel.update(operation.id, operation.value as any);
+        const result = await this.messageModel.update(
+          operation.id,
+          normalizeMessageError(operation.value),
+        );
         results.push({ id: operation.id, index, success: result.success, type: operation.type });
       } catch (error) {
         console.error('[MessageService] batchMutate operation failed:', error);
@@ -233,7 +322,7 @@ export class MessageService {
     //    when present (passing `undefined` falls back to the model's genId
     //    default), so flows that chain parentId across not-yet-created messages
     //    (e.g. the subagent run coordinator) can assign ids up front.
-    const item = await this.messageModel.create(params, params.id);
+    const item = await this.messageModel.create(normalizeMessageError(params), params.id);
 
     // 2. Query all messages for this agent/topic
     // Use agentId field for query
@@ -329,6 +418,8 @@ export class MessageService {
     value: UpdateMessageParams,
     options: QueryOptions,
   ): Promise<{ messages?: UIChatMessage[]; success: boolean }> {
+    value = normalizeMessageError(value);
+
     const updateStartedAt = Date.now();
     const modelTiming = createModelTiming(options, 'lambda.message.update.dbUpdate');
     if (modelTiming) {

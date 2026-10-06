@@ -2,34 +2,36 @@
 
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { Form, Input, type InputRef } from 'antd';
+import { Button, Input, InputPassword, Text } from '@lobehub/ui/base-ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { Lock, Mail } from 'lucide-react';
-import { useEffect, useRef } from 'react';
+import { type CSSProperties, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useNavigate, useSearchParams } from 'react-router';
 
 import { AuthCard } from '@/features/AuthCard';
-import { AuthAgreement, useAuthAgreement } from '@/features/AuthShell';
+import AuthAgreement from '@/features/AuthShell/AuthAgreement';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 
+import { EMAIL_REGEX } from '../SignIn/SignInEmailStep';
 import { useSignUp } from './useSignUp';
 
+const FIELD_STYLE: CSSProperties = { gap: 0, paddingBlock: '0 24px' };
+
 const BetterAuthSignUpForm = () => {
-  const { form, loading, onSubmit, businessElement } = useSignUp();
+  const { agreementChecked, businessElement, form, loading, setAgreementChecked } = useSignUp();
 
   const { t } = useTranslation('auth');
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
 
-  const emailInputRef = useRef<InputRef>(null);
-  const passwordInputRef = useRef<InputRef>(null);
+  const emailInputRef = useRef<HTMLInputElement>(null);
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const email = searchParams.get('email');
     if (email) {
-      form.setFieldsValue({ email });
+      form.setValue('email', email);
       passwordInputRef.current?.focus();
     } else {
       emailInputRef.current?.focus();
@@ -55,21 +57,14 @@ const BetterAuthSignUpForm = () => {
 
   return (
     <AuthCard footer={footer} title={t('betterAuth.signup.cardTitle', { appName: BRANDING_NAME })}>
-      <Form
-        form={form}
-        layout="vertical"
-        onFinish={(values) =>
-          continueWithAgreement(() => {
-            void onSubmit(values);
-          })
-        }
-      >
-        <Form.Item
+      <Form form={form} gap={0} layout="vertical">
+        <Form.Field
           name="email"
-          rules={[
-            { message: t('betterAuth.errors.emailRequired'), required: true },
-            { message: t('betterAuth.errors.emailInvalid'), type: 'email' },
-          ]}
+          style={FIELD_STYLE}
+          validate={(value: string) => {
+            if (!value) return t('betterAuth.errors.emailRequired');
+            if (!EMAIL_REGEX.test(value)) return t('betterAuth.errors.emailInvalid');
+          }}
         >
           <Input
             autoComplete="email"
@@ -87,25 +82,19 @@ const BetterAuthSignUpForm = () => {
               />
             }
           />
-        </Form.Item>
-        <Form.Item
+        </Form.Field>
+        <Form.Field
           name="password"
-          rules={[
-            { message: t('betterAuth.errors.passwordRequired'), required: true },
-            { message: t('betterAuth.errors.passwordMinLength'), min: 8 },
-            { max: 64, message: t('betterAuth.errors.passwordMaxLength') },
-            {
-              message: t('betterAuth.errors.passwordFormat'),
-              validator: (_, value) => {
-                if (!value) return Promise.resolve();
-                const hasLetter = /[a-z]/i.test(value);
-                const hasNumber = /\d/.test(value);
-                return hasLetter && hasNumber ? Promise.resolve() : Promise.reject();
-              },
-            },
-          ]}
+          style={FIELD_STYLE}
+          validate={(value: string) => {
+            if (!value) return t('betterAuth.errors.passwordRequired');
+            if (value.length < 8) return t('betterAuth.errors.passwordMinLength');
+            if (value.length > 64) return t('betterAuth.errors.passwordMaxLength');
+            if (!/[a-z]/i.test(value) || !/\d/.test(value))
+              return t('betterAuth.errors.passwordFormat');
+          }}
         >
-          <Input.Password
+          <InputPassword
             autoComplete="new-password"
             placeholder={t('betterAuth.signup.passwordPlaceholder')}
             ref={passwordInputRef}
@@ -119,23 +108,17 @@ const BetterAuthSignUpForm = () => {
               />
             }
           />
-        </Form.Item>
-        <Form.Item
-          dependencies={['password']}
+        </Form.Field>
+        <Form.Field
+          deps={['password']}
           name="confirmPassword"
-          rules={[
-            { message: t('betterAuth.errors.confirmPasswordRequired'), required: true },
-            ({ getFieldValue }) => ({
-              validator(_, value) {
-                if (!value || getFieldValue('password') === value) {
-                  return Promise.resolve();
-                }
-                return Promise.reject(new Error(t('betterAuth.errors.passwordMismatch')));
-              },
-            }),
-          ]}
+          style={FIELD_STYLE}
+          validate={(value: string, values: { password: string }) => {
+            if (!value) return t('betterAuth.errors.confirmPasswordRequired');
+            if (values.password !== value) return t('betterAuth.errors.passwordMismatch');
+          }}
         >
-          <Input.Password
+          <InputPassword
             autoComplete="new-password"
             placeholder={t('betterAuth.signup.confirmPasswordPlaceholder')}
             size="large"
@@ -148,16 +131,14 @@ const BetterAuthSignUpForm = () => {
               />
             }
           />
-        </Form.Item>
+        </Form.Field>
 
-        {businessElement}
+        {businessElement && <div style={{ paddingBlockEnd: 24 }}>{businessElement}</div>}
 
         <AuthAgreement checked={agreementChecked} onChange={setAgreementChecked} />
-        <Form.Item>
-          <Button block htmlType="submit" loading={loading} size="large" type="primary">
-            {t('betterAuth.signup.submit')}
-          </Button>
-        </Form.Item>
+        <Button block htmlType="submit" loading={loading} size="large" type="primary">
+          {t('betterAuth.signup.submit')}
+        </Button>
       </Form>
     </AuthCard>
   );

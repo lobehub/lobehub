@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import * as dotenv from 'dotenv';
 import dotenvExpand from 'dotenv-expand';
 
-import { summarizeFtsSearchReindexError } from '../../packages/database/src/repositories/ftsSearchReindex';
+import { summarizeFtsSearchReindexError } from '../elasticsearchReindex/runtime/auditLogger';
 import { runWithLockRetry as defaultRunWithLockRetry } from '../migrateServerDB/retry';
 
 // Load environment variables in priority order:
@@ -25,8 +25,12 @@ type LoadRepository = () => Promise<FtsSearchSyncCaptureRepository>;
 type RunWithLockRetry = (operation: () => Promise<void>) => Promise<void>;
 type Logger = (...arguments_: unknown[]) => void;
 
+interface FtsSearchSyncCaptureEnvironment {
+  DATABASE_URL?: string;
+}
+
 export type InstallFtsSearchSyncCaptureOptions = {
-  env?: NodeJS.ProcessEnv;
+  env?: FtsSearchSyncCaptureEnvironment;
   loadRepository?: LoadRepository;
   runWithLockRetry?: RunWithLockRetry;
 };
@@ -45,7 +49,7 @@ const loadRepository: LoadRepository = async () => {
 };
 
 export const installFtsSearchSyncCapture = async ({
-  env: environment = process.env,
+  env: environment = { DATABASE_URL: process.env.DATABASE_URL },
   loadRepository: load = loadRepository,
   runWithLockRetry = defaultRunWithLockRetry,
 }: InstallFtsSearchSyncCaptureOptions = {}) => {

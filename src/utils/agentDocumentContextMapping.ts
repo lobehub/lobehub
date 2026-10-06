@@ -3,7 +3,7 @@ import {
   AGENT_DOCUMENT_INJECTION_POSITIONS,
   type AgentContextDocument,
   type AgentDocumentInjectionPosition,
-} from '@lobechat/context-engine';
+} from '@lobechat/context-engine/agent-document';
 
 import type { AgentDocumentContextPayload } from '@/database/models/agentDocuments';
 
@@ -35,6 +35,7 @@ export const normalizeAgentDocumentPosition = (
 export const toAgentContextDocument = (doc: AgentDocumentContextPayload): AgentContextDocument => ({
   content: doc.content,
   contentCharCount: doc.contentCharCount ?? doc.content.length,
+  createdAt: doc.createdAt ?? undefined,
   description: doc.description ?? undefined,
   filename: doc.filename,
   id: doc.id,

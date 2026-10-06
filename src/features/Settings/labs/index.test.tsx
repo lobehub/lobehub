@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { initServerConfigStore, Provider } from '@/store/serverConfig/store';
 import { useUserStore } from '@/store/user';
 
+import { LAB_FEATURES } from './features';
 import Page from './index';
 
 vi.hoisted(() => {
@@ -107,10 +108,17 @@ describe('Labs settings page', () => {
     expect(screen.getByText('features.oauthApps.title')).toBeDefined();
   });
 
+  it('renders Integrations as an alpha lab toggle', () => {
+    renderPage();
+
+    const integrations = screen.getByText('features.integrations.title');
+    expect(within(integrations).getByText('stage.alpha.label')).toBeDefined();
+  });
+
   it('renders the topic acceptance (tray) lab toggle', () => {
     renderPage();
 
-    expect(screen.getByText('features.topicAcceptance.title')).toBeDefined();
+    expect(screen.getByText('features.goals.title')).toBeDefined();
   });
 
   it('does not render released task verify as a lab toggle', () => {
@@ -125,20 +133,25 @@ describe('Labs settings page', () => {
     expect(screen.queryByText('features.inAppBrowser.title')).toBeNull();
   });
 
+  it('does not render the released agent provider binding as a lab toggle', () => {
+    renderPage();
+
+    expect(screen.queryByText('features.agentProviderBinding.title')).toBeNull();
+  });
+
   it('labels every experiment with a maturity stage tag', () => {
     renderPage();
 
     const alphaTags = screen.getAllByText('stage.alpha.label');
     const betaTags = screen.getAllByText('stage.beta.label');
-    // Every toggle carries exactly one stage tag.
-    expect(alphaTags.length + betaTags.length).toBe(14);
+    // Every toggle carries exactly one stage tag — counted against the registry
+    // rather than a literal, so adding an experiment does not fail this test for
+    // the wrong reason.
+    expect(alphaTags.length + betaTags.length).toBe(LAB_FEATURES.length);
   });
 
   it('marks internal-testing experiments as alpha and usable ones as beta', () => {
     renderPage();
-
-    const agentProviderBinding = screen.getByText('features.agentProviderBinding.title');
-    expect(within(agentProviderBinding).getByText('stage.alpha.label')).toBeDefined();
 
     const claudeCodeSdk = screen.getByText('features.claudeCodeSdk.title');
     expect(within(claudeCodeSdk).getByText('stage.alpha.label')).toBeDefined();

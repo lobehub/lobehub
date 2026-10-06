@@ -13,6 +13,13 @@ export interface ToolRunResult {
   content: string;
   /** Server tool paused (client/device dispatch) — result arrives later. */
   deferred?: boolean;
+  /**
+   * Wall time the tool took on the DEVICE, by the device's own clock, when the
+   * call was dispatched to one. Paired with the server-observed
+   * `executionTime`, the difference is pure dispatch overhead — the number that
+   * decides whether moving the agent loop onto the device is worth it.
+   */
+  deviceExecutionTime?: number;
   error?: unknown;
   executionTime?: number;
   state?: Record<string, any>;
@@ -131,6 +138,11 @@ export interface ToolRunContext {
  * client adapter wraps `internal_invokeDifferentTypePlugin`.
  */
 export interface ToolTransport {
+  /** Execution-entry control; a returned result settles this call without launching it. */
+  beforeToolCall?: (
+    call: ChatToolPayload,
+    context: ToolRunContext,
+  ) => Promise<ToolRunExecution | undefined>;
   /** This runtime can execute tools whose source is the client directly. */
   canRunClientTools?: boolean;
   getCost?: (toolName: string) => number;

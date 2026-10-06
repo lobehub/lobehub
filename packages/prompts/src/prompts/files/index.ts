@@ -5,6 +5,13 @@ import { filePrompts } from './file';
 import { imagesPrompts } from './image';
 import { videosPrompts } from './video';
 
+export {
+  FILE_INLINE_MAX_CHARS,
+  FILE_PREVIEW_CHARS,
+  isOversizedFileContent,
+  previewLongFileContent,
+  readAttachmentContinuation,
+} from './file';
 export type { KnowledgeBaseInfo, PromptKnowledgeOptions } from './knowledgeBase';
 export { promptAgentKnowledge } from './knowledgeBase';
 
@@ -14,9 +21,12 @@ export const filesPrompts = ({
   videoList,
   audioList,
   addUrl = true,
+  canReadAttachment = false,
   messageId,
 }: {
   addUrl?: boolean;
+  /** Whether `readAttachment` is in the request's tool set; see `PreviewLongFileContentOptions`. */
+  canReadAttachment?: boolean;
   audioList?: ChatAudioItem[];
   fileList?: ChatFileItem[];
   imageList?: ChatImageItem[];
@@ -32,7 +42,7 @@ export const filesPrompts = ({
 
   const contentParts = [
     hasImages ? imagesPrompts(imageList!, addUrl, messageId) : '',
-    hasFiles ? filePrompts(fileList!, addUrl) : '',
+    hasFiles ? filePrompts(fileList!, addUrl, canReadAttachment) : '',
     hasVideos ? videosPrompts(videoList!, addUrl, messageId) : '',
     hasAudios ? audiosPrompts(audioList!, addUrl, messageId) : '',
   ].filter(Boolean);

@@ -1,6 +1,16 @@
 import { type MenuProps } from '@lobehub/ui';
-import { AccordionItem, ContextMenuTrigger, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
+import { ContextMenuTrigger, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import {
+  AccordionHeader,
+  AccordionItem,
+  AccordionPanel,
+  accordionStyles,
+  AccordionTrigger,
+  ActionIcon,
+  Spin,
+  Text,
+} from '@lobehub/ui/base-ui';
+import { cx } from 'antd-style';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -14,15 +24,14 @@ import { memo, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { useInitRecents } from '@/hooks/useInitRecents';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
 import { homeRecentSelectors } from '@/store/home/selectors';
+import { createRecentQueryKey } from '@/store/home/slices/recent/initialState';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
@@ -34,15 +43,14 @@ interface RecentsProps {
 
 const Recents = memo<RecentsProps>(({ itemKey }) => {
   const { t } = useTranslation('common');
-  const recents = useHomeStore(homeRecentSelectors.recents);
-  const isInit = useHomeStore(homeRecentSelectors.isRecentsInit);
   const isLogin = useUserStore(authSelectors.isLogin);
-  // Keep `error` / `mutate` so a failed recents fetch surfaces a Retry state
-  // instead of a permanent skeleton.
-  const { error, isRevalidating, mutate } = useInitRecents();
-
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const queryKey = createRecentQueryKey(recentPageSize + 1);
+  const items = useHomeStore(homeRecentSelectors.query(queryKey));
+  const useFetchRecents = useHomeStore((s) => s.useFetchRecents);
+  const syncStatus = useFetchRecents(isLogin, recentPageSize);
+  const refreshRecents = useHomeStore((s) => s.refreshRecents);
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
   const hiddenSections = useGlobalStore(
     systemStatusSelectors.hiddenSidebarSections(activeWorkspaceId),
@@ -117,45 +125,41 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
         onClick: () => openCustomizeSidebarModal(),
       },
     ] as MenuProps['items'];
-  }, [
-    recentPageSize,
-    updateSystemStatus,
-    t,
-    isFirst,
-    isLast,
-    moveSection,
-    hideSection,
-    visibleItems.length,
-  ]);
+  }, [recentPageSize, updateSystemStatus, t, isFirst, isLast, moveSection, hideSection]);
 
   if (!isLogin) return null;
-  if (isInit && (!recents || recents.length === 0)) return null;
+  if (items && items.length === 0) return null;
 
   return (
-    <AccordionItem
-      itemKey={itemKey}
-      paddingBlock={4}
-      paddingInline={'8px 4px'}
-      action={
-        <DropdownMenu items={dropdownMenu}>
-          <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
-        </DropdownMenu>
-      }
-      headerWrapper={(header) => (
-        <ContextMenuTrigger items={dropdownMenu}>{header}</ContextMenuTrigger>
-      )}
-      title={
-        <Flexbox horizontal align="center" gap={4}>
-          <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
-            {t('recents')}
-          </Text>
-          {isRevalidating && <NeuralNetworkLoading size={14} />}
-        </Flexbox>
-      }
-    >
-      <Suspense fallback={<SkeletonList rows={3} />}>
-        <RecentsList error={error} onRetry={() => mutate()} />
-      </Suspense>
+    <AccordionItem value={itemKey}>
+      <ContextMenuTrigger items={dropdownMenu}>
+        <AccordionHeader>
+          <AccordionTrigger style={{ paddingBlock: 4, paddingInline: '8px 4px' }}>
+            <Flexbox horizontal align="center" gap={4}>
+              <Text ellipsis fontSize={12} type={'secondary'} weight={500}>
+                {t('recents')}
+              </Text>
+              {syncStatus.isValidating && items && <Spin size="small" variant="network" />}
+            </Flexbox>
+          </AccordionTrigger>
+          <div
+            className={cx(
+              'accordion-action',
+              accordionStyles.action,
+              accordionStyles.actionBorderless,
+            )}
+          >
+            <DropdownMenu items={dropdownMenu}>
+              <ActionIcon icon={MoreHorizontalIcon} size={'small'} style={{ flex: 'none' }} />
+            </DropdownMenu>
+          </div>
+        </AccordionHeader>
+      </ContextMenuTrigger>
+      <AccordionPanel>
+        <Suspense fallback={<SkeletonList rows={3} />}>
+          <RecentsList error={syncStatus.error} onRetry={() => void refreshRecents()} />
+        </Suspense>
+      </AccordionPanel>
     </AccordionItem>
   );
 });

@@ -13,7 +13,7 @@ export const HETERO_OPERATION_JWT_AUDIENCE = 'urn:lobehub:hetero-operation';
 export const HETERO_OPERATION_JWT_PURPOSE = 'hetero-operation';
 
 export type HeteroOperationCapability =
-  'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read' | 'model:invoke';
+  'goal:manage' | 'hetero:finish' | 'hetero:ingest' | 'hetero:intervention:read' | 'model:invoke';
 
 export interface HeteroOperationJwtClaims {
   aud: typeof HETERO_OPERATION_JWT_AUDIENCE;
@@ -185,9 +185,13 @@ export const validateHeteroOperationClaims = (
     typeof payload.exp !== 'number' ||
     !Array.isArray(capabilities) ||
     !capabilities.every((capability) =>
-      ['model:invoke', 'hetero:ingest', 'hetero:finish', 'hetero:intervention:read'].includes(
-        capability as string,
-      ),
+      [
+        'goal:manage',
+        'model:invoke',
+        'hetero:ingest',
+        'hetero:finish',
+        'hetero:intervention:read',
+      ].includes(capability as string),
     ) ||
     (payload.model !== undefined && typeof payload.model !== 'string') ||
     (payload.provider_id !== undefined && typeof payload.provider_id !== 'string') ||
@@ -240,6 +244,33 @@ export const signWorkspaceDeviceToken = async (workspaceId: string): Promise<str
       .setExpirationTime('4h')
       .sign(key)
   );
+};
+
+/**
+ * Sign the one-shot token that opens a tunnel link.
+ *
+ * The device gateway verifies the signature and reads `sub` (plus an optional
+ * `workspace_id`) to decide whether the caller owns the tunnel. The token is
+ * only the *entry ticket*: the gateway immediately exchanges it for a session
+ * cookie scoped to that tunnel hostname, so it is minted at click time and
+ * expires quickly. A tunnel link is not a public share link — opening it from
+ * elsewhere requires an authenticated LobeHub session to mint a fresh token.
+ */
+export const signTunnelAccessToken = async (params: {
+  userId: string;
+  workspaceId?: string;
+}): Promise<string> => {
+  const { key, kid } = await getSigningKey();
+
+  return new SignJWT({
+    purpose: 'tunnel-access',
+    ...(params.workspaceId ? { workspace_id: params.workspaceId } : {}),
+  })
+    .setProtectedHeader({ alg: 'RS256', kid })
+    .setSubject(params.userId)
+    .setIssuedAt()
+    .setExpirationTime('10m')
+    .sign(key);
 };
 
 /**

@@ -15,14 +15,18 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn(async () => ({})) }));
 
 vi.mock('@/database/models/connector', () => ({
-  ConnectorModel: vi.fn().mockImplementation(() => ({
-    markComposioConnectionUnavailable: mocks.markComposioUnavailable,
-    queryByIdentifiers: mocks.connectorQueryByIdentifiers,
-  })),
+  ConnectorModel: vi.fn().mockImplementation(function () {
+    return {
+      markComposioConnectionUnavailable: mocks.markComposioUnavailable,
+      queryByIdentifiers: mocks.connectorQueryByIdentifiers,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/plugin', () => ({
-  PluginModel: vi.fn().mockImplementation(() => ({ findById: mocks.pluginFindById })),
+  PluginModel: vi.fn().mockImplementation(function () {
+    return { findById: mocks.pluginFindById };
+  }),
 }));
 
 vi.mock('@/libs/composio', () => ({
@@ -40,13 +44,14 @@ const input = { identifier: 'gmail', toolArgs: { to: 'a@b.c' }, toolSlug: 'GMAIL
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.connectorQueryByIdentifiers.mockResolvedValue([]);
-  mocks.isComposioNotFound.mockImplementation(
-    (error: unknown) =>
+  mocks.isComposioNotFound.mockImplementation(function (error: unknown) {
+    return (
       typeof error === 'object' &&
       error !== null &&
       'code' in error &&
-      error.code === 'CONNECTED_ACCOUNT_NOT_FOUND',
-  );
+      error.code === 'CONNECTED_ACCOUNT_NOT_FOUND'
+    );
+  });
   mocks.markComposioUnavailable.mockResolvedValue(false);
   mocks.pluginFindById.mockResolvedValue(undefined);
   mocks.toolsExecute.mockResolvedValue({ data: 'ok' });

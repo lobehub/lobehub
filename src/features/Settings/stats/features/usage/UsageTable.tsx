@@ -1,12 +1,11 @@
-import { ProviderIcon } from '@lobehub/icons';
 import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { type TableColumnType } from 'antd';
+import { type TableColumn, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
+import { ProviderIcon } from '@/components/LobeIcons';
 import SpendType, { type SpendTypeValue } from '@/components/SpendType';
 import TablePagination from '@/components/TablePagination';
 import TotalToken from '@/components/TotalToken';
@@ -24,7 +23,7 @@ const DEFAULT_PAGE_SIZE = PAGE_SIZE_OPTIONS[0];
 
 /**
  * Sortable columns and the number each row sorts by. Pagination is ours now, so
- * antd only ever sees one page — sorting has to run over the whole result set
+ * the table only ever sees one page — sorting has to run over the whole result set
  * here, before it gets sliced.
  */
 const SORT_VALUES: Record<string, (row: any) => number> = {
@@ -92,13 +91,12 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
 
   // Column order mirrors the workspace spend breakdown: when it happened, what
   // it was, which model, how many tokens, what it cost, how fast.
-  const columns: TableColumnType<any>[] = [
+  const columns: TableColumn<any>[] = [
     {
       dataIndex: 'createdAt',
       key: 'createdAt',
       render: (value) => <span style={{ textWrap: 'nowrap' }}>{formatSpendTime(value)}</span>,
       sorter: true,
-      sortOrder: sort?.field === 'createdAt' ? sort.order : null,
       title: tSpend('table.columns.time'),
       width: 150,
     },
@@ -143,29 +141,27 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
         />
       ),
       sorter: true,
-      sortOrder: sort?.field === 'totalTokens' ? sort.order : null,
       title: tSpend('table.columns.totalTokens'),
       width: 180,
     },
     {
-      align: 'end',
+      align: 'right',
       dataIndex: 'spend',
       key: 'spend',
       // Kept in dollars, unlike the workspace breakdown's credits column.
       render: (value) => `$${formatNumber(value, 6)}`,
       sorter: true,
-      sortOrder: sort?.field === 'spend' ? sort.order : null,
       title: t('usage.table.spend'),
     },
     {
-      align: 'end',
+      align: 'right',
       dataIndex: 'tps',
       key: 'tps',
       render: (value) => (value ? formatNumber(value, 2) : '--'),
       title: t('usage.table.tps'),
     },
     {
-      align: 'end',
+      align: 'right',
       dataIndex: 'ttft',
       key: 'ttft',
       render: (value) => (value ? formatNumber(value / 1000, 2) : '--'),
@@ -182,9 +178,8 @@ const UsageTable = memo<UsageChartProps>(({ dateStrings }) => {
         rowKey={(record) => record.id || `${record.model}-${record.createdAt}-${record.provider}`}
         size="small"
         onChange={(_pagination, _filters, sorter) => {
-          const next = Array.isArray(sorter) ? sorter[0] : sorter;
-          const field = String(next?.columnKey ?? '');
-          setSort(next?.order && SORT_VALUES[field] ? { field, order: next.order } : null);
+          const field = String(sorter.columnKey ?? '');
+          setSort(sorter.order && SORT_VALUES[field] ? { field, order: sorter.order } : null);
           // A re-sort makes the current page a different set of rows; start
           // from the top rather than dropping the reader into the middle.
           setPagination({ current: 1 });

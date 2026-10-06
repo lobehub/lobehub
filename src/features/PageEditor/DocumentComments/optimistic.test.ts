@@ -40,6 +40,7 @@ const createComment = (
   parentCommentId: null,
   replyTo: null,
   replyToCommentId: null,
+  selectionAnchor: null,
   updatedAt: createdAt,
   workspaceId: 'workspace-1',
 });

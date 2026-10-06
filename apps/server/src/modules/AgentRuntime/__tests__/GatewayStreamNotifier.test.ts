@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
+import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
-import type { IStreamEventManager } from '../types';
+import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
@@ -42,6 +43,9 @@ describe('GatewayStreamNotifier', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // `clearAllMocks` keeps implementations, so a test that installs a fetch
+    // that never resolves would otherwise hang whichever test runs next.
+    mockFetch.mockReset().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
     inner = createMockInner();
     notifier = new GatewayStreamNotifier(inner, gatewayUrl, serviceToken);
   });
@@ -80,7 +84,144 @@ describe('GatewayStreamNotifier', () => {
       );
     });
 
-    it('awaits stream_end gateway push before resolving', async () => {
+    it.each([undefined, 'execution_complete'])(
+      'omits unused step_complete state from gateway payloads (phase=%s)',
+      async (phase) => {
+        const finalState = {
+          initialContext: { systemRole: 'system context' },
+          plan: { tools: ['tool'] },
+          status: 'done',
+          world: { agent: { name: 'agent' } },
+        };
+        const data = {
+          finalState,
+          nextStepScheduled: false,
+          ...(phase && { phase, reason: 'done', reasonDetail: 'Finished' }),
+          stepIndex: 2,
+        };
+
+        await notifier.publishStreamEvent('op-1', {
+          data,
+          stepIndex: 2,
+          type: 'step_complete',
+        });
+
+        const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+        const { finalState: _finalState, ...expected } = data;
+        expect(body.event.data).toEqual(expected);
+        expect(body.event.data).not.toHaveProperty('finalState');
+        // The notifier must not mutate the runtime state passed by its caller.
+        expect(inner.calls.publishStreamEvent[0][1].data.finalState).toBe(finalState);
+        expect(data.finalState).toBe(finalState);
+      },
+    );
+
+    it('projects the tool_end result onto the wire without touching the inner copy', async () => {
+      const result = {
+        content: 'THE WHOLE PAGE'.repeat(500),
+        state: {
+          results: [{ crawler: 'naive', data: { content: 'x'.repeat(5000) }, url: 'https://a' }],
+        },
+        success: true,
+      };
+      const data = {
+        executionTime: 42,
+        isSuccess: true,
+        payload: {
+          parentMessageId: 'msg-1',
+          toolCalling: { apiName: 'crawlSinglePage', identifier: 'lobe-web-browsing' },
+        },
+        result,
+      };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'tool_end' });
+
+      const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
+      expect(pushed.result).not.toHaveProperty('content');
+      expect(pushed.result.success).toBe(true);
+      expect(pushed.isSuccess).toBe(true);
+      expect(pushed.executionTime).toBe(42);
+      expect(pushed.result.state.results[0].data.content.length).toBeLessThan(5000);
+      // In-process consumers (Responses API, recorded steps) keep the real body.
+      expect(inner.calls.publishStreamEvent[0][1].data.result).toBe(result);
+      expect(data.result.content).toBe(result.content);
+    });
+
+    it('keeps a shell result body, whose renderer-side hook parses it', async () => {
+      const data = {
+        isSuccess: true,
+        payload: { toolCalling: { apiName: 'runCommand', identifier: 'lobe-local-system' } },
+        result: { content: 'Switched to branch feat/x', state: { exitCode: 0 }, success: true },
+      };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'tool_end' });
+
+      const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
+      expect(pushed.result.content).toBe('Switched to branch feat/x');
+      expect(pushed.result.state.exitCode).toBe(0);
+    });
+
+    it('ships stream_end with only what the wire reads', async () => {
+      const data = {
+        finalContent: 'the answer',
+        grounding: { citations: [1, 2] },
+        imageList: [{ id: 'img-1' }],
+        reasoning: 'x'.repeat(9000),
+        stepLabel: 'Step 2',
+        toolsCalling: [{ id: 'call-1' }],
+        usage: { total_tokens: 500 },
+      };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+      await notifier.drainPushes('op-1');
+
+      const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
+      expect(pushed).toEqual({ finalContent: 'the answer', stepLabel: 'Step 2' });
+      // In-process consumers (Responses API, the CLI) keep the whole payload.
+      expect(inner.calls.publishStreamEvent[0][1].data).toBe(data);
+    });
+
+    it('keeps an absent finalContent absent rather than inventing one', async () => {
+      const data = { reasoning: 'dropped', toolsCalling: [] };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+      await notifier.drainPushes('op-1');
+
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body).event.data).toEqual({});
+    });
+
+    it('leaves other event types carrying their result body', async () => {
+      const data = { result: { content: 'kept' } };
+
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'step_start' });
+
+      expect(JSON.parse(mockFetch.mock.calls[0][1].body).event.data.result.content).toBe('kept');
+    });
+
+    it('forwards opted-in step state without bypassing visitor redaction', async () => {
+      const finalState = {
+        host: { includeFinalState: true },
+        initialContext: { prompt: 'context' },
+        messages: [{ content: 'history' }],
+        status: 'done',
+      };
+      const data = { finalState, phase: 'execution_complete', reason: 'done' };
+      await notifier.publishStreamEvent('op-1', { data, stepIndex: 2, type: 'step_complete' });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.event.data.finalState).toEqual({
+        host: { includeFinalState: true },
+        initialContext: { prompt: 'context' },
+        status: 'done',
+      });
+      expect(sanitizeGatewayEventData(data, FULL_STRIP_REDACTION, 'step_complete')).toEqual({
+        phase: 'execution_complete',
+        reason: 'done',
+      });
+    });
+
+    it('waits for the stream_end gateway push unless the caller defers pushes', async () => {
+      // Request-scoped callers (hetero ingest, routers) never drain, so the
+      // push must land before publishStreamEvent resolves.
       let resolveFetch!: () => void;
       mockFetch.mockImplementationOnce(
         () =>
@@ -89,28 +230,103 @@ describe('GatewayStreamNotifier', () => {
           }),
       );
 
-      const result = notifier.publishStreamEvent('op-1', {
-        data: { finalContent: 'final answer' },
-        stepIndex: 0,
-        type: 'stream_end' as const,
-      });
-      let resolved = false;
-      void result.then(() => {
-        resolved = true;
-      });
-
-      await Promise.resolve();
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${gatewayUrl}/api/operations/push-event`,
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(resolved).toBe(false);
+      let published = false;
+      const publish = notifier
+        .publishStreamEvent('op-1', {
+          data: { finalContent: 'final answer' },
+          stepIndex: 0,
+          type: 'stream_end' as const,
+        })
+        .then(() => {
+          published = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(published).toBe(false);
 
       resolveFetch();
+      await publish;
+      expect(published).toBe(true);
+    });
 
-      await expect(result).resolves.toBe('publishStreamEvent-result');
-      expect(resolved).toBe(true);
+    it('does not wait for the stream_end gateway push when deferred, but drainPushes does', async () => {
+      const notifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        undefined,
+        { deferPushes: true },
+      );
+      let resolveFetch!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          }),
+      );
+
+      // The step publishes and moves on: the push is ordered, not awaited.
+      await expect(
+        notifier.publishStreamEvent('op-1', {
+          data: { finalContent: 'final answer' },
+          stepIndex: 0,
+          type: 'stream_end' as const,
+        }),
+      ).resolves.toBe('publishStreamEvent-result');
+
+      let drained = false;
+      const drain = notifier.drainPushes('op-1').then(() => {
+        drained = true;
+      });
+      await Promise.resolve();
+      expect(drained).toBe(false);
+
+      resolveFetch();
+      await drain;
+      expect(drained).toBe(true);
+    });
+
+    it('keeps a barrier behind the pushes issued before it, and ahead of later ones', async () => {
+      const notifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        undefined,
+        { deferPushes: true },
+      );
+      const order: string[] = [];
+      let releaseChunk!: () => void;
+      mockFetch.mockImplementation((_url: string, init: { body: string }) => {
+        const { type } = JSON.parse(init.body).event;
+        if (type === 'stream_chunk') {
+          return new Promise((resolve) => {
+            releaseChunk = () => {
+              order.push('stream_chunk');
+              resolve({ ok: true, text: () => Promise.resolve('') });
+            };
+          });
+        }
+        order.push(type);
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+      });
+
+      await notifier.publishStreamChunk('op-1', 0, { chunkType: 'text' } as StreamChunkData);
+      await notifier.publishStreamEvent('op-1', {
+        data: { finalContent: 'done' },
+        stepIndex: 0,
+        type: 'stream_end',
+      });
+      await notifier.publishStreamEvent('op-1', { data: {}, stepIndex: 1, type: 'step_start' });
+
+      // Nothing may pass the barrier while the chunk it waits for is in flight.
+      await Promise.resolve();
+      expect(order).toEqual([]);
+
+      releaseChunk();
+      await notifier.drainPushes('op-1');
+
+      expect(order).toEqual(['stream_chunk', 'stream_end', 'step_start']);
     });
 
     it('still returns inner result even if gateway fails', async () => {
@@ -150,6 +366,31 @@ describe('GatewayStreamNotifier', () => {
       expect(inner.calls.publishAgentRuntimeInit[0]).toEqual(['op-1', initialState]);
     });
 
+    it('pushes only the status, never the whole AgentState', async () => {
+      // Nothing on the other end reads this event's data, while the raw state
+      // carries the LLM context and every enabled tool's manifest.
+      await notifier.publishAgentRuntimeInit('op-1', {
+        agentConfig: { systemRole: 'secret prompt' },
+        messages: [{ content: 'x'.repeat(50_000), role: 'user' }],
+        status: 'running',
+        toolManifestMap: { big: 'manifest' },
+        userId: 'user-1',
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const push = mockFetch.mock.calls.find((c: any[]) =>
+        String(c[0]).endsWith('/api/operations/push-event'),
+      );
+      const pushed = JSON.parse(push![1].body);
+      const initEvent = (pushed.events ?? [pushed.event ?? pushed]).find(
+        (e: any) => e?.type === 'agent_runtime_init' || e?.event?.type === 'agent_runtime_init',
+      );
+      const data = (initEvent?.data ?? initEvent?.event?.data) as Record<string, unknown>;
+
+      expect(data).toEqual({ status: 'running' });
+    });
+
     it('calls gateway init and push-event endpoints', async () => {
       await notifier.publishAgentRuntimeInit('op-1', { userId: 'user-1' });
 
@@ -158,6 +399,110 @@ describe('GatewayStreamNotifier', () => {
       const urls = mockFetch.mock.calls.map((c: any[]) => c[0]);
       expect(urls).toContain(`${gatewayUrl}/api/operations/init`);
       expect(urls).toContain(`${gatewayUrl}/api/operations/push-event`);
+    });
+
+    // Protocol v2 §3.2: the per-user hub describes an op in its lifecycle feed
+    // from the `meta` persisted at init, so the routing fields the caller
+    // already knows must ride along — and nothing else (no lookups, no
+    // agentConfig / modelRuntimeConfig leakage into the gateway).
+    it('sends only the known op-routing fields as `meta` in the init body', async () => {
+      await notifier.publishAgentRuntimeInit('op-1', {
+        agentConfig: { systemRole: 'secret' },
+        agentId: 'agt_1',
+        groupId: 'grp_1',
+        mirrorToOperationId: 'op-supervisor',
+        modelRuntimeConfig: { model: 'gpt' },
+        parentOperationId: 'op-parent',
+        rootOperationId: 'op-root',
+        scope: 'group',
+        taskId: 'task_1',
+        threadId: 'thr_1',
+        topicId: 'tpc_1',
+        userId: 'user-1',
+        workspaceId: 'ws_1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: {
+          agentId: 'agt_1',
+          groupId: 'grp_1',
+          mirrorToOperationId: 'op-supervisor',
+          parentOperationId: 'op-parent',
+          rootOperationId: 'op-root',
+          scope: 'group',
+          taskId: 'task_1',
+          threadId: 'thr_1',
+          topicId: 'tpc_1',
+        },
+        operationId: 'op-1',
+        userId: 'user-1',
+      });
+    });
+
+    it('omits absent meta keys, and the whole `meta` when nothing applies', async () => {
+      // Hetero dispatch shape: only agentId / topicId / (optional) mirror known.
+      await notifier.publishAgentRuntimeInit('op-hetero', {
+        agentId: 'agt_1',
+        mirrorToOperationId: undefined,
+        topicId: 'tpc_1',
+        userId: 'user-1',
+      });
+      // Legacy / minimal init (what the coordinator's Redis metadata yields
+      // for a plain single-agent run).
+      await notifier.publishAgentRuntimeInit('op-legacy', { userId: 'user-1' });
+
+      const bodies = mockFetch.mock.calls
+        .filter((call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`)
+        .map((call: any[]) => JSON.parse(call[1].body));
+
+      expect(bodies).toEqual([
+        {
+          meta: { agentId: 'agt_1', topicId: 'tpc_1' },
+          operationId: 'op-hetero',
+          userId: 'user-1',
+        },
+        { operationId: 'op-legacy', userId: 'user-1' },
+      ]);
+      expect(bodies[1]).not.toHaveProperty('meta');
+    });
+
+    it('tells the gateway a run is heterogeneous so its watchdog allows long silence', async () => {
+      await notifier.publishAgentRuntimeInit('op-cc', {
+        agentId: 'agt_1',
+        assistantMessageId: 'msg_1',
+        heteroType: 'claude-code',
+        topicId: 'tpc_1',
+        userId: 'user-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: { agentId: 'agt_1', heteroType: 'claude-code', topicId: 'tpc_1' },
+        operationId: 'op-cc',
+        userId: 'user-1',
+      });
+    });
+
+    it('registers the visitor as gateway owner while still sending meta', async () => {
+      await notifier.publishAgentRuntimeInit('op-share', {
+        streamOwnerUserId: 'visitor-1',
+        topicId: 'tpc_1',
+        userId: 'creator-1',
+      });
+
+      const initCall = mockFetch.mock.calls.find(
+        (call: any[]) => call[0] === `${gatewayUrl}/api/operations/init`,
+      )!;
+      expect(JSON.parse(initCall[1].body)).toEqual({
+        meta: { topicId: 'tpc_1' },
+        operationId: 'op-share',
+        userId: 'visitor-1',
+      });
     });
 
     it('waits for gateway init before exposing the operation to subscribers', async () => {
@@ -321,6 +666,61 @@ describe('GatewayStreamNotifier', () => {
       expect(body.event.data.reasonDetail).toBe('Custom detail');
     });
 
+    describe('recordError', () => {
+      const endEventData = async (
+        params: Omit<PublishAgentRuntimeEndParams, 'operationId' | 'stepIndex'>,
+      ) => {
+        await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
+        await new Promise((r) => setTimeout(r, 50));
+        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+        return JSON.parse(pushCall![1].body).event.data;
+      };
+
+      it('keeps a user-side error off the gateway board', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: 'insufficient quota', type: 'InsufficientQuota' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'openai' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(false);
+      });
+
+      it('files a provider rate limit on our own provider', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'claude-opus-5', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('classifies by the configured provider, not the upstream named in the error body', async () => {
+        // On our provider the normalized error names the upstream the router
+        // reached, never `lobehub` — trusting it would hide our own rate limit.
+        const data = await endEventData({
+          finalState: {
+            error: { body: { provider: 'azure' }, message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('omits the flag on a non-error end', async () => {
+        const data = await endEventData({ finalState: {}, reason: 'completed' });
+
+        expect(data).not.toHaveProperty('recordError');
+      });
+    });
+
     it('includes errorType from finalState.error.type', async () => {
       const finalState = {
         error: { message: 'Budget exceeded', type: 'InsufficientBudgetForModel' },
@@ -402,6 +802,28 @@ describe('GatewayStreamNotifier', () => {
 
       const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
       const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data).not.toHaveProperty('uiMessages');
+    });
+
+    it('sends only terminal metadata after a protocol-v2 message patch', async () => {
+      await notifier.publishAgentRuntimeEnd({
+        finalState: { messages: ['large'], status: 'done', world: { private: true } },
+        messagePatchMode: true,
+        messageRevision: 5,
+        operationId: 'op-1',
+        reason: 'completed',
+        stepIndex: 4,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+      const body = JSON.parse(pushCall![1].body);
+      expect(body.event.data).toMatchObject({
+        messagePatchMode: true,
+        messageRevision: 5,
+        reason: 'completed',
+      });
+      expect(body.event.data).not.toHaveProperty('finalState');
       expect(body.event.data).not.toHaveProperty('uiMessages');
     });
   });
@@ -707,6 +1129,83 @@ describe('GatewayStreamNotifier', () => {
 
       const pushes = pushEventCalls().filter((b) => b.event?.data?.content === 'plain');
       expect(pushes.map((p) => p.operationId)).toEqual(['op-plain']);
+    });
+
+    it('mirrors a member terminal as a non-terminal member_runtime_end so the supervisor channel stays open (G-02)', async () => {
+      await notifier.publishAgentRuntimeInit('op-supervisor', { acceptsMemberRuntimeEnd: true });
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'done',
+        stepIndex: 1,
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const ends = pushEventCalls().filter(
+        (b) => b.event?.type === 'agent_runtime_end' || b.event?.type === 'member_runtime_end',
+      );
+      // The member's own channel still gets its real terminal.
+      expect(ends.filter((p) => p.operationId === 'op-member').map((p) => p.event.type)).toEqual([
+        'agent_runtime_end',
+      ]);
+      // The supervisor's channel must NOT receive an `agent_runtime_end`: the
+      // gateway DO treats any such event as the end of ITS session and
+      // broadcasts `session_complete`, cutting the supervisor stream short.
+      const mirrored = ends.filter((p) => p.operationId === 'op-supervisor');
+      expect(mirrored.map((p) => p.event.type)).toEqual(['member_runtime_end']);
+      expect(mirrored[0].event.operationId).toBe('op-member');
+      expect(mirrored[0].event.data.reason).toBe('done');
+    });
+
+    // Codex P1 on #20102: a client released before the rename (desktop, or a web
+    // tab from before a rolling deploy) only retires a member column on
+    // `agent_runtime_end`; renaming it for that client left the column running.
+    it('keeps the verbatim agent_runtime_end for a supervisor whose client predates member_runtime_end', async () => {
+      await notifier.publishAgentRuntimeInit('op-supervisor', {});
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'done',
+        stepIndex: 1,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const mirrored = pushEventCalls().filter(
+        (b) =>
+          b.operationId === 'op-supervisor' &&
+          (b.event?.type === 'agent_runtime_end' || b.event?.type === 'member_runtime_end'),
+      );
+      expect(mirrored.map((p) => p.event.type)).toEqual(['agent_runtime_end']);
+      expect(mirrored[0].event.operationId).toBe('op-member');
+    });
+
+    it('queue worker path: reads the supervisor client declaration from persisted metadata', async () => {
+      const resolveAccepts = vi.fn(async (op: string) => op === 'op-supervisor-q');
+      const workerNotifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        async (op) => (op === 'op-member-q' ? 'op-supervisor-q' : undefined),
+        undefined,
+        { resolveAcceptsMemberRuntimeEnd: resolveAccepts },
+      );
+
+      await workerNotifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member-q',
+        reason: 'done',
+        stepIndex: 1,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const mirrored = pushEventCalls().filter((b) => b.operationId === 'op-supervisor-q');
+      expect(mirrored.map((p) => p.event.type)).toEqual(['member_runtime_end']);
+      expect(resolveAccepts).toHaveBeenCalledWith('op-supervisor-q');
     });
 
     it('stops mirroring after the member op reaches a terminal state', async () => {

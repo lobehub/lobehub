@@ -19,6 +19,8 @@ interface CreateFileParams extends Omit<UploadFileParams, 'url'> {
 }
 
 export class FileService {
+  rehostImage = async (url: string) => lambdaClient.file.rehostImage.mutate({ url });
+
   createFile = async (
     params: UploadFileParams & {
       parentId?: string;

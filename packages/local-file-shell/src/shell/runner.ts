@@ -1,12 +1,19 @@
-import { spawn } from 'node:child_process';
+import type { spawn } from 'node:child_process';
+import { stat } from 'node:fs/promises';
+import os from 'node:os';
 
 import type { SandboxPolicy } from '@lobechat/device-sandbox';
 
 import type { RunCommandParams, RunCommandResult } from '../types';
-import type { ShellOutputFiles, ShellProcess, ShellProcessManager } from './process-manager';
+import type { ShellBackend, ShellOutputFiles } from './backend';
+import { ChildProcessBackend } from './child-process-backend';
+import type { ShellProcess, ShellProcessManager } from './process-manager';
+import { DEFAULT_OBSERVATION_TIMEOUT_MS } from './process-manager';
 import { detectWindowsShell, getShellConfig, normalizeEnvVarRefs } from './utils';
 
 export interface RunCommandOptions {
+  /** Backend to spawn with; defaults to the process manager's own. */
+  backend?: ShellBackend;
   logger?: {
     debug: (...args: any[]) => void;
     error: (...args: any[]) => void;
@@ -27,7 +34,28 @@ export interface RunCommandOptions {
   onSandboxUnavailable?: (error: Error) => void;
   processManager: ShellProcessManager;
   sandboxPolicy?: SandboxPolicy;
+  /**
+   * Spawn function for the default child-process backend (e.g. one that
+   * registers the process with a tracker). Ignored when {@link backend} is set.
+   */
+  spawnProcess?: typeof spawn;
 }
+
+/**
+ * Node reports a missing spawn cwd as `spawn <shell> ENOENT` — blaming the
+ * shell binary — so the model goes off debugging a healthy shell. Check the
+ * directory first and name the real problem, and the machine it happened on
+ * (a cwd pinned on another device is the usual cause).
+ */
+const checkWorkingDirectory = async (cwd: string): Promise<string | undefined> => {
+  try {
+    if ((await stat(cwd)).isDirectory()) return;
+    return `Working directory is not a directory on ${os.hostname()}: ${cwd}`;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
+    return `Working directory does not exist on ${os.hostname()}: ${cwd}. The shell is fine — run the command from a directory that exists on this device.`;
+  }
+};
 
 export async function runCommand(
   {
@@ -36,16 +64,33 @@ export async function runCommand(
     description,
     env: extraEnv,
     run_in_background,
-    timeout = 30_000,
+    timeout = DEFAULT_OBSERVATION_TIMEOUT_MS,
   }: RunCommandParams,
-  { processManager, logger, onSandboxUnavailable, sandboxPolicy }: RunCommandOptions,
+  {
+    backend: backendOverride,
+    processManager,
+    logger,
+    onSandboxUnavailable,
+    sandboxPolicy,
+    spawnProcess,
+  }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
     return { error: 'command is required', success: false };
   }
 
+  // A caller-supplied spawn function (the desktop's managed-process tracker)
+  // still runs through the child-process backend, so kill / release reach it.
+  const backend =
+    backendOverride ??
+    (spawnProcess ? new ChildProcessBackend(spawnProcess) : processManager.backend);
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
+
+  if (cwd) {
+    const cwdError = await checkWorkingDirectory(cwd);
+    if (cwdError) return { error: cwdError, success: false };
+  }
 
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
 
@@ -97,31 +142,24 @@ export async function runCommand(
     const shellId = processManager.createShellId();
     const shellOutputFiles = processManager.createOutputFiles(shellId);
     outputFiles = shellOutputFiles;
-    const childProcess = spawn(launchCommand.cmd, launchCommand.args, {
-      cwd,
-      detached: process.platform !== 'win32',
-      env: launchEnv,
-      shell: false,
-      stdio: ['pipe', shellOutputFiles.stdout.fd, shellOutputFiles.stderr.fd],
-      // The Electron main process is a GUI process without a console, so on
-      // Windows spawning a console program (powershell.exe / cmd.exe) allocates
-      // a new console window that flashes up for every command. windowsHide
-      // defaults to false in Node, so it must be set explicitly.
-      windowsHide: true,
-    });
+    const handle = backend.spawn(
+      { args: launchCommand.args, cmd: launchCommand.cmd },
+      { cwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
+    );
 
     const shellProcess: ShellProcess = {
+      backend,
       exitCode: null,
       outputFiles: shellOutputFiles,
-      process: childProcess,
+      process: handle,
     };
 
-    childProcess.on('exit', (code) => {
+    handle.on('exit', (code: number | null) => {
       logger?.debug(`${logPrefix} Process exited`, { code, shellId });
       shellProcess.exitCode = code ?? 0;
     });
 
-    childProcess.on('error', (error) => {
+    handle.on('error', (error: Error) => {
       logger?.error(`${logPrefix} Command failed:`, error);
       const cwdContext = cwd ? ` (working directory: ${cwd})` : '';
       shellProcess.spawnError = new Error(
@@ -132,7 +170,7 @@ export async function runCommand(
       );
       shellProcess.exitCode = 1;
     });
-    childProcess.once('close', () => releaseSandbox?.());
+    handle.once('close', () => releaseSandbox?.());
 
     processManager.register(shellId, shellProcess);
     // Close our fd copy only after error/close listeners are registered; spawn errors are asynchronous.

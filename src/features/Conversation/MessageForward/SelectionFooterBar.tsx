@@ -44,7 +44,9 @@ const SelectionFooterBar = memo(() => {
   const [forwardOpen, setForwardOpen] = useState(false);
   const storeApi = useConversationStoreApi();
   const selectedCount = useConversationStore(messageStateSelectors.selectedMessageCount);
-  const selectedMessageIds = useConversationStore((s) => s.selectedMessageIds);
+  const selectedMessageIds = useConversationStore(
+    messageStateSelectors.selectedDeletableMessageIds,
+  );
   const exitSelectionMode = useConversationStore((s) => s.exitSelectionMode);
   const deleteMessages = useConversationStore((s) => s.deleteMessages);
 

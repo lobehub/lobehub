@@ -2,9 +2,9 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { ImessageBridgeConfig, ImessageBridgeStatus } from '@lobechat/electron-client-ipc';
-import { Flexbox, FormItem, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Switch, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { Form as AntdForm } from 'antd';
+import { Form, useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import { KeyRound, Link2, Wrench } from 'lucide-react';
 import { memo, use, useCallback, useEffect, useState } from 'react';
@@ -69,8 +69,8 @@ const CredentialExtras = memo(() => {
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
 
-  const form = AntdForm.useFormInstance();
-  const applicationId = AntdForm.useWatch('applicationId', form) as string | undefined;
+  const form = useFormInstance();
+  const applicationId = useWatch(form, 'applicationId') as string | undefined;
   const appId = applicationId?.trim();
   const postSave = use(ChannelPostSaveContext);
 
@@ -110,20 +110,18 @@ const CredentialExtras = memo(() => {
 
   const fillDesktopDeviceId = useCallback(async () => {
     const deviceInfo = await gatewayConnectionService.getDeviceInfo();
-    form.setFieldValue(['credentials', 'desktopDeviceId'], deviceInfo.deviceId);
-    void form.validateFields([['credentials', 'desktopDeviceId']]).catch(() => undefined);
+    form.setValue('credentials.desktopDeviceId', deviceInfo.deviceId);
+    void form.validate(['credentials.desktopDeviceId']);
   }, [form]);
 
   // The webhook secret is shared between the cloud provider and the local
   // bridge but is not a user-facing field — generate one on demand and reuse
   // whatever is already stored on the form (saved config or a prior generation).
   const ensureWebhookSecret = useCallback((): string => {
-    const existing = (
-      form.getFieldValue(['credentials', 'webhookSecret']) as string | undefined
-    )?.trim();
+    const existing = (form.getValue('credentials.webhookSecret') as string | undefined)?.trim();
     if (existing) return existing;
     const generated = globalThis.crypto.randomUUID();
-    form.setFieldValue(['credentials', 'webhookSecret'], generated);
+    form.setValue('credentials.webhookSecret', generated);
     return generated;
   }, [form]);
 
@@ -255,7 +253,7 @@ const CredentialExtras = memo(() => {
       </Flexbox>
 
       {/* Middle: the credential fields the operator fills in. */}
-      <FormItem
+      <Form.Field
         avatar={<Icon className={styles.fieldIcon} icon={Link2} size={20} />}
         minWidth={'max(50%, 360px)'}
         variant="outlined"
@@ -278,8 +276,8 @@ const CredentialExtras = memo(() => {
             setTestStatus('idle');
           }}
         />
-      </FormItem>
-      <FormItem
+      </Form.Field>
+      <Form.Field
         divider
         avatar={<Icon className={styles.fieldIcon} icon={KeyRound} size={20} />}
         minWidth={'max(50%, 360px)'}
@@ -300,7 +298,7 @@ const CredentialExtras = memo(() => {
             setTestStatus('idle');
           }}
         />
-      </FormItem>
+      </Form.Field>
 
       {/* Bottom: row 1 — service status + the Enable toggle (write-through);
           row 2 — the connection test. */}

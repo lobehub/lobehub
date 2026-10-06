@@ -1,19 +1,27 @@
 import type { ToolRunResult } from '@lobechat/agent-runtime';
+import type { SerializedAgentHook } from '@lobechat/types';
+import {
+  agentHookMatcherSchema,
+  agentHookTypeSchema,
+  resolveToolCallHookErrorPolicy,
+  serializedAgentHookSchema,
+} from '@lobechat/types';
 import debug from 'debug';
-import urlJoin from 'url-join';
 
-import { OtelQstashClient } from '@/libs/qstash';
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
 
+import { deliverWebhook, executeToolCallWebhook } from './httpWebhook';
+import { matchesHook } from './matcher';
+import { getServerHooks, mergeServerHooks } from './serverHooks';
 import type {
   AgentHook,
   AgentHookEvent,
   AgentHookType,
-  AgentHookWebhook,
   AnyHookEvent,
   SerializedHook,
   ToolCallHookEvent,
 } from './types';
+import { createWebhookPayloadBuilder } from './webhookPayload';
 
 const log = debug('lobe-server:hook-dispatcher');
 
@@ -27,101 +35,37 @@ export class CriticalHookDeliveryError extends Error {
   }
 }
 
-/**
- * Delivers a webhook via HTTP POST (fetch or QStash)
- */
-export async function deliverWebhook(
-  webhook: AgentHookWebhook,
-  payload: Record<string, unknown>,
-): Promise<void> {
-  const { url, delivery = 'fetch', fallback = 'fetch' } = webhook;
+export { deliverWebhook } from './httpWebhook';
 
-  // Resolve URL: relative paths joined with INTERNAL_APP_URL or APP_URL
-  const resolvedUrl = url.startsWith('http')
-    ? url
-    : urlJoin(process.env.INTERNAL_APP_URL || process.env.APP_URL || '', url);
-
-  if (delivery === 'qstash') {
-    try {
-      const qstashToken = process.env.QSTASH_TOKEN;
-      if (!qstashToken) {
-        if (fallback === 'none') {
-          throw new Error(`QSTASH_TOKEN not available for qstash-only webhook: ${url}`);
-        }
-        log('QStash token not available, falling back to fetch delivery');
-        await fetchDeliver(resolvedUrl, payload);
-        return;
-      }
-      const client = new OtelQstashClient({ token: qstashToken });
-      await client.publishJSON({
-        body: payload,
-        headers: {
-          ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
-            'x-vercel-protection-bypass': process.env.VERCEL_AUTOMATION_BYPASS_SECRET,
-          }),
-        },
-        url: resolvedUrl,
-      });
-      log('Webhook delivered via QStash: %s', url);
-    } catch (error) {
-      // An unsigned fetch can never authenticate against a QStash-signed
-      // endpoint — falling back would just be a silently-dropped 401. Let
-      // the failure surface to the dispatcher instead.
-      if (fallback === 'none') throw error;
-
-      log('QStash delivery failed, falling back to fetch: %O', error);
-      await fetchDeliver(resolvedUrl, payload);
-    }
-  } else {
-    await fetchDeliver(resolvedUrl, payload);
-  }
-}
-
-async function fetchDeliver(url: string, payload: Record<string, unknown>): Promise<void> {
-  const res = await fetch(url, {
-    body: JSON.stringify(payload),
-    headers: { 'Content-Type': 'application/json' },
-    method: 'POST',
-  });
-  if (res.status < 200 || res.status >= 300) {
-    throw new Error(`Webhook delivery failed: ${res.status} ${res.statusText}`);
-  }
-  log('Webhook delivered via fetch: %s (status: %d)', url, res.status);
-}
-
-function buildWebhookPayload(
-  event: AnyHookEvent,
-  eventFields?: (keyof AgentHookEvent)[],
-): Record<string, unknown> {
-  if (eventFields) {
-    const payload: Record<string, unknown> = {};
-    for (const field of eventFields) {
-      if (field === 'finalState') continue;
-      if (field in event) payload[field] = event[field as keyof AnyHookEvent];
-    }
-    return payload;
-  }
-
-  const payload = { ...event };
-  if ('finalState' in payload) {
-    delete (payload as { finalState?: unknown }).finalState;
-  }
-  return payload;
+/** Discard legacy environment hooks and validate caller configs on every worker restore. */
+export function parseSerializedHooks(hooks: SerializedAgentHook[]): SerializedHook[] {
+  return mergeServerHooks(hooks, []).map((hook) => serializedAgentHookSchema.parse(hook));
 }
 
 /**
  * HookDispatcher — central hub for registering and dispatching agent lifecycle hooks
  *
  * Local mode: hooks are stored in memory, handler functions called directly
- * Production mode: webhook configs persisted in AgentState.metadata._hooks,
+ * Production mode: webhook configs persisted in AgentState.host.hooks,
  *   delivered via HTTP POST or QStash
  */
 export class HookDispatcher {
+  private readonly buildWebhookPayload = createWebhookPayloadBuilder();
+
   /**
    * In-memory hook store (local mode)
    * Maps operationId → AgentHook[]
    */
   private hooks: Map<string, AgentHook[]> = new Map();
+
+  /** Shared by normal dispatch and tool control, including cold-worker recovery. */
+  private resolveHooks(operationId: string, serializedHooks?: SerializedAgentHook[]) {
+    const restored = serializedHooks ? parseSerializedHooks(serializedHooks) : undefined;
+    const hooks: (AgentHook | SerializedHook)[] = isQueueAgentRuntimeEnabled()
+      ? (restored ?? this.getSerializedHooks(operationId) ?? [])
+      : (this.hooks.get(operationId) ?? restored ?? []);
+    return mergeServerHooks(hooks, getServerHooks());
+  }
 
   /**
    * Dispatch hooks for a given event type
@@ -133,115 +77,157 @@ export class HookDispatcher {
     operationId: string,
     type: AgentHookType,
     event: AnyHookEvent,
-    serializedHooks?: SerializedHook[],
+    /**
+     * Hooks persisted on `state.host.hooks` (wire shape). Narrowed here to the
+     * runtime-precise {@link SerializedHook} once the type / webhook are checked.
+     */
+    serializedHooks?: SerializedAgentHook[],
   ): Promise<void> {
-    const isQueueMode = isQueueAgentRuntimeEnabled();
-
-    if (!isQueueMode) {
-      // Local mode: call handler functions directly
-      const hooks = this.hooks.get(operationId)?.filter((h) => h.type === type) || [];
-
-      for (const hook of hooks) {
-        try {
-          log('[%s][%s] Dispatching local hook: %s', operationId, type, hook.id);
-          await hook.handler(event as AgentHookEvent);
-        } catch (error) {
-          log('[%s][%s] Hook error (non-fatal): %s %O', operationId, type, hook.id, error);
-          // Hook errors should NOT affect main execution flow
-        }
-      }
-    } else {
-      // Production mode: deliver via webhooks
-      const webhookHooks =
-        serializedHooks?.filter((h) => h.type === type && h.webhook) ||
-        this.getSerializedHooks(operationId)?.filter((h) => h.type === type) ||
-        [];
-
-      let criticalError: CriticalHookDeliveryError | undefined;
-      for (const hook of webhookHooks) {
-        try {
-          log(
-            '[%s][%s] Delivering webhook hook: %s → %s',
-            operationId,
-            type,
-            hook.id,
-            hook.webhook.url,
-          );
-          const webhookPayload = buildWebhookPayload(event, hook.webhook.eventFields);
-          await deliverWebhook(hook.webhook, {
-            ...webhookPayload,
-            hookId: hook.id,
-            hookType: type,
-            ...hook.webhook.body,
-          });
-        } catch (error) {
-          if (hook.webhook.fallback === 'none') {
-            // No-fallback webhooks carry control flow (e.g. the sub-agent
-            // resume bridge) — losing one strands its consumer, so surface
-            // the failure in production logs, not just the debug namespace.
-            console.error(
-              `[HookDispatcher][${operationId}][${type}] Webhook delivery failed with no fallback: ${hook.id} → ${hook.webhook.url}`,
-              error,
-            );
-            criticalError ??= new CriticalHookDeliveryError(hook.id, error);
-          } else {
-            log(
-              '[%s][%s] Webhook delivery error (non-fatal): %s %O',
-              operationId,
-              type,
-              hook.id,
-              error,
-            );
-          }
-        }
-      }
-
-      // Finish independent sibling hooks first, then fail the queue execution.
-      // Queue runtimes can retry a lost control-flow handoff instead of
-      // reporting success while stranding its consumer.
-      if (criticalError) throw criticalError;
-    }
+    return this.dispatchHooks(operationId, type, event, serializedHooks);
   }
 
-  /**
-   * Dispatch beforeToolCall hooks with mock support.
-   * Returns mock result if any handler called event.mock(), otherwise null.
-   */
+  private async dispatchHooks(
+    operationId: string,
+    type: AgentHookType,
+    event: AnyHookEvent,
+    serializedHooks?: SerializedAgentHook[],
+    stopAfterHandler?: () => boolean,
+    consumer?: 'handler' | 'webhook',
+  ): Promise<void> {
+    const isQueueMode = isQueueAgentRuntimeEnabled();
+    const hooks = this.resolveHooks(operationId, serializedHooks);
+    let criticalError: CriticalHookDeliveryError | undefined;
+    for (const hook of hooks.filter(
+      (h) =>
+        h.type === type &&
+        h.webhook?.responseHandling !== 'toolCall' &&
+        matchesHook(h.matcher, event),
+    )) {
+      const handler = 'handler' in hook ? hook.handler : undefined;
+      const useHandler = !isQueueMode && !!handler;
+      if (consumer === 'handler' && !useHandler) continue;
+      if (consumer === 'webhook' && useHandler) continue;
+      // Preserve first-mock handler semantics without dropping independent HTTP callbacks.
+      if (useHandler && stopAfterHandler?.()) continue;
+      try {
+        if (useHandler) {
+          await handler(event as AgentHookEvent);
+        } else if (hook.webhook) {
+          const payload = await this.buildWebhookPayload(event, hook.webhook, {
+            hookId: hook.id,
+            hookType: type,
+          });
+          if (payload) {
+            delete payload.mock;
+            await deliverWebhook(hook.webhook, payload);
+          }
+        }
+      } catch (error) {
+        if (!useHandler && hook.webhook?.fallback === 'none') {
+          console.error(
+            '[HookDispatcher] Critical webhook delivery failed',
+            { operationId, hookId: hook.id, hookType: type },
+            error,
+          );
+          criticalError ??= new CriticalHookDeliveryError(hook.id, error);
+        } else if (!useHandler) {
+          console.error(
+            '[HookDispatcher] Webhook delivery failed (non-fatal)',
+            { operationId, hookId: hook.id, hookType: type },
+            error,
+          );
+        } else {
+          log('[%s][%s] Hook failed (non-fatal): %s', operationId, type, hook.id);
+        }
+      }
+    }
+    // Independent critical callbacks all get a chance to run before surfacing the failure.
+    if (criticalError) throw criticalError;
+  }
+
+  /** Ordered synchronous controls. Cancellation never goes through onError. */
+  async evaluateToolCall(
+    operationId: string,
+    event: Omit<ToolCallHookEvent, 'mock'>,
+    serializedHooks?: SerializedAgentHook[],
+    signal?: AbortSignal,
+  ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
+    const hooks = this.resolveHooks(operationId, serializedHooks);
+    for (const hook of hooks) {
+      if (signal?.aborted) return { status: 'cancelled' };
+      if (
+        hook.type !== 'beforeToolCall' ||
+        hook.webhook?.responseHandling !== 'toolCall' ||
+        !matchesHook(hook.matcher, event)
+      )
+        continue;
+      const payload = await this.buildWebhookPayload(
+        event,
+        {},
+        { hookId: hook.id, hookType: 'beforeToolCall' },
+        { signal },
+      );
+      if (!payload || signal?.aborted) return { status: 'cancelled' };
+      const response = await executeToolCallWebhook(hook.webhook, payload, { signal });
+      if (signal?.aborted || response.status === 'cancelled') return { status: 'cancelled' };
+      if (response.status === 'success' && response.decision.decision === 'deny') {
+        return {
+          status: 'blocked',
+          reason: response.decision.reason ?? 'Blocked by beforeToolCall hook.',
+        };
+      }
+      if (response.status === 'error') {
+        if (resolveToolCallHookErrorPolicy(hook.webhook.onError).action === 'block') {
+          return {
+            status: 'blocked',
+            reason: 'hook_control_error',
+          };
+        }
+        continue;
+      }
+    }
+    return signal?.aborted ? { status: 'cancelled' } : { status: 'allow' };
+  }
+
+  /** Deliver each observation once; only local handlers can supply a mock. */
   async dispatchBeforeToolCall(
     operationId: string,
     event: Omit<ToolCallHookEvent, 'mock' | 'operationId'>,
-  ): Promise<{
-    isMocked: true;
-    result: ToolRunResult;
-  } | null> {
-    const hooks = this.hooks.get(operationId)?.filter((h) => h.type === 'beforeToolCall') || [];
-    if (hooks.length === 0) return null;
-
-    let isMocked = false;
+    serializedHooks?: SerializedAgentHook[],
+  ): Promise<{ isMocked: true; result: ToolRunResult } | null> {
     let mockedResult: ToolRunResult | undefined;
-
     const toolCallEvent: ToolCallHookEvent = {
       ...event,
       mock: (result) => {
-        if (isMocked) return false;
-        isMocked = true;
+        if (mockedResult) return false;
         mockedResult = result;
         return true;
       },
       operationId,
     };
-
-    for (const hook of hooks) {
-      try {
-        log('[%s][beforeToolCall] Dispatching: %s', operationId, hook.id);
-        await hook.handler(toolCallEvent as any);
-      } catch (error) {
-        log('[%s][beforeToolCall] Hook error (non-fatal): %s %O', operationId, hook.id, error);
-      }
-      if (isMocked) break;
-    }
-
-    return isMocked && mockedResult ? { isMocked: true, result: mockedResult } : null;
+    // Observations never become a tool-execution prerequisite. The normal
+    // dispatcher retains critical failure reporting and independent siblings.
+    void this.dispatchHooks(
+      operationId,
+      'beforeToolCall',
+      toolCallEvent,
+      serializedHooks,
+      undefined,
+      'webhook',
+    ).catch((error: unknown) => {
+      log('[%s][beforeToolCall] Observation delivery rejected: %O', operationId, error);
+    });
+    // Legacy local handlers can supply an asynchronous mock. Invoke them once;
+    // the first mock stops only handlers, not the independent HTTP observation.
+    await this.dispatchHooks(
+      operationId,
+      'beforeToolCall',
+      toolCallEvent,
+      serializedHooks,
+      () => !!mockedResult,
+      'handler',
+    );
+    return mockedResult ? { isMocked: true, result: mockedResult } : null;
   }
 
   /**
@@ -251,13 +237,16 @@ export class HookDispatcher {
     const hooks = this.hooks.get(operationId);
     if (!hooks) return undefined;
 
-    return hooks
-      .filter((h) => h.webhook)
-      .map((h) => ({
-        id: h.id,
-        type: h.type,
-        webhook: h.webhook!,
-      }));
+    return parseSerializedHooks(
+      hooks
+        .filter((h) => h.webhook)
+        .map((h) => ({
+          id: h.id,
+          matcher: h.matcher,
+          type: h.type,
+          webhook: h.webhook!,
+        })),
+    );
   }
 
   /**
@@ -272,16 +261,65 @@ export class HookDispatcher {
   }
 
   /**
+   * Whether dispatching `type` right now would actually reach a consumer, under
+   * the rules {@link dispatch} applies for the current runtime mode: local mode
+   * needs a handler or webhook, queue mode needs a webhook to deliver.
+   *
+   * Callers that ALSO surface the same failure themselves (the IM bot bridge
+   * reports a startup failure inline) ask this before deciding whether their own
+   * report would be a duplicate — a failure the hooks will announce must not be
+   * announced twice, and one they cannot announce must not vanish.
+   */
+  canDeliver(operationId: string, type: AgentHookType): boolean {
+    const hooks = this.resolveHooks(operationId).filter((hook) => hook.type === type);
+
+    return isQueueAgentRuntimeEnabled() ? hooks.some((hook) => hook.webhook) : hooks.length > 0;
+  }
+
+  /**
    * Register hooks for an operation
    *
    * In local mode: stores hooks in memory (including handler functions)
-   * In production mode: caller should persist getSerializedHooks() to state.metadata._hooks
+   * In production mode: caller should persist getSerializedHooks() to state.host.hooks
    */
   register(operationId: string, hooks: AgentHook[]): void {
+    const existing = this.hooks.get(operationId) || [];
+    hooks = mergeServerHooks([...existing, ...hooks], getServerHooks());
     if (hooks.length === 0) return;
 
-    const existing = this.hooks.get(operationId) || [];
-    this.hooks.set(operationId, [...existing, ...hooks]);
+    // Validate the entire batch before mutating registration state.
+    const validatedHooks = hooks.map((hook) => {
+      agentHookTypeSchema.parse(hook.type);
+      if (typeof hook.id !== 'string') throw new Error('Hook id must be a string');
+      if (hook.matcher !== undefined) {
+        agentHookMatcherSchema.parse(hook.matcher);
+        if (!['beforeToolCall', 'afterToolCall', 'onToolCallError'].includes(hook.type)) {
+          throw new Error('Matchers are only supported for tool events');
+        }
+      }
+      if (hook.handler !== undefined && typeof hook.handler !== 'function') {
+        throw new Error('Hook handler must be a function');
+      }
+      if (hook.webhook) {
+        const parsed = serializedAgentHookSchema.parse({
+          id: hook.id,
+          matcher: hook.matcher,
+          type: hook.type,
+          webhook: hook.webhook,
+        });
+        if (parsed.webhook.responseHandling === 'toolCall' && hook.handler)
+          throw new Error('Control hooks cannot have a handler');
+        return { ...parsed, handler: hook.handler } as AgentHook;
+      } else if (!hook.handler) {
+        throw new Error('A hook requires a handler or webhook');
+      }
+      return {
+        ...hook,
+        matcher:
+          hook.matcher !== undefined ? agentHookMatcherSchema.parse(hook.matcher) : undefined,
+      };
+    });
+    this.hooks.set(operationId, mergeServerHooks(validatedHooks, []));
 
     log(
       '[%s] Registered %d hooks: %s',

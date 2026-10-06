@@ -117,7 +117,7 @@ const Versions = memo(() => {
               title: t('assistants.details.version.table.isValidated'),
             },
             {
-              align: 'end',
+              align: 'right',
               dataIndex: 'createdAt',
               render: (_: any, record: any) => <PublishedTime date={record.createdAt} />,
               title: t('assistants.details.version.table.publishAt'),

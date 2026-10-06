@@ -55,6 +55,28 @@ describe('Node observability resource attributes', () => {
     });
   });
 
+  it('registers Sentry and OTLP processors on one tracer provider', () => {
+    const contextManager = { name: 'sentry-context-manager' };
+    const sampler = { name: 'sentry-sampler' };
+    const sentrySpanProcessor = { name: 'sentry-span-processor' };
+    const textMapPropagator = { name: 'sentry-propagator' };
+
+    register({
+      contextManager,
+      sampler,
+      spanProcessors: [sentrySpanProcessor],
+      textMapPropagator,
+    } as unknown as Parameters<typeof register>[0]);
+
+    expect(mocks.nodeSdkOptions).toMatchObject({
+      contextManager,
+      sampler,
+      textMapPropagator,
+    });
+    expect(mocks.nodeSdkOptions?.traceExporter).toBeUndefined();
+    expect(mocks.nodeSdkOptions?.spanProcessors).toEqual([sentrySpanProcessor, expect.any(Object)]);
+  });
+
   it('does not expose telemetry shutdown failures to the caller', async () => {
     const shutdown = vi.fn().mockRejectedValue(new Error('collector unavailable'));
 

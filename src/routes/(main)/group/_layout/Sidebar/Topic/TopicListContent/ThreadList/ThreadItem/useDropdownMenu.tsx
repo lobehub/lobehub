@@ -5,22 +5,26 @@ import { PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openRenameModal } from '@/components/RenameModal';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 
 interface ThreadItemDropdownMenuProps {
   id: string;
-  toggleEditing: (visible?: boolean) => void;
+  title: string;
 }
 
 export const useThreadItemDropdownMenu = ({
   id,
-  toggleEditing,
+  title,
 }: ThreadItemDropdownMenuProps): (() => MenuProps['items']) => {
   const { t } = useTranslation(['thread', 'common']);
   const { allowed: canEditThread } = usePermission('edit_own_content');
 
-  const [removeThread] = useChatStore((s) => [s.removeThread]);
+  const [removeThread, updateThreadTitle] = useChatStore((s) => [
+    s.removeThread,
+    s.updateThreadTitle,
+  ]);
 
   return useCallback(() => {
     return [
@@ -30,7 +34,10 @@ export const useThreadItemDropdownMenu = ({
         key: 'rename',
         label: t('rename', { ns: 'common' }),
         onClick: () => {
-          toggleEditing(true);
+          openRenameModal({
+            defaultValue: title,
+            onSave: (newTitle) => updateThreadTitle(id, newTitle),
+          });
         },
         sfSymbol: 'pencil',
       },
@@ -58,5 +65,5 @@ export const useThreadItemDropdownMenu = ({
         sfSymbol: 'trash',
       },
     ].filter(Boolean) as MenuProps['items'];
-  }, [id, canEditThread, removeThread, toggleEditing, t]);
+  }, [id, canEditThread, removeThread, title, updateThreadTitle, t]);
 };

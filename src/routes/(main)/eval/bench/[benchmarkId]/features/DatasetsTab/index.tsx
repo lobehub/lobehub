@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { Card, Skeleton } from 'antd';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Button, confirmModal, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Plus } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
@@ -21,9 +20,7 @@ import EmptyState from './EmptyState';
 
 const loadingStyles = createStaticStyles(({ css }) => ({
   card: css`
-    .ant-card-body {
-      padding: 0;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   header: css`
     display: flex;
@@ -190,17 +187,17 @@ const DatasetsTab = memo<DatasetsTabProps>(
           {datasetsLoading && datasets.length === 0 ? (
             <Flexbox gap={12}>
               {[1, 2, 3].map((i) => (
-                <Card className={loadingStyles.card} key={i}>
+                <Block className={loadingStyles.card} key={i} variant={'outlined'}>
                   <div className={loadingStyles.header}>
                     <div className={loadingStyles.icon} />
                     <Flexbox flex={1} gap={8}>
-                      <Skeleton.Input active size="small" style={{ height: 16, width: 120 }} />
-                      <Skeleton.Input active size="small" style={{ height: 12, width: 200 }} />
+                      <Skeleton height={16} width={120} />
+                      <Skeleton height={12} width={200} />
                     </Flexbox>
-                    <Skeleton.Button active size="small" style={{ height: 36, width: 64 }} />
-                    <Skeleton.Button active size="small" style={{ height: 28, width: 64 }} />
+                    <Skeleton height={36} width={64} />
+                    <Skeleton height={28} width={64} />
                   </div>
-                </Card>
+                </Block>
               ))}
             </Flexbox>
           ) : datasets.length === 0 ? (

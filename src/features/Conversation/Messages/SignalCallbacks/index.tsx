@@ -1,8 +1,8 @@
 'use client';
 
 import { type UISignalCallbacksBlock } from '@lobechat/types';
-import { Accordion, AccordionItem, Block, Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Markdown } from '@lobehub/ui';
+import { Accordion, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { Radio } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -37,69 +37,71 @@ const SignalCallbacks = memo<{ block: UISignalCallbacksBlock }>(({ block }) => {
 
   return (
     <Accordion
-      expandedKeys={expandedKeys}
       gap={4}
-      onExpandedChange={(keys) => setExpandedKeys(keys as string[])}
-    >
-      <AccordionItem
-        itemKey="signal-callbacks"
-        paddingBlock={4}
-        paddingInline={4}
-        title={
-          <Flexbox horizontal align="center" gap={8}>
+      indicatorPlacement="inline"
+      styles={{ trigger: { paddingBlock: 4, paddingInline: 4 } }}
+      value={expandedKeys}
+      items={[
+        {
+          children: (
             <Block
-              horizontal
-              align="center"
-              flex="none"
-              gap={4}
-              height={24}
-              justify="center"
-              style={{ fontSize: 12 }}
-              variant="outlined"
-              width={24}
+              className={styles.callbackBody}
+              padding={12}
+              style={{ marginBlock: 8 }}
+              variant={'outlined'}
             >
-              <Icon color={cssVar.colorTextSecondary} icon={Radio} />
-            </Block>
-            <Text as="span" type="secondary">
-              {t('signalCallbacks.title', {
-                count: block.callbacks.length,
-                tool: block.sourceToolName,
-              })}
-            </Text>
-          </Flexbox>
-        }
-      >
-        <Block
-          className={styles.callbackBody}
-          padding={12}
-          style={{ marginBlock: 8 }}
-          variant={'outlined'}
-        >
-          {block.callbacks.length === 0 ? (
-            <Text type="secondary">{t('signalCallbacks.empty')}</Text>
-          ) : (
-            <Flexbox gap={4}>
-              {block.callbacks.map((cb) => (
-                <Flexbox
-                  horizontal
-                  align="flex-start"
-                  className={styles.callbackItem}
-                  gap={8}
-                  key={cb.id}
-                >
-                  {typeof cb.sequence === 'number' && (
-                    <span className={styles.sequence}>#{cb.sequence}</span>
-                  )}
-                  <Flexbox flex={1}>
-                    <Markdown variant="chat">{cb.content}</Markdown>
-                  </Flexbox>
+              {block.callbacks.length === 0 ? (
+                <Text type="secondary">{t('signalCallbacks.empty')}</Text>
+              ) : (
+                <Flexbox gap={4}>
+                  {block.callbacks.map((cb) => (
+                    <Flexbox
+                      horizontal
+                      align="flex-start"
+                      className={styles.callbackItem}
+                      gap={8}
+                      key={cb.id}
+                    >
+                      {typeof cb.sequence === 'number' && (
+                        <span className={styles.sequence}>#{cb.sequence}</span>
+                      )}
+                      <Flexbox flex={1}>
+                        <Markdown variant="chat">{cb.content}</Markdown>
+                      </Flexbox>
+                    </Flexbox>
+                  ))}
                 </Flexbox>
-              ))}
+              )}
+            </Block>
+          ),
+          key: 'signal-callbacks',
+          title: (
+            <Flexbox horizontal align="center" gap={8}>
+              <Block
+                horizontal
+                align="center"
+                flex="none"
+                gap={4}
+                height={24}
+                justify="center"
+                style={{ fontSize: 12 }}
+                variant="outlined"
+                width={24}
+              >
+                <Icon color={cssVar.colorTextSecondary} icon={Radio} />
+              </Block>
+              <Text as="span" type="secondary">
+                {t('signalCallbacks.title', {
+                  count: block.callbacks.length,
+                  tool: block.sourceToolName,
+                })}
+              </Text>
             </Flexbox>
-          )}
-        </Block>
-      </AccordionItem>
-    </Accordion>
+          ),
+        },
+      ]}
+      onValueChange={setExpandedKeys}
+    />
   );
 });
 

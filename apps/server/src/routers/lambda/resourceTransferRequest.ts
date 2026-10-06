@@ -5,7 +5,11 @@ import { z } from 'zod';
 
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AGENT_OWNERSHIP_STALE, AgentOwnedByGroupError } from '@/database/models/agent';
+import {
+  AGENT_OWNERSHIP_STALE,
+  AGENT_SHARED_TRANSFER_BLOCKED,
+  AgentOwnedByGroupError,
+} from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import { AGENT_TRANSFER_IN_PROGRESS } from '@/database/models/agentTransferJob';
 import {
@@ -21,6 +25,7 @@ import { buildMemberTransferManifest } from '@/database/repositories/resourceTra
 import type { ResourceTransferRequestItem } from '@/database/schemas';
 import { agents, chatGroups, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
@@ -127,7 +132,13 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
             title: agents.title,
           })
           .from(agents)
-          .where(and(inArray(agents.id, agentIds), eq(agents.workspaceId, requestWorkspaceId)))
+          .where(
+            and(
+              inArray(agents.id, agentIds),
+              eq(agents.workspaceId, requestWorkspaceId),
+              notTrashed(agents.isDeleted),
+            ),
+          )
       : Promise.resolve([]),
     groupIds.length > 0
       ? db
@@ -139,7 +150,11 @@ const enrichRequests = async (db: LobeChatDatabase, requests: ResourceTransferRe
           })
           .from(chatGroups)
           .where(
-            and(inArray(chatGroups.id, groupIds), eq(chatGroups.workspaceId, requestWorkspaceId)),
+            and(
+              inArray(chatGroups.id, groupIds),
+              eq(chatGroups.workspaceId, requestWorkspaceId),
+              notTrashed(chatGroups.isDeleted),
+            ),
           )
       : Promise.resolve([]),
   ]);
@@ -281,6 +296,17 @@ export const resourceTransferRequestRouter = router({
             cause: { data: { code: TransferErrorCode.CopyInProgress } },
             code: 'CONFLICT',
             message: 'A previous copy of this agent is still duplicating its history',
+          });
+        }
+        if (error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          // A share row, including a paused row, blocks ownership transfer.
+          // Keep this request pending so it can be canceled or retried only
+          // after the share row is actually removed.
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message:
+              'This agent cannot be transferred while a share link exists, including paused links.',
           });
         }
       }

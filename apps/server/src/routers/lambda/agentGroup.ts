@@ -6,7 +6,7 @@ import { startAgentTransferJob } from '@/business/server/agent-transfer/jobRunne
 import { notifyResourceTransfer } from '@/business/server/resource-transfer/notify';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { AgentModel } from '@/database/models/agent';
+import { AGENT_SHARED_TRANSFER_BLOCKED, AgentModel } from '@/database/models/agent';
 import { AGENT_COPY_IN_PROGRESS } from '@/database/models/agentCopyJob';
 import {
   AGENT_TRANSFER_IN_PROGRESS,
@@ -935,6 +935,13 @@ export const agentGroupRouter = router({
             cause: { data: { code: TransferErrorCode.TransferInProgress } },
             code: 'CONFLICT',
             message: "A previous transfer of this group's agents is still migrating history",
+          });
+        }
+        if (error instanceof Error && error.message === AGENT_SHARED_TRANSFER_BLOCKED) {
+          throw new TRPCError({
+            cause: { data: { code: TransferErrorCode.SharedTransferBlocked } },
+            code: 'PRECONDITION_FAILED',
+            message: 'This group contains a shared agent, so its ownership cannot be changed.',
           });
         }
         throw error;

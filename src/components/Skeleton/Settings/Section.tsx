@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, FormGroup } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
 
 import SkeletonBar from '../Bar';
@@ -33,7 +34,7 @@ const Row = ({ index }: { index: number }) => (
 );
 
 const Group = ({ rows, titleWidth }: { rows: number; titleWidth: number }) => (
-  <FormGroup
+  <Form.Group
     collapsible={false}
     title={<SkeletonBar height={18} width={titleWidth} />}
     variant={'filled'}
@@ -46,7 +47,7 @@ const Group = ({ rows, titleWidth }: { rows: number; titleWidth: number }) => (
         </Flexbox>
       ))}
     </Flexbox>
-  </FormGroup>
+  </Form.Group>
 );
 
 const SettingsSectionSkeleton = () => (

@@ -67,6 +67,12 @@ export interface TrashItem {
 
 export interface TrashListParams {
   cursor?: string | null;
+  /**
+   * Only roots this user trashed. Set server-side for workspace non-owners, so
+   * a member never sees titles of teammates' resources (a message root's title
+   * is a content excerpt).
+   */
+  deletedByUserId?: string;
   limit?: number;
   resourceType?: TrashResourceType;
 }

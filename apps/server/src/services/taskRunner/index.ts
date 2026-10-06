@@ -1,7 +1,9 @@
 import { TaskIdentifier as TaskSkillIdentifier } from '@lobechat/builtin-skills';
+import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-evidence';
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
+import { readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -10,15 +12,24 @@ import { AgentModel } from '@/database/models/agent';
 import { BriefModel } from '@/database/models/brief';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
+import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
+import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
+import {
+  resolveRunDeviceId,
+  resolveTaskRunExecution,
+  resolveTopicExecutionPatch,
+} from './resolveRunExecution';
 
 const log = debug('task-runner');
 
 export interface RunTaskParams {
+  /** Extra builtin tools this run mounts beside the Task skill, e.g. the Goal report tool. */
+  additionalPluginIds?: string[];
   continueTopicId?: string;
   extraPrompt?: string;
   /** Optional per-operation cap. Omitted means the agent runtime remains uncapped. */
@@ -52,6 +63,7 @@ export class TaskRunnerService {
   private taskLifecycle: TaskLifecycleService;
   private taskModel: TaskModel;
   private taskTopicModel: TaskTopicModel;
+  private topicModel: TopicModel;
   private userId: string;
 
   private workspaceId?: string;
@@ -63,12 +75,36 @@ export class TaskRunnerService {
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.taskModel = new TaskModel(db, userId, workspaceId);
     this.taskTopicModel = new TaskTopicModel(db, userId, workspaceId);
+    this.topicModel = new TopicModel(db, userId, workspaceId);
     this.briefModel = new BriefModel(db, userId, workspaceId);
     this.taskLifecycle = new TaskLifecycleService(db, userId, workspaceId);
   }
 
+  /**
+   * Mirror a task's execution selection onto a topic one of its runs continues.
+   *
+   * Deliberately NOT swallowed: the topic's stored directory outranks the
+   * selection this run brings, so an unsynced topic means the run may start in
+   * the previous machine's directory — failing the kickoff (and letting the
+   * caller's error path restore the task's resting state) is better than
+   * running somewhere the user did not pin.
+   */
+  private async syncTopicExecution(
+    topicId: string,
+    taskConfig: Record<string, unknown>,
+    runDeviceId: string | undefined,
+  ): Promise<void> {
+    const topic = await this.topicModel.findById(topicId);
+    const patch = resolveTopicExecutionPatch(topic?.metadata, taskConfig, runDeviceId);
+    if (!patch) return;
+
+    await this.topicModel.updateMetadata(topicId, patch);
+    log('runTask: synced topic %s execution metadata', topicId);
+  }
+
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
     const {
+      additionalPluginIds,
       taskId: idOrIdentifier,
       continueTopicId,
       extraPrompt,
@@ -100,19 +136,13 @@ export class TaskRunnerService {
         // fallback must stay ephemeral — persisting it would silently replace
         // the member assignment on the first run.
         if (!task.assigneeUserId) {
-          await this.taskModel.update(task.id, { assigneeAgentId: inboxAgent.id });
+          // Goes through the logging path like every other assignee write: the
+          // chip visibly flips from unassigned to the inbox agent, so the feed
+          // has to be able to say who did it. No actor — nobody asked for this
+          // one, the runner needed an agent to execute with.
+          await this.taskModel.updateWithLog(task.id, { assigneeAgentId: inboxAgent.id }, {});
         }
         task.assigneeAgentId = inboxAgent.id;
-      } else if (task.assigneeUserId) {
-        // Released clients persisted the inbox fallback before calling run,
-        // even when the task was assigned to a member. Recognize that exact
-        // legacy pair and restore the human assignment before execution. A
-        // non-inbox agent remains an explicit agent assignment and is left
-        // untouched.
-        const inboxAgent = await this.agentModel.getBuiltinAgent(INBOX_SESSION_ID);
-        if (task.assigneeAgentId === inboxAgent?.id) {
-          await this.taskModel.update(task.id, { assigneeAgentId: null });
-        }
       }
 
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
@@ -143,7 +173,11 @@ export class TaskRunnerService {
         }
       }
 
-      const { fileIds: attachmentFileIds, prompt } = await buildTaskPrompt(
+      const {
+        acceptanceEnabled,
+        fileIds: attachmentFileIds,
+        prompt,
+      } = await buildTaskPrompt(
         task,
         {
           briefModel: this.briefModel,
@@ -157,10 +191,20 @@ export class TaskRunnerService {
       );
 
       if (task.status !== 'running') {
-        await this.taskModel.updateStatus(task.id, 'running', {
-          error: null,
-          startedAt: new Date(),
-        });
+        // Conditional on the status read above: a task deleted (or started by
+        // another caller) in the meantime must not get an agent dispatched.
+        const started = await this.taskModel.updateStatusIfCurrent(
+          task.id,
+          task.status,
+          'running',
+          { error: null, startedAt: new Date() },
+        );
+        if (!started) {
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'The task changed or was deleted before its run could start.',
+          });
+        }
         weSetRunning = true;
       } else if (task.error) {
         await this.taskModel.update(task.id, { error: null });
@@ -194,6 +238,12 @@ export class TaskRunnerService {
       if (briefMode === 'agent' && !reviewConfig?.enabled && checkpoint.onAgentRequest !== false) {
         pluginIds.push(BriefIdentifier);
       }
+      // The Acceptance runs inside the Task, so the builder needs listCriteria +
+      // submitEvidence for the whole run — not only in the post-run evidence
+      // turn, which mounts this tool exclusively and therefore can only ever
+      // restate text it already wrote.
+      if (acceptanceEnabled) pluginIds.push(AcceptanceEvidenceIdentifier);
+      if (additionalPluginIds) pluginIds.push(...additionalPluginIds);
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
 
@@ -207,6 +257,31 @@ export class TaskRunnerService {
           taskConfig.model = snapshot.model;
           taskConfig.provider = snapshot.provider;
         }
+      }
+
+      // The execution selection the task itself carries — a pinned device and/or
+      // a working directory. Undefined when the task pins nothing, in which case
+      // the run keeps inheriting the assignee agent's target and cwd.
+      const taskExecution = readTaskExecutionConfig(taskConfig);
+      // The device the run will actually use. It differs from the task's pin
+      // when the author FIXED the agent's target, and that difference decides
+      // whether the directory may travel: see `resolveTaskRunExecution`.
+      const runDeviceId = taskExecution
+        ? resolveRunDeviceId(
+            taskExecution,
+            await this.agentModel.getAgentAgencyConfig(agentRef),
+            this.workspaceId,
+          )
+        : undefined;
+      const runExecution = resolveTaskRunExecution(taskExecution, runDeviceId);
+
+      // A continued topic keeps its own metadata (`turnSetup` stamps
+      // `initialTopicMetadata` only for a topic it creates) and those stored
+      // values outrank what this run brings — the directory this task pins would
+      // be ignored, and the previous machine's kept. Stamp the task's selection
+      // onto the topic first; see `resolveTopicExecutionPatch`.
+      if (continueTopicId) {
+        await this.syncTopicExecution(continueTopicId, taskConfig, runDeviceId);
       }
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
@@ -251,21 +326,103 @@ export class TaskRunnerService {
         title: extraPrompt ? extraPrompt.slice(0, 100) : task.name || task.identifier,
         trigger: TopicTrigger.RunTask,
         userInterventionConfig: { approvalMode: 'headless' },
-        ...(continueTopicId && { appContext: { topicId: continueTopicId } }),
+        // The task's own pin, when it has one. `deviceId` forces device routing
+        // unless the agent's selection policy is `fixed` (author-controlled
+        // targets stay authoritative — same rule the chat picker follows), and
+        // the directory rides into the topic this run creates.
+        ...(runExecution?.deviceId ? { deviceId: runExecution.deviceId } : {}),
+        ...(continueTopicId || runExecution?.initialTopicMetadata
+          ? {
+              appContext: {
+                ...(continueTopicId && { topicId: continueTopicId }),
+                // A continued topic keeps its own metadata (the server ignores
+                // this for an existing topic), so it is only meaningful on a
+                // fresh run — sent anyway so the task's intent is not lost if
+                // that ever changes.
+                ...(runExecution?.initialTopicMetadata && {
+                  initialTopicMetadata: runExecution.initialTopicMetadata,
+                }),
+              },
+            }
+          : {}),
       });
 
-      if (result.topicId) {
-        if (continueTopicId) {
-          await this.taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
-          await this.taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
-          await this.taskModel.updateCurrentTopic(task.id, continueTopicId);
-        } else {
+      if (!result.success) {
+        // execAgent reports a dispatch or startup failure as a result rather
+        // than a throw (`startOperation`, `heteroDispatch`): the assistant
+        // bubble already carries the error and the run's lifecycle hooks have
+        // fired. Booking that dead operation as a running topic would leave
+        // the Task looking in flight — a goal coordinator would even record a
+        // `started_run` for it — with nothing left to ever settle it. Keep the
+        // attempt visible as a failed run, then fail the kickoff like any other.
+        if (result.topicId && !continueTopicId) {
           await this.taskModel.incrementTopicCount(task.id);
           await this.taskModel.updateCurrentTopic(task.id, result.topicId);
           await this.taskTopicModel.add(task.id, result.topicId, {
             operationId: result.operationId,
             seq: (task.totalTopics || 0) + 1,
             trigger,
+          });
+        }
+        if (result.topicId) {
+          await this.taskTopicModel.updateStatus(
+            task.id,
+            result.topicId,
+            resolveFailedRunStatus(result.error),
+          );
+        }
+        throw new Error(result.error || result.message || 'Agent run failed to start');
+      }
+
+      if (result.topicId) {
+        const topicId = result.topicId;
+        // Record the run under the task's row lock (see TaskService.deleteTask).
+        // If the task was deleted — or canceled, e.g. by a Goal retiring its
+        // node — while this run was being dispatched, whoever did it found no
+        // topic to stop yet. Nobody else will stop it, so stop it here instead
+        // of recording an operation that keeps running behind the cancellation.
+        // A claim withdrawn mid-startup is the same case: closing or restarting
+        // a goal puts a claimed Task with no recorded run back to `backlog`.
+        const recorded = await this.db.transaction(async (tx) => {
+          const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+          const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+          if (!(await taskModel.lockForUpdate(task.id))) return 'deleted' as const;
+          const current = await taskModel.findById(task.id);
+          if (current?.status === 'canceled') return 'canceled' as const;
+          if (current?.status === 'backlog') return 'withdrawn' as const;
+          if (continueTopicId) {
+            await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
+            await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);
+            await taskModel.updateCurrentTopic(task.id, continueTopicId);
+          } else {
+            await taskModel.incrementTopicCount(task.id);
+            await taskModel.updateCurrentTopic(task.id, topicId);
+            await taskTopicModel.add(task.id, topicId, {
+              operationId: result.operationId,
+              seq: (task.totalTopics || 0) + 1,
+              trigger,
+            });
+          }
+          return 'recorded' as const;
+        });
+        if (recorded !== 'recorded') {
+          const stop = await aiAgentService
+            .interruptTask({ operationId: result.operationId })
+            .catch((error) => {
+              log('runTask: failed to stop orphaned run: %O', error);
+              return undefined;
+            });
+          // Same confirmation gate as TaskService.interruptTaskOperation.
+          const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
+          throw new TRPCError({
+            code: stopped
+              ? recorded === 'deleted'
+                ? 'NOT_FOUND'
+                : 'CONFLICT'
+              : 'INTERNAL_SERVER_ERROR',
+            message: stopped
+              ? `The task was ${recorded} while its run was starting; the run was stopped.`
+              : `The task was ${recorded} while its run was starting, and stopping that run (operation ${result.operationId}) could not be confirmed.`,
           });
         }
       }
@@ -326,7 +483,17 @@ export class TaskRunnerService {
    *   with the error recorded — the same fallback used by the runner itself.
    */
   async cascadeOnCompletion(completedTaskId: string): Promise<CascadeResult> {
-    const unlocked = await this.taskModel.getUnlockedTasks(completedTaskId);
+    return this.cascadeOnCompletionMany([completedTaskId]);
+  }
+
+  /**
+   * Batched variant of {@link cascadeOnCompletion} for family-wide status
+   * cascades: dependents are discovered across all completed ids in one pass,
+   * so completing N tasks costs a constant number of discovery queries instead
+   * of N dependency walks.
+   */
+  async cascadeOnCompletionMany(completedTaskIds: string[]): Promise<CascadeResult> {
+    const unlocked = await this.taskModel.getUnlockedTasksForMany(completedTaskIds);
     if (unlocked.length === 0) return TaskRunnerService.cascadeEmpty();
 
     const result: CascadeResult = { failed: [], paused: [], started: [] };

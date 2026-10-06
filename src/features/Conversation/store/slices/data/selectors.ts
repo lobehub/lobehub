@@ -9,6 +9,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 
 import { type State } from '../../initialState';
 import { getPendingInterventions } from './pendingInterventions';
+import { collectSteerChains } from './steerChains';
 import { getWorkSummariesByRootOperationId } from './workSummaries';
 
 const displayMessages = (s: State) => s.displayMessages;
@@ -162,7 +163,41 @@ const pendingInterventions = (s: State) => getPendingInterventions(s.displayMess
 const workSummariesByRootOperationId = (rootOperationId?: string | null) => (s: State) =>
   getWorkSummariesByRootOperationId(s.dbMessages, rootOperationId);
 
+const isRefreshingAt = (id: string) => (s: State) => s.refreshingRowId === id;
+
 const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
+
+const rowMemberIds = (id: string) => (s: State) =>
+  collectSteerChains(s.displayMessages).byHost.get(id)?.memberIds ?? [id];
+
+const hostRowOf = (id: string) => (s: State) =>
+  collectSteerChains(s.displayMessages).hostOf.get(id) ?? id;
+
+const collectDeletableMessageIds = (message: UIChatMessage | undefined): string[] => {
+  if (!message) return [];
+  if ((message.role !== 'assistantGroup' && message.role !== 'supervisor') || !message.children) {
+    return [message.id];
+  }
+
+  return [
+    message.id,
+    ...message.children.map((child) => child.id),
+    ...message.children.flatMap(
+      (child) => child.tools?.flatMap((tool) => (tool.result?.id ? [tool.result.id] : [])) ?? [],
+    ),
+  ];
+};
+
+// The server reparents survivors instead of cascading, so every folded
+// continuation must be expanded the same way as the host or its later blocks
+// resurface as a fresh turn under the original user message.
+const deletableRowMessageIds = (id: string) => (s: State) => [
+  ...new Set(
+    rowMemberIds(id)(s).flatMap((memberId) =>
+      collectDeletableMessageIds(getDisplayMessageById(memberId)(s)),
+    ),
+  ),
+];
 
 const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock => ({
   content: message.content,
@@ -177,6 +212,16 @@ const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock 
   tools: message.tools as ChatToolPayloadWithResult[],
   usage: message.usage,
 });
+
+const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
+  const tailId = rowMemberIds(id)(s).at(-1) ?? id;
+  const tail = getDisplayMessageById(tailId)(s);
+
+  if (tail?.role !== 'assistant') return getGroupLatestMessageWithoutTools(tailId)(s);
+  if (tail.tools?.length || !tail.content) return;
+
+  return toAssistantContentBlock(tail);
+};
 
 /**
  * Walk displayMessages (including compressed groups and agentCouncil members)
@@ -272,8 +317,10 @@ const getVerifyOrdinal = (id: string) => (s: State) => {
 };
 
 export const dataSelectors = {
+  isRefreshingAt,
   currentTopicSummary,
   dbMessages,
+  deletableRowMessageIds,
   getVerifyOrdinal,
   displayMessageIds,
   displayMessages,
@@ -284,13 +331,16 @@ export const dataSelectors = {
   getBlockHasTools,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  getRowLatestMessageWithoutTools,
   getToolInBlock,
   getToolMessageCreatedAt,
   getToolsInBlock,
   hasNoRenderedReply,
+  hostRowOf,
   isSecondLastMessageFromUser,
   messagesInit,
   pendingInterventions,
+  rowMemberIds,
   skipFetch,
   taskCallbackTaskIds,
   workSummariesByRootOperationId,

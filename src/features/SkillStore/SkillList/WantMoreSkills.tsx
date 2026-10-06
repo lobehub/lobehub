@@ -1,7 +1,8 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Typography } from 'antd';
+import { Text } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,10 +22,19 @@ const WantMoreSkills = memo(() => {
 
   return (
     <Flexbox align="center" justify="center" paddingBlock={24}>
-      <Typography.Text type="secondary">
+      <Text type={'secondary'}>
         {t('skillStore.wantMore.reachedEnd')}{' '}
-        <Typography.Link onClick={handleClick}>{t('skillStore.wantMore.action')}</Typography.Link>
-      </Typography.Text>
+        <a
+          href={'#'}
+          style={{ color: cssVar.colorLink }}
+          onClick={(e) => {
+            e.preventDefault();
+            handleClick();
+          }}
+        >
+          {t('skillStore.wantMore.action')}
+        </a>
+      </Text>
     </Flexbox>
   );
 });

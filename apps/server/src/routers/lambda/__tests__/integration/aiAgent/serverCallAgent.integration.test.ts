@@ -29,13 +29,19 @@ process.env.OPENAI_API_KEY = 'sk-test-fake-api-key-for-testing';
 
 let testDB: LobeChatDatabase;
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn(() => testDB),
+  getServerDB: vi.fn(function () {
+    return testDB;
+  }),
 }));
 
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn().mockImplementation(() => ({
-    getFullFileUrl: vi.fn().mockImplementation((path: string) => (path ? `/files${path}` : null)),
-  })),
+  FileService: vi.fn().mockImplementation(function () {
+    return {
+      getFullFileUrl: vi.fn().mockImplementation(function (path: string) {
+        return path ? `/files${path}` : null;
+      }),
+    };
+  }),
 }));
 
 let mockResponsesCreate: any;
@@ -57,9 +63,6 @@ const createCallAgentResponse = () => {
     arguments: JSON.stringify({
       agentId: targetAgentId,
       instruction: 'Handle the delegated backend integration task.',
-      runAsTask: true,
-      taskTitle: 'Delegated backend integration task',
-      timeout: 30_000,
     }),
     call_id: callId,
     name: 'lobe-agent-management____callAgent',
@@ -218,7 +221,7 @@ afterEach(async () => {
 describe('Server callAgent deferred execution', () => {
   it('parks the parent, runs the target agent, backfills the tool message and resumes', async () => {
     let callCount = 0;
-    mockResponsesCreate.mockImplementation(() => {
+    mockResponsesCreate.mockImplementation(function () {
       callCount++;
       if (callCount === 1) return Promise.resolve(createCallAgentResponse() as any);
       if (callCount === 2) return Promise.resolve(createFinalTextResponse(TARGET_ANSWER) as any);

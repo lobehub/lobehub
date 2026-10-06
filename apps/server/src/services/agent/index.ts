@@ -1,6 +1,7 @@
 import { type BuiltinAgentSlug } from '@lobechat/builtin-agents';
 import { BUILTIN_AGENTS } from '@lobechat/builtin-agents';
-import { DEFAULT_AGENT_CONFIG } from '@lobechat/const';
+import { DEFAULT_PROVIDER } from '@lobechat/business-const';
+import { DEFAULT_AGENT_CONFIG, DEFAULT_MODEL } from '@lobechat/const';
 import { type LobeChatDatabase } from '@lobechat/database';
 import { type AgentItem, type LobeAgentChatConfig, type LobeAgentConfig } from '@lobechat/types';
 import { cleanObject, merge } from '@lobechat/utils';
@@ -8,7 +9,9 @@ import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 import { type PartialDeep } from 'type-fest';
 
+import { AGENT_SHARE_ALLOWED_PROVIDERS } from '@/business/agent-share';
 import { AgentModel } from '@/database/models/agent';
+import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '@/database/utils/inboxAgent';
@@ -21,6 +24,7 @@ import {
   RedisKeys,
 } from '@/libs/redis';
 import { getServerDefaultAgentConfig } from '@/server/globalConfig';
+import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { type UpdateAgentResult } from './type';
 
@@ -64,6 +68,65 @@ export class AgentService {
     this.workspaceId = workspaceId;
     this.agentModel = new AgentModel(db, userId, workspaceId);
     this.userModel = new UserModel(db, userId);
+  }
+
+  /** Validate the effective selection at configuration boundaries, including inherited defaults. */
+  async assertShareModelAllowed(agentId: string, patch: PartialDeep<AgentItem> = {}) {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS) return;
+
+    const agent = await this.agentModel.getAgentConfigById(agentId);
+    if (!agent) throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+
+    const selection = await this.resolveModelSelection({ ...agent, ...patch });
+    const { provider } = selection;
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS.includes(provider)) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Shared agents only support models from: ${AGENT_SHARE_ALLOWED_PROVIDERS.join(', ')}. Switch providers or turn off sharing first.`,
+      });
+    }
+    return selection;
+  }
+
+  /** Serialize provider changes and publication on the existing shared-agent row lock. */
+  async withShareModelLock<T>(
+    agentId: string,
+    action: (service: AgentService, shares: AgentShareModel) => Promise<T>,
+  ): Promise<T> {
+    if (!AGENT_SHARE_ALLOWED_PROVIDERS) {
+      return action(this, new AgentShareModel(this.db, this.userId, this.workspaceId));
+    }
+    return this.db.transaction(async (transaction) => {
+      const tx = transaction as LobeChatDatabase;
+      if (
+        !(await AgentShareModel.lockScopedAgentRow(tx, agentId, {
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        }))
+      ) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Agent not found' });
+      }
+      if (this.workspaceId) {
+        await assertCanPerformResourceAction({
+          action: 'manage',
+          db: tx,
+          resourceId: agentId,
+          resourceType: 'agent',
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        });
+      }
+      return action(
+        new AgentService(tx, this.userId, this.workspaceId),
+        new AgentShareModel(tx, this.userId, this.workspaceId),
+      );
+    });
+  }
+
+  /** Pin inherited defaults so later account changes cannot alter a published model. */
+  async prepareShareModel(agentId: string) {
+    const selection = await this.assertShareModelAllowed(agentId);
+    if (selection) await this.agentModel.updateConfig(agentId, selection);
   }
 
   async createInbox() {
@@ -181,6 +244,29 @@ export class AgentService {
   }
 
   /**
+   * The model and provider a run of this agent actually uses: the same
+   * `DEFAULT_AGENT_CONFIG` → server default → user default → agent layering
+   * as {@link getAgentConfig}, narrowed to those two fields. For read paths
+   * that only need to know which model will answer (deriving what media a
+   * share visitor may attach, for instance) without loading the agent's
+   * knowledge and documents.
+   */
+  async resolveModelSelection(agent: {
+    model?: string | null;
+    provider?: string | null;
+  }): Promise<{ model: string; provider: string }> {
+    const defaultAgentConfig = await this.userModel.getUserSettingsDefaultAgentConfig();
+    const merged = this.mergeDefaultConfig(
+      { model: agent.model, provider: agent.provider },
+      defaultAgentConfig,
+    )!;
+
+    // `LobeAgentConfig` types both as optional even though `DEFAULT_AGENT_CONFIG`
+    // always supplies them; the fallbacks are those same constants.
+    return { model: merged.model ?? DEFAULT_MODEL, provider: merged.provider ?? DEFAULT_PROVIDER };
+  }
+
+  /**
    * Get AI-generated welcome data from Redis
    * Returns null if Redis is disabled or data doesn't exist
    */
@@ -251,6 +337,30 @@ export class AgentService {
     agentId: string,
     value: PartialDeep<AgentItem>,
   ): Promise<UpdateAgentResult> {
+    if (
+      AGENT_SHARE_ALLOWED_PROVIDERS &&
+      !this.workspaceId &&
+      ('model' in value || 'provider' in value)
+    ) {
+      return this.withShareModelLock(agentId, (service) => service.saveAgentConfig(agentId, value));
+    }
+    return this.saveAgentConfig(agentId, value);
+  }
+
+  private async saveAgentConfig(
+    agentId: string,
+    value: PartialDeep<AgentItem>,
+  ): Promise<UpdateAgentResult> {
+    if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
+      const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
+        agentId,
+      );
+      if (share?.visibility === 'link') {
+        const selection = await this.assertShareModelAllowed(agentId, value);
+        value = { ...value, ...selection };
+      }
+    }
+
     // 1. Execute update
     // `AgentItem` here is the `@lobechat/types` domain shape (plugins:
     // AgentPluginEntry[]); `agentModel.updateConfig` takes the DB-layer

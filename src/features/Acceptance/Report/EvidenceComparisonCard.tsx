@@ -3,12 +3,11 @@
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
 /** The `metadata.comparison` an evidence artifact may carry (authored at ingest). */
 export interface EvidenceComparisonMeta {
   id: string;
-  /** Optional per-side caption shown next to the role. */
+  /** Optional authored caption shown in the tinted band. */
   label?: string;
   /**
    * How the pair is arranged. Side by side reads best for tall, narrow captures
@@ -105,10 +104,6 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorSuccessText};
     background: ${cssVar.colorSuccessBg};
   `,
-  role: css`
-    flex: none;
-    font-weight: 600;
-  `,
   /* The two captions are themselves a before/after contrast, so they must stay
      readable side by side — wrap rather than ellipsize. */
   caption: css`
@@ -132,7 +127,7 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export interface EvidenceComparisonSide {
-  /** Caption next to the role band — the comparison label, or the evidence description. */
+  /** Caption in the tinted band — the comparison label, or the evidence description. */
   caption?: string;
   content: ReactNode;
 }
@@ -149,8 +144,6 @@ interface EvidenceComparisonCardProps {
  */
 export const EvidenceComparisonCard = memo<EvidenceComparisonCardProps>(
   ({ after, before, layout = 'horizontal' }) => {
-    const { t } = useTranslation('verify');
-
     return (
       <div className={cx(styles.card, layout === 'vertical' && styles.cardVertical)}>
         {(
@@ -160,15 +153,16 @@ export const EvidenceComparisonCard = memo<EvidenceComparisonCardProps>(
           ] as const
         ).map(([role, side]) => (
           <div className={styles.side} key={role}>
-            <div
-              className={cx(
-                styles.label,
-                role === 'before' ? styles.labelBefore : styles.labelAfter,
-              )}
-            >
-              <span className={styles.role}>{t(`report.evidence.comparison.${role}`)}</span>
-              {side.caption && <span className={styles.caption}>{side.caption}</span>}
-            </div>
+            {side.caption && (
+              <div
+                className={cx(
+                  styles.label,
+                  role === 'before' ? styles.labelBefore : styles.labelAfter,
+                )}
+              >
+                <span className={styles.caption}>{side.caption}</span>
+              </div>
+            )}
             <div className={styles.content}>{side.content}</div>
           </div>
         ))}

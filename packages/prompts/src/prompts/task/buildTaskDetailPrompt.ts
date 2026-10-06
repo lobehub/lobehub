@@ -1,5 +1,12 @@
 import type { TaskDetailData, TaskDetailWorkspaceNode } from './index';
-import { briefIcon, priorityLabel, statusIcon, timeAgo } from './index';
+import {
+  assignmentParticipantLabel,
+  briefIcon,
+  formatPropertyValue,
+  priorityLabel,
+  statusIcon,
+  timeAgo,
+} from './index';
 import type { TaskManagerPromptDefaults } from './taskManagerDefaults';
 import { buildTaskManagerDefaultsBlock } from './taskManagerDefaults';
 
@@ -102,6 +109,20 @@ export const buildTaskDetailPrompt = (input: BuildTaskDetailPromptInput, now?: D
         const content = act.content || '';
         const truncated = content.length > 200 ? content.slice(0, 200) + '...' : content;
         lines.push(`  💭 ${ago} ${author} ${truncated}${idSuffix}`);
+      } else if (act.type === 'property') {
+        const actor = assignmentParticipantLabel(act.author, 'system');
+        const change = act.propertyChange;
+        lines.push(
+          `  🔁 ${ago} ${actor} changed ${change?.field}: ${formatPropertyValue(change?.field, change?.from)} → ${formatPropertyValue(change?.field, change?.to)}${idSuffix}`,
+        );
+      } else if (act.type === 'assignment') {
+        // Who owns this task has changed hands before; the agent reading the
+        // detail should see that history, not just the current chip.
+        const slot = act.assignment?.kind === 'agent' ? 'agent' : 'member';
+        const actor = assignmentParticipantLabel(act.author, 'system');
+        lines.push(
+          `  👥 ${ago} ${actor} set ${slot} assignee: ${assignmentParticipantLabel(act.assignment?.from)} → ${assignmentParticipantLabel(act.assignment?.to)}${idSuffix}`,
+        );
       }
     }
   }

@@ -1,6 +1,6 @@
 'use client';
 
-import { ModelProvider } from 'model-bank';
+import { ModelProvider } from 'model-bank/modelProvider';
 import { AzureProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 
@@ -41,7 +41,7 @@ const useProviderCard = (): ProviderItem => {
         ),
         desc: t('azure.token.desc'),
         label: t('azure.token.title'),
-        name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
       },
       {
         children: isLoading ? (
@@ -51,7 +51,7 @@ const useProviderCard = (): ProviderItem => {
         ),
         desc: t('azure.endpoint.desc'),
         label: t('azure.endpoint.title'),
-        name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderBaseUrlKey}`,
       },
     ],
     checkModel,

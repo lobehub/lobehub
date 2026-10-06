@@ -333,8 +333,8 @@ export const isAiModelVisible = (model: { visible?: boolean }) => model.visible 
  *
  * Field names intentionally mirror the same-named `LobeAgentChatConfig` fields so
  * `applyModelExtendParams` can consume this object unchanged. Deliberately narrow:
- * only the reasoning-effort family + `reasoningMode` — other extend params
- * (textVerbosity, thinking budget/level, ...) remain agent-scoped for now.
+ * the reasoning-effort family, Gemini thinking levels, and `reasoningMode`.
+ * Numeric thinking budgets and other extend params remain agent-scoped.
  */
 export interface AiModelReasoningConfig {
   codexMaxReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
@@ -348,9 +348,11 @@ export interface AiModelReasoningConfig {
   gpt5_2ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh';
   gpt5_6ReasoningEffort?: 'none' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   gpt5ReasoningEffort?: 'minimal' | 'low' | 'medium' | 'high';
+  gpt6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   grok4_3ReasoningEffort?: 'none' | 'low' | 'medium' | 'high';
   grok4_5ReasoningEffort?: 'low' | 'medium' | 'high';
   grok4_6ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
+  grok4_7ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   grok4_20ReasoningEffort?: 'low' | 'medium' | 'high' | 'xhigh';
   hy3ReasoningEffort?: 'no_think' | 'low' | 'high';
   kimiK3ReasoningEffort?: 'low' | 'high' | 'max';
@@ -359,6 +361,10 @@ export interface AiModelReasoningConfig {
   reasoningMode?: 'standard' | 'pro';
   ring2_6ReasoningEffort?: 'high' | 'xhigh';
   step3_5ReasoningEffort?: 'low' | 'high';
+  thinkingLevel?: 'minimal' | 'low' | 'medium' | 'high';
+  thinkingLevel2?: 'low' | 'high';
+  thinkingLevel3?: 'low' | 'medium' | 'high';
+  thinkingLevel4?: 'minimal' | 'high';
 }
 
 export const AiModelReasoningConfigSchema = z.object({
@@ -373,9 +379,11 @@ export const AiModelReasoningConfigSchema = z.object({
   gpt5_2ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh']).optional(),
   gpt5_6ReasoningEffort: z.enum(['none', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
   gpt5ReasoningEffort: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  gpt6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
   grok4_3ReasoningEffort: z.enum(['none', 'low', 'medium', 'high']).optional(),
   grok4_5ReasoningEffort: z.enum(['low', 'medium', 'high']).optional(),
   grok4_6ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
+  grok4_7ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   grok4_20ReasoningEffort: z.enum(['low', 'medium', 'high', 'xhigh']).optional(),
   hy3ReasoningEffort: z.enum(['no_think', 'low', 'high']).optional(),
   kimiK3ReasoningEffort: z.enum(['low', 'high', 'max']).optional(),
@@ -384,6 +392,10 @@ export const AiModelReasoningConfigSchema = z.object({
   reasoningMode: z.enum(['standard', 'pro']).optional(),
   ring2_6ReasoningEffort: z.enum(['high', 'xhigh']).optional(),
   step3_5ReasoningEffort: z.enum(['low', 'high']).optional(),
+  thinkingLevel: z.enum(['minimal', 'low', 'medium', 'high']).optional(),
+  thinkingLevel2: z.enum(['low', 'high']).optional(),
+  thinkingLevel3: z.enum(['low', 'medium', 'high']).optional(),
+  thinkingLevel4: z.enum(['minimal', 'high']).optional(),
 });
 
 /**
@@ -414,9 +426,11 @@ export const MODEL_REASONING_PARAM_LEVELS: {
   gpt5_2ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh'],
   gpt5_6ReasoningEffort: ['none', 'low', 'medium', 'high', 'xhigh', 'max'],
   gpt5ReasoningEffort: ['minimal', 'low', 'medium', 'high'],
+  gpt6ReasoningEffort: ['low', 'medium', 'high', 'xhigh', 'max'],
   grok4_3ReasoningEffort: ['none', 'low', 'medium', 'high'],
   grok4_5ReasoningEffort: ['low', 'medium', 'high'],
   grok4_6ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
+  grok4_7ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
   grok4_20ReasoningEffort: ['low', 'medium', 'high', 'xhigh'],
   hy3ReasoningEffort: ['no_think', 'low', 'high'],
   kimiK3ReasoningEffort: ['low', 'high', 'max'],
@@ -425,6 +439,10 @@ export const MODEL_REASONING_PARAM_LEVELS: {
   reasoningMode: ['standard', 'pro'],
   ring2_6ReasoningEffort: ['high', 'xhigh'],
   step3_5ReasoningEffort: ['low', 'high'],
+  thinkingLevel: ['minimal', 'low', 'medium', 'high'],
+  thinkingLevel2: ['low', 'high'],
+  thinkingLevel3: ['low', 'medium', 'high'],
+  thinkingLevel4: ['minimal', 'high'],
 };
 
 /**
@@ -446,9 +464,11 @@ export const MODEL_REASONING_PARAM_DEFAULTS: {
   gpt5_2ReasoningEffort: 'none',
   gpt5_6ReasoningEffort: 'medium',
   gpt5ReasoningEffort: 'medium',
+  gpt6ReasoningEffort: 'medium',
   grok4_3ReasoningEffort: 'low',
   grok4_5ReasoningEffort: 'high',
   grok4_6ReasoningEffort: 'high',
+  grok4_7ReasoningEffort: 'high',
   grok4_20ReasoningEffort: 'medium',
   hy3ReasoningEffort: 'high',
   kimiK3ReasoningEffort: 'max',
@@ -457,6 +477,10 @@ export const MODEL_REASONING_PARAM_DEFAULTS: {
   reasoningMode: 'standard',
   ring2_6ReasoningEffort: 'high',
   step3_5ReasoningEffort: 'low',
+  thinkingLevel: 'high',
+  thinkingLevel2: 'high',
+  thinkingLevel3: 'high',
+  thinkingLevel4: 'minimal',
 };
 
 export interface AiModelConfig {
@@ -490,6 +514,7 @@ export type ExtendParamsType =
   | 'effort'
   | 'deepseekV4GAReasoningEffort'
   | 'deepseekV4ReasoningEffort'
+  | 'qwen38ReasoningEffort'
   | 'reasoningEffort'
   | 'reasoningMode'
   | 'gpt5ReasoningEffort'
@@ -497,12 +522,14 @@ export type ExtendParamsType =
   | 'gpt5_2ReasoningEffort'
   | 'gpt5_2ProReasoningEffort'
   | 'gpt5_6ReasoningEffort'
+  | 'gpt6ReasoningEffort'
   | 'glm5_2ReasoningEffort'
   | 'glm5_3ReasoningEffort'
   | 'grok4_20ReasoningEffort'
   | 'grok4_3ReasoningEffort'
   | 'grok4_5ReasoningEffort'
   | 'grok4_6ReasoningEffort'
+  | 'grok4_7ReasoningEffort'
   | 'hy3ReasoningEffort'
   | 'kimiK3ReasoningEffort'
   | 'ring2_6ReasoningEffort'
@@ -550,6 +577,7 @@ export const ExtendParamsTypeSchema = z.enum([
   'effort',
   'deepseekV4GAReasoningEffort',
   'deepseekV4ReasoningEffort',
+  'qwen38ReasoningEffort',
   'reasoningEffort',
   'reasoningMode',
   'gpt5ReasoningEffort',
@@ -557,12 +585,14 @@ export const ExtendParamsTypeSchema = z.enum([
   'gpt5_2ReasoningEffort',
   'gpt5_2ProReasoningEffort',
   'gpt5_6ReasoningEffort',
+  'gpt6ReasoningEffort',
   'glm5_2ReasoningEffort',
   'glm5_3ReasoningEffort',
   'grok4_20ReasoningEffort',
   'grok4_3ReasoningEffort',
   'grok4_5ReasoningEffort',
   'grok4_6ReasoningEffort',
+  'grok4_7ReasoningEffort',
   'hy3ReasoningEffort',
   'kimiK3ReasoningEffort',
   'ring2_6ReasoningEffort',

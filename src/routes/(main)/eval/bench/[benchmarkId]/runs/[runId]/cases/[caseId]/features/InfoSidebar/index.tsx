@@ -3,8 +3,7 @@
 import type { EvalRubricScore } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
 import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { Collapse } from 'antd';
+import { Accordion, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -230,15 +229,15 @@ const InfoSidebar = memo<InfoSidebarProps>(({ testCase, evalResult, passed, scor
               )}
 
               {scoredRubrics.length > 0 && (
-                <Collapse
-                  ghost
-                  size="small"
+                <Accordion
+                  defaultValue={[]}
+                  styles={{ trigger: { paddingInline: 12 } }}
                   items={scoredRubrics.map((s) => ({
                     children: s.reason ? (
                       <span className={styles.rubricReason}>{s.reason}</span>
                     ) : null,
                     key: s.rubricId,
-                    label: (
+                    title: (
                       <Flexbox horizontal align="center" gap={8} justify="space-between">
                         <span className={styles.rubricName}>
                           {t(`evalMode.${getEvalModeFromRubricId(s.rubricId)}` as any)}

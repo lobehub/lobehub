@@ -22,38 +22,56 @@ vi.mock('@lobechat/model-runtime', () => ({
   getModelPropertyWithFallback: vi.fn(async () => ({ vision: false })),
 }));
 vi.mock('@/database/models/aiModel', () => ({
-  AiModelModel: vi.fn(() => ({ findByIdAndProvider: mocks.aiModelFind })),
+  AiModelModel: vi.fn(function () {
+    return { findByIdAndProvider: mocks.aiModelFind };
+  }),
 }));
 vi.mock('@/database/models/document', () => ({
-  DocumentModel: vi.fn(() => ({ findById: vi.fn(), findByIds: mocks.documentFindByIds })),
+  DocumentModel: vi.fn(function () {
+    return { findById: vi.fn(), findByIds: mocks.documentFindByIds };
+  }),
 }));
 vi.mock('@/database/models/file', () => ({
-  FileModel: vi.fn(() => ({ findById: mocks.fileFindById })),
+  FileModel: vi.fn(function () {
+    return { findById: mocks.fileFindById };
+  }),
 }));
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({ listByRun: mocks.evidenceListByRun })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return { listByRun: mocks.evidenceListByRun };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({
-    createMany: mocks.resultCreateMany,
-    listByRun: mocks.resultListByRun,
-    updateByCheckItem: mocks.resultUpdateByCheckItem,
-  })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return {
+      createMany: mocks.resultCreateMany,
+      listByRun: mocks.resultListByRun,
+      updateByCheckItem: mocks.resultUpdateByCheckItem,
+    };
+  }),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({ ensureForOperation: mocks.runEnsureForOperation })),
+  VerifyRunModel: vi.fn(function () {
+    return { ensureForOperation: mocks.runEnsureForOperation };
+  }),
 }));
 vi.mock('@/server/services/aiGeneration', () => ({
-  AiGenerationService: vi.fn(() => ({ generateObject: mocks.aiGenerateObject })),
+  AiGenerationService: vi.fn(function () {
+    return { generateObject: mocks.aiGenerateObject };
+  }),
 }));
 vi.mock('@/server/services/file', () => ({
-  FileService: vi.fn(() => ({ getFileAccessUrl: mocks.fileAccessUrl })),
+  FileService: vi.fn(function () {
+    return { getFileAccessUrl: mocks.fileAccessUrl };
+  }),
 }));
 vi.mock('../statusService', () => ({
-  VerifyStatusService: vi.fn(() => ({
-    markVerifying: mocks.statusMarkVerifying,
-    recompute: mocks.statusRecompute,
-  })),
+  VerifyStatusService: vi.fn(function () {
+    return {
+      markVerifying: mocks.statusMarkVerifying,
+      recompute: mocks.statusRecompute,
+    };
+  }),
 }));
 
 describe('VerifyExecutorService', () => {
@@ -151,6 +169,45 @@ describe('VerifyExecutorService', () => {
       'run-1',
       'document-check',
       expect.objectContaining({ verdict: 'uncertain' }),
+    );
+  });
+
+  it('points a missing run-evidence item at a submit command it can run as-is', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan: [
+        {
+          id: 'shot-check',
+          index: 0,
+          onFail: 'auto_repair',
+          required: true,
+          title: 'Screenshot',
+          verifierConfig: {
+            requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
+          },
+          verifierType: 'llm',
+        },
+      ],
+      planConfirmedAt: new Date(),
+    });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'ui change',
+      goal: 'verify ui',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'builder-op-shot',
+      runVerifierAgent: vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op-shot' }),
+    });
+
+    expect(mocks.resultUpdateByCheckItem).toHaveBeenCalledWith(
+      'run-1',
+      'shot-check',
+      expect.objectContaining({
+        suggestion: expect.stringContaining(
+          'lh acceptance run result submit --run run-1 --item shot-check',
+        ),
+        verdict: 'uncertain',
+      }),
     );
   });
 

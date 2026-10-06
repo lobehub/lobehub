@@ -1,7 +1,8 @@
 'use client';
 
 import { Button, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
-import type { FormInstance } from 'antd';
+import type { FormInstance } from '@lobehub/ui/base-ui/form';
+import { type CreateAiModelParams } from 'model-bank';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,8 +34,12 @@ const CreateNewModelFooter = memo<CreateNewModelFooterProps>(({ formRef }) => {
           setLoading(true);
 
           try {
-            await form.validateFields();
-            const data = form.getFieldsValue();
+            const { valid } = await form.validate();
+            if (!valid) {
+              setLoading(false);
+              return;
+            }
+            const data = form.getValues() as Omit<CreateAiModelParams, 'providerId'>;
             await createNewAiModel({ ...data, providerId: editingProvider });
             setLoading(false);
             close();

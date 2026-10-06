@@ -7,10 +7,10 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
+import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
 import { fileManagerSelectors, useFileStore } from '@/store/file';
 import { type AsyncTaskStatus, type IAsyncTaskError } from '@/types/asyncTask';
 import { formatSize } from '@/utils/format';
-import { isChunkingUnsupported } from '@/utils/isChunkingUnsupported';
 
 import ChunksBadge from '../../ListView/ListItem/ChunkTag';
 
@@ -59,19 +59,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     height: 120px;
     margin-block-end: 12px;
     border-radius: ${cssVar.borderRadius};
-
-    background: ${cssVar.colorFillQuaternary};
-  `,
-  markdownLoading: css`
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    min-height: 120px;
-    border-radius: ${cssVar.borderRadiusLG};
-
-    font-size: 12px;
-    color: ${cssVar.colorTextTertiary};
 
     background: ${cssVar.colorFillQuaternary};
   `,
@@ -133,13 +120,12 @@ interface MarkdownFileItemProps {
   chunkCount?: number | null;
   chunkingError?: IAsyncTaskError | null;
   chunkingStatus?: AsyncTaskStatus | null;
+  contentPreview?: string | null;
   embeddingError?: IAsyncTaskError | null;
   embeddingStatus?: AsyncTaskStatus | null;
   fileType?: string;
   finishEmbedding?: boolean;
   id: string;
-  isLoadingMarkdown: boolean;
-  markdownContent: string;
   name: string;
   size: number;
 }
@@ -149,13 +135,12 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
     chunkCount,
     chunkingError,
     chunkingStatus,
+    contentPreview,
     embeddingError,
     embeddingStatus,
     fileType,
     finishEmbedding,
     id,
-    isLoadingMarkdown,
-    markdownContent,
     name,
     size,
   }) => {
@@ -165,15 +150,13 @@ const MarkdownFileItem = memo<MarkdownFileItemProps>(
       s.parseFilesToChunks,
     ]);
 
-    const isSupportedForChunking = !isChunkingUnsupported(fileType || '');
+    const isSupportedForChunking = isChunkingSupported({ fileType, name });
 
     return (
       <>
         <div style={{ position: 'relative' }}>
-          {isLoadingMarkdown ? (
-            <div className={styles.markdownLoading}>Loading preview...</div>
-          ) : markdownContent ? (
-            <div className={styles.markdownPreview}>{markdownContent}</div>
+          {contentPreview ? (
+            <div className={styles.markdownPreview}>{contentPreview}</div>
           ) : (
             <div className={styles.iconWrapper}>
               <FileIcon fileName={name} fileType={fileType} size={64} />

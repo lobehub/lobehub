@@ -1,6 +1,13 @@
-import type { GoalStatus } from '@lobechat/const/goal';
-import type { GoalNodeStatus } from '@lobechat/types';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { randomUUID } from 'node:crypto';
+
+import { GOAL_CLARIFICATION_TITLE, type GoalStatus } from '@lobechat/const/goal';
+import type {
+  GoalDecisionOption,
+  GoalNodeStatus,
+  GoalSupervisionState,
+  GoalUnderstanding,
+} from '@lobechat/types';
+import { and, desc, eq, inArray, notInArray, sql } from 'drizzle-orm';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
@@ -21,7 +28,7 @@ const TERMINAL_NODE_STATUSES = new Set<GoalNodeStatus>(['resolved', 'rejected', 
  * its own definition (title / requirement), budget and lifecycle state.
  *
  * Execution lives in the goal's graph, not on the goal row: the coordinator
- * dispatches a Task per Work node, and everything execution-specific (attempts,
+ * dispatches a Task per task node, and everything execution-specific (attempts,
  * cost, acceptance) is derived from those tasks at read time.
  */
 export class GoalModel {
@@ -37,7 +44,7 @@ export class GoalModel {
 
   /**
    * The goal owns a Goal Graph. `goal.create` always seeds a problem node and
-   * the opening Work, so this is exactly "not a leftover from the old
+   * the opening Tasks, so this is exactly "not a leftover from the old
    * task-carried flow".
    */
   private static hasGraphSql = sql`EXISTS (
@@ -65,27 +72,210 @@ export class GoalModel {
   };
 
   findById = async (id: string): Promise<GoalItem | undefined> => {
-    return this.db.query.goals.findFirst({ where: and(eq(goals.id, id), this.ownership()) });
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .limit(1);
+    return row;
   };
 
-  /** The Goal Graph that owns a Work Task, or undefined when the task is not graph-managed. */
-  findByWorkTask = async (taskId: string): Promise<GoalItem | undefined> => {
+  /** Lock the owned Goal while committing a supervisor transition. Call inside a transaction. */
+  lockById = async (id: string): Promise<GoalItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .for('update')
+      .limit(1);
+    return row;
+  };
+
+  /** The Goal Graph that owns this Task, or undefined when the task is not graph-managed. */
+  findByGraphTask = async (taskId: string): Promise<GoalItem | undefined> => {
     const [row] = await this.db
       .select({ goal: goals })
       .from(goalNodes)
       .innerJoin(goals, eq(goalNodes.goalId, goals.id))
-      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.kind, 'work'), this.ownership()))
+      .where(and(eq(goalNodes.taskId, taskId), eq(goalNodes.kind, 'task'), this.ownership()))
       .limit(1);
     return row?.goal;
+  };
+
+  /**
+   * Patch only `config.pausedBy`, leaving every other key in the column alone.
+   *
+   * The coordinator writes this marker from a tick while the user edits budget
+   * and acceptance criteria on the same JSONB column from the goal page. A
+   * read-modify-write of the whole config would let whichever landed second
+   * discard the other's work — the user's new criteria, or the marker a
+   * measured-acceptance goal needs to ever reopen.
+   */
+  updatePauseReason = async (id: string, reason: string | undefined): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: reason
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{pausedBy}', ${JSON.stringify(reason)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'pausedBy'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /**
+   * Patch only `config.taskAgentId` (or drop it with `null`), for the same
+   * reason as `updatePauseReason`: a whole-config write here would race budget
+   * and acceptance edits on the same column and discard whichever landed first.
+   */
+  updateTaskAgentId = async (id: string, taskAgentId: string | null) => {
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: taskAgentId
+          ? sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{taskAgentId}', ${JSON.stringify(taskAgentId)}::jsonb)`
+          : sql`COALESCE(${goals.config}, '{}'::jsonb) - 'taskAgentId'`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()))
+      .returning();
+    return row as GoalItem | undefined;
+  };
+
+  /**
+   * Patch only `config.understanding`, for the same reason as
+   * `updatePauseReason`: decomposition writes it while the user may be editing
+   * budget or acceptance on the same column.
+   */
+  updateUnderstanding = async (id: string, understanding: GoalUnderstanding): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{understanding}', ${JSON.stringify(understanding)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /** Compare-and-swap only the supervisor namespace; concurrent budget edits survive. */
+  updateSupervisorState = async (
+    id: string,
+    expectedRevision: number,
+    state: Omit<GoalSupervisionState, 'revision'>,
+  ): Promise<GoalSupervisionState | undefined> => {
+    const next = { ...state, revision: expectedRevision + 1 };
+    const [row] = await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{supervisorState}', ${JSON.stringify(next)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`COALESCE((${goals.config}->'supervisorState'->>'revision')::integer, 0) = ${expectedRevision}`,
+        ),
+      )
+      .returning({ id: goals.id });
+    return row ? next : undefined;
   };
 
   update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
     const [row] = await this.db
       .update(goals)
-      .set({ ...value, updatedAt: new Date() })
+      .set({
+        ...value,
+        // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
+        // ownership always comes from the current row, never that snapshot, and
+        // policy edits cannot replace the concurrently written incident ledger.
+        ...(value.config !== undefined
+          ? {
+              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding')
+                || jsonb_strip_nulls(jsonb_build_object(
+                  'planningCheckpoint', ${goals.config}->'planningCheckpoint',
+                  'planningProtocol', ${goals.config}->'planningProtocol',
+                  'supervisorState', ${goals.config}->'supervisorState',
+                  'managerState', ${goals.config}->'managerState',
+                  'understanding', ${goals.config}->'understanding'
+                ))`,
+            }
+          : {}),
+        updatedAt: new Date(),
+      })
       .where(and(eq(goals.id, id), this.ownership()))
       .returning();
     return row as GoalItem | undefined;
+  };
+
+  /** Call inside a transaction when a coordinator needs to serialize a write. */
+  findByIdForUpdate = async (id: string) => {
+    const [row] = await this.db
+      .select()
+      .from(goals)
+      .where(and(eq(goals.id, id), this.ownership()))
+      .limit(1)
+      .for('update');
+    return row;
+  };
+
+  /** Claim a bounded planning lease without holding a connection during the model call. */
+  claimPlanning = async (id: string) =>
+    this.db.transaction(async (tx) => {
+      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const goal = await model.findByIdForUpdate(id);
+      if (!goal || !['planning', 'running'].includes(goal.status)) return undefined;
+      // A running goal without lease provenance may still have an unfenced
+      // pre-lease worker in flight. Never infer abandonment from elapsed time.
+      // See docs/development/goal-planning-lease-rollout.md before rollout/rollback.
+      if (
+        goal.status === 'running' &&
+        !goal.config?.planningProtocol &&
+        !goal.config?.planningCheckpoint
+      )
+        return undefined;
+      const now = Date.now();
+      if (
+        goal.config?.planningCheckpoint &&
+        Date.parse(goal.config.planningCheckpoint.expiresAt) > now
+      )
+        return undefined;
+      const [task] = await tx
+        .select({ id: goalNodes.id })
+        .from(goalNodes)
+        .where(and(eq(goalNodes.goalId, id), eq(goalNodes.kind, 'task')))
+        .limit(1);
+      if (task) return undefined;
+      const checkpoint = {
+        token: randomUUID(),
+        expiresAt: new Date(now + 5 * 60_000).toISOString(),
+      };
+      await tx
+        .update(goals)
+        .set({
+          config: { ...goal.config, planningCheckpoint: checkpoint, planningProtocol: 'lease-v1' },
+          startedAt: goal.startedAt ?? new Date(now),
+          status: 'running',
+          updatedAt: new Date(now),
+        })
+        .where(eq(goals.id, id));
+      return { ...checkpoint, previousStatus: goal.status };
+    });
+
+  /** A late worker must never clear a newer worker's lease or other configuration. */
+  releasePlanning = async (id: string, token: string) => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`${goals.config} - 'planningCheckpoint'`,
+      })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`${goals.config}->'planningCheckpoint'->>'token' = ${token}`,
+        ),
+      );
   };
 
   /**
@@ -104,6 +294,40 @@ export class GoalModel {
     });
   };
 
+  /**
+   * Every clarification the coordinator is still waiting on, across the
+   * caller's goals — what a surface outside the goal page needs to ask them.
+   * Oldest first, so the question that has waited longest is asked first.
+   */
+  listPendingClarifications = async (): Promise<PendingGoalClarificationRow[]> =>
+    this.db
+      .select({
+        agentId: goals.agentId,
+        decisionId: goalNodeDecisions.id,
+        description: goalNodes.description,
+        goalId: goals.id,
+        goalTitle: goals.title,
+        options: goalNodeDecisions.options,
+        requirement: goals.requirement,
+        question: goalNodeDecisions.question,
+      })
+      .from(goalNodeDecisions)
+      .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
+      .innerJoin(goals, eq(goalNodes.goalId, goals.id))
+      .where(
+        and(
+          this.ownership(),
+          // Only a goal parked on its questions asks them; one the user paused
+          // or ended keeps its open questions without nagging about them.
+          notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
+          eq(goalNodeDecisions.status, 'pending'),
+          eq(goalNodes.title, GOAL_CLARIFICATION_TITLE),
+        ),
+      )
+      // A round's questions share one transaction timestamp; the id keeps
+      // their order stable across reads so "question 1" stays question 1.
+      .orderBy(goalNodeDecisions.createdAt, goalNodeDecisions.id);
+
   delete = async (id: string) => {
     return this.db.delete(goals).where(and(eq(goals.id, id), this.ownership()));
   };
@@ -111,10 +335,10 @@ export class GoalModel {
   /**
    * Open goals that nothing is currently moving — the sweep's work list.
    *
-   * A goal qualifies when it is still open and has no Work node that is both
+   * A goal qualifies when it is still open and has no task node that is both
    * `active` and freshly touched: either nothing was ever dispatched, the
    * completion event that should have re-entered the coordinator was lost, or a
-   * running Work outlived its operation lease and needs reclaiming. Goals with a
+   * running Task outlived its operation lease and needs reclaiming. Goals with a
    * decision gate open are excluded — only a human moves those, and ticking them
    * would just report `waiting_human` on every sweep.
    *
@@ -139,7 +363,7 @@ export class GoalModel {
           sql`NOT EXISTS (
             SELECT 1 FROM ${goalNodes}
             WHERE ${goalNodes.goalId} = ${goals.id}
-              AND ${goalNodes.kind} = 'work'
+              AND ${goalNodes.kind} = 'task'
               AND ${goalNodes.status} = 'active'
               AND ${goalNodes.updatedAt} > ${staleBefore}
           )`,
@@ -163,7 +387,7 @@ export class GoalModel {
    * Goal-centric on purpose. Goals used to be listed through their carrier
    * task, which made a goal without one invisible; a Goal Graph goal is
    * `standalone`, so the list reads the `goals` table and derives execution
-   * facts from the graph's Work tasks.
+   * facts from the graph's tasks.
    */
   list = async (
     options: {
@@ -172,18 +396,21 @@ export class GoalModel {
       offset?: number;
       projectId?: string;
       statuses?: GoalStatus[];
+      /** Goals created from this conversation (`subject_type = 'topic'`). */
+      topicId?: string;
     } = {},
   ): Promise<{ goals: GoalListItem[]; total: number }> => {
-    const { agentId, limit = 50, offset = 0, projectId, statuses } = options;
+    const { agentId, limit = 50, offset = 0, projectId, statuses, topicId } = options;
 
     // Only goals that actually have a graph. Rows created by the earlier
     // task-carried flow have no `goal_nodes`, so they would render as a
-    // zero-work goal page that can never advance; they stay out of the list
+    // zero-task goal page that can never advance; they stay out of the list
     // until something backfills them into graphs.
     const conditions = [this.ownership(), GoalModel.hasGraphSql];
     if (agentId) conditions.push(eq(goals.agentId, agentId));
     if (projectId) conditions.push(eq(goals.projectId, projectId));
     if (statuses && statuses.length > 0) conditions.push(inArray(goals.status, statuses));
+    if (topicId) conditions.push(eq(goals.subjectType, 'topic'), eq(goals.subjectId, topicId));
 
     const [countRow] = await this.db
       .select({ count: sql<number>`count(*)` })
@@ -219,33 +446,33 @@ export class GoalModel {
         .innerJoin(goalNodes, eq(goalNodeDecisions.nodeId, goalNodes.id))
         .where(and(inArray(goalNodes.goalId, goalIds), eq(goalNodeDecisions.status, 'pending')))
         .groupBy(goalNodes.goalId),
-      this.workTaskRunStats(goalIds),
+      this.graphTaskRunStats(goalIds),
     ]);
 
-    const stats = new Map<string, { findingCount: number; workDone: number; workTotal: number }>();
+    const stats = new Map<string, { findingCount: number; taskDone: number; taskTotal: number }>();
     for (const row of nodeRows) {
-      const current = stats.get(row.goalId) ?? { findingCount: 0, workDone: 0, workTotal: 0 };
+      const current = stats.get(row.goalId) ?? { findingCount: 0, taskDone: 0, taskTotal: 0 };
       const count = Number(row.count);
       if (row.kind === 'finding') current.findingCount += count;
-      if (row.kind === 'work') {
-        current.workTotal += count;
-        if (TERMINAL_NODE_STATUSES.has(row.status)) current.workDone += count;
+      if (row.kind === 'task') {
+        current.taskTotal += count;
+        if (TERMINAL_NODE_STATUSES.has(row.status)) current.taskDone += count;
       }
       stats.set(row.goalId, current);
     }
     const pendingByGoal = new Map(decisionRows.map((row) => [row.goalId, Number(row.count)]));
 
     const items: GoalListItem[] = rows.map((goal) => {
-      const counts = stats.get(goal.id) ?? { findingCount: 0, workDone: 0, workTotal: 0 };
+      const counts = stats.get(goal.id) ?? { findingCount: 0, taskDone: 0, taskTotal: 0 };
       const run = runStats.get(goal.id) ?? { totalRunCost: 0, totalRunDuration: 0 };
       return {
         findingCount: counts.findingCount,
         goal,
         pendingDecisions: pendingByGoal.get(goal.id) ?? 0,
+        taskDone: counts.taskDone,
+        taskTotal: counts.taskTotal,
         totalRunCost: run.totalRunCost,
         totalRunDuration: run.totalRunDuration,
-        workDone: counts.workDone,
-        workTotal: counts.workTotal,
       };
     });
 
@@ -254,10 +481,10 @@ export class GoalModel {
 
   /**
    * Cost and runtime across every task the graph dispatched, including tasks
-   * those Work tasks spawned themselves — the same subtree rule the task board
-   * uses, seeded from the Work nodes instead of one carrier root.
+   * those graph tasks spawned themselves — the same subtree rule the task board
+   * uses, seeded from the task nodes instead of one carrier root.
    */
-  private workTaskRunStats = async (goalIds: string[]) => {
+  private graphTaskRunStats = async (goalIds: string[]) => {
     if (goalIds.length === 0)
       return new Map<string, { totalRunCost: number; totalRunDuration: number }>();
 
@@ -266,31 +493,31 @@ export class GoalModel {
       total_run_cost: number;
       total_run_duration: number;
     }>(sql`
-      WITH RECURSIVE work_tree AS (
+      WITH RECURSIVE task_tree AS (
         SELECT ${goalNodes.goalId} AS goal_id, ${tasks.id} AS task_id
         FROM ${goalNodes}
         JOIN ${tasks} ON ${tasks.id} = ${goalNodes.taskId}
         WHERE ${inArray(goalNodes.goalId, goalIds)}
-          AND ${goalNodes.kind} = 'work'
+          AND ${goalNodes.kind} = 'task'
           AND ${this.taskOwnershipSql('tasks')}
         UNION ALL
-        SELECT work_tree.goal_id, child.id
+        SELECT task_tree.goal_id, child.id
         FROM ${tasks} child
-        JOIN work_tree ON child.parent_task_id = work_tree.task_id
+        JOIN task_tree ON child.parent_task_id = task_tree.task_id
         WHERE ${this.taskOwnershipSql('child')}
       )
       SELECT
-        work_tree.goal_id,
+        task_tree.goal_id,
         coalesce(sum(${topics.totalCost}), 0) AS total_run_cost,
         coalesce(
           sum(extract(epoch from (${topics.completedAt} - ${taskTopics.createdAt})) * 1000)
             filter (where ${topics.completedAt} is not null),
           0
         ) AS total_run_duration
-      FROM work_tree
-      LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = work_tree.task_id
+      FROM task_tree
+      LEFT JOIN ${taskTopics} ON ${taskTopics.taskId} = task_tree.task_id
       LEFT JOIN ${topics} ON ${topics.id} = ${taskTopics.topicId}
-      GROUP BY work_tree.goal_id
+      GROUP BY task_tree.goal_id
     `);
 
     return new Map(
@@ -314,8 +541,22 @@ export interface GoalListItem {
   goal: GoalItem;
   /** Decision gates waiting on a human right now. */
   pendingDecisions: number;
+  /** Task nodes in a terminal status (resolved / rejected / retired). */
+  taskDone: number;
+  taskTotal: number;
   totalRunCost: number;
   totalRunDuration: number;
-  workDone: number;
-  workTotal: number;
+}
+
+export interface PendingGoalClarificationRow {
+  agentId: string | null;
+  decisionId: string;
+  /** What changes with the answer (the decision node's description). */
+  description: string | null;
+  goalId: string;
+  goalTitle: string;
+  options: GoalDecisionOption[] | null;
+  question: string;
+  /** What the goal asks for, so a surface away from its page can say which goal this is. */
+  requirement: string | null;
 }

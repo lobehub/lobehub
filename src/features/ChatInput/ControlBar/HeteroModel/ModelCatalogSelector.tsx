@@ -3,7 +3,7 @@
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousAgentModel, ListHeterogeneousAgentModelsParams } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
-import { Icon, Input, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -25,6 +25,7 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
+  Input,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
@@ -64,6 +65,10 @@ const styles = createStaticStyles(({ css }) => ({
     color: ${cssVar.colorTextTertiary};
     text-align: center;
   `,
+  groupLabel: css`
+    text-transform: none;
+    letter-spacing: normal;
+  `,
   item: css`
     min-height: 42px;
   `,
@@ -77,8 +82,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   search: css`
     display: flex;
-    gap: 6px;
+    gap: 8px;
     align-items: center;
+    padding-block: 10px;
   `,
   spinning: css`
     animation: heterogeneous-agent-model-spin 0.8s linear infinite;
@@ -353,7 +359,9 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
           )}
           {Object.entries(groups).map(([providerId, models]) => (
             <DropdownMenuGroup key={providerId}>
-              <DropdownMenuGroupLabel>{providerId}</DropdownMenuGroupLabel>
+              <DropdownMenuGroupLabel className={styles.groupLabel}>
+                {getHeterogeneousTypeLabel(providerId) ?? providerId}
+              </DropdownMenuGroupLabel>
               {models.map((item) => {
                 const isStale = selectedIsStale && item.id === currentModel;
 

@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   chainGoalCriteriaDraft,
+  chainGoalDecompose,
   GOAL_CRITERIA_DRAFT_JSON_SCHEMA,
   GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
+  GOAL_DECOMPOSE_PROMPT_VERSION,
 } from './goal';
 
 describe('chainGoalCriteriaDraft', () => {
@@ -32,5 +34,39 @@ describe('chainGoalCriteriaDraft', () => {
       'criteria',
     ]);
     expect(chain.messages[1].content).toContain('Ship a polished v1');
+  });
+});
+
+describe('chainGoalDecompose', () => {
+  it('aligns investigation and implementation responsibilities with their own pass conditions', () => {
+    const requirement = '升级 PPT、Word、Excel 编辑体验，支持编辑、保存和重开。';
+    const { messages } = chainGoalDecompose({ requirement });
+    const prompt = messages[0].content;
+
+    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v6');
+    expect(messages[1].content).toContain(requirement);
+    expect(prompt).toContain('a request to build, fix, or upgrade requires implementation');
+    expect(prompt).toContain('It may pass when it proves a capability is missing');
+    expect(prompt).toContain(
+      'assign explicit implementation ownership for every requested capability',
+    );
+    expect(prompt).toContain('include dependent implementation tasks that consume its findings');
+    expect(prompt).toContain('discovering a read-only viewer triggers implementation');
+    expect(prompt).toContain('an investigation-only goal must not become an implementation task');
+  });
+
+  it('reports what it cannot determine and plans on answered clarifications', () => {
+    const plain = chainGoalDecompose({ requirement: '写一份发布说明' });
+    expect(plain.messages[0].content).toContain(
+      'every blocking question goes into that single round',
+    );
+    expect(plain.messages[1].content).not.toContain('Answered clarifications');
+
+    const { messages } = chainGoalDecompose({
+      clarifications: [{ answer: '开发者', question: '给谁看？' }],
+      requirement: '写一份发布说明',
+    });
+    expect(messages[1].content).toContain('## Answered clarifications');
+    expect(messages[1].content).toContain('- Q: 给谁看？\n  A: 开发者');
   });
 });

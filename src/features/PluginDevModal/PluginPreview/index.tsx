@@ -1,8 +1,7 @@
-import { type ToolManifest } from '@lobechat/types';
+import { type LobeToolCustomPlugin } from '@lobechat/types';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
-import { Form as AForm } from 'antd';
+import { type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
 import { cssVar } from 'antd-style';
 import { FileCode } from 'lucide-react';
 import { memo } from 'react';
@@ -16,9 +15,9 @@ import { pluginHelpers } from '@/store/tool';
 import ApiVisualizer from './ApiVisualizer';
 import PluginEmptyState from './EmptyState';
 
-const PluginPreview = memo<{ form: FormInstance }>(({ form }) => {
+const PluginPreview = memo<{ form: FormInstance<LobeToolCustomPlugin> }>(({ form }) => {
   const { t } = useTranslation('plugin');
-  const manifest: ToolManifest = AForm.useWatch(['manifest'], form);
+  const manifest = useWatch(form, 'manifest');
   const meta = manifest?.meta;
 
   if (!manifest)

@@ -1,7 +1,6 @@
 import type { TaskTemplate } from '@lobechat/const';
 import { Block, Center, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { ActionIcon, Button, Divider, Tag, Text } from '@lobehub/ui/base-ui';
 import { cssVar, cx } from 'antd-style';
 import { Clock, X } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useMemo } from 'react';
@@ -15,7 +14,6 @@ import { RECOMMENDATION_ICON_SIZE } from '@/features/Recommendations/iconSize';
 import { ConnectorAuthRow } from './ConnectorAuthRow';
 import { resolveTemplateIcon } from './resolveTemplateIcon';
 import { styles } from './style';
-import { createTaskTemplateDetailModal } from './TaskTemplateDetailModal';
 import { INTEREST_ICON_MAP, TemplateBriefIcon } from './TemplateBriefIcon';
 import { useScheduleText } from './useScheduleText';
 import { useTaskTemplateCreate } from './useTaskTemplateCreate';
@@ -60,7 +58,9 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
     );
 
     const handleOpenDetail = useCallback(() => {
-      createTaskTemplateDetailModal({ onCreated, template });
+      void import('./TaskTemplateDetailModal').then(({ createTaskTemplateDetailModal }) =>
+        createTaskTemplateDetailModal({ onCreated, template }),
+      );
     }, [onCreated, template]);
 
     const handlePrimaryClick = useCallback(
@@ -164,7 +164,7 @@ export const TaskTemplateCard = memo<TaskTemplateCardProps>(
             />
           </Flexbox>
         </Flexbox>
-        <Divider dashed style={{ marginBlock: 0 }} />
+        <Divider dashed />
         {description.trim().length > 0 ? <BriefCardSummary summary={description} /> : null}
         {visibleAuthSpecs.length > 0 && (
           <Flexbox gap={6} onClick={(e) => e.stopPropagation()}>

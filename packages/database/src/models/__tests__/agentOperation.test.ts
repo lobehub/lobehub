@@ -25,6 +25,33 @@ afterEach(async () => {
 });
 
 describe('AgentOperationModel', () => {
+  it('matches diagnostic source identity within both topic and owner', async () => {
+    await serverDB.insert(topics).values({ id: 'diagnostic-topic', userId });
+    const model = new AgentOperationModel(serverDB, userId);
+    await model.recordStart({
+      operationId: 'diagnostic-operation',
+      topicId: 'diagnostic-topic',
+      appContext: { sourceMessageId: 'server-incident-message' },
+    });
+    await model.recordStart({
+      operationId: 'unrelated-operation',
+      topicId: 'diagnostic-topic',
+      appContext: { sourceMessageId: 'another-message' },
+    });
+    expect(
+      (await model.findByTopicSourceMessage('diagnostic-topic', 'server-incident-message'))?.id,
+    ).toBe('diagnostic-operation');
+    expect(
+      await model.findByTopicSourceMessage('different-topic', 'server-incident-message'),
+    ).toBeUndefined();
+    expect(
+      await new AgentOperationModel(serverDB, otherUserId).findByTopicSourceMessage(
+        'diagnostic-topic',
+        'server-incident-message',
+      ),
+    ).toBeUndefined();
+  });
+
   describe('recordStart', () => {
     it('inserts a row with status=running and the provided ids', async () => {
       const model = new AgentOperationModel(serverDB, userId);
@@ -187,6 +214,99 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('server-default relay invocation attestation', () => {
+    it('records the first accepted invocation and reuses it for matching retries', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-server-default-relay';
+      await model.recordStart({
+        metadata: {
+          agentType: 'trae',
+          preserved: true,
+          serverDefaultHeterogeneous: true,
+        },
+        model: 'gpt-5.4',
+        operationId,
+        provider: 'lobehub',
+      });
+      const first = {
+        acceptedAt: '2026-09-01T00:00:00.000Z',
+        agentType: 'trae',
+        ingress: 'openai-responses' as const,
+        model: 'gpt-5.4',
+        operationId,
+        provider: 'lobehub',
+      };
+
+      await expect(model.recordServerDefaultRelayInvocation(operationId, first)).resolves.toEqual(
+        first,
+      );
+      await expect(
+        model.recordServerDefaultRelayInvocation(operationId, {
+          ...first,
+          acceptedAt: '2026-09-01T00:01:00.000Z',
+        }),
+      ).resolves.toEqual(first);
+
+      expect((await model.findById(operationId))?.metadata).toEqual({
+        agentType: 'trae',
+        preserved: true,
+        serverDefaultHeterogeneous: true,
+        serverDefaultRelayInvocation: first,
+      });
+    });
+
+    it('rejects an unmarked, mismatched, terminal, or foreign operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const otherOwner = new AgentOperationModel(serverDB, otherUserId);
+      const invocation = {
+        acceptedAt: '2026-09-01T00:00:00.000Z',
+        agentType: 'trae',
+        ingress: 'openai-responses' as const,
+        model: 'gpt-5.4',
+        operationId: 'op-relay-authority',
+        provider: 'lobehub',
+      };
+
+      await model.recordStart({
+        metadata: { agentType: 'trae' },
+        model: invocation.model,
+        operationId: invocation.operationId,
+        provider: invocation.provider,
+      });
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, invocation),
+      ).resolves.toBeNull();
+
+      await serverDB
+        .update(agentOperations)
+        .set({ metadata: { agentType: 'trae', serverDefaultHeterogeneous: true } })
+        .where(eq(agentOperations.id, invocation.operationId));
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, {
+          ...invocation,
+          model: 'gpt-5.5',
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, {
+          ...invocation,
+          operationId: 'different-operation',
+        }),
+      ).resolves.toBeNull();
+      await expect(
+        otherOwner.recordServerDefaultRelayInvocation(invocation.operationId, invocation),
+      ).resolves.toBeNull();
+
+      await model.settleRunning(invocation.operationId, 'done');
+      await expect(
+        model.recordServerDefaultRelayInvocation(invocation.operationId, invocation),
+      ).resolves.toBeNull();
+      expect((await model.findById(invocation.operationId))?.metadata).not.toHaveProperty(
+        'serverDefaultRelayInvocation',
+      );
+    });
+  });
+
   describe('recordCompletion', () => {
     it('updates the row to a terminal status with aggregates and trace key', async () => {
       const model = new AgentOperationModel(serverDB, userId);
@@ -301,7 +421,62 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('mergeMetadata', () => {
+    it('merges keys into existing metadata and is scoped to the owner', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-merge-metadata';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ metadata: { existing: 1 } })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.mergeMetadata(operationId, { supersede: { kind: 'client_missed' } })).toBe(
+        true,
+      );
+      expect((await model.findById(operationId))!.metadata).toEqual({
+        existing: 1,
+        supersede: { kind: 'client_missed' },
+      });
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).mergeMetadata(operationId, {
+          foreign: true,
+        }),
+      ).toBe(false);
+      expect((await model.findById(operationId))!.metadata).not.toHaveProperty('foreign');
+    });
+  });
+
   describe('operation lease', () => {
+    it('answers whether a run is still live on a given topic', async () => {
+      // The ingest path falls back to this when a topic loses its
+      // `runningOperation` marker: the row, not the marker, says whether the
+      // producer behind a batch is still alive — and the topic pairing keeps
+      // the answer from authorizing a write to someone else's topic.
+      await serverDB.insert(topics).values([
+        { id: 'live-topic', userId },
+        { id: 'other-topic', userId },
+      ]);
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-live-on-topic';
+      await model.recordStart({ operationId, topicId: 'live-topic' });
+
+      expect(await model.isRunningOnTopic(operationId, 'live-topic')).toBe(true);
+      // Bound to another topic, so it cannot vouch for a write to this one.
+      expect(await model.isRunningOnTopic(operationId, 'other-topic')).toBe(false);
+      // Another user's row is out of scope entirely.
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).isRunningOnTopic(
+          operationId,
+          'live-topic',
+        ),
+      ).toBe(false);
+
+      await model.recordCompletion(operationId, { status: 'done' });
+      expect(await model.isRunningOnTopic(operationId, 'live-topic')).toBe(false);
+    });
+
     it('refreshes a running operation and only settles an expired lease', async () => {
       const model = new AgentOperationModel(serverDB, userId);
       const operationId = 'op-lease';
@@ -371,6 +546,272 @@ describe('AgentOperationModel', () => {
         completionReason: 'lease_expired',
         status: 'abandoned',
       });
+    });
+
+    it('lets the retiring caller persist terminal stats onto the abandoned row', async () => {
+      // The stale-operation reaper claims with settleStaleRunning, then runs the
+      // completion lifecycle, whose write must land (so hooks fire) without
+      // moving the row out of `abandoned`.
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-stale-retired-stats';
+      await model.recordStart({ operationId });
+      await serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+      expect(await model.settleStaleRunning(operationId, new Date(Date.now() - 60_000))).toBe(true);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'error',
+          status: 'error',
+        }),
+      ).toBe(false);
+      expect(
+        await model.recordCompletion(operationId, {
+          completionReason: 'lease_expired',
+          status: 'abandoned',
+          stepCount: 4,
+        }),
+      ).toBe(true);
+      expect(await model.findById(operationId)).toMatchObject({
+        completionReason: 'lease_expired',
+        status: 'abandoned',
+        stepCount: 4,
+      });
+    });
+  });
+
+  describe('hetero ingest rejection marker', () => {
+    const marker = {
+      at: '2026-09-18T04:44:38.923Z',
+      droppedEvents: 12,
+      reason: 'stale-operation',
+    } as const;
+
+    it('keeps the first refusal, survives a terminal row, and stays owner-scoped', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-ingest-refused';
+      await model.recordStart({ operationId });
+
+      expect(await model.recordHeteroIngestRejection(operationId, marker)).toBe(true);
+      // Later batches of the same run are refused too — the first refusal is the
+      // one that explains where the output started disappearing.
+      expect(
+        await model.recordHeteroIngestRejection(operationId, {
+          ...marker,
+          at: '2026-09-18T04:46:00.000Z',
+          droppedEvents: 3,
+        }),
+      ).toBe(false);
+      expect((await model.findById(operationId))?.metadata).toMatchObject({
+        heteroIngestRejection: marker,
+      });
+
+      // "The row is already terminal" is itself a refusal reason, so unlike the
+      // lease writes this one must not be gated on status = running.
+      const terminalId = 'op-ingest-refused-terminal';
+      await model.recordStart({ operationId: terminalId });
+      await model.settleRunning(terminalId, 'done');
+      expect(await model.recordHeteroIngestRejection(terminalId, marker)).toBe(true);
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).recordHeteroIngestRejection(
+          'op-ingest-refused-foreign',
+          marker,
+        ),
+      ).toBe(false);
+    });
+
+    it('merges into existing metadata instead of replacing it', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-ingest-refused-merge';
+      await model.recordStart({ operationId, metadata: { assistantMessageId: 'asst-1' } });
+
+      await model.recordHeteroIngestRejection(operationId, marker);
+
+      expect((await model.findById(operationId))?.metadata).toMatchObject({
+        assistantMessageId: 'asst-1',
+        heteroIngestRejection: marker,
+      });
+    });
+  });
+
+  describe('settleLive', () => {
+    it('retires running and parked rows but never rewrites a terminal one', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-live-running' });
+      await model.recordStart({ operationId: 'op-live-human' });
+      await model.recordCompletion('op-live-human', {
+        completionReason: 'waiting_for_human',
+        status: 'waiting_for_human',
+      });
+      await model.recordStart({ operationId: 'op-live-async' });
+      await model.recordCompletion('op-live-async', {
+        completionReason: 'waiting_for_async_tool',
+        status: 'waiting_for_async_tool',
+      });
+      await model.recordStart({ operationId: 'op-live-done' });
+      await model.settleRunning('op-live-done', 'done');
+
+      expect(await model.settleLive('op-live-running', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-human', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-async', 'error')).toBe(true);
+      expect(await model.settleLive('op-live-done', 'error')).toBe(false);
+
+      for (const id of ['op-live-running', 'op-live-human', 'op-live-async']) {
+        expect(await model.findById(id)).toMatchObject({
+          completionReason: 'error',
+          status: 'error',
+        });
+      }
+      expect((await model.findById('op-live-done'))?.status).toBe('done');
+    });
+
+    it('leaves parked rows alone through settleRunning', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId: 'op-parked-kept' });
+      await model.recordCompletion('op-parked-kept', {
+        completionReason: 'waiting_for_human',
+        status: 'waiting_for_human',
+      });
+
+      expect(await model.settleRunning('op-parked-kept', 'error')).toBe(false);
+      expect((await model.findById('op-parked-kept'))?.status).toBe('waiting_for_human');
+    });
+
+    it("does not settle another user's row", async () => {
+      await new AgentOperationModel(serverDB, userId).recordStart({
+        operationId: 'op-live-foreign',
+      });
+
+      expect(
+        await new AgentOperationModel(serverDB, otherUserId).settleLive('op-live-foreign', 'error'),
+      ).toBe(false);
+    });
+  });
+
+  describe('claimStaleRedrive', () => {
+    const makeStale = async (operationId: string) =>
+      serverDB
+        .update(agentOperations)
+        .set({ updatedAt: new Date('2026-01-01T00:00:00.000Z') })
+        .where(eq(agentOperations.id, operationId));
+
+    const staleBefore = () => new Date(Date.now() - 60_000);
+
+    it('hands out increasing attempts and stops at the budget', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-budget';
+      await model.recordStart({ operationId });
+
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(1);
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(2);
+      await makeStale(operationId);
+      // Budget spent — the caller falls back to abandoning the operation.
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBeNull();
+    });
+
+    it('re-arms the lease so the next sweep skips a recovering operation', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-rearm';
+      await model.recordStart({ operationId });
+      await makeStale(operationId);
+
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBe(1);
+      // The claim itself bumped updatedAt, so the row is no longer a candidate.
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBeNull();
+    });
+
+    it('loses to a heartbeat that landed after the candidate was selected', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-heartbeat-race';
+      await model.recordStart({ operationId });
+      await makeStale(operationId);
+
+      const selectedAt = staleBefore();
+      await model.touchRunning(operationId);
+
+      expect(await model.claimStaleRedrive(operationId, selectedAt, 3)).toBeNull();
+      expect((await model.findById(operationId))?.status).toBe('running');
+    });
+
+    it('never claims an operation that already reached a terminal state', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-terminal';
+      await model.recordStart({ operationId });
+      await model.recordCompletion(operationId, { completionReason: 'done', status: 'done' });
+      await makeStale(operationId);
+
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBeNull();
+    });
+
+    it('preserves unrelated metadata keys', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-metadata';
+      await model.recordStart({ operationId, metadata: { keepMe: 'yes' } });
+      await makeStale(operationId);
+
+      await model.claimStaleRedrive(operationId, staleBefore(), 3);
+
+      const row = await model.findById(operationId);
+      expect(row?.metadata).toMatchObject({
+        keepMe: 'yes',
+        staleRedrive: { attempts: 1 },
+      });
+    });
+
+    it('gives an attempt back so a failed publish costs no budget', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-release';
+      await model.recordStart({ operationId });
+
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(1);
+      expect(await model.releaseStaleRedrive(operationId, 1)).toBe(true);
+
+      // Budget restored: the next claim hands out attempt 1 again.
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 2)).toBe(1);
+    });
+
+    it('only ever undoes its own increment', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+      const operationId = 'op-redrive-release-race';
+      await model.recordStart({ operationId });
+
+      await makeStale(operationId);
+      await model.claimStaleRedrive(operationId, staleBefore(), 3);
+      await makeStale(operationId);
+      expect(await model.claimStaleRedrive(operationId, staleBefore(), 3)).toBe(2);
+
+      // A late release for attempt 1 must not walk the counter backwards past
+      // the attempt another sweep has since claimed.
+      expect(await model.releaseStaleRedrive(operationId, 1)).toBe(false);
+      const row = await model.findById(operationId);
+      expect(row?.metadata).toMatchObject({ staleRedrive: { attempts: 2 } });
+    });
+
+    it('scopes the release to the owning user', async () => {
+      const operationId = 'op-redrive-release-ownership';
+      const model = new AgentOperationModel(serverDB, userId);
+      await model.recordStart({ operationId });
+      await makeStale(operationId);
+      await model.claimStaleRedrive(operationId, staleBefore(), 3);
+
+      const intruder = new AgentOperationModel(serverDB, otherUserId);
+      expect(await intruder.releaseStaleRedrive(operationId, 1)).toBe(false);
+    });
+
+    it('is scoped to the owning user', async () => {
+      const operationId = 'op-redrive-ownership';
+      await new AgentOperationModel(serverDB, userId).recordStart({ operationId });
+      await makeStale(operationId);
+
+      const intruder = new AgentOperationModel(serverDB, otherUserId);
+      expect(await intruder.claimStaleRedrive(operationId, staleBefore(), 3)).toBeNull();
     });
   });
 
@@ -564,13 +1005,69 @@ describe('AgentOperationModel', () => {
     });
   });
 
+  describe('findOwnOperationById', () => {
+    beforeEach(async () => {
+      await serverDB.insert(topics).values([
+        { id: 'own-tpc', userId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'own-tpc-visitor', senderId: 'visitor-user-x', userId },
+      ]);
+      await serverDB.insert(agentOperations).values([
+        { id: 'op-own', status: 'done', topicId: 'own-tpc', userId },
+        { id: 'op-own-visitor', status: 'done', topicId: 'own-tpc-visitor', userId },
+        { id: 'op-own-topicless', status: 'done', userId },
+      ]);
+    });
+
+    it('hides an operation recorded inside an agent-share visitor topic', async () => {
+      // Visitor runs execute under the creator's identity, so the row passes
+      // ownership — the creator-facing trace lookup must still read it as absent.
+      const model = new AgentOperationModel(serverDB, userId);
+
+      expect(await model.findOwnOperationById('op-own-visitor')).toBeNull();
+      // The runtime lookup keeps working: it drives the visitor's own run.
+      expect(await model.findById('op-own-visitor')).toMatchObject({ id: 'op-own-visitor' });
+    });
+
+    it('returns the creator own operations, topic-bound or not', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      expect(await model.findOwnOperationById('op-own')).toMatchObject({ id: 'op-own' });
+      expect(await model.findOwnOperationById('op-own-topicless')).toMatchObject({
+        id: 'op-own-topicless',
+      });
+    });
+
+    it('does not cross the ownership boundary', async () => {
+      const model = new AgentOperationModel(serverDB, otherUserId);
+
+      expect(await model.findOwnOperationById('op-own')).toBeNull();
+    });
+  });
+
   describe('listByTopic', () => {
     beforeEach(async () => {
       await serverDB.insert(topics).values([
         { id: 'tpc-a', userId },
         { id: 'tpc-b', userId },
         { id: 'tpc-foreign', userId: otherUserId },
+        // Agent-share visitor topic: creator's userId + a visitor senderId.
+        { id: 'tpc-visitor', senderId: 'visitor-user-x', userId },
       ]);
+    });
+
+    it('excludes operations recorded inside an agent-share visitor topic', async () => {
+      const model = new AgentOperationModel(serverDB, userId);
+
+      // Visitor runs execute under the creator's identity, so their operation
+      // rows pass the ownership filter — the trace panel must still not expose
+      // a visitor conversation's trajectory.
+      await serverDB
+        .insert(agentOperations)
+        .values([{ id: 'op-visitor', status: 'done', topicId: 'tpc-visitor', userId }]);
+
+      const rows = await model.listByTopic('tpc-visitor');
+      expect(rows).toEqual([]);
     });
 
     it('returns the topic operations newest first, owner-scoped', async () => {

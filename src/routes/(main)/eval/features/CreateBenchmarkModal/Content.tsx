@@ -1,8 +1,7 @@
 'use client';
 
-import { Input, TextArea } from '@lobehub/ui';
-import { Select, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { cssVar } from 'antd-style';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -27,17 +26,8 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
   const { close } = useModalContext();
 
   const navigate = useWorkspaceAwareNavigate();
-  const [form] = Form.useForm();
   const [identifierTouched, setIdentifierTouched] = useState(false);
   const createBenchmark = useEvalStore((s) => s.createBenchmark);
-
-  const nameValue = Form.useWatch('name', form);
-
-  useEffect(() => {
-    if (!identifierTouched && nameValue) {
-      form.setFieldValue('identifier', toIdentifier(nameValue));
-    }
-  }, [nameValue, identifierTouched, form]);
 
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
@@ -60,33 +50,44 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
     }
   };
 
+  const form = useForm({
+    onSubmit: handleFinish,
+  });
+  const nameValue = useWatch(form, 'name');
+
+  useEffect(() => {
+    if (!identifierTouched && nameValue) {
+      form.setValue('identifier', toIdentifier(nameValue));
+    }
+  }, [nameValue, identifierTouched, form]);
+
   return (
-    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
-      <Form.Item
+    <Form form={form} id={formId} layout="vertical">
+      <Form.Field
         label={t('benchmark.create.name.label')}
         name="name"
-        rules={[{ message: t('benchmark.create.nameRequired'), required: true }]}
+        required={t('benchmark.create.nameRequired')}
       >
         <Input autoFocus placeholder={t('benchmark.create.name.placeholder')} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
+      <Form.Field
         label={t('benchmark.create.identifier.label')}
         name="identifier"
-        rules={[{ message: t('benchmark.create.identifierRequired'), required: true }]}
+        required={t('benchmark.create.identifierRequired')}
       >
         <Input
           placeholder={t('benchmark.create.identifier.placeholder')}
           style={{ fontFamily: cssVar.fontFamilyCode }}
           onChange={() => setIdentifierTouched(true)}
         />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('benchmark.create.description.label')} name="description">
+      <Form.Field label={t('benchmark.create.description.label')} name="description">
         <TextArea placeholder={t('benchmark.create.description.placeholder')} rows={3} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('benchmark.create.tags.label')} name="tags" style={{ marginBottom: 0 }}>
+      <Form.Field label={t('benchmark.create.tags.label')} name="tags">
         <Select
           mode="tags"
           open={false}
@@ -94,7 +95,7 @@ const CreateBenchmarkContent: FC<CreateBenchmarkContentProps> = ({ formId, onLoa
           style={{ width: '100%' }}
           tokenSeparators={[',', '，', ' ']}
         />
-      </Form.Item>
+      </Form.Field>
     </Form>
   );
 };

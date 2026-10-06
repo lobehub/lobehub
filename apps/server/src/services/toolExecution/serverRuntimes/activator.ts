@@ -6,7 +6,7 @@ import {
   type ToolManifestInfo,
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
-import { getDisabledPluginIds } from '@lobechat/types';
+import { describeLockedDevicePicker, getDisabledPluginIds } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
 import { AgentSkillModel } from '@/database/models/agentSkill';
@@ -17,6 +17,7 @@ import {
 } from '@/server/services/agentSignal/procedure';
 import { redisPolicyStateStore } from '@/server/services/agentSignal/store/adapters/redis/policyStateStore';
 
+import { REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { type ServerRuntimeRegistration } from './types';
 
 /**
@@ -131,6 +132,12 @@ export const activatorRuntime: ServerRuntimeRegistration = {
             }
           }
         : undefined,
+      // A device-locked run walls the picker off, so activating it can only fail;
+      // say why, so the model sends the user to the device selector instead.
+      explainNotFound: (identifier) =>
+        identifier === REMOTE_DEVICE_TOOL_IDENTIFIER && context.executionPlan
+          ? describeLockedDevicePicker(context.executionPlan)
+          : undefined,
       getActivatedToolIds: () => [...activatedIds],
       getToolManifests: async (identifiers: string[]): Promise<ToolManifestInfo[]> => {
         // Note: context.toolManifestMap should only contain discoverable tools.

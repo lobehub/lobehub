@@ -1,5 +1,6 @@
 import { classifyEditedFile, getBasename } from '@lobechat/builtin-tools/fileEditScan';
 import {
+  type ListedWorkType,
   type WorkListItem,
   workProviderOfResourceType,
   type WorkSkillProvider,
@@ -43,7 +44,7 @@ const PROVIDER_ICONS: Record<WorkSkillProvider, WorkIcon> = {
  */
 export type WorkOpenTarget =
   | { agentDocumentId?: string; documentId: string; kind: 'document' }
-  | { identifier: string; kind: 'task' }
+  | { identifier: string; kind: 'task'; name?: string | null }
   | { kind: 'external'; url: string }
   /**
    * In-app preview of a cloud-persisted file (the FilePreview chat portal).
@@ -156,7 +157,7 @@ const getFileWorkPath = (item: WorkItemOfType<'file'>): string | null =>
   getFileWorkMetadata(item)?.filePath ?? item.description?.trim() ?? null;
 
 export const WORK_TYPE_DESCRIPTORS: {
-  [T in WorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
+  [T in ListedWorkType]: WorkTypeDescriptor<WorkItemOfType<T>>;
 } = {
   document: {
     getDescription: (item) => item.description?.trim() ?? null,
@@ -243,7 +244,7 @@ export const WORK_TYPE_DESCRIPTORS: {
     // nullable on the base type, so drop the affordance when both are missing.
     getOpenTarget: (item) => {
       const identifier = item.task.identifier ?? item.resourceId;
-      return identifier ? { identifier, kind: 'task' } : null;
+      return identifier ? { identifier, kind: 'task', name: item.task.name } : null;
     },
     getTitle: (item) => item.task.name,
   },
@@ -287,9 +288,6 @@ export const getWorkTypeDescriptor = <Item extends WorkListItem | WorkSummaryIte
   // genuinely be missing even though the compile-time map looks total. The
   // re-narrowing casts are safe — a registry entry keyed by `item.type` accepts
   // exactly that type's item, which `Item` is.
-  const descriptors = WORK_TYPE_DESCRIPTORS as Record<
-    WorkType,
-    WorkTypeDescriptor<Item> | undefined
-  >;
+  const descriptors = WORK_TYPE_DESCRIPTORS as Partial<Record<WorkType, WorkTypeDescriptor<Item>>>;
   return descriptors[item.type] ?? (FALLBACK_WORK_TYPE_DESCRIPTOR as WorkTypeDescriptor<Item>);
 };

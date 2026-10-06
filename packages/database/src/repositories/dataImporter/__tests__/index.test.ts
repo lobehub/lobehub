@@ -387,6 +387,34 @@ describe('DataImporter', () => {
   });
 
   describe('import message and topic', () => {
+    it('skips a trashed message identity when the same export is imported again', async () => {
+      const data = {
+        data: {
+          messages: [
+            {
+              content: 'Imported once',
+              createdAt: '2026-09-10T00:00:00Z',
+              id: 'trashed-import-message',
+              role: 'user',
+              updatedAt: '2026-09-10T00:00:00Z',
+            },
+          ],
+        },
+        mode: 'pglite',
+        schemaHash: 'test',
+      } as ImportPgDataStructure;
+      await importer.importPgData(data);
+      await clientDB
+        .update(Schema.messages)
+        .set({ deletedAt: new Date('2026-09-10T01:00:00Z'), isDeleted: true })
+        .where(eq(Schema.messages.clientId, 'trashed-import-message'));
+
+      const second = await new DataImporterRepos(clientDB, userId).importPgData(data);
+
+      expect(second.success).toBe(true);
+      expect(second.results.messages).toMatchObject({ added: 0, errors: 0, skips: 1 });
+    });
+
     it('should map topic agentId to the imported agent id', async () => {
       const exportData: ImportPgDataStructure = {
         data: {

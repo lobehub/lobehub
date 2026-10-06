@@ -7,6 +7,7 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
+import { settleFailedRepair } from './repairTerminal';
 import { planItemToPendingResult } from './resultSnapshot';
 import { finalizeVerifyRun } from './settle';
 import { VERIFY_ABANDONED_MS, VERIFY_ROLLUP_GRACE_MS } from './staleness';
@@ -38,7 +39,8 @@ export interface VerifySweepOutcome {
 }
 
 /**
- * Recover verification runs stranded in `verifying`.
+ * Recover verification runs stranded in `verifying` and planned repairs whose
+ * operation has already failed or been interrupted.
  *
  * Entering `verifying` is a durable write; the judging that leaves it runs as
  * post-response work, so any host-level interruption — instance recycled,
@@ -119,6 +121,11 @@ const recoverRun = async (
 ): Promise<'abandoned' | 'settled' | 'skipped'> => {
   const operationId = run.operationId;
   if (!operationId) return 'skipped';
+  if (run.status === 'planned') {
+    return (await settleFailedRepair(db, run.userId, operationId, run.workspaceId ?? undefined))
+      ? 'abandoned'
+      : 'skipped';
+  }
 
   const workspaceId = run.workspaceId ?? undefined;
   const plan = (run.plan ?? []) as VerifyCheckItem[];

@@ -9,11 +9,13 @@ const { mockIoRedisInitialize, mockIoRedisDisconnect } = vi.hoisted(() => ({
 }));
 
 vi.mock('./redis', () => {
-  const IoRedisRedisProvider = vi.fn().mockImplementation((config) => ({
-    config,
-    initialize: mockIoRedisInitialize,
-    disconnect: mockIoRedisDisconnect,
-  }));
+  const IoRedisRedisProvider = vi.fn(function (config: unknown) {
+    return {
+      config,
+      initialize: mockIoRedisInitialize,
+      disconnect: mockIoRedisDisconnect,
+    };
+  });
 
   return { IoRedisRedisProvider };
 });

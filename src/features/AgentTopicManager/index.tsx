@@ -24,7 +24,9 @@ import Toolbar from './Toolbar';
 import TopicGrid from './TopicGrid';
 import TopicListView from './TopicListView';
 import {
+  buildBotChannelOptions,
   getProjectFilterLabel,
+  matchesBotChannel,
   matchesGroup,
   matchesStatus,
   matchesTimeRange,
@@ -59,6 +61,7 @@ const AgentTopicManager = memo(() => {
   const status = useTopicsViewStore((s) => s.status);
   const groupIds = useTopicsViewStore((s) => s.groupIds);
   const triggers = useTopicsViewStore((s) => s.triggers);
+  const botChannels = useTopicsViewStore((s) => s.botChannels);
   const timeRange = useTopicsViewStore((s) => s.timeRange);
   const sortBy = useTopicsViewStore((s) => s.sortBy);
   const groupBy = useTopicsViewStore((s) => s.groupBy);
@@ -66,6 +69,7 @@ const AgentTopicManager = memo(() => {
   const setStatus = useTopicsViewStore((s) => s.setStatus);
   const setGroupIds = useTopicsViewStore((s) => s.setGroupIds);
   const setTriggers = useTopicsViewStore((s) => s.setTriggers);
+  const setBotChannels = useTopicsViewStore((s) => s.setBotChannels);
   const setTimeRange = useTopicsViewStore((s) => s.setTimeRange);
   const setSearch = useTopicsViewStore((s) => s.setSearch);
 
@@ -79,7 +83,7 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
-  const { error, isLoading, mutate } = useFetchAgentTopicsView(true, {
+  const { error, isHydrated, isValidating, revalidate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
     pageSize: PAGE_SIZE,
     // Opt into the heavier card-detail columns (firstUserMessage,
@@ -87,6 +91,9 @@ const AgentTopicManager = memo(() => {
     // omit this so their query stays cheap.
     withDetails: true,
   });
+
+  // Rows come from the store; the hook only reports fetch progress.
+  const isLoading = !isHydrated || isValidating;
 
   const trimmedSearch = search.trim();
   const { data: searchResults } = useSearchTopics(
@@ -108,9 +115,10 @@ const AgentTopicManager = memo(() => {
         (t) =>
           matchesGroup(t, groupIds) &&
           matchesTrigger(t, triggers) &&
-          matchesTimeRange(t, timeRange),
+          matchesTimeRange(t, timeRange) &&
+          matchesBotChannel(t, botChannels),
       ),
-    [baseTopics, groupIds, triggers, timeRange],
+    [baseTopics, groupIds, triggers, timeRange, botChannels],
   );
 
   const filtered = useMemo(() => {
@@ -156,12 +164,15 @@ const AgentTopicManager = memo(() => {
     return Array.from(map, ([value, label]) => ({ label, value }));
   }, [baseTopics]);
 
+  const botChannelOptions = useMemo(() => buildBotChannelOptions(baseTopics), [baseTopics]);
+
   const totalAfterFilter = filtered.length;
   // 'active' is the default tab, so it doesn't count as a user-applied filter
   const hasActiveFilters =
     (status !== 'active' && status !== 'all') ||
     groupIds.length > 0 ||
     triggers.length > 0 ||
+    botChannels.length > 0 ||
     timeRange !== 'all' ||
     trimmedSearch.length > 0;
 
@@ -172,6 +183,7 @@ const AgentTopicManager = memo(() => {
     setStatus('all');
     setGroupIds([]);
     setTriggers([]);
+    setBotChannels([]);
     setTimeRange('all');
     setSearch('');
   };
@@ -224,14 +236,18 @@ const AgentTopicManager = memo(() => {
             width: '100%',
           }}
         >
-          <Toolbar projects={projects} statusCounts={statusCounts} />
+          <Toolbar
+            botChannelOptions={botChannelOptions}
+            projects={projects}
+            statusCounts={statusCounts}
+          />
           <BulkActionBar />
           {!isSearchMode && error && !isLoading && baseTopics.length === 0 ? (
             <AsyncError
               error={error}
               variant={'block'}
               onRetry={() => {
-                void mutate();
+                void revalidate();
               }}
             />
           ) : isLoading && baseTopics.length === 0 ? (

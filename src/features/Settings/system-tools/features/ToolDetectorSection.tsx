@@ -1,10 +1,10 @@
 'use client';
 
 import { type BinaryStatus } from '@lobechat/electron-client-ipc';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { CopyButton, Flexbox, Form, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui/base-ui';
-import { CheckCircle2, Loader2Icon, RefreshCw, XCircle } from 'lucide-react';
+import { CopyButton, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Button, Spin, Tag, Text } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -81,7 +81,7 @@ const ToolStatusDisplay = memo<ToolStatusDisplayProps>(({ status, isDetecting })
   if (isDetecting) {
     return (
       <Flexbox horizontal align="center" gap={8}>
-        <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />
+        <Spin size="small" style={{ opacity: 0.5 }} />
         <Text type="secondary">{t('settingSystemTools.detecting')}</Text>
       </Flexbox>
     );
@@ -133,6 +133,7 @@ const ToolDetectorSection = memo(() => {
   // rendered as "not detected" — a failure masquerading as an all-missing
   // environment. Track it so we can render a failure + Retry instead (ux Read §1.1).
   const [detectError, setDetectError] = useState<unknown>();
+  const form = useForm();
 
   const detectTools = useCallback(async (force = false) => {
     try {
@@ -156,31 +157,29 @@ const ToolDetectorSection = memo(() => {
     detectTools(true);
   }, [detectTools]);
 
-  const formItems: FormGroupItemType[] = Object.entries(TOOL_CATEGORIES).map(
-    ([, categoryConfig]) => ({
-      children: categoryConfig.tools.map((tool) => {
-        const status = toolStatuses[tool.name];
-        const label = (
-          <Flexbox horizontal align="center" gap={8}>
-            <Text>{tool.name}</Text>
-            {status?.version && (
-              <Tag color="processing" style={{ marginInlineStart: 0 }}>
-                {status.version}
-              </Tag>
-            )}
-          </Flexbox>
-        );
-        return {
-          children: <ToolStatusDisplay isDetecting={detecting} status={status} />,
-          desc: t(tool.descKey),
-          label,
-          minWidth: undefined,
-        };
-      }),
-      desc: t(categoryConfig.descKey),
-      title: t(categoryConfig.titleKey),
+  const formItems: FormGroupItem[] = Object.entries(TOOL_CATEGORIES).map(([, categoryConfig]) => ({
+    children: categoryConfig.tools.map((tool) => {
+      const status = toolStatuses[tool.name];
+      const label = (
+        <Flexbox horizontal align="center" gap={8}>
+          <Text>{tool.name}</Text>
+          {status?.version && (
+            <Tag color="processing" style={{ marginInlineStart: 0 }}>
+              {status.version}
+            </Tag>
+          )}
+        </Flexbox>
+      );
+      return {
+        children: <ToolStatusDisplay isDetecting={detecting} status={status} />,
+        desc: t(tool.descKey),
+        label,
+        minWidth: undefined,
+      };
     }),
-  );
+    desc: t(categoryConfig.descKey),
+    title: t(categoryConfig.titleKey),
+  }));
 
   // Nothing detected AND the scan errored → a real failure, not an empty
   // environment. Show the reason + Retry rather than a wall of "not detected".
@@ -191,6 +190,7 @@ const ToolDetectorSection = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={formItems}
       itemsType={'group'}
       variant={'filled'}

@@ -15,27 +15,6 @@ const useSWRMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  Select: ({
-    onChange,
-    options,
-    value,
-  }: {
-    onChange?: (value: string) => void;
-    options?: { label: string; value: string }[];
-    value?: string;
-  }) => (
-    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {options?.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
-  ),
-}));
-
-vi.mock('antd', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
   QRCode: ({
     'aria-label': ariaLabel,
     bgColor,
@@ -54,6 +33,23 @@ vi.mock('antd', async (importOriginal) => ({
       data-value={value}
       role="img"
     />
+  ),
+  Select: ({
+    onChange,
+    options,
+    value,
+  }: {
+    onChange?: (value: string) => void;
+    options?: { label: string; value: string }[];
+    value?: string;
+  }) => (
+    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+      {options?.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
   ),
 }));
 
@@ -98,7 +94,6 @@ vi.mock('react-i18next', () => ({
 vi.mock('swr', () => ({ default: useSWRMock }));
 
 vi.mock('@/components/AsyncError', () => ({ default: () => null }));
-vi.mock('@/components/NeuralNetworkLoading', () => ({ default: () => <span>Loading</span> }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => vi.fn(),
 }));

@@ -113,7 +113,7 @@ const ToolItem = memo<ToolItemProps>(({ tool }) => {
             Cancel
           </Button>
         ) : (
-          <Button icon={<Download size={14} />} size="small" type="primary" onClick={handleInstall}>
+          <Button icon={<Download size={14} />} size="small" onClick={handleInstall}>
             Install
           </Button>
         )}

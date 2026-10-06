@@ -14,6 +14,7 @@ import {
   CODEX_COMMAND_OUTPUT_MAX_LENGTH,
   truncateCodexCommandOutput,
 } from '../utils/codexCommandOutput';
+import { isCodexCapacityError } from '../utils/codexErrors';
 import { toCodexUsageData, toTurnUsageFromCumulative } from '../utils/codexUsage';
 
 const CODEX_IDENTIFIER = 'codex';
@@ -821,7 +822,17 @@ export class CodexAdapter implements AgentEventAdapter {
       case 'turn.completed': {
         return this.handleTurnCompleted(raw);
       }
-      case 'error':
+      case 'error': {
+        // exec --json drops app-server's willRetry flag from StreamError notifications.
+        // Preserve Codex's reconnect notices as retries, without ending the turn or tools.
+        if (
+          typeof raw.message === 'string' &&
+          /^Reconnecting\.\.\. (?:\d+\/\d+|waiting for network)(?: \(|$)/.test(raw.message)
+        ) {
+          return [this.makeEvent('stream_retry', { message: raw.message })];
+        }
+        return this.handleTerminalError(raw);
+      }
       case 'turn.failed': {
         return this.handleTerminalError(raw);
       }
@@ -903,7 +914,9 @@ export class CodexAdapter implements AgentEventAdapter {
             docsUrl: CODEX_USAGE_SETTINGS_URL,
             rateLimitInfo,
           }
-        : {}),
+        : isCodexCapacityError(message)
+          ? { code: 'overloaded', details: { kind: 'server_overloaded' } }
+          : {}),
       message,
       stderr,
     };
@@ -1227,6 +1240,8 @@ export class CodexAdapter implements AgentEventAdapter {
     return {
       ...(this.currentModel ? { model: this.currentModel } : {}),
       provider: CODEX_IDENTIFIER,
+      // Persist the native thread before a non-zero exec exit can skip finish-path persistence.
+      ...(this.sessionId ? { sessionId: this.sessionId } : {}),
       ...extra,
     };
   }

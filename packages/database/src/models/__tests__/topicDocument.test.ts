@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { agentShareDocumentAccessScope } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -229,6 +230,45 @@ describe('TopicDocumentModel', () => {
       expect(docsForUser2).toHaveLength(0);
     });
 
+    it('isolates Agent Share documents from ordinary topic reads', async () => {
+      const accessScope = agentShareDocumentAccessScope({
+        shareId: 'share-topic-documents',
+        topicId,
+        visitorUserId: 'visitor-topic-documents',
+      });
+      const shareDocumentModel = new DocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        undefined,
+        accessScope,
+      );
+      const shareTopicDocumentModel = new TopicDocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        accessScope,
+      );
+      const otherShareTopicDocumentModel = new TopicDocumentModel(
+        serverDB,
+        userId,
+        undefined,
+        agentShareDocumentAccessScope({
+          shareId: 'other-share',
+          topicId,
+          visitorUserId: 'visitor-topic-documents',
+        }),
+      );
+      const doc = await createTestDocument(shareDocumentModel, 'Visitor Document');
+      await topicDocumentModel.associate({ documentId: doc.id, topicId });
+
+      await expect(topicDocumentModel.findByTopicId(topicId)).resolves.toEqual([]);
+      await expect(otherShareTopicDocumentModel.findByTopicId(topicId)).resolves.toEqual([]);
+      await expect(shareTopicDocumentModel.findByTopicId(topicId)).resolves.toMatchObject([
+        { id: doc.id, title: 'Visitor Document' },
+      ]);
+    });
+
     it('drops a doc that was flipped back to private after the association was created', async () => {
       // Workspace-shared: A associates a public doc with the topic. Then A
       // flips the doc back to `private`. Other members' subsequent read of the
@@ -287,6 +327,92 @@ describe('TopicDocumentModel', () => {
       // B no longer sees it in the topic associations
       const afterUnpublish = await wsB.findByTopicId(wsTopicId);
       expect(afterUnpublish).toHaveLength(0);
+    });
+  });
+
+  describe('findVerbatimTwin', () => {
+    const createWith = async (title: string, content: string, fileType: string) => {
+      const doc = await documentModel.create({
+        content,
+        fileType,
+        source: `notebook:${topicId}`,
+        sourceType: 'api',
+        title,
+        totalCharCount: content.length,
+        totalLineCount: 1,
+      });
+      await topicDocumentModel.associate({ documentId: doc.id, topicId });
+      return doc;
+    };
+
+    it('reuses a byte-identical document another surface wrote, whatever it calls the kind', async () => {
+      // The notebook calls a report `markdown`; the page surface calls the same
+      // report `custom/document`. It is one document either way.
+      const page = await createWith('Report', 'Same body', 'custom/document');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'markdown',
+        title: 'Report',
+        topicId,
+      });
+
+      expect(twin?.id).toBe(page.id);
+    });
+
+    it('does not answer a plan write with a page holding the same text', async () => {
+      // `findPlanByTopic` filters on `agent/plan`. Reusing the page here would
+      // report a successful create and leave no discoverable plan behind.
+      await createWith('Plan', 'Same body', 'custom/document');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'agent/plan',
+        title: 'Plan',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+    });
+
+    it('does not answer a plain write with a plan holding the same text', async () => {
+      await createWith('Plan', 'Same body', 'agent/plan');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'markdown',
+        title: 'Plan',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+    });
+
+    it('keeps a labelled kind distinct — a note is not answered by a markdown row', async () => {
+      await createWith('Notes', 'Same body', 'markdown');
+
+      const twin = await topicDocumentModel.findVerbatimTwin({
+        content: 'Same body',
+        fileType: 'note',
+        title: 'Notes',
+        topicId,
+      });
+
+      expect(twin).toBeUndefined();
+      // The read has to agree with the write: a `note` create that reported
+      // success must be findable as a note.
+      expect(await topicDocumentModel.findByTopicId(topicId, { type: 'note' })).toHaveLength(0);
+    });
+
+    it('finds a plain document under every equivalent kind', async () => {
+      // `documentFileTypesOfKind` widens the write; the same equivalence widens
+      // the read, so whichever equivalent name a plain document was written as,
+      // a read by the name the caller asked for finds it.
+      const page = await createWith('Report', 'Same body', 'custom/document');
+
+      const byMarkdown = await topicDocumentModel.findByTopicId(topicId, { type: 'markdown' });
+
+      expect(byMarkdown.map((doc) => doc.id)).toEqual([page.id]);
     });
   });
 

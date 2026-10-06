@@ -197,7 +197,11 @@ const ProjectListPage = memo(() => {
   const [keyword, setKeyword] = useState('');
   const enabled = useUserStore(labPreferSelectors.enableProjects);
   const projects = useCurrentProjectList();
-  const { error, isLoading, mutate } = useProjectStore((s) => s.useFetchProjectList)(enabled);
+  const { error, isHydrated, isValidating, revalidate } = useProjectStore(
+    (s) => s.useFetchProjectList,
+  )(enabled);
+  // Rows come from the store; the hook only reports fetch progress.
+  const isLoading = !isHydrated || isValidating;
 
   const filteredProjects = useMemo(() => {
     const normalizedKeyword = keyword.trim().toLocaleLowerCase();
@@ -234,8 +238,8 @@ const ProjectListPage = memo(() => {
             {t('create.action')}
           </Button>
         </Flexbox>
-        {error ? (
-          <AsyncError error={error} onRetry={() => mutate()} />
+        {error && projects.length === 0 ? (
+          <AsyncError error={error} onRetry={() => revalidate()} />
         ) : isLoading && projects.length === 0 ? (
           <SkeletonList rows={8} />
         ) : filteredProjects.length === 0 ? (

@@ -1,9 +1,9 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { type TopicExportMode } from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
-import { type FormItemProps } from '@lobehub/ui';
-import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import { Button, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
 import { CopyIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +12,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
+import { useExportMessages } from '../useExportMessages';
 import { generateFullExport } from './generateFullExport';
 import { generateMessages } from './generateMessages';
 import Preview from './Preview';
@@ -25,6 +26,10 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 
 const ShareJSON = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
+  const form = useForm({
+    initialValues: DEFAULT_FIELD_VALUE,
+    onValuesChange: (_, v) => setFieldValue(v),
+  });
   const { t } = useTranslation(['chat', 'common']);
 
   const exportModeOptions = useMemo(
@@ -35,7 +40,7 @@ const ShareJSON = memo(() => {
     [t],
   );
 
-  const settings: FormItemProps[] = [
+  const settings: FormFieldProps<FieldType>[] = [
     {
       children: (
         <Tabs
@@ -61,11 +66,13 @@ const ShareJSON = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'withSystemRole',
-      valuePropName: 'checked',
     },
   ];
 
   const { dbMessages, systemRole, title, topic } = useShareData();
+  // Tool bodies the read path left on the server would otherwise serialize as
+  // empty strings and be lost on re-import — see `useExportMessages`.
+  const { isHydrating, isIncomplete, messages: exportMessages } = useExportMessages(dbMessages);
 
   // Always include tool messages (includeTool: true)
   const data =
@@ -73,13 +80,13 @@ const ShareJSON = memo(() => {
       ? generateMessages({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
         })
       : generateFullExport({
           ...fieldValue,
           includeTool: true,
-          messages: dbMessages,
+          messages: exportMessages,
           systemRole: systemRole ?? '',
           topic: topic ?? undefined,
         });
@@ -92,7 +99,11 @@ const ShareJSON = memo(() => {
     <>
       <Button
         block
+        // Both actions serialize `content`; until the omitted tool bodies land
+        // it is still the projected view, which would export as empty results.
+        disabled={isHydrating || isIncomplete}
         icon={CopyIcon}
+        loading={isHydrating}
         size={isMobile ? undefined : 'large'}
         type={'primary'}
         onClick={async () => {
@@ -104,6 +115,7 @@ const ShareJSON = memo(() => {
       </Button>
       <Button
         block
+        disabled={isHydrating || isIncomplete}
         size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.json`);
@@ -119,13 +131,7 @@ const ShareJSON = memo(() => {
       <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
         <Preview content={content} />
         <Flexbox className={styles.sidebar} gap={12}>
-          <Form
-            initialValues={DEFAULT_FIELD_VALUE}
-            items={settings}
-            itemsType={'flat'}
-            onValuesChange={(_, v) => setFieldValue(v)}
-            {...FORM_STYLE}
-          />
+          <Form form={form} items={settings} itemsType={'flat'} {...FORM_STYLE} />
           {!isMobile && button}
         </Flexbox>
       </Flexbox>

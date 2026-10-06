@@ -3,13 +3,12 @@
 import { isDesktop } from '@lobechat/const';
 import type { WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirSourcePath } from '@lobechat/types';
-import { Flexbox, Icon, Input, Popover, Tooltip } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Input, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronDownIcon,
-  FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
   SearchIcon,
@@ -40,6 +39,7 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/selectors';
 
+import DashedFolderIcon from './DashedFolderIcon';
 import DirIcon from './DirIcon';
 import { useCommitWorkingDirectory } from './useCommitWorkingDirectory';
 import { useMigrateDeviceRecents } from './useMigrateDeviceRecents';
@@ -174,14 +174,6 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 2px;
     padding-inline: 8px;
     border-block-end: 1px solid ${cssVar.colorSplit};
-
-    .ant-input-affix-wrapper {
-      padding-inline: 0;
-    }
-
-    .ant-input-prefix {
-      margin-inline-end: 8px;
-    }
   `,
   sectionTitle: css`
     padding-block: 6px 2px;
@@ -225,7 +217,7 @@ const ChooseLocalFolderRow = memo<{ defaultPath?: string; onPick: (entry: Folder
 );
 ChooseLocalFolderRow.displayName = 'ChooseLocalFolderRow';
 
-/** Web / remote device: filesystem isn't browsable here — enter an absolute path. */
+/** Browse the target device through its directory RPC. */
 const AddRemoteFolderRow = memo<{
   defaultCwd?: string;
   deviceId?: string;
@@ -234,7 +226,7 @@ const AddRemoteFolderRow = memo<{
 }>(({ defaultCwd, deviceId, onBeforeOpen, onPick }) => {
   const { t } = useTranslation('device');
 
-  // Stat the entered path on the target device (it can't be browsed here): block
+  // Validate the selected or manually entered path on the target device: block
   // on a definitive negative, otherwise commit with the detected repoType so the
   // recent entry shows the right (git / github) icon. An unreachable device
   // (null) is treated as "can't verify" and allowed through without a repoType.
@@ -250,7 +242,11 @@ const AddRemoteFolderRow = memo<{
 
   const handleClick = () => {
     onBeforeOpen();
-    openAddWorkingDirModal({ onSubmit: handleSubmit, placeholder: defaultCwd || undefined });
+    openAddWorkingDirModal({
+      defaultPath: defaultCwd || undefined,
+      deviceId,
+      onSubmit: handleSubmit,
+    });
   };
   return (
     <Flexbox
@@ -498,6 +494,7 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
             placeholder={t('workingDirectory.searchPlaceholder')}
             prefix={<Icon icon={SearchIcon} size={14} />}
             size="small"
+            style={{ paddingInline: 0 }}
             value={search}
             variant="borderless"
             onChange={(e) => setSearch(e.target.value)}
@@ -530,7 +527,9 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
         <ChooseLocalFolderRow defaultPath={selectedDir} onPick={pick} />
       ) : (
         <AddRemoteFolderRow
-          defaultCwd={deviceDefaultCwd}
+          // Start the browser at the directory this conversation actually runs in
+          // (topic / agent override first), not the bare home folder.
+          defaultCwd={selectedDir || deviceDefaultCwd}
           deviceId={targetDeviceId}
           onBeforeOpen={() => setOpen(false)}
           onPick={pick}
@@ -541,14 +540,14 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
 
   const displayName = selectedDir
     ? (getWorkingDirectoryName(selectedDir) ?? selectedDir)
-    : t('workingDirectory.title');
+    : t('workingDirectory.unselected');
 
   const trigger = (
     <div className={styles.button}>
       {selectedDir ? (
         <DirIcon repoType={recents.find((r) => r.path === selectedDir)?.repoType} />
       ) : (
-        <Icon icon={FolderIcon} size={14} />
+        <DashedFolderIcon size={14} />
       )}
       <span className={styles.buttonLabel}>{displayName}</span>
       <Icon icon={ChevronDownIcon} size={12} />

@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum, TextArea } from '@lobehub/ui';
-import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Hotkey, Icon, KeyMapEnum } from '@lobehub/ui';
+import { Button, Tabs, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -56,7 +56,15 @@ export interface AskUserQuestionLabels {
   submit: string;
   supplementEnter: string;
   supplementPlaceholder: string;
+  /** Shown once the timeout fallback has answered on the user's behalf. */
   timeExpired: string;
+  /**
+   * Shown when the clock ran out with no fallback answer — provider-owned
+   * option ids (consent is never inferred) or a card opened after the
+   * producer already stopped waiting. Promising "option 1 will be used" here
+   * would describe a submission that is never going to happen.
+   */
+  timeExpiredNoAnswer: string;
   timeRemaining: (time: string) => string;
 }
 
@@ -84,6 +92,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     actionsPortalTarget,
     activeQuestion,
     activeTab,
+    autoSubmitted,
     custom,
     escapeActive,
     escapeText,
@@ -282,7 +291,11 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
     >
       {showCountdown && (
         <Text fontSize={12} type="secondary">
-          {expired ? labels.timeExpired : labels.timeRemaining(formatRemaining(remainingMs))}
+          {autoSubmitted
+            ? labels.timeExpired
+            : expired
+              ? labels.timeExpiredNoAnswer
+              : labels.timeRemaining(formatRemaining(remainingMs))}
         </Text>
       )}
       <Flexbox horizontal gap={8}>

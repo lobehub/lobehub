@@ -1,7 +1,7 @@
 'use client';
 
-import { ContextMenuHost, ModalHost, TooltipGroup } from '@lobehub/ui';
-import { ModalHost as BaseModalHost, ToastHost } from '@lobehub/ui/base-ui';
+import { ContextMenuHost, TooltipGroup } from '@lobehub/ui';
+import { ModalHost, ToastHost } from '@lobehub/ui/base-ui';
 import { StyleProvider } from 'antd-style';
 import { domMax, LazyMotion } from 'motion/react';
 import { Component, type CSSProperties, lazy, memo, type PropsWithChildren, Suspense } from 'react';
@@ -18,7 +18,9 @@ import { FaviconProvider } from '@/layout/GlobalProvider/FaviconProvider';
 import { GroupWizardProvider } from '@/layout/GlobalProvider/GroupWizardProvider';
 import QueryProvider from '@/layout/GlobalProvider/Query';
 import ServerVersionOutdatedAlert from '@/layout/GlobalProvider/ServerVersionOutdatedAlert';
-import StoreInitialization from '@/layout/GlobalProvider/StoreInitialization';
+import StoreInitialization, {
+  BuiltinAgentInitialization,
+} from '@/layout/GlobalProvider/StoreInitialization';
 import { registerNativeContextMenuInterceptor } from '@/libs/contextMenu';
 import { usePostRenderReady } from '@/spa/atoms/app';
 import { ServerConfigStoreProvider } from '@/store/serverConfig/Provider';
@@ -30,6 +32,8 @@ registerNativeContextMenuInterceptor();
 const DevDock = lazy(() => import('@/features/DevDock'));
 const ImperativeMountHost = lazy(() => import('@/components/ImperativeMount'));
 const DynamicFavicon = lazy(() => import('@/layout/GlobalProvider/DynamicFavicon'));
+const BackgroundActivityMonitor = lazy(() => import('@/features/BackgroundActivity/Monitor'));
+const TaskDock = lazy(() => import('@/features/TaskDock'));
 
 const devDockLayoutStyle: CSSProperties = {
   alignItems: 'center',
@@ -53,7 +57,7 @@ class DevDockBoundary extends Component<PropsWithChildren, { failed: boolean }> 
 }
 
 export const DevDockLayout = memo<PropsWithChildren>(({ children }) => {
-  const mounted = useDevDockMounted();
+  const mounted = useDevDockMounted() && !window.location.pathname.startsWith('/popup/processes');
 
   return (
     <>
@@ -98,16 +102,20 @@ const SPAGlobalProvider = memo<PropsWithChildren>(({ children }) => {
                   <StyleProvider speedy={import.meta.env.PROD}>
                     <LobeAnalyticsProviderWrapper>
                       <CacheHydrationGate>
+                        <BuiltinAgentInitialization />
                         <DevDockLayout>{children}</DevDockLayout>
                       </CacheHydrationGate>
                     </LobeAnalyticsProviderWrapper>
                   </StyleProvider>
                 </TooltipGroup>
                 <ModalHost />
-                <BaseModalHost />
                 <ToastHost />
                 <ContextMenuHost />
                 <Suspense>
+                  <TaskDock />
+                  {isDesktop && !window.location.pathname.startsWith('/popup') && (
+                    <BackgroundActivityMonitor />
+                  )}
                   <ImperativeMountHost />
                 </Suspense>
               </LazyMotion>

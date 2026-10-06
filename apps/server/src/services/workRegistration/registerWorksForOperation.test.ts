@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
+import { WorkModel } from '@/database/models/work';
+
 import { redeployFileWork, registerWorksForOperation } from './registerWorksForOperation';
 import { stateHasEntityFileEdits } from './stateHasEntityFileEdits';
 
@@ -28,30 +31,44 @@ const {
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
-  AgentOperationModel: vi.fn(() => ({
-    findById: mockFindById,
-    listOperationTree: mockListOperationTree,
-  })),
+  AgentOperationModel: vi.fn(function () {
+    return {
+      findById: mockFindById,
+      listOperationTree: mockListOperationTree,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/message', () => ({
-  MessageModel: vi.fn(() => ({
-    findById: mockFindMessageById,
-    listMessagePluginsForOperation: mockListPlugins,
-    update: mockUpdateMessage,
-  })),
+  MessageModel: vi.fn(function () {
+    return {
+      findById: mockFindMessageById,
+      listMessagePluginsForOperation: mockListPlugins,
+      update: mockUpdateMessage,
+    };
+  }),
 }));
 
 vi.mock('@/database/models/work', () => ({
-  WorkModel: vi.fn(() => ({
-    findFileVersionByToolCall: mockFindFileVersionByToolCall,
-    registerFile: mockRegisterFile,
-    registerShellGithubResult: mockRegisterShellGithubResult,
-  })),
+  WorkModel: vi.fn(function () {
+    return {
+      findFileVersionByToolCall: mockFindFileVersionByToolCall,
+      registerFile: mockRegisterFile,
+      registerShellGithubResult: mockRegisterShellGithubResult,
+    };
+  }),
 }));
 
-vi.mock('@/server/services/file', () => ({ FileService: vi.fn(() => ({})) }));
-vi.mock('@/server/services/market', () => ({ MarketService: vi.fn(() => ({})) }));
+vi.mock('@/server/services/file', () => ({
+  FileService: vi.fn(function () {
+    return {};
+  }),
+}));
+vi.mock('@/server/services/market', () => ({
+  MarketService: vi.fn(function () {
+    return {};
+  }),
+}));
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mockCreateSandboxService,
 }));
@@ -165,6 +182,48 @@ beforeEach(() => {
 });
 
 describe('registerWorksForOperation', () => {
+  it('registers a share visitor run under the share scope with file provenance', async () => {
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+    const agentShareVisitor = { shareId: 'share-1', visitorUserId: 'visitor-1' };
+
+    await registerWorksForOperation({ ...baseParams, agentShareVisitor });
+
+    // The scan must opt in to share-visitor rows: the visitor's tool messages
+    // hang off a topic with a non-null `senderId`, which the default
+    // `ownership()` predicate excludes (the scan would find nothing).
+    expect(vi.mocked(MessageModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined, {
+      includeShareVisitor: true,
+    });
+    // The registry is opened under the share scope of the completing op's
+    // topic, so the Work row is stamped and hidden from the creator's lists.
+    expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, {
+      shareId: 'share-1',
+      topicId: 'topic-1',
+      type: 'agentShare',
+      visitorUserId: 'visitor-1',
+    });
+    // The exported entity file carries the same provenance the visitor upload
+    // path stamps, keeping it out of the creator's library.
+    expect(mockExportAndUploadFile).toHaveBeenCalledWith(
+      '/mnt/data/deck.pptx',
+      'deck.pptx',
+      expect.objectContaining({ metadata: { agentShare: agentShareVisitor } }),
+    );
+    expect(mockRegisterFile).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the ordinary registry and exports without provenance for a creator run', async () => {
+    mockListPlugins.mockResolvedValue([writeRow('a', '/mnt/data/deck.pptx')]);
+
+    await registerWorksForOperation(baseParams);
+
+    expect(vi.mocked(WorkModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined);
+    expect(vi.mocked(MessageModel)).toHaveBeenCalledWith(serverDB, 'user-1', undefined, undefined, {
+      includeShareVisitor: false,
+    });
+    expect(mockExportAndUploadFile.mock.calls[0][2]).not.toHaveProperty('metadata');
+  });
+
   it('registers one file Work version per edited entity file', async () => {
     mockListPlugins.mockResolvedValue([
       writeRow('a', '/mnt/data/deck.pptx'),
@@ -987,7 +1046,7 @@ describe('registerWorksForOperation · shell github works', () => {
     expect(mockUpdateMessage).toHaveBeenCalledWith('msg-assistant', {
       metadata: { work: { rootOperationId: 'op-1' } },
     });
-    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+    expect(outcome).toEqual({ anchorMessageId: 'msg-assistant', attempted: 1, failed: 0 });
   });
 
   it('counts a failed anchor stamp so the completion backstop retries', async () => {
@@ -1097,7 +1156,7 @@ describe('registerWorksForOperation · shell github works', () => {
     expect(mockUpdateMessage).toHaveBeenCalledWith('msg-owner-assistant', {
       metadata: { work: { rootOperationId: 'op-1' } },
     });
-    expect(outcome).toEqual({ attempted: 1, failed: 0 });
+    expect(outcome).toEqual({ anchorMessageId: 'msg-owner-assistant', attempted: 1, failed: 0 });
   });
 
   it('counts a missing anchor as failed so the completion marker is withheld', async () => {

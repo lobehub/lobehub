@@ -1,13 +1,13 @@
 'use client';
 
 import { type IEditor } from '@lobehub/editor';
-import { Skeleton } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { createStoreUpdater } from 'zustand-utils';
 
 import NotFound from '@/components/404';
 import AsyncError from '@/components/AsyncError';
+import { ArticleSkeleton } from '@/components/Skeleton';
 import { useSaveDocumentHotkey } from '@/hooks/useHotkeys';
 import { useDocumentStore } from '@/store/document';
 import { editorSelectors } from '@/store/document/slices/editor';
@@ -21,7 +21,7 @@ import UnsavedChangesGuard from './UnsavedChangesGuard';
  */
 const EditorSkeleton = () => (
   <div style={{ paddingBlock: 24 }}>
-    <Skeleton active paragraph={{ rows: 8 }} />
+    <ArticleSkeleton rows={8} />
   </div>
 );
 

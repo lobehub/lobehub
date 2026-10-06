@@ -1,3 +1,4 @@
+import type { RecentItem } from '@lobechat/types';
 import { type MenuProps } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { confirmModal } from '@lobehub/ui/base-ui';
@@ -7,24 +8,18 @@ import { useTranslation } from 'react-i18next';
 
 import { useDocumentTransferMenuItem } from '@/business/client/hooks/useDocumentTransferMenuItem';
 import { useTaskTransferMenuItem } from '@/business/client/hooks/useTaskTransferMenuItem';
+import { openRenameModal } from '@/components/RenameModal';
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
 import { usePermission } from '@/hooks/usePermission';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
-import { type RecentItem } from '@/server/routers/lambda/recent';
 import { documentService } from '@/services/document';
 import { taskService } from '@/services/task';
 import { topicService } from '@/services/topic';
 import { useHomeStore } from '@/store/home';
 
-export const useRecentItemDropdownMenu = (
-  item: RecentItem,
-  toggleEditing: (visible?: boolean) => void,
-) => {
+export const useRecentItemDropdownMenu = (item: RecentItem) => {
   const { t } = useTranslation(['common', 'topic', 'components']);
-  const [updateRecentTitle, refreshRecents] = useHomeStore((s) => [
-    s.updateRecentTitle,
-    s.refreshRecents,
-  ]);
+  const [renameRecent, refreshRecents] = useHomeStore((s) => [s.renameRecent, s.refreshRecents]);
 
   // Viewer can read recents but cannot rename/delete them — keep the menu
   // items visible-but-disabled so the affordance is clear (per disabled-not-
@@ -41,27 +36,8 @@ export const useRecentItemDropdownMenu = (
   const transferMenuItems = documentTransferItems ?? taskTransferItems;
 
   const handleRename = useCallback(
-    async (newTitle: string) => {
-      // Optimistic update
-      updateRecentTitle(item.id, newTitle);
-
-      // Persist to server
-      switch (item.type) {
-        case 'document': {
-          await documentService.updateDocument({ id: item.id, title: newTitle });
-          break;
-        }
-        case 'task': {
-          await taskService.update(item.id, { name: newTitle });
-          break;
-        }
-        case 'topic': {
-          await topicService.updateTopic(item.id, { title: newTitle });
-          break;
-        }
-      }
-    },
-    [item, updateRecentTitle],
+    (newTitle: string) => renameRecent({ id: item.id, title: newTitle, type: item.type }),
+    [item.id, item.type, renameRecent],
   );
 
   const handleDelete = useCallback(() => {
@@ -101,7 +77,7 @@ export const useRecentItemDropdownMenu = (
       },
       title: t('delete', { ns: 'common' }),
     });
-  }, [item, t, refreshRecents]);
+  }, [item, refreshRecents, t]);
 
   const dropdownMenu = useCallback((): MenuProps['items'] => {
     const items: NativeContextMenuItem[] = [
@@ -110,7 +86,7 @@ export const useRecentItemDropdownMenu = (
         icon: <Icon icon={PencilLineIcon} />,
         key: 'rename',
         label: t('rename'),
-        onClick: () => toggleEditing(true),
+        onClick: () => openRenameModal({ defaultValue: item.title, onSave: handleRename }),
         sfSymbol: 'pencil',
       },
       ...(transferMenuItems ?? []),
@@ -126,7 +102,7 @@ export const useRecentItemDropdownMenu = (
       },
     ];
     return items as MenuProps['items'];
-  }, [canEdit, t, toggleEditing, handleDelete, transferMenuItems]);
+  }, [canEdit, t, item.title, handleRename, handleDelete, transferMenuItems]);
 
-  return { dropdownMenu, handleRename };
+  return { dropdownMenu };
 };

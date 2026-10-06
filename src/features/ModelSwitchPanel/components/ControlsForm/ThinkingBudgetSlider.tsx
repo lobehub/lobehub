@@ -1,4 +1,5 @@
-import { Flexbox, InputNumber } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { InputNumber } from '@lobehub/ui/base-ui';
 import { memo, useMemo } from 'react';
 import useMergeState from 'use-merge-value';
 
@@ -89,6 +90,8 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
     };
 
     const inputStep = useMemo(() => getStepForValue(budget), [budget]);
+    const specialLabel =
+      budget === SPECIAL_VALUES.AUTO ? 'Auto' : budget === SPECIAL_VALUES.OFF ? 'OFF' : undefined;
 
     const options = useMemo(
       () =>
@@ -112,28 +115,13 @@ const ThinkingBudgetSlider = memo<ThinkingBudgetSliderProps>(
             changeOnWheel
             max={32_768}
             min={-1}
+            placeholder={specialLabel}
             step={inputStep}
             style={{ width: 80 }}
-            value={budget}
-            formatter={(value, _info) => {
-              if (value === SPECIAL_VALUES.AUTO) return 'Auto';
-              if (value === SPECIAL_VALUES.OFF) return 'OFF';
-              return `${value}`;
-            }}
-            parser={(value) => {
-              if (typeof value === 'string') {
-                if (value.toLowerCase() === 'auto') return SPECIAL_VALUES.AUTO;
-                if (value.toLowerCase() === 'off') return SPECIAL_VALUES.OFF;
-                return parseInt(value.replaceAll(/[^\d-]/g, ''), 10) || 0;
-              }
-              if (typeof value === 'number') {
-                return value;
-              }
-              return SPECIAL_VALUES.AUTO;
-            }}
+            value={specialLabel ? null : budget}
             onChange={(e) => {
-              if (e === null || e === undefined) return;
-              updateWithRealValue(e as number);
+              if (e === null) return;
+              updateWithRealValue(e);
             }}
           />
         </div>

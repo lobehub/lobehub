@@ -1,7 +1,7 @@
 'use client';
 
-import { Collapse, Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Accordion, Tag } from '@lobehub/ui/base-ui';
 import { type LucideIcon } from 'lucide-react';
 import {
   ChartColumnBig,
@@ -96,15 +96,16 @@ const ParameterList = memo(() => {
   return (
     <Flexbox gap={16}>
       <Title>{t('models.parameterList.title')}</Title>
-      <Collapse
-        defaultActiveKey={items.map((item) => item.key)}
-        expandIconPlacement={'end'}
+      <Accordion
+        defaultValue={items.map((item) => item.key)}
         gap={16}
+        indicatorPlacement={'end'}
+        styles={{ content: { padding: '12px 16px' } }}
         variant={'outlined'}
         items={items.map((item) => ({
-          children: <ParameterItem {...item} key={item.key} />,
+          children: <ParameterItem {...item} />,
           key: item.key,
-          label: (
+          title: (
             <Flexbox horizontal align={'center'} gap={8}>
               <Icon icon={item.icon} size={16} />
               {item.label}

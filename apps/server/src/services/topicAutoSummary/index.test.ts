@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type { LobeChatDatabase } from '@/database/type';
+
 import { TopicAutoSummaryService } from './index';
 
 const mocks = vi.hoisted(() => ({
   generateObject: vi.fn(),
   getUserSettings: vi.fn(),
+  resolveSystemAgentModelConfig: vi.fn(),
   updateSummaryIfCurrent: vi.fn(),
 }));
 
@@ -25,15 +28,12 @@ vi.mock('@/server/services/aiGeneration', () => ({
   },
 }));
 vi.mock('@/server/services/systemAgent/modelConfig', () => ({
-  resolveSystemAgentModelConfig: vi.fn().mockResolvedValue({
-    model: 'deepseek-v4-flash',
-    provider: 'deepseek',
-  }),
+  resolveSystemAgentModelConfig: mocks.resolveSystemAgentModelConfig,
 }));
 
-const createDb = () => {
-  const results = [
-    [{ historySummary: 'Earlier decision: use PostgreSQL.' }],
+const createDb = (
+  results: unknown[][] = [
+    [{ historySummary: 'Earlier decision: use PostgreSQL.', senderId: null }],
     [
       {
         content: 'What is next?',
@@ -42,9 +42,9 @@ const createDb = () => {
         updatedAt: new Date('2026-07-31T10:00:00Z'),
       },
     ],
-  ];
-
-  return {
+  ],
+) => {
+  const db = {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
         where: vi.fn(() => ({
@@ -53,7 +53,9 @@ const createDb = () => {
         })),
       })),
     })),
-  } as never;
+  };
+
+  return db as typeof db & LobeChatDatabase;
 };
 
 describe('TopicAutoSummaryService', () => {
@@ -63,6 +65,10 @@ describe('TopicAutoSummaryService', () => {
       systemAgent: { topicAutoSummary: { enabled: true } },
     });
     mocks.generateObject.mockResolvedValue({ description: 'Next steps', summary: 'Combined' });
+    mocks.resolveSystemAgentModelConfig.mockResolvedValue({
+      model: 'deepseek-v4-flash',
+      provider: 'deepseek',
+    });
     mocks.updateSummaryIfCurrent.mockResolvedValue(true);
   });
 
@@ -78,6 +84,7 @@ describe('TopicAutoSummaryService', () => {
     );
     expect(request.messages[1].content).toContain('Recent conversation:\nUSER: What is next?');
     expect(mocks.generateObject.mock.calls[0][1]).toEqual({
+      metadata: { trigger: 'topic_summary' },
       tracing: {
         promptVersion: 'v1',
         scenario: 'topic_auto_summary',
@@ -95,6 +102,33 @@ describe('TopicAutoSummaryService', () => {
 
     expect(result).toEqual({ reason: 'disabled', summarized: false });
     expect(mocks.generateObject).not.toHaveBeenCalled();
+  });
+
+  it('skips a share-visitor topic without invoking generation', async () => {
+    // The topic row load returns a non-null senderId → visitor conversation.
+    // These are creator-billed only through the share spend gate, so the
+    // auto-summary worker must never call the LLM for them.
+    const db = createDb([[{ historySummary: null, senderId: 'visitor-9' }]]);
+    const service = new TopicAutoSummaryService(db, 'creator-1');
+
+    const result = await service.summarize('shared-topic');
+
+    expect(result).toEqual({ reason: 'disabled', summarized: false });
+    expect(mocks.generateObject).not.toHaveBeenCalled();
+    expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
+  });
+
+  it('stops before reading messages or resolving a model when the topic was trashed', async () => {
+    const db = createDb([[]]);
+    const service = new TopicAutoSummaryService(db, 'user-1');
+
+    const result = await service.summarize('trashed-topic');
+
+    expect(result).toEqual({ reason: 'stale', summarized: false });
+    expect(db.select).toHaveBeenCalledTimes(1);
+    expect(mocks.resolveSystemAgentModelConfig).not.toHaveBeenCalled();
+    expect(mocks.generateObject).not.toHaveBeenCalled();
+    expect(mocks.updateSummaryIfCurrent).not.toHaveBeenCalled();
   });
 
   it('still summarizes an opted-out user when forced', async () => {

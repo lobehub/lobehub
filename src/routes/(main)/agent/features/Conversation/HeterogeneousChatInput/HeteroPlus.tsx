@@ -50,7 +50,7 @@ const HeteroPlus = memo(() => {
 
   const scheduledSendAt = useConversationStore((s) => s.scheduledSendAt);
   const setScheduledSendAt = useConversationStore((s) => s.setScheduledSendAt);
-  const enableTopicAcceptance = useUserStore(labPreferSelectors.enableTopicAcceptance);
+  const enableGoals = useUserStore(labPreferSelectors.enableGoals);
 
   const armSchedule = useCallback(
     (hours: number) => {
@@ -102,7 +102,7 @@ const HeteroPlus = memo(() => {
         type: 'switch',
       },
       // Goal creation shares the standard input's goal chip.
-      ...(enableTopicAcceptance
+      ...(enableGoals
         ? ([
             { type: 'divider' },
             {
@@ -118,16 +118,7 @@ const HeteroPlus = memo(() => {
           ] as ActionDropdownMenuItems)
         : []),
     ];
-  }, [
-    t,
-    tEditor,
-    showTypoBar,
-    setShowTypoBar,
-    armSchedule,
-    scheduledSendAt,
-    enableTopicAcceptance,
-    editor,
-  ]);
+  }, [t, tEditor, showTypoBar, setShowTypoBar, armSchedule, scheduledSendAt, enableGoals, editor]);
 
   return (
     <ChatInputAction

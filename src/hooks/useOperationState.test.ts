@@ -132,7 +132,7 @@ describe('useOperationState', () => {
               },
               'op-stream': {
                 id: 'op-stream',
-                type: 'groupAgentStream',
+                type: 'callLLM',
                 status: 'running',
                 context: { messageId },
                 abortController: new AbortController(),

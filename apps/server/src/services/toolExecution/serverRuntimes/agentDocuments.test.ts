@@ -6,9 +6,11 @@ import { agentDocumentsRuntime } from './agentDocuments';
 const listDocuments = vi.fn();
 
 vi.mock('@/server/services/agentDocuments', () => ({
-  AgentDocumentsService: vi.fn().mockImplementation(() => ({
-    listDocuments,
-  })),
+  AgentDocumentsService: vi.fn().mockImplementation(function () {
+    return {
+      listDocuments,
+    };
+  }),
 }));
 
 describe('agentDocumentsRuntime', () => {

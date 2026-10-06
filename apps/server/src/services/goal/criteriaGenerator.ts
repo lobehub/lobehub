@@ -1,10 +1,14 @@
 import { TRACING_SCENARIOS } from '@lobechat/const';
 import { isProgrammaticTestCheck } from '@lobechat/const/verify';
 import type { TracingOptions } from '@lobechat/llm-generation-tracing';
+import type { GoalClarificationAnswer } from '@lobechat/prompts';
 import {
   chainGoalCriteriaDraft,
+  chainGoalDecompose,
   GOAL_CRITERIA_DRAFT_JSON_SCHEMA,
   GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
+  GOAL_DECOMPOSE_JSON_SCHEMA,
+  GOAL_DECOMPOSE_PROMPT_VERSION,
   VERIFY_EVIDENCE_MODALITIES,
   VERIFY_EVIDENCE_SCOPES,
   VERIFY_EVIDENCE_TYPES,
@@ -12,6 +16,7 @@ import {
   VERIFY_VERIFIER_TYPES,
 } from '@lobechat/prompts';
 import type { RequiredEvidenceSpec, VerifyCheckItem } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { z } from 'zod';
 
@@ -64,6 +69,46 @@ export interface GoalPlanDraft {
   title: string;
 }
 
+const decompositionSchema = z.object({
+  /** Readings the plan relies on that the goal did not state. */
+  assumptions: z.array(z.string()).default([]),
+  problemStatement: z.string().min(1),
+  /**
+   * What the planner could not determine and would change the deliverable.
+   * Defaulted so an older answer without the field still plans.
+   */
+  questions: z
+    .array(
+      z.object({
+        assumption: z.string(),
+        blocking: z.boolean(),
+        impact: z.string().optional(),
+        options: z.array(z.string()).default([]),
+        question: z.string(),
+      }),
+    )
+    .default([]),
+  tasks: z
+    .array(
+      z.object({
+        /** 0-based indices of earlier tasks this one consumes; drives `depends_on` edges. */
+        dependsOn: z.array(z.number().int().nonnegative()).optional(),
+        /**
+         * Present only when the direction is a candidate answer under test; the
+         * coordinator then wraps its Task in an experiment container. Ordinary
+         * delivery steps carry `null` and attach straight to the problem.
+         */
+        hypothesis: z.string().max(280).nullable().optional(),
+        instruction: z.string().min(1),
+        title: z.string().min(1).max(80),
+      }),
+    )
+    .min(1)
+    .max(5),
+});
+
+export type GoalDecompositionDraft = z.input<typeof decompositionSchema>;
+
 export class GoalCriteriaGeneratorService {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -97,7 +142,7 @@ export class GoalCriteriaGeneratorService {
         thinking: { type: 'disabled' },
       },
       {
-        metadata: { trigger: 'goal_criteria_draft' },
+        metadata: { trigger: RequestTrigger.Goal },
         tracing: {
           promptVersion: GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.GoalCriteriaGen,
@@ -117,5 +162,42 @@ export class GoalCriteriaGeneratorService {
       .filter((criterion) => !isProgrammaticTestCheck(criterion.title, criterion.description));
 
     return { ...parsed.data, criteria };
+  }
+
+  /**
+   * Plan the opening exploration structure for a goal that has no tasks yet:
+   * the core question plus 1–5 independent directions. Returns undefined on
+   * any model/schema failure so the coordinator can fall back to a single
+   * task seeded from the raw requirement instead of stalling the goal.
+   */
+  async decompose(params: {
+    clarifications?: GoalClarificationAnswer[];
+    requirement: string;
+  }): Promise<GoalDecompositionDraft | undefined> {
+    const modelConfig = await resolveGoalModelConfig(this.db, this.userId);
+    const ai = new AiGenerationService(this.db, this.userId, this.workspaceId);
+    const raw = await ai.generateObject(
+      {
+        ...chainGoalDecompose(params),
+        ...modelConfig,
+        schema: GOAL_DECOMPOSE_JSON_SCHEMA,
+        thinking: { type: 'disabled' },
+      },
+      {
+        metadata: { trigger: RequestTrigger.Goal },
+        tracing: {
+          promptVersion: GOAL_DECOMPOSE_PROMPT_VERSION,
+          scenario: TRACING_SCENARIOS.GoalDecompose,
+          schemaName: GOAL_DECOMPOSE_JSON_SCHEMA.name,
+        } satisfies TracingOptions,
+      },
+    );
+
+    const parsed = decompositionSchema.safeParse(raw);
+    if (!parsed.success) {
+      log('goal decomposition did not match schema: %O', parsed.error.flatten());
+      return undefined;
+    }
+    return parsed.data;
   }
 }

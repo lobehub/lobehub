@@ -6,6 +6,7 @@ import type * as SWRLib from '@/libs/swr';
 import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
+import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 import { type GlobalServerConfig } from '@/types/serverConfig';
 import { type UserInitializationState, type UserPreference } from '@/types/user';
@@ -35,6 +36,7 @@ vi.mock('swr', async (importOriginal) => {
 });
 
 beforeEach(() => {
+  localStorage.clear();
   swrMocks.mutate.mockReset();
   swrMocks.mutate.mockResolvedValue(undefined);
 });
@@ -263,6 +265,50 @@ describe('createCommonSlice', () => {
         expect(preference.current.data?.preference).toEqual(savedPreference);
         expect(result.current.isUserStateInit).toBeTruthy();
         expect(result.current.preference).toEqual(savedPreference);
+      });
+    });
+
+    it('should persist the authoritative avatar and preference for the returned user', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const mockUserState: UserInitializationState = {
+        avatar: 'avatar-a',
+        preference: { lab: { enableProjects: true } },
+        settings: {},
+        userId: 'user-a',
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(readUserDisplaySnapshot('user-a')).toEqual({
+          avatar: 'avatar-a',
+          preference: { lab: { enableProjects: true } },
+        });
+      });
+      expect(readUserDisplaySnapshot('user-b')).toBeUndefined();
+    });
+
+    it('should clear a previously cached avatar when the authoritative state has none', async () => {
+      const { result } = renderHook(() => useUserStore());
+      const mockUserState: UserInitializationState = {
+        preference: { lab: { enableProjects: true } },
+        settings: {},
+        userId: 'user-a',
+      };
+
+      vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
+
+      writeUserDisplaySnapshot('user-a', { avatar: 'stale-avatar' });
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
+
+      await waitFor(() => {
+        expect(readUserDisplaySnapshot('user-a')?.avatar).toBe('');
       });
     });
 

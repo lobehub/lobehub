@@ -42,15 +42,14 @@ beforeEach(() => {
   editMessageWithButtons = vi.fn().mockResolvedValue(undefined);
   createDMChannel = vi.fn().mockResolvedValue({ id: 'dm_channel_1' });
 
-  vi.mocked(DiscordApi).mockImplementation(
-    () =>
-      ({
-        createDMChannel,
-        createMessage,
-        createMessageWithButtons,
-        editMessageWithButtons,
-      }) as any,
-  );
+  vi.mocked(DiscordApi).mockImplementation(function () {
+    return {
+      createDMChannel,
+      createMessage,
+      createMessageWithButtons,
+      editMessageWithButtons,
+    } as any;
+  });
 
   vi.mocked(issueLinkToken).mockResolvedValue('rand_token');
 });

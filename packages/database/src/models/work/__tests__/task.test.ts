@@ -100,7 +100,7 @@ describe('WorkModel · task', () => {
     expect(worksInConversation[0]).toMatchObject({
       id: work?.id,
       task: { name: 'Work MVP plan', priority: 2, status: 'backlog' },
-      taskDeleted: false,
+      resourceDeleted: false,
     });
 
     const byOperation = await workModel.listByRootOperation({ rootOperationId: 'op-root' });
@@ -752,14 +752,14 @@ describe('WorkModel · task', () => {
     expect(workRows).toHaveLength(1);
     expect(versionRows.length).toBeGreaterThan(0);
     // The task-joined lists now surface the orphan via LEFT JOIN, rendered from
-    // its version snapshot and flagged `taskDeleted` so the UI shows "task
+    // its version snapshot and flagged `resourceDeleted` so the UI shows "task
     // deleted" instead of dropping the card entirely.
     const orphaned = await workModel.listByConversation({ threadId, topicId });
     expect(orphaned).toHaveLength(1);
     expect(orphaned[0]).toMatchObject({
       id: work!.id,
       task: expect.objectContaining({ name: 'Keep my Work' }),
-      taskDeleted: true,
+      resourceDeleted: true,
     });
   });
 
@@ -984,7 +984,7 @@ describe('WorkModel · workspace task visibility', () => {
 
     const ownerView = await ownerWorks.listByConversation({ topicId });
     expect(ownerView).toHaveLength(1);
-    expect(expectTaskListItem(ownerView[0]).taskDeleted).toBe(true);
+    expect(expectTaskListItem(ownerView[0]).resourceDeleted).toBe(true);
 
     expect(await memberWorks.listByConversation({ topicId })).toHaveLength(0);
   });

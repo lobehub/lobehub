@@ -1,13 +1,10 @@
 'use client';
 
-import { Flexbox, FormGroup } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type ReactNode } from 'react';
 
-import { useServerConfigStore } from '@/store/serverConfig';
-import { serverConfigSelectors } from '@/store/serverConfig/selectors';
-import { useToolStore } from '@/store/tool';
-import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 
@@ -100,18 +97,12 @@ const InterestsSkeleton = () => (
 const SettingsProfileSkeleton = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const email = useUserStore(userProfileSelectors.email);
-  const enableComposio = useServerConfigStore(serverConfigSelectors.enableComposio);
-  const [hasConnectedServers, isServersInit] = useToolStore((state) => [
-    state.composioServers.some((server) => server.status === ComposioServerStatus.ACTIVE),
-    state.isComposioServersInit,
-  ]);
 
   return (
-    <FormGroup
+    <Form.Group
       aria-busy
       collapsible={false}
       data-testid={'settings-profile-skeleton'}
-      gap={16}
       title={<SkeletonBar height={18} width={80} />}
       variant={'filled'}
     >
@@ -138,19 +129,8 @@ const SettingsProfileSkeleton = () => {
             <SettingsProfileRowSkeleton bodyWidth={184} height={54} labelWidth={96} />
           </>
         )}
-        {enableComposio && isServersInit && hasConnectedServers && (
-          <>
-            <div className={styles.divider} />
-            <SettingsProfileRowSkeleton
-              action={false}
-              bodyWidth={184}
-              height={54}
-              labelWidth={136}
-            />
-          </>
-        )}
       </Flexbox>
-    </FormGroup>
+    </Form.Group>
   );
 };
 

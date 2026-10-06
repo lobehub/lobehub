@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NetworkConnectionError, PageNotFoundError, TimeoutError } from '../../utils/errorType';
+import {
+  NetworkConnectionError,
+  PageNotFoundError,
+  TimeoutError,
+  UnsupportedContentError,
+} from '../../utils/errorType';
 import { naive } from '../naive';
 
 // Mock dependencies
@@ -53,6 +58,41 @@ describe('naive crawler', () => {
       title: 'Normal Page Title',
       url: 'https://example.com',
     });
+  });
+
+  it('should throw UnsupportedContentError for non-document content types', async () => {
+    const { withTimeout } = await import('../../utils/withTimeout');
+    const { htmlToMarkdown } = await import('../../utils/htmlToMarkdown');
+
+    for (const contentType of ['image/png', 'image/svg+xml', 'font/woff2', 'video/mp4']) {
+      vi.mocked(withTimeout).mockResolvedValue({
+        status: 200,
+        ok: true,
+        headers: new Map([['content-type', contentType]]),
+        text: vi.fn().mockResolvedValue('binary'),
+      } as any);
+
+      await expect(naive('https://example.com/asset', { filterOptions: {} })).rejects.toThrow(
+        UnsupportedContentError,
+      );
+    }
+
+    expect(htmlToMarkdown).not.toHaveBeenCalled();
+  });
+
+  it('should throw PageNotFoundError with status for 410 Gone', async () => {
+    const { withTimeout } = await import('../../utils/withTimeout');
+    vi.mocked(withTimeout).mockResolvedValue({
+      status: 410,
+      ok: false,
+      statusText: 'Gone',
+      headers: new Map(),
+      text: vi.fn().mockResolvedValue(''),
+    } as any);
+
+    await expect(naive('https://example.com/removed', { filterOptions: {} })).rejects.toMatchObject(
+      { name: 'PageNotFoundError', status: 410 },
+    );
   });
 
   it('should successfully crawl JSON content', async () => {

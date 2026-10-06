@@ -15,6 +15,18 @@ export const MEMORY_SEARCH_TOP_K_LIMITS = {
   medium: { ...DEFAULT_SEARCH_USER_MEMORY_TOP_K },
 } as const;
 
+/**
+ * Context memories are left out of searches below `high` effort (see the
+ * limits above). When the caller explicitly asks for the context layer —
+ * `layers` includes "context" or `topK.contexts > 0` — it still gets up to
+ * this many per effort level instead of a silent empty result.
+ */
+export const MEMORY_SEARCH_EXPLICIT_CONTEXT_TOP_K = {
+  high: MEMORY_SEARCH_TOP_K_LIMITS.high.contexts,
+  low: 1,
+  medium: 2,
+} as const;
+
 export interface UserMemoryConfigItem {
   model: string;
   provider: string;

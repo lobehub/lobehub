@@ -49,6 +49,16 @@ export const getLanguageFromFilename = (fileName?: string | null): string => {
       return 'cpp';
     }
 
+    case 'v': {
+      return 'verilog';
+    }
+    // shiki's bundled SystemVerilog grammar id is `system-verilog`; the plain
+    // `systemverilog` token is not in the bundle and would silently degrade
+    // highlighting to plaintext.
+    case 'sv': {
+      return 'system-verilog';
+    }
+
     case 'cs': {
       return 'csharp';
     }

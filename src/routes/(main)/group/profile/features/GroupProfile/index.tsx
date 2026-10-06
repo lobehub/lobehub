@@ -1,8 +1,7 @@
 'use client';
 
 import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, type ModalInstance } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { ActionIcon, Button, Divider, type ModalInstance } from '@lobehub/ui/base-ui';
 import { useTheme } from 'antd-style';
 import { MoreHorizontalIcon, PlayIcon, Settings2Icon, UsersIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -249,7 +248,7 @@ const GroupProfile = memo(() => {
           </Button>
         </Flexbox>
       </Flexbox>
-      <Divider />
+      <Divider style={{ marginBlock: 24 }} />
       {/* Group Content Editor */}
       <EditingIndicator
         holderId={lock.lockedByOther ? lock.holderId : null}

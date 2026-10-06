@@ -46,6 +46,14 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     });
   });
 
+  it('accepts Droid as an explicit permission provider', () => {
+    expect(
+      sanitizeAgentInterventionRequestForReview(
+        request({ identifier: 'droid', provider: 'droid' }),
+      ),
+    ).toMatchObject({ interactionKind: 'permission', provider: 'droid' });
+  });
+
   it('fails closed when a permission option lacks an id or ids are duplicated', () => {
     const missingId = request({
       arguments: JSON.stringify({
@@ -201,5 +209,13 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     expect(
       sanitizeAgentInterventionRequestForReview(request({ interactionKind: undefined })),
     ).toBeUndefined();
+  });
+
+  it('accepts Devin as a durable intervention provider', () => {
+    const sanitized = sanitizeAgentInterventionRequestForReview(
+      request({ identifier: 'devin', provider: 'devin' }),
+    );
+
+    expect(sanitized).toMatchObject({ identifier: 'devin', provider: 'devin' });
   });
 });

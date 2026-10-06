@@ -13,3 +13,6 @@ import dayjs, { type ConfigType } from 'dayjs';
  */
 export const resolveShownNewsOffset = (day: string, now?: ConfigType): number =>
   Math.max(0, dayjs(now).startOf('day').diff(dayjs(day).startOf('day'), 'day'));
+
+/** Historical rows already sit beneath a dated heading; only today's rows need relative time. */
+export const shouldShowNewsItemTime = (dayOffset: number) => dayOffset === 0;

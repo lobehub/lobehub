@@ -22,6 +22,7 @@ const normalizeReadResult = (result: LocalReadFileResult) => ({
   loc: result.loc,
   totalCharCount: result.totalCharCount,
   totalLineCount: result.totalLineCount,
+  truncated: result.truncated,
 });
 
 const createReadSnapshot = async (
@@ -33,10 +34,16 @@ const createReadSnapshot = async (
 
   try {
     const result = await localFileService.readLocalFile(args);
+    const span = Math.max(result.loc[1] - result.loc[0], 1);
     const content = formatFileContent({
       content: result.content,
+      continueFrom: (line) =>
+        `call readFile with path="${reference.path}" and loc=[${line - 1}, ${line - 1 + span}]`,
+      firstLineNumber: result.loc[0] + 1,
       lineRange: result.loc,
-      path: reference.path,
+      totalChars: result.totalCharCount,
+      totalLines: result.totalLineCount,
+      truncated: result.truncated,
     });
     const state = {
       charCount: result.charCount,

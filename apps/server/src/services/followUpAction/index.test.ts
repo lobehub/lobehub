@@ -1,7 +1,10 @@
 // @vitest-environment node
+import { ModelRuntime } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
+import * as TracingServiceModule from '@/server/services/llmGenerationTracing';
 
 import { FollowUpActionService } from './index';
 
@@ -37,6 +40,68 @@ describe('FollowUpActionService.extract', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('reuses the source topic in outgoing OpenCode requests across extractions', async () => {
+    const sessions: (string | null)[] = [];
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'Choose a next step.' });
+    vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB').mockImplementation(async () =>
+      ModelRuntime.initializeWithProvider('opencodecodingplan', { apiKey: 'test' }),
+    );
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url) === 'https://models.dev/api.json') {
+          return Response.json({ 'opencode-go': { models: {} } });
+        }
+        expect(String(url)).toBe('https://opencode.ai/zen/go/v1/chat/completions');
+        sessions.push(new Headers(init?.headers).get('x-opencode-session'));
+        return Response.json({
+          choices: [
+            { finish_reason: 'stop', message: { content: '{"chips":[]}', role: 'assistant' } },
+          ],
+        });
+      }),
+    );
+
+    for (const topicId of ['topic-1', 'topic-1', 'topic-2']) {
+      expect(
+        await svc.extract({
+          modelConfig: { model: 'glm-5', provider: 'opencodecodingplan' },
+          topicId,
+        }),
+      ).toEqual({ chips: [], messageId: FOUND_MSG });
+    }
+
+    expect(sessions).toEqual(['topic-1', 'topic-1', 'topic-2']);
+  });
+
+  it('excludes agent-share visitor messages from the assistant lookup', async () => {
+    queryFindFirstSpy.mockResolvedValue(undefined);
+    await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    const { where } = queryFindFirstSpy.mock.calls[0][0];
+    const operators = {
+      and: (...conditions: unknown[]) => conditions,
+      eq: (column: unknown, value: unknown) => ({ column, op: 'eq', value }),
+      isNotNull: (column: unknown) => ({ column, op: 'isNotNull' }),
+      isNull: (column: unknown) => ({ column, op: 'isNull' }),
+      ne: (column: unknown, value: unknown) => ({ column, op: 'ne', value }),
+    };
+    const conditions = where(
+      {
+        content: 'content',
+        role: 'role',
+        threadId: 'threadId',
+        topicId: 'topicId',
+        userId: 'userId',
+        workspaceId: 'workspaceId',
+      },
+      operators,
+    ) as unknown[];
+
+    expect(conditions).toContainEqual(notShareVisitorMessage());
   });
 
   it('returns empty (with empty messageId) when no eligible assistant message found', async () => {
@@ -93,6 +158,7 @@ describe('FollowUpActionService.extract', () => {
         model: 'custom-scene-model',
       }),
       expect.objectContaining({
+        metadata: expect.objectContaining({ topicId: TEST_TOPIC }),
         tracing: expect.objectContaining({
           promptVersion: 'v1.0',
           scenario: 'follow_up',
@@ -220,6 +286,35 @@ describe('FollowUpActionService.extract', () => {
       MODEL_CONFIG.provider,
       'workspace-1',
     );
+  });
+
+  const mockTracingEnabled = (enabled: boolean) =>
+    vi
+      .spyOn(TracingServiceModule, 'getLLMGenerationTracingService')
+      .mockReturnValue({ isEnabled: () => enabled } as any);
+
+  it('returns a tracingId when the tracing store is enabled', async () => {
+    mockTracingEnabled(true);
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [{ label: 'ok', message: 'ok' }] });
+
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    expect(typeof result.tracingId).toBe('string');
+    // The id handed to the client must be the same one passed to the tracing hook.
+    expect(runtimeMock.generateObject.mock.calls[0][1].tracing.tracingId).toBe(result.tracingId);
+  });
+
+  it('omits the tracingId when the tracing store is disabled (no row would exist)', async () => {
+    mockTracingEnabled(false);
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
+    runtimeMock.generateObject.mockResolvedValue({ chips: [{ label: 'ok', message: 'ok' }] });
+
+    const result = await svc.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC });
+
+    expect(result.chips).toHaveLength(1);
+    expect(result.tracingId).toBeUndefined();
+    expect(runtimeMock.generateObject.mock.calls[0][1].tracing.tracingId).toBeUndefined();
   });
 
   it('appends onboarding addendum to system prompt when hint is onboarding', async () => {

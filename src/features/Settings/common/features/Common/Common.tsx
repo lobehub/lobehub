@@ -1,8 +1,8 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon, ImageSelect, Skeleton } from '@lobehub/ui';
-import { Select, Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, ImageSelect } from '@lobehub/ui';
+import { Select, Skeleton, Tabs } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';
 import { useTheme as useNextThemesTheme } from 'next-themes';
@@ -21,6 +21,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/selectors';
 import { type LocaleMode } from '@/types/locale';
+import { type UserGeneralConfig } from '@/types/user/settings';
 import { preloadLang } from '@/utils/client/preloadLang';
 
 const Common = memo(() => {
@@ -32,6 +33,11 @@ const Common = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const [switchLocale, isStatusInit] = useGlobalStore((s) => [s.switchLocale, s.isStatusInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm({
+    initialValues: general,
+    values: general,
+    onValuesChange: (v) => save(() => setSettings({ general: v })),
+  });
 
   // Use the theme value from next-themes, default to 'system'
   const currentTheme = theme || 'system';
@@ -40,10 +46,9 @@ const Common = memo(() => {
     switchLocale(value);
   };
 
-  if (!(isStatusInit && isUserStateInit))
-    return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (!(isStatusInit && isUserStateInit)) return <Skeleton.Text rows={5} />;
 
-  const themeFormGroup: FormGroupItemType = {
+  const themeFormGroup: FormGroupItem<UserGeneralConfig> = {
     children: [
       {
         children: (
@@ -146,7 +151,7 @@ const Common = memo(() => {
         ),
         minWidth: undefined,
         name: 'animationMode',
-        valuePropName: 'activeKey',
+        valueProp: 'activeKey',
       },
       {
         children: (
@@ -172,7 +177,7 @@ const Common = memo(() => {
         ),
         minWidth: undefined,
         name: 'contextMenuMode',
-        valuePropName: 'activeKey',
+        valueProp: 'activeKey',
       },
 
       {
@@ -206,11 +211,10 @@ const Common = memo(() => {
   return (
     <Form
       collapsible={false}
-      initialValues={general}
+      form={form}
       items={[themeFormGroup]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={(v) => save(() => setSettings({ general: v }))}
       {...FORM_STYLE}
     />
   );

@@ -1,9 +1,8 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -14,6 +13,7 @@ import { useElectronStore } from '@/store/electron';
 const Desktop = memo(() => {
   const { t } = useTranslation('setting');
   const [loading, setLoading] = useState(false);
+  const form = useForm();
   const [appTrayVisible, setAppTrayVisible, useGetAppTrayVisible] = useElectronStore((s) => [
     s.appTrayVisible,
     s.setAppTrayVisible,
@@ -24,7 +24,7 @@ const Desktop = memo(() => {
 
   if (!isDesktop) return null;
 
-  const desktop: FormGroupItemType = {
+  const desktop: FormGroupItem = {
     children: [
       {
         children: (
@@ -55,6 +55,7 @@ const Desktop = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={[desktop]}
       itemsType={'group'}
       variant={'filled'}

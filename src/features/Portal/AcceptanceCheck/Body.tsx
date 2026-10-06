@@ -2,18 +2,18 @@
 
 import type { VerifyAgentPlanConfig } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, Spin, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   checkHeadMeta,
   type CheckReviewInput,
   FocusedCheckDetails,
   useAcceptanceBundle,
 } from '@/features/Acceptance';
+import { canReviewAcceptance } from '@/features/Acceptance/Viewer/visibility';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -74,7 +74,7 @@ const Body = memo(() => {
   if (isLoading) {
     return (
       <Center height={'100%'}>
-        <NeuralNetworkLoading size={40} />
+        <Spin size="large" />
       </Center>
     );
   }
@@ -130,7 +130,7 @@ const Body = memo(() => {
         </Flexbox>
       )}
       <FocusedCheckDetails
-        canReview={data.isOwner}
+        canReview={canReviewAcceptance(data)}
         check={check}
         reviewPending={reviewPending}
         onOpenTrace={openVerifierTrace}

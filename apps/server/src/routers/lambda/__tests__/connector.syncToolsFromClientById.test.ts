@@ -54,8 +54,12 @@ describe('connectorRouter.syncToolsFromClientById', () => {
     };
     connectorToolModelMock = { upsertMany: vi.fn() };
 
-    vi.mocked(ConnectorModel).mockImplementation(() => connectorModelMock);
-    vi.mocked(ConnectorToolModel).mockImplementation(() => connectorToolModelMock);
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return connectorModelMock;
+    });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return connectorToolModelMock;
+    });
   });
 
   const caller = () =>

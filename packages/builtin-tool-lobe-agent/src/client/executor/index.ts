@@ -19,6 +19,12 @@ import {
   selectMediaFileItems,
   validateMediaUrls,
 } from '../../media';
+import {
+  type PlanDocument,
+  PlanExecutionRuntime,
+  type PlanRuntimeContext,
+  type PlanRuntimeService,
+} from '../../PlanRuntime';
 import type {
   AnalyzeMediaParams,
   AskUserQuestionArgs,
@@ -28,14 +34,19 @@ import type {
   CreateTodosParams,
   UpdatePlanParams,
   UpdateTodosParams,
+  VentParams,
+  VentRejectionReason,
+  VentState,
 } from '../../types';
 import { LobeAgentApiName } from '../../types';
 import {
-  type PlanDocument,
-  PlanExecutionRuntime,
-  type PlanRuntimeContext,
-  type PlanRuntimeService,
-} from './PlanRuntime';
+  createMemoryVentLedger,
+  formatVentResultContent,
+  getVentFingerprint,
+  getVentScope,
+  validateVentParams,
+  type VentLedger,
+} from '../../vent';
 import { getTodosFromContext } from './planTodoHelper';
 import { resolveClientMediaPayloadItems } from './resolveMediaUris';
 
@@ -99,8 +110,10 @@ const clientPlanService: PlanRuntimeService = {
     return normalizePlanDoc(doc);
   },
 
-  updatePlanMetadata: async (id, metadata) => {
+  updatePlanMetadata: async (id, metadata, topicId) => {
     await notebookService.updateDocument({ id, metadata });
+    const { invalidateDocumentMutation } = await import('@/services/document/invalidation');
+    await invalidateDocumentMutation({ cause: 'notebook', documentId: id, topicId });
   },
 };
 
@@ -160,6 +173,10 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
   // becomes the tool result and this runtime is only the fallback executor.
   private interactionRuntime = new UserInteractionExecutionRuntime();
 
+  // A client run executes in this tab, so an in-memory ledger sees every vent
+  // of the run.
+  private ventLedger: VentLedger = createMemoryVentLedger();
+
   // ==================== Ask User Question ====================
 
   askUserQuestion = (params: AskUserQuestionArgs): Promise<BuiltinToolResult> =>
@@ -181,6 +198,54 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
 
   clearTodos = (params: ClearTodosParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> =>
     this.planRuntime.clearTodos(params, toPlanRuntimeContext(ctx));
+
+  // ==================== Vent ====================
+
+  /**
+   * Privately flag platform friction. The report's durable record is the
+   * persisted tool-call message itself; this validates the input, admits at
+   * most one distinct vent per run, and surfaces a settled state for the
+   * inspector.
+   */
+  vent = async (params: VentParams, ctx: BuiltinToolContext): Promise<BuiltinToolResult> => {
+    const invalid = validateVentParams(params);
+    if (invalid === 'invalid_category' || invalid === 'invalid_severity') {
+      const state: VentState = { recorded: false, reason: invalid };
+      const message = formatVentResultContent(state);
+      return {
+        content: message,
+        error: { message, type: 'InvalidArguments' },
+        state,
+        success: false,
+      };
+    }
+
+    // `operationId` is the per-tool-call operation on the client; the run is
+    // the root operation.
+    const scope = getVentScope({
+      operationId: ctx.rootOperationId ?? ctx.operationId,
+      topicId: ctx.topicId,
+    });
+    let admission: VentRejectionReason | 'accepted' = invalid ?? 'accepted';
+    if (!invalid && scope) {
+      admission = await this.ventLedger.admit({
+        fingerprint: getVentFingerprint(params),
+        limit: scope.limit,
+        scopeKey: scope.key,
+      });
+    }
+    const recorded = admission === 'accepted';
+
+    const state: VentState = {
+      category: params.category,
+      reason: admission === 'accepted' ? null : admission,
+      recorded,
+      severity: params.severity,
+      ventId: recorded && ctx.toolCallId ? `vent:${ctx.toolCallId}` : null,
+    };
+
+    return { content: formatVentResultContent(state), state, success: true };
+  };
 
   // ==================== Media Analysis ====================
 
@@ -395,6 +460,25 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
 
     if (!description || !instruction) {
       return { content: 'Sub-agent description and instruction are required.', success: false };
+    }
+
+    // Tool-call JSON reaches this executor without schema validation; a
+    // malformed id must not silently start a fresh (billed) sub-agent.
+    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
+      return { content: 'subAgentId must be a string.', success: false };
+    }
+    // Strict-schema models send `subAgentId: ""` to mean "start a new one".
+    const subAgentId = params.subAgentId?.trim();
+
+    // Continuing an earlier sub-agent is implemented by the server runtime only.
+    // Fail loudly instead of silently starting a fresh sub-agent that has none
+    // of the earlier sub-agent's history.
+    if (subAgentId) {
+      return {
+        content:
+          'Continuing an earlier sub-agent (subAgentId) is not supported in this runtime. Leave subAgentId empty to start a new sub-agent.',
+        success: false,
+      };
     }
 
     if (!ctx.subAgent) {

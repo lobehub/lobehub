@@ -1,12 +1,15 @@
-import { Flexbox, Popover } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { ExternalLink, FolderOpen } from 'lucide-react';
+import { ExternalLink, EyeIcon, FolderOpen, MessageSquarePlus } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import FileIcon from '@/components/FileIcon';
-import { localFileService } from '@/services/electron/localFileService';
+
+import { type StartTopicConversation } from './StartTopicConversation';
+import { useLocalFileActions } from './useLocalFileActions';
+import { useStartTopicInDirectory } from './useStartTopicInDirectory';
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -22,6 +25,66 @@ const styles = createStaticStyles(({ css }) => ({
       color: ${cssVar.colorText};
       background: ${cssVar.colorFillTertiary};
     }
+
+    &:focus-visible {
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: 1px;
+    }
+  `,
+  segment: css`
+    cursor: pointer;
+
+    position: relative;
+
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+
+    padding-block: 5px;
+    padding-inline: 11px;
+    border: none;
+
+    font-family: inherit;
+    font-size: 13px;
+    line-height: 20px;
+    color: ${cssVar.colorTextSecondary};
+    white-space: nowrap;
+
+    background: transparent;
+
+    & + &::before {
+      content: '';
+
+      position: absolute;
+      inset-block: 5px;
+      inset-inline-start: 0;
+
+      width: 1px;
+
+      background: ${cssVar.colorBorderSecondary};
+    }
+
+    &:hover {
+      color: ${cssVar.colorText};
+      background: ${cssVar.colorFillTertiary};
+    }
+
+    &:hover::before,
+    &:hover + &::before {
+      background: transparent;
+    }
+
+    &:focus-visible {
+      border-radius: 6px;
+      outline: 2px solid ${cssVar.colorPrimaryBorder};
+      outline-offset: -2px;
+    }
+  `,
+  segmented: css`
+    overflow: hidden;
+    display: inline-flex;
+    align-items: stretch;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   title: css`
     overflow: hidden;
@@ -35,6 +98,12 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface LocalFileProps {
+  /**
+   * The conversation rendering this reference, enabling "start a topic in this
+   * folder" for it. Falls back to `StartTopicConversationContext`; absent
+   * outside an eligible conversation.
+   */
+  conversation?: StartTopicConversation;
   isDirectory?: boolean;
   name: string;
   path?: string;
@@ -46,22 +115,21 @@ interface LocalFileProps {
 }
 
 export const LocalFile = ({
+  conversation,
   name,
   path,
   isDirectory = false,
   readonly = false,
 }: LocalFileProps) => {
   const { t } = useTranslation('components');
-
-  const handleOpenFile = () => {
-    if (!path) return;
-    localFileService.openLocalFileOrFolder(path, isDirectory);
-  };
-
-  const handleOpenFolder = () => {
-    if (!path) return;
-    localFileService.openFileFolder(path);
-  };
+  const { canPreview, handleClick, handleOpenFile, handleOpenFolder, handlePreview } =
+    useLocalFileActions({ isDirectory, path, readonly });
+  const { canStartTopic, startTopic } = useStartTopicInDirectory({
+    conversation,
+    isDirectory,
+    path,
+    readonly,
+  });
 
   const fileContent = (
     <Flexbox
@@ -69,8 +137,21 @@ export const LocalFile = ({
       align={'center'}
       className={styles.container}
       gap={4}
+      // Inline chip, not a <button> (block layout inside markdown prose) — so
+      // give the clickable state complete button semantics by hand.
+      role={handleClick ? 'button' : undefined}
       style={{ display: 'inline-flex', verticalAlign: 'middle' }}
-      onClick={isDirectory ? handleOpenFile : undefined}
+      tabIndex={handleClick ? 0 : undefined}
+      onClick={handleClick}
+      onKeyDown={
+        handleClick
+          ? (event) => {
+              if (event.key !== 'Enter' && event.key !== ' ') return;
+              event.preventDefault();
+              handleClick();
+            }
+          : undefined
+      }
     >
       <FileIcon fileName={name} isDirectory={isDirectory} size={22} variant={'raw'} />
       <Flexbox horizontal align={'baseline'} gap={4} style={{ overflow: 'hidden', width: '100%' }}>
@@ -79,31 +160,40 @@ export const LocalFile = ({
     </Flexbox>
   );
 
-  // Directory or readonly mode (e.g. share page): no popover, just display
-  if (isDirectory || readonly) {
+  // Readonly mode (e.g. share page): no popover or local actions.
+  if (readonly) {
     return fileContent;
   }
 
-  // File: show popover with two actions
+  // Files and directories share the same hover action surface. Directory chips
+  // keep their direct click-to-open behavior while exposing the contextual
+  // "start topic here" action without adding persistent markdown clutter.
   const popoverContent = (
-    <Flexbox horizontal gap={4} padding={4}>
-      <Button
-        icon={ExternalLink}
-        size="small"
-        title={t('LocalFile.action.open')}
-        onClick={handleOpenFile}
-      >
+    <div className={styles.segmented}>
+      {canPreview && (
+        <button className={styles.segment} type={'button'} onClick={handlePreview}>
+          <EyeIcon size={15} />
+          {t('LocalFile.action.preview')}
+        </button>
+      )}
+      <button className={styles.segment} type={'button'} onClick={handleOpenFile}>
+        <ExternalLink size={15} />
         {t('LocalFile.action.open')}
-      </Button>
-      <Button
-        icon={FolderOpen}
-        size="small"
-        title={t('LocalFile.action.showInFolder')}
-        onClick={handleOpenFolder}
-      >
-        {t('LocalFile.action.showInFolder')}
-      </Button>
-    </Flexbox>
+      </button>
+      {isDirectory ? (
+        canStartTopic && (
+          <button className={styles.segment} type={'button'} onClick={() => void startTopic()}>
+            <MessageSquarePlus size={15} />
+            {t('LocalFile.action.startTopic')}
+          </button>
+        )
+      ) : (
+        <button className={styles.segment} type={'button'} onClick={handleOpenFolder}>
+          <FolderOpen size={15} />
+          {t('LocalFile.action.showInFolder')}
+        </button>
+      )}
+    </div>
   );
 
   return (

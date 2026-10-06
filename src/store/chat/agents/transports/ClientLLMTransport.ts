@@ -397,6 +397,8 @@ export class ClientLLMTransport implements LLMTransport {
         if (streamChunk.type === 'reasoning') reasoning += streamChunk.text;
       },
       signal,
+      topicId:
+        this.context.get().operations[this.context.operationId]?.context.topicId ?? undefined,
     });
 
     if (streamError) throw streamError;

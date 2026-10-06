@@ -1,12 +1,13 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useEntityMarkdown } from '@/features/EntityLink';
 import { useActivityTime } from '@/hooks/useActivityTime';
 
 import type { GoalGraphView, GoalNodeView } from './goalGraphViewModel';
@@ -31,6 +32,17 @@ const styles = createStaticStyles(({ css }) => ({
     padding-block: 0 10px;
     padding-inline: 30px 8px;
   `,
+  source: css`
+    flex: none;
+    max-width: 40%;
+    text-align: end;
+  `,
+  /** Matches the deliverables list, so both sections share one column edge. */
+  time: css`
+    flex: none;
+    min-width: 60px;
+    text-align: end;
+  `,
   row: css`
     cursor: pointer;
     padding-block: 8px;
@@ -47,6 +59,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
   ({ onSelect, view }) => {
     const { t } = useTranslation('chat');
     const [open, setOpen] = useState(false);
+    const markdownProps = useEntityMarkdown();
     const { text, title } = useActivityTime(view.node.resolvedAt ?? view.node.createdAt);
     const answered = view.answers[0];
 
@@ -65,22 +78,21 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
             size={14}
           />
           <KindDot kind={'finding'} />
-          <Text ellipsis style={{ flexShrink: 1, minWidth: 0 }} weight={500}>
+          {/* The title takes the slack so the attribution and the timestamp
+              line up as columns, matching the deliverables list directly
+              above — otherwise the two adjacent sections read as different
+              layouts of the same row. */}
+          <Text ellipsis style={{ flex: 1, minWidth: 0 }} weight={500}>
             {view.node.title}
           </Text>
-          <Text ellipsis fontSize={12} style={{ flexShrink: 1, minWidth: 0 }} type={'secondary'}>
+          <Text ellipsis className={styles.source} fontSize={12} type={'secondary'}>
             {answered
               ? t('goalProcess.findings.answers', { title: answered.title })
               : view.producedBy
                 ? t('goalProcess.findings.from', { title: view.producedBy.title })
                 : ''}
           </Text>
-          <Text
-            fontSize={12}
-            style={{ flex: 'none', marginInlineStart: 'auto' }}
-            title={title}
-            type={'secondary'}
-          >
+          <Text className={styles.time} fontSize={12} title={title} type={'secondary'}>
             {text}
           </Text>
         </Flexbox>
@@ -101,10 +113,12 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
                 </Text>
               </Flexbox>
             ))}
+            {/* The description is the producing run's handoff — actual Markdown
+                (tables, code blocks), not plain text. Render it as such. */}
             {view.node.description && (
-              <Text fontSize={13} style={{ whiteSpace: 'pre-wrap' }}>
+              <Markdown fontSize={13} variant={'chat'} {...markdownProps}>
                 {view.node.description}
-              </Text>
+              </Markdown>
             )}
             {view.producedBy && (
               <Flexbox
@@ -114,7 +128,7 @@ const FindingRow = memo<{ onSelect: (nodeId: string) => void; view: GoalNodeView
                 style={{ cursor: 'pointer' }}
                 onClick={() => onSelect(view.producedBy!.id)}
               >
-                <KindDot kind={'work'} />
+                <KindDot kind={'task'} />
                 <Text fontSize={12} type={'secondary'}>
                   {t('goalProcess.findings.from', { title: view.producedBy.title })}
                 </Text>

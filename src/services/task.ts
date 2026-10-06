@@ -1,4 +1,10 @@
-import type { CheckpointConfig, TaskAutomationMode, TaskStatus } from '@lobechat/types';
+import type {
+  CheckpointConfig,
+  TaskAutomationMode,
+  TaskInstructionSynthesis,
+  TaskIntentAnalysis,
+  TaskStatus,
+} from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -10,6 +16,8 @@ class TaskService {
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
 
   list = async (params: {
+    /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */
+    after?: { at: Date | string; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
@@ -19,6 +27,8 @@ class TaskService {
     parentTaskId?: string | null;
     priorities?: number[];
     projectId?: string;
+    /** "My tasks" narrowing: assigned to the caller, or created by them. */
+    scope?: 'assigned' | 'created';
     statuses?: TaskStatus[];
     visibility?: 'private' | 'public';
   }) => lambdaClient.task.list.query(params);
@@ -27,7 +37,7 @@ class TaskService {
     assigneeAgentId?: string;
     automated?: boolean;
     excludeStatuses?: TaskStatus[];
-    groupBy?: 'assignee' | 'priority';
+    groupBy?: 'assignee' | 'member' | 'priority';
     groups?: Array<{
       key: string;
       limit?: number;
@@ -36,8 +46,16 @@ class TaskService {
     }>;
     parentTaskId?: string | null;
     projectId?: string;
+    /** "My tasks" narrowing: assigned to the caller, or created by them. */
+    scope?: 'assigned' | 'created';
     visibility?: 'private' | 'public';
-  }) => lambdaClient.task.groupList.query(params);
+  }) =>
+    lambdaClient.task.groupList.query({
+      ...params,
+      // Keep `assignee`'s released hybrid API semantics for older clients.
+      // This UI's Agent board deliberately opts into the agent-only contract.
+      groupBy: params.groupBy === 'assignee' ? 'agent' : params.groupBy,
+    });
 
   getSubtasks = async (id: string) => lambdaClient.task.getSubtasks.query({ id });
 
@@ -56,6 +74,27 @@ class TaskService {
   getVerifyConfig = async (id: string) => lambdaClient.task.getVerifyConfig.query({ id });
 
   // ── Mutations ──
+
+  /**
+   * Read a composer draft and report what it means. A mutation on the wire
+   * (it spends a model call), but it creates nothing — the caller decides
+   * whether to act on the reading.
+   */
+  analyzeIntent = async (params: {
+    context?: string;
+    instruction: string;
+  }): Promise<TaskIntentAnalysis> => lambdaClient.task.analyzeIntent.mutate(params);
+
+  /**
+   * Rewrite the confirmed draft into the brief that gets executed, with the
+   * user's answers folded in. Also a mutation on the wire, and also creates
+   * nothing.
+   */
+  synthesizeInstruction = async (params: {
+    answers: { answer: string; question: string }[];
+    context?: string;
+    instruction: string;
+  }): Promise<TaskInstructionSynthesis> => lambdaClient.task.synthesizeInstruction.mutate(params);
 
   create = async (params: {
     assigneeAgentId?: string;
@@ -83,11 +122,19 @@ class TaskService {
   update = async (
     id: string,
     data: {
+      /**
+       * The agent making this change when the task tool runs in the browser
+       * (client-first runtime). Attribution only — the server verifies the
+       * caller can use that agent before recording it.
+       */
+      actorAgentId?: string;
       assigneeAgentId?: string | null;
       assigneeUserId?: string | null;
       // Automation mode; null = no automation
       automationMode?: TaskAutomationMode | null;
       config?: Record<string, unknown>;
+      /** Deep-merged into `config` server-side under the row lock (vs. `config`, which replaces). */
+      configPatch?: Record<string, unknown>;
       context?: Record<string, unknown>;
       description?: string;
       editorData?: unknown;
@@ -110,8 +157,21 @@ class TaskService {
 
   clearAll = async () => lambdaClient.task.clearAll.mutate();
 
-  updateStatus = async (id: string, status: TaskStatus, error?: string) =>
-    lambdaClient.task.updateStatus.mutate({ error, id, status });
+  updateStatus = async (
+    id: string,
+    status: TaskStatus,
+    error?: string,
+    options?: { actorAgentId?: string },
+  ) =>
+    lambdaClient.task.updateStatus.mutate({
+      actorAgentId: options?.actorAgentId,
+      error,
+      id,
+      status,
+    });
+
+  updateStatusCascade = async (id: string, status: 'canceled' | 'completed') =>
+    lambdaClient.task.updateStatusCascade.mutate({ id, status });
 
   run = async (id: string, params?: { continueTopicId?: string; prompt?: string }) =>
     lambdaClient.task.run.mutate({ id, ...params });

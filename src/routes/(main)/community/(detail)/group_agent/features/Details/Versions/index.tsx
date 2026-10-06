@@ -96,7 +96,7 @@ const Versions = memo(() => {
               }),
             },
             {
-              align: 'end',
+              align: 'right',
               dataIndex: 'createdAt',
               render: (_: any, record: any) => <PublishedTime date={record.createdAt} />,
               title: t('groupAgents.details.version.table.publishAt', {

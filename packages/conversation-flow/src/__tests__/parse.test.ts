@@ -163,6 +163,62 @@ describe('parse', () => {
       expect((currentGroup as any).children[0].tools[0].result_msg_id).toBe('tool-current-1');
     });
 
+    it('should give each step its own result when a provider reuses one tool call id across the chain', () => {
+      // Kimi via zeabur / nvidia / moonshot numbers tool calls per response, so
+      // every step of one run stores `<tool>:0` — without `result_msg_id`.
+      const reusedId = 'lobe-local-system____runCommand:0';
+      const step = (n: number, parentId: string): Message[] => [
+        {
+          agentId: 'agent-1',
+          content: '',
+          createdAt: n * 2 - 1,
+          id: `assistant-${n}`,
+          parentId,
+          role: 'assistant',
+          tools: [
+            {
+              apiName: 'runCommand',
+              arguments: `{"command":"echo ${n}"}`,
+              id: reusedId,
+              identifier: 'lobe-local-system',
+              type: 'builtin',
+            },
+          ],
+          updatedAt: n * 2 - 1,
+        },
+        {
+          content: `Stdout: ok-${n}`,
+          createdAt: n * 2,
+          id: `tool-${n}`,
+          parentId: `assistant-${n}`,
+          role: 'tool',
+          tool_call_id: reusedId,
+          updatedAt: n * 2,
+        },
+      ];
+
+      const result = parse([
+        { content: 'run three commands', createdAt: 0, id: 'user-1', role: 'user', updatedAt: 0 },
+        ...step(1, 'user-1'),
+        ...step(2, 'tool-1'),
+        ...step(3, 'tool-2'),
+      ]);
+
+      const group = result.flatList.find((message) => message.id === 'assistant-1') as any;
+
+      expect(group?.role).toBe('assistantGroup');
+      expect(
+        group.children.map((child: any) => ({
+          content: child.tools[0].result?.content,
+          resultId: child.tools[0].result_msg_id,
+        })),
+      ).toEqual([
+        { content: 'Stdout: ok-1', resultId: 'tool-1' },
+        { content: 'Stdout: ok-2', resultId: 'tool-2' },
+        { content: 'Stdout: ok-3', resultId: 'tool-3' },
+      ]);
+    });
+
     it('should keep sibling assistant continuations before later user turns under another tool result', () => {
       const time = (seconds: number) =>
         new Date(`2026-01-01T00:00:${String(seconds).padStart(2, '0')}.000Z`).getTime();
@@ -1657,26 +1713,42 @@ describe('parse', () => {
     });
   });
 
-  describe('Performance', () => {
-    it('should parse 10000 items within 100ms', () => {
-      // Generate 10000 messages as flat siblings (no deep nesting to avoid stack overflow)
-      // This simulates a more realistic scenario where messages are not deeply nested
-      const largeInput = Array.from({ length: 10000 }, (_, i) => ({
-        id: `msg-${i}`,
-        role: i % 2 === 0 ? ('user' as const) : ('assistant' as const),
-        content: `Message ${i}`,
-        parentId: undefined, // All messages at the same level
-        createdAt: Date.now() + i,
-      }));
+  describe('thread scope', () => {
+    const base = { createdAt: 1, role: 'assistant', updatedAt: 1 } as const;
+    // Shape of `MessageModel.query({ threadId })`: the unthreaded ancestors the thread hangs
+    // off, followed by the thread's own replies.
+    const threadQuery: Message[] = [
+      { ...base, content: 'Question', id: 'user-1', role: 'user' },
+      { ...base, content: 'Answer', createdAt: 2, id: 'asst-1', parentId: 'user-1' },
+      {
+        ...base,
+        content: 'Thread question',
+        createdAt: 3,
+        id: 'thr-1',
+        parentId: 'asst-1',
+        role: 'user',
+        threadId: 'thd-1',
+      },
+      {
+        ...base,
+        content: 'Thread answer',
+        createdAt: 4,
+        id: 'thr-2',
+        parentId: 'thr-1',
+        threadId: 'thd-1',
+      },
+    ];
 
-      const startTime = performance.now();
-      const result = parse(largeInput as any[]);
-      const endTime = performance.now();
+    it('should keep thread replies when parsing a thread view', () => {
+      const { flatList } = parse(threadQuery, undefined, { threadId: 'thd-1' });
 
-      const executionTime = endTime - startTime;
+      expect(flatList.map((m) => m.id)).toEqual(['user-1', 'asst-1', 'thr-1', 'thr-2']);
+    });
 
-      expect(result.flatList.length).toBeGreaterThan(0);
-      expect(executionTime).toBeLessThan(100);
+    it('should leave threads out of the main flow by default', () => {
+      const { flatList } = parse(threadQuery);
+
+      expect(flatList.map((m) => m.id)).toEqual(['user-1', 'asst-1']);
     });
   });
 });

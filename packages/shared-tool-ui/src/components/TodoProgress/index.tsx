@@ -1,9 +1,11 @@
 'use client';
 
 import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { CircleArrowRight, CircleCheckBig, ListTodo } from 'lucide-react';
 import { memo } from 'react';
+
+import { shinyTextStyles } from '../../styles';
 
 /**
  * Visual state of a todo summary:
@@ -170,6 +172,7 @@ TodoProgressRing.displayName = 'TodoProgressRing';
 
 interface TodoSummaryContentProps {
   label: string;
+  shiny?: boolean;
   summary: TodoSummary;
 }
 
@@ -177,7 +180,7 @@ interface TodoSummaryContentProps {
  * Inline inspector summary: progress ring + count chip + "label: detail".
  * Render it inside an `inspectorTextStyles.root` flex container.
  */
-export const TodoInspectorSummary = memo<TodoSummaryContentProps>(({ label, summary }) => {
+export const TodoInspectorSummary = memo<TodoSummaryContentProps>(({ label, shiny, summary }) => {
   const { completed, detail, state, total } = summary;
 
   return (
@@ -189,7 +192,7 @@ export const TodoInspectorSummary = memo<TodoSummaryContentProps>(({ label, summ
         </span>
       )}
       <span className={styles.summaryText}>
-        {label}
+        <span className={cx(shiny && shinyTextStyles.shinyText)}>{label}</span>
         {detail && (
           <>
             {': '}

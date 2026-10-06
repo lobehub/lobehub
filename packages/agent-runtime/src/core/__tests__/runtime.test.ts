@@ -1325,12 +1325,19 @@ describe('AgentRuntime', () => {
       expect(result.nextContext?.payload).toHaveProperty('toolCount', 3);
     });
 
-    it('should resolve blocked tools and continue without waiting for human approval', async () => {
+    it.each([
+      {},
+      {
+        blockedContent: 'This run cannot wait for user interaction.',
+        blockedReason: 'human_intervention_unavailable',
+      },
+    ])('should resolve blocked tools with the supplied rejection %j', async (rejection) => {
       class BlockedToolAgent implements Agent {
         async runner(context: AgentRuntimeContext, _state: AgentState) {
           if (context.phase === 'user_input') {
             return {
               payload: {
+                ...rejection,
                 parentMessageId: 'assistant-1',
                 toolsCalling: [
                   {
@@ -1363,7 +1370,8 @@ describe('AgentRuntime', () => {
         {
           id: 'call_blocked',
           result: {
-            content: 'Blocked by security/privacy.',
+            content: rejection.blockedContent ?? 'Blocked by security/privacy.',
+            ...(rejection.blockedReason && { error: rejection.blockedReason }),
             success: false,
           },
           type: 'tool_result',

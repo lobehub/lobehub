@@ -9,9 +9,11 @@ const { mockLog } = vi.hoisted(() => ({ mockLog: vi.fn() }));
 vi.mock('debug', () => ({ default: () => mockLog }));
 
 vi.mock('@/database/models/pushToken', () => ({
-  PushTokenModel: vi.fn(() => ({
-    listByUserId: mockListByUserId,
-  })),
+  PushTokenModel: vi.fn(function () {
+    return {
+      listByUserId: mockListByUserId,
+    };
+  }),
 }));
 
 vi.mock('@/database/server', () => ({ serverDB: {} }));

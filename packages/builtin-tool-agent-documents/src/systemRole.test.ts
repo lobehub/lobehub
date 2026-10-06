@@ -9,4 +9,17 @@ describe('systemPrompt', () => {
       "For folder navigation, pass the folder's `documentId` (or the ID shown in a collapsed folder row) as `listDocuments.parentId`.",
     );
   });
+
+  it("should route the user's uploaded files to the Knowledge Base tool when it is available", () => {
+    expect(systemPrompt).toContain(
+      'If the Knowledge Base tool is available in this conversation, use its listFiles/readKnowledge instead — do not treat listDocuments results as a match for an uploaded file.',
+    );
+  });
+
+  it('should not dead-end when the Knowledge Base tool is unavailable', () => {
+    expect(systemPrompt).toContain(
+      "If the Knowledge Base tool is not available, listDocuments still cannot see the user's uploaded files",
+    );
+    expect(systemPrompt).toContain('do not simply refuse');
+  });
 });

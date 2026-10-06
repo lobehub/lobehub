@@ -235,6 +235,9 @@ describe('MacOSMenu', () => {
       expect(preferencesItem).toBeDefined();
       await preferencesItem.click();
       expect(mockApp.browserManager.getMainWindow).toHaveBeenCalled();
+      const mainWindow = (mockApp.browserManager.getMainWindow as any).mock.results[0].value;
+      expect(mainWindow.show).toHaveBeenCalled();
+      expect(mainWindow.broadcast).toHaveBeenCalledWith('createNewTab', { path: '/settings' });
     });
 
     it('should handle visit website click', async () => {

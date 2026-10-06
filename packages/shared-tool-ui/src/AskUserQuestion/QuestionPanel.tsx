@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -105,7 +105,14 @@ export const QuestionPanel = memo<QuestionPanelProps>(
             </Text>
           )}
         </Flexbox>
-        <Text strong>{question.question}</Text>
+        <Flexbox gap={2}>
+          <Text strong>{question.question}</Text>
+          {question.description && (
+            <Text fontSize={12} type="secondary">
+              {question.description}
+            </Text>
+          )}
+        </Flexbox>
 
         <Flexbox gap={4} role="listbox">
           {question.options.map((opt, optIdx) => {

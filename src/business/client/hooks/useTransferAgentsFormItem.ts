@@ -1,3 +1,3 @@
-import type { FormGroupItemType } from '@lobehub/ui';
+import type { FormFieldProps } from '@lobehub/ui/base-ui/form';
 
-export const useTransferAgentsFormItem = (): FormGroupItemType['children'] | null => null;
+export const useTransferAgentsFormItem = (): FormFieldProps[] | null => null;

@@ -1,5 +1,36 @@
 import { MessageApiName } from '@lobechat/builtin-tool-message';
 
+import { isGuestTelegramThreadId } from './telegram/threadId';
+
+/**
+ * Channel-scoped `lobe-message` APIs (as opposed to bot/messenger management).
+ * Telegram Guest Mode cannot perform any of these: the bot is not a chat
+ * member and only has a single guest reply delivered by the outbound transport.
+ */
+export const CHANNEL_MESSAGE_APIS = [
+  MessageApiName.sendMessage,
+  MessageApiName.sendDirectMessage,
+  MessageApiName.readMessages,
+  MessageApiName.readDocument,
+  MessageApiName.searchMessages,
+  MessageApiName.editMessage,
+  MessageApiName.deleteMessage,
+  MessageApiName.reactToMessage,
+  MessageApiName.getReactions,
+  MessageApiName.pinMessage,
+  MessageApiName.unpinMessage,
+  MessageApiName.listPins,
+  MessageApiName.getChannelInfo,
+  MessageApiName.listChannels,
+  MessageApiName.getMemberInfo,
+  MessageApiName.createThread,
+  MessageApiName.listThreads,
+  MessageApiName.replyToThread,
+  MessageApiName.createPoll,
+] as const;
+
+export const TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS: string[] = [...CHANNEL_MESSAGE_APIS];
+
 /**
  * `lobe-message` channel APIs each platform's runtime does NOT support — either
  * because its service throws `PlatformUnsupportedError`, or because the optional
@@ -18,10 +49,14 @@ import { MessageApiName } from '@lobechat/builtin-tool-message';
  * do not rely on the default. Bot/messenger-management APIs (listBots, messenger
  * installs, …) are intentionally excluded: they're platform-independent and must
  * stay available inside any IM conversation.
+ *
+ * Telegram Guest Mode summons are NOT this map: they overlay
+ * `TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS` via `resolveUnsupportedMessageApis`.
  */
 export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
   // Discord implements the full surface — no entry needed, but keep it explicit.
-  discord: [],
+  // Discord has no document API — `readDocument` is Feishu/Lark only.
+  discord: [MessageApiName.readDocument],
   feishu: [
     MessageApiName.createPoll,
     MessageApiName.createThread,
@@ -46,6 +81,7 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.listThreads,
     MessageApiName.pinMessage,
     MessageApiName.reactToMessage,
+    MessageApiName.readDocument,
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
@@ -76,19 +112,26 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.listThreads,
     MessageApiName.pinMessage,
     MessageApiName.reactToMessage,
+    MessageApiName.readDocument,
     MessageApiName.readMessages,
     MessageApiName.replyToThread,
     MessageApiName.searchMessages,
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
-  slack: [MessageApiName.createPoll, MessageApiName.createThread, MessageApiName.sendDirectMessage],
+  slack: [
+    MessageApiName.createPoll,
+    MessageApiName.createThread,
+    MessageApiName.readDocument,
+    MessageApiName.sendDirectMessage,
+  ],
   // Telegram has no history-read API → prompt uses pre-injected recent channel history.
   telegram: [
     MessageApiName.getReactions,
     MessageApiName.listChannels,
     MessageApiName.listPins,
     MessageApiName.listThreads,
+    MessageApiName.readDocument,
     MessageApiName.readMessages,
     MessageApiName.searchMessages,
     MessageApiName.sendDirectMessage,
@@ -107,10 +150,27 @@ export const PLATFORM_UNSUPPORTED_MESSAGE_APIS: Record<string, string[]> = {
     MessageApiName.listThreads,
     MessageApiName.pinMessage,
     MessageApiName.reactToMessage,
+    MessageApiName.readDocument,
     MessageApiName.readMessages,
     MessageApiName.replyToThread,
     MessageApiName.searchMessages,
     MessageApiName.sendDirectMessage,
     MessageApiName.unpinMessage,
   ],
+};
+
+/**
+ * Capability set for this invocation. Guest Telegram threads are not member
+ * chats — regular channel tools would only fail at the Bot API — so they get
+ * the guest overlay instead of `PLATFORM_UNSUPPORTED_MESSAGE_APIS.telegram`.
+ */
+export const resolveUnsupportedMessageApis = (
+  platformId: string | undefined,
+  platformThreadId?: string,
+): string[] | undefined => {
+  if (platformId === 'telegram' && platformThreadId && isGuestTelegramThreadId(platformThreadId)) {
+    return TELEGRAM_GUEST_UNSUPPORTED_MESSAGE_APIS;
+  }
+  if (!platformId) return undefined;
+  return PLATFORM_UNSUPPORTED_MESSAGE_APIS[platformId];
 };

@@ -8,7 +8,7 @@ import { memo, useCallback } from 'react';
 
 import { useWorkspaces } from '@/business/client/hooks/useWorkspaces';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
-import { parseInternalLink } from '@/features/Conversation/Markdown/plugins/Link/internalLink';
+import { parseInternalLink } from '@/features/EntityLink';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import { useGlobalStore } from '@/store/global';

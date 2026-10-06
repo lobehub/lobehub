@@ -9,6 +9,7 @@ import {
   normalizeInboxAgentMeta,
   normalizeInboxAgentTitle,
 } from '../utils/inboxAgent';
+import { notTrashed } from '../utils/softDelete';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
 export type TopicShareData = NonNullable<
@@ -144,7 +145,12 @@ export class TopicShareModel {
         workspaceId: topicShares.workspaceId,
       })
       .from(topicShares)
-      .innerJoin(topics, eq(topicShares.topicId, topics.id))
+      // A share is resolved with no user scope at all (that is the point of a
+      // public link), so it never passes through `buildWorkspaceWhere` and has
+      // to carry the recycle-bin gate itself: a trashed topic keeps its
+      // `topic_shares` row and its messages until purge, and without this an
+      // anonymous visitor could keep reading a deleted conversation.
+      .innerJoin(topics, and(eq(topicShares.topicId, topics.id), notTrashed(topics.isDeleted)))
       .leftJoin(agents, eq(topics.agentId, agents.id))
       .leftJoin(chatGroups, eq(topics.groupId, chatGroups.id))
       .where(eq(topicShares.id, shareId))

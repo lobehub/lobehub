@@ -17,6 +17,7 @@ const providerDefaults: Partial<
   [ModelProvider.Ollama]: { fetchOnClient: true },
   [ModelProvider.OpenAI]: { enabled: true },
   [ModelProvider.OpenCodeZen]: { enabledModels: enabledOpenCodeZenModels },
+  [ModelProvider.Unsloth]: { fetchOnClient: true },
 };
 
 const genUserLLMConfig = (): UserModelProviderConfig => {

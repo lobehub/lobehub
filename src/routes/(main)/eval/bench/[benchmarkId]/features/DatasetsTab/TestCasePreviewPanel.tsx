@@ -18,12 +18,9 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   fieldLabel: css`
     margin: 0;
-
     font-size: ${cssVar.fontSizeSM};
     font-weight: 600;
     color: ${cssVar.colorTextTertiary};
-    text-transform: uppercase;
-    letter-spacing: 0.02em;
   `,
   fieldValue: css`
     padding-block: 8px;

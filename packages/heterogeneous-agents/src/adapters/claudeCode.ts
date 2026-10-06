@@ -37,6 +37,11 @@
  */
 
 import { getHeterogeneousAgentConfigOrThrow } from '../config';
+import {
+  classifyCliQuotaMessage,
+  CLI_SERVER_THROTTLE_PATTERNS,
+  CLI_USER_RATE_LIMIT_PATTERNS,
+} from '../errors/cliQuota';
 import type { HeteroErrorKind } from '../errors/specs';
 import { imagePlaceholder } from '../imageEcho';
 import type {
@@ -254,55 +259,6 @@ export interface ClaudeCompatibleAdapterProfile {
   errorSubtypeMessages: Record<string, string>;
   ignoreDuplicateInit: boolean;
 }
-
-/**
- * Genuinely user-side limit wording. Used only as the text fallback for
- * batch CLI / sandbox runs that don't emit a structured `rate_limit_event`
- * (so {@link isUserQuotaRateLimit} can't fire). The ambiguous bare
- * `rate limit` / `rate limited` substring is deliberately NOT here — it also
- * appears in Anthropic's transient server throttle, so leaning on it would
- * reintroduce the very misclassification this set exists to avoid.
- */
-/**
- * Credit/balance exhaustion, e.g. `You've reached your Fable 5 limit. Run
- * /usage-credits to continue or switch models with /model.` It renders the
- * same guide as a plan window, but waiting for a reset never clears it.
- */
-const CLI_CREDIT_LIMIT_PATTERNS = [
-  /you'?ve reached your .{0,40}\blimit\b/i,
-  /\/usage-credits\b/i,
-] as const;
-
-const CLI_USER_RATE_LIMIT_PATTERNS = [
-  /you'?ve hit your limit/i,
-  // CC names the window in the wording it actually ships — `You've hit your
-  // session limit · resets 6:30pm (Asia/Shanghai)` and `You've hit your weekly
-  // limit · resets Jul 3 at 1pm`. Without these the bare `you've hit your
-  // limit` pattern misses every real message, leaving the 429 to fall through
-  // to the overloaded (retry) guide.
-  /you'?ve hit your \S+ limit/i,
-  ...CLI_CREDIT_LIMIT_PATTERNS,
-  /usage limit reached/i,
-  /\blimit reached\b/i,
-  // Gateways/proxies in front of the API localize the same quota rejection,
-  // e.g. `API Error: Request rejected (429) · [1234][已达到 5 小时使用上限，
-  // 2026-06-19 22:00:00 后可继续使用。…]`. English-only patterns classified
-  // these as a transient overload and told the user to just retry.
-  /使用上限/,
-] as const;
-
-/**
- * Anthropic's server-side transient throttle. CC surfaces this as a 429 with
- * a message that explicitly disclaims the user's plan limit ("not your usage
- * limit") — e.g. `API Error: Server is temporarily limiting requests (not your
- * usage limit) · Rate limited`. It clears on its own in moments, so it must be
- * classified as `overloaded` (retry UX), NOT `rate_limit` (which renders a
- * misleading "usage limit reached" reset-time guide).
- */
-const CLI_SERVER_THROTTLE_PATTERNS = [
-  /not your usage limit/i,
-  /server is temporarily limiting requests/i,
-] as const;
 
 /**
  * Transport-level failures: the connection dropped, stalled, or timed out
@@ -744,6 +700,17 @@ const isAbortedResult = (raw: any): boolean =>
   !getCliResultMessage(raw?.result) &&
   !getCliResultErrors(raw);
 
+/**
+ * A `result` that closes CC's own task-notification pass without running a
+ * single turn. A notification pass that DID run a turn (`num_turns > 0`) carries
+ * real output and stays a normal result.
+ */
+const isEmptyTaskNotificationResult = (raw: any): boolean =>
+  raw?.origin?.kind === 'task-notification' &&
+  raw.num_turns === 0 &&
+  !raw.is_error &&
+  !getCliResultMessage(raw.result);
+
 const buildAbortedRuntimeEndData = (raw: any): Record<string, unknown> => ({
   kind: 'aborted' satisfies HeteroErrorKind,
   reason: 'interrupted',
@@ -918,11 +885,9 @@ const getRateLimitTerminalError = (
 
   // A credit/balance limit shares the `rate_limit` guide but not its remedy:
   // waiting for a reset never clears it, so it is a distinct taxonomy kind.
-  const kind: HeteroErrorKind = CLI_CREDIT_LIMIT_PATTERNS.some((pattern) =>
-    pattern.test(rawMessage),
-  )
-    ? 'credit_limit'
-    : 'usage_limit';
+  // A `rate_limit_info`-only rejection (no quota wording in the text) is a
+  // plan window by definition — that structured event only ever reports one.
+  const kind: HeteroErrorKind = classifyCliQuotaMessage(rawMessage)?.kind ?? 'usage_limit';
 
   return {
     agentType,
@@ -1264,6 +1229,37 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    */
   private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
 
+  /**
+   * Map a raw per-turn usage object (from `message_delta.usage` in partial
+   * mode, or `assistant.message.usage` in batch mode) into the normalized
+   * `UsageData` shape. Subclasses override to surface provider-specific
+   * consumption signals the token-only base mapping drops — e.g. Qoder zeroes
+   * the token fields and bills in `credits`, so the base mapping alone would
+   * return undefined and emit no usage event at all.
+   */
+  protected extractUsage(
+    raw:
+      | {
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+          input_tokens?: number;
+          output_tokens?: number;
+        }
+      | null
+      | undefined,
+  ): UsageData | undefined {
+    return toUsageData(raw);
+  }
+
+  /**
+   * Map the terminal `result` event into its session-total `UsageData`.
+   * Takes the whole raw event because session-level consumption is not
+   * always nested under `usage` (Qoder puts credits on `total_credits`).
+   */
+  protected extractResultUsage(raw: any): UsageData | undefined {
+    return toUsageData(raw?.usage);
+  }
+
   constructor(
     options: ClaudeCodeAdapterOptions = {},
     profile: ClaudeCompatibleAdapterProfile = CLAUDE_CODE_ADAPTER_PROFILE,
@@ -1573,7 +1569,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     // partial mode (`sawStreamEvent`) `message_delta` owns this — skip here to
     // avoid double-counting the stale snapshot.
     if (!this.sawStreamEvent) {
-      const usage = toUsageData(raw.message?.usage);
+      const usage = this.extractUsage(raw.message?.usage);
       if (usage) {
         events.push(
           this.makeEvent('step_complete', {
@@ -1757,7 +1753,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       ),
     );
 
-    const usage = toUsageData(raw.message?.usage);
+    const usage = this.extractUsage(raw.message?.usage);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
@@ -2096,12 +2092,19 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   }
 
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
+    // Resuming a session whose previous run left background tasks behind makes
+    // CC first report them as orphaned (`task_notification` ×N), then close that
+    // bookkeeping pass with an empty zero-turn `result` BEFORE the user's turn
+    // even starts. Treating it as terminal ends the operation with no content
+    // and drops the real turn that follows — the reply stays a `...` shell.
+    if (isEmptyTaskNotificationResult(raw)) return [];
+
     // Emit authoritative grand-total usage from CC's result event. The
     // executor currently ignores this phase (it persists per-turn via
     // turn_metadata), but we still emit it so other consumers — cost
     // displays, logs — can read the normalized total.
     const events: HeterogeneousAgentEvent[] = [];
-    const usage = toUsageData(raw.usage);
+    const usage = this.extractResultUsage(raw);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
@@ -2231,7 +2234,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
         // every `assistant` event, so `handleAssistant` deliberately skips the
         // emission and lets this branch own it. `message_delta.usage` carries
         // the full final usage (input + cache + final output_tokens).
-        const usage = toUsageData(event.usage);
+        const usage = this.extractUsage(event.usage);
         if (!usage) return [];
         return [
           this.makeEvent('step_complete', {

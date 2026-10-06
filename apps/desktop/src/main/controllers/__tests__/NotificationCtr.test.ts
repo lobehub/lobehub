@@ -25,7 +25,11 @@ vi.mock('electron', () => {
     on: vi.fn(),
     show: vi.fn(),
   };
-  const MockNotification = vi.fn(() => mockNotificationInstance) as any;
+  // `Notification` is instantiated with `new` by the production code, so the mock
+  // implementation must be constructable (vitest 5 rejects arrow functions).
+  const MockNotification = vi.fn(function () {
+    return mockNotificationInstance;
+  }) as any;
   MockNotification.isSupported = vi.fn(() => true);
 
   return {
@@ -308,7 +312,9 @@ describe('NotificationCtr', () => {
 
       // Get the mock instance that will be created
       const mockInstance = { on: vi.fn(), show: vi.fn() };
-      vi.mocked(Notification).mockReturnValue(mockInstance as any);
+      vi.mocked(Notification).mockImplementation(function () {
+        return mockInstance as any;
+      });
 
       const promise = controller.showDesktopNotification(params);
       vi.advanceTimersByTime(100);
@@ -331,7 +337,7 @@ describe('NotificationCtr', () => {
       const { Notification } = await import('electron');
       vi.mocked(Notification.isSupported).mockReturnValue(true);
       mockBrowserWindow.isVisible.mockReturnValue(false);
-      vi.mocked(Notification).mockImplementationOnce(() => {
+      vi.mocked(Notification).mockImplementationOnce(function () {
         throw new Error('Notification error');
       });
 
@@ -347,7 +353,7 @@ describe('NotificationCtr', () => {
       const { Notification } = await import('electron');
       vi.mocked(Notification.isSupported).mockReturnValue(true);
       mockBrowserWindow.isVisible.mockReturnValue(false);
-      vi.mocked(Notification).mockImplementationOnce(() => {
+      vi.mocked(Notification).mockImplementationOnce(function () {
         throw 'string error';
       });
 

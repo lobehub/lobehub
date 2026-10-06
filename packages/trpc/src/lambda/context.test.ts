@@ -1,3 +1,4 @@
+import { AUTH_FAILURE_HEADER } from '@lobechat/desktop-bridge';
 import { API_KEY_PREFIX } from '@lobechat/utils/apiKey';
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,9 +39,11 @@ vi.mock('@/database/core/db-adaptor', () => ({
 
 vi.mock('@/database/models/apiKey', () => ({
   ApiKeyModel: Object.assign(
-    vi.fn().mockImplementation((_db: unknown, userId: string) => ({
-      updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
-    })),
+    vi.fn(function (_db: unknown, userId: string) {
+      return {
+        updateLastUsed: userId ? mockUpdateLastUsed : vi.fn(),
+      };
+    }),
     {
       findByKey: mockFindByKey,
     },
@@ -77,6 +80,15 @@ vi.mock('@/utils/apiKey', async (importOriginal) => {
 });
 
 const mockCanUseWorkspaceApiKeys = vi.hoisted(() => vi.fn(async () => true));
+
+const mockGetRequestClientIP = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/requestClientIP', async (importOriginal) => {
+  const actual = (await importOriginal()) as {
+    getRequestClientIP: (headers: Headers) => string | undefined;
+  };
+  mockGetRequestClientIP.mockImplementation(actual.getRequestClientIP);
+  return { getRequestClientIP: mockGetRequestClientIP };
+});
 
 vi.mock('@/business/server/workspaceApiKey', () => ({
   canUseWorkspaceApiKeys: mockCanUseWorkspaceApiKeys,
@@ -228,6 +240,17 @@ describe('createLambdaContext', () => {
       type: 'web',
       version: '2.2.10',
     });
+  });
+
+  it('should resolve clientIp through the overridable request IP module', async () => {
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'x-forwarded-for': '198.51.100.3, 10.0.0.1' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(mockGetRequestClientIP).toHaveBeenCalledWith(request.headers);
+    expect(context.clientIp).toBe('198.51.100.3');
   });
 
   it('should authenticate with API key and skip session fallback', async () => {
@@ -462,5 +485,59 @@ describe('createLambdaContext', () => {
     expect(context.oidcAuth).toBeUndefined();
     expect(mockValidateOIDCJWT).toHaveBeenCalledWith('oidc-token');
     expect(mockGetSession).not.toHaveBeenCalled();
+  });
+
+  it('records jwt_expired in resHeaders when the OIDC JWT is expired and no session exists', async () => {
+    const cause = Object.assign(new Error('"exp" claim timestamp check failed'), {
+      code: 'ERR_JWT_EXPIRED',
+    });
+    mockValidateOIDCJWT.mockRejectedValueOnce(
+      Object.assign(new Error('JWT token validation failed'), { cause }),
+    );
+    mockGetSession.mockResolvedValueOnce(null);
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'stale-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBeUndefined();
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('jwt_expired');
+  });
+
+  it('does not record a failure when the session fallback authenticates the user', async () => {
+    mockValidateOIDCJWT.mockRejectedValueOnce(new Error('JWT token validation failed'));
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'stale-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.userId).toBe('session-user');
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBeNull();
+  });
+
+  it('records user_inactive for a banned OIDC user', async () => {
+    mockAssertOIDCUserActive.mockRejectedValueOnce(new Error('OIDC user is no longer active'));
+    mockIsOIDCUserInactiveError.mockReturnValueOnce(true);
+
+    const request = new NextRequest('https://example.com/trpc/lambda', {
+      headers: { 'Oidc-Auth': 'oidc-token' },
+    });
+
+    const context = await createLambdaContext(request);
+
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('user_inactive');
+  });
+
+  it('records no_token when neither Oidc-Auth nor a session is present', async () => {
+    mockGetSession.mockResolvedValueOnce(null);
+
+    const context = await createLambdaContext(new NextRequest('https://example.com/trpc/lambda'));
+
+    expect(context.userId).toBeUndefined();
+    expect(context.resHeaders?.get(AUTH_FAILURE_HEADER)).toBe('no_token');
   });
 });

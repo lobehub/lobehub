@@ -3,6 +3,8 @@ import { generateSpecs } from 'hono-openapi';
 
 import { API_KEY_SCOPES } from '@/const/apiKeyScope';
 
+import { evalResponseSchema } from './types/eval-response.type';
+
 const HTTP_METHODS = new Set(['DELETE', 'GET', 'PATCH', 'POST', 'PUT']);
 
 type GenerateSpecsApp = Parameters<typeof generateSpecs>[0];
@@ -47,6 +49,18 @@ const resourceSchemas: Record<string, SchemaObject> = {
       id: { type: 'string' },
       model: nullableString,
       params: nullableObject,
+      plugins: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            identifier: { type: 'string' },
+            mode: { type: 'string', enum: ['pinned', 'auto', 'disabled'] },
+          },
+          required: ['identifier', 'mode'],
+        },
+      },
       provider: nullableString,
       slug: nullableString,
       systemRole: nullableString,
@@ -418,6 +432,46 @@ const groupResources: Record<string, { listKey: string; schema: string }> = {
 
 const ref = (schema: string): SchemaObject => ({ $ref: `#/components/schemas/${schema}` });
 
+/**
+ * Personal-agent resources whose payload is coordinator / inbox state rather
+ * than a stable CRUD row (a goal's graph snapshot, a category of memory
+ * entries, a page of receipts). The spec stays deliberately vague for these —
+ * same policy as unnamed sub-operations: `additionalProperties` over a guessed
+ * shape, so a generated client is never confidently mistyped.
+ */
+const PERSONAL_AGENT_GROUPS = new Set(['goals', 'memories', 'notifications', 'signals', 'tasks']);
+
+/**
+ * Handlers whose success status is not 200. A controller's return code is not
+ * visible to the generator, so every non-200 success has to be declared here —
+ * otherwise the document (and the SDK generated from it) advertises a status
+ * the runtime never sends, and status-discriminating clients branch wrongly.
+ */
+const CREATED_OPERATIONS = new Set([
+  'POST agent-groups',
+  'POST agents/{id}/duplicate',
+  'POST api-keys',
+  'POST eval/benchmarks',
+  'POST eval/datasets',
+  'POST eval/datasets/{datasetId}/test-cases',
+  'POST goals',
+  'POST mcp-servers',
+  'POST tasks',
+]);
+
+const ACCEPTED_OPERATIONS = new Set([
+  'POST eval/runs',
+  'POST signals/source-events',
+  'POST signals/trigger',
+]);
+
+const successStatusFor = (group: string, rest: string, method: string): number => {
+  const operation = `${method.toUpperCase()} ${group}${rest ? `/${rest}` : ''}`;
+  if (ACCEPTED_OPERATIONS.has(operation)) return 202;
+  if (CREATED_OPERATIONS.has(operation)) return 201;
+  return 200;
+};
+
 const successEnvelope = (data: SchemaObject): SchemaObject => ({
   additionalProperties: false,
   properties: {
@@ -442,6 +496,10 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
       required: ['service', 'status', 'timestamp'],
       type: 'object',
     };
+  }
+
+  if (PERSONAL_AGENT_GROUPS.has(group)) {
+    return successEnvelope({ additionalProperties: true, type: ['array', 'object', 'null'] });
   }
 
   if (group === 'responses') {
@@ -481,21 +539,54 @@ const getSuccessSchema = (group: string, rest: string, method: string): SchemaOb
     return successEnvelope(ref('ChatResponse'));
   }
 
-  if (group === 'eval') {
-    if (rest.endsWith('/results')) {
-      return successEnvelope({
-        additionalProperties: false,
-        properties: {
-          results: { items: ref('EvalRunResult'), type: 'array' },
-          runId: { type: 'string' },
-          total: { minimum: 0, type: 'integer' },
+  if (group === 'eval') return successEnvelope(evalResponseSchema(method, rest));
+
+  if (group === 'topics' && rest.endsWith('/threads'))
+    return successEnvelope({
+      type: 'object',
+      properties: {
+        threads: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              id: { type: 'string' },
+              topicId: { type: 'string' },
+              title: nullableString,
+              type: { type: 'string' },
+              status: nullableString,
+              parentThreadId: nullableString,
+              createdAt: dateTime,
+              updatedAt: dateTime,
+            },
+          },
         },
-        required: ['runId', 'total', 'results'],
-        type: 'object',
-      });
-    }
-    return successEnvelope(ref('EvalRun'));
-  }
+        total: { type: 'integer' },
+      },
+      required: ['threads', 'total'],
+    });
+  if (group === 'plugins')
+    return successEnvelope({
+      type: 'object',
+      properties: {
+        plugins: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            properties: {
+              identifier: { type: 'string' },
+              type: { type: 'string' },
+              createdAt: dateTime,
+              updatedAt: dateTime,
+            },
+          },
+        },
+        total: { type: 'integer' },
+      },
+      required: ['plugins', 'total'],
+    });
 
   const resource = groupResources[group];
   if (!resource) return successEnvelope({ additionalProperties: true, type: 'object' });
@@ -733,14 +824,15 @@ export const buildSpecDocument = async (app: GenerateSpecsApp) => {
         successContent['text/event-stream'] = { schema: { type: 'string' } };
       }
 
-      const successStatus =
-        group === 'eval' && method === 'post' && rest === 'runs'
-          ? 202
-          : ['agent-groups', 'api-keys', 'mcp-servers'].includes(group) &&
-              method === 'post' &&
-              rest === ''
-            ? 201
-            : 200;
+      const successStatus = successStatusFor(group, rest, method);
+      // `hono-openapi` fills a contentless 200 into operations that declare a
+      // request body but no responses. When the handler actually answers
+      // 201/202 that placeholder is not a real response and must go, or the
+      // document keeps advertising a status the runtime never sends.
+      const placeholder200 = op.responses[200] as { content?: unknown } | undefined;
+      if (successStatus !== 200 && placeholder200 && !placeholder200.content) {
+        delete op.responses[200];
+      }
       const currentSuccess = (op.responses[successStatus] ?? {}) as Record<string, unknown>;
       op.responses[successStatus] = {
         ...currentSuccess,

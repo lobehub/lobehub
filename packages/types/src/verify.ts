@@ -1,3 +1,4 @@
+import type { VerifyCheckDefinition } from './acceptanceFlow';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
  * shape, Toulmin narrative, and rubric run-policy config. Kept here (not in the
@@ -157,9 +158,17 @@ export interface AcceptanceGroupFeedback {
 /** One group-scoped feedback entry as stored on a round's decision detail. */
 export type VerifyRunGroupFeedbackEntry = Omit<AcceptanceGroupFeedback, 'roundIndex'>;
 
+/** A presentation group of stable acceptance-union check IDs, independent of execution flows. */
+export interface AcceptanceCheckGroup {
+  checkItemIds: string[];
+  title: string;
+}
+
 /** Generic acceptance extension bag for cross-subject state we have not modeled yet. */
 export interface AcceptanceMetadata {
   [key: string]: unknown;
+  /** Current checklist organization; frozen plans, results and reviews keep their original IDs. */
+  checkGrouping?: { groups: AcceptanceCheckGroup[]; version: number };
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
 }
@@ -183,8 +192,10 @@ export type AcceptanceCheckReviewAction = 'accept' | 'ignore' | 'reject';
 export type AcceptanceRejectIntent = 'unmet' | 'new-idea' | 'no-evidence';
 
 /** What an automated reviewer proposes for a check — never `ignore`, which is a
- *  statement about the reviewer's priorities rather than about the delivery. */
-export type ReviewPredictionAction = 'accept' | 'reject';
+ *  statement about the reviewer's priorities rather than about the delivery.
+ *  `unjudgeable` means no capture could settle the criterion from the reviewer's
+ *  side; see `reviewPredictionActions` in `@lobechat/const/verify`. */
+export type ReviewPredictionAction = 'accept' | 'reject' | 'unjudgeable';
 
 /**
  * How a review attempt ended — see `@lobechat/const/verify` for why this is
@@ -242,15 +253,56 @@ export interface ReviewProposalOutcome {
 }
 
 /**
+ * Where on a video evidence an annotation sits, in seconds from the start.
+ * `start` alone pins one frame; `start` + `end` marks a span.
+ */
+export interface AcceptanceReviewAnnotationTime {
+  end?: number;
+  start: number;
+}
+
+/**
  * A user-drawn region on one evidence image, in coordinates normalized to the
- * image box (0–1) so the overlay renders at any display size.
+ * image box (0–1) so the overlay renders at any display size. On video evidence
+ * the region is drawn on the frame at `time.start`; a note that marks a moment
+ * or a span without circling an area carries the whole frame
+ * (`FULL_FRAME_RECT` in `@lobechat/const/verify`).
  */
 export interface AcceptanceReviewAnnotation {
   /** The note attached to this region. */
   comment?: string;
+  /**
+   * The agent chapter this note disputes, quoted so the objection still reads
+   * correctly after the evidence is re-uploaded.
+   */
+  disputes?: Pick<VerifyEvidenceChapter, 'kind' | 'note' | 't'>;
   /** The evidence row (`verify_evidence.id`) the region was drawn on. */
   evidenceId: string;
   rect: { height: number; width: number; x: number; y: number };
+  /** Video evidence only: the frame or span the note is about. */
+  time?: AcceptanceReviewAnnotationTime;
+}
+
+/**
+ * How an agent marker on a video reads (runtime set: `verifyEvidenceChapterKinds`).
+ *
+ * - `step`: an action the agent performed, logged while driving the recording.
+ * - `check`: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass.
+ * - `flag`: an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree.
+ */
+export type VerifyEvidenceChapterKind = 'check' | 'flag' | 'step';
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
 }
 
 /**
@@ -364,6 +416,19 @@ export type VerifyEvidenceCapturedBy =
  * `verify_runs.user_decision` verb stays the queryable field.
  */
 export interface VerifyRunDecisionDetail {
+  /**
+   * The provider change request whose merge made this decision, when
+   * `source` is `scm_merge`. Lets the board and the verifier-training
+   * pipeline tell a human verdict apart from a merge-driven one.
+   */
+  changeRequest?: {
+    /** Provider user id of whoever merged; resolves through the SCM identities. */
+    mergedByExternalId?: string;
+    number: number;
+    provider: string;
+    repoFullName: string;
+    url: string;
+  };
   /** Free-form reason, e.g. the reject note that seeds the next repair round. */
   comment?: string;
   /** When the decision was made (ISO 8601). */
@@ -380,6 +445,12 @@ export interface VerifyRunDecisionDetail {
    * staleness falls out of the round chain.
    */
   groupFeedback?: VerifyRunGroupFeedbackEntry[];
+  /**
+   * What made the decision. Absent means a human clicked accept / reject;
+   * `scm_merge` means the linked pull request was merged, which LobeHub
+   * treats as the strongest possible acceptance signal.
+   */
+  source?: 'scm_merge';
 }
 
 /**
@@ -554,6 +625,18 @@ export interface VerifyRubricConfig {
  */
 export interface VerifyRunMetadata {
   [key: string]: unknown;
+  /** Autonomous Goal review, kept separate from human decisions and verifier verdicts. */
+  goalReview?: {
+    feedback: string;
+    predictionIds: string[];
+    /**
+     * `unjudgeable` is separate from `rejected` on purpose: it means the review
+     * could not decide from evidence, not that the delivery fell short. Folding
+     * it into `rejected` both sent the builder off to fix nothing and made the
+     * two indistinguishable in the agreement statistics.
+     */
+    status: 'passed' | 'rejected' | 'errored' | 'unjudgeable';
+  };
   interactionCost?: VerifyInteractionCost;
   /**
    * Per-run override for the repair-round cap, taking precedence over the
@@ -574,6 +657,12 @@ export interface VerifyRunMetadata {
    * run that *authored* the report — and is many-to-one.
    */
   origin?: VerifyRunOrigin;
+  /**
+   * The round this one replays (`flow plan --from-run`). A replay is pinned to
+   * the source round's frozen definition, so it never follows later graph edits
+   * and never absorbs another flow, even while it holds no results yet.
+   */
+  replayOfRunId?: string;
 }
 
 export type VerifyVisualizationValue = boolean | null | number | string;
@@ -687,6 +776,25 @@ export interface VerifyCheckResultMetadata {
 }
 
 /**
+ * How one round's checks came out, counted — what a surface shows as
+ * "3 passed · 1 undecided" without reading the checks themselves.
+ *
+ * Deliberately the same three-way split the acceptance's criteria list uses
+ * (`CriterionOutcomeState`): a check with no verdict falls back to its status,
+ * and everything else is undecided. Two surfaces reading the same round must
+ * not be able to disagree about it.
+ */
+export interface VerifyCheckTally {
+  /** Judged failed — a failed verdict, or a failed status where no verdict landed. */
+  failed: number;
+  /** Judged passed — a passed verdict, or a passed status where no verdict landed. */
+  passed: number;
+  total: number;
+  /** Planned but never judged: neither passed nor failed. */
+  unjudged: number;
+}
+
+/**
  * Immutable snapshot of one check item, frozen into `agent_operations.verify_plan`
  * when the plan is confirmed. The resolved content (title / verifierConfig) is
  * copied in — not just a criterion FK — so editing the source criterion / rubric
@@ -700,6 +808,7 @@ export interface VerifyCheckItem {
    * checks without one fall back to surface grouping.
    */
   category?: string;
+  definition?: VerifyCheckDefinition;
   /** One-sentence summary of what this check verifies. */
   description?: string;
   /** The document holding the detailed judging instruction / rule body, if any. */
@@ -712,8 +821,14 @@ export interface VerifyCheckItem {
   onFail: VerifyOnFailStrategy;
   /** Whether failing this item blocks delivery (snapshot may override the source default). */
   required: boolean;
+  resourceSnapshot?: {
+    documentContent?: string;
+    fixtures: { fixtureId: string; content?: string; fileHash?: string; url?: string }[];
+  };
   /** Provenance: the criterion this item was instantiated from, or null when agent-generated. */
   sourceCriterionId?: string | null;
+  /** Immutable reusable flow definition instantiated for this verification round. */
+  sourceFlowNode?: { flowId: string; nodeId: string; incomingEdgeId?: string };
   /** Provenance: the rubric (group) this item came in through, or null. */
   sourceRubricId?: string | null;
   /**
@@ -779,7 +894,7 @@ export interface ToulminVerdict {
 /**
  * Declares that a criterion is evidence-driven: it cannot pass on the
  * deliverable text alone — the run must capture and upload an artifact of each
- * listed `type` (via `lh verify upload-evidence`). Stored under the plan item's
+ * listed `type` (via `lh acceptance run result submit`). Stored under the plan item's
  * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
  * structural gate marks a required item `uncertain` when any listed type is
  * missing, independent of the LLM judge.

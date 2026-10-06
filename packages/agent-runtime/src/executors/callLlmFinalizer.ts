@@ -17,6 +17,11 @@ import type {
   GeneralAgentCallLLMResultPayload,
   InstructionExecutionResult,
 } from '../types';
+import {
+  hasRepeatedToolCall,
+  TOOL_CALL_REPEAT_LIMIT,
+  updateToolCallRepeatGuard,
+} from '../utils/toolCallRepeatGuard';
 
 export const VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY =
   'visibleOutputEndPublishedStepIndex';
@@ -60,16 +65,20 @@ const buildMessageMetadata = ({
   answerSalvagedFromReasoning,
   currentStepSpeed,
   currentStepUsage,
+  executionSite,
   finishType,
   hasContentImages,
   interruptedMidStream,
+  usageEstimated,
 }: {
   answerSalvagedFromReasoning?: boolean;
   currentStepSpeed?: ModelPerformance;
   currentStepUsage?: ModelUsage;
+  executionSite?: LLMAttemptOutput['executionSite'];
   finishType?: string;
   hasContentImages?: boolean;
   interruptedMidStream?: boolean;
+  usageEstimated?: boolean;
 }): CallLlmMessageMetadata | undefined => {
   const metadata: CallLlmMessageMetadata = {
     ...(currentStepUsage && { ...currentStepUsage, usage: currentStepUsage }),
@@ -78,6 +87,8 @@ const buildMessageMetadata = ({
     ...(hasContentImages && { isMultimodal: true }),
     ...(answerSalvagedFromReasoning && { answerSalvagedFromReasoning: true }),
     ...(interruptedMidStream && { interruptedMidStream: true }),
+    ...(executionSite && { executionSite }),
+    ...(usageEstimated && currentStepUsage && { usageEstimated: true }),
   };
 
   return Object.keys(metadata).length > 0 ? metadata : undefined;
@@ -143,7 +154,7 @@ const buildWorkAnchor = ({
 }): MessageMetadata['work'] => {
   if (output.toolsCalling.length > 0 || output.toolCalls.length > 0) return undefined;
 
-  const sourceMessageId = state.metadata?.sourceMessageId;
+  const sourceMessageId = state.origin?.sourceMessageId;
   const sourceMessageIndex =
     typeof sourceMessageId === 'string'
       ? state.messages.findIndex((message) => message.id === sourceMessageId)
@@ -177,8 +188,10 @@ const persistFinalMessage = async ({
     answerSalvagedFromReasoning: output.answerSalvagedFromReasoning,
     currentStepSpeed: output.speed,
     currentStepUsage: output.usage,
+    executionSite: output.executionSite,
     finishType: output.finishReason,
     hasContentImages: output.hasContentImages,
+    usageEstimated: output.usageEstimated,
   });
   const workAnchor = buildWorkAnchor({
     operationId: host.operation.operationId,
@@ -212,13 +225,19 @@ const buildFinalState = ({
   shouldReplayAssistantReasoning,
   state,
   stepLabel,
+  toolCallRepeatGuard,
   visibleOutputEndPublishedStepIndex,
   finalReasoning,
 }: Omit<FinalizeCallLlmTurnInput, 'events' | 'host' | 'recordResult'> & {
   finalReasoning?: ModelReasoning;
+  toolCallRepeatGuard: NonNullable<AgentState['toolCallRepeatGuard']>;
   visibleOutputEndPublishedStepIndex?: number;
 }): AgentState => {
   const newState = structuredClone(state);
+  // Completion must retain the persisted assistant identity even when messages
+  // are rehydrated into display groups before the next runtime step.
+  newState.metadata = { ...newState.metadata, workAssistantMessageId: assistantMessageId };
+  newState.toolCallRepeatGuard = toolCallRepeatGuard;
   newState.messages.push({
     content: output.content,
     id: assistantMessageId,
@@ -268,27 +287,48 @@ export const finalizeCallLlmTurn = async ({
   stepLabel,
 }: FinalizeCallLlmTurnInput): Promise<InstructionExecutionResult> => {
   const { operation, transports } = host;
+  const repeatCounts = updateToolCallRepeatGuard(state.toolCallRepeatGuard, output.toolsCalling);
+  const stoppedByRepeatLimit = output.finishReason !== 'abort' && hasRepeatedToolCall(repeatCounts);
+  // Carried on the state so the terminal reason can name this stop. Sticky once
+  // set: later turns emit no tool calls, and `updateToolCallRepeatGuard` resets
+  // its counts on those, which would otherwise erase the only trace of why the
+  // run ended.
+  const toolCallRepeatGuard = {
+    ...repeatCounts,
+    ...((stoppedByRepeatLimit || state.toolCallRepeatGuard?.stoppedByRepeatLimit) && {
+      stoppedByRepeatLimit: true,
+    }),
+  };
+  const finalizedOutput = stoppedByRepeatLimit
+    ? {
+        ...output,
+        content: `Stopped after the same tool call was requested ${TOOL_CALL_REPEAT_LIMIT} consecutive times.`,
+        finishReason: 'tool_call_repeat_limit',
+        toolCalls: [],
+        toolsCalling: [],
+      }
+    : output;
 
   events.push({
     result: {
-      content: output.content,
-      finishReason: output.finishReason,
-      reasoning: output.thinkingContent,
-      tool_calls: output.toolCalls,
-      usage: output.usage,
+      content: finalizedOutput.content,
+      finishReason: finalizedOutput.finishReason,
+      reasoning: finalizedOutput.thinkingContent,
+      tool_calls: finalizedOutput.toolCalls,
+      usage: finalizedOutput.usage,
     },
     type: 'llm_result',
   });
 
   await transports.stream.publishEvent({
     data: {
-      finalContent: output.content,
-      grounding: output.grounding,
+      finalContent: finalizedOutput.content,
+      grounding: finalizedOutput.grounding,
       ...(stepLabel && { stepLabel }),
-      imageList: output.imageList.length > 0 ? output.imageList : undefined,
-      reasoning: output.thinkingContent || undefined,
-      toolsCalling: output.toolsCalling,
-      usage: output.usage,
+      imageList: finalizedOutput.imageList.length > 0 ? finalizedOutput.imageList : undefined,
+      reasoning: finalizedOutput.thinkingContent || undefined,
+      toolsCalling: finalizedOutput.toolsCalling,
+      usage: finalizedOutput.usage,
     },
     stepIndex: operation.stepIndex,
     type: 'stream_end',
@@ -299,9 +339,9 @@ export const finalizeCallLlmTurn = async ({
     operation.allowEarlyFinalAnswerVisibleOutputEnd ?? true;
   if (
     canPublishEarlyFinalAnswerVisibleEnd &&
-    output.finishReason !== 'abort' &&
-    output.toolsCalling.length === 0 &&
-    output.toolCalls.length === 0
+    finalizedOutput.finishReason !== 'abort' &&
+    finalizedOutput.toolsCalling.length === 0 &&
+    finalizedOutput.toolCalls.length === 0
   ) {
     try {
       await transports.stream.publishEvent({
@@ -315,32 +355,38 @@ export const finalizeCallLlmTurn = async ({
     }
   }
 
-  const finalReasoning = await persistFinalMessage({ assistantMessageId, host, output, state });
+  const finalReasoning = await persistFinalMessage({
+    assistantMessageId,
+    host,
+    output: finalizedOutput,
+    state,
+  });
   const newState = buildFinalState({
     assistantMessageId,
     finalReasoning,
     model,
-    output,
+    output: finalizedOutput,
     provider,
     shouldReplayAssistantReasoning,
     state,
     stepLabel,
+    toolCallRepeatGuard,
     visibleOutputEndPublishedStepIndex,
   });
 
-  await recordResult?.(output);
+  await recordResult?.(finalizedOutput);
 
-  if (output.finishReason === 'abort') {
+  if (finalizedOutput.finishReason === 'abort') {
     return {
       events,
       newState,
       nextContext: {
         payload: {
-          hasToolsCalling: output.toolsCalling.length > 0,
+          hasToolsCalling: finalizedOutput.toolsCalling.length > 0,
           parentMessageId: assistantMessageId,
           reason: 'user_cancelled',
-          result: { content: output.content, tool_calls: output.toolCalls },
-          toolsCalling: output.toolsCalling,
+          result: { content: finalizedOutput.content, tool_calls: finalizedOutput.toolCalls },
+          toolsCalling: finalizedOutput.toolsCalling,
         },
         phase: 'human_abort',
         session: {
@@ -350,7 +396,7 @@ export const finalizeCallLlmTurn = async ({
           status: 'running',
           stepCount: state.stepCount + 1,
         },
-        stepUsage: output.usage,
+        stepUsage: finalizedOutput.usage,
       },
     };
   }
@@ -360,10 +406,10 @@ export const finalizeCallLlmTurn = async ({
     newState,
     nextContext: {
       payload: {
-        hasToolsCalling: output.toolsCalling.length > 0,
+        hasToolsCalling: finalizedOutput.toolsCalling.length > 0,
         parentMessageId: assistantMessageId,
-        result: { content: output.content, tool_calls: output.toolCalls },
-        toolsCalling: output.toolsCalling,
+        result: { content: finalizedOutput.content, tool_calls: finalizedOutput.toolCalls },
+        toolsCalling: finalizedOutput.toolsCalling,
       } as GeneralAgentCallLLMResultPayload,
       phase: 'llm_result',
       session: {
@@ -373,7 +419,7 @@ export const finalizeCallLlmTurn = async ({
         status: 'running',
         stepCount: state.stepCount + 1,
       },
-      stepUsage: output.usage,
+      stepUsage: finalizedOutput.usage,
     },
   };
 };
@@ -391,7 +437,9 @@ export const persistInterruptedCallLlmResult = async ({
       metadata: buildMessageMetadata({
         currentStepSpeed: output.speed,
         currentStepUsage: output.usage,
+        executionSite: output.executionSite,
         interruptedMidStream: true,
+        usageEstimated: output.usageEstimated,
       }),
       reasoning: output.thinkingContent ? { content: output.thinkingContent } : undefined,
       tools: sanitizePersistedTools(output.toolsCalling),

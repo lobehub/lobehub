@@ -1,13 +1,13 @@
-import { Block, Empty, Highlighter } from '@lobehub/ui';
+import { Block, Highlighter } from '@lobehub/ui';
 import { Tag } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { Database } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import InlineTable from '@/components/InlineTable';
 
 import { useDetailContext } from '../DetailProvider';
+import { SchemaEmpty } from './SchemaList';
 import { styles } from './style';
 import { ModeType } from './types';
 
@@ -15,23 +15,14 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
   const { t } = useTranslation(['discover', 'plugin']);
   const { resources } = useDetailContext();
 
-  if (!resources)
-    return (
-      <Block variant={'outlined'}>
-        <Empty
-          description={t('plugin:mcpEmpty.resources')}
-          descriptionProps={{ fontSize: 14 }}
-          icon={Database}
-          style={{ maxWidth: 400 }}
-        />
-      </Block>
-    );
+  if (!resources?.length) return <SchemaEmpty>{t('plugin:mcpEmpty.resources')}</SchemaEmpty>;
 
   return mode === ModeType.Docs ? (
     <Block style={{ overflow: 'hidden' }} variant={'outlined'}>
       <InlineTable
         dataSource={resources}
         pagination={false}
+        rowKey={'uri'}
         size={'middle'}
         columns={[
           {
@@ -56,8 +47,8 @@ const Resources = memo<{ mode?: ModeType }>(({ mode }) => {
             title: t('mcp.details.schema.resources.table.uri'),
           },
           {
-            dataIndex: 'description',
             key: 'description',
+            render: (_, record) => (record as { description?: string }).description,
             title: t('mcp.details.schema.resources.table.description'),
           },
         ]}

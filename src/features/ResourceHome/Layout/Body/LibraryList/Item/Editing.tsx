@@ -1,11 +1,9 @@
-import { Input, stopPropagation } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
-import { type InputRef } from 'antd';
+import { stopPropagation } from '@lobehub/ui';
+import { Input, toast } from '@lobehub/ui/base-ui';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useKnowledgeBaseStore } from '@/store/library';
-import { isForbiddenError } from '@/utils/forbiddenError';
 
 interface EditingProps {
   id: string;
@@ -21,7 +19,7 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
     s.updateKnowledgeBase,
   ]);
   const [newName, setNewName] = useState(name);
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const submittingRef = useRef(false);
 
   useEffect(() => {
@@ -31,8 +29,8 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
     submittingRef.current = false;
 
     queueMicrotask(() => {
-      inputRef.current?.input?.focus();
-      inputRef.current?.input?.select();
+      inputRef.current?.focus();
+      inputRef.current?.select();
     });
   }, [editing, name]);
 
@@ -44,8 +42,8 @@ const Editing = memo<EditingProps>(({ id, name, toggleEditing }) => {
     if (value && value !== name) {
       try {
         await updateKnowledgeBase(id, { name: value });
-      } catch (error) {
-        toast.error(isForbiddenError(error) ? t('manageOnlyCreator') : t('operationFailed'));
+      } catch {
+        toast.error(t('operationFailed'));
       }
     }
 

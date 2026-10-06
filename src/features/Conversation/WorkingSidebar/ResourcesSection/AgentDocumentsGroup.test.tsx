@@ -29,10 +29,6 @@ vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   toast: { error: messageError, success: messageSuccess },
 }));
 
-vi.mock('@/components/NeuralNetworkLoading', () => ({
-  default: () => <div data-testid="neural-network-loading" />,
-}));
-
 vi.mock('@/components/AsyncError', () => ({
   default: ({ onRetry }: { onRetry?: () => void }) => (
     <button data-testid="async-error" onClick={onRetry}>
@@ -353,6 +349,42 @@ describe('AgentDocumentsGroup', () => {
     expect(screen.getByText('device-writer')).toBeInTheDocument();
   });
 
+  it('keeps the filesystem skill scan inert while the pane is disabled', () => {
+    const projectItem = {
+      description: 'writes things',
+      fileCount: 2,
+      files: [],
+      id: 'project-skill',
+      name: 'project-writer',
+      scope: 'project' as const,
+    };
+    useProjectSkillsMock.mockReturnValue({
+      deviceItems: [],
+      error: undefined,
+      getRowActions: () => [],
+      isLoading: false,
+      items: [projectItem],
+      mutate: vi.fn(),
+      onOpenFile: () => undefined,
+      onOpenSkill: () => undefined,
+      projectItems: [projectItem],
+      raw: undefined,
+    });
+    useClientDataSWR.mockReturnValue({
+      data: [],
+      error: undefined,
+      isLoading: false,
+      mutate: vi.fn(),
+    });
+
+    render(<AgentDocumentsGroup showLocalProjectSkills enabled={false} workingDirectory="/repo" />);
+
+    // `undefined` workingDirectory is the hook's documented inert mode: no scan fires.
+    expect(useProjectSkillsMock).toHaveBeenCalledWith(undefined, undefined);
+    expect(screen.queryByTestId('skills-list')).not.toBeInTheDocument();
+    expect(screen.queryByText('project-writer')).not.toBeInTheDocument();
+  });
+
   it('opens the SKILL.md document in the portal when clicking a skill bundle row', () => {
     useClientDataSWR.mockReturnValue({
       data: [skillBundleRow, skillIndexRow],
@@ -646,6 +678,6 @@ describe('AgentDocumentsGroup', () => {
     });
 
     render(<AgentDocumentsGroup />);
-    expect(screen.getByTestId('neural-network-loading')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toBeInTheDocument();
   });
 });

@@ -1,9 +1,8 @@
 'use client';
 
 import { type WindowsShellMode } from '@lobechat/electron-client-ipc';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
 import { Select, Text } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
@@ -21,6 +20,7 @@ import { getPlatform } from '@/utils/platform';
 const ShellSection = memo(() => {
   const { t } = useTranslation('setting');
   const [updating, setUpdating] = useState(false);
+  const form = useForm();
 
   const { data, mutate } = useSWR(
     'desktop-shell-settings',
@@ -49,7 +49,7 @@ const ShellSection = memo(() => {
       : []),
   ];
 
-  const shellGroup: FormGroupItemType = {
+  const shellGroup: FormGroupItem = {
     children: [
       {
         children: (
@@ -87,6 +87,7 @@ const ShellSection = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={[shellGroup]}
       itemsType={'group'}
       variant={'filled'}

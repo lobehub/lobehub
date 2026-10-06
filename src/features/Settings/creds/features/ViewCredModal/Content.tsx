@@ -2,17 +2,16 @@
 
 import { type UserCredSummary } from '@lobechat/types';
 import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert, Descriptions, Text } from '@lobehub/ui/base-ui';
 import { useQuery } from '@tanstack/react-query';
-import { Descriptions, Skeleton, Typography } from 'antd';
 import { createStaticStyles, cx } from 'antd-style';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CredsApi } from '../useCredsApi';
+import { ArticleSkeleton } from '@/components/Skeleton';
 
-const { Text } = Typography;
+import { type CredsApi } from '../useCredsApi';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   kvKey: css`
@@ -103,6 +102,7 @@ const KVRow: FC<KVRowProps> = ({ keyName, value }) => {
       <div className={styles.kvKey}>{keyName}</div>
       <div className={styles.kvValue}>
         <Text
+          as={'span'}
           className={cx(!visible && styles.maskedValue)}
           style={{
             flex: 1,
@@ -152,7 +152,7 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred, credsApi })
   const valueEntries = Object.entries(values);
 
   if (isLoading) {
-    return <Skeleton active paragraph={{ rows: 3 }} />;
+    return <ArticleSkeleton rows={3} />;
   }
 
   if (error) {
@@ -174,15 +174,18 @@ const ViewCredModalContent: FC<ViewCredModalContentProps> = ({ cred, credsApi })
         style={{ marginBottom: 16 }}
         type={'warning'}
       />
-      <Descriptions bordered column={1} size={'small'}>
-        <Descriptions.Item label={t('creds.table.name')}>{cred.name}</Descriptions.Item>
-        <Descriptions.Item label={t('creds.table.key')}>
-          <code>{cred.key}</code>
-        </Descriptions.Item>
-        <Descriptions.Item label={t('creds.table.type')}>
-          {cred.type ? t(`creds.types.${cred.type}` as any) : '-'}
-        </Descriptions.Item>
-      </Descriptions>
+      <Descriptions
+        bordered
+        items={[
+          { children: cred.name, key: 'name', label: t('creds.table.name') },
+          { children: <code>{cred.key}</code>, key: 'key', label: t('creds.table.key') },
+          {
+            children: cred.type ? t(`creds.types.${cred.type}` as any) : '-',
+            key: 'type',
+            label: t('creds.table.type'),
+          },
+        ]}
+      />
 
       {valueEntries.length > 0 && (
         <div className={styles.valuesSection}>

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { sendVerificationEmail } from '@/libs/better-auth/auth-client';
+import { toAbsoluteAuthCallbackUrl } from '@/utils/onboardingRedirect';
 
 interface UseVerifyEmailParams {
   callbackUrl: string;
@@ -21,7 +22,10 @@ export const useVerifyEmail = ({ email, callbackUrl }: UseVerifyEmailParams) => 
 
     setResending(true);
     try {
-      const result = await sendVerificationEmail({ callbackURL: callbackUrl, email });
+      const result = await sendVerificationEmail({
+        callbackURL: toAbsoluteAuthCallbackUrl(callbackUrl, window.location.origin),
+        email,
+      });
       if (result.error) {
         toast.error(result.error.message || t('betterAuth.verifyEmail.resend.error'));
         return;

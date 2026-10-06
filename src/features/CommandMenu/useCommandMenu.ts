@@ -3,7 +3,6 @@ import { useTheme as useNextThemesTheme } from 'next-themes';
 import { useCallback, useEffect } from 'react';
 import useSWR from 'swr';
 
-import { isDesktop } from '@/const/version';
 import type { FtsSearchResult } from '@/database/repositories/ftsSearch';
 import { useCreateMenuItems } from '@/features/HomeSidebar/hooks';
 import { useCreateNewModal } from '@/features/LibraryModal';
@@ -11,7 +10,6 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { useGroupWizard } from '@/layout/GlobalProvider/GroupWizardProvider';
 import { lambdaClient } from '@/libs/trpc/client';
-import { electronSystemService } from '@/services/electron/system';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors/builtinAgentSelectors';
 import { useChatStore } from '@/store/chat';
@@ -19,6 +17,7 @@ import { topicSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
 import { globalHelpers } from '@/store/global/helpers';
 import { useHomeStore } from '@/store/home';
+import { openTrustedExternalUrl } from '@/utils/openTrustedExternalUrl';
 
 import { useCommandMenuContext } from './CommandMenuContext';
 import { type ThemeMode } from './types';
@@ -113,12 +112,8 @@ export const useCommandMenu = () => {
   );
 
   const handleExternalLink = useCallback(
-    async (url: string) => {
-      if (isDesktop) {
-        await electronSystemService.openExternalLink(url);
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer');
-      }
+    (url: string) => {
+      openTrustedExternalUrl(url);
       onClose();
     },
     [onClose],

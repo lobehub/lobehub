@@ -381,7 +381,9 @@ export class SkillImporter {
         // Handle ZIP file
         log('importFromUrl: detected ZIP file, parsing as package...');
         zipBuffer = Buffer.from(await response.arrayBuffer());
-        const parsed = await this.parser.parseZipPackage(zipBuffer);
+        const parsed = await this.parser.parseZipPackage(zipBuffer, {
+          fallbackName: options?.identifier,
+        });
         manifest = parsed.manifest;
         skillContent = parsed.content;
         zipHash = parsed.zipHash;
@@ -391,7 +393,7 @@ export class SkillImporter {
         // Handle plain SKILL.md
         log('importFromUrl: detected SKILL.md, parsing as markdown...');
         const content = await response.text();
-        const parsed = this.parser.parseSkillMd(content);
+        const parsed = this.parser.parseSkillMd(content, { fallbackName: options?.identifier });
         manifest = parsed.manifest;
         skillContent = parsed.content;
         log('importFromUrl: parsed SKILL.md, manifest=%o', manifest);
@@ -415,11 +417,49 @@ export class SkillImporter {
       .replace(/^\//, '') // Remove leading slash
       .replace(/\.md$/i, '') // Remove .md extension
       .replaceAll('/', '.'); // Replace slashes with dots
-    const identifier = options?.identifier || `url.${url.host}.${pathPart || 'skill'}`;
+    const urlIdentifier = `url.${url.host}.${pathPart || 'skill'}`;
+    const identifier = options?.identifier || urlIdentifier;
     log('importFromUrl: identifier=%s', identifier);
 
     // 5. Check for existing skill
-    const existing = await this.skillModel.findByIdentifier(identifier);
+    let existing = await this.skillModel.findByIdentifier(identifier);
+
+    // A user may have authored a skill under this very identifier. Only treat
+    // the row as this import when it came from the market or from this same
+    // URL; otherwise updating it would overwrite the user's own skill.
+    if (existing && existing.source !== 'market' && existing.manifest?.sourceUrl !== input.url) {
+      throw new SkillImportError(
+        `A skill with identifier "${identifier}" is already installed from another source (name: ${existing.name}). Delete it before importing this one.`,
+        'CONFLICT',
+      );
+    }
+
+    // Older agent-tool imports keyed market skills by the URL-derived
+    // identifier. Look that row up too, so a skill whose manifest name changed
+    // since then is still updated in place rather than installed twice. Only
+    // take it when it was fetched from this same URL: a user skill may carry
+    // that identifier explicitly and must not be overwritten.
+    if (!existing && identifier !== urlIdentifier) {
+      const legacy = await this.skillModel.findByIdentifier(urlIdentifier);
+      if (legacy?.manifest?.sourceUrl === input.url) existing = legacy;
+    }
+
+    // Names are unique per scope, so the same skill already installed under yet
+    // another identifier would fail the insert below with a raw DB error. A
+    // same-name row fetched from the same URL is this skill; any other
+    // same-name row is a real conflict the caller must resolve.
+    if (!existing) {
+      const sameName = await this.skillModel.findByName(manifest.name);
+      if (sameName) {
+        if (sameName.manifest?.sourceUrl !== input.url) {
+          throw new SkillImportError(
+            `A skill named "${manifest.name}" is already installed (identifier: ${sameName.identifier}). Use the installed skill, or delete it before importing this one.`,
+            'CONFLICT',
+          );
+        }
+        existing = sameName;
+      }
+    }
 
     // 6. Build manifest with source URL
     const fullManifest: SkillManifest = {

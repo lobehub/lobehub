@@ -2,14 +2,21 @@ import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type LobeToolCustomPlugin } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Button, Drawer, toast } from '@lobehub/ui/base-ui';
-import { Form, Popconfirm } from 'antd';
+import { Button, confirmModal, Drawer, toast } from '@lobehub/ui/base-ui';
+import { useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { useResponsive } from 'antd-style';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { openConnectorOAuthPopup } from '@/utils/connectorOAuth';
+
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
+import { getSaveErrorToast } from './saveErrorToast';
+
+const INITIAL_VALUES = {
+  customParams: { mcp: { auth: { type: 'none' }, type: 'http' } },
+} as LobeToolCustomPlugin;
 
 interface DevModalProps {
   /** Enable the connector-backed OAuth auth type in the MCP form (see MCPManifestForm). */
@@ -43,8 +50,16 @@ const DevModal = memo<DevModalProps>(
     const [submitting, setSubmitting] = useState(false);
 
     const { mobile } = useResponsive();
-    const [form] = Form.useForm();
-    const authType = Form.useWatch(['customParams', 'mcp', 'auth', 'type'], form);
+    const form = useForm<LobeToolCustomPlugin>({
+      initialValues: INITIAL_VALUES,
+      onSubmit: async (values) => {
+        await doSave(values);
+      },
+      onValuesChange: (_, values) => {
+        onValueChange?.(values);
+      },
+    });
+    const authType = useWatch(form, 'customParams.mcp.auth.type');
 
     // Seed the form once per modal open, waiting for `value` to arrive (it may
     // be undefined initially while edit-mode credentials are being fetched).
@@ -55,7 +70,7 @@ const DevModal = memo<DevModalProps>(
         return;
       }
       if (value !== undefined && !seededRef.current) {
-        form.setFieldsValue(value);
+        form.setValues(value);
         seededRef.current = true;
       }
     }, [open, value]);
@@ -73,32 +88,38 @@ const DevModal = memo<DevModalProps>(
         onOpenChange(false);
       } catch (error) {
         console.error('[DevModal] Install failed:', error);
-        const httpStatus = (error as { data?: { httpStatus?: number } })?.data?.httpStatus;
-        toast.error(
-          httpStatus === 403
+        const { description, titleKey } = getSaveErrorToast(error, Boolean(ctx));
+        const title =
+          titleKey === 'dev.permissionDenied'
             ? t(
                 'dev.permissionDenied',
                 'You are not allowed to modify this connector — only the creator or a workspace owner can',
               )
-            : t('dev.saveError'),
-        );
+            : t(titleKey as never);
+        toast.error(description ? { description, title } : title);
       } finally {
+        ctx?.oauthPopup?.close();
         setSubmitting(false);
       }
     };
 
-    // OAuth needs window.open within the user-gesture tick (browsers block it
+    // Web OAuth needs window.open within the user-gesture tick (browsers block it
     // after an async boundary). Open a blank popup synchronously here, validate,
-    // then hand it to onSave which navigates it to the authorize URL. Shared by
+    // then hand it to onSave. Desktop opens a native window via IPC instead. Shared by
     // the footer save button and the in-form "Authorize" button.
     const runOAuthFlow = async () => {
-      const popup = window.open('about:blank', 'lobe-connector-oauth', 'width=600,height=720');
-      try {
-        const values = (await form.validateFields()) as LobeToolCustomPlugin;
-        await doSave(values, { oauthPopup: popup });
-      } catch {
-        popup?.close();
+      if (submitting) return;
+      const popup = openConnectorOAuthPopup();
+      if (popup === null) {
+        toast.error(t('dev.oauthError.blocked'));
+        return;
       }
+      const { valid } = await form.validate();
+      if (!valid) {
+        popup?.close();
+        return;
+      }
+      await doSave(form.getValues(), { oauthPopup: popup });
     };
 
     const handlePrimaryClick = () => {
@@ -107,7 +128,7 @@ const DevModal = memo<DevModalProps>(
     };
 
     useEffect(() => {
-      if (mode === 'create' && !open) form.resetFields();
+      if (mode === 'create' && !open) form.reset(INITIAL_VALUES);
     }, [open]);
 
     const buttonStyle = mobile ? { flex: 1 } : { margin: 0 };
@@ -115,25 +136,25 @@ const DevModal = memo<DevModalProps>(
     const footer = (
       <Flexbox horizontal flex={1} gap={12} justify={'space-between'}>
         {isEditMode ? (
-          <Popconfirm
-            arrow={false}
-            cancelText={t('cancel', { ns: 'common' })}
-            okText={t('ok', { ns: 'common' })}
-            placement={'topLeft'}
-            title={t('dev.confirmDeleteDevPlugin')}
-            okButtonProps={{
-              danger: true,
-              type: 'primary',
-            }}
-            onConfirm={() => {
-              onDelete?.();
-              toast.success(t('dev.deleteSuccess'));
-            }}
+          <Button
+            danger
+            style={buttonStyle}
+            onClick={() =>
+              confirmModal({
+                cancelText: t('cancel', { ns: 'common' }),
+                okButtonProps: { danger: true },
+                okText: t('ok', { ns: 'common' }),
+                onOk: () => {
+                  onDelete?.();
+                  toast.success(t('dev.deleteSuccess'));
+                },
+                content: t('dev.confirmDeleteDevPlugin'),
+                title: t('delete', { ns: 'common' }),
+              })
+            }
           >
-            <Button danger style={buttonStyle}>
-              {t('delete', { ns: 'common' })}
-            </Button>
-          </Popconfirm>
+            {t('delete', { ns: 'common' })}
+          </Button>
         ) : (
           <div />
         )}
@@ -159,53 +180,44 @@ const DevModal = memo<DevModalProps>(
     );
 
     return (
-      <Form.Provider
-        onFormChange={() => {
-          onValueChange?.(form.getFieldsValue());
+      <Drawer
+        containerMaxWidth={'auto'}
+        footer={footer}
+        height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
+        open={open}
+        placement={'bottom'}
+        push={false}
+        title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
+        width={mobile ? '100%' : 800}
+        styles={{
+          bodyContent: {
+            height: '100%',
+            padding: 0,
+          },
         }}
-        onFormFinish={async (_, info) => {
-          await doSave(info.values as LobeToolCustomPlugin);
+        onClose={() => {
+          onOpenChange(false);
         }}
       >
-        <Drawer
-          containerMaxWidth={'auto'}
-          footer={footer}
-          height={isDesktop ? `calc(100vh - ${TITLE_BAR_HEIGHT}px)` : '100vh'}
-          open={open}
-          placement={'bottom'}
-          push={false}
-          title={t(isEditMode ? 'dev.title.skillSettings' : 'dev.title.create')}
-          width={mobile ? '100%' : 800}
-          styles={{
-            bodyContent: {
-              height: '100%',
-              padding: 0,
-            },
-          }}
-          onClose={() => {
-            onOpenChange(false);
+        <Flexbox
+          horizontal
+          gap={0}
+          height={'100%'}
+          onClick={(e) => {
+            e.stopPropagation();
           }}
         >
-          <Flexbox
-            horizontal
-            gap={0}
-            height={'100%'}
-            onClick={(e) => {
-              e.stopPropagation();
-            }}
-          >
-            <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
-              <MCPManifestForm
-                enableOAuth={enableOAuth}
-                form={form}
-                isEditMode={isEditMode}
-                onAuthorizeOAuth={runOAuthFlow}
-              />
-            </Flexbox>
-            <PluginPreview form={form} />
+          <Flexbox flex={3} gap={16} padding={24} style={{ overflowY: 'auto' }}>
+            <MCPManifestForm
+              enableOAuth={enableOAuth}
+              form={form}
+              isEditMode={isEditMode}
+              onAuthorizeOAuth={runOAuthFlow}
+            />
           </Flexbox>
-        </Drawer>
-      </Form.Provider>
+          <PluginPreview form={form} />
+        </Flexbox>
+      </Drawer>
     );
   },
 );

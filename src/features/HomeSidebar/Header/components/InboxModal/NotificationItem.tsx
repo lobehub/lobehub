@@ -11,14 +11,13 @@ import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ProductLogo } from '@/components/Branding';
-import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
 
 import { formatNotificationRelativeTime } from './formatNotificationRelativeTime';
-import { getNotificationAgentId } from './getNotificationAgentId';
 import { createNotificationDetailModal } from './NotificationDetailModal';
 import { toNotificationPreview } from './toNotificationPreview';
+import { useNotificationAgentMeta } from './useNotificationAgentMeta';
 
 const styles = createStaticStyles(({ css }) => ({
   unreadDot: css`
@@ -74,8 +73,7 @@ const NotificationItem = memo<NotificationItemProps>(
     const dateLocale = i18n.resolvedLanguage || i18n.language;
     const preview = useMemo(() => toNotificationPreview(content), [content]);
     const actor = metadata?.actor;
-    const agentId = useMemo(() => getNotificationAgentId(actionUrl), [actionUrl]);
-    const agent = useAgentDisplayMeta(agentId, { fallbackToDefault: false });
+    const agent = useNotificationAgentMeta(actionUrl, metadata);
 
     const handleMarkAsRead = useCallback(() => {
       if (!isRead) onMarkAsRead(id);

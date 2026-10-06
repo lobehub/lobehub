@@ -7,7 +7,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/server/services/goal', () => ({
-  GoalService: vi.fn(() => ({ create: mocks.create })),
+  GoalService: vi.fn(function () {
+    return { create: mocks.create };
+  }),
 }));
 vi.mock('@/server/services/goal/advanceGoal', () => ({ advanceGoal: mocks.advanceGoal }));
 vi.mock('@/server/services/goal/scheduler', () => ({
@@ -47,6 +49,9 @@ describe('goalRuntime.createGoal', () => {
 
     expect(mocks.scheduleGoalAdvance).toHaveBeenCalledWith({
       goalId: 'goal_1',
+      // The label survives the queue hop onto the trajectory, so a run can be
+      // sliced by what drove it — asserted here rather than left loose.
+      trigger: 'create',
       userId: 'user-1',
       workspaceId: 'ws-1',
     });

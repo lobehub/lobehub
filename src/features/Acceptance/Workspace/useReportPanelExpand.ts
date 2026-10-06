@@ -10,6 +10,8 @@ export interface ReportPanelExpand {
   expand: boolean;
   /** Below the breakpoint the panel floats over the report instead of shrinking it. */
   isNarrow: boolean;
+  /** The wide-layout preference itself, regardless of the current viewport. */
+  pinned: boolean;
   setExpand: (expand: boolean) => void;
 }
 
@@ -61,5 +63,5 @@ export const useReportPanelExpand = (): ReportPanelExpand => {
     }));
   };
 
-  return { expand: isNarrow ? floatOpen : showPanel, isNarrow, setExpand };
+  return { expand: isNarrow ? floatOpen : showPanel, isNarrow, pinned: showPanel, setExpand };
 };

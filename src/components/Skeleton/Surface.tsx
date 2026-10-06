@@ -1,8 +1,11 @@
 'use client';
 
-import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
+import { Flexbox, Grid } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
-import type { ReactElement } from 'react';
+import type { ComponentType } from 'react';
+
+import type { RouteSkeletonProps } from '@/spa/router/routeMeta';
 
 import SkeletonBar from './Bar';
 
@@ -65,7 +68,7 @@ const ListSkeleton = () => (
 
 const FormSkeleton = () => (
   <Flexbox align={'center'} padding={24}>
-    <FormGroup
+    <Form.Group
       collapsible={false}
       style={{ width: 'min(800px, 100%)' }}
       title={<SkeletonBar height={18} width={112} />}
@@ -91,7 +94,7 @@ const FormSkeleton = () => (
           </Flexbox>
         ))}
       </Flexbox>
-    </FormGroup>
+    </Form.Group>
   </Flexbox>
 );
 
@@ -163,14 +166,16 @@ const SurfaceSkeleton = ({ header = true, variant = 'list' }: SurfaceSkeletonPro
   </Flexbox>
 );
 
-const surfaceSkeletonCache = new Map<string, () => ReactElement>();
+const surfaceSkeletonCache = new Map<string, ComponentType<RouteSkeletonProps>>();
 
 export const createSurfaceSkeleton = (variant: SurfaceSkeletonVariant, header = true) => {
   const key = `${variant}:${header}`;
   const cached = surfaceSkeletonCache.get(key);
   if (cached) return cached;
 
-  const Component = () => <SurfaceSkeleton header={header} variant={variant} />;
+  const Component = ({ chrome = 'page' }: RouteSkeletonProps) => (
+    <SurfaceSkeleton header={header && chrome !== 'body'} variant={variant} />
+  );
   Component.displayName = `SurfaceSkeleton(${key})`;
   surfaceSkeletonCache.set(key, Component);
   return Component;

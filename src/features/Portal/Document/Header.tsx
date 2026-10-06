@@ -1,62 +1,97 @@
 'use client';
 
-import { Flexbox, Skeleton } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
+import { createStaticStyles, cssVar } from 'antd-style';
+import { ChevronRight } from 'lucide-react';
+import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { portalKeys } from '@/libs/swr/keys';
-import { documentService } from '@/services/document';
-import { oneLineEllipsis } from '@/styles';
-import { getDocumentRenderMode } from '@/utils/documentRenderMode';
+import { usePortalDocumentTitleState } from './titleContext';
 
-import AutoSaveHint from './AutoSaveHint';
-import { useResolvedDocumentId } from './documentViewContext';
+const styles = createStaticStyles(({ css }) => ({
+  root: css`
+    min-width: 0;
+  `,
+  separator: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextQuaternary};
+  `,
+  title: css`
+    font-size: 13px;
+    font-weight: 600;
+  `,
+  crumbButton: css`
+    cursor: pointer;
 
-const Header = () => {
-  const documentId = useResolvedDocumentId();
+    flex-shrink: 0;
 
-  const { data: document, isLoading } = useClientDataSWR(
-    documentId ? portalKeys.documentHeader(documentId) : null,
-    () => documentService.getDocumentById(documentId!),
-  );
+    padding: 0;
+    border: none;
 
-  const title = document?.filename || document?.title;
-  const isReadonly = !!document && getDocumentRenderMode(document).mode === 'highlight';
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
 
-  if (!documentId) return null;
+    background: none;
 
-  if (isLoading || !title) {
-    return (
-      <Flexbox
-        horizontal
-        align={'center'}
-        flex={1}
-        gap={12}
-        justify={'space-between'}
-        width={'100%'}
-      >
-        <Flexbox flex={1}>
-          <Skeleton.Button active size={'small'} style={{ height: 16, width: 180 }} />
-        </Flexbox>
-      </Flexbox>
-    );
+    transition: color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
+
+    &:hover {
+      color: ${cssVar.colorText};
+    }
+
+    &:focus-visible {
+      border-radius: ${cssVar.borderRadiusSM};
+      outline: none;
+      box-shadow: 0 0 0 2px ${cssVar.colorPrimaryBorder};
+    }
+  `,
+  crumbLabel: css`
+    flex-shrink: 0;
+    font-size: 13px;
+  `,
+}));
+
+interface HeaderProps {
+  /** Navigate to the documents index on breadcrumb click (agent route has one). */
+  onOpenDocumentsIndex?: () => void;
+}
+
+const Header = memo<HeaderProps>(({ onOpenDocumentsIndex }) => {
+  const { t } = useTranslation('file');
+  const { isLoading, savedTitle, titleFallback } = usePortalDocumentTitleState();
+
+  if (isLoading) {
+    return <Skeleton height={16} width={180} />;
   }
 
   return (
-    <Flexbox horizontal align={'center'} flex={1} gap={12} justify={'space-between'} width={'100%'}>
-      <Flexbox flex={1}>
-        <Text className={cx(oneLineEllipsis)} type={'secondary'}>
-          {title}
+    // Hug the title so the shared `…` rides right behind it.
+    <Flexbox horizontal align={'center'} className={styles.root} flex={'0 1 auto'} gap={4}>
+      {/* Navigable crumb gets a real button (keyboard reachable); a plain
+            notebook document renders a noninteractive label with no affordance. */}
+      {onOpenDocumentsIndex ? (
+        <button className={styles.crumbButton} type={'button'} onClick={onOpenDocumentsIndex}>
+          {t('menu.allPages', { ns: 'file' })}
+        </button>
+      ) : (
+        <Text className={styles.crumbLabel} color={cssVar.colorTextQuaternary}>
+          {t('menu.allPages', { ns: 'file' })}
         </Text>
-      </Flexbox>
-      {!isReadonly && (
-        <Flexbox horizontal align={'center'} gap={8}>
-          <AutoSaveHint />
-        </Flexbox>
       )}
+      <Icon className={styles.separator} icon={ChevronRight} size={14} />
+      {/* Display only — renaming goes through the `…` menu's dialog. */}
+      <Text
+        className={styles.title}
+        ellipsis={{ tooltip: savedTitle || titleFallback }}
+        style={{ minWidth: 0 }}
+      >
+        {savedTitle || titleFallback}
+      </Text>
     </Flexbox>
   );
-};
+});
+
+Header.displayName = 'PortalDocumentHeader';
 
 export default Header;

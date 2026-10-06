@@ -33,8 +33,6 @@ const styles = createStaticStyles(({ css }) => ({
     inset-block-start: 0;
 
     color: ${cssVar.colorTextQuaternary};
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
 
     background: ${cssVar.colorBgContainer};
   `,

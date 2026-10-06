@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { cssVar } from 'antd-style';
-import { memo, Suspense, useMemo } from 'react';
+import { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -11,6 +11,7 @@ import {
 } from '@/features/AgentTransferMigration';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { useMessageDeepLink } from '@/features/Conversation/ChatList/hooks/useMessageDeepLink';
 import {
   ForwardMessageDispatcher,
   MessageForwardFooter,
@@ -40,13 +41,11 @@ interface ConversationAreaProps {
 const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
   const { t } = useTranslation('chat');
   const context = useGroupContext();
+  const messageDeepLink = useMessageDeepLink();
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
-  const chatKey = useMemo(
-    () => messageMapKey(context),
-    [context.agentId, context.topicId, context.threadId],
-  );
+  const chatKey = messageMapKey(context);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
 
@@ -87,7 +86,7 @@ const Conversation = memo<ConversationAreaProps>(({ mobile = false }) => {
         {topicPending ? (
           <TopicMigrationPlaceholder groupId={context.groupId} topicId={context.topicId} />
         ) : (
-          <ChatList welcome={<WelcomeChatItem />} />
+          <ChatList messageDeepLink={messageDeepLink} welcome={<WelcomeChatItem />} />
         )}
       </Flexbox>
       {topicPending ? (

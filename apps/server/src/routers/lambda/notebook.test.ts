@@ -1,0 +1,182 @@
+// @vitest-environment node
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { createCallerFactory } from '@/libs/trpc/lambda';
+import { createContextInner } from '@/libs/trpc/lambda/context';
+
+import { notebookRouter } from './notebook';
+
+const mocks = vi.hoisted(() => ({
+  associate: vi.fn(),
+  create: vi.fn(),
+  findDocumentById: vi.fn(),
+  findOwnOperationById: vi.fn(),
+  findTopicById: vi.fn(),
+  findVerbatimTwin: vi.fn(),
+  registerDocument: vi.fn(),
+}));
+vi.mock('@/database/core/db-adaptor', () => ({ getServerDB: vi.fn().mockResolvedValue({}) }));
+vi.mock('@/database/models/document', () => ({
+  DocumentModel: vi.fn().mockImplementation(function () {
+    return { create: mocks.create, findById: mocks.findDocumentById };
+  }),
+}));
+vi.mock('@/database/models/topicDocument', () => ({
+  TopicDocumentModel: vi.fn().mockImplementation(function () {
+    return { associate: mocks.associate, findVerbatimTwin: mocks.findVerbatimTwin };
+  }),
+}));
+vi.mock('@/database/models/topic', () => ({
+  TopicModel: vi.fn().mockImplementation(function () {
+    return { findById: mocks.findTopicById };
+  }),
+}));
+vi.mock('@/database/models/agentOperation', () => ({
+  AgentOperationModel: vi.fn().mockImplementation(function () {
+    return { findOwnOperationById: mocks.findOwnOperationById };
+  }),
+}));
+vi.mock('@/database/models/work', () => ({
+  WorkModel: vi.fn().mockImplementation(function () {
+    return { registerDocument: mocks.registerDocument };
+  }),
+}));
+vi.mock('@/server/services/notebook', () => ({ NotebookRuntimeService: vi.fn() }));
+
+const createCaller = createCallerFactory(notebookRouter);
+const input = {
+  content: 'Measured report',
+  description: 'Results',
+  title: 'Report',
+  topicId: 'topic-1',
+};
+
+describe('notebook document work provenance', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.create.mockResolvedValue({ id: 'doc-1' });
+  });
+
+  const caller = async () => createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('registers the actual linked document under the owning root run', async () => {
+    mocks.findOwnOperationById
+      .mockResolvedValueOnce({
+        id: 'child',
+        parentOperationId: 'root',
+        topicId: 'topic-1',
+        agentId: 'agent-1',
+      })
+      .mockResolvedValueOnce({ id: 'root', parentOperationId: null });
+    await (await caller()).createDocument({ ...input, operationId: 'child' });
+    expect(mocks.associate).toHaveBeenCalledWith({ documentId: 'doc-1', topicId: 'topic-1' });
+    expect(mocks.registerDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        documentId: 'doc-1',
+        rootOperationId: 'root',
+        agentId: 'agent-1',
+        topicId: 'topic-1',
+        changeType: 'created',
+      }),
+    );
+  });
+
+  it.each([null, { id: 'op', topicId: 'other-topic' }])(
+    'rejects inaccessible or mismatched provenance before writing',
+    async (operation) => {
+      mocks.findOwnOperationById.mockResolvedValue(operation);
+      await expect(
+        (await caller()).createDocument({ ...input, operationId: 'op' }),
+      ).rejects.toThrow(/does not belong/);
+      expect(mocks.create).not.toHaveBeenCalled();
+      expect(mocks.registerDocument).not.toHaveBeenCalled();
+    },
+  );
+
+  it('keeps ordinary user-created notebooks free of invented agent provenance', async () => {
+    await (await caller()).createDocument(input);
+    expect(mocks.create).toHaveBeenCalled();
+    expect(mocks.findOwnOperationById).not.toHaveBeenCalled();
+    expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('reuses a document this topic already holds verbatim instead of forking it', async () => {
+    // One report written through the agent documents tool and again through
+    // this one used to leave two documents behind: two entries in the topic's
+    // list and two deliverable cards on the goal graph, for one report.
+    mocks.findVerbatimTwin.mockResolvedValue({ id: 'doc-existing' });
+
+    const result = await (await caller()).createDocument(input);
+
+    expect(mocks.findVerbatimTwin).toHaveBeenCalledWith({
+      content: input.content,
+      fileType: 'markdown',
+      title: input.title,
+      topicId: input.topicId,
+    });
+    expect(result).toEqual({ id: 'doc-existing' });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.associate).not.toHaveBeenCalled();
+    expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it('carries the requested kind into the twin search', async () => {
+    // A plan is found by its type, so the search has to know it is looking for
+    // one and not reuse a markdown note that holds the same text.
+    await (await caller()).createDocument({ ...input, type: 'agent/plan' });
+
+    expect(mocks.findVerbatimTwin).toHaveBeenCalledWith({
+      content: input.content,
+      fileType: 'agent/plan',
+      title: input.title,
+      topicId: input.topicId,
+    });
+  });
+
+  it('rejects inaccessible ancestry before writing', async () => {
+    mocks.findOwnOperationById
+      .mockResolvedValueOnce({ id: 'child', topicId: 'topic-1', parentOperationId: 'foreign' })
+      .mockResolvedValueOnce(null);
+    await expect(
+      (await caller()).createDocument({ ...input, operationId: 'child' }),
+    ).rejects.toThrow(/ancestry/);
+    expect(mocks.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('notebook.associateDocument', () => {
+  beforeEach(() => {
+    for (const mock of Object.values(mocks)) mock.mockReset();
+    mocks.associate.mockImplementation(async (params) => params);
+  });
+
+  const caller = async () => createCaller(await createContextInner({ userId: 'user-1' }));
+
+  it('links the existing document without creating a copy or a new Work', async () => {
+    mocks.findDocumentById.mockResolvedValue({ id: 'doc-1' });
+    mocks.findTopicById.mockResolvedValue({ id: 'topic-1' });
+
+    const result = await (
+      await caller()
+    ).associateDocument({ documentId: 'doc-1', topicId: 'topic-1' });
+
+    expect(result).toEqual({ documentId: 'doc-1', topicId: 'topic-1' });
+    expect(mocks.associate).toHaveBeenCalledWith({ documentId: 'doc-1', topicId: 'topic-1' });
+    expect(mocks.create).not.toHaveBeenCalled();
+    expect(mocks.registerDocument).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['document', null, { id: 'topic-1' }],
+    ['topic', { id: 'doc-1' }, null],
+  ])('rejects an inaccessible %s', async (_, document, topic) => {
+    mocks.findDocumentById.mockResolvedValue(document);
+    mocks.findTopicById.mockResolvedValue(topic);
+
+    await expect(
+      (await caller()).associateDocument({ documentId: 'doc-1', topicId: 'topic-1' }),
+    ).rejects.toThrow(/not found/);
+    expect(mocks.associate).not.toHaveBeenCalled();
+  });
+});

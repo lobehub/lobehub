@@ -1,6 +1,7 @@
 'use client';
 
-import { Icon, Input } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
+import { Input } from '@lobehub/ui/base-ui';
 import { Search } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

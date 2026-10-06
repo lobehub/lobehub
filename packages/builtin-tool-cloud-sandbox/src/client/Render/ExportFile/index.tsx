@@ -1,10 +1,10 @@
 'use client';
 
-import { CheckCircleFilled, CloseCircleFilled, DownloadOutlined } from '@ant-design/icons';
 import type { BuiltinRenderProps } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { CircleCheckIcon, CircleXIcon, DownloadIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 
 import type { ExportFileState } from '../../../types';
@@ -13,9 +13,6 @@ const styles = createStaticStyles(({ css }) => ({
   container: css`
     overflow: hidden;
     padding-inline: 8px 0;
-  `,
-  statusIcon: css`
-    font-size: 12px;
   `,
 }));
 
@@ -56,12 +53,9 @@ const ExportFile = memo<BuiltinRenderProps<ExportFileParams, ExportFileState>>(
       <Flexbox className={styles.container} gap={8}>
         <Flexbox horizontal align={'center'} gap={8}>
           {pluginState === undefined ? null : isSuccess ? (
-            <CheckCircleFilled
-              className={styles.statusIcon}
-              style={{ color: cssVar.colorSuccess }}
-            />
+            <Icon color={cssVar.colorSuccess} icon={CircleCheckIcon} size={12} />
           ) : (
-            <CloseCircleFilled className={styles.statusIcon} style={{ color: cssVar.colorError }} />
+            <Icon color={cssVar.colorError} icon={CircleXIcon} size={12} />
           )}
           <Text code as={'span'} fontSize={12}>
             {isSuccess
@@ -70,7 +64,7 @@ const ExportFile = memo<BuiltinRenderProps<ExportFileParams, ExportFileState>>(
           </Text>
           {isSuccess && pluginState?.downloadUrl && (
             <ActionIcon
-              icon={DownloadOutlined}
+              icon={DownloadIcon}
               size={'small'}
               title="Download"
               onClick={handleDownload}

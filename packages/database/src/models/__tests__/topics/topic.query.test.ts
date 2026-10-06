@@ -1823,6 +1823,57 @@ describe('TopicModel - Query', () => {
   });
 
   describe('queryByKeyword with external candidates', () => {
+    it('ignores tool and blank message candidates when finding topics', async () => {
+      await serverDB.insert(topics).values([
+        { id: 'candidate-tool-topic', title: 'Tool topic', userId },
+        { id: 'candidate-blank-topic', title: 'Blank topic', userId },
+        { id: 'candidate-visible-topic', title: 'Visible topic', userId },
+      ]);
+      await serverDB.insert(messages).values([
+        {
+          content: 'Tool output',
+          id: 'candidate-tool-hit',
+          role: 'tool',
+          topicId: 'candidate-tool-topic',
+          userId,
+        },
+        {
+          content: ' \n\t',
+          id: 'candidate-blank-hit',
+          role: 'assistant',
+          topicId: 'candidate-blank-topic',
+          userId,
+        },
+        {
+          content: 'Visible response',
+          id: 'candidate-visible-hit',
+          role: 'assistant',
+          topicId: 'candidate-visible-topic',
+          userId,
+        },
+      ]);
+      const model = new TopicModel(serverDB, userId, undefined, {
+        ftsSearchCandidateEnabled: true,
+        ftsSearchCandidates: vi.fn().mockImplementation(({ entity }) =>
+          Promise.resolve({
+            candidates:
+              entity === 'messages'
+                ? [
+                    { id: 'candidate-tool-hit', score: 3 },
+                    { id: 'candidate-blank-hit', score: 2 },
+                    { id: 'candidate-visible-hit', score: 1 },
+                  ]
+                : [],
+            total: 3,
+          }),
+        ),
+      });
+
+      const result = await model.queryByKeyword('candidate');
+
+      expect(result.map(({ id }) => id)).toEqual(['candidate-visible-topic']);
+    });
+
     it('hydrates title and message legs through the requested topic scope', async () => {
       await serverDB.insert(topics).values([
         {

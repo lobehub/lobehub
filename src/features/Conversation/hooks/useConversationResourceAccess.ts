@@ -15,7 +15,14 @@ interface ConversationResourceTarget {
   groupId?: string | null;
 }
 
-const useConversationResourceAccessForTarget = ({
+/**
+ * Resource gating for a conversation the caller names explicitly, for surfaces
+ * that render beside the conversation instead of inside its
+ * `ConversationProvider` — a task run's follow-up composer knows the run's
+ * agent before any drawer is open, and must pass the same check the drawer's
+ * own composer does.
+ */
+export const useConversationResourceAccessForTarget = ({
   agentId,
   groupId,
 }: ConversationResourceTarget) => {

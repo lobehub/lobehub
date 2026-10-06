@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  type RendererFile,
   RendererProtocolManager,
   StaticRendererFallback,
   ViteRendererFallback,
@@ -64,8 +65,10 @@ describe('RendererProtocolManager + StaticRendererFallback', () => {
     protocolHandlerRef.current = null;
   });
 
-  const buildStaticManager = (resolve: (url: URL) => Promise<string | null>) => {
-    const fallback = new StaticRendererFallback('/export', resolve);
+  const file = (filePath: string) => ({ filePath, name: filePath.split('/').pop()! });
+
+  const buildStaticManager = (resolve: (url: URL) => Promise<RendererFile | null>) => {
+    const fallback = new StaticRendererFallback(resolve);
     const manager = new RendererProtocolManager({ fallback });
     manager.registerHandler();
     return manager;
@@ -73,8 +76,8 @@ describe('RendererProtocolManager + StaticRendererFallback', () => {
 
   it('falls back to entry HTML when resolve returns 404.html for non-asset routes', async () => {
     const resolveRendererFilePath = vi.fn(async (url: URL) => {
-      if (url.pathname === '/missing') return '/export/404.html';
-      if (url.pathname === '/') return '/export/index.html';
+      if (url.pathname === '/missing') return file('/export/404.html');
+      if (url.pathname === '/') return file('/export/index.html');
       return null;
     });
     mockReadFile.mockImplementation(async (path: string) => Buffer.from(`content:${path}`));
@@ -101,8 +104,8 @@ describe('RendererProtocolManager + StaticRendererFallback', () => {
 
   it('serves 404.html when explicitly requested', async () => {
     const resolveRendererFilePath = vi.fn(async (url: URL) => {
-      if (url.pathname === '/404.html') return '/export/404.html';
-      if (url.pathname === '/') return '/export/index.html';
+      if (url.pathname === '/404.html') return file('/export/404.html');
+      if (url.pathname === '/') return file('/export/index.html');
       return null;
     });
     mockReadFile.mockImplementation(async (path: string) => Buffer.from(`content:${path}`));
@@ -138,7 +141,7 @@ describe('RendererProtocolManager + StaticRendererFallback', () => {
   });
 
   it('supports Range requests for media assets', async () => {
-    const resolveRendererFilePath = vi.fn(async (_url: URL) => '/export/intro-video.mp4');
+    const resolveRendererFilePath = vi.fn(async (_url: URL) => file('/export/intro-video.mp4'));
     const payload = Buffer.from('0123456789');
 
     mockStat.mockImplementation(async () => ({ size: payload.length }));
@@ -163,11 +166,32 @@ describe('RendererProtocolManager + StaticRendererFallback', () => {
     expect(buf.toString()).toBe('01');
   });
 
+  it('derives Content-Type from the logical name when the stored file has no extension', async () => {
+    const resolveRendererFilePath = vi.fn(async () => ({
+      filePath: '/core-ota/store/abc123',
+      name: 'chunk.js',
+    }));
+    mockReadFile.mockImplementation(async () => Buffer.from('export {}'));
+
+    buildStaticManager(resolveRendererFilePath);
+    const handler = protocolHandlerRef.current;
+
+    const response = await handler({
+      headers: new Headers(),
+      method: 'GET',
+      url: 'app://renderer/assets/chunk.js',
+    } as any);
+
+    expect(response.status).toBe(200);
+    expect(mockReadFile).toHaveBeenCalledWith('/core-ota/store/abc123');
+    expect(response.headers.get('Content-Type')).toMatch(/javascript/);
+  });
+
   it('runs interceptors before the fallback and short-circuits on first non-null Response', async () => {
-    const resolveRendererFilePath = vi.fn(async () => '/export/index.html');
+    const resolveRendererFilePath = vi.fn(async () => file('/export/index.html'));
     mockReadFile.mockImplementation(async () => Buffer.from('static'));
 
-    const fallback = new StaticRendererFallback('/export', resolveRendererFilePath);
+    const fallback = new StaticRendererFallback(resolveRendererFilePath);
     const manager = new RendererProtocolManager({ fallback });
 
     manager.addRequestInterceptor(async () => null);
@@ -199,7 +223,7 @@ describe('RendererProtocolManager + StaticRendererFallback', () => {
   });
 
   it('returns 404 for cross-host requests', async () => {
-    const resolveRendererFilePath = vi.fn(async () => '/export/index.html');
+    const resolveRendererFilePath = vi.fn(async () => file('/export/index.html'));
     buildStaticManager(resolveRendererFilePath);
     const handler = protocolHandlerRef.current;
 

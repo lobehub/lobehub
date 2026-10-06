@@ -1,5 +1,6 @@
-import { Block, Flexbox, Skeleton } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { formatDuration as formatDurationMs } from '@lobechat/utils';
+import { Block, Flexbox } from '@lobehub/ui';
+import { Divider, Skeleton } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { Fragment, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,12 +19,7 @@ import { HeatmapType } from '../../types';
  */
 const formatDuration = (seconds?: number) => {
   if (!seconds || seconds < 1) return '--';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
+  return formatDurationMs(seconds * 1000);
 };
 
 /**
@@ -91,14 +87,10 @@ const HeatmapStats = memo(() => {
       <Flexbox horizontal align={'center'} width={'100%'}>
         {items.map((item, index) => (
           <Fragment key={item.label}>
-            {index > 0 && <Divider style={{ height: 32, margin: 0 }} type={'vertical'} />}
+            {index > 0 && <Divider orientation={'vertical'} style={{ height: 32 }} />}
             <Flexbox align={'center'} flex={1} gap={4}>
               <div style={{ fontSize: 20, fontWeight: 'bold' }}>
-                {loading || item.loading ? (
-                  <Skeleton.Button active size={'small'} style={{ width: 56 }} />
-                ) : (
-                  item.value
-                )}
+                {loading || item.loading ? <Skeleton height={28} width={56} /> : item.value}
               </div>
               <div style={{ color: cssVar.colorTextDescription, fontSize: 12 }}>{item.label}</div>
             </Flexbox>

@@ -1,24 +1,14 @@
 'use client';
 
-import { useAnalytics } from '@lobehub/analytics/react';
 import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui/base-ui';
-import { Carousel as AntCarousel } from 'antd';
+import { ActionIcon, Button, Carousel } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { X } from 'lucide-react';
-import { motion } from 'motion/react';
-import {
-  type ComponentRef,
-  memo,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import * as m from 'motion/react-m';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAnalytics } from '@/libs/analytics/client';
 import type { GlobalBillboard, GlobalBillboardItem } from '@/types/serverConfig';
 
 import { resolveBillboardAction, runBillboardAction } from './actions';
@@ -68,8 +58,7 @@ const styles = createStaticStyles(({ css }) => ({
     inset-inline-end: 8px;
 
     /* Sits over the cover image (140px band) — give it its own opaque surface so
-       the icon reads on any image, and lift z-index above the carousel dots /
-       slick internals. */
+       the icon reads on any image, and lift z-index above the carousel slides. */
     color: #fff;
 
     background: rgb(0 0 0 / 45%);
@@ -254,7 +243,6 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
   ({ set, onClose, closing, exitTarget, onAnimationFinish, cardAttr }) => {
     const [paused, setPaused] = useState(false);
     const [current, setCurrent] = useState(0);
-    const carouselRef = useRef<ComponentRef<typeof AntCarousel>>(null);
     const { analytics } = useAnalytics();
 
     useEffect(() => {
@@ -283,7 +271,7 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
     const cardDataProps = cardAttr ? { [cardAttr]: '' } : {};
 
     return (
-      <motion.div
+      <m.div
         {...cardDataProps}
         className={styles.card}
         initial={{ opacity: 0, scale: 0.92, y: 16 }}
@@ -309,13 +297,12 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
           />
         ) : (
           <>
-            <AntCarousel
+            <Carousel
               adaptiveHeight
-              autoplay={!paused}
-              autoplaySpeed={6000}
-              beforeChange={(_: number, next: number) => setCurrent(next)}
+              autoplay={paused ? false : 6000}
               dots={false}
-              ref={carouselRef}
+              index={current}
+              onIndexChange={setCurrent}
             >
               {set.items.map((item, idx) => (
                 <div key={item.id}>
@@ -327,19 +314,19 @@ const BillboardCarousel = memo<BillboardCarouselProps>(
                   />
                 </div>
               ))}
-            </AntCarousel>
+            </Carousel>
             <Flexbox horizontal className={styles.dots} gap={6} justify="center">
               {set.items.map((item, idx) => (
                 <div
                   className={`${styles.dot} ${current === idx ? styles.dotActive : ''}`}
                   key={item.id}
-                  onClick={() => carouselRef.current?.goTo(idx)}
+                  onClick={() => setCurrent(idx)}
                 />
               ))}
             </Flexbox>
           </>
         )}
-      </motion.div>
+      </m.div>
     );
   },
 );

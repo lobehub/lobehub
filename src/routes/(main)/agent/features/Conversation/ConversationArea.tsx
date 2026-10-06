@@ -14,6 +14,7 @@ import {
 } from '@/features/AgentTransferMigration';
 import ChatMiniMap from '@/features/ChatMiniMap';
 import { ChatList, ConversationProvider } from '@/features/Conversation';
+import { useMessageDeepLink } from '@/features/Conversation/ChatList/hooks/useMessageDeepLink';
 import ComposerDraftReceiver from '@/features/Conversation/ComposerDraftReceiver';
 import { useChatFollowUp } from '@/features/Conversation/hooks/useChatFollowUp';
 import {
@@ -34,6 +35,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import ExposeMainEditor from './ExposeMainEditor';
 import HeterogeneousChatInput from './HeterogeneousChatInput';
+import LocateMessageFromUrl from './LocateMessageFromUrl';
 import MainChatInput from './MainChatInput';
 import MessageFromUrl from './MainChatInput/MessageFromUrl';
 import ThreadHydration from './ThreadHydration';
@@ -65,13 +67,11 @@ const styles = createStaticStyles(({ css }) => ({
 const Conversation = memo(() => {
   const { t } = useTranslation('chat');
   const context = useAgentContext();
+  const messageDeepLink = useMessageDeepLink();
 
   // Get raw dbMessages from ChatStore for this context
   // ConversationStore will parse them internally to generate displayMessages
-  const chatKey = useMemo(
-    () => messageMapKey(context),
-    [context.agentId, context.topicId, context.threadId],
-  );
+  const chatKey = messageMapKey(context);
   const replaceMessages = useChatStore((s) => s.replaceMessages);
   const messages = useChatStore((s) => s.dbMessagesMap[chatKey]);
 
@@ -156,8 +156,8 @@ const Conversation = memo(() => {
             <TopicMigrationPlaceholder agentId={context.agentId} topicId={context.topicId} />
           ) : (
             <ChatList
-              defaultWorkflowExpandLevel={isHeterogeneousAgent ? { streaming: 'full' } : undefined}
               headerSlot={<div aria-hidden className={styles.floatingHeaderSpacer} />}
+              messageDeepLink={messageDeepLink}
               welcome={<AgentHome />}
               footerSlot={
                 isSubagentThread ? (
@@ -205,6 +205,7 @@ const Conversation = memo(() => {
       <ThreadHydration />
       <ChatMiniMap />
       <ForwardMessageDispatcher />
+      <LocateMessageFromUrl />
       {/* Held back while the topic is still migrating: the composer above is
           already disabled, and letting `?message=` through would send into the
           not-yet-migrated history this screen is waiting for. The param stays

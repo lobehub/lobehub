@@ -13,37 +13,45 @@ const { mockMarketSDK } = vi.hoisted(() => ({
 }));
 
 vi.mock('@/business/server/trpc-middlewares/rbacPermission', () => ({
-  withScopedPermission: vi.fn(() => (opts: any) => opts.next({ ctx: opts.ctx })),
+  withScopedPermission: vi.fn(function () {
+    return (opts: any) => opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/database/models/user', () => ({
-  UserModel: vi.fn(() => ({
-    getUserState: vi.fn(async () => ({ settings: {} })),
-  })),
+  UserModel: vi.fn(function () {
+    return {
+      getUserState: vi.fn(async () => ({ settings: {} })),
+    };
+  }),
 }));
 
 vi.mock('@/libs/trpc/lambda/middleware', () => ({
-  marketSDK: vi.fn((opts: any) =>
-    opts.next({
+  marketSDK: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         marketSDK: mockMarketSDK,
       },
-    }),
-  ),
-  marketUserInfo: vi.fn((opts: any) =>
-    opts.next({
+    });
+  }),
+  marketUserInfo: vi.fn(function (opts: any) {
+    return opts.next({
       ctx: {
         ...opts.ctx,
         marketUserInfo: { email: 'actor@example.com', name: 'Actor', userId: 'user-1' },
       },
-    }),
-  ),
-  serverDatabase: vi.fn((opts: any) => opts.next({ ctx: opts.ctx })),
+    });
+  }),
+  serverDatabase: vi.fn(function (opts: any) {
+    return opts.next({ ctx: opts.ctx });
+  }),
 }));
 
 vi.mock('@/libs/trusted-client', () => ({
-  generateTrustedClientToken: vi.fn(() => 'trust-token'),
+  generateTrustedClientToken: vi.fn(function () {
+    return 'trust-token';
+  }),
 }));
 
 describe('agentGroupRouter.forkAgentGroup', () => {

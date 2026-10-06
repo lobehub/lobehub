@@ -1,5 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { GroupBotIcon } from '@lobehub/ui/icons';
 import { CornerDownRight } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback } from 'react';
@@ -7,10 +6,10 @@ import { memo, useCallback } from 'react';
 import { startThreadDrag } from '@/features/ChatInput/InputEditor/ReferTopic/threadDragData';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { useChatStore } from '@/store/chat';
+import { portalThreadSelectors } from '@/store/chat/selectors';
 
-import { useThreadNavigation } from '../../../hooks/useThreadNavigation';
 import Actions from './Actions';
-import Editing from './Editing';
+import { isThreadRowActive } from './active';
 import { useThreadItemDropdownMenu } from './useDropdownMenu';
 
 export interface ThreadItemProps {
@@ -21,30 +20,16 @@ export interface ThreadItemProps {
   title: string;
 }
 
-// Indent applied INSIDE the NavItem's Block (overrides default paddingInline=4
-// on the start side), so the icon + title shift right by one icon-slot width
-// while the row background/highlight stays full-width.
-const SUBAGENT_PADDING_INLINE_START = 32;
-
 const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessageId }) => {
-  const [editing, activeThreadId] = useChatStore((s) => [
-    s.threadRenamingId === id,
-    s.activeThreadId,
-  ]);
-
-  const { navigateToThread, isInAgentSubRoute } = useThreadNavigation();
-
-  const toggleEditing = useCallback(
-    (visible?: boolean) => {
-      useChatStore.setState({ threadRenamingId: visible ? id : '' });
-    },
-    [id],
-  );
+  const activeThreadId = useChatStore((s) => s.activeThreadId);
+  // This row opens its thread in the Portal, so its "current" state is the
+  // portal's thread — see `isThreadRowActive` for the conversation fallback.
+  const portalThreadId = useChatStore((s) => portalThreadSelectors.portalCurrentThread(s)?.id);
+  const openThreadInPortal = useChatStore((s) => s.openThreadInPortal);
 
   const handleClick = useCallback(() => {
-    if (editing) return;
-    navigateToThread(id);
-  }, [editing, id, navigateToThread]);
+    openThreadInPortal(id, sourceMessageId);
+  }, [id, openThreadInPortal, sourceMessageId]);
 
   const handleDragStart = useCallback(
     (event: DragEvent) => {
@@ -56,34 +41,28 @@ const ThreadItem = memo<ThreadItemProps>(({ title, id, isSubagent, sourceMessage
   const dropdownMenu = useThreadItemDropdownMenu({
     id,
     sourceMessageId,
-    toggleEditing,
+    title,
   });
 
-  const active = id === activeThreadId;
+  const active = isThreadRowActive({ activeThreadId, portalThreadId, threadId: id });
 
   return (
-    <>
-      <NavItem
-        draggable
-        actions={<Actions dropdownMenu={dropdownMenu} />}
-        active={active && !isInAgentSubRoute}
-        contextMenuItems={dropdownMenu}
-        data-thread-id={id}
-        disabled={editing}
-        icon={<Icon color={cssVar.colorTextDescription} icon={CornerDownRight} size={'small'} />}
-        // The capped ThreadList is a flex column, so rows shrink to fit its
-        // max-height instead of overflowing — the scroll never engages. Pin the
-        // row min-height to the NavItem height (36) to force overflow → scroll.
-        title={title}
-        style={{
-          minHeight: 36,
-          ...(isSubagent && { paddingInlineStart: SUBAGENT_PADDING_INLINE_START }),
-        }}
-        onClick={handleClick}
-        onDragStart={handleDragStart}
-      />
-      <Editing id={id} title={title} toggleEditing={toggleEditing} />
-    </>
+    <NavItem
+      draggable
+      actions={<Actions dropdownMenu={dropdownMenu} />}
+      active={active}
+      contextMenuItems={dropdownMenu}
+      data-thread-id={id}
+      icon={isSubagent ? GroupBotIcon : CornerDownRight}
+      iconSize={16}
+      // The capped ThreadList is a flex column, so rows shrink to fit its
+      // max-height instead of overflowing — the scroll never engages. Pin the
+      // row min-height to the NavItem height (36) to force overflow → scroll.
+      style={{ minHeight: 36 }}
+      title={title}
+      onClick={handleClick}
+      onDragStart={handleDragStart}
+    />
   );
 });
 

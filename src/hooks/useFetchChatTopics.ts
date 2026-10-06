@@ -1,38 +1,68 @@
-import { MAIN_SIDEBAR_EXCLUDE_TRIGGERS } from '@/const/topic';
 import { useAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode';
+import {
+  deriveSidebarTopicListQuery,
+  type SidebarTopicListQuery,
+} from '@/hooks/chatTopicListQuery';
 import { useFetchTopics } from '@/hooks/useFetchTopics';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
+import { useGlobalStore } from '@/store/global';
+import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
-const EXCLUDE_STATUSES_COMPLETED = ['completed'];
-
 /**
- * Canonical topic fetch for chat sidebars (agent + group). Reads every
- * filter from a single source so all call sites in the same route mount
- * the same SWR key — otherwise two sibling `useFetchTopics()` calls with
- * different args both write to `topicDataMap[containerKey]` and whichever
- * response lands last wins, which is how completed topics used to leak
- * into the list despite the `excludeStatuses` filter.
+ * The one query shape a `topicDataMap` bucket is allowed to hold. The bucket is
+ * keyed by container (`agent_<id>`) only — not by filters — so every fetch that
+ * targets a container overwrites whatever the previous one put there. Two
+ * mounted fetches with different filters therefore fight, and the looser one
+ * wins whenever it lands last.
  *
- * Extend this hook when adding more preference-driven topic params; don't
- * spread them across individual components.
+ * The derivation itself lives in {@link deriveSidebarTopicListQuery}, which the
+ * pre-paint hydrate reads imperatively: same inputs means the same SWR key and
+ * the same persisted row, so SWR dedupes and the hydrate actually applies.
  */
-export const useFetchChatTopics = () => {
+const useChatTopicListQuery = (): SidebarTopicListQuery => {
   const includeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
   const activeGroupId = useChatStore((s) => s.activeGroupId);
   const { topicGroupMode } = useAgentTopicGroupMode();
 
-  // "Group by status" ordering is resolved server-side so the highest-priority
-  // topics (awaiting human → running → active) stay on the first page even when
-  // the list is paginated — client-side grouping over a partial page is exactly
-  // what made the previous approach flaky. Only the agent sidebar supports it;
-  // group sessions keep the default updatedAt ordering.
-  const sortBy = !activeGroupId && topicGroupMode === 'byStatus' ? 'status' : undefined;
+  return deriveSidebarTopicListQuery({
+    includeCompleted,
+    isGroupSession: !!activeGroupId,
+    topicGroupMode,
+  });
+};
 
-  return useFetchTopics({
-    excludeStatuses: includeCompleted ? undefined : EXCLUDE_STATUSES_COMPLETED,
-    excludeTriggers: MAIN_SIDEBAR_EXCLUDE_TRIGGERS,
-    sortBy,
+/**
+ * Canonical topic fetch for chat sidebars (agent + group), driven by the active
+ * session. Use {@link useFetchAgentChatTopics} for a panel that names its agent
+ * explicitly.
+ *
+ * Extend {@link useChatTopicListQuery} when adding more preference-driven topic
+ * params; don't spread them across individual components.
+ */
+export const useFetchChatTopics = () => useFetchTopics(useChatTopicListQuery());
+
+/**
+ * Same canonical list, for the secondary conversation panels that carry their
+ * own topic picker (goal chat, task manager, page copilot, agent builder).
+ *
+ * These share `topicDataMap[agent_<id>]` with the sidebar, so they must ask for
+ * exactly the same list: fetching unfiltered here used to overwrite the
+ * sidebar's bucket with system-owned topics (task runs, cron, docs, evals) the
+ * moment such a panel mounted next to it.
+ */
+export const useFetchAgentChatTopics = (agentId?: string) => {
+  const query = useChatTopicListQuery();
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const pageSize = useGlobalStore(systemStatusSelectors.topicPageSize);
+
+  return useChatStore((s) => s.useFetchTopics)(!!agentId, {
+    agentId,
+    ...query,
+    isInbox: !!inboxAgentId && agentId === inboxAgentId,
+    pageSize,
   });
 };

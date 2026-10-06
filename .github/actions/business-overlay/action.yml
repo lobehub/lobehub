@@ -91,4 +91,9 @@ runs:
         }
         NODE
 
+        node "$GITHUB_ACTION_PATH/../../scripts/mergeAllowBuilds.mjs" \
+          "$overlay_root/pnpm-workspace.yaml" \
+          "$GITHUB_WORKSPACE/pnpm-workspace.yaml" \
+          "$GITHUB_WORKSPACE/apps/desktop/pnpm-workspace.yaml"
+
         echo "✅ Overlay repository $resolved_overlay_ref applied at $overlay_root"

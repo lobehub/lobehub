@@ -1,13 +1,11 @@
+import { TextArea } from '@lobehub/ui/base-ui';
 import { useDebounceFn } from 'ahooks';
-import { Input } from 'antd';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
-
-import { styles } from '../shared/style';
 
 const DEBOUNCE_MS = 300;
 
@@ -41,13 +39,16 @@ const TaskDetailTitleInput = memo(() => {
   );
 
   return (
-    <Input.TextArea
+    <TextArea
       autoSize={{ minRows: 1 }}
-      className={styles.titleInput}
       disabled={!canEditTask}
       placeholder={t('taskDetail.titlePlaceholder')}
+      style={{ padding: 0 }}
       value={localName}
       variant={'borderless'}
+      styles={{
+        input: { fontSize: 24, fontWeight: 600, lineHeight: 1.3, minHeight: 'auto' },
+      }}
       onChange={handleNameChange}
     />
   );

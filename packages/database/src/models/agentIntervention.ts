@@ -30,6 +30,7 @@ import {
   userSettings,
 } from '../schemas';
 import type { LobeChatDatabase, Transaction } from '../type';
+import { notTrashed } from '../utils/softDelete';
 
 export const AGENT_INTERVENTION_INVALID_REVIEW_TOKEN_HASH =
   'AGENT_INTERVENTION_INVALID_REVIEW_TOKEN_HASH';
@@ -277,8 +278,13 @@ const hasValidAnswers = (
     }
     if (definition.multi) {
       if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) return false;
+      // A multi-select question with "write your own" enabled carries the typed
+      // answer as one more entry in the array, exactly as the single-select
+      // branch below carries it as the scalar value. Whitelist the options only
+      // when the question forbids custom answers.
       if (
         definition.options.size > 0 &&
+        !definition.allowCustomAnswer &&
         value.some((item) => !definition.options.has(item as string))
       ) {
         return false;
@@ -2044,6 +2050,7 @@ export class AgentInterventionModel {
           this.workspaceId
             ? eq(messages.workspaceId, this.workspaceId)
             : isNull(messages.workspaceId),
+          notTrashed(messages.isDeleted),
         ),
       )
       .limit(1)
@@ -2185,6 +2192,7 @@ export class AgentInterventionModel {
           this.workspaceId
             ? eq(messages.workspaceId, this.workspaceId)
             : isNull(messages.workspaceId),
+          notTrashed(messages.isDeleted),
         ),
       )
       .limit(1)

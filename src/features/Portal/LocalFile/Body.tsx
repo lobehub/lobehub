@@ -29,12 +29,14 @@ import {
   type SkillMarkdownMetadataItem,
 } from '@/utils/skillMarkdown';
 
-import { extensionToLanguage, getFileExtension } from './Body.helpers';
+import { getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
 import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
+import UnsupportedPreview from './UnsupportedPreview';
+import VideoPreview from './VideoPreview';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
-const DocumentPreview = lazy(() => import('./DocumentPreview'));
+const DocumentPreview = lazy(() => import('@/features/FileViewer/Renderer/Document'));
 
 interface ImagePreviewProps {
   blob: Blob;
@@ -254,6 +256,7 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
       [modeScopeKey],
     );
     const showHtmlPreview = isHtml && mode === 'render';
+    const showSourceView = showHtmlPreview || !(isMarkdown && mode === 'render');
     const [htmlPreviewRevision, setHtmlPreviewRevision] = useState(0);
     const handleReloadPreview = useCallback(async () => {
       await onReload?.();
@@ -292,7 +295,9 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
         <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
           <PublishHtmlArtifactLiveBar />
           <PreviewToolbar
+            deviceId={deviceId}
             path={filePath}
+            rootPath={workingDirectory}
             actions={
               <>
                 {isHtml && (
@@ -338,7 +343,10 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
             }
           />
           <Flexbox flex={1} height={'100%'} style={{ minHeight: 0, overflow: 'hidden' }}>
-            <div style={{ flex: 1, minHeight: 0, overflow: showHtmlPreview ? 'hidden' : 'auto' }}>
+            {/* The rendered-markdown branch scrolls here; the HTML preview and
+                the code editor each own their scrolling, and the editor needs
+                that so its gutter and status bar stay pinned. */}
+            <div style={{ flex: 1, minHeight: 0, overflow: showSourceView ? 'hidden' : 'auto' }}>
               {isMarkdown && mode === 'render' ? (
                 <>
                   <SkillFrontmatterPreviewCard metadata={frontmatterMetadata} />
@@ -357,9 +365,9 @@ const TextPreviewPane = memo<TextPreviewPaneProps>(
                 />
               ) : (
                 <CodeEditorPane
-                  language={extensionToLanguage(ext)}
+                  showStatusBar
+                  filePath={filePath}
                   readOnly={readOnly}
-                  style={{ fontSize: 12, minHeight: '100%' }}
                   value={editingValue}
                   onChange={readOnly ? undefined : handleCodeChange}
                   onSave={readOnly ? undefined : handleSave}
@@ -489,6 +497,18 @@ const ActiveFileView = memo<ActiveFileViewProps>(
       return <ImagePreview blob={preview.blob} filename={filename} />;
     }
 
+    if (preview.type === 'video') {
+      return (
+        <VideoPreview
+          allowExternalFile={allowExternalFilePreview}
+          filePath={filePath}
+          key={filePath}
+          revision={preview.revision}
+          workingDirectory={workingDirectory}
+        />
+      );
+    }
+
     if (preview.type === 'document') {
       return (
         <Suspense fallback={<Loading />}>
@@ -509,9 +529,11 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     if (preview.type !== 'text') {
       return (
-        <Center height={'100%'} width={'100%'}>
-          <Empty description={t('workingPanel.localFile.binary')} />
-        </Center>
+        <UnsupportedPreview
+          filePath={filePath}
+          isLocalFile={!sandboxTopicId && !deviceId && isDesktop}
+          oversized={preview.type === 'binary' && preview.oversized}
+        />
       );
     }
 

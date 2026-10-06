@@ -55,7 +55,7 @@ Calibrate to lifespan as well: when the scope summary, PR/issue, or code comment
 
 Focus over completeness: findings must serve THIS change and its requirement. Do not audit unrelated legacy code, and do not propose rewrites beyond the change's scope.
 
-If this is a follow-up that earlier findings were fixed, review the new diff as a fresh review under the same checklists — never only confirm the requested edits landed.
+For a follow-up, assess every supplied original finding and its counterevidence against the current code, and check the fixes for regressions under the same checklists. Report each original finding as resolved, still present, or unresolved with the reason. Do not drop an original finding merely because its line is absent from the fix diff, and do not stop at confirming that the requested edits landed.
 
 ## Review scope (hard rules)
 

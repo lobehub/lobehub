@@ -40,6 +40,7 @@ describe('BatchIngester', () => {
       ingest: vi.fn(async (events) => {
         batches.push(numbers(events));
         if (batches.length === 1) await firstAck; // slow first round-trip
+        return { accepted: true };
       }),
     };
     const ingester = new BatchIngester(sink);
@@ -58,12 +59,11 @@ describe('BatchIngester', () => {
     expect(batches).toEqual([[1], [2, 3]]);
   });
 
-  it('never sends later batches once an earlier batch has exhausted its retries', async () => {
+  it('does not send later batches while the head batch remains unacknowledged', async () => {
     // Regression: queued follow-up batches used to keep sending after the
-    // first batch was permanently lost — if the server recovered mid-window,
+    // first batch was unacknowledged — if the server recovered mid-window,
     // it received a gapped stream (e.g. a tool_end whose tool_start never
-    // arrived). After a fatal error the worker must stop and drop everything
-    // still buffered.
+    // arrived). Exhausted retries stop this pump without skipping its head.
     const batches: number[][] = [];
     const sink: IngestSink = {
       finish: vi.fn(async () => {}),
@@ -98,6 +98,7 @@ describe('BatchIngester', () => {
       finish: vi.fn(async () => {}),
       ingest: vi.fn(async (events) => {
         batches.push(numbers(events));
+        return { accepted: true };
       }),
     };
     const ingester = new BatchIngester(sink);
@@ -108,5 +109,104 @@ describe('BatchIngester', () => {
 
     expect(batches.map((batch) => batch.length)).toEqual([50, 50, 20]);
     expect(batches.flat()).toEqual(all);
+  });
+  it('allows a later drain to retry the retained head without a new event', async () => {
+    const ingest = vi.fn<IngestSink['ingest']>().mockRejectedValue(new Error('offline'));
+    const ingester = new BatchIngester({ ingest, finish: vi.fn() });
+    ingester.push(makeEvent(1));
+    const failedDrain = expect(ingester.drain()).rejects.toThrow('offline');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await failedDrain;
+    ingest.mockResolvedValue({ accepted: true });
+    await ingester.drain();
+    expect(numbers(ingest.mock.calls.at(-1)![0])).toEqual([1]);
+    await ingester.drain();
+    expect(ingest).toHaveBeenCalledTimes(7);
+  });
+
+  it('fails the stream on a refused batch instead of retrying output the server threw away', async () => {
+    // Regression: a refusal arrives as a 200 (the operation is over server-side,
+    // so the batch is discarded), which the ingester read as "delivered". The
+    // agent kept working, every later batch was discarded the same way, and the
+    // run finished reporting success on output nobody ever stored.
+    const ingest = vi
+      .fn<IngestSink['ingest']>()
+      .mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest });
+
+    ingester.push(makeEvent(1));
+    const drained = expect(ingester.drain()).rejects.toThrow('stale-operation');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await drained;
+
+    expect(ingest).toHaveBeenCalledTimes(1); // refusal is permanent — no retries
+    expect(ingester.failed).toBe(true);
+
+    // And the stream stays failed: later events are dropped rather than queued
+    // for an upload that cannot succeed.
+    ingester.push(makeEvent(2));
+    await expect(ingester.drain()).rejects.toThrow('stale-operation');
+    expect(ingest).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a lost stream the moment it happens, not only at drain', async () => {
+    // The refusal above is terminal, but the caller only learned about it when
+    // it drained — i.e. after the agent had finished. A run whose output is
+    // already being discarded kept working until then (observed: 15 minutes of
+    // a CLI producing output nobody stored). The callback is what lets the
+    // caller stop the agent instead.
+    const ingest = vi
+      .fn<IngestSink['ingest']>()
+      .mockResolvedValue({ accepted: false, reason: 'stale-operation' });
+    const onFatal = vi.fn();
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest }, undefined, onFatal);
+
+    ingester.push(makeEvent(1));
+    const drained = expect(ingester.drain()).rejects.toThrow('stale-operation');
+    await vi.advanceTimersByTimeAsync(20_000);
+    await drained;
+
+    expect(onFatal).toHaveBeenCalledTimes(1);
+    expect(onFatal.mock.calls[0][0]).toBeInstanceOf(Error);
+    expect(onFatal.mock.calls[0][0].message).toContain('stale-operation');
+
+    // Latched: a second failure (or a later push on a dead stream) must not
+    // re-fire it and abort a run twice.
+    ingester.push(makeEvent(2));
+    await expect(ingester.drain()).rejects.toThrow('stale-operation');
+    expect(onFatal).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports an overflow through the same callback', () => {
+    const maxBytes = Buffer.byteLength(JSON.stringify(makeEvent(1)));
+    const onFatal = vi.fn();
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest: vi.fn() }, maxBytes, onFatal);
+
+    ingester.push(makeEvent(1));
+    ingester.push(makeEvent(2));
+
+    expect(onFatal).toHaveBeenCalledTimes(1);
+    expect(onFatal.mock.calls[0][0].message).toContain('buffer limit exceeded');
+  });
+
+  it('treats an ack without a verdict as accepted so older servers keep working', async () => {
+    const ingest = vi.fn<IngestSink['ingest']>().mockResolvedValue(undefined as never);
+    const ingester = new BatchIngester({ finish: vi.fn(), ingest });
+
+    ingester.push(makeEvent(1));
+    await expect(ingester.drain()).resolves.toBeUndefined();
+    expect(ingester.failed).toBe(false);
+  });
+
+  it('fails closed on overflow instead of dropping a prefix then uploading a gapped stream', async () => {
+    const sink: IngestSink = { ingest: vi.fn(), finish: vi.fn() };
+    const maxBytes = Buffer.byteLength(JSON.stringify(makeEvent(1)));
+    const ingester = new BatchIngester(sink, maxBytes);
+    ingester.push(makeEvent(1));
+    ingester.push(makeEvent(2));
+    expect(ingester.failed).toBe(true);
+    ingester.push(makeEvent(3));
+    await expect(ingester.drain()).rejects.toThrow('buffer limit exceeded');
+    expect(sink.ingest).not.toHaveBeenCalled();
   });
 });

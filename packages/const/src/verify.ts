@@ -72,6 +72,28 @@ export const verifyRunStatuses = [
 export type VerifyRunStatus = (typeof verifyRunStatuses)[number];
 
 /**
+ * A draft round only describes what will be verified: nothing has executed and
+ * nobody has decided. Drafts follow the live plan and are reused by the next
+ * plan or ingest instead of consuming another round number.
+ *
+ * A replay is excluded: it is pinned to the source round's frozen definition, so
+ * it must not follow later graph edits or absorb another flow. Only the newest
+ * round can be the open draft — an older one left behind by a replay is an
+ * abandoned ledger position, so callers check the latest round rather than
+ * searching the whole chain.
+ */
+export const isDraftVerifyRun = (run: {
+  metadata?: { replayOfRunId?: string } | null;
+  planConfirmedAt?: Date | string | null;
+  status?: string | null;
+  userDecision?: string | null;
+}): boolean =>
+  run.status === 'planned' &&
+  !run.planConfirmedAt &&
+  !run.userDecision &&
+  !run.metadata?.replayOfRunId;
+
+/**
  * What produced a verification session.
  * - agent:         verifying a real Agent Run (`verify_runs.operation_id` set)
  * - agent-testing: a standalone session ingested from the agent-testing harness
@@ -164,6 +186,14 @@ const PROGRAMMATIC_TEST_PATTERNS: RegExp[] = [
 ];
 
 /**
+ * Stored title of the synthesized holistic fallback check (one broad agent
+ * verify over the whole deliverable, used when a task opted into verify without
+ * decomposing into criteria). The server persists this fixed English string;
+ * clients match against it to render a localized display title instead.
+ */
+export const HOLISTIC_CHECK_TITLE = 'Task delivery acceptance';
+
+/**
  * Whether a proposed acceptance check is really one of the repo's programmatic
  * test / static-analysis gates rather than a delivery outcome a person accepts.
  *
@@ -253,8 +283,16 @@ export type AcceptanceRejectIntent = (typeof acceptanceRejectIntents)[number];
 
 /** What an automated reviewer proposes for a check. Deliberately narrower than
  *  the human's vocabulary: a model never proposes `ignore`, which is a statement
- *  about the reviewer's priorities rather than about the delivery. */
-export const reviewPredictionActions = ['accept', 'reject'] as const;
+ *  about the reviewer's priorities rather than about the delivery.
+ *
+ *  `unjudgeable` is NOT a softer `reject`. It means the criterion asks for
+ *  something no reader can confirm — re-running the delivered scripts, building,
+ *  driving a live system — so no capture could ever settle it and another
+ *  delivery attempt is wasted. Thin or missing evidence stays a `reject`,
+ *  because a builder can fix that. The two are separate values because folding
+ *  them together made "the delivery fell short" and "this reviewer cannot decide"
+ *  indistinguishable in the agreement statistics. */
+export const reviewPredictionActions = ['accept', 'reject', 'unjudgeable'] as const;
 export type ReviewPredictionAction = (typeof reviewPredictionActions)[number];
 
 /**
@@ -333,6 +371,100 @@ export const verifyEvidenceCapturedBy = [
 ] as const;
 export type VerifyEvidenceCapturedBy = (typeof verifyEvidenceCapturedBy)[number];
 
+/**
+ * How an agent marker on a video reads.
+ *
+ * - step:  an action the agent performed, logged while driving the recording
+ * - check: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass
+ * - flag:  an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree
+ */
+export const verifyEvidenceChapterKinds = ['check', 'flag', 'step'] as const;
+export type VerifyEvidenceChapterKind = (typeof verifyEvidenceChapterKinds)[number];
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
+}
+
+/** Upper bound on chapters per video — a timeline, not a transcript. */
+export const MAX_VERIFY_EVIDENCE_CHAPTERS = 100;
+
+const trimmedText = (value: unknown, max: number) =>
+  typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+
+/**
+ * Read `chapters` from an evidence metadata bag (or a raw array), dropping
+ * malformed entries instead of failing: chapters guide the reviewer, so one bad
+ * marker must never cost the upload. Returns them sorted by time, or
+ * `undefined` when none survive.
+ */
+export const readEvidenceChapters = (value: unknown): VerifyEvidenceChapter[] | undefined => {
+  let raw: unknown;
+  if (Array.isArray(value)) raw = value;
+  else if (value && typeof value === 'object') raw = (value as { chapters?: unknown }).chapters;
+  if (!Array.isArray(raw)) return undefined;
+
+  const chapters: VerifyEvidenceChapter[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { kind, label, note, t } = entry as Record<string, unknown>;
+    if (typeof t !== 'number' || !Number.isFinite(t) || t < 0) continue;
+    if (!verifyEvidenceChapterKinds.includes(kind as VerifyEvidenceChapterKind)) continue;
+    const chapter: VerifyEvidenceChapter = { kind: kind as VerifyEvidenceChapterKind, t };
+    const text = { label: trimmedText(label, 80), note: trimmedText(note, 500) };
+    if (chapter.kind === 'step' ? !text.label : !text.note) continue;
+    if (text.label) chapter.label = text.label;
+    if (text.note) chapter.note = text.note;
+    chapters.push(chapter);
+  }
+  if (chapters.length === 0) return undefined;
+  return chapters.sort((a, b) => a.t - b.t).slice(0, MAX_VERIFY_EVIDENCE_CHAPTERS);
+};
+
+/**
+ * Canonicalize the `chapters` key of an evidence metadata bag before it is
+ * stored: malformed markers are dropped, and chapters on anything but a video
+ * are removed (they have no timeline to sit on). Other keys pass through.
+ */
+export const normalizeEvidenceMetadata = (metadata: unknown, type: string): unknown => {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return metadata;
+  if (!('chapters' in metadata)) return metadata;
+  const { chapters: _chapters, ...rest } = metadata as Record<string, unknown>;
+  const chapters = type === 'video' ? readEvidenceChapters(metadata) : undefined;
+  if (chapters) return { ...rest, chapters };
+  return Object.keys(rest).length > 0 ? rest : null;
+};
+
+/**
+ * A video timestamp as `m:ss.cc` — a skeleton flash can last a handful of
+ * frames. Rounds to whole centiseconds first so 59.999s carries into the next
+ * minute (`1:00.00`) instead of reading `0:60.00`.
+ */
+export const formatVideoTimestamp = (seconds: number) => {
+  if (!Number.isFinite(seconds) || seconds < 0) return '0:00.00';
+  const centiseconds = Math.round(seconds * 100);
+  const minutes = Math.floor(centiseconds / 6000);
+  const rest = (centiseconds - minutes * 6000) / 100;
+  return `${minutes}:${rest.toFixed(2).padStart(5, '0')}`;
+};
+
+/**
+ * The whole frame. A reviewer note on a video that marks a moment or a span
+ * without circling an area carries this region.
+ */
+export const FULL_FRAME_RECT = { height: 1, width: 1, x: 0, y: 0 } as const;
+
+export const isFullFrameRect = (rect: { height: number; width: number; x: number; y: number }) =>
+  rect.x === 0 && rect.y === 0 && rect.width === 1 && rect.height === 1;
+
 /** Default cap on automatic repair rounds when a rubric doesn't override it. */
 export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
 
@@ -346,7 +478,7 @@ export const DEFAULT_MAX_REPAIR_ROUNDS = 3;
  * (`tasks.config.verify.maxIterations`). Their product is the worst-case number
  * of agent runs a goal can pay for.
  */
-export const DEFAULT_GOAL_MAX_ROUNDS = 3;
+export const DEFAULT_GOAL_MAX_ROUNDS = 8;
 
 /** Bounds the round budget a goal may be created with. */
 export const GOAL_MAX_ROUNDS_RANGE = { max: 10, min: 2 } as const;

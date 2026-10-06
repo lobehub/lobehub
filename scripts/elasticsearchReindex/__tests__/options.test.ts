@@ -2,10 +2,93 @@ import { describe, expect, it } from 'vitest';
 
 import {
   assertFtsSearchReindexElasticsearchHostname,
+  assertFtsSearchReindexRangeCollation,
   assertFtsSearchReindexTelemetryExportConfigured,
+  resolveFtsSearchReindexBatchSizeByEntity,
   resolveFtsSearchReindexElasticsearchEnvironment,
+  resolveFtsSearchReindexEntities,
+  resolveFtsSearchReindexRangeConcurrencyByEntity,
   resolveFtsSearchReindexTelemetryEnvironment,
 } from '../options';
+
+describe('resolveFtsSearchReindexRangeConcurrencyByEntity', () => {
+  it('accepts repeatable high-volume entity concurrency', () => {
+    expect(
+      resolveFtsSearchReindexRangeConcurrencyByEntity([
+        '--entity-range-concurrency=documents:4',
+        '--entity-range-concurrency=messages:9',
+      ]),
+    ).toEqual({ documents: 4, messages: 9 });
+  });
+
+  it('rejects unsupported entities, invalid concurrency, and duplicates', () => {
+    expect(() =>
+      resolveFtsSearchReindexRangeConcurrencyByEntity(['--entity-range-concurrency=agents:2']),
+    ).toThrow('supports only documents and messages');
+    expect(() =>
+      resolveFtsSearchReindexRangeConcurrencyByEntity(['--entity-range-concurrency=messages:0']),
+    ).toThrow('<entity>:<positive-integer>');
+    expect(() =>
+      resolveFtsSearchReindexRangeConcurrencyByEntity([
+        '--entity-range-concurrency=messages:2',
+        '--entity-range-concurrency=messages:4',
+      ]),
+    ).toThrow('provided more than once');
+  });
+
+  it('requires bytewise PostgreSQL collation only when parallel ranges are enabled', () => {
+    expect(() => assertFtsSearchReindexRangeCollation('C.UTF-8', { messages: 9 })).not.toThrow();
+    expect(() => assertFtsSearchReindexRangeCollation('en_US.UTF-8', {})).not.toThrow();
+    expect(() => assertFtsSearchReindexRangeCollation('en_US.UTF-8', { messages: 9 })).toThrow(
+      'require a bytewise database collation',
+    );
+  });
+});
+
+describe('resolveFtsSearchReindexEntities', () => {
+  it('accepts a repeatable subset while leaving the default unspecified', () => {
+    expect(resolveFtsSearchReindexEntities([])).toBeUndefined();
+    expect(resolveFtsSearchReindexEntities(['--entity=documents', '--entity=messages'])).toEqual([
+      'documents',
+      'messages',
+    ]);
+  });
+
+  it('rejects unknown and duplicate entities', () => {
+    expect(() => resolveFtsSearchReindexEntities(['--entity=unknown'])).toThrow(
+      'unknown search entity',
+    );
+    expect(() =>
+      resolveFtsSearchReindexEntities(['--entity=messages', '--entity=messages']),
+    ).toThrow('provided more than once');
+  });
+});
+
+describe('resolveFtsSearchReindexBatchSizeByEntity', () => {
+  it('accepts repeatable per-entity page-size overrides', () => {
+    expect(
+      resolveFtsSearchReindexBatchSizeByEntity([
+        '--entity-batch-size=documents:1000',
+        '--entity-batch-size=messages:5000',
+      ]),
+    ).toEqual({ documents: 1000, messages: 5000 });
+  });
+
+  it('rejects unknown entities, invalid sizes, and duplicate overrides', () => {
+    expect(() =>
+      resolveFtsSearchReindexBatchSizeByEntity(['--entity-batch-size=unknown:1']),
+    ).toThrow('unknown search entity');
+    expect(() =>
+      resolveFtsSearchReindexBatchSizeByEntity(['--entity-batch-size=documents:0']),
+    ).toThrow('<entity>:<positive-integer>');
+    expect(() =>
+      resolveFtsSearchReindexBatchSizeByEntity([
+        '--entity-batch-size=documents:1000',
+        '--entity-batch-size=documents:500',
+      ]),
+    ).toThrow('provided more than once');
+  });
+});
 
 describe('resolveFtsSearchReindexElasticsearchEnvironment', () => {
   it('uses the canonical pair by default', () => {

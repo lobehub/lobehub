@@ -1,7 +1,6 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Card } from 'antd';
+import { Block, Empty, Flexbox } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Database } from 'lucide-react';
 import { memo } from 'react';
@@ -10,12 +9,11 @@ import { useTranslation } from 'react-i18next';
 import DatasetRow from './DatasetRow';
 import type { useExperimentActions } from './useExperimentActions';
 
-const styles = createStaticStyles(({ css }) => ({
+const styles = createStaticStyles(({ css, cssVar }) => ({
   listCard: css`
-    .ant-card-body {
-      padding-block: 4px;
-      padding-inline: 8px;
-    }
+    padding-block: 4px;
+    padding-inline: 8px;
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   sectionTitle: css`
     margin: 0;
@@ -36,7 +34,7 @@ const ScopedDatasetsSection = memo<ScopedDatasetsSectionProps>(({ actions }) => 
   return (
     <Flexbox gap={12}>
       <h3 className={styles.sectionTitle}>{t('experiment.detail.datasetsScoped')}</h3>
-      <Card className={styles.listCard}>
+      <Block className={styles.listCard} variant={'outlined'}>
         {scopedDatasets.length === 0 ? (
           <Empty description={t('experiment.detail.datasetsScopedEmpty')} icon={Database} />
         ) : (
@@ -46,7 +44,7 @@ const ScopedDatasetsSection = memo<ScopedDatasetsSectionProps>(({ actions }) => 
             ))}
           </Flexbox>
         )}
-      </Card>
+      </Block>
     </Flexbox>
   );
 });

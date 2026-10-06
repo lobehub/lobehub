@@ -6,24 +6,33 @@ import {
   startEvidenceSubmission,
 } from '../evidenceSubmission';
 
-const { createMany, execAgent, findByOperation, upsertByCheckItem } = vi.hoisted(() => ({
+const { createMany, execAgent, findByOperation, listByRun, upsertByCheckItem } = vi.hoisted(() => ({
   createMany: vi.fn(),
   execAgent: vi.fn(),
   findByOperation: vi.fn(),
+  listByRun: vi.fn(),
   upsertByCheckItem: vi.fn(),
 }));
 
 vi.mock('@/server/services/aiAgent', () => ({
-  AiAgentService: vi.fn(() => ({ execAgent })),
+  AiAgentService: vi.fn(function () {
+    return { execAgent };
+  }),
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
-  VerifyCheckResultModel: vi.fn(() => ({ upsertByCheckItem })),
+  VerifyCheckResultModel: vi.fn(function () {
+    return { upsertByCheckItem };
+  }),
 }));
 vi.mock('@/database/models/verifyEvidence', () => ({
-  VerifyEvidenceModel: vi.fn(() => ({ createMany })),
+  VerifyEvidenceModel: vi.fn(function () {
+    return { createMany, listByRun };
+  }),
 }));
 vi.mock('@/database/models/verifyRun', () => ({
-  VerifyRunModel: vi.fn(() => ({ findByOperation })),
+  VerifyRunModel: vi.fn(function () {
+    return { findByOperation };
+  }),
 }));
 
 describe('startEvidenceSubmission', () => {
@@ -32,6 +41,7 @@ describe('startEvidenceSubmission', () => {
     findByOperation.mockReset().mockResolvedValue({ id: 'run-1' });
     upsertByCheckItem.mockReset().mockResolvedValue({ id: 'result-1' });
     createMany.mockReset().mockResolvedValue(undefined);
+    listByRun.mockReset().mockResolvedValue([]);
   });
 
   it('records the heterogeneous builder deliverable as inline evidence for every criterion', async () => {
@@ -63,6 +73,44 @@ describe('startEvidenceSubmission', () => {
         type: 'text',
       }),
     ]);
+  });
+
+  it('leaves criteria the builder already evidenced untouched', async () => {
+    listByRun.mockResolvedValue([{ checkItemId: 'criterion-1', type: 'transcript' }]);
+
+    await recordHeterogeneousDeliverableEvidence({
+      db: {} as any,
+      deliverable: 'the whole final report',
+      operation: { id: 'work-op' } as any,
+      plan: [
+        {
+          id: 'criterion-1',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'Evidenced by the builder',
+          verifierConfig: {},
+          verifierType: 'llm',
+        },
+        {
+          id: 'criterion-2',
+          index: 1,
+          onFail: 'manual',
+          required: true,
+          title: 'Left without evidence',
+          verifierConfig: {},
+          verifierType: 'llm',
+        },
+      ],
+      userId: 'user-1',
+    });
+
+    expect(listByRun).toHaveBeenCalledWith('run-1');
+    expect(upsertByCheckItem).toHaveBeenCalledTimes(1);
+    expect(upsertByCheckItem).toHaveBeenCalledWith(
+      expect.objectContaining({ checkItemId: 'criterion-2' }),
+    );
+    expect(createMany).toHaveBeenCalledTimes(1);
   });
 
   it('continues as the original builder in the same topic with only the evidence tool', async () => {

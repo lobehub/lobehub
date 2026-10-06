@@ -2,8 +2,8 @@
 
 import { type ChatInputProps } from '@lobehub/editor/react';
 import { ChatInput, ChatInputActionBar } from '@lobehub/editor/react';
-import { Center, Flexbox, Skeleton } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Center, Flexbox } from '@lobehub/ui';
+import { Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import { type ReactNode, use } from 'react';
 import { memo, useEffect } from 'react';
@@ -185,23 +185,21 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
 
     const loadingLeftSlot = isConfigLoading ? (
       <Flexbox horizontal align="center" gap={6} paddingInline={4}>
-        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
-        <Skeleton.Button active shape="circle" size="small" style={{ height: 28, width: 28 }} />
+        <Skeleton height={28} radius={'50%'} width={28} />
+        <Skeleton height={28} radius={'50%'} width={28} />
       </Flexbox>
     ) : null;
     const loadingRightSlot = isConfigLoading ? (
-      <Skeleton.Button
-        active
-        shape="round"
-        size="small"
-        style={{ height: 32, minWidth: 64, width: 64 }}
-      />
+      <Skeleton radius={999} style={{ height: 32, minWidth: 64, width: 64 }} />
     ) : null;
     const noticeNode = !isConfigLoading && <ChatInputNotice />;
     // The action bar is `width: 100%`, so a sibling placed *inside* its
     // shrink-to-fit box is pushed past the bar's right edge and leaves a
     // one-slot hole between the last action and the expand toggle. Keep the
     // toggle in a row outside that box.
+    // NOTICE: The hover-only expand button stays in layout at zero opacity to
+    // prevent shifting. Keep the notice before it so the hidden 32px control
+    // does not create a false gap after the microphone action.
     const leftSlotContent = (
       <Flexbox horizontal align={'center'} flex={'none'} gap={2}>
         <Flexbox horizontal align={'center'} className={styles.leftActions}>
@@ -214,13 +212,13 @@ const DesktopChatInput = memo<DesktopChatInputProps>(
             />
           )}
         </Flexbox>
+        {noticeNode}
         <ComposerExpandButton />
       </Flexbox>
     );
     const leftSlot = noticeNode ? (
-      <Flexbox horizontal align={'center'} className={styles.leftSlot} gap={4}>
+      <Flexbox horizontal align={'center'} className={styles.leftSlot}>
         {leftSlotContent}
-        {noticeNode}
       </Flexbox>
     ) : (
       leftSlotContent

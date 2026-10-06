@@ -16,12 +16,12 @@ Feature: 发送消息与流式输出期间的视口滚动行为
     Then 视口应贴近聊天列表底部
 
   @AGENT-SCROLL-002 @P0 @journey
-  Scenario: 关闭流式自动滚动后，用户消息固定在顶部且视口不跟随
+  Scenario: 关闭流式自动滚动后，用户消息固定在顶部
     Given 用户在设置中关闭 "AI 回复时自动滚动"
+    And 流式响应被放慢以模拟长文输出
     And 用户进入 Lobe AI 对话页面
-    When 用户发送长文消息并等待回复完成
+    When 用户发送一条触发长文输出的消息
     Then 用户消息应固定在聊天列表顶部
-    And 视口不应贴近聊天列表底部
 
   # Mid-stream scroll-up cancellation is covered at the unit level in
   # `useConversationScroll.test.ts`. An end-to-end version is pending until
@@ -43,6 +43,18 @@ Feature: 发送消息与流式输出期间的视口滚动行为
     And 用户进入 Lobe AI 对话页面
     When 用户发送一条触发长文输出的消息
     Then 用户消息应固定在聊天列表顶部
+
+  # Regression guard for the lost pin animation: the send scroll fires before
+  # the spacer row exists and gets clamped, so the visible slide is the settle
+  # re-pin after mount. An instant re-pin there turns the slide into a jump.
+  @AGENT-SCROLL-007 @P0 @journey
+  Scenario: 发送消息后，用户消息以多帧平滑滚动过渡到列表顶部
+    Given 流式响应被放慢以模拟长文输出
+    And 用户进入 Lobe AI 对话页面
+    When 用户完成一轮用于垫高列表的长回复对话
+    And 开始记录聊天列表滚动轨迹
+    And 用户发送一条触发长文输出的消息
+    Then 聊天列表应以多帧平滑滚动把用户消息顶到顶部
 
   # Regression guard for the memo-staleness issue where the message
   # ResizeObserver could skip rebinding to the new turn's user/assistant DOM

@@ -48,6 +48,81 @@ describe('topicSelectors', () => {
     });
   });
 
+  describe('reasoning + hetero pins', () => {
+    const pinTopicDataMap = createTopicDataMap('test');
+    pinTopicDataMap[topicMapKey({ agentId: 'test' })].items = [
+      {
+        id: 'pinned',
+        metadata: { reasoningConfig: { reasoningEffort: 'high' } },
+        model: 'gpt-5',
+        name: 'Pinned',
+        provider: 'openai',
+      },
+      { id: 'legacy', model: 'gpt-5', name: 'Legacy', provider: 'openai' },
+      { id: 'noModel', metadata: { reasoningConfig: {} }, name: 'No Model' },
+      {
+        id: 'heteroBoth',
+        metadata: { heteroEffort: 'max' },
+        model: 'opus',
+        name: 'Hetero',
+        provider: 'claude-code',
+      },
+      { id: 'heteroEffortOnly', metadata: { heteroEffort: 'default' }, name: 'Hetero effort' },
+      { id: 'heteroNone', name: 'Hetero none' },
+    ] as any;
+    const state = merge(initialStore, { topicDataMap: pinTopicDataMap, activeAgentId: 'test' });
+
+    it('getTopicReasoningPinById returns the pinned model with its reasoning config', () => {
+      expect(topicSelectors.getTopicReasoningPinById('pinned')(state)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+        reasoningConfig: { reasoningEffort: 'high' },
+      });
+      expect(topicSelectors.getTopicReasoningPinById('legacy')(state)).toEqual({
+        model: 'gpt-5',
+        provider: 'openai',
+        reasoningConfig: undefined,
+      });
+      expect(topicSelectors.getTopicReasoningPinById('noModel')(state)).toBeUndefined();
+    });
+
+    it('getTopicReasoningConfigForModel only honors a pin taken for the same model', () => {
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('pinned', 'gpt-5', 'openai')(state),
+      ).toEqual({ reasoningEffort: 'high' });
+      // a sub-agent modelOverride must not inherit the parent topic's effort
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('pinned', 'gpt-4', 'openai')(state),
+      ).toBeUndefined();
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('pinned', 'gpt-5', 'azure')(state),
+      ).toBeUndefined();
+      expect(
+        topicSelectors.getTopicReasoningConfigForModel('legacy', 'gpt-5', 'openai')(state),
+      ).toBeUndefined();
+    });
+
+    it('getTopicHeteroPinById combines the model columns with the effort pin', () => {
+      expect(topicSelectors.getTopicHeteroPinById('heteroBoth')(state)).toEqual({
+        effort: 'max',
+        model: 'opus',
+        provider: 'claude-code',
+      });
+      expect(topicSelectors.getTopicHeteroPinById('heteroEffortOnly')(state)).toEqual({
+        effort: 'default',
+      });
+      expect(topicSelectors.getTopicHeteroPinById('heteroNone')(state)).toBeUndefined();
+      expect(topicSelectors.getTopicHeteroPinById('missing')(state)).toBeUndefined();
+    });
+
+    it('activeTopicHeteroPin follows the active topic', () => {
+      expect(topicSelectors.activeTopicHeteroPin(state)).toBeUndefined();
+      expect(
+        topicSelectors.activeTopicHeteroPin(merge(state, { activeTopicId: 'heteroBoth' })),
+      ).toEqual({ effort: 'max', model: 'opus', provider: 'claude-code' });
+    });
+  });
+
   describe('getTopicModelById / activeTopicModel', () => {
     const modelTopicDataMap = createTopicDataMap('test');
     modelTopicDataMap[topicMapKey({ agentId: 'test' })].items = [
@@ -236,6 +311,34 @@ describe('topicSelectors', () => {
       const state = merge(initialStore, { topicDataMap, activeAgentId: 'test' });
       const topics = topicSelectors.displayTopics(state);
       expect(topics).toEqual(topicItems);
+    });
+
+    it('should hide every system-owned trigger, not just cron', () => {
+      // A panel fetching the same agent with looser filters (goal chat, task
+      // manager, page copilot) overwrites this bucket, so the list surfaces
+      // must not render whatever lands in it.
+      const polluted = [
+        ...topicItems,
+        { id: 'cron1', name: 'Cron', trigger: 'cron' },
+        { id: 'task1', name: 'Task run', trigger: 'task' },
+        { id: 'doc1', name: 'Doc chat', trigger: 'document' },
+        { id: 'eval1', name: 'Eval', trigger: 'eval' },
+      ];
+      const state = merge(initialStore, {
+        activeAgentId: 'test',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'test' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: polluted,
+            pageSize: 20,
+            total: polluted.length,
+          },
+        },
+      });
+
+      expect(topicSelectors.displayTopics(state)).toEqual(topicItems);
+      expect(topicSelectors.currentTopicLength(state)).toBe(topicItems.length);
     });
   });
 
@@ -550,6 +653,120 @@ describe('topicSelectors', () => {
         expect.objectContaining({ id: 'active' }),
       ]);
       expect(topicSelectors.displayTopicsForSidebar(20, 'updatedAt', true)(state)).toHaveLength(2);
+    });
+
+    it('keeps the active topic visible when it falls outside the configured page', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'older-active',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: true,
+            items: [
+              { id: 'newest', updatedAt: 3 },
+              { id: 'newer', updatedAt: 2 },
+              { id: 'older-active', updatedAt: 1 },
+            ],
+            pageSize: 2,
+            total: 3,
+          },
+        },
+      });
+
+      expect(
+        topicSelectors
+          .displayTopicsForSidebar(
+            2,
+            'updatedAt',
+            false,
+          )(state)
+          ?.map(({ id }) => id),
+      ).toEqual(['newest', 'newer', 'older-active']);
+    });
+
+    it('keeps an active completed topic from the detail cache visible', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'archived-active',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: true,
+            items: [{ id: 'visible', status: 'active', updatedAt: 2 }],
+            pageSize: 20,
+            total: 2,
+          },
+        },
+        topicDetailMap: {
+          'archived-active': { id: 'archived-active', status: 'completed', updatedAt: 1 },
+        },
+      });
+
+      expect(
+        topicSelectors
+          .displayTopicsForSidebar(
+            20,
+            'updatedAt',
+            false,
+          )(state)
+          ?.map(({ id }) => id),
+      ).toEqual(['visible', 'archived-active']);
+    });
+
+    it('keeps an injected active favorite before regular topics', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'archived-favorite',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: true,
+            items: [
+              { favorite: true, id: 'visible-favorite', updatedAt: 3 },
+              { id: 'regular', updatedAt: 2 },
+            ],
+            pageSize: 20,
+            total: 3,
+          },
+        },
+        topicDetailMap: {
+          'archived-favorite': {
+            favorite: true,
+            id: 'archived-favorite',
+            status: 'completed',
+            updatedAt: 1,
+          },
+        },
+      });
+
+      expect(
+        topicSelectors
+          .displayTopicsForSidebar(
+            20,
+            'updatedAt',
+            false,
+          )(state)
+          ?.map(({ id }) => id),
+      ).toEqual(['visible-favorite', 'archived-favorite', 'regular']);
+    });
+
+    it('does not duplicate an active topic already in the visible page', () => {
+      const state = merge(initialStore, {
+        activeAgentId: 'agent-1',
+        activeTopicId: 'active',
+        topicDataMap: {
+          [topicMapKey({ agentId: 'agent-1' })]: {
+            currentPage: 0,
+            hasMore: false,
+            items: [{ id: 'active', updatedAt: 1 }],
+            pageSize: 20,
+            total: 1,
+          },
+        },
+      });
+
+      expect(topicSelectors.displayTopicsForSidebar(20)(state)).toHaveLength(1);
     });
   });
 

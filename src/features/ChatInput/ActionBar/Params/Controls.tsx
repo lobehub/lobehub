@@ -4,21 +4,20 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Select, SliderWithInput, Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Select, SliderWithInput, Spin, Switch, TextArea } from '@lobehub/ui/base-ui';
+import { useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank';
+import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { PartialDeep } from 'type-fest';
 
 import InfoTooltip from '@/components/InfoTooltip';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import ModelSelect from '@/features/ModelSelect';
 import ControlsForm from '@/features/ModelSwitchPanel/components/ControlsForm';
 import { usePermission } from '@/hooks/usePermission';
@@ -193,49 +192,6 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   modelConfigSection: css`
     padding-block: 12px;
-
-    .ant-form {
-      margin: 0;
-    }
-
-    .ant-form-item {
-      padding-block: 12px;
-    }
-
-    .ant-form-item-row {
-      gap: 10px;
-    }
-
-    .ant-form-item-label > label {
-      font-size: 13px;
-      font-weight: 500;
-      line-height: 20px;
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-form-item-label > label div {
-      color: ${cssVar.colorTextSecondary};
-    }
-
-    .ant-form-item-label > label small,
-    .ant-form-item-label > label small *:not(a) {
-      font-size: 12px;
-      font-weight: 400;
-      line-height: 18px;
-      color: ${cssVar.colorTextTertiary};
-    }
-
-    .ant-form-item:first-child {
-      padding-block-start: 0;
-    }
-
-    .ant-form-item:last-child {
-      padding-block-end: 0;
-    }
-
-    .ant-divider {
-      display: none;
-    }
   `,
   panel: css`
     overflow: hidden;
@@ -261,10 +217,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     .ant-switch.ant-switch-checked {
       background: ${cssVar.colorText};
-    }
-
-    .ant-form-item {
-      margin: 0;
     }
   `,
   sidebarPanel: css`
@@ -367,11 +319,11 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-const PARAM_NAME_MAP: Record<ParamKey, (string | number)[]> = {
-  frequency_penalty: ['params', 'frequency_penalty'],
-  presence_penalty: ['params', 'presence_penalty'],
-  temperature: ['params', 'temperature'],
-  top_p: ['params', 'top_p'],
+const PARAM_NAME_MAP: Record<ParamKey, string> = {
+  frequency_penalty: 'params.frequency_penalty',
+  presence_penalty: 'params.presence_penalty',
+  temperature: 'params.temperature',
+  top_p: 'params.top_p',
 };
 
 const PARAM_DEFAULTS: Record<ParamKey, number> = {
@@ -561,31 +513,29 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     REASONING_PARAMS_SET.has(param),
   );
   const enableAgentMode = useAgentStore(agentByIdSelectors.getAgentEnableModeById(agentId));
-  const [form] = AntdForm.useForm();
+  const form = useForm();
   const [advancedOpen, setAdvancedOpen] = useState(() => getStoredOpen(ADVANCED_OPEN_STORAGE_KEY));
   const [modelConfigOpen, setModelConfigOpen] = useState(() =>
     getStoredOpen(MODEL_CONFIG_OPEN_STORAGE_KEY),
   );
   const [, refreshFormValues] = useState(0);
 
-  const enableContextCompression = form.getFieldValue(['chatConfig', 'enableContextCompression']);
-  const enableMaxTokens = form.getFieldValue(['chatConfig', 'enableMaxTokens']);
-  const enableHistoryCount = form.getFieldValue(['chatConfig', 'enableHistoryCount']);
-  const historyCountValue = form.getFieldValue(['chatConfig', 'historyCount']);
-  const maxTokensValue = form.getFieldValue(['params', 'max_tokens']);
-  const inputTemplateValue = form.getFieldValue(['chatConfig', 'inputTemplate']);
-  const enableAutoScrollOnStreaming = form.getFieldValue([
-    'chatConfig',
-    'enableAutoScrollOnStreaming',
-  ]);
-  const enableStreaming = form.getFieldValue(['chatConfig', 'enableStreaming']);
-  const enableFollowUpChips = form.getFieldValue(['chatConfig', 'enableFollowUpChips']);
+  const enableContextCompression = form.getValue('chatConfig.enableContextCompression');
+  const enableMaxTokens = form.getValue('chatConfig.enableMaxTokens');
+  const enableHistoryCount = form.getValue('chatConfig.enableHistoryCount');
+  const historyCountValue = form.getValue('chatConfig.historyCount');
+  const maxTokensValue = form.getValue('params.max_tokens');
+  const inputTemplateValue = form.getValue('chatConfig.inputTemplate');
+  const enableAutoScrollOnStreaming = form.getValue('chatConfig.enableAutoScrollOnStreaming');
+  const enableStreaming = form.getValue('chatConfig.enableStreaming');
+  const enableStaleToolResultTrim = form.getValue('chatConfig.enableStaleToolResultTrim');
+  const enableFollowUpChips = form.getValue('chatConfig.enableFollowUpChips');
   const globalFollowUp = useUserStore(systemAgentSelectors.followUpAction, isEqual);
   const globalFollowUpReady =
     globalFollowUp.enabled === true && !!globalFollowUp.model && !!globalFollowUp.provider;
   const showFollowUpHint = !globalFollowUpReady && Boolean(enableFollowUpChips);
-  const enableReasoningEffort = form.getFieldValue(['chatConfig', 'enableReasoningEffort']);
-  const reasoningEffortValue = form.getFieldValue(['params', 'reasoning_effort']);
+  const enableReasoningEffort = form.getValue('chatConfig.enableReasoningEffort');
+  const reasoningEffortValue = form.getValue('params.reasoning_effort');
   const { frequency_penalty, presence_penalty, temperature, top_p } = config.params ?? {};
 
   const historyCountFromStore = useAgentStore((s) =>
@@ -604,7 +554,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   });
 
   useEffect(() => {
-    form.setFieldsValue(config);
+    form.setValues(config);
 
     if (typeof temperature === 'number') lastValuesRef.current.temperature = temperature;
     if (typeof top_p === 'number') lastValuesRef.current.top_p = top_p;
@@ -622,9 +572,9 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     // Skip syncing when updating to avoid overwriting user's in-progress edits
     if (updating) return;
 
-    form.setFieldsValue({
+    form.setValues({
       chatConfig: {
-        ...form.getFieldValue('chatConfig'),
+        ...form.getValue('chatConfig'),
         enableHistoryCount: enableHistoryCountFromStore,
         historyCount: historyCountFromStore,
       },
@@ -632,10 +582,10 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
     refreshFormValues((value) => value + 1);
   }, [form, enableHistoryCountFromStore, historyCountFromStore, updating]);
 
-  const temperatureValue = form.getFieldValue(PARAM_NAME_MAP.temperature);
-  const topPValue = form.getFieldValue(PARAM_NAME_MAP.top_p);
-  const presencePenaltyValue = form.getFieldValue(PARAM_NAME_MAP.presence_penalty);
-  const frequencyPenaltyValue = form.getFieldValue(PARAM_NAME_MAP.frequency_penalty);
+  const temperatureValue = form.getValue(PARAM_NAME_MAP.temperature);
+  const topPValue = form.getValue(PARAM_NAME_MAP.top_p);
+  const presencePenaltyValue = form.getValue(PARAM_NAME_MAP.presence_penalty);
+  const frequencyPenaltyValue = form.getValue(PARAM_NAME_MAP.frequency_penalty);
 
   const enabledMap: Record<ParamKey, boolean> = {
     frequency_penalty: typeof frequencyPenaltyValue === 'number',
@@ -704,24 +654,24 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
       let newValue: number | undefined;
 
       if (!enabled) {
-        const currentValue = form.getFieldValue(namePath);
+        const currentValue = form.getValue(namePath);
         if (typeof currentValue === 'number') {
           lastValuesRef.current[key] = currentValue;
         }
         newValue = undefined;
-        form.setFieldValue(namePath, undefined);
+        form.setValue(namePath, undefined);
       } else {
         const fallback = lastValuesRef.current[key];
         const nextValue = typeof fallback === 'number' ? fallback : PARAM_DEFAULTS[key];
         lastValuesRef.current[key] = nextValue;
         newValue = nextValue;
-        form.setFieldValue(namePath, nextValue);
+        form.setValue(namePath, nextValue);
       }
       refreshFormValues((value) => value + 1);
 
       // Save changes immediately - manually construct config object to ensure latest values are used
       setUpdating(true);
-      const currentValues = form.getFieldsValue(true) as PartialDeep<LobeAgentConfig>;
+      const currentValues = form.getValues() as PartialDeep<LobeAgentConfig>;
       const prevParams = (currentValues.params ?? {}) as Partial<
         Record<ParamKey, null | number | undefined>
       >;
@@ -768,19 +718,15 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
   );
 
   const handleFieldChange = useCallback(
-    (namePath: (string | number)[], value: boolean | number | string) => {
+    (namePath: string, value: boolean | number | string) => {
       if (!canCreate) return;
-      form.setFieldValue(namePath, value);
-      if (
-        namePath[0] === 'params' &&
-        typeof namePath[1] === 'string' &&
-        namePath[1] in PARAM_NAME_MAP &&
-        typeof value === 'number'
-      ) {
-        lastValuesRef.current[namePath[1] as ParamKey] = value;
+      form.setValue(namePath, value);
+      const [scope, key] = namePath.split('.');
+      if (scope === 'params' && key in PARAM_NAME_MAP && typeof value === 'number') {
+        lastValuesRef.current[key as ParamKey] = value;
       }
       refreshFormValues((current) => current + 1);
-      handleValuesChange(form.getFieldsValue(true) as PartialDeep<LobeAgentConfig>);
+      handleValuesChange(form.getValues() as PartialDeep<LobeAgentConfig>);
     },
     [canCreate, form, handleValuesChange, refreshFormValues],
   );
@@ -844,7 +790,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
           <span className={styles.headerTitle}>{panelTitle}</span>
           {updating && (
             <div className={styles.headerLoading}>
-              <NeuralNetworkLoading size={18} />
+              <Spin size="small" />
             </div>
           )}
         </div>
@@ -860,7 +806,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   disabled={!canCreate}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableContextCompression'], checked);
+                    handleFieldChange('chatConfig.enableContextCompression', checked);
                   }}
                 />
               }
@@ -875,7 +821,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   disabled={!canCreate}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableHistoryCount'], checked);
+                    handleFieldChange('chatConfig.enableHistoryCount', checked);
                   }}
                 />
               }
@@ -890,11 +836,26 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   step={1}
                   value={typeof historyCountValue === 'number' ? historyCountValue : 0}
                   onChange={(value) => {
-                    handleFieldChange(['chatConfig', 'historyCount'], value);
+                    handleFieldChange('chatConfig.historyCount', value);
                   }}
                 />
               )}
             </ControlRow>
+            <ControlRow
+              tag="staleToolResultTrim"
+              title={t('settingChat.enableStaleToolResultTrim.title')}
+              tooltip={t('settingChat.enableStaleToolResultTrim.desc')}
+              action={
+                <Switch
+                  checked={enableStaleToolResultTrim !== false}
+                  disabled={!canCreate}
+                  size={'small'}
+                  onChange={(checked) => {
+                    handleFieldChange('chatConfig.enableStaleToolResultTrim', checked);
+                  }}
+                />
+              }
+            />
             <ControlRow
               tag="autoScroll"
               title={t('settingChat.enableAutoScrollOnStreaming.title')}
@@ -904,7 +865,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   checked={Boolean(enableAutoScrollOnStreaming)}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableAutoScrollOnStreaming'], checked);
+                    handleFieldChange('chatConfig.enableAutoScrollOnStreaming', checked);
                   }}
                 />
               }
@@ -918,7 +879,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   checked={enableStreaming !== false}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableStreaming'], checked);
+                    handleFieldChange('chatConfig.enableStreaming', checked);
                   }}
                 />
               }
@@ -932,7 +893,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                   checked={Boolean(enableFollowUpChips)}
                   size={'small'}
                   onChange={(checked) => {
-                    handleFieldChange(['chatConfig', 'enableFollowUpChips'], checked);
+                    handleFieldChange('chatConfig.enableFollowUpChips', checked);
                   }}
                 />
               }
@@ -952,7 +913,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                 placeholder={t('settingChat.inputTemplate.placeholder')}
                 value={typeof inputTemplateValue === 'string' ? inputTemplateValue : ''}
                 onChange={(e) => {
-                  handleFieldChange(['chatConfig', 'inputTemplate'], e.target.value);
+                  handleFieldChange('chatConfig.inputTemplate', e.target.value);
                 }}
               />
             </ControlRow>
@@ -1044,7 +1005,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                         {enabled && (
                           <SliderField
                             disabled={!canCreate}
-                            value={form.getFieldValue(PARAM_NAME_MAP[key])}
+                            value={form.getValue(PARAM_NAME_MAP[key])}
                             onChange={(value) => {
                               handleFieldChange(PARAM_NAME_MAP[key], value);
                             }}
@@ -1065,9 +1026,9 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                         size={'small'}
                         onChange={(checked) => {
                           if (checked && typeof maxTokensValue !== 'number') {
-                            form.setFieldValue(['params', 'max_tokens'], 4096);
+                            form.setValue('params.max_tokens', 4096);
                           }
-                          handleFieldChange(['chatConfig', 'enableMaxTokens'], checked);
+                          handleFieldChange('chatConfig.enableMaxTokens', checked);
                         }}
                       />
                     }
@@ -1082,7 +1043,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                         step={100}
                         value={typeof maxTokensValue === 'number' ? maxTokensValue : 4096}
                         onChange={(value) => {
-                          handleFieldChange(['params', 'max_tokens'], value);
+                          handleFieldChange('params.max_tokens', value);
                         }}
                       />
                     )}
@@ -1098,9 +1059,9 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                           size={'small'}
                           onChange={(checked) => {
                             if (checked && typeof reasoningEffortValue !== 'string') {
-                              form.setFieldValue(['params', 'reasoning_effort'], 'medium');
+                              form.setValue('params.reasoning_effort', 'medium');
                             }
-                            handleFieldChange(['chatConfig', 'enableReasoningEffort'], checked);
+                            handleFieldChange('chatConfig.enableReasoningEffort', checked);
                           }}
                         />
                       }
@@ -1126,7 +1087,7 @@ const Controls = ({ variant = 'popover' }: ControlsProps) => {
                               : 'medium'
                           }
                           onChange={(value) => {
-                            handleFieldChange(['params', 'reasoning_effort'], value);
+                            handleFieldChange('params.reasoning_effort', value);
                           }}
                         />
                       )}

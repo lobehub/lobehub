@@ -1,4 +1,3 @@
-import { type CollapseProps } from 'antd';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,7 +13,7 @@ import { sessionSelectors } from '@/store/session/selectors';
 import { type LobeAgentSession, type LobeSessions } from '@/types/session';
 import { LobeSessionType, SessionDefaultGroup } from '@/types/session';
 
-import CollapseGroup from './CollapseGroup';
+import CollapseGroup, { type CollapseGroupItem } from './CollapseGroup';
 import Actions from './CollapseGroup/Actions';
 import Inbox from './Inbox';
 import SessionList from './List';
@@ -91,7 +90,7 @@ const DefaultMode = memo(() => {
           key: SessionDefaultGroup.Default,
           label: t('defaultList'),
         },
-      ].filter(Boolean) as CollapseProps['items'],
+      ].filter(Boolean) as CollapseGroupItem[],
     [t, filteredCustomSessionGroups, filteredPinnedSessions, filteredDefaultSessions],
   );
 
@@ -101,10 +100,7 @@ const DefaultMode = memo(() => {
       <CollapseGroup
         activeKey={sessionGroupKeys}
         items={items}
-        onChange={(keys) => {
-          const expandSessionGroupKeys = typeof keys === 'string' ? [keys] : keys;
-          updateSystemStatus({ expandSessionGroupKeys });
-        }}
+        onChange={(expandSessionGroupKeys) => updateSystemStatus({ expandSessionGroupKeys })}
       />
       <ConfigGroupModal
         open={configGroupModalOpen}

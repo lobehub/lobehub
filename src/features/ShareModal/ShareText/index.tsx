@@ -1,8 +1,8 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
-import { type FormItemProps } from '@lobehub/ui';
-import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import { Button, Switch, toast } from '@lobehub/ui/base-ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -11,6 +11,7 @@ import { useIsMobile } from '@/hooks/useIsMobile';
 
 import { useShareData } from '../ShareDataProvider';
 import { styles } from '../style';
+import { useExportMessages } from '../useExportMessages';
 import Preview from './Preview';
 import { generateMarkdown } from './template';
 import { type FieldType } from './type';
@@ -24,16 +25,19 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 
 const ShareText = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
+  const form = useForm({
+    initialValues: DEFAULT_FIELD_VALUE,
+    onValuesChange: (_, v) => setFieldValue(v),
+  });
   const { t } = useTranslation(['chat', 'common']);
 
-  const settings: FormItemProps[] = [
+  const settings: FormFieldProps<FieldType>[] = [
     {
       children: <Switch />,
       label: t('shareModal.withSystemRole'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'withSystemRole',
-      valuePropName: 'checked',
     },
     {
       children: <Switch />,
@@ -41,7 +45,6 @@ const ShareText = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'withRole',
-      valuePropName: 'checked',
     },
     {
       children: <Switch />,
@@ -49,7 +52,6 @@ const ShareText = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'includeUser',
-      valuePropName: 'checked',
     },
     {
       children: <Switch />,
@@ -57,14 +59,20 @@ const ShareText = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'includeTool',
-      valuePropName: 'checked',
     },
   ];
 
   const { displayMessages, systemRole, title } = useShareData();
+  // Markdown serializes each tool's `content` too, so the same omitted rows
+  // would export as empty code blocks — see `useExportMessages`.
+  const {
+    isHydrating,
+    isIncomplete,
+    messages: exportMessages,
+  } = useExportMessages(displayMessages);
   const content = generateMarkdown({
     ...fieldValue,
-    messages: displayMessages,
+    messages: exportMessages,
     systemRole: systemRole ?? '',
     title,
   }).replaceAll('\n\n\n', '\n');
@@ -75,7 +83,9 @@ const ShareText = memo(() => {
     <>
       <Button
         block
+        disabled={isHydrating || isIncomplete}
         icon={CopyIcon}
+        loading={isHydrating}
         size={isMobile ? undefined : 'large'}
         type={'primary'}
         onClick={async () => {
@@ -87,6 +97,7 @@ const ShareText = memo(() => {
       </Button>
       <Button
         block
+        disabled={isHydrating || isIncomplete}
         size={isMobile ? undefined : 'large'}
         onClick={() => {
           exportFile(content, `${title}.md`);
@@ -102,13 +113,7 @@ const ShareText = memo(() => {
       <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
         <Preview content={content} />
         <Flexbox className={styles.sidebar} gap={12}>
-          <Form
-            initialValues={DEFAULT_FIELD_VALUE}
-            items={settings}
-            itemsType={'flat'}
-            onValuesChange={(_, v) => setFieldValue(v)}
-            {...FORM_STYLE}
-          />
+          <Form form={form} items={settings} itemsType={'flat'} {...FORM_STYLE} />
           {!isMobile && button}
         </Flexbox>
       </Flexbox>

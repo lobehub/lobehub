@@ -1,21 +1,6 @@
 import { createStaticStyles } from 'antd-style';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
-  titleInput: css`
-    &.ant-input {
-      resize: none;
-
-      flex: 1;
-
-      min-height: auto;
-      padding: 0;
-
-      font-size: 24px;
-      font-weight: 600;
-      line-height: 1.3;
-    }
-  `,
-
   breadcrumb: css`
     overflow: hidden;
     min-width: 0;
@@ -35,15 +20,14 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
       min-width: 0;
     }
 
-    li.ant-breadcrumb-separator {
+    li > [aria-hidden='true'] {
       overflow: visible;
       flex-shrink: 0;
       min-width: auto;
       margin-inline: 2px;
     }
 
-    .ant-breadcrumb-link,
-    .ant-breadcrumb-link > a {
+    li > :not([aria-hidden='true']) {
       overflow: hidden;
       display: flex;
       align-items: center;
@@ -55,32 +39,71 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
 
-  subtaskTree: css`
-    .ant-tree-node-content-wrapper {
-      cursor: default;
+  subtaskTreeTitle: css`
+    color: ${cssVar.colorTextSecondary};
+  `,
 
-      overflow: hidden;
-      display: flex;
-      flex: 1;
-      gap: 4px;
-      align-items: center;
+  /**
+   * One line of the activity timeline. The rail is drawn per line so a run of
+   * lines joins up; the first and last line of a run only draw their inner
+   * half, so the rail starts and ends at a mark.
+   */
+  activityLine: css`
+    position: relative;
 
-      min-width: 0;
-      min-height: 36px;
+    /*
+     * Inset so the 16px mark is centred under the 24px avatar inside a comment
+     * card (8px card padding + 12px to the avatar's centre): the rail and the
+     * faces in the cards sit on one vertical line, the cards just run wider.
+     */
+    padding-block: 5px;
+    padding-inline-start: 12px;
 
-      color: ${cssVar.colorTextSecondary};
+    &::before {
+      content: '';
+
+      position: absolute;
+      inset-block: 0;
+      inset-inline-start: 19.5px;
+
+      width: 1px;
+
+      background: ${cssVar.colorBorderSecondary};
     }
 
-    .ant-tree-title {
-      overflow: hidden;
-      flex: 1;
-      min-width: 0;
+    &:first-child::before {
+      inset-block-start: 50%;
     }
 
-    .ant-tree-switcher {
-      margin-inline-end: 0;
-      color: ${cssVar.colorTextDescription};
+    &:last-child::before {
+      inset-block-end: 50%;
     }
+
+    &:only-child::before {
+      display: none;
+    }
+  `,
+
+  /** The 16px mark on the rail: a type icon or a face. Opaque so it covers the rail. */
+  activityMark: css`
+    position: relative;
+    z-index: 1;
+
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+
+    background: ${cssVar.colorBgContainer};
+  `,
+
+  /** A run of adjacent lines; cancels the feed's card gap so they sit tight. */
+  activityTimeline: css`
+    margin-block: -4px;
   `,
 
   activityAvatar: css`
@@ -120,8 +143,6 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
 
   agentAuthorName: css`
     cursor: pointer;
-    font-weight: 500;
-    color: ${cssVar.colorTextSecondary};
     transition: color 0.15s ease;
 
     &:hover {

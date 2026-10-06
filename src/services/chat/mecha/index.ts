@@ -17,8 +17,13 @@ export { contextEngineering } from './contextEngineering';
 export { initializeWithClientStore } from './clientModelRuntime';
 
 // Model parameters
-export type { ModelExtendParams, ModelParamsContext } from './modelParamsResolver';
-export { resolveModelExtendParams } from './modelParamsResolver';
+export type { BrowserModelParamsContext, ModelExtendParams } from './modelParamsResolver';
+export {
+  createBrowserModelParamsProviders,
+  resolveBrowserModelParams,
+  resolveDefaultEnableAdaptiveThinkingForModel,
+  resolveDefaultThinkingLevelForModel,
+} from './modelParamsResolver';
 
 // Memory management
 export type { TopicMemoryResolverContext } from './memoryManager';

@@ -18,6 +18,10 @@ tags:
   [![][docker-pulls-shield]][docker-pulls-link]
 </div>
 
+<Callout type="warning">
+  **正在升级已有的 Docker Compose 部署？** 最新的 `docker-compose.yml` 新增了 Gateway 模式所需的网关服务。启动前请先按 [升级已有部署](#升级已有部署) 更新 `.env`，否则网关容器会反复重启、智能体退回浏览器中运行，`docker logs lobehub` 也会打印 `ACTION REQUIRED` 告警。
+</Callout>
+
 ## 快速启动
 
 <Callout type="info">
@@ -29,7 +33,7 @@ tags:
 
   - 一键启动脚本为首次部署专用，非首次部署请参考 [自定义部署](#自定义部署) 章节
 
-  - 端口占用检查：确保 `3210`、`9000`、`9001` 端口可用
+  - 端口占用检查：确保 `3210`、`9000`、`9001`、`8787`、`8788` 端口可用
 </Callout>
 
 执行以下命令初始化部署环境，目录 `lobehub` 将用于存放你的配置文件和后续的数据库文件。
@@ -74,6 +78,8 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
     - URL: http://localhost:9000
     - Username: admin
     - Password: 8c82ea41
+  Agent Gateway:
+    - URL: http://localhost:8787
   ```
 
   ### 启动 Docker
@@ -129,6 +135,8 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
     - URL: http://your_server_ip:9000
     - Username: admin
     - Password: dbac8440
+  Agent Gateway:
+    - URL: http://your_server_ip:8787
   ```
 
   ### 启动 Docker
@@ -168,11 +176,12 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
 
   在域名模式中，你需要完成反向代理配置，并确保局域网 / 公网能访问到以下服务。请使用反向代理将以下服务端口映射到域名：
 
-  | 域名                  | 反代端口   | 是否必选 |
-  | ------------------- | ------ | ---- |
-  | `lobe.example.com`  | `3210` | 必选   |
-  | `s3.example.com`    | `9000` | 必选   |
-  | `s3-ui.example.com` | `9001` |      |
+  | 域名                    | 反代端口   | 是否必选 |
+  | --------------------- | ------ | ---- |
+  | `lobe.example.com`    | `3210` | 必选   |
+  | `s3.example.com`      | `9000` | 必选   |
+  | `gateway.example.com` | `8787` | 必选   |
+  | `s3-ui.example.com`   | `9001` |      |
 
   ### 在交互式脚本中完成剩余配置
 
@@ -180,6 +189,7 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
 
   - LobeHub 服务的域名设置：`lobe.example.com`
   - S3 服务的域名设置：`s3.example.com`
+  - Agent 网关的域名设置：`gateway.example.com`（反向代理需要允许 WebSocket 升级）
   - 选择访问协议：`http` 或 `https`
   - 安全密钥重新生成：我们强烈建议你重新生成安全密钥，如果你缺少脚本所需的密钥生成库，我们建议你参考 [自定义部署](#自定义部署) 章节对密钥进行修改。
 
@@ -191,7 +201,7 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
     - S3 服务的域名设置：`lobe.example.com:${PORT2}`
       需在反向代理中配置对应端口的转发规则。
       **端口模式 vs 域名模式：**
-    - 端口模式：一键安装脚本自动使用默认端口（3210/9000/9001）
+    - 端口模式：一键安装脚本自动使用默认端口（3210/9000/9001/8787/8788）
     - 域名模式：可自定义端口（通过反向代理配置）
   </Callout>
 
@@ -217,6 +227,8 @@ bash <(curl -fsSL https://lobe.li/setup.sh) -l zh_CN
     - URL: https://s3.example.com
     - Username: admin
     - Password: dbac8440
+  Agent Gateway:
+    - URL: https://gateway.example.com
   ```
 
   ### 启动 Docker
@@ -291,6 +303,8 @@ LobeHub 需要为 LLM 服务提供商提供文件对象的公网访问地址，�
 S3_ENDPOINT=https://s3.example.com
 ```
 
+`S3_ENDPOINT` 只需要能被浏览器访问：`docker-compose.yml` 设置了 `S3_INTERNAL_ENDPOINT=http://rustfs:9000`，LobeHub 服务端自身会在 Compose 网络内访问 RustFS。
+
 2. PostgreSQL
 
 该配置位于 `docker-compose.yml` 文件中，你需要配置数据库的名称和密码：
@@ -318,6 +332,75 @@ INTERNAL_APP_URL=http://localhost:3210
 <Callout type="tip">
   对于 Docker Compose 部署，推荐使用 `http://localhost:3210`（容器调用自身）或 `http://lobe:3210`（使用服务名称进行容器间通信）。
 </Callout>
+
+4. Agent 网关（Gateway 模式）
+
+`gateway` 服务让智能体在 LobeHub 服务端运行，而不是在浏览器中运行。它需要在 `.env` 中配置以下变量，`setup.sh` 会自动填写：
+
+- `AGENT_GATEWAY_URL`：浏览器访问网关的地址，例如 `https://gateway.example.com` 或 `http://your_server_ip:8787`。浏览器会向该地址建立 WebSocket 连接，因此其前面的反向代理需要允许 WebSocket 升级并设置较长的读取超时。LobeHub 服务端则在 Compose 网络内通过 `http://gateway:8787` 访问网关。
+- `GATEWAY_SERVICE_TOKEN`：LobeHub 与网关共享的随机 Token。
+- `JWKS_KEY`：LobeHub 签发内部 JWT 使用的 RS256 密钥。每个部署都必须使用自己的密钥，且只保留在 `lobe` 容器中。
+- `JWKS_PUBLIC_KEY`：同一密钥去掉私钥字段后的公钥。只有它会传给网关，用于校验浏览器会话。
+
+```sh
+# GATEWAY_SERVICE_TOKEN
+openssl rand -hex 32
+# JWKS_KEY 与 JWKS_PUBLIC_KEY（把输出的两行都填入 .env）
+docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("crypto");const {privateKey,publicKey}=c.generateKeyPairSync("rsa",{modulusLength:2048});const meta={alg:"RS256",kid:c.randomBytes(8).toString("hex"),use:"sig"};console.log("JWKS_KEY="+JSON.stringify({keys:[{...privateKey.export({format:"jwk"}),...meta}]}));console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[{...publicKey.export({format:"jwk"}),...meta}]}))'
+```
+
+<Callout type="warning">
+  正在升级已有部署？请先完成 [升级已有部署](#升级已有部署) 中的步骤。网关的状态保存在内存中，重启时正在进行的运行会被中断。
+</Callout>
+
+<Callout type="tip">
+  通过 `lh connect --gateway http://your_server_ip:8788` 接入的设备，可以经由 `8788` 端口的设备网关为该部署执行本地工具。
+</Callout>
+
+## 升级已有部署
+
+<Callout type="warning">
+  请在启动新的 `docker-compose.yml` 之前完成以下步骤。完成之前，`lobe-gateway` 容器会反复重启、智能体退回浏览器中运行，`docker logs lobehub` 启动时会打印 `ACTION REQUIRED` 告警。
+</Callout>
+
+<Steps>
+  ### 备份 `.env` 并下载新的 Compose 文件
+
+  ```sh
+  cp .env .env.bak
+  curl -O https://raw.githubusercontent.com/lobehub/lobehub/HEAD/docker-compose/deploy/docker-compose.yml
+  ```
+
+  ### 在 `.env` 中补充网关变量
+
+  ```env
+  AGENT_GATEWAY_PORT=8787
+  DEVICE_GATEWAY_PORT=8788
+  # 浏览器访问网关的地址，例如 https://gateway.example.com
+  AGENT_GATEWAY_URL=http://your_server_ip:8787
+  DEVICE_GATEWAY_URL=http://gateway:8788
+  # 填入 openssl rand -hex 32 的输出
+  GATEWAY_SERVICE_TOKEN=
+  ```
+
+  然后在 `.env` 所在目录运行下面的命令，从现有 `JWKS_KEY` 导出公钥，并把输出的 `JWKS_PUBLIC_KEY` 填入 `.env`：
+
+  ```sh
+  docker run --rm -e JWKS_KEY="$(grep '^JWKS_KEY=' .env | cut -d= -f2-)" --entrypoint /bin/node lobehub/lobehub -e 'const {d,p,q,dp,dq,qi,...pub}=JSON.parse(process.env.JWKS_KEY).keys[0];console.log("JWKS_PUBLIC_KEY="+JSON.stringify({keys:[pub]}))'
+  ```
+
+  域名模式下，还需要为网关域名配置反向代理到 `8787` 端口，并开启 WebSocket 升级。
+
+  ### 替换示例 `JWKS_KEY`
+
+  如果 `.env` 中的 `JWKS_KEY` 仍是旧版 `.env.example` 自带的值（其 `kid` 为 `6823046760c5d460`），任何人都能伪造你的部署会接受的令牌。请使用 [必要配置](#必要配置) 中的命令生成新的密钥对，同时替换 `JWKS_KEY` 与 `JWKS_PUBLIC_KEY`，替换后桌面端和 CLI 可能需要重新登录。
+
+  ### 重建服务
+
+  ```sh
+  docker compose up -d --force-recreate
+  ```
+</Steps>
 
 ## 常见问题
 
@@ -483,6 +566,8 @@ docker compose exec postgresql pg_isready -U postgres
 docker compose logs rustfs
 docker compose logs rustfs-init
 ```
+
+`rustfs-init` 同时会为存储桶配置浏览器直传所需的 CORS 规则。如果浏览器上传时报网络错误，可以执行 `docker compose up -d --force-recreate rustfs-init` 重新配置。
 
 确认 bucket 是否已创建：`docker compose exec rustfs ls /data/lobe`
 

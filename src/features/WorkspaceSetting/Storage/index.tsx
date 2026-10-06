@@ -1,9 +1,9 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Form, Icon } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { Button, Switch } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -14,21 +14,21 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 const WorkspaceStorageContent = memo(() => {
   const { t } = useTranslation('setting');
   const transferAgentsFormItems = useTransferAgentsFormItem();
+  const form = useForm();
 
-  const analytics: FormGroupItemType = {
+  const analytics: FormGroupItem = {
     children: [
       {
         children: <Switch disabled />,
         desc: t('workspaceSetting.storage.telemetry.desc', { appName: BRANDING_NAME }),
         label: t('workspaceSetting.storage.telemetry.title'),
         minWidth: undefined,
-        valuePropName: 'checked',
       },
     ],
     title: t('analytics.title'),
   };
 
-  const system: FormGroupItemType = {
+  const system: FormGroupItem = {
     children: [
       {
         children: (
@@ -52,22 +52,11 @@ const WorkspaceStorageContent = memo(() => {
         layout: 'horizontal',
         minWidth: undefined,
       },
-      {
-        children: (
-          <Button danger disabled type={'primary'}>
-            {t('danger.reset.action')}
-          </Button>
-        ),
-        desc: t('workspaceSetting.storage.danger.reset.desc'),
-        label: t('workspaceSetting.storage.danger.reset.title'),
-        layout: 'horizontal',
-        minWidth: undefined,
-      },
     ],
     title: t('storage.actions.title'),
   };
 
-  const dataMigration: FormGroupItemType | undefined = transferAgentsFormItems
+  const dataMigration: FormGroupItem | undefined = transferAgentsFormItems
     ? {
         children: transferAgentsFormItems,
         title: t('storage.migration.title'),
@@ -77,6 +66,7 @@ const WorkspaceStorageContent = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={[analytics, ...(dataMigration ? [dataMigration] : []), system]}
       itemsType={'group'}
       variant={'filled'}

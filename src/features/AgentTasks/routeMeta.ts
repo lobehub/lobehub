@@ -1,7 +1,7 @@
 import { ListTodoIcon } from 'lucide-react';
 
-import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
 import TasksSkeleton from '@/components/Skeleton/Tasks';
+import TaskDetailSkeleton from '@/features/AgentTasks/AgentTaskDetail/TaskDetailSkeleton';
 import { usePublishDynamicRouteMeta } from '@/features/RouteMeta/usePublishDynamicRouteMeta';
 import { matchesRouteWorkspace, useRouteWorkspaceId } from '@/features/RouteMeta/workspaceScope';
 import type { DynamicRouteMetaProps } from '@/spa/router/routeMeta';
@@ -35,6 +35,6 @@ const TaskDynamicMeta = ({ onResolve, params }: DynamicRouteMetaProps) => {
 export const taskRouteMeta = routeMeta({
   DynamicMeta: TaskDynamicMeta,
   icon: ListTodoIcon,
-  Skeleton: createSurfaceSkeleton('detail'),
+  Skeleton: TaskDetailSkeleton,
   titleKey: 'navigation.task',
 });

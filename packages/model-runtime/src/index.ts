@@ -5,6 +5,7 @@ export type { ModelRuntimeHooks } from './core/ModelRuntime';
 export { ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
 export * from './core/RouterRuntime';
+export { createCallbacksTransformer } from './core/streams/protocol';
 export * from './core/usageConverters';
 export {
   CATEGORY_NUMERIC_PREFIX,
@@ -21,7 +22,9 @@ export {
   type ErrorSeverity,
   formatErrorRef,
   getErrorCodeSpec,
+  getRuntimeErrorI18nKey,
   isEmptyModelCompletion,
+  isModelRefusalFinishReason,
   isUserSideError,
   matchErrorPattern,
   type MatchInput,
@@ -31,6 +34,7 @@ export {
   parseErrorRef,
   refineErrorCode,
   type RefineErrorInput,
+  type RuntimeErrorI18nKey,
   type SpecErrorCode,
 } from './errors';
 export * from './helpers';

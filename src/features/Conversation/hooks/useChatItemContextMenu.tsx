@@ -92,7 +92,6 @@ export const useChatItemContextMenu = ({
     regenerateUserMessage,
     regenerateAssistantMessage,
     translateMessage,
-    startMessageTTS,
     delAndRegenerateMessage,
     copyMessage,
     openThreadCreator,
@@ -106,7 +105,6 @@ export const useChatItemContextMenu = ({
     s.regenerateUserMessage,
     s.regenerateAssistantMessage,
     s.translateMessage,
-    s.startMessageTTS,
     s.delAndRegenerateMessage,
     s.copyMessage,
     s.openThreadCreator,
@@ -136,7 +134,6 @@ export const useChatItemContextMenu = ({
       regenerate,
       share,
       translate,
-      tts,
     } = actionsBar;
 
     const withPermission = (items: MenuItem[]) =>
@@ -146,7 +143,7 @@ export const useChatItemContextMenu = ({
             if ('type' in item && item.type === 'divider') return item;
             if (['edit', 'del'].includes(String(item.key))) return { ...item, disabled: !canEdit };
             if (
-              ['branching', 'delAndRegenerate', 'regenerate', 'translate', 'tts'].includes(
+              ['branching', 'delAndRegenerate', 'regenerate', 'translate'].includes(
                 String(item.key),
               )
             ) {
@@ -167,17 +164,7 @@ export const useChatItemContextMenu = ({
 
       if (!inThread && !isGroupSession && isDevMode) list.push(branching);
 
-      list.push(
-        divider,
-        tts,
-        translate,
-        divider,
-        share,
-        divider,
-        regenerate,
-        delAndRegenerate,
-        del,
-      );
+      list.push(divider, translate, divider, share, divider, regenerate, delAndRegenerate, del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -209,7 +196,7 @@ export const useChatItemContextMenu = ({
 
       if (!inThread && isDevMode) list.push(branching);
 
-      list.push(divider, tts, translate, divider, regenerate, del);
+      list.push(divider, translate, divider, regenerate, del);
 
       return withPermission(list.filter(Boolean) as MenuItem[]);
     }
@@ -303,11 +290,6 @@ export const useChatItemContextMenu = ({
           }
           break;
         }
-        case 'tts': {
-          if (!canCreate) break;
-          startMessageTTS(id);
-          break;
-        }
         case 'share': {
           if (!canEdit) break;
           handleShare();
@@ -343,7 +325,6 @@ export const useChatItemContextMenu = ({
       toggleMessageEditing,
       topic,
       translateMessage,
-      startMessageTTS,
     ],
   );
 

@@ -1,3 +1,4 @@
+import { replicaKeys } from '@lobechat/replica';
 import { unstable_serialize } from 'swr';
 import { describe, expect, it } from 'vitest';
 
@@ -9,32 +10,12 @@ import {
   recentKeys,
   resourceKeys,
   taskKeys,
+  verifyKeys,
   workKeys,
 } from './keys';
 import { CACHE_TIERS } from './localStorageProvider';
 
 describe('recentKeys', () => {
-  it('keys the Home recent list by identity cache scope', () => {
-    expect(recentKeys.list(true, 10, 'user-1:workspace-1')).toEqual([
-      'recent:list',
-      true,
-      10,
-      'user-1:workspace-1',
-    ]);
-  });
-
-  it('keeps users isolated in the same workspace', () => {
-    expect(recentKeys.list(true, 10, 'user-1:workspace-1')).not.toEqual(
-      recentKeys.list(true, 10, 'user-2:workspace-1'),
-    );
-  });
-
-  it('keeps workspaces isolated for the same user', () => {
-    expect(recentKeys.allDrawer(true, 'user-1:workspace-1')).not.toEqual(
-      recentKeys.allDrawer(true, 'user-1:workspace-2'),
-    );
-  });
-
   it('keys the Home topic-only list independently from mixed recents', () => {
     expect(recentKeys.topicList(9, 'user-1:workspace-1', 'mine')).toEqual([
       'recent:topicList',
@@ -63,6 +44,21 @@ describe('recentKeys', () => {
   });
 });
 
+describe('replica sync keys', () => {
+  it('keeps SWR orchestration entries out of the persistence tiers', () => {
+    for (const key of [
+      // Replicas persist through their own storage, never through the SWR tiers.
+      replicaKeys.sync('agentList', 1, 'user-1:personal', 'sidebar', {}),
+      replicaKeys.sync('agentConfig', 1, 'user-1:personal', 'agent-1', { agentId: 'agent-1' }),
+    ]) {
+      const serialized = unstable_serialize(key);
+      expect(
+        [...CACHE_TIERS.idb, ...CACHE_TIERS.local].some((pattern) => serialized.includes(pattern)),
+      ).toBe(false);
+    }
+  });
+});
+
 describe('isAcceptanceListKey', () => {
   it('matches every Acceptance list variant without matching detail keys', () => {
     expect(isAcceptanceListKey(['verify:acceptances', '', '', 'active'])).toBe(true);
@@ -70,6 +66,15 @@ describe('isAcceptanceListKey', () => {
       true,
     );
     expect(isAcceptanceListKey(['verify:acceptanceBundle', 'acceptance-1'])).toBe(false);
+  });
+
+  it('keeps project-scoped acceptance feeds in separate cache entries', () => {
+    expect(verifyKeys.acceptances(undefined, undefined, 'all', 'project-1')).not.toEqual(
+      verifyKeys.acceptances(undefined, undefined, 'all', 'project-2'),
+    );
+    expect(verifyKeys.acceptancePage('workspace-1', 'all', 'project-1')).not.toEqual(
+      verifyKeys.acceptancePage('workspace-1', 'all', 'project-2'),
+    );
   });
 });
 
@@ -142,9 +147,16 @@ describe('isDocumentCommentKeyForEvent', () => {
         event,
       ),
     ).toBe(true);
+    // Pinned deep-link details revalidate on any comment event in the workspace.
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.detail('workspace-1', 'reply-9'), event),
+    ).toBe(true);
   });
 
   it('does not invalidate other documents, workspaces, or reply threads', () => {
+    expect(
+      isDocumentCommentKeyForEvent(documentCommentKeys.detail('workspace-2', 'root-1'), event),
+    ).toBe(false);
     expect(
       isDocumentCommentKeyForEvent(documentCommentKeys.threads('workspace-2', 'document-1'), event),
     ).toBe(false);

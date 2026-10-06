@@ -210,6 +210,33 @@ describe('AcpStdioClient', () => {
     expect(onMessage).toHaveBeenCalledWith({ method: 'first' });
   });
 
+  it('inherits an outer wrapper process group and signals the child directly', async () => {
+    const { child } = createProcess();
+    spawnMock.mockReturnValue(child);
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = new AcpStdioClient({
+      args: ['agent', 'stdio'],
+      commandPath: 'agent',
+      cwd: '/workspace',
+      detached: false,
+      env: { ...process.env },
+      onMessage: vi.fn(),
+      onRawMessage: vi.fn(),
+      onStderr: vi.fn(),
+    });
+    await client.start();
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'agent',
+      ['agent', 'stdio'],
+      expect.objectContaining({ detached: false }),
+    );
+    client.close('SIGKILL');
+
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL');
+    expect(processKill).not.toHaveBeenCalled();
+  });
+
   it('terminates the child process tree with taskkill on Windows', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' });
     const { child } = createProcess();

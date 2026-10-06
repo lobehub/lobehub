@@ -51,7 +51,6 @@ export type OperationType =
   // === (sub-operations of executeToolCall) ===
   | 'pluginApi' // Plugin API call
   | 'builtinToolSearch' // Builtin tool: search
-  | 'builtinToolInterpreter' // Builtin tool: code interpreter
   | 'builtinToolLocalSystem' // Builtin tool: local system
   | 'builtinToolKnowledgeBase' // Builtin tool: knowledge base
   | 'builtinToolMemory' // Builtin tool: user memory
@@ -61,8 +60,6 @@ export type OperationType =
 
   // === Group Chat ===
   | 'supervisorDecision' // Supervisor decision
-  | 'groupAgentGenerate' // Group agent generate (deprecated, use groupAgentStream)
-  | 'groupAgentStream' // Group agent SSE stream (sub-operation of execServerAgentRuntime)
 
   // === Sub-Agent (Desktop only) ===
   | 'execClientSubAgent' // Dispatch single sub-agent on the desktop client
@@ -173,6 +170,12 @@ export interface OperationMetadata {
    * assistant output has arrived yet.
    */
   streamRetry?: StreamRetryMetadata;
+
+  /**
+   * Start of the turn a steered run continues. Elapsed timers count from here so
+   * a queued follow-up reads as one continuous turn; inherited by child operations.
+   */
+  turnStartTime?: number;
 
   /**
    * The model text stream has finished and there is no visible follow-up phase
@@ -435,6 +438,8 @@ export interface OperationFilter {
  * - execHeterogeneousAgent: Heterogeneous agent execution (Claude Code CLI, etc.)
  * - execServerAgentRuntime: Server-side agent execution (Group Chat)
  */
+export const SEND_NOW_CANCEL_REASON = 'send_now';
+
 export const AI_RUNTIME_OPERATION_TYPES: OperationType[] = [
   'execAgentRuntime',
   'execHeterogeneousAgent',

@@ -1,4 +1,4 @@
-import type { WorkSkillProvider, WorkType } from '@lobechat/types';
+import type { ListedWorkType, WorkSkillProvider } from '@lobechat/types';
 
 /**
  * `?works=` values: the per-type keys (task / document) plus the per-PROVIDER
@@ -16,7 +16,7 @@ export type WorkGalleryKey = 'all' | 'document' | 'github' | 'linear' | 'task';
  */
 export interface WorkGalleryFilter {
   provider?: WorkSkillProvider;
-  type?: WorkType;
+  type?: ListedWorkType;
 }
 
 const FILTER_BY_KEY = new Map<WorkGalleryKey, WorkGalleryFilter>([

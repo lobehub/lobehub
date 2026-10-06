@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { ListTodoIcon, TargetIcon } from 'lucide-react';
+import { ClipboardCheckIcon, ListTodoIcon, TargetIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router';
@@ -14,7 +14,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
-import { getProjectGoalsPath, getProjectTasksPath } from './navigation';
+import { getProjectAcceptancePath, getProjectGoalsPath, getProjectTasksPath } from './navigation';
 import ProjectHeader from './ProjectHeader';
 
 const ProjectSidebarContent = memo(() => {
@@ -26,13 +26,16 @@ const ProjectSidebarContent = memo(() => {
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const projectTasksPath = getProjectTasksPath(projectId!);
   const projectGoalsPath = getProjectGoalsPath(projectId!);
+  const projectAcceptancePath = getProjectAcceptancePath(projectId!);
 
   const header = <ProjectHeader project={detail?.project} />;
 
-  if (detailSWR.error)
+  if (detailSWR.error && !detail)
     return (
       <SideBarLayout
-        body={<AsyncError error={detailSWR.error} variant="inline" onRetry={detailSWR.mutate} />}
+        body={
+          <AsyncError error={detailSWR.error} variant="inline" onRetry={detailSWR.revalidate} />
+        }
         header={header}
       />
     );
@@ -53,6 +56,12 @@ const ProjectSidebarContent = memo(() => {
             icon={TargetIcon}
             title={t('sections.goals')}
             onClick={() => navigate(projectGoalsPath)}
+          />
+          <NavItem
+            active={pathname === projectAcceptancePath}
+            icon={ClipboardCheckIcon}
+            title={t('sections.acceptance')}
+            onClick={() => navigate(projectAcceptancePath)}
           />
         </Flexbox>
       }

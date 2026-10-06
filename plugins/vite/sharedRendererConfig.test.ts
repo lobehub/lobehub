@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   __testing,
+  createEntrySetLabeler,
+  createSharedRolldownOutput,
   sharedModulePreload,
   sharedOptimizeDeps,
   sharedRendererDedupe,
@@ -18,6 +20,33 @@ describe('sharedRendererPlugins', () => {
   it('keeps the icon barrel transform out of the Electron renderer', () => {
     expect(getPluginNames('desktop')).not.toContain('lobe-icon-named-export-proxy');
     expect(getPluginNames('web')).toContain('lobe-icon-named-export-proxy');
+  });
+});
+
+describe('lobe-dev-editor-provider', () => {
+  it('sends the provider entry back to the one prebundled editor bundle', async () => {
+    const plugin = sharedRendererPlugins({ platform: 'web' })
+      .flat(Number.POSITIVE_INFINITY)
+      .find(
+        (
+          item,
+        ): item is { name: string; resolveId: (source: string, importer: string) => unknown } =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          (item as { name?: string }).name === 'lobe-dev-editor-provider',
+      );
+
+    const resolve = async (source: string) =>
+      plugin!.resolveId.call(
+        { resolve: async (id: string) => ({ id }) },
+        source,
+        '/repo/src/layout/GlobalProvider/Editor.tsx',
+      );
+
+    await expect(resolve('@lobehub/editor/react/EditorProvider')).resolves.toEqual({
+      id: '@lobehub/editor/react',
+    });
+    await expect(resolve('@lobehub/editor/react')).resolves.toBeNull();
   });
 });
 
@@ -189,6 +218,19 @@ describe('sharedManualChunks', () => {
   });
 });
 
+describe('isUiCoreModule', () => {
+  it('folds first-screen @lobehub/ui members into vendor-ui-core and leaves heavy ones lazy', () => {
+    const es = '/repo/node_modules/.pnpm/@lobehub+ui@5/node_modules/@lobehub/ui/es/';
+    expect(__testing.isUiCoreModule(`${es}Flex/FlexBasic.mjs`)).toBe(true);
+    expect(__testing.isUiCoreModule(`${es}base-ui/Button/Button.mjs`)).toBe(true);
+    expect(__testing.isUiCoreModule(`${es}hooks/useIsClient.mjs`)).toBe(true);
+    expect(__testing.isUiCoreModule(`${es}Markdown/Markdown.mjs`)).toBe(false);
+    expect(__testing.isUiCoreModule(`${es}hooks/useMarkdown/index.mjs`)).toBe(false);
+    expect(__testing.isUiCoreModule(`${es}base-ui/Select/Select.mjs`)).toBe(false);
+    expect(__testing.isUiCoreModule('/repo/node_modules/antd/es/index.js')).toBe(false);
+  });
+});
+
 describe('sharedChunkFileNames', () => {
   it('routes only the complete deferred model catalog to on-demand assets', () => {
     expect(
@@ -241,5 +283,102 @@ describe('sharedChunkFileNames', () => {
         name: 'markdown',
       }),
     ).toBe('assets/[name]-[hash].js');
+  });
+});
+
+const fakeGraph: Record<string, string[]> = {
+  '/main.tsx': ['/shared.ts', '/main-only.ts', '/node_modules/antd/es/button.js'],
+  '/overlay.tsx': ['/shared.ts', '/overlay-only.ts'],
+  '/popup.tsx': ['/shared.ts', '/main-only.ts'],
+  '/shared.ts': ['/leaf.ts'],
+  '/main-only.ts': [],
+  '/overlay-only.ts': [],
+  '/leaf.ts': [],
+  '/lazy.ts': [],
+  '/node_modules/antd/es/button.js': [],
+};
+const fakeCtx = {
+  getModuleInfo: (id: string) => (id in fakeGraph ? { importedIds: fakeGraph[id] } : null),
+};
+const fakeEntries = { main: '/main.tsx', overlay: '/overlay.tsx', popup: '/popup.tsx' };
+
+describe('createEntrySetLabeler', () => {
+  const label = createEntrySetLabeler(fakeEntries);
+
+  it('labels each first-screen module by the entries that statically reach it', () => {
+    expect(label('/leaf.ts', fakeCtx)).toBe('main+overlay+popup');
+    expect(label('/main-only.ts', fakeCtx)).toBe('main+popup');
+    expect(label('/overlay-only.ts', fakeCtx)).toBe('overlay');
+    expect(label('/main.tsx', fakeCtx)).toBe('main');
+  });
+
+  it('leaves modules no entry reaches statically unlabeled', () => {
+    expect(label('/lazy.ts', fakeCtx)).toBeNull();
+  });
+
+  it('matches Windows entry paths against normalized module graph IDs', () => {
+    const windowsLabel = createEntrySetLabeler({
+      main: 'C:\\repo\\main.tsx',
+      overlay: 'C:\\repo\\overlay.tsx',
+      popup: 'C:\\repo\\popup.tsx',
+    });
+    const graph = Object.fromEntries(
+      Object.entries(fakeGraph).map(([id, imports]) => [
+        `C:/repo${id}`,
+        { importedIds: imports.map((dependency) => `C:/repo${dependency}`) },
+      ]),
+    );
+    const ctx = { getModuleInfo: (id: string) => graph[id] ?? null };
+
+    expect(windowsLabel('C:/repo/main.tsx', ctx)).toBe('main');
+    expect(windowsLabel('C:/repo/leaf.ts', ctx)).toBe('main+overlay+popup');
+    expect(windowsLabel('C:/repo/main-only.ts', ctx)).toBe('main+popup');
+    expect(windowsLabel('C:/repo/overlay-only.ts', ctx)).toBe('overlay');
+    expect(windowsLabel('C:/repo/lazy.ts', ctx)).toBeNull();
+  });
+
+  it('fails loudly when an entry module is not in the graph', () => {
+    const broken = createEntrySetLabeler({ main: '/missing.tsx' });
+    expect(() => broken('/leaf.ts', fakeCtx)).toThrow(/missing\.tsx/);
+  });
+});
+
+type OutputGroup = ReturnType<typeof createSharedRolldownOutput>['codeSplitting']['groups'][number];
+const nameOf = (group: OutputGroup | undefined, id: string) =>
+  typeof group?.name === 'function' ? group.name(id, fakeCtx) : group?.name;
+
+describe('createSharedRolldownOutput', () => {
+  const groups = (options?: Parameters<typeof createSharedRolldownOutput>[0]) =>
+    createSharedRolldownOutput(options).codeSplitting.groups as OutputGroup[];
+  const initialGroup = (list: OutputGroup[], vendor: string) =>
+    list.find(
+      (g) =>
+        g.priority >= 10 &&
+        (g.name === vendor || nameOf(g, '/node_modules/antd/es/button.js')?.startsWith(vendor)),
+    );
+
+  it('keeps the single-name first-screen catch-all for single-entry builds', () => {
+    expect(groups().at(-1)).toMatchObject({ name: 'app-initial', tags: ['$initial'] });
+    expect(initialGroup(groups(), 'vendor-antd')).toMatchObject({ tags: ['$initial'] });
+    expect(initialGroup(groups(), 'vendor-antd')?.name).toBe('vendor-antd');
+  });
+
+  it('splits first-screen chunks, vendor groups included, per entry set for multi-entry builds', () => {
+    const output = createSharedRolldownOutput({ initialEntries: fakeEntries, splitInitial: false });
+    const list = output.codeSplitting.groups as OutputGroup[];
+
+    expect(output.codeSplitting).toMatchObject({ includeDependenciesRecursively: false });
+    expect(list.some((g) => 'tags' in g)).toBe(false);
+    expect(nameOf(list.at(-1), '/main-only.ts')).toBe('initial-main+popup');
+    expect(nameOf(list.at(-1), '/lazy.ts')).toBeNull();
+    expect(nameOf(initialGroup(list, 'vendor-antd'), '/node_modules/antd/es/button.js')).toBe(
+      'vendor-antd-main',
+    );
+  });
+
+  it('keeps entry-set chunking for multi-entry builds without initial entries', () => {
+    const output = createSharedRolldownOutput({ splitInitial: false });
+    expect(output.codeSplitting).not.toHaveProperty('includeDependenciesRecursively');
+    expect((output.codeSplitting.groups as OutputGroup[]).some((g) => 'tags' in g)).toBe(false);
   });
 });

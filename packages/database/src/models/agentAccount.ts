@@ -1,0 +1,295 @@
+import type {
+  AgentAccountCapabilities,
+  AgentAccountCredentialHint,
+  AgentAccountKind,
+} from '@lobechat/types';
+import { and, desc, eq, sql } from 'drizzle-orm';
+
+import type { AgentAccountItem, NewAgentAccount } from '../schemas';
+import { agentAccounts } from '../schemas';
+import type { LobeChatDatabase } from '../type';
+import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+interface GateKeeper {
+  decrypt: (ciphertext: string) => Promise<{ plaintext: string }>;
+  encrypt: (plaintext: string) => Promise<string>;
+}
+
+/**
+ * An account as every read path returns it.
+ *
+ * `credentials` is structurally absent — not merely empty — so a caller cannot
+ * accidentally serialize the ciphertext, and `hasCredential` answers the only
+ * question a read needs to ask about it.
+ */
+export type AgentAccountView = Omit<AgentAccountItem, 'credentials'> & {
+  hasCredential: boolean;
+};
+
+/** The non-secret fields a caller may patch in place. */
+export interface AgentAccountPatch {
+  capabilities?: AgentAccountCapabilities;
+  displayName?: string | null;
+  metadata?: Record<string, unknown>;
+  status?: AgentAccountItem['status'];
+}
+
+/** Strip the ciphertext from a freshly written row. */
+const toView = (row: AgentAccountItem): AgentAccountView => {
+  const { credentials, ...rest } = row;
+  return { ...rest, hasCredential: credentials !== null };
+};
+
+/**
+ * The read shape, selected explicitly.
+ *
+ * `credentials` is replaced by a SQL `is not null` so the ciphertext never even
+ * leaves the database on a list/detail query — least privilege lives in the
+ * query, not in a convention the next caller has to remember.
+ */
+const viewColumns = {
+  accessedAt: agentAccounts.accessedAt,
+  agentId: agentAccounts.agentId,
+  capabilities: agentAccounts.capabilities,
+  createdAt: agentAccounts.createdAt,
+  credentialHint: agentAccounts.credentialHint,
+  displayName: agentAccounts.displayName,
+  hasCredential: sql<boolean>`${agentAccounts.credentials} is not null`.as('has_credential'),
+  id: agentAccounts.id,
+  identifier: agentAccounts.identifier,
+  kind: agentAccounts.kind,
+  metadata: agentAccounts.metadata,
+  provider: agentAccounts.provider,
+  revokedAt: agentAccounts.revokedAt,
+  status: agentAccounts.status,
+  updatedAt: agentAccounts.updatedAt,
+  userId: agentAccounts.userId,
+  workspaceId: agentAccounts.workspaceId,
+};
+
+/**
+ * Agent accounts (mail / phone / wallet / service) and their credentials.
+ *
+ * Credential handling mirrors `AgentBotProviderModel` / `messengerAccountLinks`:
+ * the secret is AES-GCM ciphertext written through an injected gatekeeper, and
+ * only `getCredential` ever decrypts it.
+ */
+export class AgentAccountModel {
+  private db: LobeChatDatabase;
+  private gateKeeper?: GateKeeper;
+  private userId: string;
+  private workspaceId?: string;
+
+  constructor(db: LobeChatDatabase, userId: string, gateKeeper?: GateKeeper, workspaceId?: string) {
+    this.db = db;
+    this.userId = userId;
+    this.workspaceId = workspaceId;
+    this.gateKeeper = gateKeeper;
+  }
+
+  private ownership = () =>
+    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentAccounts);
+
+  private encrypt = async (value: Record<string, string>): Promise<string> => {
+    if (!this.gateKeeper) {
+      throw new Error(
+        'AgentAccountModel needs a gatekeeper to store credentials. Pass KeyVaultsGateKeeper (requires KEY_VAULTS_SECRET) when constructing it.',
+      );
+    }
+
+    return this.gateKeeper.encrypt(JSON.stringify(value));
+  };
+
+  private decrypt = async (ciphertext: string): Promise<Record<string, string>> => {
+    if (!this.gateKeeper) {
+      throw new Error(
+        'AgentAccountModel needs a gatekeeper to read credentials. Pass KeyVaultsGateKeeper (requires KEY_VAULTS_SECRET) when constructing it.',
+      );
+    }
+
+    return JSON.parse((await this.gateKeeper.decrypt(ciphertext)).plaintext);
+  };
+
+  // --------------- Writes ---------------
+
+  create = async (
+    params: Omit<NewAgentAccount, 'credentials' | 'userId'> & {
+      credential?: Record<string, string>;
+      credentialHint?: AgentAccountCredentialHint;
+    },
+  ): Promise<AgentAccountView> => {
+    const { credential, credentialHint, ...rest } = params;
+
+    const [row] = await this.db
+      .insert(agentAccounts)
+      .values(
+        buildWorkspacePayload(
+          { userId: this.userId, workspaceId: this.workspaceId },
+          {
+            ...rest,
+            credentials: credential ? await this.encrypt(credential) : null,
+            credentialHint: credential
+              ? { ...credentialHint, rotatedAt: new Date().toISOString() }
+              : credentialHint,
+          },
+        ),
+      )
+      .returning();
+
+    return toView(row);
+  };
+
+  /** Patch the non-secret fields. Credentials go through {@link setCredential}. */
+  update = async (id: string, patch: AgentAccountPatch): Promise<string | undefined> => {
+    const [row] = await this.db
+      .update(agentAccounts)
+      .set({ ...patch, updatedAt: new Date() })
+      .where(and(eq(agentAccounts.id, id), this.ownership()))
+      .returning({ id: agentAccounts.id });
+
+    return row?.id;
+  };
+
+  /**
+   * Install or rotate the credential. Write-only: nothing returns it, and the
+   * hint's `rotatedAt` is stamped here so a reader can tell when it last changed.
+   */
+  setCredential = async (
+    id: string,
+    credential: Record<string, string>,
+    hint?: Omit<AgentAccountCredentialHint, 'rotatedAt'>,
+  ): Promise<string | undefined> => {
+    const [row] = await this.db
+      .update(agentAccounts)
+      .set({
+        credentialHint: { ...hint, rotatedAt: new Date().toISOString() },
+        credentials: await this.encrypt(credential),
+        updatedAt: new Date(),
+      })
+      .where(and(eq(agentAccounts.id, id), this.ownership()))
+      .returning({ id: agentAccounts.id });
+
+    return row?.id;
+  };
+
+  /**
+   * Revoke an account. Purging the credential is the default: a revoked account
+   * must not keep a usable secret behind it.
+   */
+  revoke = async (
+    id: string,
+    options: { purgeCredential?: boolean } = {},
+  ): Promise<string | undefined> => {
+    const purge = options.purgeCredential ?? true;
+
+    const [row] = await this.db
+      .update(agentAccounts)
+      .set({
+        ...(purge ? { credentialHint: null, credentials: null } : {}),
+        revokedAt: new Date(),
+        status: 'revoked',
+        updatedAt: new Date(),
+      })
+      .where(and(eq(agentAccounts.id, id), this.ownership()))
+      .returning({ id: agentAccounts.id });
+
+    return row?.id;
+  };
+
+  // --------------- Reads ---------------
+
+  query = async (params?: {
+    agentId?: string;
+    kind?: AgentAccountKind;
+    provider?: string;
+  }): Promise<AgentAccountView[]> => {
+    const conditions = [this.ownership()];
+
+    if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
+    if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
+    if (params?.provider) conditions.push(eq(agentAccounts.provider, params.provider));
+
+    return this.db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(and(...conditions))
+      .orderBy(desc(agentAccounts.updatedAt));
+  };
+
+  findById = async (id: string): Promise<AgentAccountView | undefined> => {
+    const [row] = await this.db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(and(eq(agentAccounts.id, id), this.ownership()))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
+   * Decrypt the stored credential for internal use (signature verification,
+   * login). The only read that yields a secret; scope-filtered, and callers
+   * must never hand the result back to an API response or a model.
+   */
+  getCredential = async (id: string): Promise<Record<string, string> | null> => {
+    const [row] = await this.db
+      .select({ credentials: agentAccounts.credentials })
+      .from(agentAccounts)
+      .where(and(eq(agentAccounts.id, id), this.ownership()))
+      .limit(1);
+
+    if (!row?.credentials) return null;
+
+    return this.decrypt(row.credentials);
+  };
+
+  // --------------- Unscoped lookups (inbound routing) ---------------
+
+  /**
+   * Resolve an account from the routing key on an inbound webhook, before any
+   * user is known. Authorization is the caller's job — this reaches rows
+   * belonging to anyone, exactly like `AgentBotProviderModel.findByPlatformAndAppId`.
+   */
+  static findByRoutingKey = async (
+    db: LobeChatDatabase,
+    provider: string,
+    identifier: string,
+  ): Promise<AgentAccountView | undefined> => {
+    const [row] = await db
+      .select(viewColumns)
+      .from(agentAccounts)
+      .where(and(eq(agentAccounts.provider, provider), eq(agentAccounts.identifier, identifier)))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
+   * Decrypt an account's credential while resolving an inbound webhook, so the
+   * signature can be verified *before* the request is trusted. The trust model
+   * is the same as the bot path: nothing else may call this.
+   */
+  static findForInboundVerification = async (
+    db: LobeChatDatabase,
+    provider: string,
+    identifier: string,
+    gateKeeper?: GateKeeper,
+  ): Promise<{ credential: Record<string, string> | null; view: AgentAccountView } | undefined> => {
+    const view = await AgentAccountModel.findByRoutingKey(db, provider, identifier);
+    if (!view) return undefined;
+
+    const [row] = await db
+      .select({ credentials: agentAccounts.credentials })
+      .from(agentAccounts)
+      .where(eq(agentAccounts.id, view.id))
+      .limit(1);
+
+    if (!row?.credentials) return { credential: null, view };
+    if (!gateKeeper) return undefined;
+
+    return {
+      credential: JSON.parse((await gateKeeper.decrypt(row.credentials)).plaintext),
+      view,
+    };
+  };
+}

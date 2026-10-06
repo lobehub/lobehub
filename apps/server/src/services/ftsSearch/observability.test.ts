@@ -6,6 +6,7 @@ import type { FtsSearchBackend } from '@/database/repositories/ftsSearch';
 import {
   buildFtsSearchBackendMetricAttributes,
   recordElasticsearchFtsSearchRequest,
+  recordUserMemoryLexicalSearchDecision,
   withFtsSearchBackendObservability,
 } from './observability';
 
@@ -14,6 +15,7 @@ const mocks = vi.hoisted(() => {
   const histograms = new Map<string, { record: ReturnType<typeof vi.fn> }>();
   const span = {
     end: vi.fn(),
+    recordException: vi.fn(),
     setAttribute: vi.fn(),
     setStatus: vi.fn(),
   };
@@ -59,12 +61,14 @@ describe('full-text search backend observability', () => {
         operation: 'pg_hydration',
         provider: 'elasticsearch',
         result: 'success',
+        usage: 'message_search',
       }),
     ).toEqual({
       entity: 'messages',
       operation: 'pg_hydration',
       provider: 'elasticsearch',
       result: 'success',
+      usage: 'message_search',
     });
   });
 
@@ -75,7 +79,7 @@ describe('full-text search backend observability', () => {
       search: vi.fn().mockResolvedValue(response),
     };
     const resolveProvider = vi.fn(() => 'pg_search' as const);
-    const observed = withFtsSearchBackendObservability(backend, resolveProvider);
+    const observed = withFtsSearchBackendObservability(backend, resolveProvider, 'unified_search');
     const request = {
       entity: 'agents',
       filters: {},
@@ -106,6 +110,7 @@ describe('full-text search backend observability', () => {
           'fts.search.backend.entity': 'agents',
           'fts.search.backend.operation': 'product_path',
           'fts.search.backend.provider': 'pg_search',
+          'fts.search.backend.usage': 'unified_search',
         },
       },
       expect.any(Function),
@@ -119,7 +124,7 @@ describe('full-text search backend observability', () => {
       key: 'pg_search',
       search: vi.fn().mockResolvedValue(response),
     };
-    const observed = withFtsSearchBackendObservability(backend, () => 'pg_search');
+    const observed = withFtsSearchBackendObservability(backend, () => 'pg_search', 'unattributed');
 
     await expect(
       observed.search({
@@ -153,25 +158,89 @@ describe('full-text search backend observability', () => {
       decodedBytes: 2048,
       durationMs: 40,
       entity: 'messages',
+      errorCode: 'none',
+      executedQueryChars: 32,
       hits: 20,
+      originalQueryChars: 64,
       pagination: 'bounded',
+      queryFieldCount: 2,
       requestBytes: 512,
       result: 'success',
       serverTookMs: 12,
+      traceContext: 'recording',
+      truncated: true,
+      usage: 'unified_search',
     });
 
-    const attributes = { entity: 'messages', pagination: 'bounded', result: 'success' };
+    const requestAttributes = {
+      entity: 'messages',
+      error_code: 'none',
+      pagination: 'bounded',
+      query_truncated: true,
+      result: 'success',
+      trace_context: 'recording',
+      usage: 'unified_search',
+    };
+    const histogramAttributes = {
+      entity: 'messages',
+      pagination: 'bounded',
+      result: 'success',
+    };
+    const costAttributes = { ...histogramAttributes, usage: 'unified_search' };
     expect(mocks.counters.get('fts_search_elasticsearch_requests_total')?.add).toHaveBeenCalledWith(
       1,
-      attributes,
+      requestAttributes,
     );
     expect(
       mocks.histograms.get('fts_search_elasticsearch_server_took')?.record,
-    ).toHaveBeenCalledWith(12, attributes);
+    ).toHaveBeenCalledWith(12, costAttributes);
     expect(
       mocks.histograms.get('fts_search_elasticsearch_response_decoded_size')?.record,
-    ).toHaveBeenCalledWith(2048, attributes);
-    expect(Object.keys(attributes)).toEqual(['entity', 'pagination', 'result']);
+    ).toHaveBeenCalledWith(2048, costAttributes);
+    expect(
+      mocks.histograms.get('fts_search_elasticsearch_response_content_length')?.record,
+    ).toHaveBeenCalledWith(1024, costAttributes);
+    expect(
+      mocks.histograms.get('fts_search_elasticsearch_request_size')?.record,
+    ).toHaveBeenCalledWith(512, costAttributes);
+    expect(
+      mocks.histograms.get('fts_search_elasticsearch_response_hits')?.record,
+    ).toHaveBeenCalledWith(20, costAttributes);
+    expect(
+      mocks.histograms.get('fts_search_elasticsearch_original_query_characters')?.record,
+    ).toHaveBeenCalledWith(64, costAttributes);
+    expect(
+      mocks.histograms.get('fts_search_elasticsearch_executed_query_characters')?.record,
+    ).toHaveBeenCalledWith(32, costAttributes);
+    expect(
+      mocks.histograms.get('fts_search_elasticsearch_request_duration')?.record,
+    ).toHaveBeenCalledWith(40, costAttributes);
+    expect(Object.keys(requestAttributes)).toEqual([
+      'entity',
+      'error_code',
+      'pagination',
+      'query_truncated',
+      'result',
+      'trace_context',
+      'usage',
+    ]);
+    expect(Object.keys(costAttributes)).toEqual(['entity', 'pagination', 'result', 'usage']);
+  });
+
+  it('records when long user-memory context skips conjunction-based lexical search', () => {
+    recordUserMemoryLexicalSearchDecision({
+      decision: 'skipped_long_context',
+      queryCharacters: 7000,
+      source: 'topic_retrieval',
+    });
+
+    const attributes = { decision: 'skipped_long_context', source: 'topic_retrieval' };
+    expect(
+      mocks.counters.get('fts_search_user_memory_lexical_decisions_total')?.add,
+    ).toHaveBeenCalledWith(1, attributes);
+    expect(
+      mocks.histograms.get('fts_search_user_memory_lexical_query_characters')?.record,
+    ).toHaveBeenCalledWith(7000, attributes);
   });
 
   it('preserves the selected provider error', async () => {
@@ -180,7 +249,11 @@ describe('full-text search backend observability', () => {
       key: 'elasticsearch',
       search: vi.fn().mockRejectedValue(providerError),
     };
-    const observed = withFtsSearchBackendObservability(backend, () => 'elasticsearch');
+    const observed = withFtsSearchBackendObservability(
+      backend,
+      () => 'elasticsearch',
+      'message_search',
+    );
 
     await expect(
       observed.search({
@@ -191,6 +264,7 @@ describe('full-text search backend observability', () => {
         scope: { userId: 'private-user' },
       }),
     ).rejects.toBe(providerError);
+    expect(mocks.span.recordException).not.toHaveBeenCalled();
   });
 
   it('does not change the provider result when telemetry finalization fails', async () => {
@@ -199,7 +273,7 @@ describe('full-text search backend observability', () => {
       key: 'pg_search',
       search: vi.fn().mockResolvedValue(response),
     };
-    const observed = withFtsSearchBackendObservability(backend, () => 'pg_search');
+    const observed = withFtsSearchBackendObservability(backend, () => 'pg_search', 'unattributed');
     mocks.span.end.mockImplementationOnce(() => {
       throw new Error('telemetry unavailable');
     });

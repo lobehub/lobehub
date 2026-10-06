@@ -1,5 +1,6 @@
-import { AcceptanceSkill } from '@lobechat/builtin-skills';
+import { fetchAcceptanceSkillBundle } from '@lobechat/builtin-skills/acceptance';
 import {
+  normalizeEvidenceMetadata,
   normalizeVerifySurface,
   verifyRunScenarios,
   verifySurfaces,
@@ -12,6 +13,7 @@ import type {
   VerifyRunContext,
   VerifyRunScenario,
 } from '@lobechat/types';
+import { verifyCheckDefinitionSchema } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { asc, eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -21,6 +23,7 @@ import {
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { DocumentModel } from '@/database/models/document';
 import { LlmGenerationTracingModel } from '@/database/models/llmGenerationTracing';
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyCriterionModel } from '@/database/models/verifyCriterion';
@@ -39,11 +42,13 @@ import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { markSilentTRPCErrorLog } from '@/libs/trpc/utils/errorLogger';
+import { FileService } from '@/server/services/file';
 import { GoalCriteriaGeneratorService } from '@/server/services/goal/criteriaGenerator';
 import {
   AcceptanceService,
   createEvidenceFileResolver,
   finalizeVerifyRun,
+  purgeVerifyRun,
   VerifyExecutorService,
   VerifyFeedbackService,
   VerifyPlanGeneratorService,
@@ -51,21 +56,6 @@ import {
 } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
-
-/**
- * Skills that `verify.getSkillBundle` will materialize to a builder's disk via
- * `lh acceptance init`. Keyed by identifier; add future pullable skills here. The
- * portable acceptance skill lives in @lobechat/builtin-skills but is intentionally
- * NOT in its `builtinSkills` runtime array (kept out of the homogeneous agent
- * runtime / tool picker), so it is referenced directly here.
- *
- * The legacy `verify` identifier is kept as an alias so cached callers passing
- * `--skill verify` still resolve during the deprecation window.
- */
-const PULLABLE_SKILLS: Record<string, typeof AcceptanceSkill> = {
-  [AcceptanceSkill.identifier]: AcceptanceSkill,
-  verify: AcceptanceSkill,
-};
 
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
 const onFailSchema = z.enum(['manual', 'auto_repair']);
@@ -110,6 +100,7 @@ const rubricConfigSchema = z.object({
 });
 
 const checkItemSchema = z.object({
+  definition: verifyCheckDefinitionSchema.optional(),
   category: z.string().optional(),
   description: z.string().optional(),
   id: z.string(),
@@ -270,6 +261,7 @@ const verifyProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =
   return opts.next({
     ctx: {
       criterionModel: new VerifyCriterionModel(ctx.serverDB, ctx.userId, workspaceId),
+      documentModel: new DocumentModel(ctx.serverDB, ctx.userId, workspaceId),
       evidenceModel: new VerifyEvidenceModel(ctx.serverDB, ctx.userId, workspaceId),
       executorService: new VerifyExecutorService(ctx.serverDB, ctx.userId, workspaceId),
       tracingModel: new LlmGenerationTracingModel(ctx.serverDB, ctx.userId, workspaceId),
@@ -336,6 +328,9 @@ export const verifyRouter = router({
   createCriterion: verifyWriteProcedure
     .input(
       z.object({
+        definition: verifyCheckDefinitionSchema.optional(),
+        tags: z.array(z.string()).max(50).optional(),
+        description: z.string().optional(),
         documentId: z.string().optional(),
         onFail: onFailSchema.optional(),
         required: z.boolean().optional(),
@@ -360,13 +355,64 @@ export const verifyRouter = router({
     .input(z.object({ ids: z.array(z.string()) }))
     .mutation(async ({ ctx, input }) => ctx.criterionModel.forkRubricCriteria(input.ids)),
 
-  listCriteria: verifyProcedure.query(async ({ ctx }) => ctx.criterionModel.query()),
+  /**
+   * Resolve a specific criteria id list (e.g. the ones bound to a goal), in
+   * input order. Each row carries `instruction` resolved from its linked
+   * document — the judge rule must be inspectable and editable where the
+   * criteria are shown, not an invisible value edits would silently replace.
+   */
+  getCriteria: verifyProcedure
+    .input(z.object({ ids: z.array(z.string()) }))
+    .query(async ({ ctx, input }) => {
+      if (input.ids.length === 0) return [];
+      const rows = await ctx.criterionModel.findByIds(input.ids);
+      const documentIds = [
+        ...new Set(rows.flatMap((row) => (row.documentId ? [row.documentId] : []))),
+      ];
+      const documents = await Promise.all(documentIds.map((id) => ctx.documentModel.findById(id)));
+      const contentByDocId = new Map(
+        documents.flatMap((doc) => (doc ? [[doc.id, doc.content ?? undefined] as const] : [])),
+      );
+      const byId = new Map(
+        rows.map((row) => [
+          row.id,
+          {
+            ...row,
+            instruction: row.documentId ? contentByDocId.get(row.documentId) : undefined,
+          },
+        ]),
+      );
+      return input.ids.map((id) => byId.get(id)).filter(Boolean);
+    }),
+
+  listCriteria: verifyProcedure
+    .input(
+      z
+        .object({
+          search: z.string().optional(),
+          tags: z.array(z.string()).optional(),
+          includeArchived: z.boolean().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => ctx.criterionModel.query(input)),
+
+  getCriterionResults: verifyProcedure
+    .input(z.object({ id: z.string().uuid(), limit: z.number().int().min(1).max(100).optional() }))
+    .query(async ({ ctx, input }) => {
+      if (!(await ctx.criterionModel.findById(input.id)))
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Check asset not found' });
+      return ctx.resultModel.listByCriterion(input.id, input.limit);
+    }),
 
   updateCriterion: verifyWriteProcedure
     .input(
       z.object({
         id: z.string(),
         value: z.object({
+          definition: verifyCheckDefinitionSchema.nullish(),
+          tags: z.array(z.string()).max(50).optional(),
+          archivedAt: z.coerce.date().nullish(),
           description: z.string().nullish(),
           documentId: z.string().nullish(),
           onFail: onFailSchema.optional(),
@@ -469,7 +515,6 @@ export const verifyRouter = router({
         enableAiGeneration: z.boolean().optional(),
         goal: z.string(),
         maxAiCriteria: z.number().optional(),
-        modelConfig: modelConfigSchema.optional(),
         operationId: z.string(),
         verifyCriteriaIds: z.array(z.string()).optional(),
         verifyRubricId: z.string().nullish(),
@@ -494,7 +539,6 @@ export const verifyRouter = router({
         context: z.string().optional(),
         goal: z.string().min(1),
         maxCriteria: z.number().int().min(1).max(8).optional(),
-        modelConfig: modelConfigSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -622,31 +666,27 @@ export const verifyRouter = router({
 
   /**
    * Serve a pullable skill bundle (`SKILL.md` + inline resource files) by
-   * identifier so `lh verify init` can materialize it into a builder's working
-   * directory. Dynamic-by-design: the source is the server's deployed
-   * `@lobechat/builtin-skills`, so updating the skill + redeploying reaches every
-   * builder on the next pull — no CLI re-release. Auth-gated (verifyProcedure);
-   * returns NOT_FOUND for any identifier not in the pullable registry.
+   * identifier without authentication. Keep the legacy alias while sourcing
+   * all installers from the upstream default branch (or an explicitly selected tag).
    */
-  getSkillBundle: verifyProcedure.input(z.object({ identifier: z.string() })).query(({ input }) => {
-    const skill = PULLABLE_SKILLS[input.identifier];
-    if (!skill)
-      throw new TRPCError({
-        code: 'NOT_FOUND',
-        message: `No pullable skill with identifier "${input.identifier}"`,
-      });
-    return {
-      content: skill.content,
-      files: Object.fromEntries(
-        Object.entries(skill.resources ?? {}).map(([path, meta]) => [path, meta.content ?? '']),
-      ),
-      identifier: skill.identifier,
-      name: skill.name,
-      // The skill's own declared version, so an installer can compare a copy
-      // already on disk against the latest bundle.
-      version: skill.version,
-    };
-  }),
+  getSkillBundle: publicProcedure
+    .input(
+      z.object({
+        identifier: z.string(),
+        version: z
+          .string()
+          .regex(/^v?\d+\.\d+\.\d+$/)
+          .optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      if (input.identifier !== 'acceptance' && input.identifier !== 'verify')
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `No pullable skill with identifier "${input.identifier}"`,
+        });
+      return fetchAcceptanceSkillBundle(input.version);
+    }),
 
   getVerifyState: verifyProcedure
     .input(z.object({ operationId: z.string() }))
@@ -765,14 +805,21 @@ export const verifyRouter = router({
     .query(async ({ ctx, input }) => ctx.runModel.findById(input.verifyRunId)),
 
   // Delete a whole verification session: the run row cascades to its check
-  // results (→ their evidence) and its report via the schema FKs, so one delete
-  // tears down the published bundle. Ownership-scoped: resolveVerifyRun 404s a
-  // run that isn't the caller's before we touch it.
+  // results (→ their evidence) and its report via the schema FKs, and the
+  // evidence files only this run referenced are purged from storage.
+  // Ownership-scoped: resolveVerifyRun 404s a run that isn't the caller's
+  // before we touch it.
   deleteRun: verifyWriteProcedure.input(verifyRunIdInputSchema).mutation(async ({ ctx, input }) => {
     const run = await resolveVerifyRun(ctx, input.verifyRunId);
     assertWorkspaceRowManageable(ctx, run.userId, 'verify run');
 
-    await ctx.runModel.delete(run.id);
+    await purgeVerifyRun(
+      ctx.serverDB,
+      new FileService(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined),
+      run.userId,
+      run.workspaceId ?? undefined,
+      run.id,
+    );
     return { id: run.id, success: true };
   }),
 
@@ -921,7 +968,7 @@ export const verifyRouter = router({
         content: input.content ?? null,
         description: input.description ?? null,
         fileId: input.fileId ?? null,
-        metadata: input.metadata ?? null,
+        metadata: normalizeEvidenceMetadata(input.metadata, input.type) ?? null,
         type: input.type,
       });
     }),
@@ -985,9 +1032,20 @@ export const verifyRouter = router({
       // no verdict so an existing row keeps its status (and a new row falls to the
       // DB default 'pending') instead of being reset to 'running'. drizzle omits
       // undefined fields from both the insert and the conflict-update.
-      const planItem = (run.plan as VerifyCheckItem[] | null)?.find(
-        (i) => i.id === input.checkItemId,
-      );
+      const plan = (run.plan as VerifyCheckItem[] | null) ?? [];
+      const planItem = plan.find((i) => i.id === input.checkItemId);
+      // A planned run owns its checklist. An unknown id used to be upserted as a
+      // new row that fell to the column default `required: true`, minting a
+      // phantom required check no later round ever plans or re-answers — and the
+      // Goal review then judged its stale evidence forever. Name the valid ids
+      // so the caller can resubmit under the right one.
+      if (plan.length > 0 && !planItem)
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Check item "${input.checkItemId}" is not in this verification run's plan. Use one of: ${plan
+            .map((item) => `${item.id} (${item.title})`)
+            .join('; ')}`,
+        });
 
       const checkResult = await ctx.resultModel.upsertByCheckItem({
         checkItemId: input.checkItemId,

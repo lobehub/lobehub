@@ -1,0 +1,134 @@
+import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
+
+import type { PendingAttachment } from '../Evidence/attachments';
+
+/** One annotatable evidence image or video (already filtered to visual, file-backed). */
+export interface RejectableEvidence {
+  /** Video only: the agent's markers, so the reviewer can dispute a claim in place. */
+  chapters?: VerifyEvidenceChapter[];
+  fileUrl: string;
+  id: string;
+  /** `video` switches the stage to the player; anything else is an image. */
+  type?: string;
+}
+
+export interface DraftAnnotationEntry {
+  comment: string;
+  disputes?: AcceptanceReviewAnnotation['disputes'];
+  evidenceId: string;
+  /** Stable identity — rapid move/resize updates must never key off object
+      identity, which a stale render closure invalidates mid-gesture. */
+  key: number;
+  rect: AcceptanceReviewAnnotation['rect'];
+  time?: AcceptanceReviewAnnotation['time'];
+}
+
+/** What survives a refresh — typed feedback is too costly to lose to one F5. */
+export interface RejectDraft {
+  annotations: DraftAnnotationEntry[];
+  attachments?: PendingAttachment[];
+  comment: string;
+}
+
+let draftAnnotationSeq = 0;
+
+export const nextAnnotationKey = () => ++draftAnnotationSeq;
+
+export const serializeReviewAnnotations = (
+  annotations: DraftAnnotationEntry[],
+): AcceptanceReviewAnnotation[] =>
+  annotations.map(({ comment, disputes, evidenceId, rect, time }) => ({
+    comment: comment.trim() || undefined,
+    ...(disputes ? { disputes } : {}),
+    evidenceId,
+    rect,
+    ...(time ? { time } : {}),
+  }));
+
+/**
+ * Regions to open the modal with, keyed for editing.
+ *
+ * Only regions whose evidence still exists are restored — a new round may have
+ * replaced the artifacts since the draft was written, and a rect normalized
+ * against an image that is gone would land on whatever took its place.
+ */
+export const restoreDraftAnnotations = (
+  source: AcceptanceReviewAnnotation[],
+  evidence: RejectableEvidence[],
+): DraftAnnotationEntry[] =>
+  source
+    .filter((entry) => evidence.some((item) => item.id === entry.evidenceId))
+    .map((entry) => ({
+      comment: entry.comment ?? '',
+      disputes: entry.disputes,
+      evidenceId: entry.evidenceId,
+      key: nextAnnotationKey(),
+      rect: entry.rect,
+      time: entry.time,
+    }));
+
+const draftStorageKey = (key: string) => `acceptance-reject-draft:${key}`;
+
+export const readDraft = (key: string | undefined): RejectDraft | null => {
+  if (!key) return null;
+  try {
+    const raw = localStorage.getItem(draftStorageKey(key));
+    return raw ? (JSON.parse(raw) as RejectDraft) : null;
+  } catch {
+    return null;
+  }
+};
+
+/** An empty draft cleans its slot up rather than persisting a blank record. */
+export const writeDraft = (key: string, draft: RejectDraft) => {
+  try {
+    if (
+      !draft.comment &&
+      draft.annotations.length === 0 &&
+      (draft.attachments?.length ?? 0) === 0
+    ) {
+      localStorage.removeItem(draftStorageKey(key));
+    } else {
+      localStorage.setItem(draftStorageKey(key), JSON.stringify(draft));
+    }
+  } catch {
+    /* quota/private mode — the draft is a convenience, never a blocker */
+  }
+};
+
+export const clearDraft = (key: string) => {
+  try {
+    localStorage.removeItem(draftStorageKey(key));
+  } catch {
+    /* see writeDraft */
+  }
+};
+
+export const mergeRejectComments = (initialComment = '', storedComment = '') => {
+  const initial = initialComment.trim();
+  const stored = storedComment.trim();
+  if (!initial) return stored;
+  if (!stored || stored === initial) return initial;
+  return `${initial}\n\n${stored}`;
+};
+
+export const ZOOM_STEPS = [0.5, 0.75, 1, 1.5, 2, 3, 4];
+
+export const clampZoom = (value: number) =>
+  Math.min(Math.max(value, ZOOM_STEPS[0]), ZOOM_STEPS.at(-1)!);
+
+/**
+ * Step one notch along ZOOM_STEPS, clamped at both ends. A pinch can leave the
+ * zoom between two notches; from there a step lands on the next notch in that
+ * direction rather than snapping back to 100%.
+ */
+export const nextZoom = (current: number, direction: 1 | -1) => {
+  const index = ZOOM_STEPS.findIndex((step) => Math.abs(step - current) < 0.001);
+  if (index !== -1)
+    return ZOOM_STEPS[Math.min(Math.max(index + direction, 0), ZOOM_STEPS.length - 1)];
+  const candidate =
+    direction === 1
+      ? ZOOM_STEPS.find((step) => step > current)
+      : [...ZOOM_STEPS].reverse().find((step) => step < current);
+  return candidate ?? clampZoom(current);
+};

@@ -4,16 +4,26 @@ name: Release Desktop Canary
 # Canary 自动发版工作流
 # ============================================
 # 触发条件:
-#   1. canary 分支有 push (合入 PR) 且 commit 前缀为 style/feat/fix/refactor/release (支持 gitmoji)
+#   1. canary 分支有 push (合入 PR) 且 commit type 为 style/feat/fix/perf/refactor/release
+#      (可带任意 gitmoji)
 #   2. 手动触发 (workflow_dispatch)
 #
+# core-only 优先:
+#   先跑 release-desktop-core-ota.yml；只有 shellAbi 变了 (requires_full_release)
+#   或 core 没有变化 (skipped) 或手动 force_full 时才走全量打包。
+#
 # 并发策略:
-#   同一 workflow 仅保留最新一次运行，自动取消排队中的旧 build
+#   运行中的发布不会被后续 push 取消；等待队列仅保留最新一次运行
 #
 # 版本策略:
 #   基于最新 stable tag 的 patch+1, postfix 为递增序号
 #   格式: X.Y.(Z+1)-canary.N
 #   例: 当前 tag v2.1.28 → v2.1.29-canary.1, 下次 → v2.1.29-canary.2
+#
+# macOS Sparkle 试点 (缺少任一 secret 时自动跳过，客户端回退 electron-updater):
+#   - SPARKLE_ED_PUBLIC_KEY: 打进 Info.plist 的 SUPublicEDKey
+#   - SPARKLE_ED_PRIVATE_KEY: `generate_keys -x` 导出的 base64 seed，用于签 appcast/delta
+#   发布 {channel}/appcast-{arch}.xml 与 {channel}/{version}/*.delta 到 S3
 # ============================================
 
 on:
@@ -27,10 +37,16 @@ on:
         required: false
         type: boolean
         default: false
+      force_full:
+        description: 'Skip the core-only path and publish a full release'
+        required: false
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  # ponytail: this also protects short OTA-only runs; split the full release only if they queue.
+  cancel-in-progress: false
 
 permissions: read-all
 
@@ -39,23 +55,19 @@ env:
 
 jobs:
   # ============================================
-  # 检查 commit 前缀并计算版本号
+  # 检查 commit type
   # ============================================
-  calculate-version:
-    name: Calculate Canary Version
+  check-trigger:
+    name: Check Canary Trigger
     runs-on: ubuntu-latest
     outputs:
-      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
-      release_notes: ${{ steps.release-notes.outputs.release_notes }}
-      version: ${{ steps.version.outputs.version }}
-      tag: ${{ steps.version.outputs.tag }}
       should_build: ${{ steps.check.outputs.should_build }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
-      - name: Check commit message prefix
+      - name: Check commit type
         id: check
         run: |
           # 手动触发 + force 时跳过检查
@@ -76,17 +88,48 @@ jobs:
           commit_msg=$(git log -1 --pretty=%s HEAD)
           echo "📝 Head commit: $commit_msg"
 
-          # 检查是否匹配 style/feat/fix/refactor/release 前缀 (支持 gitmoji 前缀)
-          if echo "$commit_msg" | grep -qiE '^(💄\s*)?style(\(.+\))?:|^(✨\s*)?feat(\(.+\))?:|^(🐛\s*)?fix(\(.+\))?:|^(♻️\s*)?refactor(\(.+\))?:|^(🚀\s*)?release(\(.+\))?:'; then
+          # 只检查 Conventional Commit type；前置 gitmoji 不参与 type 匹配。
+          if node scripts/desktopCanaryTrigger.cjs "$commit_msg"; then
             echo "should_build=true" >> $GITHUB_OUTPUT
             echo "✅ Commit matches canary build trigger: $commit_msg"
           else
             echo "should_build=false" >> $GITHUB_OUTPUT
-            echo "⏭️ Commit does not match style/feat/fix/refactor/release prefix, skipping: $commit_msg"
+            echo "⏭️ Commit type is not style/feat/fix/perf/refactor/release, skipping: $commit_msg"
           fi
 
+  # ============================================
+  # core-only 发布（壳未变时不打全量包）
+  # ============================================
+  core-ota:
+    name: Core OTA
+    needs: [check-trigger]
+    if: needs.check-trigger.outputs.should_build == 'true' && !inputs.force_full
+    uses: ./.github/workflows/release-desktop-core-ota.yml
+    secrets: inherit
+    with:
+      channel: canary
+
+  # ============================================
+  # 计算版本号
+  # ============================================
+  calculate-version:
+    name: Calculate Canary Version
+    needs: [check-trigger, core-ota]
+    if: |
+      always() && needs.check-trigger.outputs.should_build == 'true' &&
+      (inputs.force_full || needs.core-ota.outputs.requires_full_release == 'true' || needs.core-ota.outputs.skipped == 'true')
+    runs-on: ubuntu-latest
+    outputs:
+      cloud_ref: ${{ steps.cloud-ref.outputs.cloud_ref }}
+      release_notes: ${{ steps.release-notes.outputs.release_notes }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
       - name: Calculate canary version
-        if: steps.check.outputs.should_build == 'true'
         id: version
         run: |
           # 获取最新的 stable tag (排除 nightly/canary/beta 等)
@@ -125,7 +168,6 @@ jobs:
 
       - name: Resolve Cloud revision
         id: cloud-ref
-        if: steps.check.outputs.should_build == 'true'
         env:
           CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
           CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
@@ -141,7 +183,6 @@ jobs:
           echo "cloud_ref=$cloud_ref" >> "$GITHUB_OUTPUT"
 
       - name: Generate canary release notes
-        if: steps.check.outputs.should_build == 'true'
         id: release-notes
         env:
           TAG: ${{ steps.version.outputs.tag }}
@@ -183,7 +224,7 @@ jobs:
             echo "### ⚠️ Important Notes"
             echo
             echo "- **This is an automated canary build and is NOT intended for production use.**"
-            echo "- Canary builds are triggered by \`build\`/\`fix\`/\`style\` commits on the \`canary\` branch."
+            echo "- Canary builds are triggered by \`style\`/\`feat\`/\`fix\`/\`perf\`/\`refactor\`/\`release\` commits on the \`canary\` branch."
             echo "- May contain **unstable or incomplete changes**. **Use at your own risk.**"
             echo "- It is strongly recommended to **back up your data** before using a canary build."
             echo
@@ -194,20 +235,10 @@ jobs:
             echo "| Platform | File |"
             echo "|----------|------|"
             echo "| macOS (Apple Silicon) | \`.dmg\` (arm64) |"
-            echo "| macOS (Intel) | \`.dmg\` (x64) |"
             echo "| Windows | \`.exe\` |"
             echo "| Linux | \`.AppImage\` / \`.deb\` |"
             echo "EOF"
           } >> $GITHUB_OUTPUT
-
-  renderer-ota:
-    name: Publish Renderer OTA
-    needs: [calculate-version]
-    if: needs.calculate-version.outputs.should_build == 'true'
-    uses: ./.github/workflows/release-desktop-renderer-ota.yml
-    with:
-      channel: canary
-    secrets: inherit
 
   # ============================================
   # 代码质量检查
@@ -215,11 +246,10 @@ jobs:
   test:
     name: Code quality check
     needs: [calculate-version]
-    if: needs.calculate-version.outputs.should_build == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout base
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -237,17 +267,17 @@ jobs:
   # ============================================
   build:
     needs: [calculate-version, test]
-    if: needs.calculate-version.outputs.should_build == 'true'
     name: Build Desktop App
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-15, macos-15-intel, windows-2025, ubuntu-latest]
+        os: [macos-15, windows-2025, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup build environment
+        id: setup
         uses: ./.github/actions/desktop-build-setup
         with:
           cloud-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
@@ -255,7 +285,16 @@ jobs:
           cloud-token: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
           node-version: ${{ env.NODE_VERSION }}
 
+      - name: Resolve core seq
+        id: core_seq
+        uses: ./.github/actions/desktop-core-seq
+        with:
+          app-version: ${{ needs.calculate-version.outputs.version }}
+          channel: canary
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+
       - name: Set package version
+        id: app_version
         run: npm run workflow:set-desktop-version ${{ needs.calculate-version.outputs.version }} canary
 
       # macOS 构建前清理 (修复 hdiutil 问题)
@@ -278,12 +317,15 @@ jobs:
 
       # macOS 构建
       - name: Build artifact on macOS
+        id: build_macos
         if: runner.os == 'macOS'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
+          SPARKLE_ED_PUBLIC_KEY: ${{ secrets.SPARKLE_ED_PUBLIC_KEY }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -299,12 +341,14 @@ jobs:
 
       # Windows 构建
       - name: Build artifact on Windows
+        id: build_windows
         if: runner.os == 'Windows'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -316,12 +360,14 @@ jobs:
 
       # Linux 构建
       - name: Build artifact on Linux
+        id: build_linux
         if: runner.os == 'Linux'
         run: npm run desktop:package:app
         env:
           UPDATE_CHANNEL: canary
           UPDATE_SERVER_URL: ${{ secrets.UPDATE_SERVER_URL }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          CORE_SEQ: ${{ steps.core_seq.outputs.seq }}
           RELEASE_NOTES: ${{ needs.calculate-version.outputs.release_notes }}
           APP_URL: http://localhost:3015
           DATABASE_URL: 'postgresql://postgres@localhost:5432/postgres'
@@ -347,13 +393,22 @@ jobs:
           retention-days: 30
 
       - name: Upload artifacts
+        id: upload
         uses: ./.github/actions/desktop-upload-artifacts
         with:
           artifact-name: release-${{ matrix.os }}
-          renderer-ota-private-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
-          renderer-ota-public-key: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          update-server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          core-signing-key: ${{ secrets.RENDERER_OTA_PRIVATE_KEY }}
           retention-days: 3
-          update-channel: canary
+
+      - name: Preserve desktop build diagnostics
+        if: always()
+        uses: ./.github/actions/desktop-ota-diagnostics
+        with:
+          kind: build
+          channel: canary
+          steps-json: ${{ toJSON(steps) }}
+          job-status: ${{ job.status }}
 
   # ============================================
   # 合并 macOS 多架构 latest-mac.yml 文件
@@ -366,7 +421,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -411,6 +466,12 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
       - name: Download merged artifacts
         uses: actions/download-artifact@v7
         with:
@@ -438,7 +499,7 @@ jobs:
             release/*.rpm*
             release/*.tar.gz*
         env:
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   # ============================================
   # 发布到 S3 更新服务器
@@ -448,12 +509,51 @@ jobs:
     name: Publish to S3
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
       - uses: ./.github/actions/desktop-publish-s3
         with:
           channel: canary
           cloud-ref: ${{ needs.calculate-version.outputs.cloud_ref }}
           version: ${{ needs.calculate-version.outputs.version }}
+          aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
+          s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
+          s3-region: ${{ secrets.UPDATE_S3_REGION }}
+          s3-endpoint: ${{ secrets.UPDATE_S3_ENDPOINT }}
+
+  # ============================================
+  # 发布 Sparkle appcast + delta（macOS 整包升级）
+  # 依赖 publish-s3：appcast 的 enclosure 指向 S3 上已经存在的 zip
+  # ============================================
+  publish-sparkle:
+    needs: [publish-s3, calculate-version]
+    name: Publish Sparkle Appcast
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          package-manager-cache: false
+
+      - uses: ./.github/actions/desktop-publish-sparkle
+        with:
+          channel: canary
+          version: ${{ needs.calculate-version.outputs.version }}
+          server-url: ${{ secrets.UPDATE_SERVER_URL }}
+          ed-private-key: ${{ secrets.SPARKLE_ED_PRIVATE_KEY }}
+          release-notes: ${{ needs.calculate-version.outputs.release_notes }}
           aws-access-key-id: ${{ secrets.UPDATE_AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.UPDATE_AWS_SECRET_ACCESS_KEY }}
           s3-bucket: ${{ secrets.UPDATE_S3_BUCKET }}
@@ -470,11 +570,20 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/create-github-app-token@v2
+        id: app-token
+        with:
+          app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
+          private-key: ${{ secrets.LOBEHUB_BOT_APP_PRIVATE_KEY }}
+
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Delete old canary GitHub releases
         uses: actions/github-script@v8
         with:
+          github-token: ${{ steps.app-token.outputs.token }}
           script: |
             const { data: releases } = await github.rest.repos.listReleases({
               owner: context.repo.owner,

@@ -1,8 +1,7 @@
 'use client';
 
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Tag } from '@lobehub/ui/base-ui';
-import { Descriptions, Divider } from 'antd';
+import { ActionIcon, Descriptions, Divider, Tag } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import { BoltIcon, DownloadIcon } from 'lucide-react';
 import { memo } from 'react';
@@ -84,8 +83,7 @@ const FileDetail = memo<FileDetailProps>((props) => {
         colon={false}
         column={1}
         items={items}
-        labelStyle={{ width: 120 }}
-        size={'small'}
+        styles={{ label: { width: 120 } }}
         title={showTitle ? t('detail.basic.title') : undefined}
         extra={
           showDownloadButton && url ? (
@@ -99,14 +97,8 @@ const FileDetail = memo<FileDetailProps>((props) => {
           ) : undefined
         }
       />
-      <Divider />
-      <Descriptions
-        colon={false}
-        column={1}
-        items={dataItems}
-        labelStyle={{ width: 120 }}
-        size={'small'}
-      />
+      <Divider style={{ marginBlock: 24 }} />
+      <Descriptions colon={false} column={1} items={dataItems} styles={{ label: { width: 120 } }} />
     </Flexbox>
   );
 });

@@ -1,8 +1,27 @@
+import type { UIChatMessage } from '@lobechat/types';
+
 // ─── Agent Stream Event (mirrors server StreamEvent) ───
+
+/**
+ * Stream features a client declares when it starts a run
+ * (`aiAgent.execAgent`'s `streamFeatures`), so the server only sends event
+ * shapes that client understands.
+ *
+ * - `member_runtime_end`: a mirrored group member's terminal arrives on the
+ *   supervisor's channel as `member_runtime_end` instead of `agent_runtime_end`.
+ */
+export type AgentStreamClientFeature = 'member_runtime_end';
 
 export type AgentStreamEventType =
   | 'agent_runtime_init'
   | 'agent_runtime_end'
+  /**
+   * A mirrored operation's terminal, delivered on another operation's channel
+   * (a group member finishing, forwarded onto the supervisor's socket). Same
+   * payload as `agent_runtime_end`, but NOT terminal for the channel it rides
+   * on: the gateway only closes a session on `agent_runtime_end`.
+   */
+  | 'member_runtime_end'
   | 'stream_start'
   | 'stream_chunk'
   | 'stream_end'
@@ -16,6 +35,14 @@ export type AgentStreamEventType =
   | 'tool_start'
   | 'tool_end'
   | 'tool_execute'
+  /**
+   * Server → executor client: run one LLM attempt for a model provider only
+   * the user's device can reach, and upload its protocol chunks back over
+   * HTTP (`/api/agent/llm-relay/:callId/chunks`). See {@link LlmExecuteData}.
+   */
+  | 'llm_execute'
+  /** Server → executor client: stop a relayed LLM attempt. See {@link LlmCancelData}. */
+  | 'llm_cancel'
   /**
    * Producer-side tool result content (heterogeneous CLI agents emit this
    * separately from `tool_end`; gateway-driven runs do not). Kept in the
@@ -39,6 +66,12 @@ export type AgentStreamEventType =
    * cancellation marker.
    */
   | 'agent_intervention_response'
+  /**
+   * Protocol-v2-only canonical conversation delta. Native server agent runs
+   * emit one after each durable step instead of repeating the whole topic on
+   * every `step_start` / `agent_runtime_end` boundary.
+   */
+  | 'message_patch'
   | 'step_start'
   | 'step_complete'
   /**
@@ -57,6 +90,22 @@ export interface AgentStreamEvent {
   stepIndex: number;
   timestamp: number;
   type: AgentStreamEventType;
+}
+
+export interface MessagePatchUpsert {
+  /** Immediate predecessor in the canonical top-level message list. */
+  afterId: string | null;
+  message: UIChatMessage;
+}
+
+/**
+ * Operation-local, monotonic patch carried only by Gateway mux / protocol v2.
+ * A missing revision is recovered with one normal message-list fetch.
+ */
+export interface MessagePatchData {
+  deletes: string[];
+  revision: number;
+  upserts: MessagePatchUpsert[];
 }
 
 export type StreamChunkType =
@@ -80,6 +129,12 @@ export interface StreamChunkData {
   pluginState?: Record<string, unknown>;
   reasoning?: string;
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /**
+   * Set when the chunk re-publishes output the server received from a relayed
+   * LLM attempt (`llm_execute`). The executor client already rendered that
+   * output locally, so it skips text/reasoning chunks carrying a call id it ran.
+   */
+  relayCallId?: string;
   /**
    * `lh hetero exec` coalesces main-agent text deltas into full-text
    * snapshots: `content` carries the WHOLE message so far and must replace
@@ -151,6 +206,7 @@ export interface ToolEndData {
 }
 
 export interface StepCompleteData {
+  /** Present only when the run opts into includeFinalState. */
   finalState?: unknown;
   phase: string;
   reason?: string;
@@ -197,7 +253,7 @@ export interface OperationHeartbeatData extends StepCompleteData {
 export type AgentInterventionInteractionKind = 'permission' | 'plan' | 'question';
 
 /** Producer that owns the blocked interaction. */
-export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'qoder';
+export type AgentInterventionProvider = 'claude-code' | 'cursor' | 'devin' | 'droid' | 'qoder';
 
 /** Whitelisted option surface that may be persisted for cold-start review. */
 export interface AgentInterventionRenderOption {
@@ -308,6 +364,78 @@ export interface ToolExecuteData {
   topicId?: string | null;
 }
 
+/** Deadlines a relayed LLM attempt runs under, in milliseconds. */
+export interface LlmRelayDeadlines {
+  /** From dispatch until the first uploaded batch (an empty batch counts). */
+  claimMs: number;
+  /** From the first batch until the first non-empty chunk (model cold start). */
+  firstChunkMs: number;
+  /** Longest gap between two batches; idle executors send an empty batch as heartbeat. */
+  idleMs: number;
+  /** Whole attempt, dispatch included. The client should stop a little earlier. */
+  totalMs: number;
+}
+
+/**
+ * Server → Client (`llm_execute`): run one LLM attempt locally and stream its
+ * normalized protocol chunks back. Carries no messages and no credentials: the
+ * request body is fetched from `GET /api/agent/llm-relay/:callId/payload`, and
+ * the client uses its own provider configuration.
+ */
+export interface LlmExecuteData {
+  /** Assistant message the attempt streams into, for local optimistic rendering. */
+  assistantMessageId?: string;
+  attempt: number;
+  /** Idempotency key of this attempt: `${operationId}:${stepIndex}:${attempt}`. */
+  callId: string;
+  deadlines: LlmRelayDeadlines;
+  /**
+   * Capability for the relay endpoints of this call (payload + chunk upload),
+   * sent as the `x-llm-relay-lease` header. Expires with the attempt.
+   */
+  leaseToken: string;
+  model: string;
+  operationId: string;
+  /**
+   * Client that started the run (`host.llmExecutor.clientId`). It executes;
+   * other clients only take over when it is gone. The first batch to arrive
+   * claims the call, later claimants get 409.
+   */
+  preferredClientId?: string;
+  /** Provider id, for the client's own key vault / endpoint lookup. */
+  provider: string;
+  /** SDK the provider speaks (`sdkType` for custom providers). */
+  runtimeProvider: string;
+  stepIndex: number;
+}
+
+/** Server → Client (`llm_cancel`): stop the relayed attempt and upload a final `aborted` batch. */
+export interface LlmCancelData {
+  callId: string;
+  reason: 'interrupted' | 'timeout' | 'superseded' | 'error';
+}
+
+/** Client → Server: one batch of a relayed attempt's output. */
+export interface LlmRelayBatch {
+  /** Sorted, gap-free per call starting at 1; the server dedupes and reorders by it. */
+  chunks: Array<{ data: unknown; id?: string; type: string }>;
+  /** Uploading client; the first batch claims the call for it. */
+  clientId: string;
+  /** Last batch of the attempt. */
+  final?: {
+    error?: unknown;
+    reason: 'aborted' | 'done' | 'error';
+  };
+  seq: number;
+}
+
+/** Server → Client reply to an uploaded batch. */
+export interface LlmRelayBatchAck {
+  ackSeq: number;
+  /** The server no longer wants this attempt (stopped, timed out, superseded): abort now. */
+  cancel?: boolean;
+}
+
 // ─── WebSocket Protocol Messages ───
 
 // Client → Server
@@ -329,10 +457,6 @@ export interface ResumeMessage {
 
 export interface HeartbeatMessage {
   type: 'heartbeat';
-}
-
-export interface InterruptMessage {
-  type: 'interrupt';
 }
 
 /**
@@ -358,8 +482,13 @@ export interface ToolResultMessage {
   workRegistration?: any;
 }
 
-export type ClientMessage =
-  AuthMessage | HeartbeatMessage | InterruptMessage | ResumeMessage | ToolResultMessage;
+/**
+ * The gateway also accepts an `interrupt` frame, but its op DO ignores it and
+ * a stop needs server-side work the socket cannot do (cancelling device/hetero
+ * processes, settling the operation and topic rows). Cancellation therefore
+ * goes through `aiAgent.interruptTask`, and no client here ever sends one.
+ */
+export type ClientMessage = AuthMessage | HeartbeatMessage | ResumeMessage | ToolResultMessage;
 
 // Server → Client
 export interface AuthSuccessMessage {
@@ -402,14 +531,28 @@ export interface SessionCompleteMessage {
 export type SessionStatus =
   'running' | 'waiting_input' | 'waiting_confirmation' | 'completed' | 'error' | 'interrupted';
 
-/** Provenance for a terminal session signal emitted by AgentStreamClient. */
+export type TerminalSessionStatus = Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+
+/**
+ * Provenance for a terminal session signal emitted by AgentStreamClient (v1)
+ * or a mux `OperationSubscription` (v2). v1 only ever emits the first two.
+ */
 export type AgentStreamSessionCompletion =
   | {
       source: 'raw_session_complete';
     }
   | {
       source: 'resume_status';
-      status: Extract<SessionStatus, 'completed' | 'error' | 'interrupted'>;
+      status: TerminalSessionStatus;
+    }
+  /** v2: this op's own `agent_runtime_end` / `error` agent event. */
+  | {
+      source: 'agent_event';
+    }
+  /** v2: hub `status_change` carrying a terminal status (e.g. watchdog). */
+  | {
+      source: 'status_change';
+      status: TerminalSessionStatus;
     };
 
 /**
@@ -465,6 +608,15 @@ export interface AgentStreamClientOptions {
   autoReconnect?: boolean;
   /** Gateway WebSocket URL base (e.g. https://gateway.lobehub.com) */
   gatewayUrl: string;
+  /**
+   * Last event id this operation has already applied, when the stream is being
+   * picked up from another transport (the v1 fallback after the multiplexed
+   * socket gave up). Both protocols read ids from the same per-operation
+   * sequence, so the first `resume` replays only what came after it — events
+   * the client already consumed, `tool_execute` included, are not delivered
+   * twice. Absent ⇒ replay from the beginning.
+   */
+  lastEventId?: string;
   /** Operation ID to subscribe to */
   operationId: string;
   /**

@@ -1,0 +1,20 @@
+name = "ui-edit-in-modal"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component file from LobeHub's web client.
+
+Team rule, distilled from the product owner's review rejections ("重命名不应该是行内编辑，应该是 modal 编辑", "点击编辑应该是打开弹窗而不是就地变成 input", "现在这个添加任务也特别难受，应该是一个 modal 打开做创建逻辑？现在变成了一个 input"): editing or creating an entity from a menu or an "edit" / "add" affordance opens a modal (or a dedicated panel), not an input that replaces the text in place.
+
+Report a component that, on an edit / rename / add action, opens a Popover holding an input for the entity's name (`InlineRename`, a Popover wrapping an `Input`) — a popover rename is still inline editing — or swaps a displayed title, name, description or list row for an inline `Input` / `TextArea` / editable field (an `isEditing` / `editing` / `renaming` state toggling between text and input), for an entity such as a topic, document, project, task, goal, agent, file or criterion. Anchor on the line where the inline input is rendered. In the message, name the entity and the action. In the suggestion, say to open a modal (the repo's `createModal` helper from `@lobehub/ui/base-ui`) with the form.
+
+Do not report:
+- forms, settings pages and modals whose purpose is editing, where fields are inputs from the start;
+- rich-text or code editors, chat inputs and search boxes;
+- inline cell editing in data tables and spreadsheets;
+- rename or create on nodes of any file / folder tree or explorer list (ResourceManager, FileTree, ExplorerTree, DocumentExplorerTree, LibraryHierarchy), from double-click or a context menu — the OS file-manager convention;
+- inline editing inside a component that is itself a modal (`*Modal`, rendered through `createModal`);
+- a persistent add-row that is always visible, and a title that is always an input (a page title editor);
+- a menu action that only sets state which opens a modal. Report only when you can see this file render the inline input in place of the text.
+
+If an exclusion applies, return no finding. If uncertain, use low confidence.
+"""

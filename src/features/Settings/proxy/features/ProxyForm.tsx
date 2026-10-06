@@ -1,10 +1,17 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Skeleton } from '@lobehub/ui';
-import { Button, RadioGroup, Switch, toast } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, Input } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import {
+  Button,
+  Input,
+  InputPassword,
+  RadioGroup,
+  Skeleton,
+  Switch,
+  toast,
+} from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,12 +26,6 @@ import { useProxyDirty } from './useProxyDirty';
 const PROXY_TYPES = ['http', 'https', 'socks5'] as const;
 const IP_HOST_REGEX = /^(?:\d{1,3}\.){3}\d{1,3}$/;
 const DOMAIN_HOST_REGEX = /^[\dA-Z](?:[\dA-Z-]*[\dA-Z])?(?:\.[\dA-Z](?:[\dA-Z-]*[\dA-Z])?)*$/i;
-
-const isFormValidationError = (
-  error: unknown,
-): error is {
-  errorFields: unknown[];
-} => typeof error === 'object' && error !== null && 'errorFields' in error;
 
 const isSupportedProxyType = (value?: string): value is (typeof PROXY_TYPES)[number] =>
   PROXY_TYPES.includes(value as (typeof PROXY_TYPES)[number]);
@@ -53,13 +54,9 @@ const isCompleteProxyConfig = (config: Partial<NetworkProxySettings>) => {
 
 const ProxyForm = () => {
   const { t } = useTranslation('electron');
-  const [form] = Form.useForm();
   const [testUrl, setTestUrl] = useState('https://www.google.com');
   const [isTesting, setIsTesting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-
-  const isEnableProxy = AntdForm.useWatch('enableProxy', form);
-  const proxyRequireAuth = AntdForm.useWatch('proxyRequireAuth', form);
 
   const [setProxySettings, useGetProxySettings] = useElectronStore((s) => [
     s.setProxySettings,
@@ -67,72 +64,72 @@ const ProxyForm = () => {
   ]);
   const { data: proxySettings, isLoading } = useGetProxySettings();
 
+  const form = useForm<NetworkProxySettings>({
+    initialValues: proxySettings,
+    onValuesChange: (changed, values) => handleValuesChange(changed, values),
+  });
+
+  const isEnableProxy = useWatch(form, 'enableProxy');
+  const proxyRequireAuth = useWatch(form, 'proxyRequireAuth');
+
   const { isDirty } = useProxyDirty(form, proxySettings);
 
   const initializedRef = useRef(false);
   useEffect(() => {
     if (proxySettings && !initializedRef.current) {
-      form.setFieldsValue(proxySettings);
+      form.setValues(proxySettings);
       initializedRef.current = true;
     }
   }, [form, proxySettings]);
 
   const validateProxyType = useCallback(
-    async (_: unknown, value?: string) => {
+    (value?: string) => {
       if (!isEnableProxy || isSupportedProxyType(value)) return;
 
-      throw new Error(t('proxy.validation.typeRequired'));
+      return t('proxy.validation.typeRequired');
     },
     [isEnableProxy, t],
   );
 
   const validateProxyServer = useCallback(
-    async (_: unknown, value?: string) => {
+    (value?: string) => {
       if (!isEnableProxy) return;
 
       const proxyServer = value?.trim();
-      if (!proxyServer) {
-        throw new Error(t('proxy.validation.serverRequired'));
-      }
+      if (!proxyServer) return t('proxy.validation.serverRequired');
 
-      if (!isValidProxyHost(proxyServer)) {
-        throw new Error(t('proxy.validation.serverInvalid'));
-      }
+      if (!isValidProxyHost(proxyServer)) return t('proxy.validation.serverInvalid');
     },
     [isEnableProxy, t],
   );
 
   const validateProxyPort = useCallback(
-    async (_: unknown, value?: string) => {
+    (value?: string) => {
       if (!isEnableProxy) return;
 
       const proxyPort = value?.trim();
-      if (!proxyPort) {
-        throw new Error(t('proxy.validation.portRequired'));
-      }
+      if (!proxyPort) return t('proxy.validation.portRequired');
 
       const port = Number.parseInt(proxyPort, 10);
-      if (Number.isNaN(port) || port < 1 || port > 65_535) {
-        throw new Error(t('proxy.validation.portInvalid'));
-      }
+      if (Number.isNaN(port) || port < 1 || port > 65_535) return t('proxy.validation.portInvalid');
     },
     [isEnableProxy, t],
   );
 
   const validateProxyUsername = useCallback(
-    async (_: unknown, value?: string) => {
+    (value?: string) => {
       if (!isEnableProxy || !proxyRequireAuth || value?.trim()) return;
 
-      throw new Error(t('proxy.validation.usernameRequired'));
+      return t('proxy.validation.usernameRequired');
     },
     [isEnableProxy, proxyRequireAuth, t],
   );
 
   const validateProxyPassword = useCallback(
-    async (_: unknown, value?: string) => {
+    (value?: string) => {
       if (!isEnableProxy || !proxyRequireAuth || value?.trim()) return;
 
-      throw new Error(t('proxy.validation.passwordRequired'));
+      return t('proxy.validation.passwordRequired');
     },
     [isEnableProxy, proxyRequireAuth, t],
   );
@@ -146,7 +143,7 @@ const ProxyForm = () => {
 
         const valuesToSave = next ? allValues : { enableProxy: false };
         setProxySettings(valuesToSave).catch((error) => {
-          form.setFieldsValue({ enableProxy: !next });
+          form.setValue('enableProxy', !next);
           const message = error instanceof Error ? error.message : String(error);
           toast.error(t('proxy.saveFailed', { error: message }));
         });
@@ -156,13 +153,10 @@ const ProxyForm = () => {
   );
 
   const handleSave = useCallback(async () => {
-    let values: NetworkProxySettings;
-    try {
-      values = await form.validateFields();
-    } catch {
-      // Validation error — fields surface their own inline messages.
-      return;
-    }
+    const { valid } = await form.validate();
+    // Validation error — fields surface their own inline messages.
+    if (!valid) return;
+    const values = form.getValues();
 
     try {
       setIsSaving(true);
@@ -177,14 +171,16 @@ const ProxyForm = () => {
   }, [form, setProxySettings, t]);
 
   const handleReset = useCallback(() => {
-    if (proxySettings) form.setFieldsValue(proxySettings);
+    if (proxySettings) form.reset(proxySettings);
   }, [form, proxySettings]);
 
   const handleTest = useCallback(async () => {
     try {
       setIsTesting(true);
 
-      const values = await form.validateFields();
+      const { valid } = await form.validate();
+      if (!valid) return;
+      const values = form.getValues();
       const config: NetworkProxySettings = {
         ...proxySettings,
         ...values,
@@ -197,8 +193,6 @@ const ProxyForm = () => {
         toast.error(`${t('proxy.testFailed')}: ${result.message ?? ''}`);
       }
     } catch (error) {
-      if (isFormValidationError(error)) return;
-
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       toast.error(`${t('proxy.testFailed')}: ${errorMessage}`);
     } finally {
@@ -206,9 +200,9 @@ const ProxyForm = () => {
     }
   }, [proxySettings, testUrl, form, t]);
 
-  if (isLoading) return <Skeleton active paragraph={{ rows: 5 }} title={false} />;
+  if (isLoading) return <Skeleton.Text rows={5} />;
 
-  const enableProxyGroup: FormGroupItemType = {
+  const enableProxyGroup: FormGroupItem<NetworkProxySettings> = {
     children: [
       {
         children: <Switch />,
@@ -217,13 +211,12 @@ const ProxyForm = () => {
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enableProxy',
-        valuePropName: 'checked',
       },
     ],
     title: t('proxy.enable'),
   };
 
-  const basicSettingsGroup: FormGroupItemType = {
+  const basicSettingsGroup: FormGroupItem<NetworkProxySettings> = {
     children: [
       {
         children: (
@@ -235,27 +228,27 @@ const ProxyForm = () => {
         label: t('proxy.type'),
         minWidth: undefined,
         name: 'proxyType',
-        rules: [{ validator: validateProxyType }],
+        validate: validateProxyType,
       },
       {
         children: <Input disabled={!isEnableProxy} placeholder="127.0.0.1" />,
         desc: t('proxy.validation.serverRequired'),
         label: t('proxy.server'),
         name: 'proxyServer',
-        rules: [{ validator: validateProxyServer }],
+        validate: validateProxyServer,
       },
       {
         children: <Input disabled={!isEnableProxy} placeholder="7890" style={{ width: 120 }} />,
         desc: t('proxy.validation.portRequired'),
         label: t('proxy.port'),
         name: 'proxyPort',
-        rules: [{ validator: validateProxyPort }],
+        validate: validateProxyPort,
       },
     ],
     title: t('proxy.basicSettings'),
   };
 
-  const authGroup: FormGroupItemType = {
+  const authGroup: FormGroupItem<NetworkProxySettings> = {
     children: [
       {
         children: <Switch disabled={!isEnableProxy} />,
@@ -264,26 +257,25 @@ const ProxyForm = () => {
         layout: 'horizontal',
         minWidth: undefined,
         name: 'proxyRequireAuth',
-        valuePropName: 'checked',
       },
       ...(proxyRequireAuth && isEnableProxy
         ? [
             {
               children: <Input placeholder={t('proxy.username_placeholder')} />,
               label: t('proxy.username'),
-              name: 'proxyUsername',
-              rules: [{ validator: validateProxyUsername }],
+              name: 'proxyUsername' as const,
+              validate: validateProxyUsername,
             },
             {
               children: (
-                <Input.Password
+                <InputPassword
                   autoComplete="new-password"
                   placeholder={t('proxy.password_placeholder')}
                 />
               ),
               label: t('proxy.password'),
-              name: 'proxyPassword',
-              rules: [{ validator: validateProxyPassword }],
+              name: 'proxyPassword' as const,
+              validate: validateProxyPassword,
             },
           ]
         : []),
@@ -291,7 +283,7 @@ const ProxyForm = () => {
     title: t('proxy.authSettings'),
   };
 
-  const testGroup: FormGroupItemType = {
+  const testGroup: FormGroupItem<NetworkProxySettings> = {
     children: [
       {
         children: (
@@ -320,11 +312,9 @@ const ProxyForm = () => {
       <Form
         collapsible={false}
         form={form}
-        initialValues={proxySettings}
         items={[enableProxyGroup, basicSettingsGroup, authGroup, testGroup]}
         itemsType={'group'}
         variant={'filled'}
-        onValuesChange={handleValuesChange}
         {...FORM_STYLE}
       />
       <SaveBar isDirty={isDirty} isSaving={isSaving} onReset={handleReset} onSave={handleSave} />

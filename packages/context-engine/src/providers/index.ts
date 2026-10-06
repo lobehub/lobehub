@@ -9,8 +9,10 @@ export {
   AgentDocumentSystemAppendInjector,
   AgentDocumentSystemReplaceInjector,
 } from './AgentDocumentInjector';
+export { AgentIdentityInjector } from './AgentIdentityInjector';
 export { AgentManagementContextInjector } from './AgentManagementContextInjector';
 export { BotPlatformContextInjector } from './BotPlatformContextInjector';
+export { ConnectorOwnershipInjector } from './ConnectorOwnershipInjector';
 export { ContextSelectionsInjector } from './ContextSelectionsInjector';
 export { DiscordContextProvider } from './DiscordContextProvider';
 export { EvalContextSystemInjector } from './EvalContextSystemInjector';
@@ -19,6 +21,8 @@ export {
   ExpertiseContextInjector,
 } from './ExpertiseContextInjector';
 export { ForceFinishSummaryInjector } from './ForceFinishSummaryInjector';
+export type { GoalContextSyntheticInjectorConfig } from './GoalContextSyntheticInjector';
+export { GoalContextSyntheticInjector } from './GoalContextSyntheticInjector';
 export { GroupAgentBuilderContextInjector } from './GroupAgentBuilderContextInjector';
 export { GroupContextInjector } from './GroupContextInjector';
 export { HistorySummaryProvider } from './HistorySummary';
@@ -31,6 +35,7 @@ export { OnboardingSyntheticStateInjector } from './OnboardingSyntheticStateInje
 export { PageEditorContextInjector } from './PageEditorContextInjector';
 export { PageSelectionsInjector } from './PageSelectionsInjector';
 export { PlanInjector } from './PlanInjector';
+export { ProjectInstructionsInjector } from './ProjectInstructionsInjector';
 export { RuntimeAdditionalContextProvider } from './RuntimeAdditionalContextProvider';
 export {
   formatSelectedSkills,
@@ -43,6 +48,12 @@ export {
   SelectedToolInjector,
 } from './SelectedToolInjector';
 export { selectActivatedSkills, SkillContextProvider } from './SkillContextProvider';
+export {
+  extractSkillImportRoutes,
+  formatSkillImportRoutes,
+  SKILL_STORE_TOOL_ID,
+  SkillImportRouteInjector,
+} from './SkillImportRouteInjector';
 export { SystemDateProvider } from './SystemDateProvider';
 export { SystemRoleInjector } from './SystemRoleInjector';
 export { TaskManagerContextInjector } from './TaskManagerContextInjector';
@@ -51,6 +62,7 @@ export { ToolDiscoveryProvider } from './ToolDiscoveryProvider';
 export { selectToolPromptManifests, ToolSystemRoleProvider } from './ToolSystemRole';
 export { TopicReferenceContextInjector } from './TopicReferenceContextInjector';
 export { UserMemoryInjector } from './UserMemoryInjector';
+export { WorkspaceContextInjector } from './WorkspaceContextInjector';
 
 // Re-export types
 export type { ActiveTopicDocumentContextInjectorConfig } from './ActiveTopicDocumentContextInjector';
@@ -70,6 +82,7 @@ export type {
   AgentDocumentSystemAppendInjectorConfig,
   AgentDocumentSystemReplaceInjectorConfig,
 } from './AgentDocumentInjector';
+export type { AgentIdentityInjectorConfig } from './AgentIdentityInjector';
 export type {
   AgentManagementContext,
   AgentManagementContextInjectorConfig,
@@ -81,6 +94,7 @@ export type {
   BotPlatformContext,
   BotPlatformContextInjectorConfig,
 } from './BotPlatformContextInjector';
+export type { ConnectorOwnershipInjectorConfig } from './ConnectorOwnershipInjector';
 export type { ContextSelectionsInjectorConfig } from './ContextSelectionsInjector';
 export type { DiscordContext, DiscordContextProviderConfig } from './DiscordContextProvider';
 export type { EvalContext, EvalContextSystemInjectorConfig } from './EvalContextSystemInjector';
@@ -111,10 +125,15 @@ export type {
 export type { PageEditorContextInjectorConfig } from './PageEditorContextInjector';
 export type { PageSelectionsInjectorConfig } from './PageSelectionsInjector';
 export type { Plan, PlanInjectorConfig } from './PlanInjector';
+export type {
+  ProjectInstructionFile,
+  ProjectInstructionsInjectorConfig,
+} from './ProjectInstructionsInjector';
 export type { RuntimeAdditionalContextProviderConfig } from './RuntimeAdditionalContextProvider';
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
+export type { SkillImportRoute, SkillImportRouteInjectorConfig } from './SkillImportRouteInjector';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';
 export type { TaskManagerContextInjectorConfig } from './TaskManagerContextInjector';
@@ -126,3 +145,4 @@ export type {
   TopicReferenceItem,
 } from './TopicReferenceContextInjector';
 export type { MemoryContext, UserMemoryInjectorConfig } from './UserMemoryInjector';
+export type { WorkspaceContext, WorkspaceContextInjectorConfig } from './WorkspaceContextInjector';

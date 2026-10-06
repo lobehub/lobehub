@@ -4,7 +4,7 @@ import { fetchEventSource } from '@lobechat/utils/client';
 import { useEffect } from 'react';
 
 import { mutate } from '@/libs/swr';
-import { isDocumentCommentKeyForEvent } from '@/libs/swr/keys';
+import { documentLikeKeys, isDocumentCommentKeyForEvent } from '@/libs/swr/keys';
 import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
 import { pageSelectors, usePageStore } from '@/store/page';
@@ -82,7 +82,7 @@ export const useResourceEvents = () => {
               return;
             }
             // Content and lock mutations are already reflected locally, but comment
-            // events must reach another window signed in as the same account.
+            // and like events must reach another window signed in as the same account.
             if (shouldIgnoreResourceEvent(parsed, myUserId)) return;
 
             if (parsed.type === 'doc.updated') {
@@ -97,6 +97,8 @@ export const useResourceEvents = () => {
                   workspaceId,
                 }),
               );
+            } else if (parsed.type === 'document.likesChanged' && workspaceId) {
+              void mutate(documentLikeKeys.summary(workspaceId, documentId));
             } else if (parsed.type === 'lock.changed') {
               // Store the holder verbatim; "locked by other" is derived against
               // the current user/session at read time (usePageLockedByOther).

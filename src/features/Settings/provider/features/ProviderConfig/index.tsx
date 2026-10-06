@@ -2,14 +2,20 @@
 
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import { AES_GCM_URL, BASE_PROVIDER_DOC_URL, FORM_STYLE } from '@lobechat/const';
-import { ProviderCombine, ProviderIcon } from '@lobehub/icons';
-import { type FormGroupItemType, type FormItemProps } from '@lobehub/ui';
-import { Center, Flexbox, Form, Icon, Skeleton, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Avatar, Switch } from '@lobehub/ui/base-ui';
+import { Center, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Avatar, Skeleton, Spin, Switch } from '@lobehub/ui/base-ui';
+import {
+  Form,
+  type FormFieldProps,
+  type FormGroupItem,
+  type FormValues,
+  useForm,
+  useWatch,
+} from '@lobehub/ui/base-ui/form';
 import { useDebounceFn } from 'ahooks';
-import { Form as AntdForm } from 'antd';
 import { createStaticStyles, cssVar, cx, responsive } from 'antd-style';
-import { InfoIcon, Loader2Icon, LockIcon } from 'lucide-react';
+import { get, set } from 'es-toolkit/compat';
+import { InfoIcon, LockIcon } from 'lucide-react';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useLayoutEffect, useRef } from 'react';
@@ -17,6 +23,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';
 
 import { FormInput, FormPassword } from '@/components/FormInput';
+import { ProviderCombine, ProviderIcon } from '@/components/LobeIcons';
 import { SkeletonInput, SkeletonSwitch } from '@/components/Skeleton';
 import { usePermission } from '@/hooks/usePermission';
 import { lambdaQuery } from '@/libs/trpc/client';
@@ -37,45 +44,26 @@ import EnableSwitch from './EnableSwitch';
 import OAuthDeviceFlowAuth from './OAuthDeviceFlowAuth';
 import UpdateProviderInfo from './UpdateProviderInfo';
 
-const prefixCls = 'ant';
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   aceGcm: css`
-    padding-block: 0 !important;
-    .${prefixCls}-form-item-label {
-      display: none;
-    }
-    .${prefixCls}-form-item-control {
-      width: 100%;
+    width: 100%;
 
-      font-size: 12px;
-      color: ${cssVar.colorTextSecondary};
-      text-align: center;
+    font-size: 12px;
+    color: ${cssVar.colorTextSecondary};
+    text-align: center;
 
-      opacity: 0.66;
+    opacity: 0.66;
 
-      transition: opacity 0.2s ${cssVar.motionEaseInOut};
+    transition: opacity 0.2s ${cssVar.motionEaseInOut};
 
-      &:hover {
-        opacity: 1;
-      }
+    &:hover {
+      opacity: 1;
     }
   `,
   form: css`
-    /* The group header is the first thing on the page, so its own top padding
-       reads as dead space under the nav bar. The page inset is enough. */
-    .${prefixCls}-collapse-header {
-      padding-block-start: 0 !important;
-    }
-    .${prefixCls}-form-item-control:has(.${prefixCls}-input,.${prefixCls}-select) {
-      flex: none;
-    }
     ${responsive.sm} {
       width: 100%;
       min-width: unset !important;
-    }
-    .${prefixCls}-select-selection-overflow-item {
-      font-size: 12px;
     }
   `,
   help: css`
@@ -101,7 +89,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 export interface ProviderConfigProps extends Omit<AiProviderDetailItem, 'enabled' | 'source'> {
-  apiKeyItems?: FormItemProps[];
+  apiKeyItems?: FormFieldProps[];
   apiKeyUrl?: string;
   canDeactivate?: boolean;
   checkErrorRender?: CheckErrorRender;
@@ -149,7 +137,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
       supportResponsesApi,
     } = settings || {};
     const { t } = useTranslation('modelProvider');
-    const [form] = Form.useForm();
+    const form = useForm({
+      onValuesChange: (_, values) => handleFormValuesChange(values),
+    });
     const { allowed: canManageProvider } = usePermission('manage_provider_key');
 
     const isOAuthProvider = authType === 'oauthDeviceFlow';
@@ -182,14 +172,14 @@ const ProviderConfig = memo<ProviderConfigProps>(
 
     // Watch form values in real-time to show/hide switches immediately
     // Watch nested form values for endpoints
-    const formBaseURL = AntdForm.useWatch(['keyVaults', 'baseURL'], form);
-    const formEndpoint = AntdForm.useWatch(['keyVaults', 'endpoint'], form);
+    const formBaseURL = useWatch(form, 'keyVaults.baseURL');
+    const formEndpoint = useWatch(form, 'keyVaults.endpoint');
     // Watch all possible credential fields for different providers
-    const formApiKey = AntdForm.useWatch(['keyVaults', 'apiKey'], form);
-    const formAccessKeyId = AntdForm.useWatch(['keyVaults', 'accessKeyId'], form);
-    const formSecretAccessKey = AntdForm.useWatch(['keyVaults', 'secretAccessKey'], form);
-    const formUsername = AntdForm.useWatch(['keyVaults', 'username'], form);
-    const formPassword = AntdForm.useWatch(['keyVaults', 'password'], form);
+    const formApiKey = useWatch(form, 'keyVaults.apiKey');
+    const formAccessKeyId = useWatch(form, 'keyVaults.accessKeyId');
+    const formSecretAccessKey = useWatch(form, 'keyVaults.secretAccessKey');
+    const formUsername = useWatch(form, 'keyVaults.username');
+    const formPassword = useWatch(form, 'keyVaults.password');
 
     // Check if provider has endpoint and apiKey based on runtime config
     // Fallback to data.keyVaults if runtime config is not yet loaded
@@ -232,11 +222,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
         ...(providerRuntimeConfig?.config && { config: providerRuntimeConfig.config }),
       };
 
-      // Clear the previous provider's field state first so omitted keys do not
+      // Replace the previous provider's field state so omitted keys do not
       // leak old values when the next provider has empty credentials.
-      form.resetFields();
-      // Set form values and mark as initialized
-      form.setFieldsValue(mergedData);
+      form.reset(mergedData);
       lastInitializedIdRef.current = id;
     }, [isLoading, id, data, providerRuntimeConfig, form]);
 
@@ -274,7 +262,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       await useAiInfraStore.getState().refreshAiProviderRuntimeState();
     }, []);
 
-    const apiKeyItem: FormItemProps[] =
+    const apiKeyItem: FormFieldProps[] =
       !showApiKey || isOAuthProvider
         ? []
         : (apiKeyItems ?? [
@@ -284,10 +272,11 @@ const ProviderConfig = memo<ProviderConfigProps>(
               ) : (
                 <FormPassword
                   autoComplete={'new-password'}
+                  disabled={!canManageProvider}
                   placeholder={t('providerModels.config.apiKey.placeholder', { name })}
                   suffix={
                     configUpdating && (
-                      <Icon spin icon={Loader2Icon} style={{ color: cssVar.colorTextTertiary }} />
+                      <Spin size="small" style={{ color: cssVar.colorTextTertiary }} />
                     )
                   }
                 />
@@ -308,13 +297,14 @@ const ProviderConfig = memo<ProviderConfigProps>(
                 t(`providerModels.config.apiKey.desc`, { name })
               ),
               label: t(`providerModels.config.apiKey.title`),
-              name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+              name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
             },
           ]);
 
-    const aceGcmItem: FormItemProps = {
+    const aceGcmItem: FormFieldProps = {
+      bare: true,
       children: (
-        <>
+        <div className={styles.aceGcm}>
           <Icon icon={LockIcon} style={{ marginRight: 4 }} />
           <Trans
             i18nKey="providerModels.config.aesGcm"
@@ -330,46 +320,36 @@ const ProviderConfig = memo<ProviderConfigProps>(
               />,
             ]}
           />
-        </>
+        </div>
       ),
-      className: styles.aceGcm,
-      minWidth: undefined,
     };
 
     const showEndpoint = !!proxyUrl || isCustom;
 
-    const endpointItem = showEndpoint
+    const endpointItem: FormFieldProps | undefined = showEndpoint
       ? {
           children: isLoading ? (
             <SkeletonInput />
           ) : (
             <FormInput
               allowClear
+              disabled={!canManageProvider}
               placeholder={
                 (!!proxyUrl && proxyUrl?.placeholder) ||
                 t('providerModels.config.baseURL.placeholder')
               }
               suffix={
-                configUpdating && (
-                  <Icon spin icon={Loader2Icon} style={{ color: cssVar.colorTextTertiary }} />
-                )
+                configUpdating && <Spin size="small" style={{ color: cssVar.colorTextTertiary }} />
               }
             />
           ),
           desc: (!!proxyUrl && proxyUrl?.desc) || t('providerModels.config.baseURL.desc'),
           label: (!!proxyUrl && proxyUrl?.title) || t('providerModels.config.baseURL.title'),
-          name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],
-          rules: [
-            {
-              validator: (_: any, value: string) => {
-                if (!value) return;
-
-                return AiProviderBaseURLSchema.safeParse(value).error
-                  ? Promise.reject(t('providerModels.config.baseURL.invalid'))
-                  : Promise.resolve();
-              },
-            },
-          ],
+          name: `${KeyVaultsConfigKey}.${LLMProviderBaseUrlKey}`,
+          validate: (value?: string) =>
+            value && AiProviderBaseURLSchema.safeParse(value).error
+              ? t('providerModels.config.baseURL.invalid')
+              : undefined,
         }
       : undefined;
 
@@ -386,9 +366,13 @@ const ProviderConfig = memo<ProviderConfigProps>(
         (showEndpoint && isProviderEndpointNotEmpty) ||
         (showApiKey && isProviderApiKeyNotEmpty));
 
-    const clientFetchItem = showClientFetch
+    const clientFetchItem: FormFieldProps | undefined = showClientFetch
       ? {
-          children: isLoading ? <SkeletonSwitch /> : <Switch loading={configUpdating} />,
+          children: isLoading ? (
+            <SkeletonSwitch />
+          ) : (
+            <Switch disabled={!canManageProvider} loading={configUpdating} />
+          ),
           desc: t('providerModels.config.fetchOnClient.desc'),
           label: t('providerModels.config.fetchOnClient.title'),
           minWidth: undefined,
@@ -404,18 +388,22 @@ const ProviderConfig = memo<ProviderConfigProps>(
       endpointItem,
       showResponsesApiSwitch
         ? {
-            children: isLoading ? <Skeleton.Button active /> : <Switch loading={configUpdating} />,
+            children: isLoading ? (
+              <Skeleton height={36} />
+            ) : (
+              <Switch disabled={!canManageProvider} loading={configUpdating} />
+            ),
             desc: t('providerModels.config.responsesApi.desc'),
             label: t('providerModels.config.responsesApi.title'),
             minWidth: undefined,
-            name: ['config', 'enableResponseApi'],
+            name: 'config.enableResponseApi',
           }
         : undefined,
       clientFetchItem,
       showChecker
         ? {
             children: isLoading ? (
-              <Skeleton.Button active />
+              <Skeleton height={36} />
             ) : (
               <Checker
                 checkErrorRender={checkErrorRender}
@@ -426,16 +414,16 @@ const ProviderConfig = memo<ProviderConfigProps>(
                   isCheckingConnection.current = false;
                 }}
                 onBeforeCheck={async () => {
-                  try {
-                    await form.validateFields();
-                  } catch {
-                    return false;
-                  }
+                  const { valid } = await form.validate();
+                  if (!valid) return false;
 
                   // Set connection test state to prevent duplicate requests from onValuesChange
                   isCheckingConnection.current = true;
                   // Proactively save the latest form values to ensure fetchAiProviderRuntimeState retrieves up-to-date data
-                  await updateAiProviderConfig(id, normalizeValues(form.getFieldsValue()));
+                  await updateAiProviderConfig(
+                    id,
+                    normalizeValues(pickFieldValues(form.getValues())),
+                  );
 
                   return true;
                 }}
@@ -446,7 +434,23 @@ const ProviderConfig = memo<ProviderConfigProps>(
           }
         : undefined,
       showAceGcm && aceGcmItem,
-    ].filter(Boolean) as FormItemProps[];
+    ].filter(Boolean) as FormFieldProps[];
+
+    const pickFieldValues = (values: FormValues): UpdateAiProviderConfigParams =>
+      configItems.reduce<UpdateAiProviderConfigParams>((acc, item) => {
+        if (item.name && !item.hidden) set(acc, item.name, get(values, item.name));
+        return acc;
+      }, {});
+
+    const handleFormValuesChange = (values: FormValues) => {
+      if (!canManageProvider) return;
+
+      cancelDebouncedHandleValueChange();
+      const baseURL = values.keyVaults?.baseURL;
+      if (baseURL && !AiProviderBaseURLSchema.safeParse(baseURL).success) return;
+
+      debouncedHandleValueChange(id, normalizeValues(pickFieldValues(values)));
+    };
 
     const logoUrl = data?.logo ?? logo;
 
@@ -536,7 +540,7 @@ const ProviderConfig = memo<ProviderConfigProps>(
       </Flexbox>
     );
 
-    const model: FormGroupItemType = {
+    const model: FormGroupItem = {
       children: configItems,
       defaultActive: true,
       extra: isOAuthProvider ? undefined : headerExtra,
@@ -562,19 +566,9 @@ const ProviderConfig = memo<ProviderConfigProps>(
         {shouldShowForm && (
           <Form
             className={cx(styles.form, className)}
-            disabled={!canManageProvider}
             form={form}
             items={[model]}
             variant={'borderless'}
-            onValuesChange={(_, values) => {
-              if (!canManageProvider) return;
-
-              cancelDebouncedHandleValueChange();
-              const baseURL = values.keyVaults?.baseURL;
-              if (baseURL && !AiProviderBaseURLSchema.safeParse(baseURL).success) return;
-
-              debouncedHandleValueChange(id, normalizeValues(values));
-            }}
             {...FORM_STYLE}
           />
         )}

@@ -1,9 +1,35 @@
+/**
+ * The agent-browser release the desktop app downloads
+ * (`apps/desktop/src/main/modules/binaries/agentBrowserBinaries.ts` `pinnedVersion`).
+ * The `npx` fallback below runs this same version; `content.test.ts` fails if the
+ * two drift apart.
+ */
+export const AGENT_BROWSER_PINNED_VERSION = '0.31.1';
+
+const NPX_AGENT_BROWSER = `npx -y agent-browser@${AGENT_BROWSER_PINNED_VERSION}`;
+
 export const systemPrompt = `<agent_browser_guides>
 # agent-browser
 
 \`agent-browser\` is a fast browser automation CLI for AI agents — drives Chrome/Chromium via CDP and serves accessibility-tree snapshots with compact \`@eN\` element refs (so you act on the page in a few hundred tokens, not raw HTML).
 
-\`agent-browser\` and Chrome are pre-installed — no setup needed.
+## Before the first command — check the CLI is available
+
+The desktop app downloads \`agent-browser\` in the background, so it may be missing (first launch, offline, download failed) — and on other devices it may never have been installed. Check once before using it:
+
+\`\`\`bash
+command -v agent-browser   # macOS / Linux
+where.exe agent-browser    # Windows (cmd or PowerShell)
+\`\`\`
+
+- **Found** → use \`agent-browser\` as written below.
+- **Not found** (or a command fails with \`command not found\` / exit 127 / ENOENT) → if Node.js is available, run it through npx instead, and substitute this prefix for every \`agent-browser\` in the commands below (each command runs in a fresh shell, so repeat the full prefix):
+  \`\`\`bash
+  ${NPX_AGENT_BROWSER} open example.com
+  \`\`\`
+- **Neither works** (no \`npx\` either) → stop and tell the user \`agent-browser\` isn't installed on this device yet. The LobeHub desktop app retries the download on its next launch, and **Settings → System Tools → Browser Automation** shows whether it's been detected; they can also install it themselves with \`npm i -g agent-browser\` or \`brew install agent-browser\`. Don't hand-roll a replacement with curl/python scraping.
+
+If a command fails because no browser is available, run \`agent-browser install\` (same prefix) once to download Chrome for Testing, then retry.
 
 ## The core loop
 
@@ -32,15 +58,21 @@ Empty body, verification screen, or obfuscated JS means the page is **blocked, n
 1. **Verify once** — \`agent-browser open <url>\`, then \`agent-browser wait --fn "document.body.innerText.length > 100" --timeout 3000\`. If it succeeds, page is usable — continue.
 2. **Timed out → launch real Chrome over CDP.** Its human fingerprint bypasses JS challenges:
    \`\`\`bash
-   # macOS (Linux: use \`google-chrome\`)
+   # macOS:
    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \\
      --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser-cdp" &
+   # Linux (binary may be \`google-chrome-stable\`, \`chromium\` or \`chromium-browser\` — check with \`command -v\`):
+   #   google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.agent-browser-cdp" &
+   # Windows (PowerShell):
+   #   Start-Process "$env:ProgramFiles\\Google\\Chrome\\Application\\chrome.exe" -ArgumentList '--remote-debugging-port=9222',"--user-data-dir=$env:USERPROFILE\\.agent-browser-cdp"
    agent-browser --cdp 9222 open <url>
    agent-browser --cdp 9222 wait --fn "document.body.innerText.length > 100" --timeout 3000
    agent-browser --cdp 9222 read              # read rendered DOM as clean markdown
    # when done, close the CDP Chrome (it keeps running otherwise):
    agent-browser --cdp 9222 close
-   pkill -f "user-data-dir=$HOME/.agent-browser-cdp"  # kill only the automation instance
+   pkill -f "user-data-dir=$HOME/.agent-browser-cdp"  # macOS / Linux: kill only the automation instance
+   # Windows (PowerShell):
+   #   Get-CimInstance Win32_Process -Filter "Name='chrome.exe'" | Where-Object { $_.CommandLine -like '*agent-browser-cdp*' } | ForEach-Object { Stop-Process -Id $_.ProcessId }
    \`\`\`
 
 **Once you switch, commit to real Chrome.** Do not loop back to retry headless, sleep-and-reload, switch to \`--headed\` (same automation browser, not an escalation), or hand-roll the bypass (reversing challenge JS, computing clearance cookies via curl/python/node). Real Chrome is the general answer.

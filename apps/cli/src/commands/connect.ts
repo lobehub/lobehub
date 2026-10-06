@@ -7,7 +7,9 @@ import {
   defaultGetProjectFileIndex,
   defaultSearchProjectFiles,
   type DeviceControlDeps,
+  DeviceMetricsSampler,
   executeDeviceRpc,
+  pushMetrics,
 } from '@lobechat/device-control';
 import type {
   AgentRunRequestMessage,
@@ -38,6 +40,7 @@ import {
   readStatus,
   removePid,
   removeStatus,
+  reportDaemonStartupReady,
   spawnDaemon,
   stopDaemon,
   writeStatus,
@@ -65,6 +68,7 @@ import {
   loadWorkspaceEnrollments,
   normalizeUrl,
   removeWorkspaceEnrollment,
+  resolveDeviceMetricsBacklogPath,
   saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
@@ -72,6 +76,8 @@ import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
 
+/** Longest a clean stop waits to push pending device health samples. */
+const SHUTDOWN_METRICS_FLUSH_MS = 3000;
 const CONNECT_SERVICE_NAME = CLI_CONNECT_SERVICE_NAME;
 
 interface ConnectOptions {
@@ -177,12 +183,12 @@ export function registerConnectCommand(program: Command) {
     .option('--gateway <url>', 'Device gateway URL')
     .option('--device-id <id>', 'Device ID')
     .option('-v, --verbose', 'Enable verbose logging')
-    .action((options: ConnectOptions) => {
+    .action(async (options: ConnectOptions) => {
       const wasStopped = stopDaemon();
       if (wasStopped) {
         log.info('Stopped existing daemon.');
       }
-      handleDaemonStart({ ...options, daemon: true });
+      await handleDaemonStart({ ...options, daemon: true });
     });
 
   const serviceCmd = connectCmd
@@ -283,7 +289,7 @@ function handleStop() {
   }
 }
 
-function handleDaemonStart(options: ConnectOptions) {
+async function handleDaemonStart(options: ConnectOptions) {
   const existingPid = getRunningDaemonPid();
   if (existingPid !== null) {
     log.error(`Daemon is already running (PID ${existingPid}).`);
@@ -293,7 +299,7 @@ function handleDaemonStart(options: ConnectOptions) {
 
   // Build args to re-run with --daemon-child
   const args = buildDaemonArgs(options);
-  const pid = spawnDaemon(args);
+  const pid = await spawnDaemon(args);
 
   log.info(`Daemon started (PID ${pid}).`);
   log.info(`  Logs: ${getLogPath()}`);
@@ -464,8 +470,29 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // shared with the workspace-share connections opened via `enrollWorkspace`.
   bindGatewayClientHandlers(client, handlerContext, workspaceId);
 
+  // Machine health (CPU / memory / load) for the device page. Samples go to
+  // the device gateway over this socket (the gateway is their only store);
+  // they keep accruing while disconnected and upload once the connection is
+  // back, so the stretch around a drop is visible afterwards. Each batch is
+  // mirrored to this machine's workspace-share connections so a shared
+  // device's workspace row has the same history.
+  const metricsSampler = identity
+    ? new DeviceMetricsSampler({
+        isConnected: () => client.connectionStatus === 'connected',
+        logger: { warn: (msg) => info(msg) },
+        storagePath: resolveDeviceMetricsBacklogPath(identity.deviceId),
+        upload: (samples) =>
+          pushMetrics(
+            client,
+            [...workspaceConnections.values()].map((entry) => entry.client),
+            samples,
+          ),
+      })
+    : undefined;
+
   client.on('connected', () => {
     updateStatus('connected');
+    void metricsSampler?.flush();
   });
 
   client.on('disconnected', () => {
@@ -562,6 +589,13 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         // fall through — likely the share (or membership) was revoked
       }
       error(`Could not refresh workspace ${wsId} connect token. Closing share connection.`);
+      closeWorkspaceConnection(wsId);
+    });
+
+    wsClient.on('replaced', () => {
+      error(
+        `Workspace ${wsId} share connection was taken over by another '${CLI_PRIMARY_BIN} connect' on this machine. Closing it here.`,
+      );
       closeWorkspaceConnection(wsId);
     });
 
@@ -743,6 +777,17 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     process.exit(1);
   });
 
+  // Another `lh connect` of this install (same persisted connection id) took
+  // over. The client no longer reconnects — doing so is what made the two trade
+  // the connection every second — so exit instead of sitting silently offline.
+  client.on('replaced', () => {
+    error(
+      `Another '${CLI_PRIMARY_BIN} connect' on this machine took over this device's gateway connection. Only one can be connected at a time; stopping this one.`,
+    );
+    cleanup();
+    process.exit(1);
+  });
+
   // Handle errors
   client.on('error', (err) => {
     error(`Connection error: ${err.message}`);
@@ -756,6 +801,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     // Close share connections but keep the persisted enrollments — the next
     // startup restores them (or clears them if revoked meanwhile).
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);
+    void metricsSampler?.stop();
     client.disconnect();
     removeStatus();
     if (isDaemonChild) {
@@ -763,15 +809,17 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     }
   };
 
-  process.on('SIGINT', () => {
+  // A clean stop pushes the health samples taken since the last upload
+  // (bounded) before the socket closes, so the device page doesn't show the
+  // final minutes as "not running".
+  const shutdown = async () => {
+    await metricsSampler?.stop({ flushTimeoutMs: SHUTDOWN_METRICS_FLUSH_MS });
     cleanup();
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', () => {
-    cleanup();
-    process.exit(0);
-  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 
   // Register this device in the server registry before opening the WS, so the
   // row exists by the time the gateway reports it online. `lh login` already
@@ -806,6 +854,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
       error(`Device registration failed (non-fatal): ${(err as Error).message}`);
     }
   }
+
+  await reportDaemonStartupReady();
+
+  await metricsSampler?.start();
 
   // Connect
   await client.connect();
@@ -859,11 +911,16 @@ function bindGatewayClientHandlers(
       log.toolCall(toolCall.apiName, requestId, toolCall.arguments, operationId);
     }
 
+    // Timed on the DEVICE's clock. The server can only see the whole dispatch
+    // round trip, so reporting this back is what separates a slow tool from
+    // slow transport.
+    const startedAt = performance.now();
     const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
+    const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
       appendLog(
-        `[RESULT] ${result.success ? 'OK' : 'FAIL'}${operationId ? ` op=${operationId}` : ''} (${requestId})`,
+        `[RESULT] ${result.success ? 'OK' : 'FAIL'} ${executionTimeMs}ms${operationId ? ` op=${operationId}` : ''} (${requestId})`,
       );
     } else {
       log.toolResult(requestId, result.success, result.content, operationId);
@@ -874,6 +931,7 @@ function bindGatewayClientHandlers(
       result: {
         content: result.content,
         error: result.error,
+        executionTimeMs,
         state: result.state,
         success: result.success,
       },

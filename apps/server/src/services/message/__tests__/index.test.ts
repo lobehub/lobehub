@@ -1,4 +1,6 @@
 import { type LobeChatDatabase } from '@lobechat/database';
+import type * as ToolViewModelModule from '@lobechat/tool-view-model';
+import { projectToolViewModels } from '@lobechat/tool-view-model';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { MessageModel } from '@/database/models/message';
@@ -8,6 +10,14 @@ import { MessageService } from '../index';
 
 vi.mock('@/database/models/message');
 vi.mock('@/server/services/file');
+
+// Spy on the real projector pipeline rather than stubbing it: the assertion
+// that matters is that the UI read path runs it at all, and that with an empty
+// registry it is still a pass-through.
+vi.mock('@lobechat/tool-view-model', async (importOriginal) => {
+  const actual = await importOriginal<typeof ToolViewModelModule>();
+  return { ...actual, projectToolViewModels: vi.fn(actual.projectToolViewModels) };
+});
 
 describe('MessageService', () => {
   let messageService: MessageService;
@@ -32,14 +42,100 @@ describe('MessageService', () => {
     } as any;
 
     mockFileService = {
-      getFullFileUrl: vi.fn().mockImplementation((path) => Promise.resolve(`/files${path}`)),
+      getFullFileUrl: vi.fn().mockImplementation(function (path) {
+        return Promise.resolve(`/files${path}`);
+      }),
     } as any;
 
     // Mock constructors
-    vi.mocked(MessageModel).mockImplementation(() => mockMessageModel);
-    vi.mocked(FileService).mockImplementation(() => mockFileService);
+    vi.mocked(MessageModel).mockImplementation(function () {
+      return mockMessageModel;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return mockFileService;
+    });
 
     messageService = new MessageService(mockDB, userId);
+  });
+
+  describe('prepareUiMessages', () => {
+    it('derives nested UI views without changing raw model data', async () => {
+      mockFileService.getFileAccessUrl = vi.fn(async (file) => `/proxy/${file.id}`);
+      const tool = {
+        content: 'FULL TOOL RESULT',
+        id: 'tool',
+        role: 'tool',
+        plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+        pluginState: { results: [] },
+        imageList: [{ id: 'image', url: 'raw/image', width: 42 }],
+        audioList: [{ id: 'audio', url: 'raw/audio', durationMs: 123 }],
+        videoList: [{ id: 'video', url: 'raw/video' }],
+        fileList: [{ id: 'hidden', inaccessible: true, url: '' }],
+      };
+      const raw = [
+        {
+          id: 'group',
+          role: 'assistant',
+          columns: [[tool]],
+          members: [tool],
+          compressedMessages: [tool],
+        },
+      ] as any;
+      const before = structuredClone(raw);
+      const [ui] = await messageService.prepareUiMessages(raw);
+      for (const nested of [ui.columns![0][0], ui.members![0], ui.compressedMessages![0]]) {
+        // The push path never projects: a pushed snapshot only ever reaches a
+        // client that did not declare protocol 2, and it has no way to fetch
+        // an omitted payload back.
+        expect(nested.content).toBe('FULL TOOL RESULT');
+        expect(nested.imageList![0]).toEqual({ id: 'image', url: '/proxy/image', width: 42 });
+        expect(nested.audioList![0]).toEqual({
+          id: 'audio',
+          url: '/proxy/audio',
+          durationMs: 123,
+        });
+        expect(nested.videoList![0].url).toBe('/proxy/video');
+        expect(nested.fileList![0].url).toBe('');
+      }
+      expect(raw).toEqual(before);
+      expect(mockFileService.getFileAccessUrl).not.toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'hidden' }),
+      );
+      expect(mockMessageModel.query).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('queryMessages', () => {
+    const toolRow = {
+      content: 'RAW BODY',
+      id: 'tool-1',
+      plugin: { apiName: 'crawlSinglePage', arguments: '{}', identifier: 'lobe-web-browsing' },
+      pluginState: { results: [] },
+      role: 'tool',
+    } as any;
+
+    it('hands back the stored payloads: only the caller knows if a model reads them', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      const result = await messageService.queryMessages({ topicId: 'topic-1' });
+
+      // The projection decision belongs to the read's caller (`message.getMessages`
+      // takes `projectToolPayloads`), because a browser-executed run assembles
+      // its LLM context from this very list.
+      expect(projectToolViewModels).not.toHaveBeenCalled();
+      expect(result).toEqual([toolRow]);
+    });
+
+    it('passes the share-visitor scope through to the model read', async () => {
+      vi.mocked(mockMessageModel.query).mockResolvedValue([toolRow]);
+
+      await messageService.queryMessages({ topicId: 'topic-1' }, { allowShareVisitor: true });
+
+      expect(mockMessageModel.query).toHaveBeenCalledWith(
+        { topicId: 'topic-1' },
+        expect.objectContaining({ allowShareVisitor: true }),
+      );
+    });
   });
 
   describe('removeMessage', () => {
@@ -197,6 +293,24 @@ describe('MessageService', () => {
   });
 
   describe('updateMessage', () => {
+    it('normalizes a known error from a legacy client before persistence', async () => {
+      await messageService.updateMessage(
+        'msg-error',
+        {
+          error: { body: { message: 'insufficient quota' }, type: 'ProviderBizError' },
+        },
+        {},
+      );
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', {
+        error: expect.objectContaining({ attribution: 'user', type: 'InsufficientQuota' }),
+      });
+    });
+
+    it('preserves an explicit error clear', async () => {
+      await messageService.updateMessage('msg-error', { error: null }, {});
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', { error: null });
+    });
+
     it('should update message and return { success: true } when no sessionId/topicId provided', async () => {
       const messageId = 'msg-1';
       const value = { content: 'updated content' };
@@ -225,6 +339,25 @@ describe('MessageService', () => {
   });
 
   describe('batchMutate', () => {
+    it('normalizes known errors on creation and batched updates too', async () => {
+      vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-error' } as any);
+      vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);
+      const error = { type: 'ProviderBizError' as const, body: { message: 'insufficient quota' } };
+      const message = { content: '', error, role: 'assistant' as const };
+      await messageService.createMessage(message);
+      await messageService.batchMutate([
+        { type: 'createMessage', message },
+        { type: 'updateMessage', id: 'msg-error', value: { error } },
+      ]);
+      const normalized = expect.objectContaining({
+        error: expect.objectContaining({ type: 'InsufficientQuota', attribution: 'user' }),
+      });
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(1, normalized, undefined);
+      expect(mockMessageModel.create).toHaveBeenNthCalledWith(2, normalized, undefined);
+      expect(mockMessageModel.update).toHaveBeenCalledWith('msg-error', normalized);
+      expect(message.error).toBe(error);
+    });
+
     it('quietly applies create/update/tool updates without querying messages', async () => {
       vi.mocked(mockMessageModel.create).mockResolvedValue({ id: 'msg-created' } as any);
       vi.mocked(mockMessageModel.update).mockResolvedValue({ success: true } as any);

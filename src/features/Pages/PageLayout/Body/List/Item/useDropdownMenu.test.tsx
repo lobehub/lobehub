@@ -143,6 +143,17 @@ describe('Page list item dropdown menu', () => {
     expect(getMenuItem(items, 'delete')).toMatchObject({ disabled: true });
   });
 
+  it("lets a workspace editor delete another member's page", () => {
+    storeMock.activeWorkspaceId = 'ws-1';
+    storeMock.document = { id: 'page-1', userId: 'another-member', visibility: 'public' };
+
+    const { result } = renderHook(() =>
+      useDropdownMenu({ pageId: 'page-1', toggleEditing: vi.fn() }),
+    );
+
+    expect(getMenuItem(result.current(), 'delete')).toMatchObject({ disabled: false });
+  });
+
   it('exposes "publish to workspace" for private pages in workspace mode', () => {
     storeMock.activeWorkspaceId = 'ws-1';
     storeMock.document = { id: 'page-1', userId: CURRENT_USER_ID, visibility: 'private' };

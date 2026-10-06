@@ -94,7 +94,7 @@ const useProviderCard = (): ProviderItem => {
           </Markdown>
         ),
         label: t('vertexai.apiKey.title'),
-        name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
       },
       {
         children: isLoading ? (
@@ -115,7 +115,7 @@ const useProviderCard = (): ProviderItem => {
           </Markdown>
         ),
         label: t('vertexai.region.title'),
-        name: [KeyVaultsConfigKey, 'region'],
+        name: `${KeyVaultsConfigKey}.region`,
       },
     ],
   };

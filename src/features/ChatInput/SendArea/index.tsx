@@ -45,7 +45,8 @@ const SendArea = memo<SendAreaProps>(({ hideContextWindow = true }) => {
   );
 
   return (
-    <Flexbox horizontal align={'center'} flex={'none'} gap={12}>
+    /** The model label must yield space before the footer clips Send on narrow panels. */
+    <Flexbox horizontal align={'center'} flex={'0 1 auto'} gap={12} style={{ minWidth: 0 }}>
       {items}
       {!audioInputActive && <SendButton />}
     </Flexbox>

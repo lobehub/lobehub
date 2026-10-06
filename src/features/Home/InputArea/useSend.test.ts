@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import type { SendButtonHandler } from '@/features/ChatInput/store/initialState';
 
 import { useSend } from './useSend';
@@ -22,6 +23,7 @@ const createTaskMock = vi.hoisted(() => vi.fn());
 const runTaskMock = vi.hoisted(() => vi.fn());
 const toggleTaskAgentPanelMock = vi.hoisted(() => vi.fn());
 const messageErrorMock = vi.hoisted(() => vi.fn());
+const messageSuccessMock = vi.hoisted(() => vi.fn());
 
 const chatState = vi.hoisted(() => ({
   inputMessage: 'hello',
@@ -93,7 +95,7 @@ const activeWorkspaceIdMock = vi.hoisted(() => ({
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  toast: { error: messageErrorMock },
+  toast: { error: messageErrorMock, success: messageSuccessMock },
 }));
 
 vi.mock('@/hooks/usePermission', () => ({
@@ -186,6 +188,7 @@ describe('Home InputArea useSend', () => {
     runTaskMock.mockReset();
     toggleTaskAgentPanelMock.mockReset();
     messageErrorMock.mockReset();
+    messageSuccessMock.mockReset();
     homeDailyBriefState.advance.mockReset();
     homeDailyBriefState.currentPair = undefined;
     chatState.inputMessage = 'hello';
@@ -199,7 +202,7 @@ describe('Home InputArea useSend', () => {
     activeWorkspaceIdMock.value = null;
   });
 
-  it('creates and starts a private workspace task with the selected Agent', async () => {
+  it('creates a private workspace task without starting it', async () => {
     activeWorkspaceIdMock.value = 'workspace-1';
     globalState.systemStatus.homeSelectedAgentId = 'agt_custom';
     homeState.ungroupedAgents = [{ id: 'agt_custom', type: 'agent' }];
@@ -208,7 +211,6 @@ describe('Home InputArea useSend', () => {
       assigneeAgentId: 'agt_custom',
       identifier: 'T-26',
     });
-    runTaskMock.mockResolvedValue({ topicId: 'tpc-26' });
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
@@ -228,10 +230,26 @@ describe('Home InputArea useSend', () => {
       name: 'Prepare the weekly report',
       visibility: 'private',
     });
-    expect(runTaskMock).toHaveBeenCalledWith('T-26', undefined, { throwOnError: true });
+    // Task mode records the task; it must not launch a run, open the task
+    // panel, or navigate away from Home.
+    expect(runTaskMock).not.toHaveBeenCalled();
+    expect(toggleTaskAgentPanelMock).not.toHaveBeenCalled();
+    expect(routerMock.push).not.toHaveBeenCalled();
     expect(sendMessageMock).not.toHaveBeenCalled();
-    expect(toggleTaskAgentPanelMock).toHaveBeenCalledWith(true);
-    expect(routerMock.push).toHaveBeenCalledWith('/tasks?agentId=agt_custom&topicId=tpc-26');
+    expect(messageSuccessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'dashboard.task.created' }),
+    );
+    // The toast is the only handle on the task once the composer is cleared, so
+    // its action must open that task rather than just dismiss the toast.
+    const [{ actions }] = messageSuccessMock.mock.calls.at(-1) as [
+      { actions: { label: string; onClick: () => void }[] },
+    ];
+    expect(actions).toHaveLength(1);
+    expect(actions[0].label).toBe('taskIntent.openCreated');
+    actions[0].onClick();
+    expect(routerMock.push).toHaveBeenCalledWith(
+      taskDetailPath('T-26', 'agt_custom', 'Prepare the weekly report'),
+    );
     expect(clearContentMock).toHaveBeenCalledTimes(1);
   });
 
@@ -257,9 +275,8 @@ describe('Home InputArea useSend', () => {
     expect(messageErrorMock).toHaveBeenCalledWith('dashboard.submitFailed');
   });
 
-  it('keeps the draft and stays on Home when task execution fails', async () => {
-    createTaskMock.mockResolvedValue({ assigneeAgentId: 'agt_inbox', identifier: 'T-27' });
-    runTaskMock.mockRejectedValue(new Error('run failed'));
+  it('keeps the draft and stays on Home when task creation throws', async () => {
+    createTaskMock.mockRejectedValue(new Error('create failed'));
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
@@ -272,34 +289,11 @@ describe('Home InputArea useSend', () => {
       await result.current.send(params);
     });
 
+    expect(runTaskMock).not.toHaveBeenCalled();
     expect(routerMock.push).not.toHaveBeenCalled();
     expect(clearContentMock).not.toHaveBeenCalled();
+    expect(messageSuccessMock).not.toHaveBeenCalled();
     expect(messageErrorMock).toHaveBeenCalledWith('dashboard.submitFailed');
-  });
-
-  it('reuses the created task when retrying after its first run fails', async () => {
-    createTaskMock.mockResolvedValue({ assigneeAgentId: 'agt_inbox', identifier: 'T-28' });
-    runTaskMock
-      .mockRejectedValueOnce(new Error('run failed'))
-      .mockResolvedValueOnce({ topicId: 'tpc-28' });
-    const { result } = renderHook(() => useSend('task'));
-    const params: Parameters<SendButtonHandler>[0] = {
-      clearContent: vi.fn(),
-      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
-      getEditorData: () => ({ type: 'doc' }),
-      getMarkdownContent: () => 'Prepare the weekly report',
-    };
-
-    await act(async () => {
-      await result.current.send(params);
-      await result.current.send(params);
-    });
-
-    expect(createTaskMock).toHaveBeenCalledTimes(1);
-    expect(runTaskMock).toHaveBeenCalledTimes(2);
-    expect(runTaskMock).toHaveBeenNthCalledWith(2, 'T-28', undefined, { throwOnError: true });
-    expect(toggleTaskAgentPanelMock).toHaveBeenCalledWith(true);
-    expect(routerMock.push).toHaveBeenCalledWith('/tasks?agentId=agt_inbox&topicId=tpc-28');
   });
 
   it('does not discard attachments that Task mode cannot persist', async () => {

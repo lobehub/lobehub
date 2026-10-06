@@ -1,4 +1,4 @@
-import { AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
+import { AUTH_FAILURE_HEADER, AUTH_REQUIRED_HEADER } from '@lobechat/desktop-bridge';
 import { BrowserWindow, session as electronSession } from 'electron';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +9,18 @@ interface RequestInitWithDuplex extends RequestInit {
 }
 
 type FetchMock = (input: RequestInfo | URL, init?: RequestInitWithDuplex) => Promise<Response>;
+
+const loggerMock = vi.hoisted(() => ({
+  debug: vi.fn(),
+  error: vi.fn(),
+  info: vi.fn(),
+  verbose: vi.fn(),
+  warn: vi.fn(),
+}));
+
+vi.mock('@/utils/logger', () => ({
+  createLogger: () => loggerMock,
+}));
 
 vi.mock('@/utils/platform', () => ({
   dev: vi.fn(() => false),
@@ -372,6 +384,85 @@ describe('BackendProxyProtocolManager', () => {
     expect(payload.reason).toContain('wwwAuth=Bearer error="invalid_token"');
     expect(payload.reason).toContain('UNAUTHORIZED');
     expect(payload.reason).toContain('token expired');
+  });
+
+  it('logs X-Auth-Failure and decoded token claims on a session 401', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } },
+    ] as any);
+
+    const manager = new BackendProxyProtocolManager();
+    const session = {} as any;
+    const token = `h.${Buffer.from(JSON.stringify({ client_id: 'desktop', exp: 1, sub: 'user_12345678' })).toString('base64url')}.s`;
+    const headers = new Headers({
+      [AUTH_FAILURE_HEADER]: 'jwt_expired',
+      [AUTH_REQUIRED_HEADER]: 'true',
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<FetchMock>(async () => new Response('{}', { headers, status: 401 })) as any,
+    );
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => token,
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+    });
+
+    await manager.proxy(
+      { headers: new Headers(), method: 'POST', url: 'app://renderer/trpc/lambda/me' } as any,
+      session,
+    );
+
+    const infoLine = loggerMock.info.mock.calls
+      .map((c) => String(c[0]))
+      .find((line) => line.includes('auth response'));
+    expect(infoLine).toContain('authFailure=jwt_expired');
+    expect(infoLine).toContain(
+      'token{sub=user_123 client=desktop exp=1970-01-01T00:00:01.000Z expiredBy=',
+    );
+    expect(infoLine).toContain('authRequired=true');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    const [, payload] = send.mock.calls[0];
+    expect(payload.reason).toContain('authFailure=jwt_expired');
+  });
+
+  it('logs a 401 without X-Auth-Required at info but does not broadcast', async () => {
+    vi.useFakeTimers();
+    const send = vi.fn();
+    vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([
+      { isDestroyed: () => false, webContents: { send } },
+    ] as any);
+
+    const manager = new BackendProxyProtocolManager();
+    const session = {} as any;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<FetchMock>(
+        async () => new Response('{"errorType":"InvalidProviderAPIKey"}', { status: 401 }),
+      ) as any,
+    );
+
+    manager.registerWithRemoteBaseUrl(session, {
+      getAccessToken: async () => 'opaque',
+      getRemoteBaseUrl: async () => 'https://remote.example.com',
+    });
+
+    await manager.proxy(
+      { headers: new Headers(), method: 'POST', url: 'app://renderer/webapi/chat' } as any,
+      session,
+    );
+
+    const infoLine = loggerMock.info.mock.calls
+      .map((c) => String(c[0]))
+      .find((line) => line.includes('auth response'));
+    expect(infoLine).toContain('status=401 POST /webapi/chat hadToken=true authRequired=false');
+    expect(infoLine).toContain('InvalidProviderAPIKey');
+
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(send).not.toHaveBeenCalled();
   });
 
   describe('createAppRequestInterceptor', () => {
