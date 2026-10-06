@@ -474,6 +474,7 @@ export const acceptanceRouter = router({
       const result = await ScmChangeRequestModel.linkAcceptance(ctx.serverDB, {
         ...parsed,
         acceptanceId: acceptance.id,
+        actorUserId: ctx.userId,
         title: input.title,
         userId: acceptance.userId,
         workspaceId: acceptance.workspaceId,
@@ -494,8 +495,6 @@ export const acceptanceRouter = router({
       const removed = await ScmChangeRequestModel.unlinkAcceptance(ctx.serverDB, {
         acceptanceId: acceptance.id,
         id: input.changeRequestId,
-        userId: acceptance.userId,
-        workspaceId: acceptance.workspaceId,
       });
       if (!removed) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Linked pull request not found' });

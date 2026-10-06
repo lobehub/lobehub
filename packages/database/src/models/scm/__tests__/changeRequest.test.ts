@@ -762,7 +762,7 @@ describe('ScmChangeRequestModel', () => {
 
 describe('ScmChangeRequestModel.linkAcceptance', () => {
   const otherUserId = 'scm-model-other-user';
-  const link = { ...snapshot, title: 'Durable waits' };
+  const link = { ...snapshot, actorUserId: userId, title: 'Durable waits' };
 
   const createAcceptance = async (owner = userId) => {
     const [row] = await serverDB
@@ -857,7 +857,7 @@ describe('ScmChangeRequestModel.linkAcceptance', () => {
     expect(result).toMatchObject({ row: { id: authored.id }, status: 'linked' });
   });
 
-  it('unlinks only rows the scope owns, and only from the named acceptance', async () => {
+  it('unlinks only from the named acceptance', async () => {
     const acceptance = await createAcceptance();
     const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
       ...link,
@@ -867,19 +867,107 @@ describe('ScmChangeRequestModel.linkAcceptance', () => {
     const params = { acceptanceId: acceptance.id, id: result.row.id };
 
     expect(
-      await ScmChangeRequestModel.unlinkAcceptance(serverDB, { ...params, userId: otherUserId }),
-    ).toBe(false);
-    expect(
       await ScmChangeRequestModel.unlinkAcceptance(serverDB, {
         ...params,
         acceptanceId: (await createAcceptance()).id,
-        userId,
       }),
     ).toBe(false);
-    expect(await ScmChangeRequestModel.unlinkAcceptance(serverDB, { ...params, userId })).toBe(
-      true,
-    );
+    expect(await ScmChangeRequestModel.unlinkAcceptance(serverDB, params)).toBe(true);
     expect(await ScmChangeRequestModel.listByAcceptance(serverDB, acceptance.id)).toHaveLength(0);
+  });
+
+  it("judges an existing row against the person linking, not the acceptance's creator", async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'Team', primaryOwnerId: otherUserId, slug: `team-${Math.random()}` })
+      .returning();
+    // The creator's personal PR row, and a workspace acceptance they created.
+    const creatorRow = await ScmChangeRequestModel.upsert(serverDB, snapshot);
+    const [teamAcceptance] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: 'team', subjectType: 'standalone', userId, workspaceId: workspace.id })
+      .returning();
+
+    // A workspace admin manages the acceptance but has no say over that row.
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: teamAcceptance.id,
+      actorUserId: otherUserId,
+      workspaceId: workspace.id,
+    });
+
+    expect(result).toEqual({ status: 'foreign' });
+    expect(
+      (await ScmChangeRequestModel.findById(serverDB, creatorRow.id))?.acceptanceId,
+    ).toBeNull();
+  });
+
+  it('finds an existing row whatever casing the pasted URL uses', async () => {
+    const acceptance = await createAcceptance();
+    const tracked = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      repoFullName: 'LobeHub/LobeHub',
+    });
+
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: acceptance.id,
+    });
+
+    expect(result).toMatchObject({ row: { id: tracked.id, repoFullName: 'LobeHub/LobeHub' } });
+  });
+
+  describe('provider events adopt a hand-linked placeholder', () => {
+    const installationSnapshot = {
+      ...snapshot,
+      externalId: 'PR_node_7',
+      keepOwner: true,
+      metadata: { routedBy: 'installation' as const },
+      repoFullName: 'LobeHub/LobeHub',
+    };
+
+    it('moves a pasted claim to the tenant the provider routes it to and drops its link', async () => {
+      const claimed = await createAcceptance(otherUserId);
+      const placeholder = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+        ...link,
+        acceptanceId: claimed.id,
+        actorUserId: otherUserId,
+        userId: otherUserId,
+      });
+      if (placeholder.status !== 'linked') throw new Error('expected a link');
+      expect(placeholder.row.metadata).toMatchObject({ routedBy: 'manual' });
+
+      // A delivery that matched nothing would normally keep the owner.
+      const row = await ScmChangeRequestModel.upsert(serverDB, { ...installationSnapshot, userId });
+
+      expect(row).toMatchObject({
+        acceptanceId: null,
+        externalId: 'PR_node_7',
+        id: placeholder.row.id,
+        metadata: { routedBy: 'installation' },
+        repoFullName: 'LobeHub/LobeHub',
+        userId,
+      });
+      // The real tenant can now link its own acceptance.
+      const mine = await createAcceptance();
+      expect(
+        (await ScmChangeRequestModel.linkAcceptance(serverDB, { ...link, acceptanceId: mine.id }))
+          .status,
+      ).toBe('linked');
+    });
+
+    it("keeps the link when the provider routes the PR to the placeholder's own tenant", async () => {
+      const acceptance = await createAcceptance();
+      const placeholder = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+        ...link,
+        acceptanceId: acceptance.id,
+      });
+      if (placeholder.status !== 'linked') throw new Error('expected a link');
+
+      const row = await ScmChangeRequestModel.upsert(serverDB, { ...installationSnapshot, userId });
+
+      expect(row).toMatchObject({ acceptanceId: acceptance.id, id: placeholder.row.id });
+    });
   });
 });
 

@@ -190,9 +190,12 @@ export interface ScmChangeRequestMetadata {
    * wherever they live, so every action on them rechecks that the person
    * can still write there; `installation` rows (and rows written before
    * author routing, which carry nothing) belong to the installation's
-   * tenant and need no such check.
+   * tenant and need no such check. `manual` rows were created by hand from a
+   * pasted URL and no provider event has vouched for them yet: the first
+   * event re-routes them as if they were new, so a placeholder can never
+   * hold the pull request against its real tenant.
    */
-  routedBy?: 'author' | 'installation';
+  routedBy?: 'author' | 'installation' | 'manual';
 }
 
 /** Processing state of one inbound webhook delivery. */
@@ -266,9 +269,11 @@ export interface ScmApplyChecksResult<TRow> {
   row: TRow;
 }
 
-/** A hand-made link from a change request to an acceptance, scoped to the acceptance's owner. */
+/** A hand-made link from a change request to an acceptance; a new row is owned by the acceptance's owner. */
 export interface ScmLinkAcceptanceParams {
   acceptanceId: string;
+  /** Who is linking. An existing row moves only if it is theirs or in the acceptance's workspace. */
+  actorUserId: string;
   number: number;
   provider: ScmProvider;
   repoFullName: string;
