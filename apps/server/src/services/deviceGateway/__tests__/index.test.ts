@@ -26,6 +26,12 @@ const MockGatewayHttpClient = vi.hoisted(() =>
   }),
 );
 
+const { readThrough } = vi.hoisted(() => ({
+  readThrough: vi.fn((_key: string, read: () => Promise<unknown>) => read()),
+}));
+
+vi.mock('@/server/utils/readThroughCache', () => ({ readThrough }));
+
 vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
 }));
@@ -439,6 +445,35 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
+    });
+
+    it('asks the device directly when no maxAge is given', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo: {} });
+
+      await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(readThrough).not.toHaveBeenCalled();
+    });
+
+    it('serves a recent answer through the cache when maxAge is set', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const systemInfo = { arch: 'arm64' };
+      mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo });
+
+      const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1', 'ws-1', {
+        maxAgeMs: 180_000,
+      });
+
+      expect(result).toEqual(systemInfo);
+      // The key carries user, pool and device so two principals never share an answer.
+      expect(readThrough).toHaveBeenCalledWith(
+        'device_system_info:v1:user-1:ws-1:dev-1',
+        expect.any(Function),
+        { ttlMs: 180_000 },
+      );
     });
   });
 

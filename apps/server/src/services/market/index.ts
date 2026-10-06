@@ -12,6 +12,7 @@ import {
   type SandboxStorageClient,
 } from '@/server/services/sandbox/storageFiles';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
+import { readThrough } from '@/server/utils/readThroughCache';
 
 import {
   listSkillToolsWithLiveFallback,
@@ -25,6 +26,8 @@ const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.c
 export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
 /** Max providers whose tool lists are fetched at once during discovery. */
 export const LOBEHUB_SKILL_DISCOVERY_CONCURRENCY = 5;
+/** How long one connection's live tool list is reused across sends. */
+export const LOBEHUB_SKILL_TOOLS_MAX_AGE_MS = 10 * 60 * 1000;
 export const LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS = 120_000;
 
 /**
@@ -157,9 +160,16 @@ export class MarketService {
 
   private readonly oauthProxyHeaders: Record<string, string>;
 
+  /**
+   * Who the cached skill tool lists belong to. A service built without a user
+   * (M2M credentials, a bare trusted token) has no scope and skips the cache.
+   */
+  private readonly skillCacheScope?: string;
+
   constructor(options: MarketServiceOptions = {}) {
     const { accessToken, userInfo, clientCredentials, trustedClientToken, ownerAccountId } =
       options;
+    this.skillCacheScope = userInfo?.userId;
 
     // Use provided trustedClientToken or generate from userInfo
     const resolvedTrustedClientToken =
@@ -414,6 +424,37 @@ export class MarketService {
         );
       },
       options?.timeoutMs,
+    );
+  }
+
+  /**
+   * The live tool list of one connected skill, remembered per connection for
+   * {@link LOBEHUB_SKILL_TOOLS_MAX_AGE_MS}.
+   *
+   * Discovery runs on every send and `tools/live` is a round trip to the
+   * provider's MCP server (150ms for GitHub, up to a second for Notion) for
+   * an answer that changes when the provider ships tools, not per turn. The
+   * key carries the connection's identity (`createdAt`, provider user), so a
+   * re-connected skill starts from a fresh read; an empty or failed list is
+   * never remembered. The connection list itself stays live so a newly
+   * connected skill shows up on the next send.
+   */
+  private async listSkillToolsForConnection(
+    connection: { createdAt?: string; providerUserId?: string },
+    providerId: string,
+  ) {
+    const read = () =>
+      this.listSkillTools(providerId, { timeoutMs: LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS });
+    if (!this.skillCacheScope) return read();
+
+    const identity = [connection.createdAt ?? '', connection.providerUserId ?? ''].join('|');
+    return readThrough(
+      `lobehub_skill_tools:v1:${this.skillCacheScope}:${providerId}:${identity}`,
+      read,
+      {
+        shouldCache: (value) => Array.isArray(value?.tools) && value.tools.length > 0,
+        ttlMs: LOBEHUB_SKILL_TOOLS_MAX_AGE_MS,
+      },
     );
   }
 
@@ -825,9 +866,10 @@ export class MarketService {
             const icon = (connection as any).icon;
             const providerLabel = LOBEHUB_SKILL_PROVIDER_LABELS[providerId] || providerId;
 
-            const { tools, instruction } = await this.listSkillTools(providerId, {
-              timeoutMs: LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS,
-            });
+            const { tools, instruction } = await this.listSkillToolsForConnection(
+              connection,
+              providerId,
+            );
             if (!tools || tools.length === 0) return;
 
             const manifest: LobeToolManifest = {

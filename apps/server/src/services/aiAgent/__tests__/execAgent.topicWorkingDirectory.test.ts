@@ -288,6 +288,36 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     });
   });
 
+  it('serves a stale workspace scan and refreshes it after the response', async () => {
+    // Two hours old: past the TTL, but still a usable description of the
+    // project. The send must not wait on the device's directory walk.
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [
+        {
+          path: '/repo/default',
+          workspace: { instructions: [], skills: [] },
+          workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
+        },
+      ],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    // A scan that never completes: if the send awaited it, this test would hang.
+    mockInitWorkspace.mockReturnValue(new Promise(() => {}));
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockUpdateTopicMetadata).toHaveBeenCalledWith('topic-1', {
+      boundDeviceId: DEVICE_ID,
+      workingDirectory: '/repo/default',
+      workingDirectoryConfig: { path: '/repo/default' },
+    });
+  });
+
   it('never rewrites a topic that is already pinned to a directory', async () => {
     // The historical pin is the contract: an old conversation must not follow
     // the agent's current default when that default changes later.
