@@ -62,7 +62,17 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 - Follow the source-label, privacy, and AI assistance rules in **PR Template** below when creating or updating a PR. Do not request prompt disclosure or block the normal PR workflow waiting for consent to publish a conversation.
 - Write the body to a temporary file and use `--body-file` to preserve formatting.
 
-### 7. Open in browser
+### 7. Link the PR to its acceptance
+
+An acceptance round published before the PR existed carries no PR, and reusing that round is correct, so nothing else ever tells the acceptance about the PR. Right after `gh pr create`, record the link with the same publish environment step 1 used for the lookup:
+
+```bash
+publish_lh acceptance link-pr <acceptanceId> "$(gh pr view --json url --jq .url)"
+```
+
+Do this for each PR in a stack; they share one acceptance. Skip it when the PR states that no acceptance is needed. A round ingested after the PR exists links itself. If the installed CLI lacks `link-pr`, or the server rejects it as unknown, mention that in the reply instead of retrying.
+
+### 8. Open in browser
 
 `gh pr view --web`
 
