@@ -860,19 +860,24 @@ export class AcceptanceService {
     if (status !== acceptance.status) {
       await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
-
-      // Rounds settled outside the verifier pipeline — an ingested round (no
-      // status, settled by its report) or a completed acceptance flow
-      // (`delivered`) — have nothing else to drive the task. Rounds the server
-      // verifier runs (`passed` / `failed` / `errored`) are driven once, after
-      // any auto-repair, by `driveTaskFromVerify`; completing here would race it.
-      if (
-        status === 'delivered' &&
-        (!current.status || current.status === 'delivered') &&
-        acceptance.subjectType === 'task'
-      )
-        await this.completeTaskForDelivery(acceptanceId, acceptance.subjectId);
     }
+
+    // Rounds settled outside the verifier pipeline — an ingested round (no
+    // status, settled by its report) or a completed acceptance flow
+    // (`delivered`) — have nothing else to drive the task. Rounds the server
+    // verifier runs (`passed` / `failed` / `errored`) are driven once, after
+    // any auto-repair, by `driveTaskFromVerify`; completing here would race it.
+    //
+    // Reconciled on every recompute of a delivered aggregate, not only on the
+    // transition: a completion that failed once is retried by the next round,
+    // report or flow event instead of leaving the task open for good. An
+    // already-completed task is a no-op.
+    if (
+      status === 'delivered' &&
+      (!current.status || current.status === 'delivered') &&
+      acceptance.subjectType === 'task'
+    )
+      await this.completeTaskForDelivery(acceptanceId, acceptance.subjectId);
     return status;
   };
 

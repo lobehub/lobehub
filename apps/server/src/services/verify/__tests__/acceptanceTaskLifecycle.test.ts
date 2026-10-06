@@ -136,11 +136,32 @@ describe('AcceptanceService task lifecycle', () => {
       });
     });
 
-    it('does nothing when the status did not change', async () => {
+    it('leaves an already completed task alone when the status did not change', async () => {
       stored.status = 'delivered';
+      mocks.taskResolve.mockResolvedValue({
+        automationMode: null,
+        id: 'task_1',
+        status: 'completed',
+      });
 
       await service().recomputeStatus('acc-1');
       expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
+    });
+
+    it('retries a completion that failed on the delivering recompute', async () => {
+      // First recompute delivers, but completing the task fails and it stays open.
+      mocks.taskServiceUpdateStatus.mockRejectedValueOnce(new Error('interrupt failed'));
+      mocks.taskFindById.mockResolvedValueOnce({ id: 'task_1', status: 'running' });
+      await service().recomputeStatus('acc-1');
+      expect(stored.status).toBe('delivered');
+
+      // A later recompute (status unchanged) completes it.
+      await service().recomputeStatus('acc-1');
+      expect(mocks.taskServiceUpdateStatus).toHaveBeenCalledTimes(2);
+      expect(mocks.taskServiceUpdateStatus).toHaveBeenLastCalledWith({
+        id: 'task_1',
+        status: 'completed',
+      });
     });
 
     it('leaves a Goal graph task to its coordinator', async () => {
