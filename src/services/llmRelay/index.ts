@@ -36,11 +36,19 @@ const isLlmRelayEnabled = () => !!getConfigState()?.featureFlags?.enableLlmRelay
  * The page-wide one-shot relay: LLM calls this tab asks the server for (preset
  * tasks, structured output, model lists) whose provider only this device can
  * reach are relayed back here instead of being called from the browser.
- * Active only within the `agent_llm_relay` rollout on a deployment with an
- * Agent Gateway; elsewhere `oneShotRelay.run` just makes the request.
+ * Active only within the `agent_llm_relay` rollout on a deployment that can
+ * relay (Agent Gateway + Redis); elsewhere `oneShotRelay.run` just makes the
+ * request.
  */
 export const oneShotRelay = new OneShotRelay({
-  isAvailable: () => isLlmRelayEnabled() && !!getConfigState()?.serverConfig?.agentGatewayUrl,
+  // `llmRelayAvailable`: the server can relay (gateway + Redis); otherwise it
+  // would call a device-only provider itself, so keep the browser path.
+  isAvailable: () => {
+    const serverConfig = getConfigState()?.serverConfig;
+    return (
+      isLlmRelayEnabled() && !!serverConfig?.agentGatewayUrl && !!serverConfig.llmRelayAvailable
+    );
+  },
   isDeviceProvider: (provider) =>
     aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState()),
   onCancel: (data) => llmRelayExecutor.cancel(data),
