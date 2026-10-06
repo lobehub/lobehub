@@ -59,6 +59,7 @@
   "imageViewer.ai.error.noModel": "没有可编辑图片的已启用模型，请在「设置 → AI 服务商」中启用一个图片模型",
   "imageViewer.ai.error.noResult": "模型没有返回图片，请重试",
   "imageViewer.ai.error.timeout": "已运行超过 3 分钟，任务仍在「图片生成」中继续，结果会出现在那里",
+  "imageViewer.ai.error.tooLarge": "图片超出当前模型可接受的大小，请先调整大小后再试",
   "imageViewer.ai.phase.generating": "生成中… {{seconds}} 秒",
   "imageViewer.ai.phase.saving": "正在保存为新图片…",
   "imageViewer.ai.phase.uploading": "准备中…",

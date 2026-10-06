@@ -510,6 +510,34 @@ describe('runAIImageEdit', () => {
     expect(deps.createImage).not.toHaveBeenCalled();
   });
 
+  // Regression: images over the model's reference limit were submitted as
+  // tasks the provider then rejected.
+  it('refuses an original larger than the model accepts, before submitting', async () => {
+    const deps = spyDeps({
+      getFile: async () => ({ knowledgeBaseIds: [], parentId: 'docs_folder', size: 6_000_000 }),
+    });
+
+    await expect(run(deps, { model: { ...MODEL, maxFileSize: 5_242_880 } })).rejects.toMatchObject({
+      kind: 'tooLarge',
+      taskRunning: false,
+    });
+    expect(deps.createTopic).not.toHaveBeenCalled();
+    expect(deps.createImage).not.toHaveBeenCalled();
+  });
+
+  it('refuses an erase guide larger than the model accepts', async () => {
+    const deps = spyDeps();
+
+    await expect(
+      run(deps, {
+        guide: new Blob([new Uint8Array(2048)], { type: 'image/png' }),
+        model: { ...MODEL, maxFileSize: 1024 },
+        operation: 'erase',
+      }),
+    ).rejects.toMatchObject({ kind: 'tooLarge' });
+    expect(deps.uploadFile).not.toHaveBeenCalled();
+  });
+
   it('times out while a status request hangs', async () => {
     const deps = spyDeps({ getStatus: () => new Promise<never>(() => {}) });
 

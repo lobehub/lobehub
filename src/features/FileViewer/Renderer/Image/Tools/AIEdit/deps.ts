@@ -23,6 +23,7 @@ export const aiEditDeps: AIEditDeps = {
       knowledgeBaseIds: file.knowledgeBaseIds,
       metadata: file.metadata as Record<string, unknown> | null,
       parentId: file.parentId,
+      size: file.size,
       visibility: file.visibility,
     };
   },

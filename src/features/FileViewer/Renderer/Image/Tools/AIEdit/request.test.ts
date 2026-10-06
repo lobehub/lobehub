@@ -38,6 +38,18 @@ describe('resolveAIEditModel', () => {
     });
   });
 
+  it('keeps the reference image size limit the model declares', () => {
+    const limited = providers([
+      ['openai', [card('gpt-image-1', { imageUrls: { default: [], maxFileSize: 5_242_880 } })]],
+    ]);
+    expect(resolveAIEditModel(limited)).toEqual({
+      maxFileSize: 5_242_880,
+      model: 'gpt-image-1',
+      provider: 'openai',
+      referenceParam: 'imageUrls',
+    });
+  });
+
   it('falls back to any editable model', () => {
     expect(
       resolveAIEditModel(providers([['fal', [card('flux-kontext', { imageUrl: {} })]]])),

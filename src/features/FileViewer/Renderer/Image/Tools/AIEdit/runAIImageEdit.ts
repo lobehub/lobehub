@@ -10,7 +10,8 @@ import { fileIdFromProxyUrl } from '../exportImage';
 import { fileIntoLibraries } from '../saveDerivedFile';
 import { type AIEditModel, type AIEditOperation, buildAIEditRequest } from './request';
 
-export type AIEditErrorKind = 'cancelled' | 'failed' | 'noModel' | 'noResult' | 'timeout';
+export type AIEditErrorKind =
+  'cancelled' | 'failed' | 'noModel' | 'noResult' | 'timeout' | 'tooLarge';
 
 export class AIImageEditError extends Error {
   kind: AIEditErrorKind;
@@ -60,6 +61,7 @@ export interface AIEditDeps {
         knowledgeBaseIds?: string[];
         metadata?: Record<string, unknown> | null;
         parentId?: string | null;
+        size?: number | null;
         visibility?: 'private' | 'public' | null;
       }
     | null
@@ -260,6 +262,15 @@ export const runAIImageEdit = async ({
       console.error('[ImageViewer] failed to read the original image location', error);
       return undefined;
     });
+
+    // The model's own limit on the reference image: refuse here instead of
+    // submitting a task the provider will reject.
+    const inputSize = operation === 'erase' ? guide?.size : (location?.size ?? undefined);
+    if (model.maxFileSize && inputSize && inputSize > model.maxFileSize)
+      throw new AIImageEditError(
+        'tooLarge',
+        `Reference image is ${inputSize} bytes; the model accepts up to ${model.maxFileSize}`,
+      );
 
     if (operation === 'erase') {
       if (!guide) throw new AIImageEditError('failed', 'Missing erase guide image');

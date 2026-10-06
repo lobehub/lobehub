@@ -17,6 +17,8 @@ export const AI_EDIT_PROMPTS: Record<AIEditOperation, string> = {
 };
 
 export interface AIEditModel {
+  /** Largest reference image the model accepts, in bytes, when it declares one. */
+  maxFileSize?: number;
   model: string;
   provider: string;
   /** Which reference-image parameter the model reads. */
@@ -40,8 +42,17 @@ const findEditable = (
     if (provider && item.id !== provider) continue;
     for (const card of item.children) {
       if (model && card.id !== model) continue;
-      const referenceParam = referenceParamOf(card.parameters as Record<string, unknown>);
-      if (referenceParam) return { model: card.id, provider: item.id, referenceParam };
+      const parameters = card.parameters as Record<string, unknown> | undefined;
+      const referenceParam = referenceParamOf(parameters);
+      if (!referenceParam) continue;
+      const maxFileSize = (parameters?.[referenceParam] as { maxFileSize?: unknown } | undefined)
+        ?.maxFileSize;
+      return {
+        ...(typeof maxFileSize === 'number' ? { maxFileSize } : {}),
+        model: card.id,
+        provider: item.id,
+        referenceParam,
+      };
     }
   }
 };

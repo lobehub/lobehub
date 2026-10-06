@@ -116,6 +116,8 @@ export default {
   'imageViewer.ai.error.noResult': 'The model returned no image. Try again.',
   'imageViewer.ai.error.timeout':
     'Still running after 3 minutes. It keeps going in Image generation, where the result will appear.',
+  'imageViewer.ai.error.tooLarge':
+    'This image is larger than the selected model accepts. Resize it smaller, then try again.',
   'imageViewer.ai.phase.generating': 'Generating… {{seconds}}s',
   'imageViewer.ai.phase.saving': 'Saving as a new image…',
   'imageViewer.ai.phase.uploading': 'Preparing…',
