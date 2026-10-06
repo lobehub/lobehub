@@ -3129,11 +3129,16 @@ export class GoalService {
     // known time, so ask for that tick directly. One wake per Goal: the claim
     // fails while an earlier-or-equal wake is still pending. A reset further out
     // than the queue's longest delay is re-armed when the capped wake fires.
-    const armed = GoalWaitService.arm(new Date(retryAt).toISOString());
+    const target = new Date(retryAt).toISOString();
+    const armed = GoalWaitService.arm(target);
+    // Claim on the reset itself, not on `armedUntil`: that rounds the delay up to
+    // whole seconds from each tick's own clock, so two ticks before the same reset
+    // would read as different wakes. Only a capped wake stores its earlier fire time.
+    const capped = Date.parse(armed.armedUntil) < retryAt;
     if (
       await new GoalModel(this.db, this.userId, this.workspaceId).armQuotaRetryWake(
         graph.goal.id,
-        armed.armedUntil,
+        capped ? armed.armedUntil : target,
       )
     )
       await new GoalWaitService(this.db, this.userId, this.workspaceId).schedule(

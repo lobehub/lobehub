@@ -884,6 +884,41 @@ describe('CLI main Agent planning', () => {
       expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
     });
 
+    it('pauses in the same transaction that consumes the failed turn', async () => {
+      const { id, op } = await start(10);
+      await ops().recordCompletion(op.id, {
+        status: 'error',
+        error: { category: 'auth', message: 'Invalid API key' },
+      });
+      // A concurrent tick that lands right after the settling transaction commits.
+      const original = db.transaction.bind(db);
+      let raced = false;
+      vi.spyOn(db, 'transaction').mockImplementation((async (
+        ...args: Parameters<typeof db.transaction>
+      ) => {
+        const result = await original(...args);
+        const goal = await model().findById(id);
+        if (!raced && goal?.config?.managerState?.consumed) {
+          raced = true;
+          await manager().advance(await service().graph(id));
+        }
+        return result;
+      }) as typeof db.transaction);
+
+      expect((await service().tick(id)).outcome).toBe('no_progress');
+      expect(raced).toBe(true);
+      expect((await model().findById(id))!.status).toBe('paused');
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps a running turn plan valid when a Task arms its quota wake', async () => {
+      const { id, state, op } = await start();
+      expect(
+        await model().armQuotaRetryWake(id, new Date(Date.now() + 3_600_000).toISOString()),
+      ).toBe(true);
+      await expect(manager().submit(id, state.token, op.id, taskPlan)).resolves.toBeDefined();
+    });
+
     it('does not hold back the next turn after a committed plan whose run errored', async () => {
       const { id, state, op } = await start();
       await manager().submit(id, state.token, op.id, taskPlan);

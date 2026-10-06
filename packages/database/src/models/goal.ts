@@ -221,13 +221,14 @@ export class GoalModel {
         // policy edits cannot replace the concurrently written incident ledger.
         ...(value.config !== undefined
           ? {
-              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding')
+              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt')
                 || jsonb_strip_nulls(jsonb_build_object(
                   'planningCheckpoint', ${goals.config}->'planningCheckpoint',
                   'planningProtocol', ${goals.config}->'planningProtocol',
                   'supervisorState', ${goals.config}->'supervisorState',
                   'managerState', ${goals.config}->'managerState',
-                  'understanding', ${goals.config}->'understanding'
+                  'understanding', ${goals.config}->'understanding',
+                  'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt'
                 ))`,
             }
           : {}),

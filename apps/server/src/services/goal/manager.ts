@@ -196,7 +196,9 @@ const managerTurnToken = (goalId: string) => `${goalId}_${randomUUID()}`;
 
 /** Excludes only the manager's own receipt. Concurrent policy/graph changes invalidate its plan. */
 export const managerSnapshot = (graph: GoalGraphSnapshot) => {
-  const { managerState: _state, ...config } = graph.goal.config ?? {};
+  // Coordinator receipts are not planning input: arming a Task's quota wake while a
+  // turn runs must not make that turn's plan stale.
+  const { managerState: _state, quotaRetryWakeAt: _quotaWake, ...config } = graph.goal.config ?? {};
   return createHash('sha256')
     .update(
       JSON.stringify({
@@ -842,9 +844,17 @@ export class GoalManagerService {
         }
         const decision = decideFailedTurn(operation.error, current);
         if (decision.action === 'pause') {
-          // The person who resumes the Goal gets a fresh retry schedule.
+          // The person who resumes the Goal gets a fresh retry schedule. Pause in
+          // this same transaction: committing the consumed receipt first would
+          // let a concurrent tick claim and dispatch a replacement turn before
+          // the pause took the row lock.
           await this.save(db, goal.id, { ...settled, ...cleared });
-          return decision;
+          const message = `${decision.reason}. Resume with: lh goal resume ${goal.id}`;
+          if (activeStatuses.has(fresh!.status)) {
+            await new GoalModel(db, this.userId, this.workspaceId).updateStatus(goal.id, 'paused');
+            await this.graph(db).recordGoalStatus(goal.id, fresh!.status, 'paused', message);
+          }
+          return { ...decision, reason: message };
         }
         await this.save(db, goal.id, {
           ...settled,
@@ -860,7 +870,7 @@ export class GoalManagerService {
         return decision;
       });
       if (failed?.action === 'pause')
-        return this.pause(goal.id, `${failed.reason}. Resume with: lh goal resume ${goal.id}`);
+        return { goalId: goal.id, outcome: 'no_progress', message: failed.reason };
       if (failed) {
         await scheduleGoalAdvance({
           goalId: goal.id,

@@ -3917,8 +3917,13 @@ describe('GoalService', () => {
       );
       expect(schedule.mock.lastCall![0].delay).toBeGreaterThanOrEqual(2 * 60 * 60);
 
-      // More ticks before the reset (the sweep, Task events) queue no more wakes.
+      // More ticks before the reset (the sweep, Task events) queue no more wakes,
+      // and a policy edit from a stale snapshot does not drop the armed receipt.
       await service.tick(graph.goal.id);
+      await new GoalModel(serverDB, userId).update(graph.goal.id, {
+        config: { recovery: { maxAttemptsPerTask: 3 } },
+      });
+      expect((await service.graph(graph.goal.id)).goal.config?.quotaRetryWakeAt).toBeDefined();
       await service.tick(graph.goal.id);
       expect(schedule.mock.calls.filter(([params]) => params.trigger === 'wake')).toHaveLength(1);
       expect(runSpy).not.toHaveBeenCalled();
