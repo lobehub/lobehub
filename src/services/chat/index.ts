@@ -25,6 +25,7 @@ import { ModelProvider } from 'model-bank/modelProvider';
 
 import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { getSearchConfig } from '@/helpers/getSearchConfig';
+import { oneShotRelay } from '@/services/llmRelay';
 import { getAgentStoreState } from '@/store/agent';
 import { agentChatConfigSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiProviderSelectors, getAiInfraStoreState } from '@/store/aiInfra';
@@ -343,13 +344,17 @@ class ChatService {
     const sdkType = resolveRuntimeProvider(provider);
 
     /**
-     * Use browser agent runtime
+     * A provider only this device reaches: within the LLM relay the server
+     * makes the call and relays it back to this tab (one-shot relay), so the
+     * browser never dials the provider on its own. Outside it, the legacy
+     * browser runtime calls the provider directly.
      */
     const enableFetchOnClient = isEnableFetchOnClient(provider);
+    const relayToThisTab = enableFetchOnClient && oneShotRelay.needsRelay(provider);
 
     let fetcher: typeof fetch | undefined = undefined;
 
-    if (enableFetchOnClient) {
+    if (enableFetchOnClient && !relayToThisTab) {
       /**
        * Notes:
        * 1. Browser agent runtime will skip auth check if a key and endpoint provided by
@@ -409,24 +414,26 @@ class ChatService {
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
 
-    return fetchSSE(API_ENDPOINTS.chat(provider), {
-      body: JSON.stringify(payload),
-      fetcher,
-      headers,
-      method: 'POST',
-      onAbort: options?.onAbort,
-      onErrorHandle: options?.onErrorHandle,
-      onFinish: options?.onFinish,
-      onMessageHandle: options?.onMessageHandle,
-      requestContext: {
-        apiMode,
-        fetchOnClient: enableFetchOnClient,
-        model,
-        provider,
-      },
-      responseAnimation: mergedResponseAnimation,
-      signal,
-    });
+    return oneShotRelay.run(relayToThisTab ? provider : undefined, (relay) =>
+      fetchSSE(API_ENDPOINTS.chat(provider), {
+        body: JSON.stringify(payload),
+        fetcher,
+        headers: relay ? { ...(headers as Record<string, string>), ...relay.headers } : headers,
+        method: 'POST',
+        onAbort: options?.onAbort,
+        onErrorHandle: options?.onErrorHandle,
+        onFinish: options?.onFinish,
+        onMessageHandle: options?.onMessageHandle,
+        requestContext: {
+          apiMode,
+          fetchOnClient: enableFetchOnClient && !relayToThisTab,
+          model,
+          provider,
+        },
+        responseAnimation: mergedResponseAnimation,
+        signal,
+      }),
+    );
   };
 
   fetchPresetTaskResult = async ({

@@ -31,7 +31,12 @@ vi.mock('@/store/user', () => ({
 
 vi.mock('@/store/user/selectors', () => ({
   systemAgentSelectors: {
-    translation: vi.fn(() => ({})),
+    translation: vi.fn(() => ({
+      customPrompt: 'Translate literally',
+      enabled: true,
+      model: 'qwen3:1.7b',
+      provider: 'ollama',
+    })),
   },
 }));
 
@@ -91,6 +96,11 @@ describe('ChatEnhanceAction', () => {
       expect(chatService.fetchPresetTaskResult).toHaveBeenCalledTimes(2);
       for (const [params] of (chatService.fetchPresetTaskResult as Mock).mock.calls) {
         expect(params.trigger).toBe(RequestTrigger.Translate);
+        // The system agent's own settings are not model parameters: the
+        // request carries the model only, whatever provider it is relayed to.
+        expect(params.params).toMatchObject({ model: 'qwen3:1.7b', provider: 'ollama' });
+        expect(params.params).not.toHaveProperty('enabled');
+        expect(params.params).not.toHaveProperty('customPrompt');
       }
     });
   });

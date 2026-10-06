@@ -19,6 +19,11 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   createTraceOptions: vi.fn().mockReturnValue({}),
 }));
 
+const resolveProviderRelay = vi.hoisted(() => vi.fn());
+vi.mock('@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite', () => ({
+  resolveProviderRelay,
+}));
+
 vi.mock('@/auth', () => ({
   auth: {
     api: {
@@ -44,9 +49,30 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks();
+  resolveProviderRelay.mockResolvedValue(undefined);
 });
 
 describe('POST handler', () => {
+  describe('one-shot relay', () => {
+    // A provider only the user's device reaches (Ollama, LM Studio, a private
+    // base URL) is never dialed from the server: without a tab standing by to
+    // run it, the route answers with an explicit error instead.
+    it('answers ClientLlmExecutorUnavailable for a device-only provider with no tab attached', async () => {
+      resolveProviderRelay.mockResolvedValue({ runtimeProvider: 'ollama' });
+
+      const response = await POST(request, { params: Promise.resolve({ provider: 'ollama' }) });
+
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+      expect(await response.json()).toMatchObject({
+        body: {
+          error: { context: 'no_client_request', reason: 'no_executor' },
+          provider: 'ollama',
+        },
+        errorType: 'ClientLlmExecutorUnavailable',
+      });
+    });
+  });
+
   describe('init chat model', () => {
     it('should initialize ModelRuntime correctly with valid session', async () => {
       const mockParams = Promise.resolve({ provider: 'test-provider' });
