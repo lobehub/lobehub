@@ -5,11 +5,12 @@ import type {
 } from '@lobechat/builtin-tool-dashboard';
 import type { DashboardToolService } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import type { LobeChatDatabase } from '@lobechat/database';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import pMap from 'p-map';
 import { z } from 'zod';
 
 import { DashboardModel } from '@/database/models/dashboard';
+import { TopicModel } from '@/database/models/topic';
 import { WidgetModel } from '@/database/models/widget';
 import type { WidgetRunRow, WidgetVersionRow } from '@/database/schemas';
 import { topics } from '@/database/schemas';
@@ -237,19 +238,18 @@ export const resolveTopicProjectId = async (db: LobeChatDatabase, topicId?: stri
 };
 
 /**
- * A topic id sent by a client, kept only when the topic is the caller's own —
- * then its project scopes what the tool creates.
+ * A topic id sent by a client, kept only when the caller can read the topic in
+ * the current scope — then its project scopes what the tool creates. In a
+ * workspace that includes teammates' topics (a member working in a teammate's
+ * project topic); in personal mode only the caller's own.
  */
 export const resolveClientTopic = async (
   db: LobeChatDatabase,
   topicId: string | null | undefined,
   userId: string,
+  workspaceId?: string,
 ): Promise<{ projectId?: string; topicId?: string }> => {
   if (!topicId) return {};
-  const [row] = await db
-    .select({ projectId: topics.projectId })
-    .from(topics)
-    .where(and(eq(topics.id, topicId), eq(topics.userId, userId)))
-    .limit(1);
-  return row ? { projectId: row.projectId ?? undefined, topicId } : {};
+  const topic = await new TopicModel(db, userId, workspaceId).findById(topicId);
+  return topic ? { projectId: topic.projectId ?? undefined, topicId } : {};
 };

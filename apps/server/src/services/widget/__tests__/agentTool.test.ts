@@ -8,9 +8,11 @@ import {
   users,
   widgets,
   widgetVersions,
+  workspaceMembers,
+  workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DashboardModel } from '@/database/models/dashboard';
@@ -77,8 +79,10 @@ beforeEach(async () => {
   ]);
 });
 
+const teammateId = 'dashboard-tool-teammate';
+
 afterEach(async () => {
-  await db.delete(users).where(eq(users.id, userId));
+  await db.delete(users).where(inArray(users.id, [userId, teammateId]));
 });
 
 const scope = {
@@ -302,5 +306,67 @@ describe('resolveClientTopic', () => {
     });
     expect(await resolveClientTopic(db, projectTopicId, 'someone-else')).toEqual({});
     expect(await resolveClientTopic(db, undefined, userId)).toEqual({});
+  });
+});
+
+describe('resolveClientTopic in a workspace', () => {
+  const workspaceId = 'dashboard-tool-workspace';
+  const wsAgentId = 'dashboard-tool-ws-agent';
+  const wsProjectId = 'dashboard-tool-ws-project';
+  const teammateTopicId = 'dashboard-tool-teammate-topic';
+
+  beforeEach(async () => {
+    await db.delete(users).where(eq(users.id, teammateId));
+    await db.insert(users).values({ id: teammateId });
+    await db
+      .insert(workspaces)
+      .values({ id: workspaceId, name: 'Team', primaryOwnerId: teammateId, slug: workspaceId });
+    await db.insert(workspaceMembers).values([
+      { role: 'owner', userId: teammateId, workspaceId },
+      { role: 'member', userId, workspaceId },
+    ]);
+    await db.insert(agents).values([
+      { id: wsAgentId, userId, workspaceId },
+      { id: `${wsProjectId}-coordinator`, userId: teammateId, workspaceId },
+    ]);
+    await db.insert(projects).values({
+      coordinatorAgentId: `${wsProjectId}-coordinator`,
+      id: wsProjectId,
+      identifier: 'WSP',
+      name: 'Team project',
+      userId: teammateId,
+      workspaceId,
+    });
+    // The teammate started the project topic; the member keeps working in it.
+    await db
+      .insert(topics)
+      .values({ id: teammateTopicId, projectId: wsProjectId, userId: teammateId, workspaceId });
+  });
+
+  it('builds under the project of a teammate’s workspace topic', async () => {
+    const topic = await resolveClientTopic(db, teammateTopicId, userId, workspaceId);
+    expect(topic).toEqual({ projectId: wsProjectId, topicId: teammateTopicId });
+
+    const service = createDashboardToolService(db, {
+      ...scope,
+      agentId: wsAgentId,
+      ...topic,
+      workspaceId,
+    });
+    const { widgetId } = await service.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Team metric',
+    });
+    const board = await service.createDashboardWithWidget('Team board', widgetId);
+
+    const [widget] = await db.select().from(widgets).where(eq(widgets.id, widgetId));
+    expect(widget).toMatchObject({ projectId: wsProjectId, userId, workspaceId });
+    expect(board).toMatchObject({ projectId: wsProjectId, title: 'Team board' });
+  });
+
+  it('does not reach a workspace topic from personal mode', async () => {
+    expect(await resolveClientTopic(db, teammateTopicId, userId)).toEqual({});
+    expect(await resolveClientTopic(db, teammateTopicId, teammateId)).toEqual({});
   });
 });

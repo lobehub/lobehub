@@ -195,7 +195,12 @@ export const dashboardRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const context = input.context ?? {};
-      const topic = await resolveClientTopic(ctx.serverDB, context.topicId, ctx.userId);
+      const topic = await resolveClientTopic(
+        ctx.serverDB,
+        context.topicId,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
       const runtime = new DashboardExecutionRuntime(
         createDashboardToolService(ctx.serverDB, {
           agentId: context.agentId ?? undefined,
