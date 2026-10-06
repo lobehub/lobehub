@@ -12,6 +12,8 @@ import { useIsHydrated } from '@/hooks/useIsHydrated';
 import { mutate as globalMutate } from '@/libs/swr';
 import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useAcceptanceScope } from '../AcceptanceScope';
 import { checkFilterState, isException } from '../Checks/checkState';
@@ -27,6 +29,7 @@ import FeedbackDrawer, { type FeedbackListEntry } from './FeedbackDrawer';
 import { draftRepairPromptInMobile } from './mobileBridge';
 import { openAcceptModal, openGroupFeedbackModal, openRejectModal } from './modals';
 import { rejectCopyOnly } from './rejectCopyOnly';
+import { collectRejectFeedback } from './rejectFeedback';
 
 interface AcceptanceDecisionProps {
   onDraftToComposer?: (text: string) => boolean;
@@ -41,7 +44,8 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
   const { turn, setTurn } = useAcceptanceTurn(embedded);
   const [pending, setPending] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
-  const { approvals } = useAcceptanceComments(acceptanceId);
+  const { approvals, items: commentItems } = useAcceptanceComments(acceptanceId);
+  const viewerId = useUserStore(userProfileSelectors.userId);
   if (!data || !canReviewAcceptance(data) || data.acceptance.status === 'closed') return null;
 
   if (flowPlanPhase(data.rounds.at(-1))) return null;
@@ -240,6 +244,12 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
             // viewer's promise, not the server's gate — the copy path below
             // opts out of dispatch explicitly.
             dispatchAvailable: Boolean(data.origin?.topic),
+            feedback: collectRejectFeedback({
+              checks,
+              comments: commentItems,
+              ownEntries: feedbackEntries.filter((entry) => !entry.stale),
+              viewerId,
+            }),
             onConfirm: async (comment) => {
               if (!data.origin?.topic) {
                 const rejected = await runAction(() =>

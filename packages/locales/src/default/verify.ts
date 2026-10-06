@@ -393,6 +393,12 @@ export default {
     'No agent is attached to this delivery. Rejecting copies the repair prompt, including any reason you add — paste it to any agent to start the next round.',
   'acceptance.reject.description':
     'Send this delivery back for another repair round. Optionally add a reason to guide the fix.',
+  'acceptance.reject.included':
+    'Includes {{count}} feedback item(s) · yours {{mine}} · others {{others}}',
+  'acceptance.reject.includedHint':
+    'The agent reads all of these, attachments included, along with your reason. Resolved comments are left out.',
+  'acceptance.reject.includedNone': 'No other open feedback — only your reason goes along',
+  'acceptance.reject.you': 'You',
   'acceptance.reject.placeholder': 'Reason (optional), e.g. add screenshot evidence for dark mode…',
   'acceptance.reportDrawer.close': 'Close the round report',
   'acceptance.review.accept': 'Accept',

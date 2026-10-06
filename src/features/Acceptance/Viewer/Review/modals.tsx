@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   createModal,
@@ -11,16 +11,34 @@ import {
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { t } from 'i18next';
+import { ChevronDown, ChevronUp, MessagesSquare } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   AttachmentStrip,
+  AttachmentThumbs,
   AttachmentUploadButton,
   useFeedbackAttachments,
 } from '../Evidence/attachments';
+import type { RejectFeedbackItem } from './rejectFeedback';
 
 const styles = createStaticStyles(({ css }) => ({
+  includedList: css`
+    overflow-y: auto;
+    max-height: 240px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  includedRow: css`
+    padding-block: 10px;
+    padding-inline: 12px;
+    border-block-end: 1px solid ${cssVar.colorBorderSecondary};
+
+    &:last-child {
+      border-block-end: none;
+    }
+  `,
   warning: css`
     padding-block: 10px;
     padding-inline: 14px;
@@ -103,58 +121,131 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
     width: 'min(90vw, 480px)',
   });
 
+const IncludedFeedbackRow = memo<{ item: RejectFeedbackItem }>(({ item }) => {
+  const { t: translate } = useTranslation('verify');
+  const source = item.mine ? translate('acceptance.reject.you') : item.authorName;
+  const scope = item.checkSeq ? `C${item.checkSeq} ${item.title ?? ''}` : item.title;
+  const metaBits = [
+    source,
+    scope,
+    item.annotationCount
+      ? translate('acceptance.feedback.annotations', { count: item.annotationCount })
+      : null,
+  ].filter(Boolean);
+
+  return (
+    <Flexbox className={styles.includedRow} gap={4}>
+      <Text ellipsis fontSize={11} type={'secondary'}>
+        {metaBits.join(' · ')}
+      </Text>
+      {item.text && (
+        <Text ellipsis={{ rows: 2 }} fontSize={12}>
+          {item.text}
+        </Text>
+      )}
+      <AttachmentThumbs attachments={item.attachments} />
+    </Flexbox>
+  );
+});
+
+IncludedFeedbackRow.displayName = 'AcceptanceRejectIncludedFeedbackRow';
+
 interface RejectContentProps {
   /** The rounds name an authoring agent — the server sends the reject back to
       it. Without one the dialog promises no next round: it copies the prompt. */
   dispatchAvailable: boolean;
+  /** Open feedback the repair agent reads alongside the reason — previewed so
+      the reviewer knows whose comments and screenshots ride along. */
+  feedback?: RejectFeedbackItem[];
   /** Perform the reject with an optional reason; resolve true to close. */
   onConfirm: (comment: string) => Promise<boolean>;
 }
 
-const RejectContent = memo<RejectContentProps>(({ dispatchAvailable, onConfirm }) => {
-  const { t: translate } = useTranslation('verify');
-  const { close } = useModalContext();
-  const [comment, setComment] = useState('');
-  const [loading, setLoading] = useState(false);
+const RejectContent = memo<RejectContentProps>(
+  ({ dispatchAvailable, feedback = [], onConfirm }) => {
+    const { t: translate } = useTranslation('verify');
+    const { close } = useModalContext();
+    const [comment, setComment] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [previewOpen, setPreviewOpen] = useState(false);
+    const mineCount = feedback.filter((item) => item.mine).length;
 
-  const handleConfirm = async () => {
-    const trimmed = comment.trim();
-    setLoading(true);
-    try {
-      if (await onConfirm(trimmed)) close();
-    } finally {
-      setLoading(false);
-    }
-  };
+    const handleConfirm = async () => {
+      const trimmed = comment.trim();
+      setLoading(true);
+      try {
+        if (await onConfirm(trimmed)) close();
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  return (
-    <Flexbox gap={16}>
-      <Text fontSize={13} type={'secondary'}>
-        {translate(
-          dispatchAvailable ? 'acceptance.reject.description' : 'acceptance.reject.descriptionCopy',
-        )}
-      </Text>
-      <TextArea
-        autoSize={{ maxRows: 6, minRows: 3 }}
-        placeholder={translate('acceptance.reject.placeholder')}
-        value={comment}
-        onChange={(event) => setComment(event.target.value)}
-      />
-      <Flexbox horizontal gap={8} justify={'flex-end'}>
-        <Button disabled={loading} onClick={close}>
-          {translate('acceptance.actions.cancel')}
-        </Button>
-        <Button loading={loading} type={'primary'} onClick={handleConfirm}>
+    return (
+      <Flexbox gap={16}>
+        <Text fontSize={13} type={'secondary'}>
           {translate(
             dispatchAvailable
-              ? 'acceptance.actions.confirmReject'
-              : 'acceptance.actions.confirmRejectCopy',
+              ? 'acceptance.reject.description'
+              : 'acceptance.reject.descriptionCopy',
           )}
-        </Button>
+        </Text>
+        <TextArea
+          autoSize={{ maxRows: 6, minRows: 3 }}
+          placeholder={translate('acceptance.reject.placeholder')}
+          value={comment}
+          onChange={(event) => setComment(event.target.value)}
+        />
+        {previewOpen && feedback.length > 0 && (
+          <Flexbox gap={6}>
+            <Text fontSize={12} type={'secondary'}>
+              {translate('acceptance.reject.includedHint')}
+            </Text>
+            <Flexbox className={styles.includedList}>
+              {feedback.map((item) => (
+                <IncludedFeedbackRow item={item} key={item.key} />
+              ))}
+            </Flexbox>
+          </Flexbox>
+        )}
+        <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
+          {/* Says up front what the repair prompt carries besides the reason —
+            otherwise nobody can tell whether teammates' notes go along. */}
+          {feedback.length > 0 ? (
+            <Button
+              aria-expanded={previewOpen}
+              icon={<Icon icon={MessagesSquare} />}
+              size={'small'}
+              type={'text'}
+              onClick={() => setPreviewOpen((open) => !open)}
+            >
+              {translate('acceptance.reject.included', {
+                count: feedback.length,
+                mine: mineCount,
+                others: feedback.length - mineCount,
+              })}
+              <Icon icon={previewOpen ? ChevronUp : ChevronDown} />
+            </Button>
+          ) : (
+            <Text fontSize={12} type={'secondary'}>
+              {translate('acceptance.reject.includedNone')}
+            </Text>
+          )}
+          <Flexbox flex={1} />
+          <Button disabled={loading} onClick={close}>
+            {translate('acceptance.actions.cancel')}
+          </Button>
+          <Button loading={loading} type={'primary'} onClick={handleConfirm}>
+            {translate(
+              dispatchAvailable
+                ? 'acceptance.actions.confirmReject'
+                : 'acceptance.actions.confirmRejectCopy',
+            )}
+          </Button>
+        </Flexbox>
       </Flexbox>
-    </Flexbox>
-  );
-});
+    );
+  },
+);
 
 RejectContent.displayName = 'AcceptanceRejectContent';
 
@@ -166,7 +257,7 @@ export const openRejectModal = (options: RejectContentProps): ModalInstance =>
     maskClosable: true,
     styles: frostedModalStyles,
     title: t('acceptance.actions.reject', { ns: 'verify' }),
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 520px)',
   });
 
 interface GroupFeedbackContentProps {
