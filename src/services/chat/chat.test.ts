@@ -1783,13 +1783,33 @@ describe('ChatService', () => {
 
       await chatService.getChatCompletion({ messages: [], model: 'qwen3', provider: 'ollama' });
 
-      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function));
+      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), { signal: undefined });
       const [url, options] = mockFetchSSE.mock.calls[0];
       expect(url).toContain('/ollama');
       expect(options.fetcher).toBeUndefined();
       expect(options.headers).toMatchObject(relayHeaders);
       expect(options.requestContext.fetchOnClient).toBe(false);
       expect(initializeWithClientStore).not.toHaveBeenCalled();
+    });
+
+    // An abort while the relay channel is still being set up must not sit out
+    // the subscribe timeout (manual compaction, preset-task loading state).
+    it("hands the caller's abort signal to the relay setup", async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'needsRelay').mockReturnValue(true);
+      const run = vi
+        .spyOn(oneShotRelay, 'run')
+        .mockImplementation(async (_provider, request) => request());
+      const controller = new AbortController();
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'qwen3', provider: 'ollama' },
+        { signal: controller.signal },
+      );
+
+      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), {
+        signal: controller.signal,
+      });
     });
 
     it('should make a POST request with the correct payload', async () => {

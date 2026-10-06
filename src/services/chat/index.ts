@@ -414,25 +414,28 @@ class ChatService {
       responseAnimation,
     ].reduce((acc, cur) => merge(acc, standardizeAnimationStyle(cur)), {});
 
-    return oneShotRelay.run(relayToThisTab ? provider : undefined, (relay) =>
-      fetchSSE(API_ENDPOINTS.chat(provider), {
-        body: JSON.stringify(payload),
-        fetcher,
-        headers: relay ? { ...(headers as Record<string, string>), ...relay.headers } : headers,
-        method: 'POST',
-        onAbort: options?.onAbort,
-        onErrorHandle: options?.onErrorHandle,
-        onFinish: options?.onFinish,
-        onMessageHandle: options?.onMessageHandle,
-        requestContext: {
-          apiMode,
-          fetchOnClient: enableFetchOnClient && !relayToThisTab,
-          model,
-          provider,
-        },
-        responseAnimation: mergedResponseAnimation,
-        signal,
-      }),
+    return oneShotRelay.run(
+      relayToThisTab ? provider : undefined,
+      (relay) =>
+        fetchSSE(API_ENDPOINTS.chat(provider), {
+          body: JSON.stringify(payload),
+          fetcher,
+          headers: relay ? { ...(headers as Record<string, string>), ...relay.headers } : headers,
+          method: 'POST',
+          onAbort: options?.onAbort,
+          onErrorHandle: options?.onErrorHandle,
+          onFinish: options?.onFinish,
+          onMessageHandle: options?.onMessageHandle,
+          requestContext: {
+            apiMode,
+            fetchOnClient: enableFetchOnClient && !relayToThisTab,
+            model,
+            provider,
+          },
+          responseAnimation: mergedResponseAnimation,
+          signal,
+        }),
+      { signal },
     );
   };
 
