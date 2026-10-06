@@ -10,7 +10,7 @@ import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import {
   countChargedTaskAttempts,
-  countDeviceOfflineRuns,
+  countUnchargedRuns,
   isDeviceUnavailableFailure,
   resolveTaskAttemptBudget,
   resolveTaskMaxSteps,
@@ -68,12 +68,13 @@ export class TaskRecoveryCoordinator {
     task: TaskItem;
   }): Promise<TaskRecoveryResult> => {
     const { goal, task } = params;
-    // A run its device lost was never judged, so it does not spend the budget;
-    // the coordinator's offline schedule bounds those retries instead.
+    // A run lost to a machine problem was never judged, so it does not spend the
+    // budget; the coordinator's offline / quota / transient schedules bound those
+    // retries instead.
     const runs = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTaskId(
       task.id,
     );
-    const attempts = countChargedTaskAttempts(task, countDeviceOfflineRuns(runs));
+    const attempts = countChargedTaskAttempts(task, countUnchargedRuns(runs));
     const attemptBudget = resolveTaskAttemptBudget(goal);
     if (attempts >= attemptBudget) return { outcome: 'exhausted-rounds' };
 

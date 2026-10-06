@@ -5,6 +5,7 @@ import {
   GOAL_CLARIFICATION_OPTION,
   GOAL_CLARIFICATION_TITLE,
   GOAL_COORDINATOR_ACTOR_ID,
+  GOAL_MACHINE_GATE_TITLE,
 } from '@lobechat/const/goal';
 import type {
   ChatTopicMetadata,
@@ -67,6 +68,8 @@ import {
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
 import { experimentResults, exploreGraph } from './exploreGraph';
+import { classifyGoalFailure, isMachineFailureClass } from './failureClass';
+import { lastAnsweredGateAt, planMachineRecovery } from './machineRecovery';
 import { answeredProblem, GoalManagerService, problemKey } from './manager';
 import {
   classifyRunFailure,
@@ -85,7 +88,9 @@ import {
 import { isGoalReportNode, withoutGoalReport } from './report';
 import { GoalReportService } from './reportService';
 import { GoalReportStore } from './reportStore';
+import { scheduleGoalAdvance } from './scheduler';
 import { GoalSupervisorService } from './supervisor';
+import { statusAuthoredByActor } from './supervisor/policy';
 import { claimGoalTask } from './taskClaim';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
@@ -2350,14 +2355,20 @@ export class GoalService {
               (await this.waitForDevice(graph, acting!.id, task, effects)) ??
               (await this.waitForQuotaReset(graph, acting!.id, task, effects));
             if (waiting) return observe(waiting);
+            const held = await this.holdForMachineFailure(graph, acting!.id, task, effects);
+            if (held) return observe(held);
             const supervision = await new GoalSupervisorService(
               this.db,
               this.userId,
               this.workspaceId,
             ).reviewFailure(graph, acting!.id, task);
             if (supervision) return observe(supervision);
+            // A machine failure the supervisor gave up on still asks for a fix,
+            // not a judgment about the work.
             return observe(
-              await this.gateOrTakeOver(graph, acting!.id, task.id, move.message, effects),
+              await this.gateOrTakeOver(graph, acting!.id, task.id, move.message, effects, {
+                machine: isMachineFailureClass(classifyGoalFailure(task.error).class),
+              }),
             );
           }
 
@@ -2717,7 +2728,9 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted'
           : 'Automatic recovery could not start the next attempt';
-    return this.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects);
+    return this.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects, {
+      machine: recovery.outcome === 'spawn-failed',
+    });
   };
 
   /** Claim the task for dispatch and start its run. */
@@ -3066,7 +3079,74 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted after an operation was abandoned'
           : 'Automatic recovery could not restart an abandoned operation';
-    return this.gateOrTakeOver(graph, nodeId, task.id, reason, effects);
+    return this.gateOrTakeOver(graph, nodeId, task.id, reason, effects, {
+      machine: recovery.outcome === 'spawn-failed',
+    });
+  };
+
+  /**
+   * Recover a Task stopped by a machine problem without asking anyone to judge it
+   * (see `planMachineRecovery`): a usage limit is waited out until it resets, a
+   * transport fault is retried a few times, and neither run spends the attempt
+   * budget. A broken setup — or a schedule that ran out — opens a machine gate
+   * that says what to fix. Judgment failures return nothing and keep the
+   * supervisor and the ordinary gate.
+   */
+  private holdForMachineFailure = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    effects: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult | undefined> => {
+    if (task.status !== 'paused' || !task.error) return;
+    // A supervised goal already has an owner for transport faults: the supervisor
+    // diagnoses and retries them (see `recoveryEligibility`), so the deterministic
+    // schedule stays out of its way rather than racing it for the same Task.
+    const supervised = !!graph.goal.config?.supervision?.enabled || !!graph.goal.config?.manager;
+    if (supervised && classifyGoalFailure(task.error).class === 'transient') return;
+    // A person's Retry restarts the schedule they overrode.
+    const answeredAt = lastAnsweredGateAt(graph, nodeId);
+    const runs = (await this.taskTopicModel.findByTaskId(task.id)).filter(
+      (run) => !answeredAt || new Date(run.updatedAt) > answeredAt,
+    );
+    const now = new Date();
+    const plan = planMachineRecovery({
+      error: task.error,
+      now,
+      runs,
+      taskUpdatedAt: task.updatedAt,
+    });
+    if (plan.action === 'none') return;
+    // A pause somebody made is theirs; the error text it kept proves nothing.
+    if (statusAuthoredByActor(await this.taskModel.getActivities(task.id, 20), task.status)) return;
+
+    if (plan.action === 'gate')
+      return this.gateOrTakeOver(graph, nodeId, task.id, plan.reason, effects, { machine: true });
+    if (plan.action === 'retry')
+      return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+
+    // The sweep re-ticks a held goal, but only on its own cadence; the tick that
+    // first sees the failure also books an advance for the retry time. Later
+    // sweep ticks do not, so a long hold does not pile up queued advances.
+    if (now.getTime() - plan.failedAt.getTime() <= MACHINE_HOLD_SCHEDULE_WINDOW_MS) {
+      await scheduleGoalAdvance({
+        delay: Math.max(
+          1,
+          Math.min(MAX_ADVANCE_DELAY_S, Math.ceil((plan.retryAt.getTime() - now.getTime()) / 1000)),
+        ),
+        goalId: graph.goal.id,
+        trigger: 'wake',
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    }
+    return {
+      goalId: graph.goal.id,
+      message: `Task ${task.identifier}: ${plan.message}`,
+      nodeId,
+      outcome: 'waiting_external',
+      taskId: task.id,
+    };
   };
 
   /**
@@ -3178,7 +3258,9 @@ export class GoalService {
     const lastFailureAt = new Date(offlineRuns ? runs[0].updatedAt : task.updatedAt);
     const retryAt = nextDeviceOfflineRetryAt(offlineRuns, lastFailureAt);
     if (!retryAt)
-      return this.gateOrTakeOver(graph, nodeId, task.id, DEVICE_OFFLINE_GATE_REASON, effects);
+      return this.gateOrTakeOver(graph, nodeId, task.id, DEVICE_OFFLINE_GATE_REASON, effects, {
+        machine: true,
+      });
     if (retryAt.getTime() <= Date.now()) return;
 
     const [latest] = await this.taskTopicModel.findWithHandoff(task.id, 1);
@@ -3743,6 +3825,7 @@ export class GoalService {
     taskId: string,
     reason: string,
     effects: GoalAdvanceEffect[] = [],
+    gate: FailureGateOptions = {},
   ): Promise<GoalTickResult> => {
     const takeover = await new GoalManagerService(this.db, this.userId, this.workspaceId).takeOver(
       graph,
@@ -3761,6 +3844,7 @@ export class GoalService {
       taskId,
       diagnosis ? `${reason} — main Agent: ${diagnosis}` : reason,
       effects,
+      gate,
     );
   };
 
@@ -3770,6 +3854,7 @@ export class GoalService {
     taskId: string,
     reason: string,
     effects: GoalAdvanceEffect[] = [],
+    gate: FailureGateOptions = {},
   ): Promise<GoalTickResult> => {
     return this.db.transaction(async (tx) => {
       const currentGoal = await new GoalModel(tx, this.userId, this.workspaceId).lockById(
@@ -3797,7 +3882,7 @@ export class GoalService {
           taskId,
         };
       }
-      return service.openFailureDecisionLocked(current, nodeId, taskId, reason, effects);
+      return service.openFailureDecisionLocked(current, nodeId, taskId, reason, effects, gate);
     });
   };
 
@@ -3807,42 +3892,53 @@ export class GoalService {
     taskId: string,
     reason: string,
     effects: GoalAdvanceEffect[],
+    gate: FailureGateOptions = {},
   ): Promise<GoalTickResult> => {
     const existingDecisionNode = graph.edges
       .filter((edge) => edge.sourceNodeId === nodeId && edge.kind === 'leads_to')
       .map((edge) => graph.nodes.find((node) => node.id === edge.targetNodeId))
       .find((node) => node?.kind === 'decision' && node.status !== 'resolved');
     if (!existingDecisionNode) {
+      const terminalAcceptance =
+        graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
+        GOAL_ACCEPTANCE_TASK_TITLE;
+      // The terminal acceptance gate keeps its own three-way shape: ending the
+      // Goal is a verdict even when a machine problem is what stopped it.
+      const machine = !!gate.machine && !terminalAcceptance;
       const node = await this.coordinatorGraph.createNode(graph.goal.id, {
         description: reason,
         kind: 'decision',
         status: 'waiting',
-        title: 'Choose how to recover failed task',
+        title: machine ? GOAL_MACHINE_GATE_TITLE : 'Choose how to recover failed task',
         scopeId: experimentOwner(graph, nodeId),
       });
       if (node) {
         effects.push({ detail: reason, nodeId, targetId: node.id, type: 'opened_decision' });
         await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
-        const terminalAcceptance =
-          graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
-          GOAL_ACCEPTANCE_TASK_TITLE;
         await this.coordinatorGraph.createDecision(graph.goal.id, node.id, {
           authority: 'user',
-          options: terminalAcceptance
+          options: machine
             ? [
-                { id: 'retry', label: 'Retry goal acceptance' },
-                // Drop the acceptance Task and end the Goal without a verdict —
-                // unlike `fail`, which records that the Goal was judged failed.
-                { id: 'retire', label: 'Abandon goal acceptance' },
-                { id: 'fail', label: 'Fail goal' },
-              ]
-            : [
-                { id: 'retry', label: 'Retry task' },
+                { id: 'retry', label: 'I fixed it — retry' },
                 { id: 'retire', label: 'Retire task' },
-              ],
-          question: terminalAcceptance
-            ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
-            : `${reason}. Retry or retire this task node?`,
+              ]
+            : terminalAcceptance
+              ? [
+                  { id: 'retry', label: 'Retry goal acceptance' },
+                  // Drop the acceptance Task and end the Goal without a verdict —
+                  // unlike `fail`, which records that the Goal was judged failed.
+                  { id: 'retire', label: 'Abandon goal acceptance' },
+                  { id: 'fail', label: 'Fail goal' },
+                ]
+              : [
+                  { id: 'retry', label: 'Retry task' },
+                  { id: 'retire', label: 'Retire task' },
+                ],
+          question: machine
+            ? `${reason}. Fix it, then retry or retire this task node?`
+            : terminalAcceptance
+              ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
+              : `${reason}. Retry or retire this task node?`,
           recommendedOptionId: 'retry',
           requestedUserId: this.userId,
         });
@@ -3859,6 +3955,19 @@ export class GoalService {
     };
   };
 }
+
+interface FailureGateOptions {
+  /**
+   * The gate is about a machine problem (broken setup, spent retry schedule), not
+   * the work: it opens as a machine gate that asks for a fix, not a judgment.
+   */
+  machine?: boolean;
+}
+
+/** A machine hold books its own advance only from the tick that first saw the failure. */
+const MACHINE_HOLD_SCHEDULE_WINDOW_MS = 15 * 60 * 1000;
+/** Queue delays are bounded; the sweep covers anything further out. */
+const MAX_ADVANCE_DELAY_S = 86_400;
 
 /**
  * Whether a Task topic is still `running` although its run has already ended.

@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import { buildGoalManagerPrompt } from '@lobechat/prompts';
 import type {
   GoalGraphSnapshot,
@@ -31,7 +31,7 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { TERMINAL_GOAL_STATUSES as finishedGoalStatuses } from './goalTraceRecorder';
 import {
   classifyRunFailure,
-  countDeviceOfflineRuns,
+  countUnchargedRuns,
   DEFAULT_MANAGER_MAX_TURNS,
   nextDeviceOfflineRetryAt,
   QUOTA_RESET_MARGIN_MS,
@@ -567,6 +567,11 @@ export class GoalManagerService {
   };
 
   private graph = (db = this.db) => new GoalGraphModel(db, this.userId, this.workspaceId);
+  private coordinatorGraph = (db = this.db) =>
+    new GoalGraphModel(db, this.userId, this.workspaceId, {
+      id: GOAL_COORDINATOR_ACTOR_ID,
+      type: 'system',
+    });
 
   private reviews = async (graph: GoalGraphSnapshot, db = this.db) => {
     const tasks = new TaskModel(db, this.userId, this.workspaceId);
@@ -646,7 +651,9 @@ export class GoalManagerService {
       const goal = await model.lockById(goalId);
       if (goal && activeStatuses.has(goal.status)) {
         await model.updateStatus(goalId, 'paused');
-        await this.graph(db).recordGoalStatus(goalId, goal.status, 'paused', message);
+        // The system paused it (a spent turn budget, an unconfirmed main Agent
+        // turn), so the timeline must not file it as the owner's pause.
+        await this.coordinatorGraph(db).recordGoalStatus(goalId, goal.status, 'paused', message);
       }
     });
     return { goalId, outcome: 'no_progress', message };
@@ -923,7 +930,7 @@ export class GoalManagerService {
           runs[0].operationId,
         )
       : undefined;
-    return !recoveryEligibility(graph, failed, op, false, countDeviceOfflineRuns(runs)).eligible;
+    return !recoveryEligibility(graph, failed, op, false, countUnchargedRuns(runs)).eligible;
   };
 
   private startTurn = async (
@@ -1366,7 +1373,7 @@ export class GoalManagerService {
         if (
           !task ||
           runs[0]?.operationId !== plan.failedOperationId ||
-          !recoveryEligibility(graph, task, failure, false, countDeviceOfflineRuns(runs)).eligible
+          !recoveryEligibility(graph, task, failure, false, countUnchargedRuns(runs)).eligible
         )
           throw new TRPCError({
             code: 'CONFLICT',

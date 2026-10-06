@@ -1,7 +1,13 @@
-import { DEVICE_OFFLINE_RUN_STATUS } from '@lobechat/const/goal';
+import {
+  DEVICE_OFFLINE_RUN_STATUS,
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+} from '@lobechat/const/goal';
 import type { GoalItem, TaskItem } from '@lobechat/types';
 
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
+
+import { classifyGoalFailure } from './failureClass';
 
 /**
  * Attempts a Task gets before the coordinator opens a decision gate, when the
@@ -124,13 +130,44 @@ export const countConsecutiveDeviceOfflineRuns = (runs: readonly { status: strin
 };
 
 /**
- * Attempts charged to a Task's budget: every run it produced except the ones
- * its device lost. Those retry on the offline schedule above instead.
+ * Runs that ended on a machine problem nothing judged: the device was gone, a
+ * usage limit was hit, or a transport fault lost the run. Each retries on its
+ * own bounded schedule instead of spending the attempt budget.
+ */
+const UNCHARGED_RUN_STATUSES = new Set<string>([
+  DEVICE_OFFLINE_RUN_STATUS,
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+]);
+
+export const isUnchargedRun = (run: { status: string }): boolean =>
+  UNCHARGED_RUN_STATUSES.has(run.status);
+
+/** Runs not charged to the Task's attempt budget (see `UNCHARGED_RUN_STATUSES`). */
+export const countUnchargedRuns = (runs: readonly { status: string }[]): number =>
+  runs.filter(isUnchargedRun).length;
+
+/**
+ * Consecutive runs that ended with `status`, `runs` newest first. Like the
+ * offline count, the streak restarts once any other run ends, so a usage limit
+ * hit once a week is not held to last week's retries.
+ */
+export const countConsecutiveRunsWithStatus = (
+  runs: readonly { status: string }[],
+  status: string,
+): number => {
+  const firstOther = runs.findIndex((run) => run.status !== status);
+  return firstOther === -1 ? runs.length : firstOther;
+};
+
+/**
+ * Attempts charged to a Task's budget: every run it produced except the
+ * uncharged ones (`countUnchargedRuns`). Those retry on their own schedules.
  */
 export const countChargedTaskAttempts = (
   task: Pick<TaskItem, 'totalTopics'>,
-  deviceOfflineRuns: number,
-): number => Math.max(0, (task.totalTopics ?? 0) - deviceOfflineRuns);
+  unchargedRuns: number,
+): number => Math.max(0, (task.totalTopics ?? 0) - unchargedRuns);
 
 /**
  * Dispatch failures that only say the device is not reachable right now. A
@@ -157,11 +194,16 @@ export const isDeviceUnavailableFailure = (error?: string | null): boolean =>
 /**
  * The `task_topics.status` a run that errored ends with. Every writer of a failed
  * run goes through this, so the dispatch result and a lifecycle hook delivered
- * later agree on an offline run instead of the later one turning it back into a
- * charged failure.
+ * later agree on an uncharged run (offline device, usage limit, transport fault)
+ * instead of the later one turning it back into a charged failure.
  */
-export const resolveFailedRunStatus = (error?: string | null): string =>
-  isDeviceUnavailableFailure(error) ? DEVICE_OFFLINE_RUN_STATUS : 'failed';
+export const resolveFailedRunStatus = (error?: string | null): string => {
+  if (isDeviceUnavailableFailure(error)) return DEVICE_OFFLINE_RUN_STATUS;
+  const failure = classifyGoalFailure(error);
+  if (failure.class === 'quota') return QUOTA_LIMITED_RUN_STATUS;
+  if (failure.class === 'transient') return TRANSIENT_FAILED_RUN_STATUS;
+  return 'failed';
+};
 
 /**
  * What a failed run's error says about retrying it.

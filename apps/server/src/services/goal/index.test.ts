@@ -1,5 +1,10 @@
 // @vitest-environment node
-import { DEVICE_OFFLINE_RUN_STATUS, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
+import {
+  DEVICE_OFFLINE_RUN_STATUS,
+  GOAL_COORDINATOR_ACTOR_ID,
+  GOAL_MACHINE_GATE_TITLE,
+  QUOTA_LIMITED_RUN_STATUS,
+} from '@lobechat/const/goal';
 import type { ChatTopicMetadata } from '@lobechat/types';
 import * as goalGraphUtils from '@lobechat/utils/goalGraph';
 import { eq, sql } from 'drizzle-orm';
@@ -50,6 +55,7 @@ import { GoalExplorationPlanner } from './explorationPlanner';
 import { GoalService } from './index';
 import { DEVICE_OFFLINE_GATE_REASON, VERIFY_SETTLE_GRACE_MS } from './recoveryPolicy';
 import * as scheduler from './scheduler';
+import { LocalGoalScheduler } from './scheduler/impls';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import type { GoalTickObservation } from './traceObservation';
 
@@ -4230,5 +4236,151 @@ describe('GoalService', () => {
 
     const next = await service.tick(graph.goal.id);
     expect(next).toMatchObject({ nodeId: dependent.id, outcome: 'advanced' });
+  });
+});
+
+/**
+ * Most real gates were machine problems pushed onto a person: a usage limit that
+ * reset on its own hours later, a working directory missing on the device. These
+ * pin that the coordinator waits out the first and asks about the second as a
+ * machine gate rather than a judgment.
+ */
+describe('GoalService machine failures', () => {
+  const MINUTE = 60 * 1000;
+  const SESSION_LIMIT = "You've hit your session limit · resets 4:30am (Asia/Shanghai)";
+  // 03:51 in Shanghai, a minute after the run hit the limit.
+  const FAILED_AT = new Date('2026-10-05T19:50:01.000Z');
+
+  const setup = async (title: string) => {
+    const runSpy = vi
+      .spyOn(TaskRunnerService.prototype, 'runTask')
+      .mockResolvedValue({ operationId: 'op-retry', success: true } as never);
+    const scheduleSpy = vi
+      .spyOn(LocalGoalScheduler.prototype, 'scheduleAdvance')
+      .mockResolvedValue('scheduled');
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      // One attempt: a limited run that spent it would gate the retry.
+      config: { recovery: { maxAttemptsPerTask: 1 } },
+      tasks: ['Run on Claude Code'],
+      title,
+    });
+    const created = await service.tick(graph.goal.id);
+    runSpy.mockClear();
+    return { created, graph, runSpy, scheduleSpy, service, taskModel };
+  };
+
+  const failRun = async (taskId: string, status: string, error: string, at: Date) => {
+    const topicId = `tpc_machine_${taskId}`;
+    await serverDB.insert(topics).values({ id: topicId, userId });
+    await serverDB
+      .insert(taskTopics)
+      .values({ seq: 1, status, taskId, topicId, updatedAt: at, userId });
+    const taskModel = new TaskModel(serverDB, userId);
+    await taskModel.update(taskId, { totalTopics: 1 });
+    await taskModel.updateStatus(taskId, 'paused', { error });
+    await serverDB.update(tasks).set({ updatedAt: at }).where(eq(tasks.id, taskId));
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('waits for a usage limit to reset, then retries without charging the attempt', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true, toFake: ['Date'] });
+    vi.setSystemTime(new Date(FAILED_AT.getTime() + MINUTE));
+    const { created, graph, runSpy, scheduleSpy, service } = await setup('Session limit');
+    await failRun(created.taskId!, QUOTA_LIMITED_RUN_STATUS, SESSION_LIMIT, FAILED_AT);
+
+    const waiting = await service.tick(graph.goal.id);
+
+    expect(waiting).toMatchObject({
+      message: expect.stringContaining('retrying at 2026-10-05T20:32:00.000Z'),
+      outcome: 'waiting_external',
+      taskId: created.taskId,
+    });
+    expect(runSpy).not.toHaveBeenCalled();
+    expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+    // The tick that saw the failure books the advance for the reset.
+    expect(scheduleSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ delay: 40 * 60 + 59, goalId: graph.goal.id, trigger: 'wake' }),
+    );
+
+    vi.setSystemTime(new Date('2026-10-05T20:33:00.000Z'));
+    const retried = await service.tick(graph.goal.id);
+
+    expect(runSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId: created.taskId, trigger: 'goal' }),
+    );
+    expect(retried).toMatchObject({ outcome: 'waiting_external', taskId: created.taskId });
+    expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
+  });
+
+  it('opens a machine gate that names the missing working directory', async () => {
+    const { created, graph, runSpy, service } = await setup('Missing working directory');
+    const error = 'Working directory does not exist: /Users/user/CodeProjects/LobeHub/lobehub';
+    await failRun(created.taskId!, 'failed', error, new Date());
+
+    const gated = await service.tick(graph.goal.id);
+
+    expect(gated).toMatchObject({ outcome: 'waiting_human', taskId: created.taskId });
+    expect(runSpy).not.toHaveBeenCalled();
+    const after = await service.graph(graph.goal.id);
+    const gate = after.nodes.find((node) => node.kind === 'decision')!;
+    expect(gate.title).toBe(GOAL_MACHINE_GATE_TITLE);
+    const [decision] = after.decisions;
+    expect(decision.question).toBe(
+      'Setup problem: Working directory does not exist: /Users/user/CodeProjects/LobeHub/lobehub. Create /Users/user/CodeProjects/LobeHub/lobehub on the device the agent runs on, or point the agent at a working directory that exists there. Fix it, then retry or retire this task node?',
+    );
+    expect(decision.options).toEqual([
+      { id: 'retry', label: 'I fixed it — retry' },
+      { id: 'retire', label: 'Retire task' },
+    ]);
+  });
+
+  it('keeps a judgment failure on the ordinary gate', async () => {
+    const { created, graph, service } = await setup('Unjudgeable delivery');
+    await failRun(
+      created.taskId!,
+      'failed',
+      'Acceptance review could not run; the delivery passed its verifiers but was never reviewed.',
+      new Date(),
+    );
+
+    await service.tick(graph.goal.id);
+
+    const gate = (await service.graph(graph.goal.id)).nodes.find(
+      (node) => node.kind === 'decision',
+    )!;
+    expect(gate.title).toBe('Choose how to recover failed task');
+  });
+
+  it('asks about a device that stayed offline with a machine gate', async () => {
+    const { created, graph, service, taskModel } = await setup('Device never came back');
+    await taskModel.update(created.taskId!, { totalTopics: 7 });
+    for (let seq = 1; seq <= 7; seq++) {
+      const topicId = `tpc_machine_offline_${seq}`;
+      await serverDB.insert(topics).values({ id: topicId, userId });
+      await serverDB.insert(taskTopics).values({
+        seq,
+        status: DEVICE_OFFLINE_RUN_STATUS,
+        taskId: created.taskId!,
+        topicId,
+        updatedAt: new Date(Date.now() - (17 - seq) * 60 * MINUTE),
+        userId,
+      });
+    }
+    await taskModel.updateStatus(created.taskId!, 'paused', { error: 'DEVICE_OFFLINE' });
+
+    await service.tick(graph.goal.id);
+
+    const gate = (await service.graph(graph.goal.id)).nodes.find(
+      (node) => node.kind === 'decision',
+    )!;
+    expect(gate).toMatchObject({
+      description: DEVICE_OFFLINE_GATE_REASON,
+      title: GOAL_MACHINE_GATE_TITLE,
+    });
   });
 });

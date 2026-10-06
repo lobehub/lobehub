@@ -9,6 +9,7 @@ import { isAgentOperationInFlight } from '@lobechat/types';
 import type { AgentOperationItem } from '@/database/schemas/agentOperations';
 import { HETERO_DISPATCH_ERROR_HEADLINES } from '@/server/services/aiAgent/helpers/heteroErrors';
 
+import { classifyGoalFailure } from '../failureClass';
 import {
   classifyRunFailure,
   countChargedTaskAttempts,
@@ -97,8 +98,8 @@ export const recoveryEligibility = (
   operation?: AgentOperationItem,
   /** Whether the Task's current status was written by a person or an agent tool. */
   actorAuthoredStatus = false,
-  /** Runs the Task's device lost; they are not charged to its attempt budget. */
-  deviceOfflineRuns = 0,
+  /** Runs lost to a machine problem; they are not charged to its attempt budget. */
+  unchargedRuns = 0,
 ): { eligible: boolean; reason: string } => {
   if (!graph.goal.config?.supervision?.enabled && !graph.goal.config?.manager)
     return { eligible: false, reason: 'Supervision is disabled' };
@@ -126,7 +127,7 @@ export const recoveryEligibility = (
   if (actorAuthoredStatus) {
     return { eligible: false, reason: 'Someone set this status themselves' };
   }
-  if (countChargedTaskAttempts(task, deviceOfflineRuns) >= resolveTaskAttemptBudget(graph.goal)) {
+  if (countChargedTaskAttempts(task, unchargedRuns) >= resolveTaskAttemptBudget(graph.goal)) {
     return { eligible: false, reason: 'Task attempt budget exhausted' };
   }
   const error = `${operation?.error?.type ?? ''} ${operation?.error?.message ?? ''} ${task.error ?? ''}`;
@@ -147,7 +148,16 @@ export const recoveryEligibility = (
   // an actor can author — a Task marked failed through the API, a settled run someone
   // reopened — arrives looking exactly like a dropped dispatch. Recognising the
   // failures instead keeps an authored decision with the person who made it.
-  if (!isRetryableDispatchFailure(error) && failure.kind !== 'transient') {
+  //
+  // The transient class is part of that allowlist: every real incident this policy
+  // escalated was a run the server discarded (`operation-not-running`), a tool
+  // result that did not persist, or a gateway timeout — failures a fresh attempt
+  // got past each time a person pressed Retry.
+  if (
+    !isRetryableDispatchFailure(error) &&
+    failure.kind !== 'transient' &&
+    classifyGoalFailure(error).class !== 'transient'
+  ) {
     return {
       eligible: false,
       reason: 'Failure is outside the recognised transport recovery policy',

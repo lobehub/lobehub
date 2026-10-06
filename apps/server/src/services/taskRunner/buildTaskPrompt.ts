@@ -15,7 +15,7 @@ import { extractFileIdsFromEditorData } from '@/server/services/file/extractFile
 import { resolveAttachmentMetadata } from '@/server/services/file/resolveAttachments';
 import {
   countChargedTaskAttempts,
-  countDeviceOfflineRuns,
+  countUnchargedRuns,
   resolveTaskAttemptBudget,
 } from '@/server/services/goal/recoveryPolicy';
 import { resolveTaskAcceptance } from '@/server/services/verify/taskAcceptance';
@@ -39,14 +39,15 @@ const resolveGoalLoopContext = async (
   if (!goal || !task.totalTopics) return undefined;
 
   const budget = resolveTaskAttemptBudget(goal);
-  // Runs its device lost are not rounds the budget counts, so the agent is not
-  // told it is on a later round than the coordinator thinks.
-  const offlineRuns = countDeviceOfflineRuns(
+  // Runs lost to a machine problem (offline device, usage limit, transport fault)
+  // are not rounds the budget counts, so the agent is not told it is on a later
+  // round than the coordinator thinks.
+  const unchargedRuns = countUnchargedRuns(
     await deps.taskTopicModel.findByTaskId(task.id).catch(() => []),
   );
   const context: TaskRunPromptGoalLoop = {
     maxRounds: Number.isFinite(budget) ? budget : null,
-    round: countChargedTaskAttempts(task, offlineRuns) + 1,
+    round: countChargedTaskAttempts(task, unchargedRuns) + 1,
   };
 
   try {

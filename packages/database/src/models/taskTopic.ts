@@ -1,4 +1,8 @@
-import { DEVICE_OFFLINE_RUN_STATUS } from '@lobechat/const/goal';
+import {
+  DEVICE_OFFLINE_RUN_STATUS,
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+} from '@lobechat/const/goal';
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 
@@ -13,7 +17,9 @@ export const TERMINAL_TOPIC_STATUSES = new Set([
   'completed',
   DEVICE_OFFLINE_RUN_STATUS,
   'failed',
+  QUOTA_LIMITED_RUN_STATUS,
   'timeout',
+  TRANSIENT_FAILED_RUN_STATUS,
 ]);
 
 export class TaskTopicModel {

@@ -5,6 +5,7 @@ import {
   classifyRunFailure,
   countChargedTaskAttempts,
   countConsecutiveDeviceOfflineRuns,
+  countUnchargedRuns,
   DEFAULT_MANAGER_MAX_TURNS,
   managerTurnsSpent,
   MIN_OPERATION_LEASE_TIMEOUT_MS,
@@ -122,5 +123,34 @@ describe('classifyRunFailure', () => {
     [undefined, '', 'unknown'],
   ])('classifies %j / %s as %s', (error, text, kind) => {
     expect(classifyRunFailure(error, text).kind).toBe(kind);
+  });
+});
+
+describe('machine-failure run accounting', () => {
+  it('marks a run that hit a usage limit or a transient fault as uncharged', () => {
+    expect(
+      resolveFailedRunStatus("You've hit your session limit · resets 4:30am (Asia/Shanghai)"),
+    ).toBe('quota_limited');
+    expect(
+      resolveFailedRunStatus(
+        "Server discarded the agent's output (operation-not-running): this run is no longer the topic's active operation, so nothing it produced was saved",
+      ),
+    ).toBe('transient_failed');
+    expect(resolveFailedRunStatus('Working directory does not exist: /Users/user/x')).toBe(
+      'failed',
+    );
+  });
+
+  it('charges none of the machine-failure runs to the attempt budget', () => {
+    const runs = [
+      { status: 'quota_limited' },
+      { status: 'transient_failed' },
+      { status: 'device_offline' },
+      { status: 'failed' },
+      { status: 'completed' },
+    ];
+    expect(countChargedTaskAttempts({ totalTopics: runs.length }, countUnchargedRuns(runs))).toBe(
+      2,
+    );
   });
 });

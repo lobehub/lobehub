@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -744,6 +744,23 @@ describe('CLI main Agent planning', () => {
     expect((await service().tick(id)).outcome).toBe('no_progress');
     expect((await model().findById(id))!.status).toBe('paused');
     expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
+  });
+
+  it('records a turn-budget pause as the system, not the owner', async () => {
+    const { id, op } = await start(1);
+    await ops().recordCompletion(op.id, {
+      status: 'error',
+      completionReason: 'error',
+      error: { message: 'transport error' },
+    });
+    await service().tick(id);
+    await service().tick(id);
+
+    const pause = (await service().graph(id)).events.find(
+      (event) =>
+        event.entityType === 'goal' && event.reason === 'Goal or main Agent turn budget exhausted',
+    );
+    expect(pause).toMatchObject({ actorId: GOAL_COORDINATOR_ACTOR_ID, actorType: 'system' });
   });
 
   it('rejects a delayed claim after another turn has consumed the remaining budget', async () => {
