@@ -102,6 +102,15 @@ describe('buildGoalCardModel', () => {
     expect(model.steps[0].state).toBe('lost');
   });
 
+  it('shows a task the goal ended under as stopped, not running', () => {
+    const model = build({
+      goal: goal({ status: 'canceled', updatedAt: at(100) }),
+      nodes: [node({ status: 'resolved' }), node({ status: 'active', updatedAt: at(99) })],
+    });
+
+    expect(model.steps.map((step) => step.state)).toEqual(['done', 'stopped']);
+  });
+
   it('lets a pending decision color the stage as waiting on the user', () => {
     const model = build({
       decisions: [{ id: 'd1', status: 'pending' }] as never,

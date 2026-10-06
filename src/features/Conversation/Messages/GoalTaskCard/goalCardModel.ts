@@ -16,7 +16,15 @@ export type GoalCardStage = (typeof GOAL_CARD_STAGES)[number];
 export type GoalCardTone = 'active' | 'canceled' | 'error' | 'paused' | 'waiting';
 
 export type PlanStepState =
-  'done' | 'failed' | 'lost' | 'queued' | 'retired' | 'running' | 'verifying' | 'waiting';
+  | 'done'
+  | 'failed'
+  | 'lost'
+  | 'queued'
+  | 'retired'
+  | 'running'
+  | 'stopped'
+  | 'verifying'
+  | 'waiting';
 
 export interface PlanStep {
   id: string;
@@ -51,6 +59,8 @@ export const planStepState = (view: GoalNodeView): PlanStepState => {
   if (status === 'resolved') return 'done';
   if (status === 'rejected') return 'failed';
   if (status === 'retired') return 'retired';
+  // The goal closed under this run: it was interrupted, not still going.
+  if (view.halted) return 'stopped';
   if (view.decision) return 'waiting';
   if (status === 'active') {
     if (view.isVerifying) return 'verifying';

@@ -49,6 +49,11 @@ const STEP_VISUAL: Record<
     labelKey: 'goalProcess.node.running',
     open: true,
   },
+  stopped: {
+    color: TASK_STATUS_VISUALS.canceled.color,
+    icon: TASK_STATUS_VISUALS.canceled.icon,
+    labelKey: 'goalProcess.node.stopped',
+  },
   verifying: {
     color: cssVar.colorInfo,
     icon: ShieldCheck,
