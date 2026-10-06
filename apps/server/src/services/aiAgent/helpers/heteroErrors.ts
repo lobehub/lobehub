@@ -2,6 +2,8 @@ import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import { getHeterogeneousAgentConfig } from '@lobechat/heterogeneous-agents';
 import { ChatErrorType, type ErrorType } from '@lobechat/types';
 
+import { resolveCloudSandboxAgentTypes } from '@/server/services/heterogeneousAgent/cloudSandboxAgentTypes';
+
 /**
  * Turn a raw device-gateway dispatch error code into a human-readable headline.
  * The gateway returns terse machine codes (e.g. `GATEWAY_NOT_CONFIGURED`) which,
@@ -113,8 +115,12 @@ export const resolveHeteroDispatchErrorType = (raw?: string): ErrorType => {
   return (code && HETERO_DISPATCH_ERROR_TYPES[code]) || ChatErrorType.ServerAgentRuntimeError;
 };
 
+/**
+ * Whether this agent type may run in the cloud sandbox. The set itself is
+ * resolved from the deployment's configuration — see `resolveCloudSandboxAgentTypes`.
+ */
 export const supportsCloudHeterogeneousSandbox = (type: HeterogeneousAgentType): boolean =>
-  type === 'claude-code' || type === 'codex';
+  (resolveCloudSandboxAgentTypes() as string[]).includes(type);
 
 export const getHeterogeneousAgentTitle = (type: HeterogeneousAgentType): string =>
   getHeterogeneousAgentConfig(type)?.title ?? type;

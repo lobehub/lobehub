@@ -17,6 +17,7 @@ export const serverConfigSelectors = {
   enableMultimodalUnderstanding: (s: ServerConfigStore) =>
     s.serverConfig.enableMultimodalUnderstanding || false,
   enabledTelemetryChat: (s: ServerConfigStore) => s.serverConfig.telemetry.langfuse || false,
+  sandboxAgentTypes: (s: ServerConfigStore) => s.serverConfig.sandboxAgentTypes ?? [],
   isMobile: (s: ServerConfigStore) => s.isMobile || false,
   oAuthSSOProviders: (s: ServerConfigStore) => s.serverConfig.oAuthSSOProviders,
   multimodalUnderstanding: (s: ServerConfigStore) => s.serverConfig.multimodalUnderstanding,

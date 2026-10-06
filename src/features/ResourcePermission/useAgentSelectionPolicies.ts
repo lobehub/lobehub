@@ -13,6 +13,8 @@ import {
   resolveExecutionTargetSelection,
 } from '@/features/ExecutionTargetPicker';
 import { isHeterogeneousSandboxExecutionAvailable } from '@/helpers/executionTarget';
+import { useServerConfigStore } from '@/store/serverConfig';
+import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -108,6 +110,8 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     [executionSelection, saveAgencyConfig],
   );
 
+  const sandboxAgentTypes = useServerConfigStore(serverConfigSelectors.sandboxAgentTypes);
+
   const setModelPolicy = useCallback(
     (policy: AgentModelSelectionPolicy) => void saveAgencyConfig({ modelSelectionPolicy: policy }),
     [saveAgencyConfig],
@@ -126,7 +130,7 @@ export const useAgentSelectionPolicies = (agentId: string): AgentSelectionPolici
     canFixExecutionTarget:
       !!executionSelection &&
       (executionSelection.target !== 'sandbox' ||
-        isHeterogeneousSandboxExecutionAvailable(heterogeneousType)),
+        isHeterogeneousSandboxExecutionAvailable(heterogeneousType, sandboxAgentTypes)),
     executionTargetPolicy: agencyConfig?.executionTargetSelectionPolicy ?? 'member',
     modelPolicy: agencyConfig?.modelSelectionPolicy ?? 'member',
     setExecutionTargetPolicy,

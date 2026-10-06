@@ -1152,7 +1152,7 @@ export const dispatchHeteroAgent = async (
       const sandboxJwt = await signUserJWT(deps.userId, '4h');
       spawnHeteroSandbox({
         ...heteroParams,
-        agentType: heteroType as 'claude-code' | 'codex',
+        agentType: heteroType,
         args: heteroExecArgs,
         jwt: sandboxJwt,
         marketService,
