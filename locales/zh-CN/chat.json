@@ -976,6 +976,8 @@
   "goalTurn.previousLabel": "上一轮",
   "goalTurn.problem": "接手的问题",
   "goalTurn.requirement": "目标需求",
+  "goalTurn.showAll": "展开全文",
+  "goalTurn.showLess": "收起",
   "goalTurn.title": "目标规划 · 第 {{turn}}/{{max}} 轮",
   "goalTurn.trigger.continuation": "重新规划",
   "goalTurn.trigger.first": "第一轮",

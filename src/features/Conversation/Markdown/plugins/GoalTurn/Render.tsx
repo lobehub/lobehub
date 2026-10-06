@@ -24,6 +24,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
       border-block-end: 1px solid ${cssVar.colorBorderSecondary};
     }
   `,
+  /* The chat bubble folds tall messages, so long text here is clamped and the
+     new feedback stays in the first view. */
+  clamp2: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  `,
+  clamp4: css`
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 4;
+  `,
   feedbackBody: css`
     padding-inline-start: 24px;
 
@@ -87,7 +101,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     overflow: hidden;
 
     inline-size: 100%;
-    min-inline-size: 320px;
+
+    /* The goal supervision panel is narrower than 320px of bubble content;
+       a fixed minimum pushed the trigger pill past the bubble's edge. */
+    min-inline-size: min(320px, 100%);
 
     font-size: 13px;
     text-align: start;
@@ -143,8 +160,13 @@ const Fold = ({ children, label }: { children: ReactNode; label: ReactNode }) =>
   );
 };
 
+/** Rough line count past which a body is clamped and gets its own toggle. */
+const isLong = (text: string) => text.length > 160 || text.split('\n').length > 4;
+
 const FeedbackRow = ({ feedback }: { feedback: GoalTurnFeedback }) => {
   const { t } = useTranslation('chat');
+  const [expanded, setExpanded] = useState(false);
+  const long = isLong(feedback.body);
   const author = feedback.author === 'user' ? t('goalTurn.authorUser') : feedback.author;
   const meta = [
     feedback.taskId,
@@ -157,15 +179,28 @@ const FeedbackRow = ({ feedback }: { feedback: GoalTurnFeedback }) => {
   return (
     <Flexbox className={styles.feedback} gap={4}>
       <Flexbox horizontal align="center" gap={8}>
-        <Icon icon={MessageSquareTextIcon} size="small" style={{ opacity: 0.6 }} />
-        <Text weight={500}>{author}</Text>
+        <Icon icon={MessageSquareTextIcon} size="small" style={{ flex: 'none', opacity: 0.6 }} />
+        <Text style={{ flex: 'none' }} weight={500}>
+          {author}
+        </Text>
         {meta ? (
-          <Text className={styles.meta} type="secondary">
+          <Text className={styles.meta} style={{ minWidth: 0 }} type="secondary">
             {meta}
           </Text>
         ) : null}
       </Flexbox>
-      <div className={styles.feedbackBody}>{feedback.body}</div>
+      <div className={cx(styles.feedbackBody, long && !expanded && styles.clamp4)}>
+        {feedback.body}
+      </div>
+      {long ? (
+        <span
+          className={styles.toggle}
+          style={{ paddingInlineStart: 24 }}
+          onClick={() => setExpanded((v) => !v)}
+        >
+          {expanded ? t('goalTurn.showLess') : t('goalTurn.showAll')}
+        </span>
+      ) : null}
     </Flexbox>
   );
 };
@@ -217,17 +252,19 @@ const Render = ({ children, node }: MarkdownElementProps<GoalTurnAttributes>) =>
       ) : null}
 
       {previous ? (
-        <Flexbox horizontal align="baseline" className={styles.row} gap={8}>
-          <Text className={styles.meta} style={{ flex: 'none' }} type="secondary">
+        <Flexbox className={styles.row} gap={2}>
+          <Text className={styles.meta} type="secondary">
             {t('goalTurn.previousLabel')}
           </Text>
-          <Text>
-            {t(`goalTurn.outcome.${previous.outcome}` as any, {
-              action: previous.action,
-              defaultValue: previous.outcome,
-            })}
-            {previous.reason ? ` — ${previous.reason}` : ''}
-          </Text>
+          <div className={styles.clamp2} title={previous.reason}>
+            <Text weight={500}>
+              {t(`goalTurn.outcome.${previous.outcome}` as any, {
+                action: previous.action,
+                defaultValue: previous.outcome,
+              })}
+            </Text>
+            {previous.reason ? <Text type="secondary">{` — ${previous.reason}`}</Text> : null}
+          </div>
         </Flexbox>
       ) : null}
 

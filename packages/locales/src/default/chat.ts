@@ -2473,6 +2473,8 @@ export default {
   'goalTurn.previousLabel': 'Previous turn',
   'goalTurn.problem': 'Problem handed over',
   'goalTurn.requirement': 'Goal requirement',
+  'goalTurn.showAll': 'Show all',
+  'goalTurn.showLess': 'Show less',
   'goalTurn.title': 'Goal planning · Turn {{turn}}/{{max}}',
   'goalTurn.trigger.continuation': 'Replanning',
   'goalTurn.trigger.first': 'First turn',
