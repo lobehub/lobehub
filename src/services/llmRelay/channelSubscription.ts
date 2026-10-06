@@ -6,6 +6,7 @@ import { aiAgentService } from '@/services/aiAgent';
 import {
   getGatewayMux,
   isGatewayMuxUnavailable,
+  markGatewayMuxUnavailable,
 } from '@/store/chat/slices/agentRun/actions/transports/gateway/muxRegistry';
 
 import { getLlmRelayClientId } from './clientId';
@@ -20,6 +21,14 @@ import type { OneShotChannelSubscription } from './oneShot';
  * `resume_complete` (pending: the server has not opened the channel yet), v1
  * authenticates the socket — so the server's dispatch cannot outrun it.
  */
+/**
+ * Muxes this module watches for `unavailable`. A tab that never started a
+ * gateway run owns a mux no transport watches, and a mux only gives up on
+ * protocol v2 when someone listens; marking it here sends later one-shot
+ * calls to v1.
+ */
+const watchedMuxes = new WeakSet<object>();
+
 export const subscribeLlmRelayChannel = async (
   gatewayUrl: string,
   channel: string,
@@ -28,7 +37,12 @@ export const subscribeLlmRelayChannel = async (
   const identity = { gatewayUrl };
 
   if (canUseGatewayProtocolV2() && !isGatewayMuxUnavailable(identity)) {
-    const subscription = getGatewayMux(identity).subscribe(channel, { executor: true });
+    const mux = getGatewayMux(identity);
+    if (!watchedMuxes.has(mux)) {
+      watchedMuxes.add(mux);
+      mux.on('unavailable', () => markGatewayMuxUnavailable(identity));
+    }
+    const subscription = mux.subscribe(channel, { executor: true });
     subscription.on('agent_event', onEvent);
     const ready = new Promise<void>((resolve) => {
       subscription.on('resume_complete', () => resolve());

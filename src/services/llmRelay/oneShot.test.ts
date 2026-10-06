@@ -147,6 +147,23 @@ describe('OneShotRelay', () => {
     }
   });
 
+  it('stops waiting for the subscription once the caller aborts', async () => {
+    vi.useFakeTimers();
+    try {
+      const { relay } = createRelay({ subscribe: vi.fn(() => new Promise(() => {})) });
+      const controller = new AbortController();
+      const request = vi.fn(async () => 'ok');
+      const result = relay.run('ollama', request, { signal: controller.signal });
+
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(request).toHaveBeenCalledTimes(1);
+      expect(await result).toBe('ok');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('still makes the request when the subscription setup fails', async () => {
     const { relay } = createRelay({
       subscribe: vi.fn(async () => {

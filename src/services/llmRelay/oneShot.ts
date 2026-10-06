@@ -60,9 +60,18 @@ const randomNonce = (): string =>
     ? crypto.randomUUID()
     : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 
-const withTimeout = (promise: Promise<void>, ms: number) =>
+/** Resolves once `promise` settles, `ms` pass or `signal` aborts, whichever comes first. */
+const withTimeout = (promise: Promise<void>, ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve) => {
     const timer = setTimeout(resolve, ms);
+    signal?.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve();
+      },
+      { once: true },
+    );
     promise.then(
       () => {
         clearTimeout(timer);
@@ -96,12 +105,14 @@ export class OneShotRelay {
   /**
    * Run `request` with this tab standing by as the executor of its LLM calls
    * to `provider`: `request` gets the headers to send, and the channel is
-   * released once it settles. A provider the server reaches itself runs
+   * released once it settles (`signal`: an aborted caller stops waiting for
+   * the subscription). A provider the server reaches itself runs
    * `request` as-is, without a channel.
    */
   async run<T>(
     provider: string | undefined,
     request: (relay?: OneShotRelayHandle) => Promise<T>,
+    { signal }: { signal?: AbortSignal } = {},
   ): Promise<T> {
     if (!this.needsRelay(provider)) return request();
 
@@ -120,6 +131,8 @@ export class OneShotRelay {
       await withTimeout(
         subscribing.then((subscription) => subscription.ready),
         ONE_SHOT_SUBSCRIBE_TIMEOUT_MS,
+        // An aborted caller has nothing to wait for: its request settles at once.
+        signal,
       );
       log('channel %s ready for %s', channel, provider);
 
