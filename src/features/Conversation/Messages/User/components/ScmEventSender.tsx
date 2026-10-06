@@ -28,9 +28,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    inline-size: 28px;
-    block-size: 28px;
-    border-radius: 6px;
+    inline-size: 36px;
+    block-size: 36px;
+    border-radius: 8px;
 
     color: ${cssVar.colorText};
 
@@ -45,7 +45,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 /** GitHub mark standing in for the avatar of a wake-up message. */
 export const ScmEventAvatar = memo(() => (
   <span className={styles.mark}>
-    <Github size={16} />
+    <Github size={20} />
   </span>
 ));
 
@@ -53,7 +53,8 @@ ScmEventAvatar.displayName = 'ScmEventAvatar';
 
 /**
  * The pull request as the sender name of a wake-up message: `owner/repo #n`
- * linking out, then the branch and commit it is about.
+ * linking out, with the branch and commit it is about on a second line —
+ * sized to sit beside the two-line-tall GitHub mark.
  */
 export const ScmEventSenderTitle = memo<{ source: ScmEventAttributes }>(({ source }) => {
   const title = scmEventTitle(source);
@@ -62,7 +63,7 @@ export const ScmEventSenderTitle = memo<{ source: ScmEventAttributes }>(({ sourc
   const url = safeScmUrl(source.url);
 
   return (
-    <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
+    <Flexbox align={'flex-end'} gap={2} style={{ minWidth: 0 }}>
       <Text style={{ whiteSpace: 'nowrap' }} weight={500}>
         {url ? (
           <a className={styles.link} href={url} rel="noreferrer" target="_blank">
