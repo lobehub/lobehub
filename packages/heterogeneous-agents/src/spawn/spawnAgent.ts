@@ -9,6 +9,7 @@ import { spawnManaged } from '@lobechat/utils/managedProcess';
 import type { AskUserBridge } from '../askUser/AskUserBridge';
 import { resolveHeterogeneousAgentCommand } from '../config';
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { isPathLikeCommand, resolveCliSpawnPlan } from './cliSpawn';
 import { readCodexSessionModel, resolveCodexInitialModel } from './codexModel';
 import { buildCursorAcpPrompt, CursorAcpSession } from './cursorAcpSession';
@@ -723,6 +724,14 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       ? await readCodexSessionModel(options.resumeSessionId, { env: childEnv })
       : undefined;
   const initialCumulativeUsage = resumedCodexSession?.cumulativeUsage;
+  const initialSessionCostUsd =
+    options.agentType === 'claude-code' && options.resumeSessionId
+      ? await readClaudeCodeSessionCost({
+          configDir: options.env?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR,
+          cwd,
+          sessionId: options.resumeSessionId,
+        })
+      : undefined;
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const detached = platform() !== 'win32' && (options.detached ?? true);
@@ -740,6 +749,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     env: childEnv,
     initialCumulativeUsage,
     initialModel,
+    initialSessionCostUsd,
     operationId: options.operationId,
     startedAt,
     uploadImage: options.uploadImage,

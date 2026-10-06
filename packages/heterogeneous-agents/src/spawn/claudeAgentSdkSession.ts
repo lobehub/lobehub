@@ -12,6 +12,7 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { spawnManaged } from '@lobechat/utils/managedProcess';
 
 import { AgentStreamPipeline, type UploadHeterogeneousImage } from './agentStreamPipeline';
+import { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 import { resolveCliSpawnPlan } from './cliSpawn';
 
 const CLAUDE_SDK_DISALLOWED_TOOLS = ['AskUserQuestion', 'Monitor', 'ScheduleWakeup'] as const;
@@ -156,6 +157,8 @@ export interface HeterogeneousAgentRuntimeStatus {
 export interface ClaudeAgentSdkSessionOptions {
   args: string[];
   commandPath: string;
+  /** Claude profile root the transcript lives under; defaults to `env.CLAUDE_CONFIG_DIR`. */
+  configDir?: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
   onEvents: (events: AgentStreamEvent[]) => Promise<void> | void;
@@ -246,6 +249,16 @@ export class ClaudeAgentSdkSession {
     this.armInactivityTimer();
 
     try {
+      if (this.options.resumeSessionId) {
+        this.pipeline.configureSession({
+          initialSessionCostUsd: await readClaudeCodeSessionCost({
+            configDir: this.options.configDir ?? this.options.env.CLAUDE_CONFIG_DIR,
+            cwd: this.options.cwd,
+            sessionId: this.options.resumeSessionId,
+          }),
+        });
+      }
+
       const { query } = await import('@anthropic-ai/claude-agent-sdk');
       const userMessage = buildClaudeSdkUserMessageFromStreamJson(this.options.stdinPayload);
 
