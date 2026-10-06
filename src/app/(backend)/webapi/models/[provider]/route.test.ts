@@ -25,6 +25,11 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 
+const resolveProviderRelay = vi.hoisted(() => vi.fn());
+vi.mock('@/server/modules/AgentRuntime/llmRelay/resolveLlmExecutionSite', () => ({
+  resolveProviderRelay,
+}));
+
 let request: Request;
 
 beforeEach(() => {
@@ -47,6 +52,22 @@ afterEach(() => {
 });
 
 describe('GET handler', () => {
+  describe('one-shot relay', () => {
+    // The server cannot reach a device-only provider (Ollama on the user's
+    // machine): without a tab standing by to list its models, it says so.
+    it('answers ClientLlmExecutorUnavailable for a device-only provider with no tab attached', async () => {
+      resolveProviderRelay.mockResolvedValueOnce({ runtimeProvider: 'ollama' });
+
+      const response = await GET(request, { params: Promise.resolve({ provider: 'ollama' }) });
+
+      expect(initModelRuntimeFromDB).not.toHaveBeenCalled();
+      expect(await response.json()).toMatchObject({
+        body: { error: { reason: 'no_executor' }, provider: 'ollama' },
+        errorType: 'ClientLlmExecutorUnavailable',
+      });
+    });
+  });
+
   describe('error handling', () => {
     it('should return the thrown error message without exposing stack trace', async () => {
       const mockParams = Promise.resolve({ provider: 'google' });

@@ -37,6 +37,19 @@ vi.mock('../chat/mecha', () => ({
   initializeWithClientStore: vi.fn(),
 }));
 
+const oneShotRelay = vi.hoisted(() => ({
+  needsRelay: vi.fn((_provider?: string) => false),
+  run: vi.fn(async (_provider: string | undefined, request: (relay?: any) => Promise<any>) =>
+    request(),
+  ),
+}));
+vi.mock('../llmRelay', () => ({ oneShotRelay }));
+
+const RELAY = {
+  channel: 'llmcall:user-1:abcdefgh',
+  headers: { 'x-lobe-client-id': 'tab-1', 'x-lobe-llm-relay-channel': 'llmcall:user-1:abcdefgh' },
+};
+
 vi.mock('@/store/aiInfra', () => ({
   aiProviderSelectors: {
     isProviderFetchOnClient: () => () => false,
@@ -72,6 +85,56 @@ describe('ModelsService', () => {
     mockedResolveRuntimeProvider.mockReset();
     mockedResolveRuntimeProvider.mockImplementation((provider: string) => provider);
     mockedInitializeWithClientStore.mockClear();
+  });
+
+  describe('one-shot relay', () => {
+    const relayTo = () => {
+      const spyIsClient = vi
+        .spyOn(aiProviderSelectors, 'isProviderFetchOnClient')
+        .mockReturnValue(() => true);
+      oneShotRelay.needsRelay.mockReturnValue(true);
+      oneShotRelay.run.mockImplementationOnce(async (_provider, request) => request(RELAY));
+      return () => {
+        spyIsClient.mockRestore();
+        oneShotRelay.needsRelay.mockReturnValue(false);
+      };
+    };
+
+    // Within the LLM relay the browser never dials a device-only provider:
+    // the server lists / downloads through this tab.
+    it('lists a device-only provider through the server with the relay headers', async () => {
+      const restore = relayTo();
+      (fetch as Mock).mockResolvedValueOnce(new Response(JSON.stringify([{ id: 'qwen3:1.7b' }])));
+
+      const result = await modelsService.getModels('ollama');
+
+      expect(oneShotRelay.run).toHaveBeenCalledWith('ollama', expect.any(Function));
+      expect(fetch).toHaveBeenCalledWith('/webapi/models/ollama', { headers: RELAY.headers });
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      expect(result).toEqual([{ id: 'qwen3:1.7b' }]);
+      restore();
+    });
+
+    it('downloads an Ollama model through the server, reading progress inside the relay', async () => {
+      const restore = relayTo();
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response('{"status":"pulling","completed":1,"total":2}\n'),
+      );
+      const onProgress = vi.fn();
+
+      await modelsService.downloadModel(
+        { model: 'qwen3:1.7b', provider: 'ollama' },
+        { onProgress },
+      );
+
+      expect(fetch).toHaveBeenCalledWith(
+        '/webapi/models/ollama/pull',
+        expect.objectContaining({ headers: RELAY.headers, method: 'POST' }),
+      );
+      expect(onProgress).toHaveBeenCalledWith({ completed: 1, status: 'pulling', total: 2 });
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      restore();
+    });
   });
 
   describe('getModels', () => {
