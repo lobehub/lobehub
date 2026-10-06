@@ -45,6 +45,9 @@ const oneShotRelay = vi.hoisted(() => ({
 }));
 vi.mock('../llmRelay', () => ({ oneShotRelay }));
 
+const getBusinessTrpcHeaders = vi.hoisted(() => vi.fn(async () => ({}) as Record<string, string>));
+vi.mock('@/business/client/trpc-headers', () => ({ getBusinessTrpcHeaders }));
+
 const RELAY = {
   channel: 'llmcall:user-1:abcdefgh',
   headers: { 'x-lobe-client-id': 'tab-1', 'x-lobe-llm-relay-channel': 'llmcall:user-1:abcdefgh' },
@@ -112,6 +115,28 @@ describe('ModelsService', () => {
       expect(fetch).toHaveBeenCalledWith('/webapi/models/ollama', { headers: RELAY.headers });
       expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
       expect(result).toEqual([{ id: 'qwen3:1.7b' }]);
+      restore();
+    });
+
+    // The server resolves the provider config (and so whether to relay) for
+    // the active workspace from `X-Workspace-Id`, which the cloud build adds.
+    it('sends the workspace headers with relayed model list and download requests', async () => {
+      getBusinessTrpcHeaders.mockResolvedValue({ 'X-Workspace-Id': 'ws-1' });
+      const restore = relayTo();
+      (fetch as Mock).mockResolvedValueOnce(new Response('[]'));
+      await modelsService.getModels('ollama');
+      expect(fetch).toHaveBeenLastCalledWith('/webapi/models/ollama', {
+        headers: { ...RELAY.headers, 'X-Workspace-Id': 'ws-1' },
+      });
+
+      oneShotRelay.run.mockImplementationOnce(async (_provider, request) => request(RELAY));
+      (fetch as Mock).mockResolvedValueOnce(new Response(''));
+      await modelsService.downloadModel({ model: 'qwen3:1.7b', provider: 'ollama' });
+      expect(fetch).toHaveBeenLastCalledWith(
+        '/webapi/models/ollama/pull',
+        expect.objectContaining({ headers: { ...RELAY.headers, 'X-Workspace-Id': 'ws-1' } }),
+      );
+      getBusinessTrpcHeaders.mockResolvedValue({});
       restore();
     });
 
