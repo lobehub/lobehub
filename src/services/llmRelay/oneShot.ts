@@ -37,6 +37,12 @@ export interface OneShotChannelSubscription {
 
 export interface OneShotRelayDeps {
   clientId?: () => string;
+  /**
+   * Stop what a run relayed on this channel left running here, once the
+   * channel is released. A sub-agent's calls name the child run, not the
+   * channel, so its in-flight call would otherwise outlive the wait.
+   */
+  endOperation?: (operationId: string) => void;
   /** The deployment can relay: `agent_llm_relay` is on and an Agent Gateway is configured. */
   isAvailable: () => boolean;
   /** Whether calls to `provider` leave from this device (shared `fetchOnClient` rule). */
@@ -119,12 +125,21 @@ export class OneShotRelay {
    * to `provider`: `request` gets the headers to send, and the channel is
    * released once it settles (`signal`: an aborted caller stops waiting for
    * the subscription). A provider the server reaches itself runs
-   * `request` as-is, without a channel.
+   * `request` as-is, without a channel. A list stands by when any of them
+   * needs this tab — for a request whose provider only the server resolves;
+   * pass it as a function to read it once the provider runtime state is known.
    */
   async run<T>(
-    provider: string | undefined,
+    provider: string | string[] | (() => string[]) | undefined,
     request: (relay?: OneShotRelayHandle) => Promise<T>,
-    { signal }: { signal?: AbortSignal } = {},
+    {
+      scope,
+      signal,
+    }: {
+      /** Bind the channel to a scope (`llmRelayChannelScope`), for a server that checks it. */
+      scope?: string;
+      signal?: AbortSignal;
+    } = {},
   ): Promise<T> {
     const providersLoading =
       provider && this.deps.isAvailable() ? this.deps.whenProvidersKnown?.() : undefined;
@@ -134,12 +149,21 @@ export class OneShotRelay {
       await withTimeout(providersLoading, undefined, signal);
       if (signal?.aborted) return request();
     }
-    if (!this.needsRelay(provider)) return request();
+    const resolved = typeof provider === 'function' ? provider() : provider;
+    const providers = Array.isArray(resolved) ? resolved : [resolved];
+    if (!providers.some((item) => this.needsRelay(item))) return request();
 
-    const channel = buildLlmRelayChannelId(this.deps.userId()!, randomNonce());
+    const channel = buildLlmRelayChannelId(
+      this.deps.userId()!,
+      scope ? `${scope}-${randomNonce().replaceAll('-', '')}` : randomNonce(),
+    );
+    const operationIds = new Set<string>();
     const subscribing = this.deps.subscribe(channel, (event) => {
-      if (event.type === 'llm_execute') this.deps.onExecute(event.data as LlmExecuteData);
-      else if (event.type === 'llm_cancel') this.deps.onCancel(event.data as LlmCancelData);
+      if (event.type === 'llm_execute') {
+        const data = event.data as LlmExecuteData;
+        if (data.operationId) operationIds.add(data.operationId);
+        this.deps.onExecute(data);
+      } else if (event.type === 'llm_cancel') this.deps.onCancel(event.data as LlmCancelData);
     });
 
     try {
@@ -154,7 +178,7 @@ export class OneShotRelay {
         // An aborted caller has nothing to wait for: its request settles at once.
         signal,
       );
-      log('channel %s for %s: subscription %s', channel, provider, outcome);
+      log('channel %s for %o: subscription %s', channel, resolved, outcome);
 
       return await request({
         channel,
@@ -164,6 +188,7 @@ export class OneShotRelay {
         },
       });
     } finally {
+      for (const operationId of operationIds) this.deps.endOperation?.(operationId);
       // A subscription that lands after the request settled is released too.
       subscribing.then(
         (subscription) => subscription.close(),

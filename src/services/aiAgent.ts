@@ -194,6 +194,10 @@ export interface ExecSubAgentTaskParams {
   /** Optional for Single Agent mode, required for Group mode */
   groupId?: string;
   instruction: string;
+  /** This tab runs the sub-agent's device-only LLM calls (with {@link llmRelayChannel}). */
+  llmExecutor?: ExecAgentLlmExecutor;
+  /** The one-shot relay channel this tab stands by on for the sub-agent's LLM calls. */
+  llmRelayChannel?: string;
   parentMessageId: string;
   /** Parent operation ID for dispatching callAgent hooks */
   parentOperationId?: string;
@@ -333,6 +337,11 @@ class AiAgentService {
 
   async execSubAgentTask(params: ExecSubAgentTaskParams) {
     return await lambdaClient.aiAgent.execSubAgentTask.mutate(params);
+  }
+
+  /** This tab stopped standing by on the relay channel it named in `execSubAgentTask`. */
+  async releaseSubAgentLlmRelay(params: { channel: string }) {
+    return await lambdaClient.aiAgent.releaseSubAgentLlmRelay.mutate(params);
   }
 
   /**

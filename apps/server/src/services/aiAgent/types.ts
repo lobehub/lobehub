@@ -1,3 +1,4 @@
+import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import type { BotPlatformContext } from '@lobechat/context-engine';
 import type {
   BotSenderMetadata,
@@ -179,6 +180,11 @@ export interface InternalExecAgentParams extends ExecAgentParams {
    * and a refusal here destroys the message before it is ever persisted.
    */
   interactiveStart?: boolean;
+  /**
+   * The client's relay executor. Server callers may also set the channel it
+   * relays on (`channelOperationId`), which a client never can.
+   */
+  llmExecutor?: AgentRunLlmExecutor;
   /** Maximum steps for the agent operation */
   maxSteps?: number;
   /**

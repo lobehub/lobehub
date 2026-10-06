@@ -44,6 +44,12 @@ export interface LlmRelayExecutorDeps {
 
 export interface ExecuteRelayCallOptions {
   /**
+   * The run whose gateway channel delivered the call, when it is not the
+   * call's own: a sub-agent's call rides its parent's channel. That run ending
+   * ends the call too ({@link LlmRelayExecutor.cancelOperation}).
+   */
+  channelOperationId?: string;
+  /**
    * Each protocol chunk this client produces for the call, as soon as it is
    * produced — for rendering the reply locally before the server's echo.
    * Only called once this client owns the call.
@@ -54,6 +60,7 @@ export interface ExecuteRelayCallOptions {
 type StopReason = LlmCancelData['reason'] | 'deadline' | 'operation_ended' | RelayUploadRejection;
 
 interface ActiveCall {
+  channelOperationId?: string;
   controller: AbortController;
   operationId: string;
   owned: boolean;
@@ -141,7 +148,8 @@ export class LlmRelayExecutor {
   }
 
   /**
-   * The run ended (stopped, failed, finished): drop its in-flight attempts.
+   * The run ended (stopped, failed, finished): drop its in-flight attempts,
+   * and those of sub-agents relayed on its channel.
    * Its `llm_cancel` can trail the terminal event, which closes the session
    * that would deliver it. Nothing more is uploaded — the server has already
    * settled the step, and a late `aborted` batch must not look like a lost
@@ -149,7 +157,8 @@ export class LlmRelayExecutor {
    */
   cancelOperation(operationId: string) {
     for (const call of this.active.values()) {
-      if (call.operationId === operationId) call.stop('operation_ended');
+      if (call.operationId === operationId || call.channelOperationId === operationId)
+        call.stop('operation_ended');
     }
   }
 
@@ -163,6 +172,7 @@ export class LlmRelayExecutor {
     let stopReason: StopReason | undefined;
 
     const call: ActiveCall = {
+      channelOperationId: options.channelOperationId,
       controller,
       operationId: data.operationId,
       owned: false,

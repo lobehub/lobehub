@@ -795,23 +795,47 @@ export class AgentRuntimeService {
   }
 
   /**
-   * The relay executor a new run carries: the one its client declared, else —
-   * for a group member, whose stream is mirrored onto its parent's channel —
-   * its parent's, so a member on the same local model reaches the same device.
-   * A genuine sub-agent publishes `llm_execute` on its own channel, which no
-   * client subscribes to, so it inherits nothing and fails fast as
-   * `no_executor` instead of waiting out the claim. Best-effort: an expired
-   * parent leaves the member without one.
+   * The relay executor a new run carries: the one its client declared, else
+   * its parent's, so a child run (group member, `callSubAgent` / `callAgent`
+   * sub-agent) on the same local model reaches the same device. No client
+   * subscribes to the child's own channel — the gateway only hands
+   * `llm_execute` to subscribers of the op it is sent on — so the inherited
+   * executor names the channel its tab does listen on: the parent's, or the
+   * one the parent already inherited. The parent stays subscribed meanwhile: it
+   * is parked (`waiting_for_async_tool`) or supervising its members.
+   * Only the caller's own parent in this workspace counts: a client can name
+   * any `parentOperationId`, and a foreign run's executor would hand this
+   * child's LLM payload to another user's tab, or to a tab of the same user
+   * relaying with another workspace's providers.
+   * Best-effort: an expired parent leaves the child without one.
    */
   private async resolveLlmExecutor(
     declared: AgentRunLlmExecutor | undefined,
     parentOperationId: string | undefined,
-    streamsOnParentChannel: boolean,
   ): Promise<AgentRunLlmExecutor | undefined> {
     if (declared) return declared;
-    if (!parentOperationId || !streamsOnParentChannel) return;
+    if (!parentOperationId) return;
 
-    return this.getLlmExecutor(parentOperationId);
+    let parent: AgentState | null | undefined;
+    try {
+      parent = await this.coordinator.loadAgentState(parentOperationId);
+    } catch (error) {
+      log('[%s] Failed to read the parent relay executor: %O', parentOperationId, error);
+      return;
+    }
+    if (
+      parent?.origin?.userId !== this.userId ||
+      (parent.origin.workspaceId ?? undefined) !== (this.workspaceId ?? undefined)
+    )
+      return;
+
+    const inherited = parent.host?.llmExecutor;
+    if (!inherited) return;
+
+    return {
+      ...inherited,
+      channelOperationId: inherited.channelOperationId ?? parentOperationId,
+    };
   }
 
   /**
@@ -1304,11 +1328,7 @@ export class AgentRuntimeService {
           }))
         : undefined;
 
-      const llmExecutor = await this.resolveLlmExecutor(
-        params.llmExecutor,
-        parentOperationId,
-        appContext?.orchestrationRole === 'member',
-      );
+      const llmExecutor = await this.resolveLlmExecutor(params.llmExecutor, parentOperationId);
 
       const initialState = {
         activatedStepTools,

@@ -189,6 +189,30 @@ describe('LlmRelayExecutor', () => {
     expect(server.batches.some((batch) => batch.final)).toBe(false);
   });
 
+  it("drops a sub-agent's attempt when the run whose channel delivered it ends", async () => {
+    const server = createServer();
+    const model = createModel();
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: async () => model.runtime,
+      fetch: server.fetch,
+    });
+
+    // A child run's call rides its parent's channel but names the child.
+    const done = executor.execute(callData({ callId: 'child-op:0:1', operationId: 'child-op' }), {
+      channelOperationId: 'parent-op',
+    });
+    await waitFor(() => model.calls.length === 1);
+    model.emit('text', 'partial');
+
+    // The parent is interrupted: its terminal event ends the parent channel.
+    executor.cancelOperation('parent-op');
+    await done;
+
+    expect(model.calls[0].signal?.aborted).toBe(true);
+    expect(executor.isRunning('child-op:0:1')).toBe(false);
+  });
+
   it('stops as soon as an upload ack says the server no longer wants the attempt', async () => {
     const server = createServer((batch) =>
       batch.chunks.length > 0

@@ -63,3 +63,24 @@ export const isOwnLlmRelayChannelId = (channel: string, userId: string): boolean
   const prefix = buildLlmRelayChannelId(userId, '');
   return channel.startsWith(prefix) && CHANNEL_NONCE.test(channel.slice(prefix.length));
 };
+
+/**
+ * The scope a channel that outlives one request (a sub-agent's relay) is bound
+ * to: the workspace the dispatching request runs in, `personal` outside one.
+ * It leads the nonce (`<scope>-<random>`), so a request in one workspace cannot
+ * name the same user's channel of another workspace, whose tab relays with
+ * that workspace's providers.
+ */
+export const llmRelayChannelScope = (workspaceId?: string | null): string =>
+  workspaceId || 'personal';
+
+/** Whether `channel` is `userId`'s own channel bound to `workspaceId`'s scope. */
+export const isScopedLlmRelayChannelId = (
+  channel: string,
+  userId: string,
+  workspaceId?: string | null,
+): boolean =>
+  isOwnLlmRelayChannelId(channel, userId) &&
+  channel
+    .slice(buildLlmRelayChannelId(userId, '').length)
+    .startsWith(`${llmRelayChannelScope(workspaceId)}-`);

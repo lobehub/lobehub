@@ -18,7 +18,13 @@ const log = debug('lobe-server:agent-runtime:llm-relay:site');
 
 export type LlmExecutionSite =
   | { site: 'server' }
-  | { preferredClientId: string; runtimeProvider: string; site: 'client' }
+  | {
+      /** Channel to dispatch on when the executor listens on another run's; see `AgentRunLlmExecutor`. */
+      channelOperationId?: string;
+      preferredClientId: string;
+      runtimeProvider: string;
+      site: 'client';
+    }
   | { reason: ClientLlmUnavailableReason; site: 'unavailable' };
 
 export interface ResolveLlmExecutionSiteParams {
@@ -105,6 +111,7 @@ export const resolveLlmExecutionSite = async ({
   if (!canExecute) return { reason: 'no_executor', site: 'unavailable' };
 
   return {
+    ...(executor.channelOperationId && { channelOperationId: executor.channelOperationId }),
     preferredClientId: executor.clientId,
     runtimeProvider: relay.runtimeProvider,
     site: 'client',

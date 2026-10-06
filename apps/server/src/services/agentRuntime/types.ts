@@ -578,7 +578,8 @@ export interface OperationCreationParams {
   /**
    * The client that started this run can execute relayed LLM attempts
    * (`llm_execute`). Stored on `state.host.llmExecutor`; a sub-agent run
-   * inherits its parent's when it declares none.
+   * inherits its parent's when it declares none, relaying on the parent's
+   * channel (`channelOperationId`).
    */
   llmExecutor?: AgentRunLlmExecutor;
   maxSteps?: number;

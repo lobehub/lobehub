@@ -1,3 +1,4 @@
+import type { AgentRunLlmExecutor } from '@lobechat/agent-runtime';
 import { isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import type {
   ExecAgentResult,
@@ -66,6 +67,12 @@ export interface ExecAgentThreadRunOptions {
    */
   deviceId?: string;
   isSubAgent: boolean;
+  /**
+   * Relay executor for the spawned run, when the dispatching tab stands by on a
+   * channel of its own (see `openSubAgentLlmRelay`). Unset, the run inherits
+   * its parent's, if any.
+   */
+  llmExecutor?: AgentRunLlmExecutor;
   localDeviceId?: string;
   logScope: 'execSubAgent' | 'execVirtualSubAgent';
   /**
@@ -336,6 +343,7 @@ export const execAgentThreadRun = async (
       chatConfigOverride: options.chatConfig,
       deviceId: options.deviceId,
       hooks,
+      ...(options.llmExecutor && { llmExecutor: options.llmExecutor }),
       localDeviceId: options.localDeviceId,
       // Explicit sub-agent model override resolved at the spawn site.
       model: options.model,

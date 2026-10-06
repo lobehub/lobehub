@@ -1151,6 +1151,8 @@ export const createGatewayEventHandler = (
         const data = event.data as LlmExecuteData | undefined;
         if (!data?.callId || context.agentShareId) break;
         void llmRelayExecutor.execute(data, {
+          // A sub-agent's call rides this run's channel: this run ending ends it.
+          channelOperationId: event.operationId || gatewayOperationId,
           onOutput: (chunk) => {
             enqueue(() => applyLocalRelayOutput(data, chunk));
           },

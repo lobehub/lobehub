@@ -227,6 +227,13 @@ export interface AgentRunClientLlmWait {
 export interface AgentRunLlmExecutor {
   /** Relay protocol versions the client speaks, e.g. `llm_relay@1`. */
   capabilities: string[];
+  /**
+   * Operation whose gateway channel the client listens on, when it is not the
+   * run's own: a sub-agent inherits its parent's executor, but the tab only
+   * subscribed to the parent's run, so the sub-agent's `llm_execute` rides that
+   * channel. Set by the server, never by the client.
+   */
+  channelOperationId?: string;
   /** Stable id of the declaring client (tab / desktop window), preferred as the executor. */
   clientId: string;
   /** Provider ids this client confirmed it can reach directly. */

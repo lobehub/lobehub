@@ -1,7 +1,11 @@
+import { llmRelayChannelScope } from '@lobechat/agent-gateway-client';
 import type { SubAgentExecutionResult, SubAgentTransport } from '@lobechat/agent-runtime';
 import type { ExecSubAgentParams, ExecVirtualSubAgentParams } from '@lobechat/types';
 
+import { getBusinessTrpcHeaders } from '@/business/client/trpc-headers';
+import type { ExecSubAgentTaskParams } from '@/services/aiAgent';
 import { aiAgentService } from '@/services/aiAgent';
+import { buildLlmExecutorDeclaration, oneShotRelay } from '@/services/llmRelay';
 import type { ChatStore } from '@/store/chat/store';
 
 const DEFAULT_TIMEOUT_MS = 1_800_000;
@@ -45,7 +49,44 @@ export class ClientSubAgentTransport implements SubAgentTransport {
     return this.execute(params);
   }
 
+  /**
+   * The child runs on the server, but a device-only model (a local Ollama, any
+   * `fetchOnClient` provider) can only run on this tab — and no server run
+   * here has an executor for the child to inherit. So this tab stands by on a
+   * relay channel of its own for as long as it waits on the child, and names
+   * it in the dispatch; the server relays the child's LLM calls on it. Which
+   * model the child uses is the server's call, so any device provider this tab
+   * runs is reason enough. Both are read once the provider runtime state has
+   * loaded, so a mention sent right after the page opens still stands by.
+   */
   private async execute(params: ExecSubAgentParams): Promise<SubAgentExecutionResult> {
+    // The server accepts only a channel bound to the workspace it runs the
+    // dispatch in — the one the business headers name.
+    const workspaceId = (await getBusinessTrpcHeaders())['X-Workspace-Id'];
+
+    return oneShotRelay.run(
+      () => buildLlmExecutorDeclaration()?.providers ?? [],
+      async (relay) => {
+        const llmExecutor = relay && buildLlmExecutorDeclaration();
+        if (!relay || !llmExecutor) return this.dispatchAndWait(params);
+
+        try {
+          return await this.dispatchAndWait({
+            ...params,
+            llmExecutor,
+            llmRelayChannel: relay.channel,
+          });
+        } finally {
+          void aiAgentService
+            .releaseSubAgentLlmRelay({ channel: relay.channel })
+            .catch(() => undefined);
+        }
+      },
+      { scope: llmRelayChannelScope(workspaceId) },
+    );
+  }
+
+  private async dispatchAndWait(params: ExecSubAgentTaskParams): Promise<SubAgentExecutionResult> {
     let dispatchResult: Awaited<ReturnType<typeof aiAgentService.execSubAgentTask>> | undefined;
     let interruptPromise: Promise<void> | undefined;
     const interrupt = () => {
