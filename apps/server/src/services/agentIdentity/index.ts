@@ -128,6 +128,9 @@ export class AgentAccountService {
         kind: params.kind,
         metadata: params.metadata ?? {},
         provider: params.provider,
+        // The handle already exists, so the account is usable as written; the
+        // column default `provisioning` is for rows written ahead of the handle.
+        status: 'active',
       });
     } catch (error) {
       throw this.toConflictError(error, params.provider, params.identifier) ?? error;
@@ -161,6 +164,8 @@ export class AgentAccountService {
         kind: provider.kind,
         metadata: issued.metadata ?? {},
         provider: provider.provider,
+        // The provider has already issued the handle; record the terminal state.
+        status: 'active',
       });
     } catch (error) {
       const conflict = this.toConflictError(error, provider.provider, issued.identifier);

@@ -135,6 +135,7 @@ describe('AgentAccountService — provisioning', () => {
       identifier: 'agent-7@lobe.id',
       kind: 'mail',
       provider: 'agent-mail',
+      status: 'active',
     });
     expect(created).not.toHaveProperty('credentials');
     expect(created.metadata).toEqual({ clientId: 'cli_1', inboxId: 'inb_1' });
@@ -167,7 +168,7 @@ describe('AgentAccountService — provisioning', () => {
       kind: 'service',
       provider: 'user',
     });
-    expect(created).toMatchObject({ kind: 'service', provider: 'user' });
+    expect(created).toMatchObject({ kind: 'service', provider: 'user', status: 'active' });
     expect(created.capabilities).toEqual({ login: true, receive: false, send: false });
   });
 
