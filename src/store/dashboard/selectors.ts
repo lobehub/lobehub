@@ -23,6 +23,13 @@ const widgetById = (dashboardId: string, widgetId?: string) => (s: DashboardStor
     ? s.dashboardDetailMap[dashboardId]?.items.find(({ widget }) => widget.id === widgetId)?.widget
     : undefined;
 
+/**
+ * Only a board's creator can change it (`DashboardModel` write rule), so the
+ * layout editor is offered to them alone.
+ */
+const canManageDashboard = (dashboardId: string, userId?: string) => (s: DashboardStore) =>
+  !!userId && s.dashboardDetailMap[dashboardId]?.userId === userId;
+
 const isWidgetRunning = (widgetId: string) => (s: DashboardStore) =>
   s.widgetRunningIds.includes(widgetId);
 
@@ -50,6 +57,7 @@ const isWidgetAdding = (widgetId: string) => (s: DashboardStore) =>
   s.widgetAddingIds.includes(widgetId);
 
 export const dashboardSelectors = {
+  canManageDashboard,
   dashboardDetail,
   dashboardList,
   isLayoutSaving,

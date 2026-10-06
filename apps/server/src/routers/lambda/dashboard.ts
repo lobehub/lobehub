@@ -244,7 +244,10 @@ export const dashboardRouter = router({
       }
     }),
 
-  /** Persist a drag-and-drop result; ids not on this board are ignored. */
+  /**
+   * Persist a drag-and-drop result; ids not on this board are ignored. Fails
+   * with NOT_FOUND when nothing was saved (not the creator, or stale items).
+   */
   updateItemLayouts: dashboardWriteProcedure
     .input(
       z.object({
@@ -263,6 +266,9 @@ export const dashboardRouter = router({
     .mutation(async ({ ctx, input }) => {
       try {
         const data = await ctx.dashboardService.saveLayout(input.dashboardId, input.patches);
+        // Nothing saved means the caller cannot change this board (only its
+        // creator can) or none of the items are on it — never report success.
+        if (input.patches.length > 0 && data === 0) throw notFound('Dashboard or its items');
         return { data, message: 'Layout saved', success: true };
       } catch (error) {
         fail(error, 'save layout');

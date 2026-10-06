@@ -859,6 +859,35 @@ describe('widget + dashboard routers integration', () => {
       expect((await member.list())!.data.map((w) => w.id)).toEqual([widget.id]);
     });
 
+    it('refuses a layout write that saves nothing instead of reporting it saved', async () => {
+      const { board: ownerBoard, widget: owner } = callers(ownerId, workspaceId);
+      const { board: memberBoard } = callers(memberId, workspaceId);
+
+      const board = (await ownerBoard.create({ title: 'Team board' }))!.data;
+      const widget = await createWidget(owner, { dashboardId: board.id, title: 'CI health' });
+      const [{ item }] = (await memberBoard.detail({ id: board.id }))!.data.items;
+      const patches = [{ id: item.id, layout: { h: 2, w: 4, x: 0, y: 0 } }];
+
+      // A member can read the public board but only its creator can arrange it.
+      await expect(
+        memberBoard.updateItemLayouts({ dashboardId: board.id, patches }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      // Items that are not on the board save nothing either.
+      await expect(
+        ownerBoard.updateItemLayouts({
+          dashboardId: board.id,
+          patches: [{ ...patches[0], id: widget.id }],
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect((await ownerBoard.updateItemLayouts({ dashboardId: board.id, patches }))!.data).toBe(
+        1,
+      );
+      expect(
+        (await ownerBoard.updateItemLayouts({ dashboardId: board.id, patches: [] }))!.data,
+      ).toBe(0);
+    });
+
     it('hides a public widget, its versions, runs and metric series once its project turns private', async () => {
       const coordinatorId = await createTestAgent(db, ownerId);
       await db.update(agents).set({ workspaceId }).where(eq(agents.id, coordinatorId));

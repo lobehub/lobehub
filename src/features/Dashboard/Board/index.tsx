@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { resolveLayouts, sortByPosition } from '../utils/layout';
 import { isUsableRunStatus } from '../utils/widgetHealth';
@@ -34,6 +36,10 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
   const runWidget = useDashboardStore((s) => s.runWidget);
   const { data, error, isLoading, mutate } = useFetchDashboardDetail(dashboardId);
   const detail = useDashboardStore(dashboardSelectors.dashboardDetail(dashboardId));
+  const userId = useUserStore(userProfileSelectors.userId);
+  const canEditLayout = useDashboardStore(
+    dashboardSelectors.canManageDashboard(dashboardId, userId),
+  );
 
   const [editing, setEditing] = useState(false);
   const [openWidgetId, setOpenWidgetId] = useState<string>();
@@ -91,7 +97,7 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
       }
       onRetry={() => void mutate()}
     >
-      {editing ? (
+      {editing && canEditLayout ? (
         <LayoutEditor
           dashboardId={dashboardId}
           initialLayouts={layouts}
@@ -106,7 +112,7 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
             runnableCount={runnable.length}
             title={detail?.title}
             widgets={ordered.map(({ widget }) => widget)}
-            onEditLayout={() => setEditing(true)}
+            onEditLayout={canEditLayout ? () => setEditing(true) : undefined}
             onRefreshAll={() => void handleRefreshAll()}
           />
           <div className={gridStyles.grid} data-dashboard-grid={'view'}>

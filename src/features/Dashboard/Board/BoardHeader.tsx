@@ -36,7 +36,8 @@ const SUMMARY_TONES = ['failed', 'stale', 'running', 'ok'] as const;
 
 interface BoardHeaderProps {
   description?: string | null;
-  onEditLayout: () => void;
+  /** Absent for viewers who cannot save the board's layout (not its creator). */
+  onEditLayout?: () => void;
   onRefreshAll: () => void;
   refreshingAll: boolean;
   runnableCount: number;
@@ -106,9 +107,11 @@ const BoardHeader = memo<BoardHeaderProps>(
           >
             {t('board.refreshAll')}
           </Button>
-          <Button icon={LayoutGridIcon} onClick={onEditLayout}>
-            {t('layout.edit')}
-          </Button>
+          {onEditLayout && (
+            <Button icon={LayoutGridIcon} onClick={onEditLayout}>
+              {t('layout.edit')}
+            </Button>
+          )}
         </Flexbox>
       </Flexbox>
     );
