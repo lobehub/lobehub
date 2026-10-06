@@ -313,6 +313,30 @@ describe('DataSlice', () => {
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
     });
 
+    it('hands the extended transcript to the host, so its next sync keeps the older rows', async () => {
+      const onMessagesChange = vi.fn();
+      const context = {
+        agentId: 'agent-earlier',
+        threadId: 'thread-earlier',
+        topicId: 'topic-earlier-host',
+      };
+      const store = createStore({ context });
+      store.setState({ onMessagesChange });
+      store.getState().replaceMessages(windowMessages, { skipOnMessagesChange: true });
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({ messages: earlierPage });
+
+      await store.getState().loadEarlierMessages();
+
+      expect(onMessagesChange).toHaveBeenCalledTimes(1);
+      expect(onMessagesChange.mock.calls[0][0].map((m: UIChatMessage) => m.id)).toEqual([
+        'u1',
+        'a1',
+        'u2',
+        'a2',
+      ]);
+      expect(onMessagesChange.mock.calls[0][1]).toEqual(context);
+    });
+
     it('stops fetching once a page comes back empty (beginning reached)', async () => {
       const store = createStore({
         context: {

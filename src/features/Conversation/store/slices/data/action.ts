@@ -488,12 +488,16 @@ export const dataSlice: StateCreator<
         false,
         'loadEarlierMessages/start',
       );
+      const before = get().dbMessages;
       await transcript.loadMore(key, context);
 
       // The flag is conversation-wide state: after a context switch it belongs
       // to the new conversation (reset by createEphemeralResetState), so a
       // late settle from the previous one must not clear it.
       if (!isSameConversationContext(context, get().context)) return;
+      // Hand the extended transcript to the host: its next sync back into this
+      // store would otherwise replace the rows with the shorter window.
+      if (get().dbMessages !== before) get().onMessagesChange?.(get().dbMessages, context);
       const error = read()?.loadMoreError;
       if (error)
         log('[loadEarlierMessages] failed | contextKey=%s | %O', messageMapKey(context), error);
