@@ -453,6 +453,23 @@ describe('cursor / backward paging (message-like transcript)', () => {
     expect(collapsed.nextCursor).toEqual({ createdAt: 7, id: 'm7' });
   });
 
+  it('persists rows appended to the head after it was fetched', () => {
+    const head = applyHeadPage<Message, Cursor>(
+      undefined,
+      { items: range(1, 4), nextCursor: null },
+      { pageSize: 4 },
+      messages,
+    );
+    // A sent message and its reply land through a plain write, not a page.
+    const grown = { ...head, items: [...head.items, msg(5), msg(6)] };
+
+    expect(mids(toPersistedPage(grown, messages))).toEqual(['m1', 'm2', 'm3', 'm4', 'm5', 'm6']);
+    // With older pages loaded, only the head (and its growth) is kept.
+    const loaded = loadedTwoWindows();
+    const loadedGrown = { ...loaded, items: [...loaded.items, msg(11)] };
+    expect(mids(toPersistedPage(loadedGrown, messages))).toEqual(['m7', 'm8', 'm9', 'm10', 'm11']);
+  });
+
   it('persists the newest window, capped by maxItems; a cut forgets the cursor', () => {
     const persisted = toPersistedPage(loadedTwoWindows(), messages);
     expect(mids(persisted)).toEqual(['m7', 'm8', 'm9', 'm10']);
