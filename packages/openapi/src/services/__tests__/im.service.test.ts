@@ -200,6 +200,27 @@ describe('ImRestService.markRead', () => {
     const [topic] = await db.select().from(topics).where(eq(topics.id, TOPIC));
     expect(topic.metadata?.imReadCursor?.messageId).toBe('msg_a2');
   });
+
+  it('refuses another user’s conversation', async () => {
+    await insertMessage('msg_a1', 'assistant', 'one', '2026-10-04T10:00:00.000100Z');
+
+    await expect(
+      new ImRestService(db, OTHER).markRead(TOPIC, { messageId: 'msg_a1' }),
+    ).rejects.toMatchObject({ name: 'NotFoundError' });
+    const [topic] = await db.select().from(topics).where(eq(topics.id, TOPIC));
+    expect(topic.metadata?.imReadCursor).toBeUndefined();
+  });
+
+  it('refuses a message that belongs to a different conversation', async () => {
+    await db.insert(topics).values({ id: 'tpc_second', title: 'second', userId: USER });
+    await insertMessage('msg_elsewhere', 'assistant', 'hi', '2026-10-04T10:00:00.000100Z', {
+      topicId: 'tpc_second',
+    });
+
+    await expect(service.markRead(TOPIC, { messageId: 'msg_elsewhere' })).rejects.toMatchObject({
+      name: 'NotFoundError',
+    });
+  });
 });
 
 describe('ImRestService.send', () => {
@@ -252,6 +273,31 @@ describe('ImRestService.send', () => {
     expect(execAgentMock).not.toHaveBeenCalled();
     expect(retry).toMatchObject({ accepted: false, operationId: null, topicId: TOPIC });
   });
+
+  it('refuses to post into another user’s conversation without starting a run', async () => {
+    await expect(
+      new ImRestService(db, OTHER).send({ agentId: AGENT, content: 'hi', topicId: TOPIC }),
+    ).rejects.toMatchObject({ name: 'AuthorizationError' });
+    expect(execAgentMock).not.toHaveBeenCalled();
+  });
+
+  it('does not treat another user’s message id as an idempotent retry', async () => {
+    await insertMessage('msg_client0001', 'user', 'hello', '2026-10-04T10:00:01Z');
+    await db.insert(topics).values({ id: 'tpc_other', title: 'other', userId: OTHER });
+    execAgentMock.mockResolvedValue({ error: 'id taken', success: false });
+
+    await expect(
+      new ImRestService(db, OTHER).send({
+        agentId: AGENT,
+        clientMessageId: 'msg_client0001',
+        content: 'hello',
+        topicId: 'tpc_other',
+      }),
+    ).rejects.toMatchObject({ name: 'BusinessError' });
+    // The lookup is owner-scoped, so the run is attempted (and the id clash
+    // surfaces there) instead of leaking the first user's message back.
+    expect(execAgentMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('ImRestService push tokens', () => {
@@ -268,6 +314,35 @@ describe('ImRestService push tokens', () => {
     expect(rows.map((row) => row.expoToken)).toEqual(['ExponentPushToken[bbb]']);
 
     await service.unregisterPushToken('device-1');
+    rows = await db.select().from(pushTokens).where(eq(pushTokens.userId, USER));
+    expect(rows).toEqual([]);
+  });
+
+  it('never deletes another user’s device, even with its exact token', async () => {
+    await service.registerPushToken('device-1', {
+      expoToken: 'ExponentPushToken[aaa]',
+      platform: 'ios',
+    });
+
+    const other = new ImRestService(db, OTHER);
+    await other.unregisterPushToken('device-1', 'ExponentPushToken[aaa]');
+    await other.unregisterPushToken('device-1');
+
+    const rows = await db.select().from(pushTokens).where(eq(pushTokens.userId, USER));
+    expect(rows.map((row) => row.expoToken)).toEqual(['ExponentPushToken[aaa]']);
+  });
+
+  it('keeps a rotated token when a stale sign-out names the old one', async () => {
+    await service.registerPushToken('device-1', {
+      expoToken: 'ExponentPushToken[bbb]',
+      platform: 'ios',
+    });
+
+    await service.unregisterPushToken('device-1', 'ExponentPushToken[aaa]');
+    let rows = await db.select().from(pushTokens).where(eq(pushTokens.userId, USER));
+    expect(rows).toHaveLength(1);
+
+    await service.unregisterPushToken('device-1', 'ExponentPushToken[bbb]');
     rows = await db.select().from(pushTokens).where(eq(pushTokens.userId, USER));
     expect(rows).toEqual([]);
   });

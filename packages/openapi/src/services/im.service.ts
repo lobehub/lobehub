@@ -2,9 +2,9 @@ import { RequestTrigger } from '@lobechat/types';
 import { and, asc, desc, eq, inArray, isNull, lte, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
-import { deletePushTokenByExpoTokenAndDevice, PushTokenModel } from '@/database/models/pushToken';
+import { PushLiveActivityModel, PushTokenModel } from '@/database/models/pushToken';
 import { TopicModel } from '@/database/models/topic';
-import { agentOperations, messages } from '@/database/schemas';
+import { agentOperations, messages, pushTokens } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -219,12 +219,25 @@ export class ImRestService extends BaseService {
     return { deviceId: row.deviceId, platform: row.platform };
   }
 
+  /**
+   * Always scoped to the caller's own rows: unlike the public tRPC sign-out
+   * endpoint, this route is authenticated, so holding a device's token is not
+   * proof of owning it here. `expoToken` only guards against a stale delete —
+   * a device that already rotated its token keeps the newer one.
+   */
   async unregisterPushToken(deviceId: string, expoToken?: string): ServiceResult<void> {
     if (expoToken) {
-      await deletePushTokenByExpoTokenAndDevice(this.db, { deviceId, expoToken });
-      return;
+      const [own] = await this.db
+        .select({ expoToken: pushTokens.expoToken })
+        .from(pushTokens)
+        .where(and(eq(pushTokens.userId, this.userId), eq(pushTokens.deviceId, deviceId)));
+      if (!own || own.expoToken !== expoToken) return;
     }
-    await new PushTokenModel(this.db, this.userId).unregister(deviceId);
+
+    await Promise.all([
+      new PushTokenModel(this.db, this.userId).unregister(deviceId),
+      new PushLiveActivityModel(this.db, this.userId).unregisterDevice(deviceId),
+    ]);
   }
 
   // ------------------------------------------------------------------ internals
