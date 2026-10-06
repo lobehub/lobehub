@@ -8,6 +8,7 @@ import type {
   ChatVideoItem,
   FileAccessScope,
   HeterogeneousProviderConfig,
+  HeterogeneousRuntimePinSources,
   HeterogeneousTopicPin,
 } from '@lobechat/types';
 import {
@@ -375,8 +376,13 @@ export interface TurnSetupResult {
   isHeteroAgent: boolean;
   /** Effective model/provider after the topic-pinned model is applied. */
   model: string;
-  /** Topic-pinned model + reasoning effort for a heterogeneous run (reused topics only). */
+  /**
+   * Model, effort and speed pins for a heterogeneous run: a reused topic's pins,
+   * with a native Task model override taking the model's place.
+   */
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
+  /** Which layer supplied each pin, for the dispatched configuration receipt. */
+  pinnedHeterogeneousTopicSources?: HeterogeneousRuntimePinSources;
   provider: string;
   /**
    * The request's device, or — when it named none — the device a reused topic
@@ -475,6 +481,15 @@ export const setupTurn = async (
   let provider = agentConfig.provider!;
   const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
   let pinnedHeterogeneousTopicModel: HeterogeneousTopicPin | undefined;
+  let pinnedHeterogeneousTopicSources: HeterogeneousRuntimePinSources | undefined;
+  // TaskRunner forwards the Task's model snapshot on every run. For a
+  // heterogeneous agent that snapshot is usually the runtime identity (e.g.
+  // codex/openai), not a native model, so it must not replace a topic pin.
+  const nativeModelOverride =
+    heterogeneousProvider && modelOverride && isHeterogeneousAgentModelId(modelOverride)
+      ? undefined
+      : modelOverride;
+  const nativeProviderOverride = nativeModelOverride ? providerOverride : undefined;
   let topicEditingGroupId: string | undefined;
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /
@@ -671,8 +686,8 @@ export const setupTurn = async (
         canUseTopicPin && (!existingTopic?.agentId || existingTopic.agentId === resolvedAgentId);
       const pinnedModel = canUseTopicModelPin ? existingTopic?.model : undefined;
       if (pinnedModel) {
-        model = modelOverride || pinnedModel;
-        provider = providerOverride || existingTopic?.provider || provider;
+        model = nativeModelOverride || pinnedModel;
+        provider = nativeProviderOverride || existingTopic?.provider || provider;
         pinnedHeterogeneousTopicModel = { model, provider };
         log(
           'execAgent: using topic-pinned model=%s provider=%s for topic %s',
@@ -745,6 +760,26 @@ export const setupTurn = async (
     throw error;
   } finally {
     topicStage.end();
+  }
+
+  if (heterogeneousProvider) {
+    // A new topic has no pins, yet a native Task model still replaces the
+    // agent's model. Carry it in the pin so dispatch and its receipt both read
+    // this one resolved result.
+    if (nativeModelOverride && !pinnedHeterogeneousTopicModel?.model) {
+      pinnedHeterogeneousTopicModel = {
+        ...pinnedHeterogeneousTopicModel,
+        model: nativeModelOverride,
+        provider: nativeProviderOverride ?? heterogeneousProvider.type,
+      };
+    }
+    if (pinnedHeterogeneousTopicModel) {
+      pinnedHeterogeneousTopicSources = {
+        effort: 'topic',
+        model: nativeModelOverride ? (operationTaskId ? 'task' : undefined) : 'topic',
+        speed: 'topic',
+      };
+    }
   }
 
   await throwIfExecutionAborted('topic setup');
@@ -1022,6 +1057,7 @@ export const setupTurn = async (
     isHeteroAgent,
     model,
     pinnedHeterogeneousTopicModel,
+    pinnedHeterogeneousTopicSources,
     provider,
     requestedDeviceId: resolvedRequestedDeviceId,
     requestTriggerMetadata,

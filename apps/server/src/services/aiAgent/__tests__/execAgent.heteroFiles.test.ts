@@ -1,6 +1,8 @@
+import type { ChatTopicMetadata } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { TaskModel } from '@/database/models/task';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 
 import { AiAgentService } from '../index';
@@ -300,6 +302,260 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
 
   const findUserMessageCreate = () =>
     mockMessageCreate.mock.calls.find((call) => call[0].role === 'user');
+
+  it('records the effective Codex Task configuration for new and resumed runs', async () => {
+    const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
+      id: 'task-1',
+    } as NonNullable<Awaited<ReturnType<TaskModel['resolve']>>>);
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        args: ['--model', 'gpt-5.5'],
+        effort: 'high',
+        speed: 'fast',
+        type: 'codex',
+      },
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      model: 'gpt-5.4',
+      prompt: 'Inspect configuration',
+      taskId: 'task-1',
+    });
+    const first = structuredClone(
+      recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig,
+    );
+    expect(first).toEqual({
+      fields: [
+        { key: 'runtime', source: 'agent', value: 'codex' },
+        { key: 'model', source: 'task', value: 'gpt-5.4' },
+        { key: 'effort', source: 'agent', value: 'high' },
+        { key: 'speed', source: 'agent', value: 'fast' },
+      ],
+      operationId: recordStartSpy.mock.calls[0][0].operationId,
+    });
+    expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        heteroRuntimeConfig: first,
+      }),
+    );
+    expect(mockDispatchAgentRun.mock.calls[0][0].args).toEqual([
+      '--model',
+      'gpt-5.4',
+      '--effort',
+      'high',
+      '--speed',
+      'fast',
+    ]);
+
+    topicMock.findById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-1',
+      metadata: { heteroEffort: 'low', heteroSpeed: 'default' },
+      model: 'gpt-5.4',
+      provider: 'codex',
+    });
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('codex-session');
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Continue',
+      taskId: 'task-1',
+    });
+    expect(recordStartSpy.mock.calls[1][0].metadata?.heterogeneousRuntimeConfig).toEqual({
+      fields: [
+        { key: 'runtime', source: 'agent', value: 'codex' },
+        { key: 'model', source: 'topic', value: 'gpt-5.4' },
+        { key: 'effort', source: 'topic', value: 'low' },
+        { key: 'speed', source: 'topic', value: 'default' },
+      ],
+      operationId: recordStartSpy.mock.calls[1][0].operationId,
+    });
+    expect(mockDispatchAgentRun.mock.calls[1][0].args).toEqual([
+      '--model',
+      'gpt-5.4',
+      '--effort',
+      'low',
+    ]);
+    expect(first).toEqual(recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig);
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'gpt-5.3-codex',
+      prompt: 'Change the resumed model',
+      taskId: 'task-1',
+    });
+    expect(recordStartSpy.mock.calls[2][0].metadata?.heterogeneousRuntimeConfig).toEqual({
+      fields: [
+        { key: 'runtime', source: 'agent', value: 'codex' },
+        { key: 'model', source: 'task', value: 'gpt-5.3-codex' },
+        { key: 'effort', source: 'topic', value: 'low' },
+        { key: 'speed', source: 'topic', value: 'default' },
+      ],
+      operationId: recordStartSpy.mock.calls[2][0].operationId,
+    });
+    expect(mockDispatchAgentRun.mock.calls[2][0].args).toEqual([
+      '--model',
+      'gpt-5.3-codex',
+      '--effort',
+      'low',
+    ]);
+    taskResolveSpy.mockRestore();
+  });
+
+  it('keeps the Topic native model when a Task continue sends its runtime snapshot', async () => {
+    const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
+      id: 'task-1',
+    } as NonNullable<Awaited<ReturnType<TaskModel['resolve']>>>);
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { model: 'gpt-5.5', type: 'codex' },
+    });
+    topicMock.findById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-1',
+      metadata: {},
+      model: 'gpt-5.4',
+      provider: 'codex',
+    });
+
+    // TaskRunner always forwards the Task's model snapshot; for a Codex Agent
+    // that is the runtime identity, not a native model.
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'codex',
+      prompt: 'Continue',
+      provider: 'openai',
+      taskId: 'task-1',
+    });
+
+    const args = mockDispatchAgentRun.mock.calls[0][0].args;
+    expect(args.slice(0, 2)).toEqual(['--model', 'gpt-5.4']);
+    expect(
+      recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig?.fields,
+    ).toContainEqual({ key: 'model', source: 'topic', value: 'gpt-5.4' });
+    taskResolveSpy.mockRestore();
+  });
+
+  it('refreshes the effective configuration when a Task Topic continues without taskId', async () => {
+    const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
+      id: 'task-1',
+    } as NonNullable<Awaited<ReturnType<TaskModel['resolve']>>>);
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        args: ['--model', 'gpt-5.5'],
+        effort: 'high',
+        speed: 'fast',
+        type: 'codex',
+      },
+    });
+    try {
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Start', taskId: 'task-1' });
+      const first = structuredClone(
+        recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig,
+      );
+      topicMock.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-1',
+        metadata: { heteroEffort: 'high', heteroRuntimeConfig: first },
+        model: 'gpt-5.5',
+        provider: 'codex',
+      });
+      mockGetHeterogeneousResumeSessionId.mockResolvedValue('codex-session');
+      Object.assign(heteroAgentConfig.agencyConfig!.heterogeneousProvider!, { speed: 'default' });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        prompt: 'Continue after changing Agent speed',
+      });
+      const current = {
+        fields: [
+          { key: 'runtime', source: 'agent', value: 'codex' },
+          { key: 'model', source: 'topic', value: 'gpt-5.5' },
+          { key: 'effort', source: 'topic', value: 'high' },
+          { key: 'speed', source: 'runtime', value: 'default' },
+        ],
+        operationId: recordStartSpy.mock.calls[1][0].operationId,
+      };
+      expect(mockDispatchAgentRun.mock.calls[1][0].args).toEqual([
+        '--model',
+        'gpt-5.5',
+        '--effort',
+        'high',
+      ]);
+      expect(recordStartSpy.mock.calls[1][0]).toMatchObject({
+        metadata: { heterogeneousRuntimeConfig: current },
+        taskId: null,
+      });
+      expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({
+          heteroRuntimeConfig: current,
+        }),
+      );
+      expect(recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig).toEqual(first);
+    } finally {
+      taskResolveSpy.mockRestore();
+    }
+  });
+
+  it('replaces a previous receipt without a separate fallible projection write', async () => {
+    let storedMetadata: ChatTopicMetadata = {
+      heteroRuntimeConfig: {
+        fields: [{ key: 'speed', source: 'agent', value: 'fast' }],
+        operationId: 'previous-operation',
+      },
+    };
+    topicMock.findById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-1',
+      metadata: storedMetadata,
+      model: 'gpt-5.5',
+      provider: 'codex',
+    });
+    topicMock.updateMetadata.mockImplementation(
+      async (_id: string, metadata: ChatTopicMetadata) => {
+        if (metadata.heteroRuntimeConfig && !metadata.runningOperation) {
+          throw new Error('Separate Topic receipt write unavailable');
+        }
+        storedMetadata = { ...storedMetadata, ...metadata };
+      },
+    );
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { model: 'gpt-5.5', speed: 'default', type: 'codex' },
+    });
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Continue with default speed',
+    });
+    const receipt = recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig;
+    expect(storedMetadata.heteroRuntimeConfig).toEqual(receipt);
+    expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+      'topic-1',
+      expect.objectContaining({
+        heteroRuntimeConfig: receipt,
+        runningOperation: expect.objectContaining({ operationId: result.operationId }),
+      }),
+    );
+    expect(storedMetadata.heteroRuntimeConfig?.fields).toContainEqual({
+      key: 'speed',
+      source: 'runtime',
+      value: 'default',
+    });
+    expect(mockDispatchAgentRun).toHaveBeenCalledOnce();
+    expect(result.success).toBe(true);
+  });
 
   it('prepares dependent records before dispatching the heterogeneous process', async () => {
     let release!: () => void;

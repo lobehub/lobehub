@@ -1,4 +1,7 @@
+import { buildHeteroExecArgs } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { AgentConfigWithId } from '@/server/services/agent';
 
 import { resolveRunAgentConfig } from '../pipeline/resolveRunAgentConfig';
 
@@ -122,5 +125,72 @@ describe('resolveRunAgentConfig', () => {
 
     expect(memberDeviceOverride).toEqual({ boundDeviceId: 'dev-1', executionTarget: 'local' });
     expect(agentConfig.agencyConfig?.executionTarget).toBe('local');
+  });
+});
+
+describe('Codex Task model overrides', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getPreference.mockResolvedValue({});
+    isResourceAuthorOrAdmin.mockResolvedValue(false);
+    getInfoForAIGeneration.mockResolvedValue({ responseLanguage: 'en-US' });
+  });
+
+  it.each(['codex', undefined])(
+    'applies a Task model with provider %s before snapshots are built',
+    async (providerOverride) => {
+      const row: AgentConfigWithId = {
+        ...(webOnboardingRow() as AgentConfigWithId),
+        agencyConfig: {
+          heterogeneousProvider: {
+            args: ['--model', 'gpt-5.5'],
+            effort: 'high',
+            speed: 'fast',
+            type: 'codex',
+          },
+        },
+        id: 'agent-codex',
+        slug: null,
+      };
+      const { agentConfig } = await resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => row },
+        {
+          identifier: row.id,
+          modelOverride: 'gpt-5.4',
+          providerOverride,
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+      expect(buildHeteroExecArgs(agentConfig.agencyConfig!.heterogeneousProvider!)).toEqual([
+        '--model',
+        'gpt-5.4',
+        '--effort',
+        'high',
+        '--speed',
+        'fast',
+      ]);
+    },
+  );
+
+  it("keeps an API binding when the Task sends the runtime's own snapshot", async () => {
+    const apiConfig = { model: 'deepseek-v4-pro', providerId: 'deepseek' };
+    const row: AgentConfigWithId = {
+      ...(webOnboardingRow() as AgentConfigWithId),
+      agencyConfig: { heterogeneousProvider: { apiConfig, authMode: 'api', type: 'codex' } },
+      id: 'agent-codex-api',
+      slug: null,
+    };
+    const { agentConfig } = await resolveRunAgentConfig(
+      { ...deps, resolveAgentConfigOrThrow: async () => row },
+      {
+        identifier: row.id,
+        modelOverride: 'codex',
+        providerOverride: 'openai',
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+
+    expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual(apiConfig);
   });
 });

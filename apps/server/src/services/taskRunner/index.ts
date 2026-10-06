@@ -3,7 +3,7 @@ import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
-import { readTaskExecutionConfig } from '@lobechat/types';
+import { getHeterogeneousNativeModelProvider, readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -16,6 +16,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
+import { resolveMissingTaskModelConfig } from '@/server/services/task/modelSnapshot';
 import { createTaskRunHooks } from '@/server/services/task/runHooks';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
@@ -248,12 +249,18 @@ export class TaskRunnerService {
       // Backfill model snapshot for tasks created before the snapshot logic
       // landed, or whose assignee was set after creation. Once written, the
       // task is pinned to this model regardless of later agent default changes.
+      // Only missing fields are filled: a legacy model-only override keeps its model.
       if (typeof taskConfig.model !== 'string' || typeof taskConfig.provider !== 'string') {
         const snapshot = await this.agentModel.getAgentModelConfig(agentRef);
         if (snapshot) {
-          await this.taskModel.updateTaskConfig(task.id, snapshot);
-          taskConfig.model = snapshot.model;
-          taskConfig.provider = snapshot.provider;
+          const agencyConfig = await this.agentModel.getAgentAgencyConfig(agentRef);
+          const missing = resolveMissingTaskModelConfig(
+            taskConfig,
+            snapshot,
+            getHeterogeneousNativeModelProvider(agencyConfig?.heterogeneousProvider),
+          );
+          await this.taskModel.updateTaskConfig(task.id, missing);
+          Object.assign(taskConfig, missing);
         }
       }
 

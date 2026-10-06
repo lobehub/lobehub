@@ -1,4 +1,9 @@
-import type { TaskDetailData, TaskVerifyConfig } from '@lobechat/types';
+import type {
+  HeterogeneousProviderConfig,
+  TaskDetailData,
+  TaskVerifyConfig,
+} from '@lobechat/types';
+import { resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
 
 import type { SaveStatus } from '@/types/saveState';
 
@@ -50,6 +55,27 @@ const activeTaskModel = (s: TaskStoreState) =>
 
 const activeTaskProvider = (s: TaskStoreState) =>
   activeTaskDetail(s)?.config?.provider as string | undefined;
+
+/**
+ * Selects the assignee's effective external runtime settings for the next Task run.
+ *
+ * Use when:
+ * - Rendering Task configuration in detail and portal surfaces.
+ *
+ * Expects:
+ * - The Task assignee's provider, rather than an unrelated active chat Agent.
+ *
+ * Returns:
+ * - Runtime, model, effort and speed with their sources; undefined for ordinary Agents.
+ */
+const activeTaskRuntimeConfig =
+  (provider: HeterogeneousProviderConfig | undefined) => (s: TaskStoreState) => {
+    if (!provider) return undefined;
+    return resolveHeterogeneousRuntimeConfig(provider, {
+      model: activeTaskModel(s),
+      provider: activeTaskProvider(s),
+    });
+  };
 
 const activeTaskSubtasks = (s: TaskStoreState) => activeTaskDetail(s)?.subtasks ?? [];
 
@@ -151,6 +177,7 @@ export const taskDetailSelectors = {
   activeTaskPeriodicInterval,
   activeTaskPriority,
   activeTaskProvider,
+  activeTaskRuntimeConfig,
   activeTaskScheduleMaxExecutions,
   activeTaskSchedulePattern,
   activeTaskScheduleTimezone,

@@ -256,3 +256,40 @@ describe('taskDetailSelectors', () => {
     });
   });
 });
+
+describe('activeTaskRuntimeConfig', () => {
+  it('exposes values and sources without depending on task lifecycle status', () => {
+    for (const status of ['backlog', 'running', 'paused'] as const) {
+      const state = createState({
+        activeTaskId: 'T-1',
+        taskDetailMap: {
+          'T-1': { ...mockDetail, config: { model: 'gpt-5.4' }, status },
+        },
+      });
+      expect(
+        taskDetailSelectors.activeTaskRuntimeConfig({
+          type: 'codex',
+          model: 'gpt-5.5',
+          effort: 'high',
+          speed: 'fast',
+        })(state),
+      ).toEqual([
+        { key: 'runtime', source: 'agent', value: 'codex' },
+        { key: 'model', source: 'task', value: 'gpt-5.4' },
+        { key: 'effort', source: 'agent', value: 'high' },
+        { key: 'speed', source: 'agent', value: 'fast' },
+      ]);
+    }
+  });
+
+  it('restores Agent values when the Task pin is cleared', () => {
+    const state = createState({
+      activeTaskId: 'T-1',
+      taskDetailMap: { 'T-1': { ...mockDetail, config: {} } },
+    });
+    expect(
+      taskDetailSelectors.activeTaskRuntimeConfig({ type: 'codex', model: 'gpt-5.5' })(state)?.[1],
+    ).toEqual({ key: 'model', source: 'agent', value: 'gpt-5.5' });
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(undefined)(state)).toBeUndefined();
+  });
+});

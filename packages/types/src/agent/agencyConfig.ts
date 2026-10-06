@@ -339,6 +339,15 @@ export const resolveHeterogeneousProviderTopicModel = (
   return model ? { model, provider: config.type } : undefined;
 };
 
+/**
+ * The provider a native model-only override (a Task's `{ model }`) runs with:
+ * the runtime itself (e.g. `codex`) under subscription or local auth. API
+ * bindings have no native provider, so callers keep the Agent's provider.
+ */
+export const getHeterogeneousNativeModelProvider = (
+  config: HeterogeneousProviderConfig | null | undefined,
+): string | undefined => (config && config.authMode !== 'api' ? config.type : undefined);
+
 const applyTopicModelPin = (
   config: HeterogeneousProviderConfig,
   topicModel: HeterogeneousTopicPin | undefined,

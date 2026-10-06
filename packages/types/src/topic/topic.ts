@@ -2,6 +2,7 @@ import type { AiModelReasoningConfig } from 'model-bank';
 import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
+import type { HeterogeneousRuntimeConfigField } from '../agent/heterogeneousRuntimeConfig';
 import type {
   HeterogeneousReasoningEffort,
   HeterogeneousSpeedMode,
@@ -168,6 +169,13 @@ export interface ChatTopicMetadata {
    * agent's effort" by `applyTopicModelToHeterogeneousProvider`.
    */
   heteroEffort?: HeterogeneousReasoningEffort;
+  /** Latest Task run's dispatched settings; no args, credentials or system context. */
+  heteroRuntimeConfig?: {
+    /** Per-field configuration and provenance captured before dispatch. */
+    fields: HeterogeneousRuntimeConfigField[];
+    /** Durable operation whose metadata retains this same receipt. */
+    operationId: string;
+  };
   /**
    * Secret-free identity of the provider/auth binding that created
    * `heteroSessionId`. Resume is allowed only when this identity still matches.

@@ -1596,6 +1596,17 @@ export class GatewayActionImpl {
       }
     }
 
+    // A mounted Task drawer reads the by-id topic detail, independently of the
+    // sidebar list. Dispatch has persisted a new receipt; revalidate that detail
+    // after the optimistic marker patch without delaying stream connection.
+    if (result.heteroType && result.topicId && !agentShareId && !continuesGroupMember) {
+      void this.#get()
+        .refreshTopicDetail(result.topicId)
+        .catch((error) =>
+          console.error('[Gateway] Failed to refresh dispatched Topic configuration:', error),
+        );
+    }
+
     // When the local operation is cancelled (e.g. user clicks stop), forward
     // the interrupt directly to the server via the existing tRPC endpoint.
     // Closure captures `result.operationId` (the server-side id) so we don't
