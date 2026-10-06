@@ -5,6 +5,8 @@ import type {
   ScmChangeRequestLinks,
   ScmCheck,
   ScmCiStatus,
+  ScmLinkAcceptanceParams,
+  ScmLinkAcceptanceResult as ScmLinkAcceptanceResultOf,
   ScmProvider,
   ScmReviewDecision,
   ScmUpsertChangeRequestParams,
@@ -100,6 +102,19 @@ export const mergeChecks = (current: ScmCheck[] | null | undefined, incoming: Sc
   return [...byIdentity.values()];
 };
 
+type ScmLinkAcceptanceResult = ScmLinkAcceptanceResultOf<ScmChangeRequestItem>;
+
+/**
+ * Whether a change request row is the acceptance owner's to re-link: it lives
+ * in the acceptance's workspace, or it is the owner's own pull request. The
+ * second half matters because author routing keeps the author as `userId`
+ * while the row sits in the installation's workspace.
+ */
+const ownedBy = (
+  row: Pick<ScmChangeRequestItem, 'userId' | 'workspaceId'>,
+  scope: { userId: string; workspaceId?: string | null },
+) => row.userId === scope.userId || (!!scope.workspaceId && row.workspaceId === scope.workspaceId);
+
 /**
  * CRUD for `scm_change_requests`, the hub row an inbound provider event
  * resolves to. Writers are server-side ingest paths, so the model is static
@@ -183,6 +198,105 @@ export class ScmChangeRequestModel {
       .from(scmChangeRequests)
       .where(eq(scmChangeRequests.acceptanceId, acceptanceId))
       .orderBy(desc(scmChangeRequests.updatedAt));
+
+  /**
+   * Point a change request at an acceptance by hand, without waiting for a
+   * provider event. The pull request often opens after its acceptance was
+   * verified, and an instance with no SCM installation never hears from the
+   * provider at all.
+   *
+   * The identity key is global, so the row may already belong to another
+   * tenant (another user's agent, another workspace's installation). Moving
+   * its acceptance link from here would rewrite someone else's record, so a
+   * foreign row is refused instead. A new row starts `open`; the first
+   * provider event that reaches it replaces that guess with real state.
+   */
+  static linkAcceptance = async (
+    db: LobeChatDatabase,
+    params: ScmLinkAcceptanceParams,
+  ): Promise<ScmLinkAcceptanceResult> => {
+    const attempt = () =>
+      db.transaction(async (tx): Promise<ScmLinkAcceptanceResult | null> => {
+        const [existing] = await tx
+          .select()
+          .from(scmChangeRequests)
+          .where(
+            and(
+              eq(scmChangeRequests.provider, params.provider),
+              eq(scmChangeRequests.repoFullName, params.repoFullName),
+              eq(scmChangeRequests.number, params.number),
+            ),
+          )
+          .limit(1)
+          .for('update');
+
+        if (existing) {
+          if (!ownedBy(existing, params)) return { status: 'foreign' };
+          const [row] = await tx
+            .update(scmChangeRequests)
+            .set({
+              acceptanceId: params.acceptanceId,
+              title: existing.title ?? params.title ?? null,
+              updatedAt: new Date(),
+            })
+            .where(eq(scmChangeRequests.id, existing.id))
+            .returning();
+          return { row, status: 'linked' };
+        }
+
+        const [row] = await tx
+          .insert(scmChangeRequests)
+          .values({
+            acceptanceId: params.acceptanceId,
+            number: params.number,
+            provider: params.provider,
+            repoFullName: params.repoFullName,
+            state: 'open',
+            title: params.title ?? null,
+            url: params.url,
+            userId: params.userId,
+            workspaceId: params.workspaceId ?? null,
+          })
+          .onConflictDoNothing({
+            target: [
+              scmChangeRequests.provider,
+              scmChangeRequests.repoFullName,
+              scmChangeRequests.number,
+            ],
+          })
+          .returning();
+        return row ? { row, status: 'linked' } : null;
+      });
+
+    // Lost the insert race: the winner has committed, so the retry locks it.
+    const result = (await attempt()) ?? (await attempt());
+    if (!result) throw new Error('scm change request vanished between insert and retry');
+    return result;
+  };
+
+  /** Drop the acceptance link of a change request the scope owns; other links stay. */
+  static unlinkAcceptance = async (
+    db: LobeChatDatabase,
+    params: { acceptanceId: string; id: string; userId: string; workspaceId?: string | null },
+  ): Promise<boolean> => {
+    const [row] = await db
+      .update(scmChangeRequests)
+      .set({ acceptanceId: null, updatedAt: new Date() })
+      .where(
+        and(
+          eq(scmChangeRequests.id, params.id),
+          eq(scmChangeRequests.acceptanceId, params.acceptanceId),
+          params.workspaceId
+            ? or(
+                eq(scmChangeRequests.userId, params.userId),
+                eq(scmChangeRequests.workspaceId, params.workspaceId),
+              )
+            : eq(scmChangeRequests.userId, params.userId),
+        ),
+      )
+      .returning({ id: scmChangeRequests.id });
+    return Boolean(row);
+  };
 
   /** Change requests visible to a scope, newest activity first. */
   /**

@@ -20,9 +20,11 @@ import {
 import { AcceptanceFlowModel } from '@/database/models/acceptanceFlow';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ProjectModel } from '@/database/models/project';
+import { ScmChangeRequestModel } from '@/database/models/scm';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
+import type { ScmChangeRequestItem } from '@/database/schemas';
 import { users } from '@/database/schemas';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
@@ -31,6 +33,7 @@ import { isUuid } from '@/database/utils/uuid';
 import { publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { FileService } from '@/server/services/file';
+import { parseChangeRequestUrl } from '@/server/services/scm/changeRequestUrl';
 import {
   AcceptanceService,
   buildAcceptanceCheckUnion,
@@ -188,6 +191,25 @@ const resolveAcceptanceForWrite = async (
     ),
   };
 };
+
+/**
+ * A linked pull request as the acceptance page shows it. Provider facts only:
+ * the links to topics, tasks and installations are the owner's plumbing, and
+ * a public acceptance is readable by anyone holding its URL.
+ */
+const toBundleChangeRequest = (row: ScmChangeRequestItem) => ({
+  ciStatus: row.ciStatus,
+  id: row.id,
+  isDraft: row.isDraft,
+  mergedAt: row.mergedAt,
+  number: row.number,
+  provider: row.provider,
+  repoFullName: row.repoFullName,
+  reviewDecision: row.reviewDecision,
+  state: row.state,
+  title: row.title,
+  url: row.url,
+});
 
 const canReadAcceptance = async (
   ctx: { serverDB: LobeChatDatabase; userId?: string | null },
@@ -425,6 +447,62 @@ export const acceptanceRouter = router({
       }
     }),
 
+  /**
+   * Record that a pull request delivers this acceptance. The link lives on the
+   * acceptance, not on a round: the pull request usually opens after the
+   * rounds that verified it, and stacked pull requests share one acceptance.
+   */
+  linkChangeRequest: acceptanceWriteProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        title: z.string().trim().min(1).max(500).optional(),
+        url: z.string().max(2000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      const parsed = parseChangeRequestUrl(input.url);
+      if (!parsed) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message:
+            'Expected a GitHub pull request URL, e.g. https://github.com/owner/repo/pull/123',
+        });
+      }
+
+      const result = await ScmChangeRequestModel.linkAcceptance(ctx.serverDB, {
+        ...parsed,
+        acceptanceId: acceptance.id,
+        title: input.title,
+        userId: acceptance.userId,
+        workspaceId: acceptance.workspaceId,
+      });
+      if (result.status === 'foreign') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `${parsed.repoFullName}#${parsed.number} is already tracked by another account or workspace`,
+        });
+      }
+      return toBundleChangeRequest(result.row);
+    }),
+
+  unlinkChangeRequest: acceptanceWriteProcedure
+    .input(z.object({ changeRequestId: z.string(), id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { acceptance } = await resolveAcceptanceForWrite(ctx, input.id);
+      const removed = await ScmChangeRequestModel.unlinkAcceptance(ctx.serverDB, {
+        acceptanceId: acceptance.id,
+        id: input.changeRequestId,
+        userId: acceptance.userId,
+        workspaceId: acceptance.workspaceId,
+      });
+      if (!removed) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Linked pull request not found' });
+      }
+      return { success: true };
+    }),
+
   /** Get (or lazily create) the aggregate for a subject — the ingest entry point. */
   ensure: acceptanceWriteProcedure
     .input(
@@ -599,22 +677,26 @@ export const acceptanceRouter = router({
         acceptance.workspaceId ?? undefined,
       );
 
-      const [subject, { evidence, reports, results, runs }, authorRows] = await Promise.all([
-        ownerService.resolveSubject(acceptance),
-        ownerService.loadRounds(acceptance.id),
-        // Who delivered this, the way a pull request names its author. A
-        // shared link lands on someone else's record, and a record with no
-        // name on it reads as nobody's.
-        ctx.serverDB
-          .select({
-            avatar: users.avatar,
-            fullName: users.fullName,
-            id: users.id,
-            username: users.username,
-          })
-          .from(users)
-          .where(eq(users.id, acceptance.userId)),
-      ]);
+      const [subject, { evidence, reports, results, runs }, authorRows, changeRequests] =
+        await Promise.all([
+          ownerService.resolveSubject(acceptance),
+          ownerService.loadRounds(acceptance.id),
+          // Who delivered this, the way a pull request names its author. A
+          // shared link lands on someone else's record, and a record with no
+          // name on it reads as nobody's.
+          ctx.serverDB
+            .select({
+              avatar: users.avatar,
+              fullName: users.fullName,
+              id: users.id,
+              username: users.username,
+            })
+            .from(users)
+            .where(eq(users.id, acceptance.userId)),
+          // The pull requests that deliver it. Owned by the acceptance, not by a
+          // round, so one opened after the last round still shows.
+          ScmChangeRequestModel.listByAcceptance(ctx.serverDB, acceptance.id),
+        ]);
       const author = authorRows[0] ?? null;
 
       const flowData = await new AcceptanceFlowModel(ctx.serverDB, acceptance.userId).list(
@@ -793,6 +875,7 @@ export const acceptanceRouter = router({
 
       return {
         author,
+        changeRequests: changeRequests.map(toBundleChangeRequest),
         flows: flowData.map((flow) => ({
           ...flow,
           versions: flow.versions.map((version) => ({

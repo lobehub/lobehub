@@ -266,6 +266,21 @@ export interface ScmApplyChecksResult<TRow> {
   row: TRow;
 }
 
+/** A hand-made link from a change request to an acceptance, scoped to the acceptance's owner. */
+export interface ScmLinkAcceptanceParams {
+  acceptanceId: string;
+  number: number;
+  provider: ScmProvider;
+  repoFullName: string;
+  title?: string | null;
+  url: string;
+  userId: string;
+  workspaceId?: string | null;
+}
+
+/** `foreign`: the change request is already tracked under another user or workspace. */
+export type ScmLinkAcceptanceResult<TRow> = { row: TRow; status: 'linked' } | { status: 'foreign' };
+
 /** Provider facts about an installation, from a webhook or the installations API. */
 export interface ScmInstallationSnapshot {
   accountExternalId: string;

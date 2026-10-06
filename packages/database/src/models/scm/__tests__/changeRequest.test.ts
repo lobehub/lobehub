@@ -3,7 +3,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
-import { acceptances, scmWebhookDeliveries, users } from '../../../schemas';
+import { acceptances, scmWebhookDeliveries, users, workspaces } from '../../../schemas';
 import { mergeChecks, rollupCiStatus, ScmChangeRequestModel } from '../changeRequest';
 import { ScmWebhookDeliveryModel } from '../delivery';
 import { ScmInstallationModel } from '../installation';
@@ -757,6 +757,129 @@ describe('ScmChangeRequestModel', () => {
     const row = await ScmChangeRequestModel.upsert(serverDB, snapshot);
     await ScmChangeRequestModel.releaseWake(serverDB, row.id);
     expect((await ScmChangeRequestModel.findById(serverDB, row.id))?.wakeCount).toBe(0);
+  });
+});
+
+describe('ScmChangeRequestModel.linkAcceptance', () => {
+  const otherUserId = 'scm-model-other-user';
+  const link = { ...snapshot, title: 'Durable waits' };
+
+  const createAcceptance = async (owner = userId) => {
+    const [row] = await serverDB
+      .insert(acceptances)
+      .values({ subjectId: `s-${Math.random()}`, subjectType: 'standalone', userId: owner })
+      .returning();
+    return row;
+  };
+
+  beforeEach(async () => {
+    await serverDB.insert(users).values({ id: otherUserId });
+  });
+
+  it('links a pull request that opened after the acceptance, with no provider event', async () => {
+    const acceptance = await createAcceptance();
+
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: acceptance.id,
+    });
+
+    expect(result.status).toBe('linked');
+    const listed = await ScmChangeRequestModel.listByAcceptance(serverDB, acceptance.id);
+    expect(listed).toHaveLength(1);
+    expect(listed[0]).toMatchObject({
+      acceptanceId: acceptance.id,
+      number: 7,
+      state: 'open',
+      title: 'Durable waits',
+      userId,
+      workspaceId: null,
+    });
+  });
+
+  it('moves an owned row to another acceptance and keeps provider facts', async () => {
+    const first = await createAcceptance();
+    const second = await createAcceptance();
+    const tracked = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: first.id },
+      state: 'merged',
+      title: 'from provider',
+    });
+
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: second.id,
+    });
+
+    expect(result).toMatchObject({ row: { id: tracked.id }, status: 'linked' });
+    const row = await ScmChangeRequestModel.findById(serverDB, tracked.id);
+    expect(row).toMatchObject({ acceptanceId: second.id, state: 'merged', title: 'from provider' });
+    expect(await ScmChangeRequestModel.listByAcceptance(serverDB, first.id)).toHaveLength(0);
+  });
+
+  it('refuses a row another tenant already tracks', async () => {
+    const theirs = await createAcceptance(otherUserId);
+    const mine = await createAcceptance();
+    const tracked = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      links: { acceptanceId: theirs.id },
+      userId: otherUserId,
+    });
+
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: mine.id,
+    });
+
+    expect(result).toEqual({ status: 'foreign' });
+    expect((await ScmChangeRequestModel.findById(serverDB, tracked.id))?.acceptanceId).toBe(
+      theirs.id,
+    );
+  });
+
+  it("re-links the owner's own pull request even when it sits in an installation's workspace", async () => {
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'Team', primaryOwnerId: otherUserId, slug: `team-${Math.random()}` })
+      .returning();
+    const mine = await createAcceptance();
+    const authored = await ScmChangeRequestModel.upsert(serverDB, {
+      ...snapshot,
+      workspaceId: workspace.id,
+    });
+
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: mine.id,
+    });
+
+    expect(result).toMatchObject({ row: { id: authored.id }, status: 'linked' });
+  });
+
+  it('unlinks only rows the scope owns, and only from the named acceptance', async () => {
+    const acceptance = await createAcceptance();
+    const result = await ScmChangeRequestModel.linkAcceptance(serverDB, {
+      ...link,
+      acceptanceId: acceptance.id,
+    });
+    if (result.status !== 'linked') throw new Error('expected a link');
+    const params = { acceptanceId: acceptance.id, id: result.row.id };
+
+    expect(
+      await ScmChangeRequestModel.unlinkAcceptance(serverDB, { ...params, userId: otherUserId }),
+    ).toBe(false);
+    expect(
+      await ScmChangeRequestModel.unlinkAcceptance(serverDB, {
+        ...params,
+        acceptanceId: (await createAcceptance()).id,
+        userId,
+      }),
+    ).toBe(false);
+    expect(await ScmChangeRequestModel.unlinkAcceptance(serverDB, { ...params, userId })).toBe(
+      true,
+    );
+    expect(await ScmChangeRequestModel.listByAcceptance(serverDB, acceptance.id)).toHaveLength(0);
   });
 });
 

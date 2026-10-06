@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { GitPullRequest } from 'lucide-react';
+import { createStaticStyles, cssVar } from 'antd-style';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +10,7 @@ import { useAcceptanceScope } from '../AcceptanceScope';
 import { acceptanceCodingScope } from '../History/codingScope';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import AcceptanceStatusPill from './AcceptanceStatusPill';
+import PullRequestLinks from './PullRequestLinks';
 
 const styles = createStaticStyles(({ css }) => ({
   titleRow: css`
@@ -42,15 +42,6 @@ const styles = createStaticStyles(({ css }) => ({
   metaRow: css`
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};
-  `,
-  scopeLink: css`
-    cursor: pointer;
-    color: ${cssVar.colorTextSecondary};
-
-    &:hover {
-      color: ${cssVar.colorText};
-      text-decoration: underline;
-    }
   `,
 }));
 
@@ -86,10 +77,8 @@ const AcceptanceIdentity = ({ focusSlot, statusSlot, topicSlot }: AcceptanceIden
   const { data } = useAcceptanceBundle(acceptanceId);
   if (!data) return null;
 
-  const { acceptance, author, origin, rounds, subject } = data;
+  const { acceptance, author, changeRequests, origin, rounds, subject } = data;
   const authorName = author?.fullName || author?.username;
-  const scope = acceptanceCodingScope(rounds);
-  const pullRequest = scope?.pullRequest;
   const originAgent = embedded ? null : origin?.agent;
   const agentName = originAgent?.title ?? t('acceptance.origin.agentFallback');
 
@@ -132,25 +121,10 @@ const AcceptanceIdentity = ({ focusSlot, statusSlot, topicSlot }: AcceptanceIden
           </Flexbox>
         )}
         {topicSlot}
-        {pullRequest?.number ? (
-          pullRequest.url ? (
-            <a
-              className={cx(styles.scopeLink)}
-              href={pullRequest.url}
-              rel={'noreferrer'}
-              target={'_blank'}
-              title={pullRequest.title ?? pullRequest.url}
-            >
-              <Flexbox horizontal align={'center'} gap={4}>
-                <Icon icon={GitPullRequest} size={13} /> #{pullRequest.number}
-              </Flexbox>
-            </a>
-          ) : (
-            <Flexbox horizontal align={'center'} gap={4}>
-              <Icon icon={GitPullRequest} size={13} /> #{pullRequest.number}
-            </Flexbox>
-          )
-        ) : null}
+        <PullRequestLinks
+          changeRequests={changeRequests}
+          fallback={acceptanceCodingScope(rounds)?.pullRequest}
+        />
       </Flexbox>
     </Flexbox>
   );
