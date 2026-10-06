@@ -1184,6 +1184,62 @@ describe('widget + dashboard routers integration', () => {
         ]);
       });
 
+      it('loses the claim when the widget is trashed or republished after the due read', async () => {
+        const owner = widgetRouter.createCaller(context(ownerId));
+        const { slot, widget } = await dueWidget();
+        const [due] = await WidgetModel.findDue(db, { now: new Date() });
+        expect(due.widget.id).toBe(widget.id);
+        const claim = () =>
+          WidgetModel.claimDueRun(db, {
+            expectedNextRunAt: slot,
+            nextRunAt: new Date(Date.now() + 300_000),
+            versionId: due.version.id,
+            widgetId: widget.id,
+          });
+
+        // a republish between the due read and the claim
+        const v2 = (await owner.saveDraft({ widgetId: widget.id, ...statScript, script: 'x' }))!
+          .data;
+        runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 2 }));
+        await owner.dryRun({ widgetId: widget.id });
+        await owner.publish({ versionId: v2.id, widgetId: widget.id });
+        await db.update(widgets).set({ nextRunAt: slot }).where(eq(widgets.id, widget.id));
+        expect(await claim()).toBeUndefined();
+
+        // a trash between the due read and the claim
+        await new WidgetModel(db, ownerId).trash(widget.id);
+        expect(
+          await WidgetModel.claimDueRun(db, {
+            expectedNextRunAt: slot,
+            nextRunAt: new Date(Date.now() + 300_000),
+            versionId: v2.id,
+            widgetId: widget.id,
+          }),
+        ).toBeUndefined();
+        expect(await scheduleRuns(widget.id)).toEqual([]);
+        expect(await nextRunAt(widget.id)).toEqual(slot);
+      });
+
+      it('never leaves an old-schedule reservation behind when a claim races a schedule change', async () => {
+        const owner = widgetRouter.createCaller(context(ownerId));
+        for (let i = 0; i < 5; i++) {
+          const { slot, widget } = await dueWidget();
+          const [due] = await WidgetModel.findDue(db, { now: new Date() });
+          await Promise.all([
+            WidgetModel.claimDueRun(db, {
+              expectedNextRunAt: slot,
+              nextRunAt: new Date(Date.now() + 300_000),
+              versionId: due.version.id,
+              widgetId: widget.id,
+            }),
+            owner.setSchedule({ id: widget.id, pattern: null }),
+          ]);
+          const running = (await scheduleRuns(widget.id)).filter((r) => r.status === 'running');
+          expect(running).toEqual([]);
+          expect(await nextRunAt(widget.id)).toBeNull();
+        }
+      });
+
       it('acks a message without a slot without running or claiming', async () => {
         const { slot, widget } = await dueWidget();
 

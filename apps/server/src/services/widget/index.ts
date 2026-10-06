@@ -194,10 +194,8 @@ export class WidgetService {
       nextRunAt = validation.nextRuns[0];
     }
 
-    // Reservations belong to the old schedule; never let them resume under the new one.
-    await this.model.cancelScheduledRuns(widgetId);
-
-    return this.model.update(widgetId, {
+    // Atomic with cancelling the old schedule's reservations, so none can resume under the new one.
+    return this.model.setSchedule(widgetId, {
       nextRunAt,
       schedulePattern: pattern ? pattern.trim() : null,
       scheduleTimezone: pattern ? (timezone ?? null) : null,

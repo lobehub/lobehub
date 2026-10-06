@@ -318,39 +318,59 @@ export class WidgetModel {
   }
 
   /**
-   * Close every scheduled run still reserved (`running`) for a widget the caller
-   * manages, as failed with `SCHEDULE_CHANGED`. Called when the schedule is
-   * cleared or replaced, so a reservation from the old schedule can never be
-   * resumed later. The widget snapshot is left alone. Returns the closed count.
+   * Replace (or clear) the refresh schedule of a widget the caller manages and
+   * close every scheduled run still reserved (`running`) as failed with
+   * `SCHEDULE_CHANGED`, in one transaction holding the widget row lock.
+   *
+   * The lock serializes this against `claimDueRun`, which claims by updating
+   * the same row: a claim that committed first has its reservation cancelled
+   * here; a claim that arrives after finds `next_run_at` changed and fails its
+   * compare-and-set. No reservation from the old schedule survives either way.
    */
-  async cancelScheduledRuns(widgetId: string) {
-    if (!isUuid(widgetId)) return 0;
-    const [widget] = await this.db
-      .select({ id: widgets.id })
-      .from(widgets)
-      .where(and(eq(widgets.id, widgetId), this.manageable()))
-      .limit(1);
-    if (!widget) return 0;
+  async setSchedule(
+    widgetId: string,
+    schedule: {
+      nextRunAt: Date | null;
+      schedulePattern: string | null;
+      scheduleTimezone: string | null;
+    },
+  ) {
+    if (!isUuid(widgetId)) return undefined;
 
-    const closed = await this.db
-      .update(widgetRuns)
-      .set({
-        error: {
-          code: 'SCHEDULE_CHANGED',
-          message: 'The schedule changed before this run finished',
-        },
-        finishedAt: new Date(),
-        status: 'failed',
-      })
-      .where(
-        and(
-          eq(widgetRuns.widgetId, widgetId),
-          eq(widgetRuns.trigger, 'schedule'),
-          eq(widgetRuns.status, 'running'),
-        ),
-      )
-      .returning({ id: widgetRuns.id });
-    return closed.length;
+    return this.db.transaction(async (tx) => {
+      const [widget] = await tx
+        .select({ id: widgets.id })
+        .from(widgets)
+        .where(and(eq(widgets.id, widgetId), this.manageable()))
+        .limit(1)
+        .for('update');
+      if (!widget) return undefined;
+
+      await tx
+        .update(widgetRuns)
+        .set({
+          error: {
+            code: 'SCHEDULE_CHANGED',
+            message: 'The schedule changed before this run finished',
+          },
+          finishedAt: new Date(),
+          status: 'failed',
+        })
+        .where(
+          and(
+            eq(widgetRuns.widgetId, widgetId),
+            eq(widgetRuns.trigger, 'schedule'),
+            eq(widgetRuns.status, 'running'),
+          ),
+        );
+
+      const [updated] = await tx
+        .update(widgets)
+        .set({ ...schedule, updatedAt: new Date() })
+        .where(eq(widgets.id, widgetId))
+        .returning();
+      return updated;
+    });
   }
 
   // ── Versions ──
@@ -663,7 +683,15 @@ export class WidgetModel {
         .update(widgets)
         .set({ nextRunAt: params.nextRunAt })
         .where(
-          and(eq(widgets.id, params.widgetId), eq(widgets.nextRunAt, params.expectedNextRunAt)),
+          and(
+            eq(widgets.id, params.widgetId),
+            eq(widgets.nextRunAt, params.expectedNextRunAt),
+            // Re-check what the due read saw: a trash, unpublish/republish or a
+            // parent turning inaccessible that commits first makes the claim lose.
+            eq(widgets.publishedVersionId, params.versionId),
+            notTrashed(widgets.isDeleted),
+            buildParentAccessibleToOwnerWhere(widgets),
+          ),
         )
         .returning({ userId: widgets.userId, workspaceId: widgets.workspaceId });
       if (!claimed) return undefined;
