@@ -470,6 +470,48 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     );
 
   acceptance
+    .command('link-pr <idOrSubject> <url>')
+    .description(
+      'Record that a pull request delivers this acceptance (works for PRs opened after the last round)',
+    )
+    .option('--title <text>', 'Pull request title, until the provider reports it')
+    .option('--unlink', 'Remove the link instead')
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        idOrSubject: string,
+        url: string,
+        options: { json?: boolean | string; title?: string; unlink?: boolean },
+      ) => {
+        const id = await resolveAcceptanceId(idOrSubject);
+        const client = await getTrpcClient();
+
+        if (options.unlink) {
+          await client.acceptance.unlinkPullRequest.mutate({ id, url });
+          if (options.json !== undefined) {
+            outputJson({ unlinked: true, url });
+            return;
+          }
+          console.log(`${pc.green('✓')} Unlinked ${url}`);
+          return;
+        }
+
+        const linked = await client.acceptance.linkPullRequest.mutate({
+          id,
+          title: options.title,
+          url,
+        });
+        if (options.json !== undefined) {
+          outputJson(linked, typeof options.json === 'string' ? options.json : undefined);
+          return;
+        }
+        console.log(
+          `${pc.green('✓')} Linked ${linked.repoFullName}#${linked.number} to acceptance ${id}`,
+        );
+      },
+    );
+
+  acceptance
     .command('accept <idOrSubject>')
     .description('Accept the delivery — the terminal user decision that closes the acceptance')
     .option('--comment <text>', 'Optional note recorded with the decision')

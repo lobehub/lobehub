@@ -25,6 +25,7 @@ describe('acceptance publication with missing evidence', () => {
       attachRun: { mutate: vi.fn() },
       ensure: { mutate: vi.fn() },
       getBundle: { query: vi.fn() },
+      linkPullRequest: { mutate: vi.fn() },
     },
     verify: {
       createRun: { mutate: vi.fn() },
@@ -129,6 +130,37 @@ describe('acceptance publication with missing evidence', () => {
       verdict: 'uncertain',
     });
     expect(await readFile(path.join(dir, 'result.json'), 'utf8')).toBe(original);
+  });
+
+  it('links the reported pull request to the acceptance, and survives a failed link', async () => {
+    const pullRequest = {
+      number: 20171,
+      title: 'Durable waits',
+      url: 'https://github.com/lobehub/lobehub/pull/20171',
+    };
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          { evidence: ['output.txt'], id: 'screen', name: '用户能看到处理结果', status: 'passed' },
+        ],
+        plan: [{ id: 'screen', requiredEvidence: ['text'], title: '用户能看到处理结果' }],
+        pullRequest,
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+        title: '处理结果展示',
+      }),
+    );
+    client.acceptance.linkPullRequest.mutate.mockRejectedValue(new Error('CONFLICT'));
+
+    await run('ingest', dir, '--json');
+
+    expect(client.acceptance.linkPullRequest.mutate).toHaveBeenCalledExactlyOnceWith({
+      id: 'acceptance-1',
+      title: 'Durable waits',
+      url: pullRequest.url,
+    });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('not linked'));
+    expect(result()).toMatchObject({ publicationStatus: 'complete', pullRequest });
   });
 
   it('does not downgrade a pass when only an optional medium failed', async () => {

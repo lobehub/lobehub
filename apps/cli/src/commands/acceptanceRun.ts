@@ -988,6 +988,22 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     }
   }
 
+  // 5. Link the PR to the acceptance itself. The round's context is a
+  //    snapshot of this ingest; the acceptance is what the PR delivers, and
+  //    the page reads its PRs from there. Never fatal: an older server lacks
+  //    the procedure, and the round itself is the deliverable.
+  if (pullRequest?.url) {
+    try {
+      await client.acceptance.linkPullRequest.mutate({
+        id: acceptanceId,
+        title: typeof pullRequest.title === 'string' ? pullRequest.title : undefined,
+        url: String(pullRequest.url),
+      });
+    } catch (e) {
+      log.warn(`pull request not linked to the acceptance: ${String(e)}`);
+    }
+  }
+
   // A case with no matching plan item means the run checked something it
   // never planned — worth saying out loud, but not a failure. Only
   // meaningful against a plan that actually names something: with no plan
