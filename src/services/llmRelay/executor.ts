@@ -307,6 +307,8 @@ export class LlmRelayExecutor {
 
     const run = method === 'models' ? runtime.models : runtime.generateObject;
     if (!run) throw new Error(`This provider does not support ${method}`);
+    // Cancelled while the runtime was created: never start a call nothing can stop.
+    if (signal.aborted) throw abortError();
     const result = await untilAborted(run.call(runtime, payload, { signal }), signal);
     if (signal.aborted) throw abortError();
 
