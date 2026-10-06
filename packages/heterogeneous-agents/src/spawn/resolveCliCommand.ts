@@ -793,24 +793,19 @@ const getWellKnownCommandPaths = (agentType: HeterogeneousCliAgentType): string[
 
       if (platform() !== 'darwin') return [];
 
-      // Codex.app was renamed to ChatGPT.app. Prefer the current bundle name,
-      // while keeping Codex.app as a fallback for older installations.
-      // ChatGPT.app 26.9 moved the CLI from `Resources/codex` into a
-      // self-contained `Resources/codex-cli/` package whose
-      // `codex-package.json` declares `bin/codex` as the entrypoint; probe
-      // that layout first and keep the flat binary for older bundles.
-      const bundledCliPaths = [path.join('codex-cli', 'bin', 'codex'), 'codex'];
-
-      return ['ChatGPT.app', 'Codex.app'].flatMap((appBundleName) =>
-        bundledCliPaths.flatMap((bundledCliPath) => {
-          const bundledCli = path.join(appBundleName, 'Contents', 'Resources', bundledCliPath);
-
-          return [
-            path.join('/Applications', bundledCli),
-            path.join(homedir(), 'Applications', bundledCli),
-          ];
-        }),
-      );
+      // Codex.app was renamed to ChatGPT.app. ChatGPT.app 26.9 then moved the
+      // CLI from `Resources/codex` into a self-contained `Resources/codex-cli/`
+      // package whose `codex-package.json` declares `bin/codex` as the
+      // entrypoint. Probe newest first; legacy Codex.app only ever shipped the
+      // flat binary.
+      return [
+        path.join('ChatGPT.app', 'Contents', 'Resources', 'codex-cli', 'bin', 'codex'),
+        path.join('ChatGPT.app', 'Contents', 'Resources', 'codex'),
+        path.join('Codex.app', 'Contents', 'Resources', 'codex'),
+      ].flatMap((bundledCli) => [
+        path.join('/Applications', bundledCli),
+        path.join(homedir(), 'Applications', bundledCli),
+      ]);
     }
     case 'cursor': {
       if (platform() !== 'darwin' && platform() !== 'linux') return [];

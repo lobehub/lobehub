@@ -709,16 +709,14 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
         callExecFileError(new Error('not found')); // which codex
         // ChatGPT.app: codex-cli/bin/codex then flat codex, /Applications and ~/Applications
         for (let i = 0; i < 4; i++) callExecFileError(new Error('ENOENT'));
-        callExecFileError(new Error('ENOENT')); // /Applications/Codex.app codex-cli/bin/codex
-        callExecFileError(new Error('ENOENT')); // ~/Applications/Codex.app codex-cli/bin/codex
-        callExecFile('codex-cli 0.142.5'); // /Applications/Codex.app flat codex
+        callExecFile('codex-cli 0.142.5'); // /Applications/Codex.app
 
         const { detectHeterogeneousCliCommand } = await importModule();
         const status = await detectHeterogeneousCliCommand('codex', 'codex');
 
         expect(status.available).toBe(true);
         expect(status.path).toBe('/Applications/Codex.app/Contents/Resources/codex');
-        expect(execFileMock.mock.calls[7]![0]).toBe(
+        expect(execFileMock.mock.calls[5]![0]).toBe(
           '/Applications/Codex.app/Contents/Resources/codex',
         );
       } finally {
@@ -1345,8 +1343,8 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        // ChatGPT.app + Codex.app × both CLI layouts × /Applications and ~/Applications
-        for (let i = 0; i < 8; i++) callExecFileError(new Error('ENOENT'));
+        // ChatGPT.app (two layouts) + Codex.app × /Applications and ~/Applications
+        for (let i = 0; i < 6; i++) callExecFileError(new Error('ENOENT'));
 
         const { resolveHeteroSpawnCommand } = await importModule();
         const resolved = await resolveHeteroSpawnCommand('codex', 'codex');

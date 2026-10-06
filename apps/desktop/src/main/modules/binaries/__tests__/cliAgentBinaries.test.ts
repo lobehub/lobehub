@@ -478,15 +478,15 @@ describe('cliAgentBinaries', () => {
 
       try {
         callExecFileError(new Error('not found')); // which codex
-        // ChatGPT.app + Codex.app × both CLI layouts × /Applications and ~/Applications
-        for (let i = 0; i < 8; i++) callExecFileError(new Error('ENOENT'));
+        // ChatGPT.app (two layouts) + Codex.app × /Applications and ~/Applications
+        for (let i = 0; i < 6; i++) callExecFileError(new Error('ENOENT'));
 
         const { codexBinary } = await import('../cliAgentBinaries');
         const status = await codexBinary.detect();
 
         expect(status.available).toBe(false);
-        expect(execFileMock).toHaveBeenCalledTimes(9);
-        expect(execFileMock.mock.calls[8]![0]).toBe(
+        expect(execFileMock).toHaveBeenCalledTimes(7);
+        expect(execFileMock.mock.calls[6]![0]).toBe(
           path.join(os.homedir(), 'Applications', 'Codex.app', 'Contents', 'Resources', 'codex'),
         );
       } finally {
