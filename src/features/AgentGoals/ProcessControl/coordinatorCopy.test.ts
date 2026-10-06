@@ -1,9 +1,11 @@
+import { GOAL_MACHINE_GATE_TITLE } from '@lobechat/const/goal';
 import { describe, expect, it } from 'vitest';
 
 import {
   coordinatorGateKind,
   coordinatorGateReason,
   coordinatorReasonCopy,
+  gateOptionLabelKey,
 } from './coordinatorCopy';
 
 const decision = (ids: string[]) => ({ options: ids.map((id) => ({ id, label: id })) }) as any;
@@ -111,5 +113,33 @@ describe('coordinatorReasonCopy', () => {
   it('passes unknown reasons through as undefined so the raw text renders', () => {
     expect(coordinatorReasonCopy('some future reason')).toBeUndefined();
     expect(coordinatorReasonCopy(undefined)).toBeUndefined();
+  });
+});
+
+describe('machine gate copy', () => {
+  it('reads the machine gate off its title and gives its Retry the "fixed it" label', () => {
+    expect(coordinatorGateKind(decision(['retry', 'retire']), GOAL_MACHINE_GATE_TITLE)).toBe(
+      'fixSetup',
+    );
+    expect(gateOptionLabelKey({ id: 'retry' }, 'fixSetup')).toBe(
+      'goalProcess.gate.option.fixedRetry',
+    );
+    expect(gateOptionLabelKey({ id: 'retry' }, 'recoverTask')).toBe(
+      'goalProcess.gate.option.retry',
+    );
+    expect(gateOptionLabelKey({ id: 'option-1' })).toBeUndefined();
+  });
+
+  it('strips the machine gate question down to what broke', () => {
+    expect(
+      coordinatorGateReason(
+        'Setup problem: Working directory does not exist: /tmp/x. Create /tmp/x on the device the agent runs on, or point the agent at a working directory that exists there. Fix it, then retry or retire this task node?',
+      ),
+    ).toBe(
+      'Setup problem: Working directory does not exist: /tmp/x. Create /tmp/x on the device the agent runs on, or point the agent at a working directory that exists there',
+    );
+    expect(coordinatorReasonCopy('Task device stayed offline')).toEqual({
+      key: 'goalProcess.gate.reason.deviceStayedOffline',
+    });
   });
 });

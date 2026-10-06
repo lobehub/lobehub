@@ -17,9 +17,11 @@ import { useChatStore } from '@/store/chat';
 import GoalClarification, { type PendingGoalClarification } from '../GoalClarification';
 import AssigneeProfileAvatar from './AssigneeProfileAvatar';
 import {
+  type CoordinatorGateKind,
   coordinatorGateReason,
   coordinatorNodeTitleKey,
   coordinatorReasonCopy,
+  gateOptionLabelKey,
   viewGateKind,
 } from './coordinatorCopy';
 import type { FrontierItem, GoalGraphView, GoalNodeView } from './goalGraphViewModel';
@@ -127,21 +129,9 @@ interface FrontierProps {
 /** Server option ids are stable; their labels are English strings from the coordinator. */
 export const useGateOptionLabel = () => {
   const { t } = useTranslation('chat');
-  return (option: GoalDecisionOption) => {
-    switch (option.id) {
-      case 'fail': {
-        return t('goalProcess.gate.option.fail');
-      }
-      case 'retire': {
-        return t('goalProcess.gate.option.retire');
-      }
-      case 'retry': {
-        return t('goalProcess.gate.option.retry');
-      }
-      default: {
-        return option.label;
-      }
-    }
+  return (option: GoalDecisionOption, kind?: CoordinatorGateKind) => {
+    const key = gateOptionLabelKey(option, kind);
+    return key ? t(key as any) : option.label;
   };
 };
 
@@ -467,7 +457,7 @@ const FrontierRow = memo<{
                         actions.decide(view.decision!.id, option.id, note.trim() || undefined);
                       }}
                     >
-                      {optionLabel(option)}
+                      {optionLabel(option, gateKind)}
                     </Button>
                   </Tooltip>
                 ))}

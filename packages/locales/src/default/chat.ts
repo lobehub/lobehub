@@ -2204,6 +2204,7 @@ export default {
   'goalProcess.gate.decisionPointLabel': 'What needs your decision',
   'goalProcess.gate.title.recoverTask': 'Decide what happens to the failed task',
   'goalProcess.gate.title.goalAcceptance': 'Decide the goal acceptance outcome',
+  'goalProcess.gate.title.fixSetup': 'Fix the setup, then retry',
   'goalProcess.clarify.title': 'Clarify the goal before work starts',
   'goalProcess.clarify.description':
     'Answer these once and the agent plans with them. Skip to let it proceed on its own assumptions.',
@@ -2219,11 +2220,14 @@ export default {
   'goalProcess.gate.reason.attemptBudgetExhausted': 'The attempt budget for this work is used up',
   'goalProcess.gate.reason.costBudgetExhausted': 'The goal cost budget is used up',
   'goalProcess.gate.reason.recoveryFailed': 'Automatic recovery could not start the next attempt',
+  'goalProcess.gate.reason.deviceStayedOffline':
+    'The device this task runs on stayed offline through every automatic retry',
   'goalProcess.gate.reason.runError': 'The run stopped with an error ({{code}})',
   'goalProcess.gate.recommended': 'recommended',
   'goalProcess.gate.noteLabel': 'Extra guidance',
   'goalProcess.gate.notePlaceholder': 'Optional — goes into the next attempt instructions',
   'goalProcess.gate.option.retry': 'Retry work',
+  'goalProcess.gate.option.fixedRetry': 'I fixed it — retry',
   'goalProcess.gate.option.retire': 'Retire work',
   'goalProcess.gate.option.fail': 'Fail goal',
   'goalProcess.gate.option.assume': 'Go with the assumption',

@@ -1,4 +1,8 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_CLARIFICATION_TITLE,
+  GOAL_MACHINE_GATE_TITLE,
+} from '@lobechat/const/goal';
 import type {
   GoalGraphDecision,
   GoalGraphEdge,
@@ -342,6 +346,28 @@ describe('buildGoalGraphView', () => {
       { endedAt: at(40), index: 1, outcome: 'failed', reason: 'Task attempt budget was exhausted' },
     ]);
     expect(view.byId.w1.startedAt).toBeUndefined();
+  });
+
+  it('tells machine gates apart from judgment and clarification gates by their title', () => {
+    const view = buildGoalGraphView(
+      snapshot({
+        nodes: [
+          node('m', { kind: 'decision', status: 'waiting', title: GOAL_MACHINE_GATE_TITLE }),
+          node('c', { kind: 'decision', status: 'waiting', title: GOAL_CLARIFICATION_TITLE }),
+          node('j', {
+            kind: 'decision',
+            status: 'waiting',
+            title: 'Choose how to recover failed task',
+          }),
+          node('t'),
+        ],
+      }),
+      NOW,
+    );
+    expect(view.byId.m.decisionCategory).toBe('machine');
+    expect(view.byId.c.decisionCategory).toBe('clarification');
+    expect(view.byId.j.decisionCategory).toBe('judgment');
+    expect(view.byId.t.decisionCategory).toBeUndefined();
   });
 
   it('surfaces a pending gate and hides the waiting task it was opened for', () => {

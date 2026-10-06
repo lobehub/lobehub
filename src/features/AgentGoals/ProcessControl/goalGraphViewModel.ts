@@ -1,3 +1,4 @@
+import { GOAL_CLARIFICATION_TITLE, GOAL_MACHINE_GATE_TITLE } from '@lobechat/const/goal';
 import type {
   GoalGraphDecision,
   GoalGraphEdge,
@@ -84,6 +85,28 @@ export interface GoalArtifactView {
   workVersionId: string;
 }
 
+/**
+ * What a decision node asks of the person.
+ *
+ * - `machine`       — the setup is broken or the automatic retries ran out; fix it and retry.
+ * - `clarification` — the planner needs an answer before it can plan.
+ * - `judgment`      — a call about the work itself.
+ */
+export type GoalDecisionCategory = 'clarification' | 'judgment' | 'machine';
+
+/**
+ * Read off the coordinator's fixed node titles, the same contract the server
+ * uses to recognise its clarification gate.
+ */
+export const decisionCategoryOf = (
+  node: Pick<GoalGraphNode, 'kind' | 'title'>,
+): GoalDecisionCategory | undefined => {
+  if (node.kind !== 'decision') return undefined;
+  if (node.title === GOAL_MACHINE_GATE_TITLE) return 'machine';
+  if (node.title === GOAL_CLARIFICATION_TITLE) return 'clarification';
+  return 'judgment';
+};
+
 export interface GoalNodeView {
   /** This task's own verification, when it has been dispatched. */
   acceptance?: GoalNodeAcceptance;
@@ -104,6 +127,8 @@ export interface GoalNodeView {
   closedReason?: string;
   /** Pending user decision opened on this node. */
   decision?: GoalGraphDecision;
+  /** Decision nodes only: what the decision asks of the person. */
+  decisionCategory?: GoalDecisionCategory;
   dependsOn: string[];
   /** Findings produced by this Task. */
   findings: GoalGraphNode[];
@@ -456,6 +481,7 @@ export const buildGoalGraphView = (
         .map((id) => nodeById.get(id))
         .filter((dep): dep is GoalGraphNode => !!dep && !TERMINAL_NODE_STATUSES.has(dep.status)),
       decision: nodeDecisions.find((d) => d.status === 'pending'),
+      ...(node.kind === 'decision' ? { decisionCategory: decisionCategoryOf(node) } : {}),
       dependsOn: dependsOn.get(node.id) ?? [],
       findings:
         node.kind === 'experiment'

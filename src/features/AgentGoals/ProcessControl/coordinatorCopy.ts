@@ -1,5 +1,9 @@
-import { GOAL_ACCEPTANCE_TASK_TITLE, GOAL_CLARIFICATION_OPTION } from '@lobechat/const/goal';
-import type { GoalGraphDecision } from '@lobechat/types';
+import {
+  GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_CLARIFICATION_OPTION,
+  GOAL_MACHINE_GATE_TITLE,
+} from '@lobechat/const/goal';
+import type { GoalDecisionOption, GoalGraphDecision } from '@lobechat/types';
 
 import type { GoalNodeView } from './goalGraphViewModel';
 
@@ -11,7 +15,7 @@ import type { GoalNodeView } from './goalGraphViewModel';
  * not recognize renders verbatim.
  */
 
-export type CoordinatorGateKind = 'clarifyGoal' | 'goalAcceptance' | 'recoverTask';
+export type CoordinatorGateKind = 'clarifyGoal' | 'fixSetup' | 'goalAcceptance' | 'recoverTask';
 
 export interface LocalizedCopyRef {
   key: string;
@@ -23,12 +27,15 @@ const idsOf = (decision?: GoalGraphDecision | null): Set<string> =>
 
 export const coordinatorGateKind = (
   decision?: GoalGraphDecision | null,
+  /** The gate node's title; the machine gate shares its options with `recoverTask`. */
+  nodeTitle?: string | null,
 ): CoordinatorGateKind | undefined => {
   const ids = idsOf(decision);
   // `fail` only ever appears on the terminal acceptance gate, which may also
   // offer `retire` — check it first.
   if (ids.has('retry') && ids.has('fail')) return 'goalAcceptance';
-  if (ids.has('retry') && ids.has('retire')) return 'recoverTask';
+  if (ids.has('retry') && ids.has('retire'))
+    return nodeTitle === GOAL_MACHINE_GATE_TITLE ? 'fixSetup' : 'recoverTask';
   if (ids.has(GOAL_CLARIFICATION_OPTION.assume) && ids.has(GOAL_CLARIFICATION_OPTION.answer))
     return 'clarifyGoal';
   return undefined;
@@ -36,9 +43,36 @@ export const coordinatorGateKind = (
 
 /** The gate a node view carries — pending first, else the last human-resolved one. */
 export const viewGateKind = (view: GoalNodeView): CoordinatorGateKind | undefined =>
-  coordinatorGateKind(view.decision ?? view.humanTouches.at(-1));
+  coordinatorGateKind(view.decision ?? view.humanTouches.at(-1), view.node.title);
 
 export const gateTitleKey = (kind: CoordinatorGateKind): string => `goalProcess.gate.title.${kind}`;
+
+/**
+ * Locale key for a coordinator gate option, or undefined for a planner-authored
+ * option that keeps its stored label. The machine gate's Retry says the person
+ * fixed something first.
+ */
+export const gateOptionLabelKey = (
+  option: Pick<GoalDecisionOption, 'id'>,
+  kind?: CoordinatorGateKind,
+): string | undefined => {
+  switch (option.id) {
+    case 'fail': {
+      return 'goalProcess.gate.option.fail';
+    }
+    case 'retire': {
+      return 'goalProcess.gate.option.retire';
+    }
+    case 'retry': {
+      return kind === 'fixSetup'
+        ? 'goalProcess.gate.option.fixedRetry'
+        : 'goalProcess.gate.option.retry';
+    }
+    default: {
+      return undefined;
+    }
+  }
+};
 
 /** The coordinator's terminal Task that accepts the whole Goal (matched by its fixed title). */
 export const isGoalAcceptanceTask = (view: GoalNodeView): boolean =>
@@ -61,6 +95,7 @@ export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined 
 /** Strip the coordinator question template down to its dynamic reason half. */
 const QUESTION_TAILS = [
   /\.?\s*Retry or retire this task node\?$/,
+  /\.?\s*Fix it, then retry or retire this task node\?$/,
   /\.?\s*Retry Goal acceptance or fail this Goal\?$/,
   /\.?\s*Retry Goal acceptance, abandon it, or fail this Goal\?$/,
 ];
@@ -102,6 +137,10 @@ const REASON_PATTERNS: Array<{
   {
     key: 'goalProcess.gate.reason.costBudgetExhausted',
     pattern: /^Goal cost budget was exhausted( after an operation was abandoned)?$/,
+  },
+  {
+    key: 'goalProcess.gate.reason.deviceStayedOffline',
+    pattern: /^Task device stayed offline$/,
   },
   {
     key: 'goalProcess.gate.reason.recoveryFailed',
