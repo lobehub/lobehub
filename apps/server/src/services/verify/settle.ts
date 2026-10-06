@@ -17,6 +17,7 @@ import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
 import { TaskService } from '@/server/services/task';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 
+import { AcceptanceService } from './acceptanceService';
 import { reviewGoalDelivery } from './goalReview';
 import { maybeAutoRepair } from './repairService';
 import { VerifyReporterService } from './reporter';
@@ -263,14 +264,19 @@ export const driveTaskFromVerify = async (
             : 'verify failed → recurring task %s remains scheduled',
           taskOperation.taskId,
         );
-      } else if (outcome === 'failed' && run.acceptanceId && !goal) {
+      } else if (
+        outcome === 'failed' &&
+        run.acceptanceId &&
+        !goal &&
         // A failed round still delivers the Acceptance — the verdict is advice and
-        // the user's accept / reject decides. The task follows the Acceptance and
-        // completes; a reject reopens it (`AcceptanceService.reject`).
-        await new TaskService(db, userId, workspaceId).updateStatus({
-          id: taskOperation.taskId,
-          status: 'completed',
-        });
+        // the user's accept / reject decides, so the task follows the Acceptance
+        // and completes. A reject that already landed (or lands mid-write) keeps
+        // the task open instead, falling through to the pause below.
+        (await new AcceptanceService(db, userId, workspaceId).completeTaskForDelivery(
+          run.acceptanceId,
+          taskOperation.taskId,
+        )) === 'completed'
+      ) {
         log('verify failed → acceptance delivered → task %s completed', taskOperation.taskId);
       } else {
         // Verification outcomes belong to the task itself. Do not create an inbox

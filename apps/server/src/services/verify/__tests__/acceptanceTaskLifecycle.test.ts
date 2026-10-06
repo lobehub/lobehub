@@ -87,8 +87,15 @@ describe('AcceptanceService task lifecycle', () => {
   });
 
   describe('delivered → task completed', () => {
+    // The stored acceptance row: the rollup writes to it, later reads see it.
+    let stored: ReturnType<typeof taskAcceptance>;
+
     beforeEach(() => {
-      mocks.findById.mockResolvedValue(taskAcceptance('verifying'));
+      stored = taskAcceptance('verifying');
+      mocks.findById.mockImplementation(async () => ({ ...stored }));
+      mocks.updatePolicyStatus.mockImplementation(async (_id: string, status: string) => {
+        stored.status = status;
+      });
       // An ingested round: no verify pipeline status, settled by its report.
       mocks.listByAcceptance.mockResolvedValue([{ id: 'run-1', roundIndex: 1, status: null }]);
       mocks.findReportByRun.mockResolvedValue({ id: 'report-1' });
@@ -112,8 +119,21 @@ describe('AcceptanceService task lifecycle', () => {
       expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
     });
 
+    it('completes the task when an acceptance flow delivers its round', async () => {
+      // `AcceptanceFlowModel.complete()` stamps the round `delivered` itself.
+      mocks.listByAcceptance.mockResolvedValue([
+        { id: 'run-1', roundIndex: 1, status: 'delivered' },
+      ]);
+
+      await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
+      expect(mocks.taskServiceUpdateStatus).toHaveBeenCalledWith({
+        id: 'task_1',
+        status: 'completed',
+      });
+    });
+
     it('does nothing when the status did not change', async () => {
-      mocks.findById.mockResolvedValue(taskAcceptance('delivered'));
+      stored.status = 'delivered';
 
       await service().recomputeStatus('acc-1');
       expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
@@ -149,10 +169,50 @@ describe('AcceptanceService task lifecycle', () => {
     });
 
     it('still settles the acceptance when completing the task fails', async () => {
-      mocks.taskServiceUpdateStatus.mockRejectedValue(new Error('cascade failed'));
+      mocks.taskServiceUpdateStatus.mockRejectedValueOnce(new Error('cascade failed'));
 
       await expect(service().recomputeStatus('acc-1')).resolves.toBe('delivered');
       expect(mocks.updatePolicyStatus).toHaveBeenCalledWith('acc-1', 'delivered');
+    });
+  });
+
+  describe('a reject racing the completion', () => {
+    let stored: ReturnType<typeof taskAcceptance>;
+
+    beforeEach(() => {
+      stored = taskAcceptance('delivered');
+      mocks.findById.mockImplementation(async () => ({ ...stored }));
+    });
+
+    it('leaves the task open when the reject already landed', async () => {
+      stored.status = 'rejected';
+
+      await expect(service().completeTaskForDelivery('acc-1', 'task_1')).resolves.toBe('rejected');
+      expect(mocks.taskServiceUpdateStatus).not.toHaveBeenCalled();
+    });
+
+    it('reopens the task when the reject lands while it is being completed', async () => {
+      // The reject saw an unfinished task, so it had nothing to reopen.
+      mocks.taskResolve
+        .mockResolvedValueOnce({ automationMode: null, id: 'task_1', status: 'running' })
+        .mockResolvedValueOnce({ automationMode: null, id: 'task_1', status: 'running' })
+        .mockResolvedValue({ automationMode: null, id: 'task_1', status: 'completed' });
+      mocks.taskServiceUpdateStatus.mockImplementationOnce(async () => {
+        stored.status = 'rejected';
+      });
+
+      await expect(service().completeTaskForDelivery('acc-1', 'task_1')).resolves.toBe('rejected');
+      expect(mocks.taskUpdateStatusIfCurrent).toHaveBeenCalledWith(
+        'task_1',
+        'completed',
+        'paused',
+        { completedAt: null },
+      );
+    });
+
+    it('completes the task when no reject intervenes', async () => {
+      await expect(service().completeTaskForDelivery('acc-1', 'task_1')).resolves.toBe('completed');
+      expect(mocks.taskUpdateStatusIfCurrent).not.toHaveBeenCalled();
     });
   });
 

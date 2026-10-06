@@ -861,12 +861,17 @@ export class AcceptanceService {
       await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
 
-      // An ingested round (no verify pipeline status) settles when its report is
-      // published, and nothing else drives the task from it. Rounds the server
-      // verifier runs are driven once, after any auto-repair, by
-      // `driveTaskFromVerify` — completing here would race ahead of it.
-      if (status === 'delivered' && !current.status && acceptance.subjectType === 'task')
-        await this.completeDeliveredTaskSubject(acceptance.subjectId);
+      // Rounds settled outside the verifier pipeline — an ingested round (no
+      // status, settled by its report) or a completed acceptance flow
+      // (`delivered`) — have nothing else to drive the task. Rounds the server
+      // verifier runs (`passed` / `failed` / `errored`) are driven once, after
+      // any auto-repair, by `driveTaskFromVerify`; completing here would race it.
+      if (
+        status === 'delivered' &&
+        (!current.status || current.status === 'delivered') &&
+        acceptance.subjectType === 'task'
+      )
+        await this.completeTaskForDelivery(acceptanceId, acceptance.subjectId);
     }
     return status;
   };
@@ -1240,16 +1245,39 @@ export class AcceptanceService {
 
   /**
    * A delivered acceptance completes its task: the delivery is in, and the
-   * user's accept / reject decides from here. Best-effort — the task must not
-   * fail the rollup that settled the round.
+   * user's accept / reject decides from here. Shared by every settlement path.
+   *
+   * A reject can land at any point around the completion, so the decision is
+   * read on both sides of the write: rejected before → the task is left alone;
+   * rejected in between → the reject saw an unfinished task and did not reopen
+   * it, so it is reopened here. Best-effort — never fails the caller.
+   *
+   * @returns `completed` when the task now follows the delivery, `rejected` when
+   * a reject won, `skipped` when the task does not follow the acceptance.
    */
-  private completeDeliveredTaskSubject = async (subjectId: string): Promise<void> => {
+  completeTaskForDelivery = async (
+    acceptanceId: string,
+    subjectId: string,
+  ): Promise<'completed' | 'rejected' | 'skipped'> => {
     try {
       const task = await this.resolveLifecycleTask(subjectId);
-      if (!task) return;
+      if (!task) return 'skipped';
+
+      const before = await this.acceptanceModel.findPolicyById(acceptanceId);
+      if (before?.status === 'rejected') return 'rejected';
+      if (before?.status !== 'delivered') return 'skipped';
+
       await this.completeTaskSubject(task.id);
+
+      const after = await this.acceptanceModel.findPolicyById(acceptanceId);
+      if (after?.status === 'rejected') {
+        await this.reopenRejectedTaskSubject(task.id);
+        return 'rejected';
+      }
+      return 'completed';
     } catch (error) {
-      log('completeDeliveredTaskSubject failed (non-fatal): %O', error);
+      log('completeTaskForDelivery failed (non-fatal): %O', error);
+      return 'skipped';
     }
   };
 
