@@ -6,8 +6,9 @@ import type { FeedbackListEntry } from './FeedbackDrawer';
 export interface RejectFeedbackItem {
   annotationCount?: number;
   attachments?: AcceptanceAttachment[];
-  /** Display name for someone else's comment; unset for the viewer's own. */
-  authorName?: string;
+  authorAvatar?: string;
+  /** Always a real name — "you" hides who the agent will see as the author. */
+  authorName: string;
   checkSeq?: number;
   createdAt: string;
   key: string;
@@ -22,7 +23,8 @@ interface CollectRejectFeedbackParams {
   comments: AcceptanceCommentItem[];
   /** The decider's own queued feedback — already filtered to the current round. */
   ownEntries: FeedbackListEntry[];
-  viewerId?: string;
+  /** The decider, who authored `ownEntries`. */
+  viewer: { avatar?: string; id?: string; name: string };
 }
 
 /**
@@ -37,7 +39,7 @@ export const collectRejectFeedback = ({
   checks,
   comments,
   ownEntries,
-  viewerId,
+  viewer,
 }: CollectRejectFeedbackParams): RejectFeedbackItem[] => {
   const checksById = new Map(checks.map((check) => [check.id, check]));
   const commentsById = new Map(comments.map((item) => [item.id, item]));
@@ -45,6 +47,8 @@ export const collectRejectFeedback = ({
   const own: RejectFeedbackItem[] = ownEntries.map((entry, index) => ({
     annotationCount: entry.annotationCount,
     attachments: entry.attachments,
+    authorAvatar: viewer.avatar || undefined,
+    authorName: viewer.name,
     checkSeq: entry.checkSeq,
     createdAt: entry.createdAt,
     key: `own-${index}`,
@@ -59,13 +63,15 @@ export const collectRejectFeedback = ({
     if (!root || root.resolvedAt) return [];
     const check = root.checkItemId ? checksById.get(root.checkItemId) : undefined;
     const mine =
-      Boolean(viewerId) && item.author.type !== 'agent' && item.authorUserId === viewerId;
+      Boolean(viewer.id) && item.author.type !== 'agent' && item.authorUserId === viewer.id;
 
     return [
       {
         annotationCount: !item.parentCommentId && root.rect ? 1 : undefined,
         attachments: item.attachments,
-        authorName: mine ? undefined : item.author.fullName || item.author.username || undefined,
+        authorAvatar: item.author.avatar || undefined,
+        // Same fallback as the discussion's comment cards.
+        authorName: item.author.fullName || item.author.username || '—',
         checkSeq: check?.seq,
         createdAt: new Date(item.createdAt).toISOString(),
         key: `comment-${item.id}`,

@@ -398,7 +398,6 @@ export default {
   'acceptance.reject.includedHint':
     'The agent reads all of these, attachments included, along with your reason. Resolved comments are left out.',
   'acceptance.reject.includedNone': 'No other open feedback — only your reason goes along',
-  'acceptance.reject.you': 'You',
   'acceptance.reject.placeholder': 'Reason (optional), e.g. add screenshot evidence for dark mode…',
   'acceptance.reportDrawer.close': 'Close the round report',
   'acceptance.review.accept': 'Accept',

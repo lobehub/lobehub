@@ -2,6 +2,7 @@
 
 import { Flexbox, Icon } from '@lobehub/ui';
 import {
+  Avatar,
   Button,
   createModal,
   type ModalInstance,
@@ -9,7 +10,7 @@ import {
   TextArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { t } from 'i18next';
 import { ChevronDown, ChevronUp, MessagesSquare } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -24,19 +25,45 @@ import {
 import type { RejectFeedbackItem } from './rejectFeedback';
 
 const styles = createStaticStyles(({ css }) => ({
+  avatarStack: css`
+    flex: none;
+
+    > * + * {
+      margin-inline-start: -6px;
+      box-shadow: 0 0 0 2px ${cssVar.colorBgElevated};
+    }
+  `,
+  included: css`
+    overflow: hidden;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+    background: ${cssVar.colorFillQuaternary};
+  `,
+  includedBody: css`
+    padding-block: 0 10px;
+    padding-inline: 12px;
+  `,
   includedList: css`
     overflow-y: auto;
     max-height: 240px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
   `,
   includedRow: css`
     padding-block: 10px;
-    padding-inline: 12px;
     border-block-end: 1px solid ${cssVar.colorBorderSecondary};
 
     &:last-child {
       border-block-end: none;
+    }
+  `,
+  includedSummary: css`
+    padding-block: 10px;
+    padding-inline: 12px;
+  `,
+  includedToggle: css`
+    cursor: pointer;
+
+    &:hover {
+      background: ${cssVar.colorFillTertiary};
     }
   `,
   warning: css`
@@ -123,10 +150,8 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
 
 const IncludedFeedbackRow = memo<{ item: RejectFeedbackItem }>(({ item }) => {
   const { t: translate } = useTranslation('verify');
-  const source = item.mine ? translate('acceptance.reject.you') : item.authorName;
   const scope = item.checkSeq ? `C${item.checkSeq} ${item.title ?? ''}` : item.title;
   const metaBits = [
-    source,
     scope,
     item.annotationCount
       ? translate('acceptance.feedback.annotations', { count: item.annotationCount })
@@ -134,16 +159,27 @@ const IncludedFeedbackRow = memo<{ item: RejectFeedbackItem }>(({ item }) => {
   ].filter(Boolean);
 
   return (
-    <Flexbox className={styles.includedRow} gap={4}>
-      <Text ellipsis fontSize={11} type={'secondary'}>
-        {metaBits.join(' · ')}
-      </Text>
-      {item.text && (
-        <Text ellipsis={{ rows: 2 }} fontSize={12}>
-          {item.text}
-        </Text>
-      )}
-      <AttachmentThumbs attachments={item.attachments} />
+    <Flexbox horizontal className={styles.includedRow} gap={8}>
+      {/* First character only — a two-character CJK name wraps in a small circle. */}
+      <Avatar avatar={item.authorAvatar || item.authorName.slice(0, 1)} size={20} />
+      <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
+        <Flexbox horizontal align={'baseline'} gap={6} style={{ minWidth: 0 }}>
+          <Text strong fontSize={12} style={{ flex: 'none' }}>
+            {item.authorName}
+          </Text>
+          {metaBits.length > 0 && (
+            <Text ellipsis fontSize={11} type={'secondary'}>
+              {metaBits.join(' · ')}
+            </Text>
+          )}
+        </Flexbox>
+        {item.text && (
+          <Text ellipsis={{ rows: 2 }} fontSize={12}>
+            {item.text}
+          </Text>
+        )}
+        <AttachmentThumbs attachments={item.attachments} />
+      </Flexbox>
     </Flexbox>
   );
 });
@@ -180,8 +216,74 @@ const RejectContent = memo<RejectContentProps>(
       }
     };
 
+    // Distinct faces behind the queued feedback, for the summary bar.
+    const authors = [
+      ...new Map(feedback.map((item) => [item.authorName, item.authorAvatar])).entries(),
+    ].slice(0, 3);
+
     return (
       <Flexbox gap={16}>
+        {/* What the repair prompt carries besides the reason leads the dialog —
+            otherwise nobody can tell whether teammates' notes go along. */}
+        {feedback.length > 0 ? (
+          <Flexbox className={styles.included}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              aria-expanded={previewOpen}
+              className={cx(styles.includedSummary, styles.includedToggle)}
+              gap={8}
+              role={'button'}
+              tabIndex={0}
+              onClick={() => setPreviewOpen((open) => !open)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setPreviewOpen((open) => !open);
+                }
+              }}
+            >
+              <Icon icon={MessagesSquare} size={16} />
+              <Text strong fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+                {translate('acceptance.reject.included', {
+                  count: feedback.length,
+                  mine: mineCount,
+                  others: feedback.length - mineCount,
+                })}
+              </Text>
+              <Flexbox horizontal className={styles.avatarStack}>
+                {authors.map(([name, avatar]) => (
+                  <Avatar avatar={avatar || name.slice(0, 1)} key={name} size={20} />
+                ))}
+              </Flexbox>
+              <Icon icon={previewOpen ? ChevronUp : ChevronDown} size={14} />
+            </Flexbox>
+            {previewOpen && (
+              <Flexbox className={styles.includedBody} gap={4}>
+                <Text fontSize={12} type={'secondary'}>
+                  {translate('acceptance.reject.includedHint')}
+                </Text>
+                <Flexbox className={styles.includedList}>
+                  {feedback.map((item) => (
+                    <IncludedFeedbackRow item={item} key={item.key} />
+                  ))}
+                </Flexbox>
+              </Flexbox>
+            )}
+          </Flexbox>
+        ) : (
+          <Flexbox
+            horizontal
+            align={'center'}
+            className={cx(styles.included, styles.includedSummary)}
+            gap={8}
+          >
+            <Icon color={cssVar.colorTextTertiary} icon={MessagesSquare} size={16} />
+            <Text fontSize={13} type={'secondary'}>
+              {translate('acceptance.reject.includedNone')}
+            </Text>
+          </Flexbox>
+        )}
         <Text fontSize={13} type={'secondary'}>
           {translate(
             dispatchAvailable
@@ -195,42 +297,7 @@ const RejectContent = memo<RejectContentProps>(
           value={comment}
           onChange={(event) => setComment(event.target.value)}
         />
-        {previewOpen && feedback.length > 0 && (
-          <Flexbox gap={6}>
-            <Text fontSize={12} type={'secondary'}>
-              {translate('acceptance.reject.includedHint')}
-            </Text>
-            <Flexbox className={styles.includedList}>
-              {feedback.map((item) => (
-                <IncludedFeedbackRow item={item} key={item.key} />
-              ))}
-            </Flexbox>
-          </Flexbox>
-        )}
-        <Flexbox horizontal align={'center'} gap={8} justify={'flex-end'} wrap={'wrap'}>
-          {/* Says up front what the repair prompt carries besides the reason —
-            otherwise nobody can tell whether teammates' notes go along. */}
-          {feedback.length > 0 ? (
-            <Button
-              aria-expanded={previewOpen}
-              icon={<Icon icon={MessagesSquare} />}
-              size={'small'}
-              type={'text'}
-              onClick={() => setPreviewOpen((open) => !open)}
-            >
-              {translate('acceptance.reject.included', {
-                count: feedback.length,
-                mine: mineCount,
-                others: feedback.length - mineCount,
-              })}
-              <Icon icon={previewOpen ? ChevronUp : ChevronDown} />
-            </Button>
-          ) : (
-            <Text fontSize={12} type={'secondary'}>
-              {translate('acceptance.reject.includedNone')}
-            </Text>
-          )}
-          <Flexbox flex={1} />
+        <Flexbox horizontal gap={8} justify={'flex-end'}>
           <Button disabled={loading} onClick={close}>
             {translate('acceptance.actions.cancel')}
           </Button>

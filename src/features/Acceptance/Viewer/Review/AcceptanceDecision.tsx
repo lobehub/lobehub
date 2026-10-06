@@ -46,6 +46,8 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const { approvals, items: commentItems } = useAcceptanceComments(acceptanceId);
   const viewerId = useUserStore(userProfileSelectors.userId);
+  const viewerName = useUserStore(userProfileSelectors.displayUserName);
+  const viewerAvatar = useUserStore(userProfileSelectors.userAvatar);
   if (!data || !canReviewAcceptance(data) || data.acceptance.status === 'closed') return null;
 
   if (flowPlanPhase(data.rounds.at(-1))) return null;
@@ -248,7 +250,7 @@ const AcceptanceDecision = ({ onDraftToComposer }: AcceptanceDecisionProps) => {
               checks,
               comments: commentItems,
               ownEntries: feedbackEntries.filter((entry) => !entry.stale),
-              viewerId,
+              viewer: { avatar: viewerAvatar, id: viewerId, name: viewerName },
             }),
             onConfirm: async (comment) => {
               if (!data.origin?.topic) {

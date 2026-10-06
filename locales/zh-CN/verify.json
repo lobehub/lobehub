@@ -229,7 +229,6 @@
   "acceptance.reject.includedHint": "agent 会连同你填写的原因一起读取以下全部反馈（含附件截图）；已解决的评论不会带上。",
   "acceptance.reject.includedNone": "暂无其他待处理反馈，只会带上你填写的原因",
   "acceptance.reject.placeholder": "打回原因（可选），例如：深色模式需补截图证据……",
-  "acceptance.reject.you": "你",
   "acceptance.reportDrawer.close": "关闭该轮报告",
   "acceptance.requirementEmpty": "尚未记录该对象的验收目标。",
   "acceptance.requirementEmptyEditable": "尚未记录验收目标，点击填写。",

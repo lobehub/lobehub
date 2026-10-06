@@ -60,7 +60,7 @@ describe('collectRejectFeedback', () => {
           title: 'Dark mode',
         },
       ],
-      viewerId: 'user-1',
+      viewer: { id: 'user-1', name: 'Arvin' },
     });
 
     expect(items).toHaveLength(2);
@@ -72,7 +72,12 @@ describe('collectRejectFeedback', () => {
       text: 'looks off',
     });
     expect(items[0].attachments).toHaveLength(1);
-    expect(items[1]).toMatchObject({ mine: true, text: 'contrast too low', title: 'Dark mode' });
+    expect(items[1]).toMatchObject({
+      authorName: 'Arvin',
+      mine: true,
+      text: 'contrast too low',
+      title: 'Dark mode',
+    });
   });
 
   it('leaves out what the CLI does not hand over: resolved threads, deleted rows, approvals', () => {
@@ -85,20 +90,36 @@ describe('collectRejectFeedback', () => {
         comment({ id: 'ok', kind: 'approval' }),
       ],
       ownEntries: [],
-      viewerId: 'user-1',
+      viewer: { id: 'user-1', name: 'Arvin' },
     });
 
     expect(items).toEqual([]);
   });
 
-  it('marks the viewer’s own discussion comments as theirs', () => {
+  it('names the viewer’s own discussion comments instead of saying “you”', () => {
     const [item] = collectRejectFeedback({
       checks,
-      comments: [comment({ authorUserId: 'user-1' })],
+      comments: [
+        comment({
+          author: {
+            avatar: 'https://x/arvin.png',
+            fullName: 'Arvin',
+            id: 'user-1',
+            status: 'active',
+            type: 'user',
+            username: 'arvin',
+          },
+          authorUserId: 'user-1',
+        }),
+      ],
       ownEntries: [],
-      viewerId: 'user-1',
+      viewer: { id: 'user-1', name: 'Arvin' },
     });
 
-    expect(item).toMatchObject({ authorName: undefined, mine: true });
+    expect(item).toMatchObject({
+      authorAvatar: 'https://x/arvin.png',
+      authorName: 'Arvin',
+      mine: true,
+    });
   });
 });
