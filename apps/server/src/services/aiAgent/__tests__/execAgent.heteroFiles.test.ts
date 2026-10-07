@@ -12,6 +12,7 @@ const {
   mockBuildRemoteDeviceHeteroContext,
   mockCreateOperationMetadata,
   mockDispatchAgentRun,
+  mockQueryDeviceSystemInfo,
   mockExecuteToolCall,
   mockInterruptOperation,
   mockGetHeterogeneousResumeSessionId,
@@ -29,6 +30,7 @@ const {
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockQueryDeviceSystemInfo: vi.fn().mockResolvedValue(undefined),
   mockExecuteToolCall: vi.fn().mockResolvedValue({ success: true }),
   mockInterruptOperation: vi.fn().mockResolvedValue(true),
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
@@ -237,6 +239,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mockDispatchAgentRun,
+    queryDeviceSystemInfo: mockQueryDeviceSystemInfo,
     executeToolCall: mockExecuteToolCall,
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
@@ -274,6 +277,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
+    mockQueryDeviceSystemInfo.mockReset().mockResolvedValue(undefined);
     mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
     mockMessageQuery.mockResolvedValue([]);
@@ -1058,12 +1062,31 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     });
 
     expect(result).toMatchObject({
-      error: expect.stringContaining('requires the local desktop app'),
+      error: expect.stringContaining('Update LobeHub CLI'),
       status: 'error',
       success: false,
     });
     expect(mockDispatchAgentRun).not.toHaveBeenCalled();
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  /** @example A live compatible device receives Ask through the native wrapper selector. */
+  it('dispatches native Codex permissions only after the device capability probe', async () => {
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { permissionMode: 'ask', type: 'codex' },
+    };
+    mockQueryDeviceSystemInfo.mockResolvedValueOnce({ nativeCodexPermissions: true });
+    const result = await service.execAgent({ agentId: 'agent-1', prompt: 'Use native approval' });
+    /** @example No exec-never fallback is substituted for Ask. */
+    expect(result).not.toMatchObject({ status: 'error' });
+    /** @example The dispatch carries the explicit app-server transport selector. */
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--codex-permission-mode', 'ask'],
+      }),
+    );
   });
 
   // Agents saved before permission presets keep their raw CLI arguments on remote targets.

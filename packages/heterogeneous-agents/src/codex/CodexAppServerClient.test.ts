@@ -138,6 +138,28 @@ afterEach(() => {
 });
 
 describe('CodexAppServerClient', () => {
+  /** @example A device runtime owns each native process before the handshake begins. */
+  it('registers the native child with its host lifecycle owner', async () => {
+    const { child } = createProcess();
+    const onSpawn = vi.fn();
+    spawnMock.mockReturnValue(child);
+    vi.spyOn(process, 'kill').mockImplementation(() => true);
+    const client = new CodexAppServerClient({
+      clientVersion: 'test',
+      commandPath: 'codex',
+      cwd: '/workspace',
+      env: process.env,
+      onSpawn,
+    });
+
+    await client.connect();
+    /** @example Stop can find the real child rather than just the wrapper PID. */
+    expect(onSpawn).toHaveBeenCalledExactlyOnceWith(child);
+    /** @example The runtime reports the app-server process while it is connected. */
+    expect(client.pid).toBe(child.pid);
+    client.close();
+  });
+
   it('only reuses a process for the same binary, global arguments, and environment', () => {
     const client = new CodexAppServerClient({
       args: ['--config', 'model_provider="openai"'],

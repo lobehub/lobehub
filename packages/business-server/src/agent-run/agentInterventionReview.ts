@@ -388,6 +388,8 @@ export type AgentInterventionRuntimeAction =
       response: {
         cancelReason?: 'user_cancelled';
         cancelled?: boolean;
+        /** Native callback identity when one tool may request permission repeatedly. */
+        interventionId?: string;
         producerAck: false;
         resolutionRequestId: string;
         result?: unknown;
@@ -452,6 +454,8 @@ export interface AgentInterventionResolutionPublishedParams {
  * authoritative row/resolution before applying the transition.
  */
 export interface AcknowledgeAgentInterventionProducerResolutionParams {
+  /** Callback whose producer settled; prevents a delayed receipt from settling a reused tool item. */
+  interventionId?: string;
   operationId: string;
   ownerUserId: string;
   resolutionRequestId?: string;
@@ -483,7 +487,7 @@ export interface NotifyAgentInterventionItem {
   /** Canonical server locator. Cloud must not copy raw arguments into the durable row. */
   sourceRef:
     | { toolCallId: string; toolMessageId: string; type: 'runtime' }
-    | { operationId: string; toolCallId: string; type: 'heterogeneous' };
+    | { interventionId?: string; operationId: string; toolCallId: string; type: 'heterogeneous' };
   summary: string;
   surface: AgentInterventionReviewItem['surface'];
 }

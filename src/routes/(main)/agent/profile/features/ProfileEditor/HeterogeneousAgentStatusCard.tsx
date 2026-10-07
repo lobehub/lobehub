@@ -219,6 +219,8 @@ interface HeterogeneousAgentStatusCardProps {
   serverDefaultLoading?: boolean;
   serverDefaultModels?: ServerDefaultModel[];
   serverDefaultUnavailableReason?: string;
+  /** Whether the selected host can execute native Codex approvals. Defaults to local support. */
+  supportsCodexPermissions?: boolean;
 }
 
 const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
@@ -226,6 +228,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     apiModeAvailable = false,
     apiModeWorkspaceBlocked = false,
     isLocalExecution = false,
+    supportsCodexPermissions = isLocalExecution,
     onPermissionModeChange,
     provider,
     serverDefaultAvailable = false,
@@ -877,12 +880,12 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       const permissionDescription = t(
         `heterogeneousStatus.codexPermission.description.${permissionMode}`,
       );
-      const permissionTooltip = isLocalExecution
+      const permissionTooltip = supportsCodexPermissions
         ? permissionDescription
         : `${permissionDescription} ${t('heterogeneousStatus.codexPermission.localOnly')}`;
       const options = [
         ...(['ask', 'auto-review', 'read-only', 'full-access'] as const).map((mode) => ({
-          disabled: !isLocalExecution && mode !== 'full-access',
+          disabled: !supportsCodexPermissions && mode !== 'full-access',
           label: t(`heterogeneousStatus.codexPermission.mode.${mode}`),
           title: t(`heterogeneousStatus.codexPermission.description.${mode}`),
           value: mode,
@@ -921,7 +924,7 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
                     typeof value !== 'string' ||
                     !CODEX_PERMISSION_MODES.includes(value as CodexPermissionMode) ||
                     !canEdit ||
-                    (!isLocalExecution && value !== 'full-access')
+                    (!supportsCodexPermissions && value !== 'full-access')
                   )
                     return;
                   const nextMode = value as CodexPermissionMode;

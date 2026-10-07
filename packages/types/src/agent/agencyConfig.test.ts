@@ -233,10 +233,19 @@ describe('Codex permission modes', () => {
     ).toEqual(['--agent-arg=--dangerously-bypass-approvals-and-sandbox', '--model', 'gpt-5.5']);
   });
 
-  it('refuses to encode a configured mode for the exec transport', () => {
-    expect(() => buildHeteroExecArgs({ permissionMode: 'ask', type: 'codex' })).toThrow(
-      'Configured Codex permission modes require the app-server transport',
-    );
+  // ROOT CAUSE:
+  // The device wrapper rejected safe presets before it could start the native
+  // approval transport. Send a typed wrapper option, never substitute exec never.
+  /** @example Device dispatch preserves the selected native approval preset. */
+  it('encodes a safe preset for the device app-server transport', () => {
+    /** @example Stale permission flags are removed and the selected mode is explicit. */
+    expect(
+      buildHeteroExecArgs({
+        args: ['--dangerously-bypass-approvals-and-sandbox'],
+        permissionMode: 'ask',
+        type: 'codex',
+      }),
+    ).toEqual(['--codex-permission-mode', 'ask']);
   });
 });
 

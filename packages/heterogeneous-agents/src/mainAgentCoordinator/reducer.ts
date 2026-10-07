@@ -1,4 +1,6 @@
 import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
+import { getAgentInterventionReviewDecisionIds } from '@lobechat/agent-gateway-client';
+import { isCodexDenyDecision } from '@lobechat/types';
 
 import { isEchoedErrorText } from '../errors/echo';
 import type { SubagentIntent, SubagentReduceCtx } from '../subagentCoordinator';
@@ -337,11 +339,26 @@ const reduceInterventionRequest = (
   if (!isInterventionRequest(data)) return { intents: [], state };
 
   const request = data as AgentInterventionRequestData;
+  const reviewDecisionIds = getAgentInterventionReviewDecisionIds(request);
   const existing = state.interventionsByCallId.get(request.toolCallId);
   const preparedState = copyState(state);
-  const intervention: MainAgentInterventionState = existing
+  const sameCallback = existing && existing.request?.interventionId === request.interventionId;
+  const intervention: MainAgentInterventionState = sameCallback
     ? { ...existing, request }
-    : { intervention: { status: 'pending' }, request, transition: 'pending' };
+    : {
+        intervention: {
+          ...(request.interventionId
+            ? {
+                arguments: request.arguments,
+                interventionId: request.interventionId,
+                reviewDecisionIds,
+              }
+            : {}),
+          status: 'pending',
+        },
+        request,
+        transition: 'pending',
+      };
   preparedState.interventionsByCallId.set(request.toolCallId, intervention);
 
   // The bridge and the adapter run on independent async pumps, so the request
@@ -382,6 +399,13 @@ const reduceInterventionResponse = (state: MainAgentRunState, data: any): Reduce
   }
 
   const existing = state.interventionsByCallId.get(data.toolCallId);
+  // A delayed ACK must never settle a later native request reusing this tool item.
+  if (
+    existing?.request?.interventionId &&
+    data.interventionId !== existing.request.interventionId
+  ) {
+    return { intents: [], state };
+  }
   const transition: MainAgentInterventionState['transition'] = !data.cancelled
     ? 'resolved'
     : data.cancelReason === 'timeout'
@@ -390,9 +414,13 @@ const reduceInterventionResponse = (state: MainAgentRunState, data: any): Reduce
         ? 'session_ended'
         : 'cancelled';
   const intervention: MainAgentInterventionState = {
-    intervention: data.cancelled
-      ? { rejectedReason: data.cancelReason ?? 'user_cancelled', status: 'rejected' }
-      : { status: 'approved' },
+    intervention: {
+      ...existing?.intervention,
+      ...(data.cancelled ||
+      (existing?.request?.provider === 'codex' && isCodexDenyDecision(data.result?.decision))
+        ? { rejectedReason: data.cancelReason ?? 'user_cancelled', status: 'rejected' as const }
+        : { status: 'approved' as const }),
+    },
     request: existing?.request,
     resolutionRequestId:
       typeof data.resolutionRequestId === 'string' ? data.resolutionRequestId : undefined,

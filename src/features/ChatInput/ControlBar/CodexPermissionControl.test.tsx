@@ -67,7 +67,7 @@ describe('CodexPermissionControl', () => {
     render(
       <CodexPermissionControl
         canConfigure
-        isLocalExecution
+        supportsNativePermissions
         agentId="agent"
         provider={{ type: 'codex', args: ['--sandbox', 'read-only', '-a', 'untrusted'] }}
       />,
@@ -98,8 +98,8 @@ describe('CodexPermissionControl', () => {
       <CodexPermissionControl
         canConfigure
         agentId="agent"
-        isLocalExecution={false}
         provider={{ type: 'codex', permissionMode: 'ask' }}
+        supportsNativePermissions={false}
       />,
     );
     /** @example The user can open the permission selector on a remote target. */
@@ -128,7 +128,7 @@ describe('CodexPermissionControl', () => {
     render(
       <CodexPermissionControl
         canConfigure
-        isLocalExecution
+        supportsNativePermissions
         agentId="agent"
         provider={{ type: 'codex', permissionMode: 'ask' }}
       />,
@@ -153,7 +153,7 @@ describe('CodexPermissionControl', () => {
     render(
       <CodexPermissionControl
         canConfigure
-        isLocalExecution
+        supportsNativePermissions
         agentId="agent"
         provider={{ type: 'codex', permissionMode: 'ask' }}
       />,
@@ -173,7 +173,7 @@ describe('CodexPermissionControl', () => {
     render(
       <CodexPermissionControl
         canConfigure
-        isLocalExecution
+        supportsNativePermissions
         agentId="agent"
         provider={{ type: 'codex', permissionMode: 'read-only' }}
       />,

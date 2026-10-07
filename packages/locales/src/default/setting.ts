@@ -519,7 +519,7 @@ export default {
   'heterogeneousStatus.codexPermission.fullAccessConfirm.title': 'Enable full access?',
   'heterogeneousStatus.codexPermission.label': 'Permissions',
   'heterogeneousStatus.codexPermission.localOnly':
-    'Approval and read-only modes require local desktop execution. Full access is available on this target.',
+    'Approval and read-only modes require Desktop or a connected device with native Codex permissions. Update LobeHub CLI and reconnect if unavailable.',
   'heterogeneousStatus.codexPermission.mode.ask': 'Ask for approval',
   'heterogeneousStatus.codexPermission.mode.auto-review': 'Approve for me',
   'heterogeneousStatus.codexPermission.mode.custom': 'Custom CLI arguments',

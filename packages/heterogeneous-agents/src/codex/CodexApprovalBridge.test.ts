@@ -19,6 +19,7 @@ const setup = () => {
       arguments: {
         availableDecisions,
         command: 'touch outside',
+        cwd: '/workspace',
         reason: 'Write outside workspace',
       },
       interventionId: 'native-id',
@@ -38,6 +39,33 @@ afterEach(() => {
 
 /** @example Every displayed request keeps its own context and one-shot callback. */
 describe('CodexApprovalBridge', () => {
+  // ROOT CAUSE:
+  // Desktop updates its card through IPC, but device cards remain resolving
+  // until the producer acknowledges the exact intervention and resolution.
+  /** @example A remote allow emits its producer receipt exactly once. */
+  it('acknowledges the consumed native decision with its remote resolution id', async () => {
+    const { bridge, events, latestId, request } = setup();
+    const pending = request();
+    const id = latestId();
+    bridge.resolve(id, 'accept', { resolutionRequestId: 'resolution-one' });
+    await pending;
+    /** @example The receipt settles only the UI callback that native Codex consumed. */
+    expect(events.filter((event) => event.type === 'agent_intervention_response')).toEqual([
+      expect.objectContaining({
+        data: expect.objectContaining({
+          interventionId: id,
+          producerAck: true,
+          resolutionRequestId: 'resolution-one',
+          result: { decision: 'accept' },
+          toolCallId: 'item',
+        }),
+      }),
+    ]);
+    bridge.resolve(id, 'accept', { resolutionRequestId: 'resolution-one' });
+    /** @example A replay cannot acknowledge or approve another callback. */
+    expect(events.filter((event) => event.type === 'agent_intervention_response')).toHaveLength(1);
+  });
+
   // ROOT CAUSE:
   // Native callbacks can share one item id; publishing both replaces the only
   // intervention on its tool message. Unique ids plus a per-tool queue preserve
@@ -175,5 +203,127 @@ describe('CodexApprovalBridge', () => {
     await expect(Promise.all([first, second])).resolves.toEqual(['cancel', 'cancel']);
     /** @example A closed operation cannot open a new approval prompt. */
     await expect(request()).resolves.toBe('cancel');
+  });
+  /** @example Review preserves working directory and exact file scope without modifying native arguments. */
+  it('includes complete native scope in the durable Review', async () => {
+    const { bridge, events } = setup();
+    const args = { cwd: '/task', grantRoot: '/task/allowed', reason: 'Edit one file' };
+    const toolContext = {
+      changes: [{ path: '/task/allowed/a.txt', diffText: '+approved content', kind: 'add' }],
+    };
+    const pending = bridge.request({
+      apiName: 'file_change',
+      arguments: args,
+      interventionId: 'native',
+      toolCallId: 'file-item',
+      toolContext,
+    });
+    const event = events.find((entry) => entry.type === 'agent_intervention_request')!;
+    const review = JSON.parse(String(event.data.reviewArguments));
+    /** @example Both the diff and session grant root remain reviewable. */
+    expect(review.questions[0].question).toContain('+approved content');
+    /** @example The working directory is not silently omitted. */
+    expect(review.questions[0].question).toContain('/task');
+    /** @example A session grant states its exact scope. */
+    expect(
+      review.questions[0].options.find((option: { id: string }) => option.id === 'decision_1')
+        .description,
+    ).toContain('/task/allowed');
+    /** @example Context does not rewrite Codex's original RPC payload. */
+    expect(JSON.parse(String(event.data.arguments))).toEqual(args);
+    bridge.cancelAll();
+    await pending;
+  });
+
+  // ROOT CAUSE:
+  // The canonical sanitizer rejects oversized option descriptions. The producer
+  // previously emitted such options, breaking ingestion while Codex stayed parked.
+  // Keep original indices and remove only unreviewable grants, never truncate scope.
+  /** @example An oversized amendment still has an actionable exact Deny/Stop path. */
+  it('filters oversized grants while preserving native option indices', async () => {
+    const { bridge, events } = setup();
+    const pending = bridge.request({
+      apiName: 'command_execution',
+      arguments: {
+        command: 'echo hello',
+        cwd: '/task',
+        reason: 'Test',
+        availableDecisions: [
+          'accept',
+          { acceptWithExecpolicyAmendment: { execpolicy_amendment: ['x'.repeat(1100)] } },
+          'decline',
+          'cancel',
+        ],
+      },
+      interventionId: 'native',
+      toolCallId: 'command',
+    });
+    const event = events.find((entry) => entry.type === 'agent_intervention_request')!;
+    const review = JSON.parse(String(event.data.reviewArguments));
+    /** @example Removing decision_1 never relabels decision_2 as an allow grant. */
+    expect(review.questions[0].options.map((option: { id: string }) => option.id)).toEqual([
+      'decision_0',
+      'decision_2',
+      'decision_3',
+    ]);
+    /** @example The command's directory and reason are displayed with its text. */
+    expect(review.questions[0].question).toContain('/task');
+    bridge.cancelAll();
+    await pending;
+  });
+
+  /** @example A command beyond the renderer limit cannot authorize an unseen suffix. */
+  it('fails closed on an unrepresentable approval scope', async () => {
+    const { bridge, events } = setup();
+    const pending = bridge.request({
+      apiName: 'command_execution',
+      arguments: { command: 'x'.repeat(4001), availableDecisions: ['accept', 'cancel'] },
+      interventionId: 'native',
+      toolCallId: 'command',
+    });
+    const event = events.find((entry) => entry.type === 'agent_intervention_request')!;
+    const review = JSON.parse(String(event.data.reviewArguments));
+    /** @example No allow action remains after context exceeds the display bound. */
+    expect(review.questions[0].options.map((option: { id: string }) => option.id)).toEqual([
+      'decision_1',
+    ]);
+    /** @example A direct stale client cannot bypass the same producer restriction. */
+    expect(bridge.resolve(String(event.data.interventionId), 'accept')).toBe(false);
+    bridge.cancelAll();
+    await pending;
+  });
+
+  // ROOT CAUSE:
+  // The size check accepted an empty native scope. No command/cwd or real diff
+  // was required, so an invisible operation could still be authorized.
+  /** @example Missing scope leaves only the bridge's explicit Stop option. */
+  it.each([
+    { apiName: 'command_execution' as const, arguments: {}, toolContext: undefined },
+    {
+      apiName: 'command_execution' as const,
+      arguments: { command: 'touch unknown' },
+      toolContext: undefined,
+    },
+    { apiName: 'file_change' as const, arguments: {}, toolContext: { changes: [] } },
+    {
+      apiName: 'file_change' as const,
+      arguments: {},
+      toolContext: { changes: [{ path: '/unknown' }] },
+    },
+  ])('rejects grants when native scope is missing: $apiName $arguments', async (request) => {
+    const { bridge, events, latestId } = setup();
+    const pending = bridge.request({
+      ...request,
+      arguments: { ...request.arguments, availableDecisions: ['accept'] },
+      interventionId: 'native-missing',
+      toolCallId: 'missing-scope',
+    });
+    const review = JSON.parse(String(events[0].data.reviewArguments));
+    /** @example A grant with unknown scope is never displayed or accepted. */
+    expect(review.questions[0].options).toEqual([{ id: 'cancel_turn', label: 'Stop this turn' }]);
+    /** @example A stale or alternate client cannot bypass the producer check. */
+    expect(bridge.resolve(latestId(), 'accept')).toBe(false);
+    bridge.cancelAll();
+    await pending;
   });
 });

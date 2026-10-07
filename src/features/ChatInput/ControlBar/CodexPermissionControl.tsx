@@ -32,21 +32,21 @@ const styles = createStaticStyles(({ css }) => ({
 interface CodexPermissionControlProps {
   agentId: string;
   canConfigure: boolean;
-  isLocalExecution: boolean;
   provider: HeterogeneousProviderConfig;
+  supportsNativePermissions: boolean;
 }
 
 /**
  * Displays the requested native permissions and persists the next selection.
  *
- * Use when: a Codex agent is shown in the desktop input control bar.
+ * Use when: a Codex agent uses Desktop or a capable connected device.
  * Expects: the effective provider configuration and resource access checks.
  * Returns: an accessible selector; active turns keep their current selection.
  */
 export const CodexPermissionControl = ({
   agentId,
   canConfigure,
-  isLocalExecution,
+  supportsNativePermissions,
   provider,
 }: CodexPermissionControlProps) => {
   const { t } = useTranslation('chat');
@@ -68,12 +68,12 @@ export const CodexPermissionControl = ({
     permissions.approvalsReviewer,
   ].join(' · ');
   const description = t(`heteroAgent.codexPermission.description.${permissionMode}`);
-  const tooltip = !isLocalExecution
+  const tooltip = !supportsNativePermissions
     ? `${description} ${t('heteroAgent.codexPermission.localOnly')}`
     : `${description} ${permissionSummary}`;
   const options = [
     ...(['ask', 'auto-review', 'read-only', 'full-access'] as const).map((mode) => ({
-      disabled: !isLocalExecution && mode !== 'full-access',
+      disabled: !supportsNativePermissions && mode !== 'full-access',
       label: t(`heteroAgent.codexPermission.mode.${mode}`),
       title: t(`heteroAgent.codexPermission.description.${mode}`),
       value: mode,
@@ -94,7 +94,7 @@ export const CodexPermissionControl = ({
     // A confirmation can outlive the idle render that opened it.
     if (
       !permissionConfigurable ||
-      (!isLocalExecution && nextMode !== 'full-access') ||
+      (!supportsNativePermissions && nextMode !== 'full-access') ||
       agentRunSelectors.isCurrentSendMessageLoading(useChatStore.getState())
     )
       return;

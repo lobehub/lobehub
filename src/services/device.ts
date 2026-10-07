@@ -12,6 +12,17 @@ class DeviceService {
     return lambdaClient.device.listDevices.query();
   }
 
+  /**
+   * Reads capabilities reported by the authenticated live connector.
+   *
+   * Use when: enabling features that older device clients do not implement.
+   * Expects: a device accessible in the current workspace.
+   * Returns: live system information, or undefined when unavailable.
+   */
+  getSystemInfo(deviceId: string) {
+    return lambdaClient.device.getDeviceSystemInfo.query({ deviceId });
+  }
+
   /** Update user-editable device fields (defaultCwd / friendlyName / workingDirs). */
   updateDevice(input: Parameters<DeviceClient['updateDevice']['mutate']>[0]) {
     return lambdaClient.device.updateDevice.mutate(input);

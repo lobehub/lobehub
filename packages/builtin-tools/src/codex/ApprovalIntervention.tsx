@@ -63,11 +63,17 @@ export const CodexApprovalIntervention = ({
   messageId,
   onInteractionAction,
   pluginState,
+  reviewDecisionIds,
   toolArgs,
 }: BuiltinInterventionProps<CodexApprovalArguments, CodexFileChangeArgs, CodexFileChangeState>) => {
   const { t } = useTranslation('plugin');
   const [submitting, setSubmitting] = useState<string>();
-  const decisions = getCodexApprovalDecisions(apiName, args);
+  const nativeDecisions = getCodexApprovalDecisions(apiName, args);
+  const decisions = nativeDecisions.filter(
+    (_, index) =>
+      reviewDecisionIds === undefined || reviewDecisionIds.includes(`decision_${index}`),
+  );
+  const restricted = decisions.length !== nativeDecisions.length;
 
   const submit = async (decision: CodexApprovalDecision) => {
     if (!onInteractionAction || disabled || submitting) return;
@@ -82,6 +88,7 @@ export const CodexApprovalIntervention = ({
 
   const getLabel = (decision: CodexApprovalDecision) => {
     const type = getCodexApprovalDecisionType(decision);
+    if (type === 'cancel') return t('builtins.codex.approval.stop');
     if (type === 'accept') return t('builtins.codex.approval.accept');
     if (type === 'acceptForSession') {
       if (apiName === 'file_change') return t('builtins.codex.approval.acceptFilesForSession');
@@ -118,6 +125,16 @@ export const CodexApprovalIntervention = ({
 
   const actions = (
     <div className={styles.actions}>
+      {reviewDecisionIds?.includes('cancel_turn') && (
+        <Button
+          disabled={disabled || Boolean(submitting)}
+          size="small"
+          type="text"
+          onClick={() => void submit('cancel')}
+        >
+          {t('builtins.codex.approval.stop')}
+        </Button>
+      )}
       {denyDecisions.map((decision) => {
         const decisionKey = JSON.stringify(decision);
         return (
@@ -167,6 +184,9 @@ export const CodexApprovalIntervention = ({
 
   return (
     <Flexbox gap={8}>
+      {restricted && (
+        <div className={styles.hint}>{t('builtins.codex.approval.reviewScopeLimit')}</div>
+      )}
       <div className={styles.hint}>{args.reason || t('builtins.codex.approval.hint')}</div>
       <dl className={styles.scope}>
         {args.command && (

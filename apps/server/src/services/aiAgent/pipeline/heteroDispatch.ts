@@ -958,16 +958,18 @@ export const dispatchHeteroAgent = async (
       log('execAgent: failed to init stream for local hetero: %O', err);
     }
 
-    // Only an explicitly saved approval preset needs the local approval bridge;
-    // legacy raw CLI arguments keep dispatching to remote exec unchanged.
+    // Explicit approval presets require a native bidirectional runtime. Connected
+    // devices provide it through the CLI; the cloud sandbox still uses exec.
+    // Legacy raw CLI arguments keep their original transport unchanged.
     if (
+      deviceHeteroPlan?.kind === 'sandbox' &&
       heteroType === 'codex' &&
       codexPermissionModeRequiresAppServer(
         agentConfig.agencyConfig?.heterogeneousProvider?.permissionMode,
       )
     ) {
       const detail =
-        'This Codex permission mode requires the local desktop app and cannot run through a connected device or cloud sandbox.';
+        'This Codex permission mode requires the local desktop app or a compatible connected device; cloud sandbox execution is unavailable.';
       const terminalReported = await finalizeHeteroDispatchError(deps, {
         agentId: resolvedAgentId,
         assistantMessageId,
@@ -1097,24 +1099,45 @@ export const dispatchHeteroAgent = async (
         dispatchDeviceId,
         dispatchWorkspaceId,
       );
+      const needsNativeCodex =
+        heteroType === 'codex' &&
+        codexPermissionModeRequiresAppServer(heterogeneousProvider?.permissionMode);
+      // Probe after device authorization, before the old wrapper could ACK an unknown option.
+      const nativePermissionsAvailable =
+        !needsNativeCodex ||
+        (!authorizationError &&
+          (
+            await deviceGateway.queryDeviceSystemInfo(
+              deps.userId,
+              dispatchDeviceId,
+              dispatchWorkspaceId,
+            )
+          )?.nativeCodexPermissions === true);
       const result = authorizationError
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
-        : await deviceGateway.dispatchAgentRun({
-            ...heteroParams,
-            agentId: resolvedAgentId,
-            args: heteroExecArgs,
-            cwd: deviceCwd,
-            deviceId: dispatchDeviceId,
-            resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
-            systemContext: deviceSystemContext,
-            // Route to the workspace pool when this is a workspace device; the
-            // operation JWT stays member-scoped (the run belongs to the member).
-            workspaceId: dispatchWorkspaceId,
-            // Topic scope for device-side heteroIngest/heteroFinish. Distinct
-            // from the routing workspace above: a workspace topic on a personal
-            // device still has to write back under `deps.workspaceId`.
-            ingestWorkspaceId: deps.workspaceId,
-          });
+        : !nativePermissionsAvailable
+          ? {
+              error:
+                'This device does not support native Codex permissions. Update LobeHub CLI and reconnect the device.',
+              errorData: undefined,
+              success: false,
+            }
+          : await deviceGateway.dispatchAgentRun({
+              ...heteroParams,
+              agentId: resolvedAgentId,
+              args: heteroExecArgs,
+              cwd: deviceCwd,
+              deviceId: dispatchDeviceId,
+              resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
+              systemContext: deviceSystemContext,
+              // Route to the workspace pool when this is a workspace device; the
+              // operation JWT stays member-scoped (the run belongs to the member).
+              workspaceId: dispatchWorkspaceId,
+              // Topic scope for device-side heteroIngest/heteroFinish. Distinct
+              // from the routing workspace above: a workspace topic on a personal
+              // device still has to write back under `deps.workspaceId`.
+              ingestWorkspaceId: deps.workspaceId,
+            });
       if (!result.success) {
         log('execAgent: hetero device dispatch failed: %s', result.error);
         const terminalReported = await finalizeHeteroDispatchError(deps, {

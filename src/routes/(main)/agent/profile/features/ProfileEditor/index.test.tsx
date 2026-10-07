@@ -7,6 +7,7 @@ import ProfileEditor from './index';
 
 const fixture = vi.hoisted(() => ({
   canEdit: true,
+  nativePermissions: false,
   provider: {
     type: 'codex',
     permissionMode: 'read-only',
@@ -24,9 +25,12 @@ vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: fixtu
 vi.mock('@/hooks/useEnabledChatModels', () => ({ useEnabledChatModels: () => [] }));
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
   useEffectiveAgencyConfig: () => ({
-    agencyConfig: { executionTarget: fixture.target },
+    agencyConfig: { boundDeviceId: 'device-1', executionTarget: fixture.target },
     workspaceScoped: false,
   }),
+}));
+vi.mock('@/store/device/capabilityHooks', () => ({
+  useDeviceCapabilities: () => ({ data: { nativeCodexPermissions: fixture.nativePermissions } }),
 }));
 vi.mock('@/store/agent', () => ({
   useAgentStore: (selector: (state: object) => unknown) =>
@@ -96,6 +100,7 @@ vi.mock('./HeterogeneousAgentStatusCard', () => ({
 describe('ProfileEditor Codex permission persistence', () => {
   beforeEach(() => {
     fixture.canEdit = true;
+    fixture.nativePermissions = false;
     fixture.target = 'device';
     fixture.update.mockClear();
   });
@@ -105,6 +110,20 @@ describe('ProfileEditor Codex permission persistence', () => {
   // for every nonlocal target before persisting. Allow only the executable remote
   // preset through this boundary; preserve permissions and provider fields.
   /** @example Device target + confirmed full-access saves the complete provider config. */
+  /** @example An authenticated compatible device can persist Ask without local execution. */
+  it('saves native permissions for a capable connected device', async () => {
+    fixture.nativePermissions = true;
+    fixture.target = 'device';
+    render(<ProfileEditor />);
+    fireEvent.click(screen.getByRole('button', { name: 'Approval' }));
+    /** @example Device permission selection reaches the same saved Agent profile. */
+    await waitFor(() =>
+      expect(fixture.update).toHaveBeenCalledWith('agent-codex', {
+        agencyConfig: { heterogeneousProvider: { ...fixture.provider, permissionMode: 'ask' } },
+      }),
+    );
+  });
+
   it('persists confirmed Full access for a connected device', async () => {
     render(<ProfileEditor />);
     fireEvent.click(screen.getByText('Confirm full access'));

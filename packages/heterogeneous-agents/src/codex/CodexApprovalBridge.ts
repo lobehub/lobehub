@@ -4,7 +4,7 @@ import type {
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
 import type { CodexApprovalDecision } from '@lobechat/types';
-import { isCodexApprovalDecision } from '@lobechat/types';
+import { getCodexApprovalDecisions, isCodexApprovalDecision } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
 import type { CommandExecutionApprovalDecision } from './protocol';
@@ -55,6 +55,8 @@ interface ApprovalRequest {
   arguments: unknown;
   interventionId: string;
   toolCallId: string;
+  /** Current tool snapshot, independent of the unmodified native approval payload. */
+  toolContext?: unknown;
 }
 
 interface PendingApproval {
@@ -129,6 +131,8 @@ export class CodexApprovalBridge {
       });
     }, timeoutMs);
     entry.timer.unref?.();
+    const args = isRecord(request.arguments) ? request.arguments : {};
+    const decisions = getCodexApprovalDecisions(request.apiName, args);
     const data: AgentInterventionRequestData = {
       apiName: request.apiName,
       arguments: JSON.stringify(request.arguments ?? {}),
@@ -136,6 +140,7 @@ export class CodexApprovalBridge {
       identifier: 'codex',
       interactionKind: 'permission',
       provider: 'codex',
+      reviewArguments: JSON.stringify(this.reviewArguments(request, decisions)),
       interventionId: request.interventionId,
       toolCallId: request.toolCallId,
     };
@@ -153,12 +158,125 @@ export class CodexApprovalBridge {
     }
   }
 
+  /** Builds bounded review context without truncating an authorizable permission scope. */
+  private reviewArguments(request: ApprovalRequest, decisions: CodexApprovalDecision[]) {
+    const args = isRecord(request.arguments) ? request.arguments : {};
+    const context = {
+      command: args.command,
+      cwd: args.cwd,
+      reason: args.reason,
+      networkApprovalContext: args.networkApprovalContext,
+      grantRoot: args.grantRoot,
+      fileChanges: request.apiName === 'file_change' ? request.toolContext : undefined,
+    };
+    const detail = JSON.stringify(context, null, 2);
+    const fileContext = isRecord(request.toolContext) ? request.toolContext : undefined;
+    const changes = fileContext?.changes;
+    const network = isRecord(args.networkApprovalContext) ? args.networkApprovalContext : undefined;
+    // The native protocol permits absent scope fields. A short JSON object alone
+    // cannot prove which command or file mutation the user would be authorizing.
+    const scopeKnown =
+      request.apiName === 'file_change'
+        ? Array.isArray(changes) &&
+          changes.length > 0 &&
+          changes.every(
+            (change) =>
+              isRecord(change) &&
+              typeof change.path === 'string' &&
+              change.path.length > 0 &&
+              typeof change.diffText === 'string' &&
+              change.diffText.length > 0 &&
+              (change.kind === 'add' ||
+                change.kind === 'delete' ||
+                change.kind === 'update' ||
+                change.kind === 'rename'),
+          )
+        : (typeof args.command === 'string' &&
+            args.command.trim().length > 0 &&
+            typeof args.cwd === 'string' &&
+            args.cwd.length > 0) ||
+          (typeof network?.host === 'string' &&
+            network.host.length > 0 &&
+            typeof network.protocol === 'string' &&
+            network.protocol.length > 0);
+    const complete = detail.length <= 4000 && scopeKnown;
+    const options = decisions.flatMap((decision, index) => {
+      const description =
+        typeof decision === 'object'
+          ? 'acceptWithExecpolicyAmendment' in decision
+            ? `Command prefix argv: ${JSON.stringify(decision.acceptWithExecpolicyAmendment.execpolicy_amendment)}`
+            : `Network policy: ${JSON.stringify(decision.applyNetworkPolicyAmendment.network_policy_amendment)}`
+          : decision === 'acceptForSession'
+            ? request.apiName === 'file_change'
+              ? `Allow file changes for this session. Grant root: ${JSON.stringify(args.grantRoot ?? null)}`
+              : `Allow this native permission for the current session. Network scope: ${JSON.stringify(args.networkApprovalContext ?? null)}`
+            : undefined;
+      // Review and chat share a sealed authorization list. Never offer a grant
+      // whose complete scope exceeds the durable renderer's validated bounds.
+      if (
+        (!complete || (description && description.length > 1000)) &&
+        decision !== 'decline' &&
+        decision !== 'cancel'
+      )
+        return [];
+      return [
+        {
+          id: `decision_${index}`,
+          label:
+            typeof decision === 'string'
+              ? {
+                  accept: 'Allow once',
+                  acceptForSession: 'Allow for this session',
+                  cancel: 'Stop this turn',
+                  decline: 'Deny',
+                }[decision]
+              : 'acceptWithExecpolicyAmendment' in decision
+                ? 'Allow matching commands'
+                : 'Apply network rule',
+          ...(description ? { description } : {}),
+        },
+      ];
+    });
+    // Cancel is always a valid bridge-level teardown action, even when the
+    // native request advertises only grants; its explicit ID is not an index.
+    if (!options.length) options.push({ id: 'cancel_turn', label: 'Stop this turn' });
+    return {
+      questions: [
+        {
+          header: 'Codex native permission',
+          multiSelect: false,
+          options,
+          question: complete
+            ? detail
+            : 'The complete permission scope cannot be displayed safely. This request can only be denied or stopped. Full context remains in the conversation.',
+        },
+      ],
+    };
+  }
+
   /** Consumes only the active callback and a decision advertised for that request. */
-  resolve(interventionId: string, decision: CodexApprovalDecision): boolean {
+  resolve(
+    interventionId: string,
+    decision: CodexApprovalDecision,
+    response?: Pick<
+      AgentInterventionResponseData,
+      'cancelled' | 'cancelReason' | 'resolutionRequestId'
+    >,
+  ): boolean {
     const entry = this.pending.get(interventionId);
     if (!entry || this.queues.get(entry.request.toolCallId)?.[0] !== entry) return false;
     const args = isRecord(entry.request.arguments) ? entry.request.arguments : {};
     const allowed = Array.isArray(args.availableDecisions) ? args.availableDecisions : undefined;
+    const decisions = getCodexApprovalDecisions(entry.request.apiName, args);
+    const decisionIndex = decisions.findIndex((candidate) =>
+      matchesApprovalDecision(candidate, decision),
+    );
+    const reviewed = this.reviewArguments(entry.request, decisions).questions[0].options;
+    if (
+      decision !== 'cancel' &&
+      !reviewed.some((option) => option.id === `decision_${decisionIndex}`)
+    )
+      return false;
     if (
       decision !== 'cancel' &&
       allowed &&
@@ -189,7 +307,7 @@ export class CodexApprovalBridge {
       )
         return false;
     }
-    void this.finish(entry, decision);
+    void this.finish(entry, decision, response && { ...response, result: { decision } });
     return true;
   }
 
@@ -211,7 +329,10 @@ export class CodexApprovalBridge {
   private async finish(
     entry: PendingApproval,
     decision: CodexApprovalDecision,
-    response?: Pick<AgentInterventionResponseData, 'cancelReason' | 'cancelled'>,
+    response?: Pick<
+      AgentInterventionResponseData,
+      'cancelReason' | 'cancelled' | 'resolutionRequestId' | 'result'
+    >,
   ): Promise<void> {
     if (!this.pending.delete(entry.request.interventionId)) return;
     clearTimeout(entry.timer);
@@ -225,12 +346,16 @@ export class CodexApprovalBridge {
 
   private emitResponse(
     request: ApprovalRequest,
-    response: Pick<AgentInterventionResponseData, 'cancelReason' | 'cancelled'>,
+    response: Pick<
+      AgentInterventionResponseData,
+      'cancelReason' | 'cancelled' | 'resolutionRequestId' | 'result'
+    >,
   ): Promise<void> {
     return Promise.resolve(
       this.options.emit({
         data: {
           ...response,
+          producerAck: true,
           interventionId: request.interventionId,
           toolCallId: request.toolCallId,
         } satisfies AgentInterventionResponseData,

@@ -3,6 +3,7 @@ import type {
   AgentInterventionResponseData,
   AgentStreamEvent,
 } from '@lobechat/agent-gateway-client';
+import { getAgentInterventionReviewDecisionIds } from '@lobechat/agent-gateway-client';
 import { stripGoalCommand, withConversationGoalPrompt } from '@lobechat/builtin-tool-goal';
 import type { HeterogeneousAgentSessionError } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
@@ -1067,6 +1068,7 @@ export const executeHeterogeneousAgent = async (
               ? {
                   arguments: data.arguments,
                   interventionId: data.interventionId ?? data.toolCallId,
+                  reviewDecisionIds: getAgentInterventionReviewDecisionIds(data),
                 }
               : {}),
             status: 'pending',

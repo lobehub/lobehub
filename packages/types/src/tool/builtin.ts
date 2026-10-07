@@ -603,6 +603,8 @@ export interface BuiltinInterventionProps<
    * @returns Cleanup function to unregister the callback
    */
   registerBeforeApprove?: (id: string, callback: () => void | Promise<void>) => () => void;
+  /** Sealed choices available for this exact native callback; undefined preserves legacy behavior. */
+  reviewDecisionIds?: string[];
   /** Original tool input used to show the proposed action or file changes. */
   toolArgs?: ToolArguments;
 }

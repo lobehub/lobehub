@@ -57,6 +57,8 @@
   "builtins.codex.approval.grantRoot": "会话写入范围",
   "builtins.codex.approval.hint": "Codex 需要你的批准后才能继续。",
   "builtins.codex.approval.network": "网络目标",
+  "builtins.codex.approval.reviewScopeLimit": "部分权限选项的完整范围无法安全展示，因此不可授权。请拒绝或停止本次请求。",
+  "builtins.codex.approval.stop": "停止本轮",
   "builtins.codex.collabTool.agentCount_one": "{{count}} 个子代理",
   "builtins.codex.collabTool.agentCount_other": "{{count}} 个子代理",
   "builtins.codex.collabTool.agentLabel": "子代理 {{index}}",

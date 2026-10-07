@@ -453,7 +453,7 @@ export default {
     'This removes sandbox restrictions and approval prompts for future runs of this Agent. Codex can access files and the network beyond the workspace.',
   'heteroAgent.codexPermission.fullAccessConfirm.title': 'Enable full access?',
   'heteroAgent.codexPermission.localOnly':
-    'Approval and read-only modes require local desktop execution. Full access is available on this target.',
+    'Approval and read-only modes require Desktop or a connected device with native Codex permissions. Update LobeHub CLI and reconnect if unavailable.',
   'heteroAgent.codexPermission.mode.ask': 'Ask for approval',
   'heteroAgent.codexPermission.mode.auto-review': 'Approve for me',
   'heteroAgent.codexPermission.mode.custom': 'Custom CLI arguments',

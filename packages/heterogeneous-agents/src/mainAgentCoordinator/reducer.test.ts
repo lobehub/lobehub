@@ -671,3 +671,56 @@ describe('reduceMainAgent — heterogeneous intervention ACK boundary', () => {
     expect(state.interventionsByCallId.get('permission-1')?.transition).toBe('resolved');
   });
 });
+
+/** @example Native callbacks survive persistence and cannot resolve a later request. */
+describe('native Codex device approval correlation', () => {
+  // ROOT CAUSE:
+  // The generic device reducer kept only pending status and reused the old terminal
+  // state for another native callback on the same item. Refresh lost command details,
+  // and a delayed ACK could settle the next request. Preserve callback context and
+  // restart only for a new callback; ignore responses with the wrong identity.
+  /** @example First deny -> new callback -> replay leaves the new approval pending. */
+  it('persists details, reopens a reused item and rejects stale acknowledgements', () => {
+    const request = (interventionId: string) => ({
+      type: 'agent_intervention_request',
+      data: {
+        apiName: 'command_execution',
+        arguments: '{"command":"touch guarded"}',
+        deadline: 5000,
+        identifier: 'codex',
+        interactionKind: 'permission',
+        interventionId,
+        provider: 'codex',
+        toolCallId: 'reused-item',
+      },
+    });
+    const reply = (interventionId: string) => ({
+      type: 'agent_intervention_response',
+      data: {
+        interventionId,
+        producerAck: true,
+        resolutionRequestId: interventionId,
+        result: { decision: 'decline' },
+        toolCallId: 'reused-item',
+      },
+    });
+    const first = run([request('first'), reply('first')]);
+    /** @example The native denial is displayed as rejected while its durable choice is resolved. */
+    expect(first.state.interventionsByCallId.get('reused-item')).toMatchObject({
+      intervention: {
+        arguments: '{"command":"touch guarded"}',
+        interventionId: 'first',
+        status: 'rejected',
+      },
+      transition: 'resolved',
+    });
+    const second = run([request('first'), reply('first'), request('second'), reply('first')]);
+    /** @example The stale ACK cannot consume the second approval. */
+    expect(second.state.interventionsByCallId.get('reused-item')).toMatchObject({
+      intervention: { interventionId: 'second', status: 'pending' },
+      transition: 'pending',
+    });
+    /** @example A replay produces no persistence side effect. */
+    expect(second.steps.at(-1)).toEqual([]);
+  });
+});

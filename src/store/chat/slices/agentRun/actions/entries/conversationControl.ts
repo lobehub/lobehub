@@ -4,6 +4,7 @@ import { isHeterogeneousAgentModelId, MESSAGE_CANCEL_FLAT } from '@lobechat/cons
 import {
   type ChatTopicStatus,
   type ConversationContext,
+  getCodexApprovalDecisions,
   isCodexDenyDecision,
   type MessageMetadata,
   resolveAgentAgencyConfig,
@@ -1812,10 +1813,36 @@ export class ConversationControlActionImpl {
       toolMessage.pluginState as
         { heterogeneousIntervention?: { interactionKind?: unknown } } | undefined
     )?.heterogeneousIntervention;
+    let sourcePayload = payload ?? {};
+    if (
+      isCodexApproval &&
+      actionType === 'submit' &&
+      codexDecision === 'cancel' &&
+      originalIntervention?.reviewDecisionIds?.includes('cancel_turn')
+    ) {
+      // The producer can seal an explicit Stop when no native grant is reviewable.
+      sourcePayload = { decision: 'cancel_turn' };
+    } else if (isCodexApproval && actionType === 'submit') {
+      const args: unknown = originalIntervention?.arguments;
+      const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
+      const choices = getCodexApprovalDecisions(
+        toolMessage.plugin?.apiName,
+        parsedArgs && typeof parsedArgs === 'object' && !Array.isArray(parsedArgs)
+          ? parsedArgs
+          : {},
+      );
+      const choiceIndex = choices.findIndex(
+        (choice) =>
+          JSON.stringify(canonicalizeResolutionPayload(choice)) ===
+          JSON.stringify(canonicalizeResolutionPayload(codexDecision)),
+      );
+      if (choiceIndex < 0) return;
+      sourcePayload = { decision: `decision_${choiceIndex}` };
+    }
     const sourceAction = toHeterogeneousSourceAction(
       actionType,
       interventionState?.interactionKind,
-      payload ?? {},
+      sourcePayload,
     );
 
     // A persisted v2 card carries everything the server needs to locate and
@@ -1832,6 +1859,19 @@ export class ConversationControlActionImpl {
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (sourceResolution.handled) {
+        if (isCodexApproval) {
+          const current = dbMessageSelectors.getDbMessageById(toolMessageId)(
+            this.#get(),
+          )?.pluginIntervention;
+          // Native ACKs and a subsequent callback can arrive before this HTTP response.
+          // Never overwrite a terminal receipt or attach A's answer to callback B.
+          if (
+            current?.interventionId !== interventionId ||
+            current?.batchId !== originalIntervention.batchId ||
+            current?.status !== 'pending'
+          )
+            return;
+        }
         const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
         this.#dispatchInterventionState(
           toolMessageId,
@@ -1841,7 +1881,13 @@ export class ConversationControlActionImpl {
         if (actionType === 'submit') {
           await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
         }
-        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, sourceOptimisticContext);
+        // Native permissions settle only on the exact producer receipt or native deadline.
+        if (!isCodexApproval)
+          this.#scheduleHeteroInterventionSettle(
+            toolMessageId,
+            actionType,
+            sourceOptimisticContext,
+          );
         return;
       }
     }
@@ -1985,7 +2031,7 @@ export class ConversationControlActionImpl {
         const resolutionIntent = JSON.stringify(
           canonicalizeResolutionPayload({ actionType, payload: payload ?? {} }),
         );
-        const resolutionKey = `${operationId}:${toolCallId}:${resolutionIntent}`;
+        const resolutionKey = `${operationId}:${toolCallId}:${interventionId ?? ''}:${resolutionIntent}`;
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
@@ -2007,7 +2053,8 @@ export class ConversationControlActionImpl {
                 toolCallId,
               },
         );
-        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
+        if (!isCodexApproval)
+          this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
       }
     } catch (err) {
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);

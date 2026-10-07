@@ -310,6 +310,8 @@ export interface AgentInterventionRequestData {
    * compatibility; current producers always include it.
    */
   provider?: AgentInterventionProvider;
+  /** Canonical, bounded review form for a provider with a native argument schema. */
+  reviewArguments?: string;
   /** Correlation key. Stable for the lifetime of the intervention. */
   toolCallId: string;
 }

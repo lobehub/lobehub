@@ -171,6 +171,9 @@ export default {
   'builtins.codex.approval.commandPrefix': 'Persistent command prefix',
   'builtins.codex.approval.grantRoot': 'Session write scope',
   'builtins.codex.approval.accept': 'Allow once',
+  'builtins.codex.approval.stop': 'Stop this turn',
+  'builtins.codex.approval.reviewScopeLimit':
+    'Some permission choices are unavailable because their full scope cannot be reviewed safely. Deny or stop this request.',
   'builtins.codex.approval.acceptFilesForSession': 'Allow changes for this session',
   'builtins.codex.approval.acceptForSession': 'Allow for this session',
   'builtins.codex.approval.acceptSimilarCommands': 'Allow commands matching {{command}}',

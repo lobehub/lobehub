@@ -726,9 +726,6 @@ export const buildHeteroExecArgs = (
   provider: HeterogeneousProviderConfig | undefined | null,
 ): string[] | undefined => {
   if (!provider) return undefined;
-  if (provider.type === 'codex' && codexPermissionModeRequiresAppServer(provider.permissionMode)) {
-    throw new Error('Configured Codex permission modes require the app-server transport');
-  }
   if (
     provider.type !== 'amp' &&
     provider.type !== 'claude-code' &&
@@ -748,15 +745,22 @@ export const buildHeteroExecArgs = (
   }
 
   // Full access has an exact exec representation; interactive presets still require app-server.
-  const baseArgs =
-    provider.type === 'codex' && provider.permissionMode === 'full-access'
+  const nativePermissionMode =
+    provider.type === 'codex' && codexPermissionModeRequiresAppServer(provider.permissionMode)
+      ? provider.permissionMode
+      : undefined;
+  const baseArgs = nativePermissionMode
+    ? (stripCodexPermissionArgs(provider.args) ?? [])
+    : provider.type === 'codex' && provider.permissionMode === 'full-access'
       ? [
           ...(stripCodexPermissionArgs(provider.args) ?? []),
           ...getCodexPermissionModeArgs('full-access'),
         ]
       : (provider.args ?? []);
   const wrapperArgs = baseArgs.map((arg) => `${HETERO_EXEC_AGENT_ARG_FLAG}=${arg}`);
-  const selectorArgs: string[] = [];
+  const selectorArgs: string[] = nativePermissionMode
+    ? ['--codex-permission-mode', nativePermissionMode]
+    : [];
 
   if (provider.type === 'amp') {
     const mode = getExplicitAmpAgentMode(provider);

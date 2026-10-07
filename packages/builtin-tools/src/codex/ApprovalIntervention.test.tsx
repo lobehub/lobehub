@@ -186,4 +186,47 @@ describe('CodexApprovalIntervention', () => {
     /** @example A disabled click never crosses the callback boundary. */
     expect(onInteractionAction).not.toHaveBeenCalled();
   });
+  /** @example Chat cannot offer a grant excluded by the same callback's sealed Review. */
+  it('limits native buttons to canonical review choices and preserves the sparse index', () => {
+    const onInteractionAction = vi.fn();
+    render(
+      <CodexApprovalIntervention
+        apiName="command_execution"
+        args={{ availableDecisions: ['accept', 'acceptForSession', 'decline'] }}
+        messageId="message"
+        reviewDecisionIds={['decision_2']}
+        onInteractionAction={onInteractionAction}
+      />,
+    );
+    /** @example Unreviewable grants are absent, with an explicit explanation. */
+    expect(screen.queryByRole('button', { name: 'builtins.codex.approval.accept' })).toBeNull();
+    /** @example The reason for restricting authorization remains visible. */
+    expect(screen.getByText('builtins.codex.approval.reviewScopeLimit')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'builtins.codex.approval.deny' }));
+    /** @example decision_2 remains decline, rather than being relabelled as decision_0. */
+    expect(onInteractionAction).toHaveBeenCalledWith({
+      type: 'submit',
+      payload: { decision: 'decline' },
+    });
+  });
+
+  /** @example Stop uses the exact provider choice sealed into the durable callback. */
+  it('submits the explicit Stop choice rather than an unsupported cancel action', () => {
+    const onInteractionAction = vi.fn();
+    render(
+      <CodexApprovalIntervention
+        apiName="command_execution"
+        args={{ availableDecisions: ['accept'] }}
+        messageId="message"
+        reviewDecisionIds={['cancel_turn']}
+        onInteractionAction={onInteractionAction}
+      />,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'builtins.codex.approval.stop' }));
+    /** @example Durable permissions allow provider-option submission. */
+    expect(onInteractionAction).toHaveBeenCalledWith({
+      type: 'submit',
+      payload: { decision: 'cancel' },
+    });
+  });
 });

@@ -555,6 +555,8 @@ describe('CodexThreadSession', () => {
       'item/commandExecution/requestApproval',
       {
         approvalId: 'approval-1',
+        command: '/usr/bin/curl -I https://github.com',
+        cwd: '/workspace',
         availableDecisions: [
           'accept',
           {
@@ -591,6 +593,26 @@ describe('CodexThreadSession', () => {
         expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
       );
 
+      if (apiName === 'file_change') {
+        // The native request references the previously streamed file proposal;
+        // reproducing that protocol order verifies the durable Review's scope.
+        await harness.notify('item/started', {
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          item: {
+            type: 'fileChange',
+            id: 'item-1',
+            status: 'inProgress',
+            changes: [{ path: '/task/a.txt', kind: { type: 'add' }, diff: '+initial' }],
+          },
+        });
+        await harness.notify('item/fileChange/patchUpdated', {
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          itemId: 'item-1',
+          changes: [{ path: '/task/a.txt', kind: { type: 'add' }, diff: '+updated' }],
+        });
+      }
       const approval = harness.requestApproval(method, {
         ...params,
         threadId: 'thread-1',
@@ -611,6 +633,12 @@ describe('CodexThreadSession', () => {
       );
       const intervention = events.find((event) => event.type === 'agent_intervention_request');
       expect(JSON.parse(intervention!.data.arguments)).toMatchObject(params);
+      if (apiName === 'file_change') {
+        /** @example Approval sees the latest streamed proposal, rather than the original diff. */
+        expect(JSON.parse(intervention!.data.reviewArguments).questions[0].question).toContain(
+          '+updated',
+        );
+      }
       expect(
         session.resolveApproval('operation-1', intervention!.data.interventionId, decision),
       ).toBe(true);
@@ -770,7 +798,7 @@ describe('CodexThreadSession', () => {
     expect(settled).toBe(true);
     expect(events).toContainEqual(
       expect.objectContaining({
-        data: { reason: 'interrupted' },
+        data: { reason: 'interrupted', interruptionCause: 'transport' },
         operationId: 'operation-1',
         type: 'agent_runtime_end',
       }),

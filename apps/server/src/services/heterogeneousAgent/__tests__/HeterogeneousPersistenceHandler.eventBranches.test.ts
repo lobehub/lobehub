@@ -170,7 +170,20 @@ const createHarness = (
         return match?.id;
       },
     ),
-    listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
+    listMessagePluginsByTopic: vi.fn(async (_topicId: string) =>
+      [...messages.values()].flatMap((message) =>
+        message.plugin
+          ? [
+              {
+                ...message.plugin,
+                id: message.id,
+                state: message.pluginState,
+                toolCallId: message.tool_call_id,
+              },
+            ]
+          : [],
+      ),
+    ),
     updateMessagePlugin: vi.fn(async (id: string, patch: Record<string, unknown>) => {
       const existing = messages.get(id);
       if (existing) messages.set(id, { ...existing, plugin: { ...existing.plugin, ...patch } });
@@ -1356,6 +1369,67 @@ describe('HeterogeneousPersistenceHandler — event branch coverage', () => {
         status: 'resolved',
         toolCallId: 'permission-1',
         workspaceId: undefined,
+      });
+    });
+
+    // ROOT CAUSE:
+    // Device native callbacks reuse an item id, while Review deduped only by
+    // operation/tool/transition. The second request inherited the first claim.
+    // Bind each durable batch and terminal ACK to the unique native callback.
+    /** @example Deny A -> request B -> stale ACK A leaves B pending after replica refresh. */
+    it('persists separate native callback claims and retains the refreshed command card', async () => {
+      const h = createHarness({ topicAgentId: 'agent-test' });
+      const native = (interventionId: string) =>
+        buildEvent('agent_intervention_request', 0, {
+          apiName: 'command_execution',
+          arguments: '{"command":"touch guarded","availableDecisions":["accept","decline"]}',
+          deadline: 1_900_000_000_000,
+          identifier: 'codex',
+          interactionKind: 'permission',
+          interventionId,
+          provider: 'codex',
+          toolCallId: 'native-item',
+          reviewArguments: JSON.stringify({
+            questions: [
+              {
+                header: 'Codex permission',
+                multiSelect: false,
+                options: [
+                  { id: 'decision_0', label: 'Allow once' },
+                  { id: 'decision_1', label: 'Deny' },
+                ],
+                question: 'touch guarded',
+              },
+            ],
+          }),
+        });
+      const denied = buildEvent('agent_intervention_response', 0, {
+        interventionId: 'callback-a',
+        producerAck: true,
+        resolutionRequestId: '11111111-1111-4111-8111-111111111111',
+        result: { decision: 'decline' },
+        toolCallId: 'native-item',
+      });
+      await ingest(h, [native('callback-a'), denied, native('callback-b')]);
+      /** @example Reusing a native item never aliases two sealed permission batches. */
+      expect(notifyAgentInterventionRequired.mock.calls.map(([params]) => params.batch.id)).toEqual(
+        [
+          'op-test:0:asst-seeded:native-item:callback-a',
+          'op-test:0:asst-seeded:native-item:callback-b',
+        ],
+      );
+      __resetOperationStatesForTesting();
+      await ingest(h, [denied]);
+      /** @example The old producer receipt is ignored on a cold server replica too. */
+      expect(acknowledgeAgentInterventionProducerResolution).toHaveBeenCalledTimes(1);
+      const tool = [...h.messages.values()].find(
+        (message) => message.tool_call_id === 'native-item',
+      );
+      /** @example Browser refresh keeps the full original command and current one-shot callback. */
+      expect(tool?.plugin?.intervention).toMatchObject({
+        interventionId: 'callback-b',
+        status: 'pending',
+        arguments: '{"command":"touch guarded","availableDecisions":["accept","decline"]}',
       });
     });
 

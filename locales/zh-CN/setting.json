@@ -792,7 +792,7 @@
   "heterogeneousStatus.codexPermission.fullAccessConfirm.description": "这会移除该 Agent 后续运行的沙箱限制和批准提示。Codex 将能够访问工作区之外的文件和网络。",
   "heterogeneousStatus.codexPermission.fullAccessConfirm.title": "启用完全访问？",
   "heterogeneousStatus.codexPermission.label": "权限",
-  "heterogeneousStatus.codexPermission.localOnly": "审批和只读模式需要本地桌面执行。当前执行目标可使用完全访问。",
+  "heterogeneousStatus.codexPermission.localOnly": "审批和只读模式需要桌面端或支持原生 Codex 权限的连接设备。不可用时请更新 LobeHub CLI 并重新连接。",
   "heterogeneousStatus.codexPermission.mode.ask": "请求批准",
   "heterogeneousStatus.codexPermission.mode.auto-review": "替我批准",
   "heterogeneousStatus.codexPermission.mode.custom": "自定义 CLI 参数",

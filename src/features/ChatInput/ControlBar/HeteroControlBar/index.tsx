@@ -22,6 +22,7 @@ import { resolveExecutionTarget } from '@/helpers/executionTarget';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
+import { useDeviceCapabilities } from '@/store/device/capabilityHooks';
 
 import { CodexPermissionControl } from '../CodexPermissionControl';
 import { ClaudeCodeQuotaMenu, CodexQuotaMenu, KimiCodeQuotaMenu } from './QuotaMenu';
@@ -152,6 +153,11 @@ const HeteroControlBar = memo(() => {
     workspaceScoped,
   });
   const isLocalHeteroExecution = executionTarget === 'local';
+  const { data: deviceCapabilities } = useDeviceCapabilities(
+    heteroProvider?.type === 'codex' && executionTarget === 'device'
+      ? agencyConfig?.boundDeviceId
+      : undefined,
+  );
   // Subscription windows (5h / weekly) only exist when the CLI is signed into
   // a Claude / Codex account. API mode bills the bound provider key instead,
   // so the remaining-quota chip in the corner would be stale or empty.
@@ -307,8 +313,13 @@ const HeteroControlBar = memo(() => {
           <CodexPermissionControl
             agentId={agentId}
             canConfigure={canConfigureResource}
-            isLocalExecution={isLocalHeteroExecution && heteroProvider.authMode !== 'api'}
             provider={heteroProvider}
+            supportsNativePermissions={
+              (isLocalHeteroExecution ||
+                (executionTarget === 'device' &&
+                  deviceCapabilities?.nativeCodexPermissions === true)) &&
+              heteroProvider.authMode !== 'api'
+            }
           />
         ) : (
           <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>

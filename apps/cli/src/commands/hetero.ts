@@ -5,6 +5,7 @@ import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
+import type { AgentInterventionResponseData } from '@lobechat/agent-gateway-client';
 import {
   HETEROGENEOUS_AGENT_CONFIGS,
   isLocalHeterogeneousType,
@@ -13,6 +14,10 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
+import {
+  type CodexAgentHandle,
+  createCodexAgentHandle,
+} from '@lobechat/heterogeneous-agents/codex';
 import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import {
@@ -33,8 +38,9 @@ import {
   isHeteroStatusGuideErrorData,
   spawnAgent,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { CODEX_PERMISSION_MODES, type CodexPermissionMode } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
-import type { Command } from 'commander';
+import { type Command, Option } from 'commander';
 
 import { getTrpcClient } from '../api/client';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
@@ -83,7 +89,7 @@ const CODEX_SERVICE_TIER_CONFIG_KEY = 'service_tier';
 /**
  * Runtime selection registry for `lh hetero exec` — the CLI counterpart of
  * the desktop controller's `runtimeDispatchers`. Long-lived bidirectional
- * runtimes (pi RPC) register a spawn factory here; every other agent uses the
+ * runtimes (pi RPC and explicit Codex permissions) register a spawn factory here; other agents use the
  * generic one-shot `spawnAgent`. A future agent adopting an RPC mode only
  * adds one entry — no dispatch edit.
  */
@@ -94,11 +100,22 @@ const spawnRuntimeRegistry: Partial<
       spawnOpts: Parameters<typeof spawnAgent>[0],
       lifecycle?: {
         onRawStdout?: (chunk: Buffer) => void;
+        onCodexHandle?: (handle: CodexAgentHandle) => void;
         onStartupControl?: (control: PiRpcStartupControl) => void;
       },
     ) => Promise<Awaited<ReturnType<typeof spawnAgent>>>
   >
 > = {
+  codex: async (spawnOpts, lifecycle) => {
+    if (!spawnOpts.codexPermissionMode)
+      return spawnAgent({ ...spawnOpts, onRawStdout: lifecycle?.onRawStdout });
+    const handle = await createCodexAgentHandle({
+      ...spawnOpts,
+      onRawStdout: lifecycle?.onRawStdout,
+    });
+    lifecycle?.onCodexHandle?.(handle);
+    return handle;
+  },
   pi: async (spawnOpts, lifecycle) =>
     createPiRpcAgentHandle({
       args: spawnOpts.extraArgs ?? [],
@@ -124,9 +141,11 @@ const spawnAgentOrRuntime = (
   spawnOpts: Parameters<typeof spawnAgent>[0],
   onRawStdout?: (chunk: Buffer) => void,
   onStartupControl?: (control: PiRpcStartupControl) => void,
+  onCodexHandle?: (handle: CodexAgentHandle) => void,
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
   const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
-  if (runtimeFactory) return runtimeFactory(spawnOpts, { onRawStdout, onStartupControl });
+  if (runtimeFactory)
+    return runtimeFactory(spawnOpts, { onCodexHandle, onRawStdout, onStartupControl });
   return spawnAgent({ ...spawnOpts, onRawStdout });
 };
 
@@ -173,6 +192,8 @@ const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): 
 
 interface ExecOptions {
   agentArg?: string[];
+  /** Saved Codex preset, requiring a native device approval transport. */
+  codexPermissionMode?: CodexPermissionMode;
   command?: string;
   cwd?: string;
   effort?: string;
@@ -472,6 +493,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     process.exit(2);
   }
 
+  if (options.codexPermissionMode && options.type !== 'codex') {
+    log.error('--codex-permission-mode is only supported for Codex');
+    process.exit(2);
+  }
+
   let resolved: ResolvedPrompt;
   try {
     resolved = await resolvePrompt(options);
@@ -606,6 +632,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
   let askServer: LobeBuiltinMcpServer | undefined;
   let askBridge: AskUserBridge | undefined;
+  let codexRuntime: CodexAgentHandle | undefined;
   let askMcpConfigPath: string | undefined;
   const askPollAbort = new AbortController();
   if (
@@ -614,7 +641,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
       agentType === 'cursor' ||
       agentType === 'droid' ||
       agentType === 'devin' ||
-      agentType === 'qoder') &&
+      agentType === 'qoder' ||
+      (agentType === 'codex' && !!options.codexPermissionMode)) &&
     serverIngester
   ) {
     if (agentType === 'cursor' || agentType === 'droid') {
@@ -627,7 +655,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
         identifier: 'devin',
         provider: 'devin',
       });
-    } else {
+    } else if (agentType !== 'codex') {
       askServer = new LobeBuiltinMcpServer();
       await askServer.start();
       askBridge = askServer.registerOperation(
@@ -656,11 +684,12 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // the producer ACK (producerAck=true + resolutionRequestId) that transitions
     // Cloud from `resolving` to terminal. Persistence de-dupes transitions by
     // (operationId, toolCallId, transition).
-    void (async () => {
-      for await (const event of askBridge!.events()) {
-        serverIngester!.push(event as AgentStreamEvent);
-      }
-    })();
+    if (askBridge)
+      void (async () => {
+        for await (const event of askBridge.events()) {
+          serverIngester!.push(event as AgentStreamEvent);
+        }
+      })();
 
     // (ii) Long-poll the server for the user's answer — only while a question is
     // actually pending, so an idle run holds no server invocation.
@@ -672,26 +701,27 @@ const exec = async (options: ExecOptions): Promise<void> => {
       // bridge timeout. Unknown/stale tool ids are harmless (`resolve` no-ops).
       let lastEventId = '0-0';
       while (!askPollAbort.signal.aborted) {
-        if (askBridge!.pendingCount === 0) {
+        if ((askBridge?.pendingCount ?? codexRuntime?.pendingApprovalCount ?? 0) === 0) {
           await sleep(200);
           continue;
         }
         try {
-          const res = await client.aiAgent.waitInterventionResponse.query({
-            lastEventId,
-            operationId,
-          });
+          const res = await client.aiAgent.waitInterventionResponse.query(
+            {
+              lastEventId,
+              operationId,
+            },
+            { signal: askPollAbort.signal },
+          );
           lastEventId = res.lastEventId;
           for (const event of res.events) {
-            const data = event.data as {
-              cancelReason?: 'session_ended' | 'timeout' | 'user_cancelled';
-              cancelled?: boolean;
-              result?: unknown;
-              resolutionRequestId?: string;
-              toolCallId: string;
-            };
+            const data = event.data as AgentInterventionResponseData;
+            if (codexRuntime) {
+              codexRuntime.resolveIntervention(data);
+              continue;
+            }
             // Idempotent: resolve() no-ops on an unknown / already-settled id.
-            askBridge!.resolve(data.toolCallId, {
+            askBridge?.resolve(data.toolCallId, {
               cancelReason: data.cancelReason,
               cancelled: data.cancelled,
               result: data.result,
@@ -818,7 +848,8 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // abort has no OS signal behind it — the CLI decided on its own — so it
     // must always deliver the signal itself, or the agent keeps running (the
     // desktop and connected-device dispatches are exactly the inherited case).
-    const ownsSignalDelivery = () => !inheritsWrapperProcessGroup || ingestLoss !== undefined;
+    const ownsSignalDelivery = () =>
+      !!options.codexPermissionMode || !inheritsWrapperProcessGroup || ingestLoss !== undefined;
     const signalAgent = (signal: NodeJS.Signals) => {
       if (startupControl) cancelStartup(startupControl, signal);
       else handle?.kill(signal);
@@ -870,13 +901,20 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // registry picks the transport: pi runs over RPC, everything else spawns
     // one-shot (same handle shape, so the event loop below is unchanged).
     try {
-      handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout, (control) => {
-        startupControl = control;
-        // `control.cancel` is protocol-level (session abort), not an OS signal
-        // — replay any cancellation received before the control bound, even
-        // when the process group already delivered the signal itself.
-        if (cancellationSignal) cancelStartup(control, cancellationSignal);
-      });
+      handle = await spawnAgentOrRuntime(
+        spawnOpts,
+        dumpAttempt?.writeStdout,
+        (control) => {
+          startupControl = control;
+          // `control.cancel` is protocol-level (session abort), not an OS signal
+          // — replay any cancellation received before the control bound, even
+          // when the process group already delivered the signal itself.
+          if (cancellationSignal) cancelStartup(control, cancellationSignal);
+        },
+        (runtime) => {
+          codexRuntime = runtime;
+        },
+      );
       if (cancellationSignal && !startupControl) {
         // Same split as `applyCancellation`: when the wrapper does not own
         // signal delivery the process group already signaled the agent, but
@@ -957,6 +995,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // `error` event is withheld from the ingester and flags a retry instead.
     let resumeNotFound = false;
     let sawTerminalError = false;
+    let nativeCancelled = false;
     let terminalErrorMessage: string | undefined;
     let terminalErrorData: Record<string, unknown> | undefined;
     try {
@@ -980,6 +1019,21 @@ const exec = async (options: ExecOptions): Promise<void> => {
         // the finish result is not derived from the exit code alone. Capture the
         // message too, so the finish payload can surface it as the task-level
         // error detail (CC relays these on stdout, not stderr).
+        // Native cancellation resolves run() normally. Preserve that outcome; a
+        // lost app-server transport is an error, never implicit user consent or success.
+        if (
+          options.codexPermissionMode &&
+          event.type === 'agent_runtime_end' &&
+          event.data.reason === 'interrupted'
+        ) {
+          if (event.data.interruptionCause === 'transport') {
+            sawTerminalError = true;
+            terminalErrorMessage =
+              'Codex app-server transport disconnected before the turn completed';
+          } else {
+            nativeCancelled = true;
+          }
+        }
         if (event.type === 'error') {
           sawTerminalError = true;
           const data = event.data as Record<string, unknown> | undefined;
@@ -1057,7 +1111,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
     }
 
     return {
-      cancelled: interrupted,
+      cancelled: interrupted || nativeCancelled,
       code,
       // The shared ingester is permanently failed once the server refused a
       // batch, so the caller must neither retry this run (every event of a
@@ -1076,7 +1130,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   // ─── First run (with --resume if provided) ───────────────────────────────
 
-  const interceptResume = !!options.resume;
+  // An explicit native permission run must never silently replace its history
+  // after an app-server failure; reconnect/resume retains and validates its policy.
+  const interceptResume = !!options.resume && !options.codexPermissionMode;
   const extraArgs = [
     ...(buildExtraArgs(options) ?? []),
     // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
@@ -1101,6 +1157,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   const first = await runOneAgent(
     {
       agentType: options.type,
+      codexPermissionMode: options.codexPermissionMode,
       askUserBridge: askBridge,
       command: resolvedCommand.command,
       cwd: options.cwd || process.cwd(),
@@ -1296,6 +1353,12 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
+    .addOption(
+      new Option(
+        '--codex-permission-mode <mode>',
+        'Run Codex with a native permission preset',
+      ).choices([...CODEX_PERMISSION_MODES]),
+    )
     .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')
     .option('--model <model>', 'Forward a resolved model selection to the agent CLI')
     .option('--effort <level>', 'Forward a resolved reasoning effort selection to the agent CLI')

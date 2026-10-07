@@ -63,6 +63,8 @@ export interface CodexAppServerClientOptions {
   commandPath: string;
   cwd: string;
   env: NodeJS.ProcessEnv;
+  /** Registers each native process generation with the owning host lifetime. */
+  onSpawn?: (child: ChildProcess) => void;
   reconnectBaseDelayMs?: number;
   reconnectMaxAttempts?: number;
   reconnectMaxDelayMs?: number;
@@ -127,6 +129,11 @@ export class CodexAppServerClient {
   private reconnectTimer?: ReturnType<typeof setTimeout>;
 
   constructor(private readonly options: CodexAppServerClientOptions) {}
+
+  /** Native process identity for host lifecycle supervision and diagnostics. */
+  get pid(): number | undefined {
+    return this.processGeneration?.child.pid;
+  }
 
   get isConnected(): boolean {
     return this.connected && !this.connectionError;
@@ -365,6 +372,7 @@ export class CodexAppServerClient {
       stdio: ['pipe', 'pipe', 'pipe'],
     });
     const processGeneration = { child, generation, stdoutBuffer: '' };
+    this.options.onSpawn?.(child);
     if (!this.isCurrentGeneration(generation)) {
       this.terminateChild(child);
       throw new CodexAppServerConnectionError('Codex app-server connection was replaced');

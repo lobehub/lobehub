@@ -20,6 +20,8 @@ export interface ToolIntervention {
   resolutionRequestId?: string;
   /** User decision published, awaiting the blocked producer's ACK. */
   resolving?: boolean;
+  /** Canonical review option IDs for this callback; absent only on legacy paths. */
+  reviewDecisionIds?: string[];
   /**
    * The user skipped the interaction (e.g. AskUserQuestion) rather than
    * rejecting the tool call — still `status: 'rejected'` for the runtime, but
@@ -36,6 +38,7 @@ export const ToolInterventionSchema = z.object({
   itemIndex: z.number().int().nonnegative().optional(),
   operationId: z.string().optional(),
   interventionId: z.string().optional(),
+  reviewDecisionIds: z.array(z.string()).optional(),
   rejectedReason: z.string().optional(),
   resolving: z.boolean().optional(),
   resolutionRequestId: z.string().optional(),

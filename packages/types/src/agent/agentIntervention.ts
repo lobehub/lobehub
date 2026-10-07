@@ -196,6 +196,8 @@ export interface AgentInterventionSanitizedRequest {
   customDetail?: AgentInterventionCustomDetail;
   fields?: AgentInterventionFormField[];
   identifier?: string;
+  /** Native callback identity, scoped to one provider permission request. */
+  interventionId?: string;
   options?: AgentInterventionOption[];
   parameterNames?: string[];
   prompt?: string;

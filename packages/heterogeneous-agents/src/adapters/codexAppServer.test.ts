@@ -95,6 +95,11 @@ describe('CodexAppServerAdapter', () => {
 
     const terminalEvents = adapter.interruptForTransportFailure();
 
+    /** @example The CLI distinguishes a lost transport from an explicit native Cancel. */
+    expect(terminalEvents.find(({ type }) => type === 'agent_runtime_end')).toMatchObject({
+      data: { reason: 'interrupted', interruptionCause: 'transport' },
+    });
+
     expect(
       planEvents.find(({ data }) => data.chunkType === 'tool_state')?.data.pluginState.todos.items,
     ).toEqual([
