@@ -401,6 +401,30 @@ describe('AgentInterventionModel', () => {
     });
   });
 
+  // ROOT CAUSE:
+  // The operation/tool uniqueness constraint prevented another native approval
+  // for the same item, even after its first batch had settled. Scope uniqueness
+  // to the sealed batch so every callback retains its original review history.
+  /** @example Native callbacks can reuse one item while their durable rows remain distinct. */
+  it('preserves separate batches for repeated approvals of the same tool item', async () => {
+    const [first] = await createQuestionBatch({
+      batchId: 'native-first',
+      items: [questionItem({ toolCallId: 'native-item' })],
+    });
+    const [second] = await createQuestionBatch({
+      batchId: 'native-second',
+      items: [questionItem({ toolCallId: 'native-item' })],
+    });
+    /** @example The second callback gets a new durable identity. */
+    expect(second.id).not.toBe(first.id);
+    const original = await serverDB
+      .select()
+      .from(agentInterventions)
+      .where(eq(agentInterventions.id, first.id));
+    /** @example The prior batch and its review-token hash are preserved. */
+    expect(original).toEqual([first]);
+  });
+
   it('requires complete identity equality for idempotent create', async () => {
     const params: Parameters<typeof model.createBatch>[0] = {
       activityKey: 'identity-activity',

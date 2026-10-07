@@ -15,6 +15,13 @@ if (!migration) throw new Error('Agent Intervention migration not found');
 
 const migrationSql = migration.sql.join('\n');
 
+// NOTICE:
+// Initialize the full historical database before timing migration replay.
+// A cold PGlite database can spend over 15 seconds applying older migrations.
+// Source: `src/models/__tests__/agentIntervention.test.ts` uses this same awaited fixture.
+// Remove this setup only when getTestDB provides an already initialized shared fixture.
+const serverDB = await getTestDB();
+
 describe('Agent Intervention and ActivityKit migration', () => {
   it('creates a generic notification-safe intervention table', () => {
     expect(migrationSql).toContain('CREATE TABLE IF NOT EXISTS "agent_interventions"');
@@ -126,7 +133,37 @@ describe('Agent Intervention and ActivityKit migration', () => {
   });
 
   it('can replay the complete migration after it has already been applied', async () => {
-    const db = await getTestDB();
+    const db = serverDB;
     for (const statement of migration.sql) await db.execute(sql.raw(statement));
+  }, 15_000);
+  /** @example Replaying the callback migration preserves the expanded unique key. */
+  it('replays the batch-scoped callback index migration without restoring the old restriction', async () => {
+    const callbackMigration = readMigrationFiles({
+      migrationsFolder: path.join(__dirname, '../../../migrations'),
+    }).find((item) =>
+      item.sql.some((statement) =>
+        statement.includes('agent_interventions_operation_batch_tool_call_unique'),
+      ),
+    );
+    if (!callbackMigration) throw new Error('Callback migration not found');
+    const db = serverDB;
+    for (let replay = 0; replay < 2; replay += 1) {
+      for (const statement of callbackMigration.sql) await db.execute(sql.raw(statement));
+    }
+    const indexes = await db.execute(
+      sql`SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'agent_interventions'`,
+    );
+    /** @example The old pair-only unique index is gone after replay. */
+    expect(
+      indexes.rows.some(
+        (row) => row.indexname === 'agent_interventions_operation_tool_call_unique',
+      ),
+    ).toBe(false);
+    /** @example The new unique index includes the sealed callback batch. */
+    expect(
+      indexes.rows.find(
+        (row) => row.indexname === 'agent_interventions_operation_batch_tool_call_unique',
+      )?.indexdef,
+    ).toContain('(operation_id, batch_id, tool_call_id)');
   }, 15_000);
 });
