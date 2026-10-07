@@ -29,8 +29,8 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
+import { usePendingInterventions } from '../hooks/usePendingInterventions';
 import InterventionBar from '../InterventionBar';
-import { usePendingInterventions } from '../InterventionBar/PendingInterventionBar';
 import {
   dataSelectors,
   messageStateSelectors,

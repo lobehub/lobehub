@@ -21,9 +21,7 @@ export type {
 // Components
 export { default as ChatInput, type ChatInputProps } from './ChatInput';
 export { default as ChatList, type ChatListProps } from './ChatList';
-export {
-  default as PendingInterventionBar,
-  usePendingInterventions,
-} from './InterventionBar/PendingInterventionBar';
+export { usePendingInterventions } from './hooks/usePendingInterventions';
+export { default as PendingInterventionBar } from './InterventionBar/PendingInterventionBar';
 export { default as MessageItem, type MessageItemProps } from './Messages';
 export { default as TodoProgress } from './TodoProgress';

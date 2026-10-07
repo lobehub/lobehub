@@ -7,7 +7,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type Operation, type OperationType } from '@/store/chat/slices/operation/types';
 
-import { usePendingInterventions } from './InterventionBar/PendingInterventionBar';
+import { usePendingInterventions } from './hooks/usePendingInterventions';
 import {
   contextSelectors,
   conversationSelectors,
