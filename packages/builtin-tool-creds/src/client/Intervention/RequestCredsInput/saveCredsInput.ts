@@ -87,3 +87,43 @@ export const saveCredsInput = async (
     });
   }
 };
+
+export type CredsInputSubmitStage = 'approve' | 'save';
+
+/**
+ * Submit handler for the secure form: write the values, then approve the
+ * call. The two steps fail independently. When the write succeeded but the
+ * approval did not, a retry only approves again; it does not write the same
+ * secret a second time. `onError` gets the failed stage so the card can say
+ * which one to retry.
+ */
+export const createCredsInputSubmit = ({
+  approve,
+  onError,
+  save,
+}: {
+  approve: () => Promise<void>;
+  onError: (stage: CredsInputSubmitStage) => void;
+  save: (values: Record<string, string>) => Promise<void>;
+}) => {
+  let saved = false;
+
+  return async (values: Record<string, string>) => {
+    if (!saved) {
+      try {
+        await save(values);
+      } catch (error) {
+        onError('save');
+        throw error;
+      }
+      saved = true;
+    }
+
+    try {
+      await approve();
+    } catch (error) {
+      onError('approve');
+      throw error;
+    }
+  };
+};

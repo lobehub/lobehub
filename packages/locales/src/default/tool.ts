@@ -94,6 +94,8 @@ export default {
     'This connector belongs to the agent “{{agent}}”. Deleting it will also remove this tool from that agent.',
   'connector.manageOnlyCreator': 'Only the creator or a workspace owner can manage this connector',
   'connector.thisAgent': 'this agent',
+  'credsInput.approveFailed':
+    "The credential was saved, but the conversation couldn't continue. Please try again.",
   'credsInput.notice.noPermission':
     'Only workspace admins can save workspace credentials. Skip this request, or ask an admin to add the credential in the workspace settings.',
   'credsInput.notice.overwrite':

@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { canSaveCredsInput, type CredsWriteClient, saveCredsInput } from './saveCredsInput';
+import {
+  canSaveCredsInput,
+  createCredsInputSubmit,
+  type CredsWriteClient,
+  saveCredsInput,
+} from './saveCredsInput';
 
 const values = { OPENAI_API_KEY: 'sk-test-secret-value' };
 
@@ -83,5 +88,48 @@ describe('canSaveCredsInput', () => {
   it('requires the credential-management permission inside a workspace', () => {
     expect(canSaveCredsInput({ canManageWorkspaceCreds: true, isWorkspace: true })).toBe(true);
     expect(canSaveCredsInput({ canManageWorkspaceCreds: false, isWorkspace: true })).toBe(false);
+  });
+});
+
+describe('createCredsInputSubmit', () => {
+  it('saves, then approves', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const approve = vi.fn().mockResolvedValue(undefined);
+    const onError = vi.fn();
+
+    await createCredsInputSubmit({ approve, onError, save })(values);
+
+    expect(save).toHaveBeenCalledWith(values);
+    expect(approve).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not approve when the save fails', async () => {
+    const save = vi.fn().mockRejectedValue(new Error('store unavailable'));
+    const approve = vi.fn();
+    const onError = vi.fn();
+
+    await expect(createCredsInputSubmit({ approve, onError, save })(values)).rejects.toThrow();
+
+    expect(onError).toHaveBeenCalledWith('save');
+    expect(approve).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed approval and retries it without writing the secret again', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const approve = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('resume failed'))
+      .mockResolvedValueOnce(undefined);
+    const onError = vi.fn();
+    const submit = createCredsInputSubmit({ approve, onError, save });
+
+    await expect(submit(values)).rejects.toThrow();
+    expect(onError).toHaveBeenCalledWith('approve');
+
+    await submit(values);
+
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(approve).toHaveBeenCalledTimes(2);
   });
 });

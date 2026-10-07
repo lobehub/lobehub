@@ -216,6 +216,34 @@ describe('buildRuntimeInterventionNotification', () => {
     expect(result?.systemActionEligibility).toBe('review_only');
   });
 
+  it('lets only the card resolve the secure credential form', async () => {
+    const credsForm = {
+      apiName: 'requestCredsInput',
+      arguments: '{"key":"openai","name":"OpenAI","type":"kv-env","fieldNames":["OPENAI_API_KEY"]}',
+      id: 'call-creds',
+      identifier: 'lobe-creds',
+      type: 'builtin' as const,
+    };
+    const result = await buildRuntimeInterventionNotification({
+      operationId: 'operation-1',
+      state: buildState({
+        pendingToolMessageIds: { 'call-creds': 'tool-creds' },
+        pendingToolsCalling: [credsForm],
+        toolManifestMap: {
+          'lobe-creds': { api: [{ name: 'requestCredsInput' }], identifier: 'lobe-creds' },
+        },
+      }),
+      userId: 'user-1',
+    });
+
+    expect(result?.items[0]).toMatchObject({
+      allowedActions: ['approve_tool', 'reject_continue', 'stop'],
+      interactionKind: 'tool_approval',
+      surface: 'form',
+    });
+    expect(result?.systemActionEligibility).toBe('review_only');
+  });
+
   it('emits an exact old-batch supersession for a partially resolved re-park', async () => {
     const result = await buildRuntimeInterventionNotification({
       operationId: 'operation-2',

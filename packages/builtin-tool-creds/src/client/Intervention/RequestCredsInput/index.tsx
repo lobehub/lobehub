@@ -15,6 +15,7 @@ import { lambdaClient } from '@/libs/trpc/client';
 import type { RequestCredsInputParams } from '../../../types';
 import {
   canSaveCredsInput,
+  createCredsInputSubmit,
   type CredsWriteClient,
   findWritableCred,
   saveCredsInput,
@@ -70,20 +71,27 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
       () => findWritableCred(client, args.key, isWorkspace),
     );
 
+    // One instance per card, so a retry after a failed approval does not write
+    // the secret again. Errors are shown as fixed copy, never the raw message.
+    const submit = useMemo(
+      () =>
+        createCredsInputSubmit({
+          approve: async () => {
+            await onInteractionAction?.({ payload: {}, type: 'submit' });
+          },
+          onError: (stage) =>
+            setError(t(stage === 'save' ? 'credsInput.saveFailed' : 'credsInput.approveFailed')),
+          save: (values) => saveCredsInput(client, args, isWorkspace, values),
+        }),
+      [args, client, isWorkspace, onInteractionAction, t],
+    );
+
     const handleSubmit = useCallback(
       async (values: Record<string, string>) => {
         setError(undefined);
-        try {
-          await saveCredsInput(client, args, isWorkspace, values);
-        } catch (saveError) {
-          // Error messages from the creds router are generic; never echo values here.
-          setError(t('credsInput.saveFailed'));
-          throw saveError;
-        }
-
-        await onInteractionAction?.({ payload: {}, type: 'submit' });
+        await submit(values);
       },
-      [args, client, isWorkspace, onInteractionAction, t],
+      [submit],
     );
 
     const handleCancel = useCallback(() => {

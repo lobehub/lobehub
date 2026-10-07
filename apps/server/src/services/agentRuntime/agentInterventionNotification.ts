@@ -155,6 +155,13 @@ const actionsFor = (
     ];
   }
 
+  if (interactionKind === 'tool_approval') {
+    // A form resolved by approval (the secure credential form): the card
+    // approves after its own write, so there are no arguments to edit and no
+    // allow-list entry to remember.
+    return ['approve_tool', 'reject_continue', 'stop'];
+  }
+
   if (interactionKind === 'question') {
     // Standard runtime AskUser has Submit / Skip semantics. Cancel is a
     // provider/custom terminal action and has no runtime handler here.
