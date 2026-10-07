@@ -59,6 +59,7 @@ lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-effect-fetching" = "error"
 "lobehub/no-mode-flags" = "warn"
+"lobehub/no-unguarded-response-field" = "error"
 
 
 # Browser code, everywhere: no third-party package that needs Node may be
@@ -207,6 +208,13 @@ files = [ "packages/alint/fixtures/no-effect-fetching/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-effect-fetching" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unguarded-response-field/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unguarded-response-field" = "warn"
 
 [[config.group]]
 files = [ "packages/alint/fixtures/no-mode-flags/**" ]

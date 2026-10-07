@@ -13,6 +13,7 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-effect-fetching`               | error    | `src/**/*.tsx`                                                | `data-fetching-architecture` skill                                      |
 | `no-dynamic-import-in-server`      | error    | `apps/server/src`, `packages/database`                        | backend code uses static top-level imports                              |
 | `no-mode-flags`                    | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                                   |
+| `no-unguarded-response-field`      | error    | `src/**/*.tsx`                                                | a newer client must survive an older server omitting a response field   |
 | `no-node-in-browser`               | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint)          |
 | `no-unsafe-user-url-fetch`         | warn     | `apps/server/src`                                             | user-controlled URLs must use SSRF-safe transport (#16601)              |
 | `no-unscoped-resource-mutation`    | warn     | database models/repositories                                  | ownership checks for resource and junction mutations (#13683, #16586)   |
