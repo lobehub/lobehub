@@ -283,6 +283,38 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       vi.useRealTimers();
     });
 
+    it('waits for a redirect that starts after the requested document committed', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      guest.isLoading.mockReturnValue(true);
+      // The requested page commits, then a script redirect aborts its load; the
+      // redirect target only commits 10s later.
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => {
+          guest.getURL.mockReturnValue('https://example.com/landing');
+          guest.emit('did-navigate', {}, 'https://example.com/landing');
+        }, 10_000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      let settled: unknown;
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      }).then((result) => (settled = result));
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(settled).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(pending).resolves.toEqual({ success: true });
+      expect(guest.getURL()).toBe('https://example.com/landing');
+      vi.useRealTimers();
+    });
+
     it('does not report success when the replacement after ERR_ABORTED never commits', async () => {
       vi.useFakeTimers();
       const guest = createWebContents(7);

@@ -338,13 +338,17 @@ export default class BrowserSidebarCtr extends ControllerModule {
 
       // ERR_ABORTED can reject as soon as the replacement navigation (a redirect
       // or a newer load) starts, before it commits. Wait for that replacement
-      // within the same budget rather than reporting the previous document.
+      // within the same budget rather than reporting the document it replaces —
+      // the previous page, or the requested one when it committed and then
+      // redirected (script or meta refresh) before finishing its load.
       if (
         outcome.status === 'failed' &&
         outcome.error.errno === NAVIGATION_ABORTED_ERRNO &&
-        !committed &&
         webContents.isLoading()
       ) {
+        // Only a commit after the abort is the replacement's.
+        const committedBeforeAbort = committed;
+        committed = false;
         // The replacement can also fail, return a 204 or be cancelled; it then
         // stops loading without ever committing.
         let failure: string | undefined;
@@ -378,6 +382,9 @@ export default class BrowserSidebarCtr extends ControllerModule {
             }),
             waitUntilDeadline(),
           ]);
+          // A slow replacement after the requested document committed is the
+          // ordinary still-loading case.
+          committed ||= committedBeforeAbort;
         } finally {
           webContents.removeListener('did-fail-load', onFailLoad);
           if (onStop) webContents.removeListener('did-stop-loading', onStop);
