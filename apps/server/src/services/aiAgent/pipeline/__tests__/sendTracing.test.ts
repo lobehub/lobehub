@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createStageTracer, openStageSpan } from '../sendTracing';
+import { createStageTracer, openStageMark } from '../sendTracing';
 
 const { span, startActiveSpan, startSpan } = vi.hoisted(() => {
   const span = { end: vi.fn(), setAttribute: vi.fn(), setStatus: vi.fn() };
@@ -30,7 +30,7 @@ describe('createStageTracer', () => {
     expect(span.setStatus).not.toHaveBeenCalled();
   });
 
-  it('marks the span errored and rethrows when the stage throws', async () => {
+  it('marks the span errored, still ends it, and rethrows when the stage throws', async () => {
     const trace = createStageTracer('execAgent');
 
     await expect(
@@ -40,30 +40,41 @@ describe('createStageTracer', () => {
     ).rejects.toThrow('boom');
 
     expect(span.setStatus).toHaveBeenCalledWith(expect.objectContaining({ message: 'boom' }));
-    expect(span.end).toHaveBeenCalled();
+    expect(span.end).toHaveBeenCalledTimes(1);
   });
 });
 
-describe('openStageSpan', () => {
-  it('opens a plain span and closes it on end()', () => {
-    const open = openStageSpan('turn_setup');
-    const stage = open('topic');
+describe('openStageMark', () => {
+  it('opens a plain span and closes it from finally on the success path', () => {
+    const mark = openStageMark('turn_setup')('topic');
+    try {
+      expect(startSpan).toHaveBeenCalledWith('turn_setup topic');
+      expect(span.end).not.toHaveBeenCalled();
+    } finally {
+      mark.end();
+    }
 
-    expect(startSpan).toHaveBeenCalledWith('turn_setup topic');
-    expect(span.end).not.toHaveBeenCalled();
-
-    stage.end();
-
-    expect(span.end).toHaveBeenCalled();
+    expect(span.end).toHaveBeenCalledTimes(1);
     expect(span.setStatus).not.toHaveBeenCalled();
   });
 
-  it('records the error passed to end()', () => {
-    openStageSpan('turn_setup')('messages').end(new Error('insert failed'));
+  it('records the error and still closes the span when the block throws', () => {
+    const mark = openStageMark('turn_setup')('topic');
+
+    expect(() => {
+      try {
+        throw new Error('topic missing');
+      } catch (error) {
+        mark.fail(error);
+        throw error;
+      } finally {
+        mark.end();
+      }
+    }).toThrow('topic missing');
 
     expect(span.setStatus).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'insert failed' }),
+      expect.objectContaining({ message: 'topic missing' }),
     );
-    expect(span.end).toHaveBeenCalled();
+    expect(span.end).toHaveBeenCalledTimes(1);
   });
 });

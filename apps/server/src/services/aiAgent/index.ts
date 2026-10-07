@@ -77,7 +77,7 @@ import { dispatchHeteroAgent } from './pipeline/heteroDispatch';
 import { buildOperationInitRequest, runOperationInit } from './pipeline/operationInit';
 import { createHistoryMessagesLoader } from './pipeline/operationPrep';
 import { resolveRunAgentConfig } from './pipeline/resolveRunAgentConfig';
-import { openStageSpan, traceSendStage } from './pipeline/sendTracing';
+import { traceSendStage } from './pipeline/sendTracing';
 import { startOperation } from './pipeline/startOperation';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { createRunFacts, type RunFacts } from './runFacts';
@@ -92,9 +92,6 @@ import type {
 } from './types';
 
 const log = debug('lobe-server:ai-agent-service');
-
-/** Timing marks over the straight-line stages of `execAgent` (see `pipeline/sendTracing`). */
-const openSendStage = openStageSpan('execAgent');
 
 /**
  * AI Agent Service
@@ -1059,7 +1056,6 @@ export class AiAgentService {
 
     // Stages 1–2.5 — resolve the effective agent config for this run
     // (see `pipeline/resolveRunAgentConfig`).
-    const agentConfigStage = openSendStage('agent_config');
     const {
       agentConfig,
       agentSlug,
@@ -1071,27 +1067,27 @@ export class AiAgentService {
       memberDeviceOverride,
       persistAgentId,
       resolvedAgentId,
-    } = await resolveRunAgentConfig(
-      {
-        db: this.db,
-        resolveAgentConfigOrThrow: (id) => this.resolveAgentConfigOrThrow(id),
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      },
-      {
-        appContext,
-        chatConfigOverride,
-        identifier,
-        instructions,
-        modelOverride,
-        providerOverride,
-        shareVisitorUserId: shareGate?.visitorUserId,
-        throwIfExecutionAborted,
-        toolModeOverride,
-      },
+    } = await traceSendStage('agent_config', () =>
+      resolveRunAgentConfig(
+        {
+          db: this.db,
+          resolveAgentConfigOrThrow: (id) => this.resolveAgentConfigOrThrow(id),
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        },
+        {
+          appContext,
+          chatConfigOverride,
+          identifier,
+          instructions,
+          modelOverride,
+          providerOverride,
+          shareVisitorUserId: shareGate?.visitorUserId,
+          throwIfExecutionAborted,
+          toolModeOverride,
+        },
+      ),
     );
-
-    agentConfigStage.end();
 
     // Share-visitor runs must never see the creator's files/knowledge bases.
     // Applied to the resolved config before anything downstream (knowledge
@@ -1159,7 +1155,6 @@ export class AiAgentService {
 
     // Stages 2.6–2.7 — claim the human decision(s) before anything below reads
     // message history (see `pipeline/approvalResume`).
-    const approvalStage = openSendStage('approval_claim');
     const {
       approvalOwnerAssistantId,
       approvalSourceOperationId,
@@ -1167,26 +1162,26 @@ export class AiAgentService {
       approvedToolEntries,
       batchApprovalAnchorId,
       resumeApprovalPlugin,
-    } = await claimApprovalResume(
-      { messageModel: this.messageModel },
-      {
-        appContext,
-        approvalClaim,
-        approvalDecisions,
-        parentMessageId,
-        providedApprovalResolutionRequestId,
-        providedApprovalSourceOperationId,
-        resumeApprovals,
-        resumeParentMessage,
-        resumeToolResult,
-      },
+    } = await traceSendStage('approval_claim', () =>
+      claimApprovalResume(
+        { messageModel: this.messageModel },
+        {
+          appContext,
+          approvalClaim,
+          approvalDecisions,
+          parentMessageId,
+          providedApprovalResolutionRequestId,
+          providedApprovalSourceOperationId,
+          resumeApprovals,
+          resumeParentMessage,
+          resumeToolResult,
+        },
+      ),
     );
 
     // Deterministic continuation identity for a generic (v2) approval claim.
     // Also consumed by the turn setup below: a crash-safe re-entry must find
     // the SAME assistant placeholder instead of minting a second turn.
-    approvalStage.end();
-
     const continuationIdentity = providedApprovalResolutionRequestId
       ? {
           resolutionRequestId: providedApprovalResolutionRequestId,
@@ -1227,46 +1222,47 @@ export class AiAgentService {
     // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
     // model), device-access policy, hetero detection, attachment ingestion, and
     // the persisted user/assistant rows (see `pipeline/turnSetup`).
-    const turnStage = openSendStage('turn_setup');
-    const turn = await setupTurn(
-      {
-        db: this.db,
-        messageModel: this.messageModel,
-        topicModel: this.topicModel,
-        userId: this.userId,
-        workspaceId: this.workspaceId,
-      },
-      {
-        agentConfig,
-        agentSlug,
-        appContext,
-        assistantAgentId,
-        attachedFileIds,
-        batchApprovalAnchorId,
-        botContext,
-        botSender,
-        clientIds,
-        continuationAssistantId,
-        conversationAgentId,
-        createdThreadId,
-        externalOrigin,
-        cronJobId,
-        files,
-        modelOverride,
-        operationTaskId,
-        parentMessageId,
-        prompt,
-        providerOverride,
-        requestedDeviceId,
-        resolvedAgentId,
-        resume,
-        runFromHistory,
-        shareGate,
-        steer,
-        throwIfExecutionAborted,
-        title,
-        trigger,
-      },
+    const turn = await traceSendStage('turn_setup', () =>
+      setupTurn(
+        {
+          db: this.db,
+          messageModel: this.messageModel,
+          topicModel: this.topicModel,
+          userId: this.userId,
+          workspaceId: this.workspaceId,
+        },
+        {
+          agentConfig,
+          agentSlug,
+          appContext,
+          assistantAgentId,
+          attachedFileIds,
+          batchApprovalAnchorId,
+          botContext,
+          botSender,
+          clientIds,
+          continuationAssistantId,
+          conversationAgentId,
+          createdThreadId,
+          externalOrigin,
+          cronJobId,
+          files,
+          modelOverride,
+          operationTaskId,
+          parentMessageId,
+          prompt,
+          providerOverride,
+          requestedDeviceId,
+          resolvedAgentId,
+          resume,
+          runFromHistory,
+          shareGate,
+          steer,
+          throwIfExecutionAborted,
+          title,
+          trigger,
+        },
+      ),
     );
     assistantMessageRef.current = turn.assistantMessageId;
     const {
@@ -1280,7 +1276,6 @@ export class AiAgentService {
       selfMessageIds,
       topicId,
     } = turn;
-    turnStage.end();
 
     // Shared context for the extracted execAgent pipeline stages
     // (`pipeline/*`). Built after the turn rows exist so every stage sees the
@@ -1360,45 +1355,45 @@ export class AiAgentService {
     let globalMemoryEnabled = agentMemoryEnabled ?? false;
     let enableExpertise = false;
     let userTimezone: string | undefined;
-    const settingsStage = openSendStage('run_settings');
-    try {
-      const settings = await runFacts.userSettings();
-      const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
+    await traceSendStage('run_settings', async () => {
+      try {
+        const settings = await runFacts.userSettings();
+        const memorySettings = settings?.memory as { enabled?: boolean } | undefined;
 
-      globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
+        globalMemoryEnabled = agentMemoryEnabled ?? memorySettings?.enabled !== false;
 
-      // Timezone drives the session-date placeholder rendered back to whoever
-      // is actually conversing. In a share-visitor run that is the VISITOR,
-      // not the creator whose settings this block otherwise reads — memory /
-      // expertise intentionally stay creator-scoped below (gated by
-      // `allowReadMemory`), but the timezone has no such gate and must not
-      // leak the creator's own setting into a visitor's turn.
-      if (shareGate) {
-        const visitorSettings = await runFacts.userSettings(shareGate.visitorUserId);
-        const visitorGeneralSettings = visitorSettings?.general as
-          { timezone?: string } | undefined;
-        userTimezone = visitorGeneralSettings?.timezone;
-      } else {
-        const generalSettings = settings?.general as { timezone?: string } | undefined;
-        userTimezone = generalSettings?.timezone;
+        // Timezone drives the session-date placeholder rendered back to whoever
+        // is actually conversing. In a share-visitor run that is the VISITOR,
+        // not the creator whose settings this block otherwise reads — memory /
+        // expertise intentionally stay creator-scoped below (gated by
+        // `allowReadMemory`), but the timezone has no such gate and must not
+        // leak the creator's own setting into a visitor's turn.
+        if (shareGate) {
+          const visitorSettings = await runFacts.userSettings(shareGate.visitorUserId);
+          const visitorGeneralSettings = visitorSettings?.general as
+            { timezone?: string } | undefined;
+          userTimezone = visitorGeneralSettings?.timezone;
+        } else {
+          const generalSettings = settings?.general as { timezone?: string } | undefined;
+          userTimezone = generalSettings?.timezone;
+        }
+      } catch (error) {
+        log('execAgent: failed to fetch user settings: %O', error);
       }
-    } catch (error) {
-      log('execAgent: failed to fetch user settings: %O', error);
-    }
-    try {
-      const preference = await new UserModel(this.db, this.userId).getUserPreference();
-      enableExpertise = preference?.lab?.enableSelfLearning === true;
-    } catch (error) {
-      console.error('Failed to resolve expertise injection Lab preference:', error);
-    }
-    // Share visitors only get the creator's memory (persona + learned
-    // expertise) when the share explicitly allows it — both surfaces would
-    // otherwise leak the creator's personal context into visitor turns.
-    if (shareGate && !shareGate.shareConfig.allowReadMemory) {
-      globalMemoryEnabled = false;
-      enableExpertise = false;
-    }
-    settingsStage.end();
+      try {
+        const preference = await new UserModel(this.db, this.userId).getUserPreference();
+        enableExpertise = preference?.lab?.enableSelfLearning === true;
+      } catch (error) {
+        console.error('Failed to resolve expertise injection Lab preference:', error);
+      }
+      // Share visitors only get the creator's memory (persona + learned
+      // expertise) when the share explicitly allows it — both surfaces would
+      // otherwise leak the creator's personal context into visitor turns.
+      if (shareGate && !shareGate.shareConfig.allowReadMemory) {
+        globalMemoryEnabled = false;
+        enableExpertise = false;
+      }
+    });
     log(
       'execAgent: globalMemoryEnabled=%s, timezone=%s',
       globalMemoryEnabled,

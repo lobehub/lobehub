@@ -27,31 +27,30 @@ export const createStageTracer =
       }
     });
 
-export interface OpenStageSpan {
-  /** Close the span; pass the error when the stage failed. */
-  end: (error?: unknown) => void;
-  span: Span;
+export interface StageMark {
+  /** Close the span. Call from `finally` so every exit path reaches it. */
+  end: () => void;
+  /** Record the error that is about to propagate; call from `catch` before rethrowing. */
+  fail: (error: unknown) => void;
 }
 
 /**
- * Open a span over a stretch of straight-line code that cannot be wrapped in
- * a callback (a block with early returns, a branch that assigns outer
- * variables). The span is NOT made active, so nested stages attach to the
- * enclosing request span instead of this one; it is a timing mark, not a
- * parent. The caller owns `end()` — every exit path must reach it.
+ * A span over a block that cannot be wrapped in a callback: one that assigns
+ * the enclosing function's narrowed bindings (TypeScript drops a `let`'s
+ * narrowing for every later read once a closure assigns it). The caller
+ * owns the lifecycle and must shape it as
+ * `try { … } catch (e) { mark.fail(e); throw e; } finally { mark.end(); }`,
+ * so a throw on any path still records the error and closes the span. The
+ * span is not made active; nested stages attach to the enclosing one.
  */
-export const openStageSpan =
+export const openStageMark =
   (family: string) =>
-  (stage: string): OpenStageSpan => {
+  (stage: string): StageMark => {
     const span = agentRuntimeTracer.startSpan(`${family} ${stage}`);
     return {
-      end: (error) => {
-        if (error) {
-          span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error)?.message });
-        }
-        span.end();
-      },
-      span,
+      end: () => span.end(),
+      fail: (error) =>
+        span.setStatus({ code: SpanStatusCode.ERROR, message: (error as Error)?.message }),
     };
   };
 
@@ -60,6 +59,11 @@ export const openStageSpan =
  * setup (rows + attachments), the init stage (discovery + prep) and operation
  * start. Postgres and Redis carry no spans of their own, so these are the
  * only breakdown of the untraced stretches before discovery and after it.
+ *
+ * Stages are wrapped where they are a call, and marked (`openStageMark`,
+ * inside try/catch/finally) where they are a block that assigns the
+ * function's narrowed bindings; either way every exit records the error
+ * and closes the span.
  */
 export const traceSendStage = createStageTracer('execAgent');
 
