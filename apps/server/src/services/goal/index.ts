@@ -3176,6 +3176,21 @@ export class GoalService {
     });
   };
 
+  /** The machine-recovery plan for a paused Task, over its runs since a person last answered its gate. */
+  private planMachineRecoveryFor = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    now = new Date(),
+  ) => {
+    // A person's Retry restarts the schedule they overrode.
+    const answeredAt = lastAnsweredGateAt(graph, nodeId);
+    const runs = (await this.taskTopicModel.findByTaskId(task.id)).filter(
+      (run) => !answeredAt || new Date(run.updatedAt) > answeredAt,
+    );
+    return planMachineRecovery({ error: task.error, now, runs, taskUpdatedAt: task.updatedAt });
+  };
+
   /**
    * Recover a Task stopped by a machine problem without asking anyone to judge it
    * (see `planMachineRecovery`): a usage limit is waited out until it resets, a
@@ -3196,18 +3211,8 @@ export class GoalService {
     // schedule stays out of its way rather than racing it for the same Task.
     const supervised = !!graph.goal.config?.supervision?.enabled || !!graph.goal.config?.manager;
     if (supervised && classifyGoalFailure(task.error).class === 'transient') return;
-    // A person's Retry restarts the schedule they overrode.
-    const answeredAt = lastAnsweredGateAt(graph, nodeId);
-    const runs = (await this.taskTopicModel.findByTaskId(task.id)).filter(
-      (run) => !answeredAt || new Date(run.updatedAt) > answeredAt,
-    );
     const now = new Date();
-    const plan = planMachineRecovery({
-      error: task.error,
-      now,
-      runs,
-      taskUpdatedAt: task.updatedAt,
-    });
+    const plan = await this.planMachineRecoveryFor(graph, nodeId, task, now);
     if (plan.action === 'none') return;
     // A pause somebody made is theirs; the error text it kept proves nothing.
     if (statusAuthoredByActor(await this.taskModel.getActivities(task.id, 20), task.status)) return;
@@ -3288,6 +3293,15 @@ export class GoalService {
     ).findById(latest.operationId);
     const failure = classifyRunFailure(operation?.error, task.error ?? '');
     if (failure.kind !== 'quota_reset') return;
+    // A refusal whose text names the limit is recorded as an uncharged run
+    // (`resolveFailedRunStatus`), so the attempt budget no longer bounds a window
+    // that keeps refusing; the uncharged quota schedule does. Once it is spent,
+    // fall through and `holdForMachineFailure` asks a person to fix the account.
+    if (
+      classifyGoalFailure(task.error).class === 'quota' &&
+      (await this.planMachineRecoveryFor(graph, nodeId, task)).action === 'gate'
+    )
+      return;
     const retryAt = failure.resetsAt! + QUOTA_RESET_MARGIN_MS;
     if (retryAt <= Date.now()) {
       // The retry is a paid run, and recovery only checks the Task's own attempts

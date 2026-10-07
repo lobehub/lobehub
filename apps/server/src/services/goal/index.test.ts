@@ -53,6 +53,7 @@ import {
 } from './decideNextMove';
 import { GoalExplorationPlanner } from './explorationPlanner';
 import { GoalService } from './index';
+import { MAX_QUOTA_RETRIES } from './machineRecovery';
 import { DEVICE_OFFLINE_GATE_REASON, VERIFY_SETTLE_GRACE_MS } from './recoveryPolicy';
 import * as scheduler from './scheduler';
 import { LocalGoalScheduler } from './scheduler/impls';
@@ -3938,6 +3939,37 @@ describe('GoalService', () => {
       expect(after.goal.config?.supervisorState?.incidents ?? []).toHaveLength(0);
     });
 
+    // The refusal's text names the limit, so its runs are uncharged and the
+    // attempt budget cannot end a window that keeps refusing. The uncharged
+    // quota schedule does: once spent, a person is asked instead of another wait.
+    it('stops waiting once the uncharged usage-limit retries are spent', async () => {
+      const schedule = vi.spyOn(scheduler, 'scheduleGoalAdvance').mockResolvedValue();
+      const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask');
+      const { created, graph, service } = await setup(
+        'Session limit keeps refusing',
+        Date.now() + 2 * 60 * 60 * 1000,
+      );
+      for (let seq = 1; seq <= MAX_QUOTA_RETRIES + 1; seq++) {
+        const topicId = `tpc_quota_${seq}`;
+        await serverDB.insert(topics).values({ id: topicId, userId });
+        await serverDB.insert(taskTopics).values({
+          seq,
+          status: QUOTA_LIMITED_RUN_STATUS,
+          taskId: created.taskId!,
+          topicId,
+          updatedAt: new Date(Date.now() - (MAX_QUOTA_RETRIES + 1 - seq) * 60 * 1000),
+          userId,
+        });
+      }
+
+      const gated = await service.tick(graph.goal.id);
+
+      expect(gated).toMatchObject({ outcome: 'waiting_human', taskId: created.taskId });
+      expect(runSpy).not.toHaveBeenCalled();
+      expect(schedule.mock.calls.filter(([params]) => params.trigger === 'wake')).toHaveLength(0);
+      expect((await service.graph(graph.goal.id)).decisions).toHaveLength(1);
+    });
+
     it('retries through ordinary recovery once the window has reset', async () => {
       const runSpy = vi
         .spyOn(TaskRunnerService.prototype, 'runTask')
@@ -4296,7 +4328,7 @@ describe('GoalService machine failures', () => {
     const waiting = await service.tick(graph.goal.id);
 
     expect(waiting).toMatchObject({
-      message: expect.stringContaining('retrying at 2026-10-05T20:32:00.000Z'),
+      message: expect.stringContaining('retrying at 2026-10-05T20:31:00.000Z'),
       outcome: 'waiting_external',
       taskId: created.taskId,
     });
@@ -4304,7 +4336,7 @@ describe('GoalService machine failures', () => {
     expect((await service.graph(graph.goal.id)).decisions).toHaveLength(0);
     // The tick that saw the failure books the advance for the reset.
     expect(scheduleSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ delay: 40 * 60 + 59, goalId: graph.goal.id, trigger: 'wake' }),
+      expect.objectContaining({ delay: 39 * 60 + 59, goalId: graph.goal.id, trigger: 'wake' }),
     );
 
     vi.setSystemTime(new Date('2026-10-05T20:33:00.000Z'));

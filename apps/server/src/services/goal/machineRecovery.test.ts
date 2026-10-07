@@ -2,6 +2,7 @@ import { QUOTA_LIMITED_RUN_STATUS, TRANSIENT_FAILED_RUN_STATUS } from '@lobechat
 import { describe, expect, it } from 'vitest';
 
 import { lastAnsweredGateAt, planMachineRecovery } from './machineRecovery';
+import { QUOTA_RESET_MARGIN_MS } from './recoveryPolicy';
 
 const MINUTE = 60 * 1000;
 const HOUR = 60 * MINUTE;
@@ -26,7 +27,7 @@ describe('planMachineRecovery', () => {
         action: 'wait',
         failedAt: FAILED_AT,
         failureClass: 'quota',
-        retryAt: new Date(RESET_AT.getTime() + 2 * MINUTE),
+        retryAt: new Date(RESET_AT.getTime() + QUOTA_RESET_MARGIN_MS),
       });
     });
 

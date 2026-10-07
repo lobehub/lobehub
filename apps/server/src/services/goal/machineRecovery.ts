@@ -3,7 +3,7 @@ import type { GoalGraphSnapshot } from '@lobechat/types';
 
 import type { GoalEnvironmentProblem, GoalFailureClassification } from './failureClass';
 import { classifyGoalFailure } from './failureClass';
-import { countConsecutiveRunsWithStatus } from './recoveryPolicy';
+import { countConsecutiveRunsWithStatus, QUOTA_RESET_MARGIN_MS } from './recoveryPolicy';
 
 /**
  * How the coordinator recovers a Task stopped by a machine problem, mirroring the
@@ -12,8 +12,6 @@ import { countConsecutiveRunsWithStatus } from './recoveryPolicy';
  * only once it is spent — with a gate that says what broke, not a judgment call.
  */
 
-/** Retry this long after the reset a usage limit names, so the retry does not race it. */
-export const QUOTA_RESET_MARGIN_MS = 2 * 60 * 1000;
 /**
  * Longest a Task waits on usage limits before a person is asked, measured from
  * the first limited run of the streak. A five-hour window that resets overnight
