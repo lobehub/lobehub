@@ -49,42 +49,42 @@ class BinaryService {
   /**
    * Get cached status for a binary (no detection)
    */
-  getStatus = (name: string): BinaryStatus | null => {
+  getStatus = async (name: string): Promise<BinaryStatus | null> => {
     return ensureElectronIpc().binary.getStatus(name);
   };
 
   /**
    * Get all cached statuses (no detection)
    */
-  getAllStatus = (): Record<string, BinaryStatus> => {
+  getAllStatus = async (): Promise<Record<string, BinaryStatus>> => {
     return ensureElectronIpc().binary.getAllStatus();
   };
 
   /**
    * Clear binary status cache
    */
-  clearCache = (name?: string): void => {
-    ensureElectronIpc().binary.clearCache(name);
+  clearCache = async (name?: string): Promise<void> => {
+    await ensureElectronIpc().binary.clearCache(name);
   };
 
   /**
    * Get list of registered binary names
    */
-  getRegistered = (): string[] => {
+  getRegistered = async (): Promise<string[]> => {
     return ensureElectronIpc().binary.getRegistered();
   };
 
   /**
    * Get all categories
    */
-  getCategories = (): BinaryCategory[] => {
+  getCategories = async (): Promise<BinaryCategory[]> => {
     return ensureElectronIpc().binary.getCategories();
   };
 
   /**
    * Get binaries in a category with their info
    */
-  getInCategory = (category: BinaryCategory): BinaryInfo[] => {
+  getInCategory = async (category: BinaryCategory): Promise<BinaryInfo[]> => {
     return ensureElectronIpc().binary.getInCategory(category);
   };
 

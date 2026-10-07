@@ -105,7 +105,7 @@ class ElectronSystemService {
     return this.ipc.menu.popupContextMenu(params);
   };
 
-  closePopupContextMenu = async (): Promise<void> => {
+  closePopupContextMenu = async (): Promise<{ success: boolean }> => {
     return this.ipc.menu.closePopupContextMenu();
   };
 
