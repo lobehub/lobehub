@@ -338,7 +338,7 @@ const describeDiscordPagination = (
     [direction]: cursor,
     ...(params.limit !== undefined ? { limit: params.limit } : {}),
   });
-  return `\n\n[Discord pagination: oldest message ID: "${oldest}"; newest message ID: "${newest}". To continue toward ${direction === 'before' ? 'older' : 'newer'} messages, call readMessages with ${next}. Use only one of before/after. More messages are unknown, regardless of page size; continue until a successful empty page, or stop and investigate errors/non-advancing cursors.]`;
+  return `\n\n[Discord pagination: oldest message ID: "${oldest}"; newest message ID: "${newest}". Within the 3–5-call readMessages budget, to continue toward ${direction === 'before' ? 'older' : 'newer'} messages, call readMessages with ${next}. Use only one of before/after. More messages are unknown, regardless of page size; stop on a successful empty page, or stop and investigate errors/non-advancing cursors. For large-volume requests or tasks needing more calls, use the lobehub skill to batch read via the CLI (lh bot message read) outside the conversation context instead of repeatedly calling readMessages.]`;
 };
 
 export class MessageExecutionRuntime {
@@ -370,15 +370,22 @@ export class MessageExecutionRuntime {
   }
 
   async readMessages(params: ReadMessagesParams): Promise<BuiltinServerRuntimeOutput> {
-    if (
-      params.platform === 'discord' &&
-      params.before !== undefined &&
-      params.after !== undefined
-    ) {
-      return {
-        content: 'readMessages error: Discord before and after are mutually exclusive.',
-        success: false,
-      };
+    if (params.platform === 'discord') {
+      if (params.before !== undefined && params.after !== undefined) {
+        return {
+          content: 'readMessages error: Discord before and after are mutually exclusive.',
+          success: false,
+        };
+      }
+      for (const direction of ['before', 'after'] as const) {
+        const cursor = params[direction];
+        if (cursor !== undefined && (typeof cursor !== 'string' || !/^\d+$/.test(cursor))) {
+          return {
+            content: `readMessages error: Discord ${direction} must be a non-empty decimal message ID string. Omit it when not needed.`,
+            success: false,
+          };
+        }
+      }
     }
     try {
       const result = await this.service.readMessages(params);

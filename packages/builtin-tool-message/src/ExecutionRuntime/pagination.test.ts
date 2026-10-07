@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { ReadMessagesParams } from '../types';
 import { MessageExecutionRuntime } from './index';
 
 const message = (id: string) => ({
@@ -65,6 +66,47 @@ describe('model-visible message pagination', () => {
     expect(nextArgs((await runtime.readMessages({ ...params, after: '99' })).content)).toEqual({
       ...params,
       after: '102',
+    });
+  });
+
+  it.each([{}, { before: '103' }, { after: '99' }])(
+    'keeps the bounded readMessages budget and CLI fallback for %j',
+    async (cursor) => {
+      const { runtime } = setup(['102', '100', '101']);
+      const out = await runtime.readMessages({ ...params, ...cursor });
+      expect(out.content).toContain('Within the 3–5-call readMessages budget');
+      expect(out.content).toContain('For large-volume requests or tasks needing more calls');
+      expect(out.content).toContain('use the lobehub skill');
+      expect(out.content).toContain('lh bot message read');
+      expect(out.content).not.toContain('continue until');
+    },
+  );
+
+  describe.each(['before', 'after'] as const)('Discord %s input', (direction) => {
+    it.each(['', ' ', ' 100 ', '100\n', '100\r', 'bad-id', '-1', '1.5', '1e3', null, 100])(
+      'rejects invalid cursor %j before fetching a page',
+      async (cursor) => {
+        const { runtime, readMessages } = setup(['102', '100', '101']);
+        const input: ReadMessagesParams = {
+          ...params,
+          [direction]: cursor as ReadMessagesParams[typeof direction],
+        };
+        const out = await runtime.readMessages(input);
+        expect(out.success).toBe(false);
+        expect(out.content).toContain(
+          `Discord ${direction} must be a non-empty decimal message ID string`,
+        );
+        expect(out.content).not.toContain('call readMessages with');
+        expect(out.state).toBeUndefined();
+        expect(readMessages).not.toHaveBeenCalled();
+      },
+    );
+
+    it('accepts an explicitly undefined cursor as omitted', async () => {
+      const { runtime } = setup(['102', '100', '101']);
+      const out = await runtime.readMessages({ ...params, [direction]: undefined });
+      expect(out.success).toBe(true);
+      expect(nextArgs(out.content)).toEqual({ ...params, before: '100' });
     });
   });
 
@@ -134,7 +176,7 @@ describe('model-visible message pagination', () => {
         hasMore: true,
         nextCursor: 'opaque-token',
       });
-      const input = { ...params, platform, cursor: 'prior-token' };
+      const input = { ...params, platform, cursor: 'prior-token', before: '', after: '' };
       const out = await runtime.readMessages(input);
       expect(readMessages).toHaveBeenCalledWith(input);
       expect(out.content).toContain('[messageId: "opaque-id"]');
