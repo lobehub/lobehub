@@ -608,7 +608,7 @@ table agent_interventions {
   updated_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
-    (operation_id, tool_call_id) [name: 'agent_interventions_operation_tool_call_unique', unique]
+    (operation_id, batch_id, tool_call_id) [name: 'agent_interventions_operation_batch_tool_call_unique', unique]
     review_token_hash [name: 'agent_interventions_review_token_hash_unique', unique]
     (operation_id, batch_id, item_index) [name: 'agent_interventions_operation_batch_item_unique', unique]
     (user_id, activity_key, item_index) [name: 'agent_interventions_owner_activity_item_unique', unique]
