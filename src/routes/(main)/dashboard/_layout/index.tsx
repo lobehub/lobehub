@@ -1,1 +1,1 @@
-export { default } from '@/features/Dashboard/FeatureGate';
+export { HomeDashboardRouteGate as default } from '@/features/Dashboard/FeatureGate';

@@ -1,3 +1,4 @@
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 /**
@@ -9,4 +10,15 @@ export const useDashboardFeature = () => {
   const ready = useServerConfigStore((s) => s.serverConfigInit);
   const enabled = useServerConfigStore(serverConfigSelectors.enableDashboard);
   return { enabled: ready && enabled, ready };
+};
+
+/**
+ * The home dashboard (`/dashboard`): personal boards only for now —
+ * workspace-level boards have no UI yet — so it is off inside a workspace even
+ * while the flag is on. Project dashboards use `useDashboardFeature` instead.
+ */
+export const useHomeDashboardFeature = () => {
+  const { enabled, ready } = useDashboardFeature();
+  const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  return { enabled: enabled && !activeWorkspaceSlug, ready };
 };
