@@ -18,6 +18,7 @@ import {
   createCredsInputSubmit,
   type CredsWriteClient,
   findWritableCred,
+  isCredTypeMismatch,
   saveCredsInput,
 } from './saveCredsInput';
 
@@ -63,8 +64,12 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
     const name = args?.name || args?.key;
     const isInteractive = interactionMode === 'custom';
 
-    // Only metadata (id / key / owner) — list responses never carry values.
-    const { data: existing } = useClientDataSWR(
+    // Only metadata (id / key / owner / type) — list responses never carry values.
+    const {
+      data: existing,
+      error: lookupError,
+      isLoading: lookingUp,
+    } = useClientDataSWR(
       isInteractive && canSave && args?.key
         ? ['requestCredsInput:existing', args.key, isWorkspace]
         : null,
@@ -94,14 +99,25 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
       [submit],
     );
 
+    const typeMismatch = isCredTypeMismatch(existing, args?.type);
+
+    // Submitting before the existing-key lookup settles would overwrite a
+    // credential without the Update label or the overwrite warning.
+    let blockedReason: string | undefined;
+    if (!canSave) blockedReason = t('credsInput.notice.noPermission');
+    else if (lookupError) blockedReason = t('credsInput.notice.lookupFailed');
+    else if (typeMismatch)
+      blockedReason = t('credsInput.notice.typeMismatch', { key: args.key, type: existing?.type });
+
     const handleCancel = useCallback(() => {
-      void onInteractionAction?.({
-        reason: canSave
-          ? 'The user chose not to enter this credential.'
-          : 'The user cannot save workspace credentials: only workspace admins can. A workspace admin needs to add this credential in the workspace settings.',
-        type: 'skip',
-      });
-    }, [canSave, onInteractionAction]);
+      let reason = 'The user chose not to enter this credential.';
+      if (!canSave)
+        reason =
+          'The user cannot save workspace credentials: only workspace admins can. A workspace admin needs to add this credential in the workspace settings.';
+      else if (typeMismatch)
+        reason = `A credential with key "${args.key}" already exists with a different type (${existing?.type}). Request it again under a different key.`;
+      void onInteractionAction?.({ reason, type: 'skip' });
+    }, [args?.key, canSave, existing?.type, onInteractionAction, typeMismatch]);
 
     const header = (
       <Flexbox gap={4}>
@@ -127,8 +143,8 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
     return (
       <SecretInputView
         actionsPortalTarget={actionsPortalTarget}
-        blockedReason={canSave ? undefined : t('credsInput.notice.noPermission')}
-        disabled={disabled}
+        blockedReason={blockedReason}
+        disabled={disabled || lookingUp}
         error={error}
         fields={fieldNames}
         labels={{
@@ -143,7 +159,7 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
             <Text fontSize={12} type={'secondary'}>
               {t(isWorkspace ? 'credsInput.notice.workspace' : 'credsInput.notice.personal')}
             </Text>
-            {existing && (
+            {existing && !typeMismatch && (
               <Text fontSize={12} type={'warning'}>
                 {t('credsInput.notice.overwrite', { key: args.key })}
               </Text>

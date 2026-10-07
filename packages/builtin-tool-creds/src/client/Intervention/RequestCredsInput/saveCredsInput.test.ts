@@ -4,6 +4,8 @@ import {
   canSaveCredsInput,
   createCredsInputSubmit,
   type CredsWriteClient,
+  CredTypeMismatchError,
+  isCredTypeMismatch,
   saveCredsInput,
 } from './saveCredsInput';
 
@@ -16,7 +18,9 @@ const args = {
   type: 'kv-env' as const,
 };
 
-const createClient = (rows: Array<{ id: number; key: string; ownerType?: string }>) => ({
+const createClient = (
+  rows: Array<{ id: number; key: string; ownerType?: string; type?: string }>,
+) => ({
   createKV: { mutate: vi.fn().mockResolvedValue({ id: 1 }) },
   list: { query: vi.fn().mockResolvedValue({ data: rows }) },
   update: { mutate: vi.fn().mockResolvedValue({}) },
@@ -149,5 +153,25 @@ describe('createCredsInputSubmit', () => {
     expect(save).toHaveBeenCalledTimes(2);
     expect(save).toHaveBeenLastCalledWith(edited);
     expect(approve).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('credential type mismatch', () => {
+  it('detects an existing credential of another type', () => {
+    expect(isCredTypeMismatch(undefined, 'kv-env')).toBe(false);
+    expect(isCredTypeMismatch({ type: 'kv-env' }, 'kv-env')).toBe(false);
+    expect(isCredTypeMismatch({ type: 'kv-header' }, 'kv-env')).toBe(true);
+    expect(isCredTypeMismatch({ type: 'oauth' }, 'kv-env')).toBe(true);
+  });
+
+  it('refuses to overwrite a credential of another type', async () => {
+    const client = createClient([{ id: 7, key: 'openai', type: 'kv-header' }]);
+
+    await expect(
+      saveCredsInput(client as CredsWriteClient, args, false, values),
+    ).rejects.toBeInstanceOf(CredTypeMismatchError);
+
+    expect(client.update.mutate).not.toHaveBeenCalled();
+    expect(client.createKV.mutate).not.toHaveBeenCalled();
   });
 });

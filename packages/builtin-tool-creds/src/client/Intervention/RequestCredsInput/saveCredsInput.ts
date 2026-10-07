@@ -15,7 +15,9 @@ export interface CredsWriteClient {
     }) => Promise<unknown>;
   };
   list: {
-    query: () => Promise<{ data?: Array<{ id: number; key: string; ownerType?: string }> }>;
+    query: () => Promise<{
+      data?: Array<{ id: number; key: string; ownerType?: string; type?: string }>;
+    }>;
   };
   update: {
     mutate: (input: {
@@ -57,10 +59,28 @@ export const findWritableCred = async (
 };
 
 /**
+ * An existing credential can only be updated in place when it has the
+ * requested type: the update API changes values but not the type, so values of
+ * one type written into a credential of another would be injected wrongly.
+ */
+export const isCredTypeMismatch = (
+  existing: { type?: string } | undefined,
+  requestedType: RequestCredsInputParams['type'],
+) => !!existing && existing.type !== undefined && existing.type !== requestedType;
+
+export class CredTypeMismatchError extends Error {
+  constructor() {
+    super('A credential with this key already exists with a different type');
+    this.name = 'CredTypeMismatchError';
+  }
+}
+
+/**
  * Writes the form's values to the credential store: updates the credential
  * with the same key when the scope can write it, creates one otherwise.
  * Re-reads the list instead of trusting what the card showed, since the key
- * may have been created elsewhere in the meantime.
+ * may have been created elsewhere in the meantime, and refuses to update a
+ * credential of another type.
  */
 export const saveCredsInput = async (
   client: CredsWriteClient,
@@ -69,6 +89,7 @@ export const saveCredsInput = async (
   values: Record<string, string>,
 ) => {
   const writable = await findWritableCred(client, args.key, isWorkspace);
+  if (isCredTypeMismatch(writable, args.type)) throw new CredTypeMismatchError();
 
   if (writable) {
     await client.update.mutate({
