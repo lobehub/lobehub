@@ -1,3 +1,5 @@
+import type { LocalHeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+
 import { ampDriver } from './drivers/amp';
 import { claudeCodeDriver } from './drivers/claudeCode';
 import { codeBuddyDriver } from './drivers/codeBuddy';
