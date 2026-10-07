@@ -310,8 +310,10 @@ export default class BrowserSidebarCtr extends ControllerModule {
     // right away anyway.
     let committed = false;
     let onCommit: (() => void) | undefined;
-    const onNavigate = () => {
+    let committedUrl: string | undefined;
+    const onNavigate = (_event: unknown, navigatedUrl: string) => {
       committed = true;
+      committedUrl = navigatedUrl;
       onCommit?.();
     };
     webContents.on('did-navigate', onNavigate);
@@ -370,9 +372,15 @@ export default class BrowserSidebarCtr extends ControllerModule {
             new Promise<{ status: 'loaded' }>((resolve) => {
               onCommit = () => resolve({ status: 'loaded' });
             }),
-            new Promise<{ error: Error; status: 'failed' }>((resolve) => {
+            new Promise<{ error: Error; status: 'failed' } | { status: 'loaded' }>((resolve) => {
               onStop = () => {
                 if (committed) return;
+                // A redirect that was cancelled or got a 204 leaves the requested
+                // document showing; one that failed outright shows its error page.
+                if (committedBeforeAbort && webContents.getURL() === committedUrl) {
+                  resolve({ status: 'loaded' });
+                  return;
+                }
                 resolve({
                   error: new Error(failure ?? 'the page stopped loading before it opened'),
                   status: 'failed',

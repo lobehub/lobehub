@@ -315,6 +315,67 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       vi.useRealTimers();
     });
 
+    it('keeps the committed page when its redirect stops without committing', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.isLoading.mockReturnValue(true);
+      // The requested page commits, then a redirect it starts gets a 204.
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => guest.emit('did-stop-loading'), 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({ success: true });
+      vi.useRealTimers();
+    });
+
+    it('reports a redirect from the committed page that fails to its error page', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => {
+          // Chromium commits the error page under the failed URL without did-navigate.
+          guest.getURL.mockReturnValue('http://127.0.0.1:18748/');
+          guest.emit(
+            'did-fail-load',
+            {},
+            -102,
+            'ERR_CONNECTION_REFUSED',
+            'http://127.0.0.1:18748/',
+            true,
+          );
+          guest.emit('did-stop-loading');
+        }, 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'Could not open https://example.com/start: ERR_CONNECTION_REFUSED (-102). The browser is still showing http://127.0.0.1:18748/.',
+        success: false,
+      });
+      vi.useRealTimers();
+    });
+
     it('does not report success when the replacement after ERR_ABORTED never commits', async () => {
       vi.useFakeTimers();
       const guest = createWebContents(7);
