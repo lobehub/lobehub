@@ -194,11 +194,13 @@ export const fillScript = (ref: string, text: string) => `((ref, text) => {
   // setter on it throws. Pick the option by value, then by visible label.
   if (el.tagName === 'SELECT') {
     const options = Array.from(el.options);
-    const label = (option) => option.text.trim().replaceAll(/\\s+/g, ' ').toLowerCase();
+    // The rendered label is the non-empty label attribute, else the text.
+    const shown = (option) => (option.getAttribute('label') || option.text).trim();
+    const label = (option) => shown(option).replaceAll(/\\s+/g, ' ').toLowerCase();
     const wanted = String(text).trim().replaceAll(/\\s+/g, ' ').toLowerCase();
     const option = options.find((o) => o.value === text) || options.find((o) => label(o) === wanted);
     if (!option) {
-      const names = options.map((o) => o.text.trim()).slice(0, 30).join(', ');
+      const names = options.map(shown).slice(0, 30).join(', ');
       return JSON.stringify({ error: 'no option matches "' + text + '"; options: ' + names });
     }
     // Assign by index: option values need not be unique (an empty placeholder
