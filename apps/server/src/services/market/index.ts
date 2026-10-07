@@ -5,15 +5,9 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import pMap from 'p-map';
 
-import { getRedisConfig } from '@/envs/redis';
-import {
-  readThroughRedis,
-  RedisKeyNamespace,
-  RedisKeys,
-  tryInitializeRedisWithPrefix,
-} from '@/libs/redis';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import { redisService } from '@/server/services/redis';
 import {
   createSandboxStorageClient,
   type SandboxStorageClient,
@@ -32,8 +26,6 @@ const MARKET_BASE_URL = process.env.MARKET_BASE_URL || 'https://market.lobehub.c
 export const LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS = 3_000;
 /** Max providers whose tool lists are fetched at once during discovery. */
 export const LOBEHUB_SKILL_DISCOVERY_CONCURRENCY = 5;
-/** How long one connection's live tool list is reused across sends. */
-export const LOBEHUB_SKILL_TOOLS_MAX_AGE_MS = 10 * 60 * 1000;
 export const LOBEHUB_SKILL_EXECUTION_TIMEOUT_MS = 120_000;
 
 /**
@@ -435,7 +427,7 @@ export class MarketService {
 
   /**
    * The live tool list of one connected skill, remembered per connection for
-   * {@link LOBEHUB_SKILL_TOOLS_MAX_AGE_MS}.
+   * ten minutes.
    *
    * Discovery runs on every send and `tools/live` is a round trip to the
    * provider's MCP server (150ms for GitHub, up to a second for Notion) for
@@ -453,15 +445,9 @@ export class MarketService {
       this.listSkillTools(providerId, { timeoutMs: LOBEHUB_SKILL_DISCOVERY_TIMEOUT_MS });
     if (!this.skillCacheScope) return read();
 
-    const identity = [connection.createdAt ?? '', connection.providerUserId ?? ''].join('|');
-    return readThroughRedis(
-      await tryInitializeRedisWithPrefix(getRedisConfig(), RedisKeyNamespace.SEND_PATH_CACHE),
-      RedisKeys.sendPathCache.lobehubSkillTools(this.skillCacheScope, providerId, identity),
+    return redisService.skillTools.remember(
+      { connection, providerId, userId: this.skillCacheScope },
       read,
-      {
-        shouldCache: (value) => Array.isArray(value?.tools) && value.tools.length > 0,
-        ttlMs: LOBEHUB_SKILL_TOOLS_MAX_AGE_MS,
-      },
     );
   }
 

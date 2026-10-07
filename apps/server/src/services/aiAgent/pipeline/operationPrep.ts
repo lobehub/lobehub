@@ -23,18 +23,12 @@ import { GoalGraphModel } from '@/database/models/goalGraph';
 import type { MessageModel } from '@/database/models/message';
 import type { TopicModel } from '@/database/models/topic';
 import { UserPersonaModel } from '@/database/models/userMemory/persona';
-import { getRedisConfig } from '@/envs/redis';
 import { isDeviceCapablePlan } from '@/helpers/executionTarget';
-import {
-  claimRedisOnce,
-  RedisKeyNamespace,
-  RedisKeys,
-  tryInitializeRedisWithPrefix,
-} from '@/libs/redis';
 import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngineering/types';
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
+import { redisService } from '@/server/services/redis';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
@@ -51,13 +45,6 @@ import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
 
 const log = debug('lobe-server:ai-agent-service');
-
-/**
- * How long one background workspace rescan holds its claim: the scan's own
- * timeout (30s) plus the writeback, so a second refresh of the same directory
- * is not started while the first is still walking it.
- */
-const WORKSPACE_RESCAN_CLAIM_MS = 45 * 1000;
 
 export interface HistoryLoaderInput {
   appContext?: InternalExecAgentParams['appContext'];
@@ -362,19 +349,16 @@ const resolveWorkspaceInit = async (
     // scan; the others leave the refresh to it.
     if (cached?.workspace) {
       log('execAgent: serving stale workspace init for %s, refreshing in background', boundCwd);
-      const claimKey = RedisKeys.sendPathCache.workspaceRescanClaim(
-        deps.userId,
-        deviceWorkspaceId ?? 'personal',
-        activeDeviceId,
-        boundCwd,
-      );
       afterUnscoped(async () => {
         try {
-          const redis = await tryInitializeRedisWithPrefix(
-            getRedisConfig(),
-            RedisKeyNamespace.SEND_PATH_CACHE,
-          );
-          if (!(await claimRedisOnce(redis, claimKey, WORKSPACE_RESCAN_CLAIM_MS))) {
+          if (
+            !(await redisService.workspaceRescan.claim({
+              userId: deps.userId,
+              workspaceId: deviceWorkspaceId,
+              deviceId: activeDeviceId,
+              cwd: boundCwd,
+            }))
+          ) {
             log('execAgent: workspace rescan for %s already in flight, skipping', boundCwd);
             return;
           }

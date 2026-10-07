@@ -158,34 +158,46 @@ const browserRuntimeRestrictedImportPatterns = [
   },
 ];
 
-// Server code reaches Redis through the unified lib (`@/libs/redis`: one
-// provider per key namespace, keys registered in `keys.ts`, helpers such as
-// `getJSONFromRedis` / `readThroughRedis` / `claimRedisOnce`). The agent
-// runtime's raw ioredis client predates it and 41 modules grew around it, each
-// hand-rolling its own key prefix, TTL and SET NX. Those are listed below so the
-// rule can be an error for every new file; the list only shrinks — move a
-// module onto `@/libs/redis` and delete its line here.
+// Business code uses domain methods in services/redis. The client lib is infrastructure.
+// Existing consumers are migration debt; this list only shrinks.
 const redisAccessRestrictedImportPaths = [
   {
     allowTypeImports: true,
     message:
-      'Server code must not open its own ioredis client. Go through "@/libs/redis" (initializeRedis / initializeRedisWithPrefix, keys in RedisKeys) and add a helper there if the one you need is missing.',
+      'Redis client access belongs inside services/redis. Use a domain method or add one there.',
+    name: '@/libs/redis',
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Server code must not open its own ioredis client. Use domain methods in "@/server/services/redis"; add missing business capabilities there.',
     name: 'ioredis',
   },
   {
     message:
-      'The raw agent-runtime Redis client is legacy. New code goes through "@/libs/redis" (initializeRedisWithPrefix + RedisKeys); if you need a primitive it lacks, add it to the lib instead of taking the raw client.',
+      'The raw agent-runtime Redis client is legacy. New code uses domain methods in "@/server/services/redis".',
     name: '@/server/modules/AgentRuntime/redis',
   },
 ];
 const redisAccessRestrictedSyntax = [
   {
     message:
-      'Server code must not open its own ioredis client, not even lazily. Go through "@/libs/redis".',
+      'Server code must not open its own ioredis client, not even lazily. Use "@/server/services/redis".',
     selector: "ImportExpression > Literal[value='ioredis']",
+  },
+  {
+    message: 'Redis client access belongs inside services/redis.',
+    selector: 'ImportExpression > Literal[value=/^@\\/libs\\/redis(?:\\/|$)/]',
   },
 ];
 const legacyRawRedisClientConsumers = [
+  'apps/server/src/services/home/index.ts',
+  'apps/server/src/services/agent/index.ts',
+  'apps/server/src/services/file/impls/s3.ts',
+  'apps/server/src/services/generation/latency.ts',
+  'apps/server/src/workflows/runGuard/store.ts',
+  'apps/server/src/runtimeConfig/providers/RedisRuntimeConfigProvider.ts',
+  'apps/server/src/router-hono/workflows/memory-user-memory/workflows/runGuard.ts',
   'apps/server/src/modules/AgentRuntime/redis.ts',
   'apps/server/src/modules/AgentRuntime/AgentStateManager.ts',
   'apps/server/src/modules/AgentRuntime/StreamEventManager.ts',
@@ -690,7 +702,12 @@ export default eslint(
     files: ['apps/server/src/**/*.{ts,tsx}'],
     // Tests of the legacy consumers import the raw module to mock or seed it;
     // the boundary is about production code paths.
-    ignores: [...legacyRawRedisClientConsumers, '**/*.test.{ts,tsx}', '**/__tests__/**'],
+    ignores: [
+      ...legacyRawRedisClientConsumers,
+      'apps/server/src/services/redis/**',
+      '**/*.test.{ts,tsx}',
+      '**/__tests__/**',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
@@ -700,7 +717,10 @@ export default eslint(
             ...(baseRestrictedImportOptions.paths ?? []),
             ...redisAccessRestrictedImportPaths,
           ],
-          patterns: baseRestrictedImportOptions.patterns ?? [],
+          patterns: [
+            ...(baseRestrictedImportOptions.patterns ?? []),
+            { group: ['@/libs/redis/*'], message: 'Use domain methods in services/redis.' },
+          ],
         },
       ],
       'no-restricted-syntax': [
