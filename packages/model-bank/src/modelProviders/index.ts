@@ -24,6 +24,7 @@ import DeepSeekProvider from './deepseek';
 import FalProvider from './fal';
 import FireworksAIProvider from './fireworksai';
 import GiteeAIProvider from './giteeai';
+import GitGotProvider from './gitgot';
 import GithubProvider from './github';
 import GithubCopilotProvider from './githubCopilot';
 import GLMCodingPlanProvider from './glmCodingPlan';
@@ -213,6 +214,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   InternLMProvider,
   HigressProvider,
   GiteeAIProvider,
+  GitGotProvider,
   TaichuProvider,
   Ai360Provider,
   Search1APIProvider,
@@ -280,6 +282,7 @@ export { default as DeepSeekProviderCard } from './deepseek';
 export { default as FalProviderCard } from './fal';
 export { default as FireworksAIProviderCard } from './fireworksai';
 export { default as GiteeAIProviderCard } from './giteeai';
+export { default as GitGotProviderCard } from './gitgot';
 export { default as GithubProviderCard } from './github';
 export { default as GithubCopilotProviderCard } from './githubCopilot';
 export { default as GLMCodingPlanProviderCard } from './glmCodingPlan';
