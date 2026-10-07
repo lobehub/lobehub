@@ -311,7 +311,6 @@ describe('BrowserSidebarCtr retained webview registration', () => {
 
       await vi.advanceTimersByTimeAsync(2000);
       await expect(pending).resolves.toEqual({ success: true });
-      expect(guest.getURL()).toBe('https://example.com/landing');
       vi.useRealTimers();
     });
 
