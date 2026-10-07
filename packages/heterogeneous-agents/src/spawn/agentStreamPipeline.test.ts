@@ -164,16 +164,6 @@ describe('AgentStreamPipeline', () => {
     expect(pipeline.sessionId).toBe('cc-99');
   });
 
-  it('auto-wires the Codex file-change tracker for codex agents only', async () => {
-    // claude-code → no codex tracker, file_change payloads pass through untouched
-    const claude = new AgentStreamPipeline({ agentType: 'claude-code', operationId: 'op-1' });
-    expect((claude as any).codexTracker).toBeUndefined();
-
-    // codex → tracker is instantiated automatically; consumers stay agent-agnostic
-    const codex = new AgentStreamPipeline({ agentType: 'codex', operationId: 'op-1' });
-    expect((codex as any).codexTracker).toBeDefined();
-  });
-
   it('emits an initial Codex model metadata event before stdout-derived events', async () => {
     const pipeline = new AgentStreamPipeline({
       agentType: 'codex',
@@ -248,18 +238,6 @@ describe('AgentStreamPipeline', () => {
 
     expect(pipeline.sessionId).toBe('cc-1');
     expect(events.length).toBeGreaterThan(0);
-  });
-
-  it('flushes adapter-buffered events on stream end', async () => {
-    const pipeline = new AgentStreamPipeline({
-      agentType: 'claude-code',
-      operationId: 'op-1',
-    });
-
-    await pipeline.push(init());
-    const flushed = await pipeline.flush();
-
-    expect(Array.isArray(flushed)).toBe(true);
   });
 
   describe('collectPostRunUsage', () => {

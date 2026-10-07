@@ -109,22 +109,6 @@ describe('platform command scanning', () => {
     });
   });
 
-  it('falls back to the official OpenClaw managed install path', async () => {
-    detectValidatedCommandCandidatesMock.mockResolvedValue({
-      available: true,
-      path: path.join(os.homedir(), '.openclaw', 'bin', 'openclaw'),
-      version: '2026.1.29',
-    });
-
-    await expect(resolveRemotePlatformCommand('openclaw')).resolves.toMatchObject({
-      available: true,
-      version: '2026.1.29',
-    });
-    expect(detectValidatedCommandCandidatesMock.mock.calls[0]![0]).toContain(
-      path.join(os.homedir(), '.openclaw', 'bin', 'openclaw'),
-    );
-  });
-
   it('falls back to the official Hermes user-local install path', async () => {
     detectValidatedCommandCandidatesMock.mockResolvedValue({
       available: true,

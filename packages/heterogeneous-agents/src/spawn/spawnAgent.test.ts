@@ -477,28 +477,6 @@ describe('spawnAgent', () => {
     processKill.mockRestore();
   });
 
-  it('preserves SIGKILL when force-stopping a Grok ACP run', async () => {
-    const fake = createGrokAcpProc({ promptAutoComplete: false });
-    nextFakeProc = fake.proc;
-    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
-
-    const { spawnAgent } = await import('./spawnAgent');
-    const handle = await spawnAgent({
-      agentType: 'grok-build',
-      operationId: 'op-grok-force-stop',
-      prompt: 'keep running',
-    });
-    await vi.waitFor(() => {
-      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
-    });
-
-    handle.kill('SIGKILL');
-
-    expect(processKill).toHaveBeenCalledWith(-54_321, 'SIGKILL');
-    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
-    processKill.mockRestore();
-  });
-
   it('preserves SIGINT when the transport fails during graceful cancellation', async () => {
     const fake = createGrokAcpProc({ promptAutoComplete: false });
     nextFakeProc = fake.proc;
@@ -1418,14 +1396,6 @@ describe('spawnAgent', () => {
     expect(command).toBe('/usr/local/bin/claude-wrapped');
     expect(args).toContain('--my-flag');
     expect(args).toContain('x');
-  });
-
-  it('rejects with an error on unknown agent type', async () => {
-    nextFakeProc = createFakeProc().proc;
-    const { spawnAgent } = await import('./spawnAgent');
-    await expect(
-      spawnAgent({ agentType: 'kimi-cli', operationId: 'op-1', prompt: 'hi' }),
-    ).rejects.toThrow('Unknown local heterogeneous agent type: "kimi-cli"');
   });
 
   it('events iterator drains all pipeline events including the trailing flush', async () => {

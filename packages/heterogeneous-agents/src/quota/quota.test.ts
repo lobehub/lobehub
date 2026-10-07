@@ -41,14 +41,6 @@ describe('computeTurnCostUsd', () => {
     expect(cost).toBeCloseTo(0.3, 6);
   });
 
-  it('captures the Fable-vs-Opus price ratio that proved the unit', () => {
-    // same token shape, Fable is 2x Opus → cost is 2x
-    const usage = { input: 500_000, output: 200_000 };
-    const opus = computeTurnCostUsd(usage, { input: 5, output: 25 });
-    const fable = computeTurnCostUsd(usage, { input: 10, output: 50 });
-    expect(fable / opus).toBeCloseTo(2, 6);
-  });
-
   it('totalTokens sums all classes', () => {
     expect(totalTokens({ cacheRead: 3, input: 1, output: 2 })).toBe(6);
   });

@@ -267,10 +267,6 @@ describe('Devin ACP helpers', () => {
     expect(buildDevinAcpArgs(['--model', 'sonnet'])).toEqual(['acp', '--model', 'sonnet']);
   });
 
-  it('does not inject a default permission mode', () => {
-    expect(buildDevinAcpArgs(['--model', 'sonnet'])).toEqual(['acp', '--model', 'sonnet']);
-  });
-
   it('moves a permission mode already in extra args before the acp subcommand', () => {
     expect(buildDevinAcpArgs(['--permission-mode', 'dangerous', '--model', 'sonnet'])).toEqual([
       '--permission-mode',

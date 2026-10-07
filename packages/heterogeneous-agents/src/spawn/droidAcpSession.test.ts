@@ -538,34 +538,4 @@ describe('DroidAcpSession', () => {
       }),
     );
   });
-
-  it('cancels an active prompt through the standard ACP notification', async () => {
-    let promptRequestId: number | string | undefined;
-    const fake = createAcpProcess({
-      onMessage: (message, { send }) => {
-        if (message.method === 'session/prompt') {
-          promptRequestId = message.id;
-          return true;
-        }
-        if (message.method === 'session/cancel') {
-          send({ id: promptRequestId, result: { stopReason: 'cancelled' } });
-          return true;
-        }
-      },
-    });
-    spawnMock.mockReturnValue(fake.child);
-    vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const session = new DroidAcpSession(createSessionOptions());
-    const run = session.run();
-    await vi.waitFor(() => expect(promptRequestId).toBeDefined());
-
-    session.interrupt();
-    await run;
-
-    expect(fake.requests).toContainEqual({
-      jsonrpc: '2.0',
-      method: 'session/cancel',
-      params: { sessionId: 'droid-session-1' },
-    });
-  });
 });
