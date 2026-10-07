@@ -1676,6 +1676,35 @@ describe('ConversationControl actions', () => {
       expect(updateTopicStatusSpy).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ['durable store', { contractVersion: 2, state: 'claimed', success: true }],
+      ['legacy resume', { contractVersion: 2, status: 'unavailable', success: false }],
+    ])(
+      'keeps a visitor\'s "don\'t ask again" in their own allow list (%s)',
+      async (_label, resolution) => {
+        const { result } = renderHook(() => useChatStore());
+        seedShareCard();
+        vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate).mockResolvedValue(
+          resolution as any,
+        );
+        vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+        const addToolToAllowList = vi.fn().mockResolvedValue(undefined);
+        useUserStore.setState({ addToolToAllowList });
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-share', '', context, {
+            rememberToolKey: 'lobe-cloud-sandbox/runCommand',
+          });
+        });
+
+        // A server-side `remember` would write the creator's allow list.
+        expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ action: { scope: 'once', type: 'approve_tool' } }),
+        );
+        expect(addToolToAllowList).toHaveBeenCalledWith('lobe-cloud-sandbox/runCommand');
+      },
+    );
+
     it('stops a parked share run through the share mirror', async () => {
       const { result } = renderHook(() => useChatStore());
       seedShareCard();

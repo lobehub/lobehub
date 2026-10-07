@@ -825,13 +825,18 @@ export class ConversationControlActionImpl {
       // the running marker intact and `#shouldUseGatewayResume` still flags
       // Gateway mode on retry.
       const pausedOpIds = this.#getRunningServerOps(effectiveContext).map((op) => op.id);
+      // A share run belongs to the agent's owner, so a server-side `remember`
+      // would write the OWNER's allow list (the share mirror rejects it). A
+      // visitor's "don't ask again" approves once and lands in their own allow
+      // list instead, which their share runs send as `userInterventionConfig`.
+      const remembersOnServer = !!options?.rememberToolKey && !effectiveContext.agentShareId;
       try {
         const sourceResolution = await this.tryResolveAgentInterventionBySource({
           action: {
             ...(options?.editedArguments && {
               edits: { [toolMessageId]: options.editedArguments },
             }),
-            scope: options?.rememberToolKey ? 'remember' : 'once',
+            scope: remembersOnServer ? 'remember' : 'once',
             type: 'approve_tool',
           },
           context: effectiveContext,
@@ -872,9 +877,9 @@ export class ConversationControlActionImpl {
               toolCallId,
             },
           });
-          if (options?.rememberToolKey) {
-            await useUserStore.getState().addToolToAllowList(options.rememberToolKey);
-          }
+        }
+        if (options?.rememberToolKey && !(sourceResolution.handled && remembersOnServer)) {
+          await useUserStore.getState().addToolToAllowList(options.rememberToolKey);
         }
         this.#writeTopicStatus(effectiveContext, 'active');
         this.#completeOpsById(pausedOpIds);

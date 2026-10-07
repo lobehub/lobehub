@@ -1099,8 +1099,9 @@ export const shareChatRouter = router({
         visitorUserId: ctx.userId,
       });
 
-      // "Approve and don't ask again" writes the OWNER's allow list; a visitor
-      // may only approve once.
+      // A server-side `remember` writes the OWNER's allow list, so a visitor
+      // may only approve once here; their "don't ask again" goes to their own
+      // allow list client-side (see `approveToolCalling`).
       if (source.action.type === 'approve_tool' && source.action.scope === 'remember') {
         throw new TRPCError({ code: 'FORBIDDEN', message: 'Visitors can only approve once' });
       }
