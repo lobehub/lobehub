@@ -919,7 +919,7 @@ export class GoalService {
       (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && !!node.taskId,
     );
     if (!terminal) return;
-    const acceptance = (await this.collectAcceptances(graph).catch(() => undefined))?.[terminal.id];
+    const acceptance = (await this.collectAcceptances(graph))?.[terminal.id];
     if (!acceptance) return;
     // `openSignOff` re-reads the acceptance under a row lock: one the owner
     // already signed asks nothing.
@@ -2527,9 +2527,13 @@ export class GoalService {
         await this.coordinatorGraph.updateNodeStatus(goalId, node.id, 'resolved', 'Goal achieved');
         effects.push({ detail: 'resolved', nodeId: node.id, type: 'node_status' });
       }
+      // Ask for the sign-off before the goal turns terminal: nothing ticks an
+      // achieved goal again, so a failed write after the transition would lose
+      // the ask for good. Failing here leaves the goal open for the next tick,
+      // and the write is idempotent per acceptance.
+      await this.requestSignOff(graph);
       await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
       effects.push({ type: 'goal_status', detail: 'achieved' });
-      await this.requestSignOff(graph);
       return { goalId, message: move.message, outcome: 'achieved' };
     }
 

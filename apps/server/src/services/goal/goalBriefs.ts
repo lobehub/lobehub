@@ -55,8 +55,10 @@ interface DecisionInput {
  * a finished goal waits for are written as briefs, so the person hears about them wherever they are instead of only
  * when they happen to open the goal page.
  *
- * Every write is best-effort: a brief is the notification, never the state —
- * the gate exists whether or not its brief could be written.
+ * Gate writes are best-effort: a brief is the notification, never the state —
+ * the gate exists whether or not its brief could be written, and the goal page
+ * still asks it. The sign-off is the exception: once the goal is achieved no
+ * other surface asks for it, so `openSignOff` throws and its caller retries.
  */
 export class GoalBriefService {
   private briefModel: BriefModel;
@@ -160,59 +162,60 @@ export class GoalBriefService {
    * The acceptance row is locked while the brief is written, so a decision that
    * lands meanwhile either is seen here (and nothing is asked) or waits for this
    * brief to exist and then settles it — never an open ask for a decided result.
+   * Throws on failure: the caller opens it before the goal turns terminal, so
+   * the next tick retries.
    */
-  openSignOff = async (goal: GoalItem, acceptanceId: string) =>
-    this.safely('openSignOff', async () => {
-      const { t: tHome } = await this.homeCopy();
-      await this.db.transaction(async (tx) => {
-        const [acceptance] = await tx
-          .select({ status: acceptances.status })
-          .from(acceptances)
-          .where(and(eq(acceptances.id, acceptanceId), eq(acceptances.userId, this.userId)))
-          .for('update');
-        // Already decided — accepted, sent back or closed — nothing is left
-        // to sign, and the card could never be answered.
-        if (!acceptance || DECIDED_ACCEPTANCE_STATUSES.has(acceptance.status)) return;
+  openSignOff = async (goal: GoalItem, acceptanceId: string): Promise<void> => {
+    const { t: tHome } = await this.homeCopy();
+    await this.db.transaction(async (tx) => {
+      const [acceptance] = await tx
+        .select({ status: acceptances.status })
+        .from(acceptances)
+        .where(and(eq(acceptances.id, acceptanceId), eq(acceptances.userId, this.userId)))
+        .for('update');
+      // Already decided — accepted, sent back or closed — nothing is left
+      // to sign, and the card could never be answered.
+      if (!acceptance || DECIDED_ACCEPTANCE_STATUSES.has(acceptance.status)) return;
 
-        const briefModel = new BriefModel(tx, this.userId, this.workspaceId);
-        const existing = await tx
-          .select({ id: briefs.id })
-          .from(briefs)
-          .where(and(briefModel.ownership(), isNull(briefs.resolvedAt), signOffFor(acceptanceId)))
-          .limit(1);
-        if (existing.length > 0) return;
+      const briefModel = new BriefModel(tx, this.userId, this.workspaceId);
+      const existing = await tx
+        .select({ id: briefs.id })
+        .from(briefs)
+        .where(and(briefModel.ownership(), isNull(briefs.resolvedAt), signOffFor(acceptanceId)))
+        .limit(1);
+      if (existing.length > 0) return;
 
-        await this.create(
-          goal,
-          {
-            actions: [
-              { key: 'signOff', label: tHome('brief.action.signOff'), type: 'resolve' },
-              {
-                key: 'requestChanges',
-                label: tHome('brief.action.requestChanges'),
-                type: 'comment',
-              },
-              {
-                key: 'openGoal',
-                label: tHome('brief.action.openGoal'),
-                type: 'link',
-                url: goalPagePath(goal),
-              },
-            ],
-            metadata: {
-              kind: 'signOff',
-              recommendedAction: 'signOff',
-              signOffAcceptanceId: acceptanceId,
+      await this.create(
+        goal,
+        {
+          actions: [
+            { key: 'signOff', label: tHome('brief.action.signOff'), type: 'resolve' },
+            {
+              key: 'requestChanges',
+              label: tHome('brief.action.requestChanges'),
+              type: 'comment',
             },
-            priority: 'normal',
-            summary: tHome('brief.goal.signOff.summary'),
-            title: tHome('brief.goal.signOff.title', { goal: goal.title }),
-            type: 'decision',
+            {
+              key: 'openGoal',
+              label: tHome('brief.action.openGoal'),
+              type: 'link',
+              url: goalPagePath(goal),
+            },
+          ],
+          metadata: {
+            kind: 'signOff',
+            recommendedAction: 'signOff',
+            signOffAcceptanceId: acceptanceId,
           },
-          briefModel,
-        );
-      });
+          priority: 'normal',
+          summary: tHome('brief.goal.signOff.summary'),
+          title: tHome('brief.goal.signOff.title', { goal: goal.title }),
+          type: 'decision',
+        },
+        briefModel,
+      );
     });
+  };
 
   /** The sign-off was given or refused somewhere else — the acceptance itself, the goal page. */
   settleSignOff = async (acceptanceId: string, action: string, comment?: string) =>

@@ -6,6 +6,8 @@ import { and, eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { BriefModel } from '@/database/models/brief';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import {
   acceptances,
@@ -279,5 +281,64 @@ describe('goal sign-off briefs', () => {
 
     await inWorkspace.settleSignOff(acceptanceId, 'signOff');
     expect(await inWorkspace.listOpenSignOffs()).toEqual([]);
+  });
+});
+
+describe('pending gates in a shared workspace', () => {
+  // Every member sees a workspace goal, but its gate is asked of one person.
+  it('lists a gate only for the member it was asked of', async () => {
+    const memberId = 'goal-brief-test-member';
+    await serverDB.insert(users).values({ id: memberId }).onConflictDoNothing();
+    const [workspace] = await serverDB
+      .insert(workspaces)
+      .values({ name: 'ws', primaryOwnerId: userId, slug: 'goal-brief-gate-ws' })
+      .returning();
+    const service = new GoalService(serverDB, userId, workspace.id);
+    const taskModel = new TaskModel(serverDB, userId, workspace.id);
+    const graph = await service.create({ tasks: ['Risky task'], title: 'Shared goal' });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'paused', { error: 'Verifier rejected output' });
+    expect((await service.tick(graph.goal.id)).outcome).toBe('waiting_human');
+
+    const asked = await new GoalModel(serverDB, userId, workspace.id).listPendingDecisions();
+    const member = await new GoalModel(serverDB, memberId, workspace.id).listPendingDecisions();
+
+    expect(asked).toEqual([expect.objectContaining({ goalId: graph.goal.id })]);
+    expect(member).toEqual([]);
+  });
+});
+
+describe('goal sign-off on achievement', () => {
+  const achieveGoal = async () => {
+    const service = new GoalService(serverDB, userId);
+    const taskModel = new TaskModel(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'A short report with evidence',
+      tasks: ['Write the report'],
+      title: 'Sign me off',
+    });
+    const created = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(created.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const acceptanceTask = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(acceptanceTask.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    return { goalId: graph.goal.id, service };
+  };
+
+  // Nothing ticks an achieved goal again, so a sign-off that failed to write
+  // after the goal turned terminal would never be asked.
+  it('keeps the goal open and retries when the sign-off cannot be written', async () => {
+    const { goalId, service } = await achieveGoal();
+    vi.spyOn(BriefModel.prototype, 'create').mockRejectedValueOnce(new Error('db down'));
+
+    await expect(service.tick(goalId)).rejects.toThrow('db down');
+    expect((await service.graph(goalId)).goal.status).not.toBe('achieved');
+
+    expect(await service.tick(goalId)).toMatchObject({ outcome: 'achieved' });
+    expect(await new GoalBriefService(serverDB, userId).listOpenSignOffs()).toEqual([
+      expect.objectContaining({ goalId, goalTitle: 'Sign me off' }),
+    ]);
   });
 });

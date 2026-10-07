@@ -7,7 +7,7 @@ import type {
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
 import type { GoalItem, NewGoal } from '../schemas/goal';
@@ -398,6 +398,13 @@ export class GoalModel {
           notInArray(goals.status, ['paused', 'achieved', 'failed', 'canceled']),
           eq(goalNodeDecisions.status, 'pending'),
           eq(goalNodeDecisions.authority, 'user'),
+          // In a workspace every member can see the goal, but a gate is asked
+          // of one person. Rows from before the requester was recorded fall
+          // back to the goal's creator.
+          or(
+            eq(goalNodeDecisions.requestedUserId, this.userId),
+            and(isNull(goalNodeDecisions.requestedUserId), eq(goals.userId, this.userId)),
+          ),
           ne(goalNodes.title, GOAL_CLARIFICATION_TITLE),
         ),
       )
