@@ -79,7 +79,7 @@ Use `bun run check [changed-files...]`.
 - Every bug fix needs a regression test that fails before the fix and passes after it. Skip pure style/CSS fixes when the only practical assertion would match stylesheet source strings.
 - Run once with the selectors needed: no selector means lint + related tests; `--lint`, `--test`, and `--type` compose. Default scope is all staged, unstaged and untracked changes; explicit paths override it.
 - Lint autofixes files: review the emitted diff. Tests use the nearest owning Vitest config. `--type` checks the full repo (`bun run type-check`). Never run `bun run test`, which runs the full suite.
-- `bun run type-check` uses Bun's builtin checker when Bun ≥ 1.4.3. The package.json `check` script is the agent CLI, so the wrapper runs `bun check` from an empty cwd. Older Bun falls back to `tsgo`.
+- `bun run type-check` runs Bun's builtin checker (`bun --check --tsconfig-override tsconfig.type-check.json`). That needs Bun ≥ 1.4.3. The package.json `check` script is the agent CLI (`bun run check`).
 - `--alint` is opt-in: model-backed rules in `packages/alint/` for judgement calls eslint cannot express. It needs a provider (`bun run alint:setup`); findings are warnings to fix or justify in the PR.
 - For a manual package test, run from the owning package: `cd packages/database && bunx vitest run --silent='passed-only' '[file-path]'`.
 
