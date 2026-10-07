@@ -1792,6 +1792,7 @@
   "sandboxStorage.publicAgentHint_one": "已隐藏 {{count}} 个私人环境 —— 公共 Agent 仅可使用工作区环境，发布后即可在这里使用。",
   "sandboxStorage.publicAgentHint_other": "已隐藏 {{count}} 个私人环境 —— 公共 Agent 仅可使用工作区环境，发布后即可在这里使用。",
   "sandboxStorage.running": "运行中",
+  "sandboxStorage.runningHint": "有一个对话的沙箱正占用着这个实例，所以这里选不了。那个对话安静约 15 分钟后会自动释放。",
   "sandboxStorage.setUpEnvironment": "去创建环境",
   "sandboxStorage.setUpEnvironmentDesc": "持久化目录需要先有一个环境",
   "sandboxStorage.workspaceGroup": "工作区环境",

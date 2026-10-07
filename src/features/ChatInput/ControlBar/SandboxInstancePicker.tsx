@@ -341,13 +341,19 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             </span>
           }
           tag={
-            preparing
-              ? t('sandboxStorage.building')
-              : unbuilt
-                ? t('sandboxStorage.buildFailed')
-                : instance.inUse
-                  ? t('sandboxStorage.running')
-                  : undefined
+            preparing ? (
+              t('sandboxStorage.building')
+            ) : unbuilt ? (
+              t('sandboxStorage.buildFailed')
+            ) : instance.inUse ? (
+              // "Running" alone reads as a state of the instance, not as
+              // the reason this row is the one that cannot be picked, and
+              // it says nothing about how long that lasts — there is no
+              // way to end the run from here, so the wait is the answer.
+              <Tooltip title={t('sandboxStorage.runningHint')}>
+                <span>{t('sandboxStorage.running')}</span>
+              </Tooltip>
+            ) : undefined
           }
           onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
         />

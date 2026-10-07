@@ -1389,6 +1389,8 @@ export default {
   // discards the other's work. The tag says which rows that applies to before
   // the first message meets the refusal.
   'sandboxStorage.running': 'Running',
+  'sandboxStorage.runningHint':
+    "A conversation's sandbox is holding this instance, so it cannot be picked here. It is released on its own roughly 15 minutes after that conversation goes quiet.",
   // A build holds the same single-writer lease a run does, so it is refused
   // for the same reason — but it is not a conversation, and saying "running"
   // would send someone looking for one.

@@ -288,9 +288,15 @@ const InstanceRow = memo<InstanceRowProps>(
         nothing here either: the line under the list reports that, rather than
         each row quietly implying it is free. */}
           {instance.inUse && (
-            <Tag color={'processing'} size={'small'}>
-              {t('environments.instances.running')}
-            </Tag>
+            // The badge says what is true; the hint says what it means for the
+            // person looking at it. There is no way to end the run from here,
+            // so how long the hold lasts is the actionable part — and Run
+            // history is where the conversation holding it can be found.
+            <Tooltip title={t('environments.instances.runningHint')}>
+              <Tag color={'processing'} size={'small'}>
+                {t('environments.instances.running')}
+              </Tag>
+            </Tooltip>
           )}
           {/* Reading what an instance kept is not an edit, so it stays
         available in an environment someone else published — that is

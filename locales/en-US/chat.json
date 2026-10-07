@@ -1792,6 +1792,7 @@
   "sandboxStorage.publicAgentHint_one": "{{count}} private environment is hidden — a public agent can only use workspace environments. Publish it to use it here.",
   "sandboxStorage.publicAgentHint_other": "{{count}} private environments are hidden — a public agent can only use workspace environments. Publish one to use it here.",
   "sandboxStorage.running": "Running",
+  "sandboxStorage.runningHint": "A conversation's sandbox is holding this instance, so it cannot be picked here. It is released on its own roughly 15 minutes after that conversation goes quiet.",
   "sandboxStorage.setUpEnvironment": "Set up an environment",
   "sandboxStorage.setUpEnvironmentDesc": "A persistent directory lives in an environment",
   "sandboxStorage.workspaceGroup": "Workspace Environments",
