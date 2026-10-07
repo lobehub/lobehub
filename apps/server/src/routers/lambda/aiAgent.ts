@@ -119,7 +119,7 @@ export interface AgentInterventionDispatchContext {
   serverDB: LobeChatDatabase;
   /**
    * Present when a share VISITOR resolved an intervention on their own share
-   * run (`shareChat.resolveIntervention`). Rebuilt from the live share row by
+   * run (`shareChat.resolveInterventionBySource`). Rebuilt from the live share row by
    * the caller — never from the parked run's state — so the continuation is
    * gated by the share's CURRENT config exactly like a fresh visitor turn.
    */

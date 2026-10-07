@@ -282,7 +282,7 @@ export type GetAgentInterventionReviewBySourceResult =
 
 /**
  * A share visitor resolving an intervention on their OWN share run. The caller
- * (`shareChat.resolveIntervention`) has already authenticated the visitor and
+ * (`shareChat.resolveInterventionBySource`) has already authenticated the visitor and
  * proved they own `topicId` under a live share of `agentId`; the business slot
  * must still bind the durable batch to exactly this owner/agent/topic and to a
  * share-run operation, and must refuse every other actor for a share run.
