@@ -28,7 +28,7 @@ import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngin
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
-import { after } from '@/server/utils/scheduleAfterResponse';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
@@ -336,9 +336,14 @@ const resolveWorkspaceInit = async (
     // on a directory walk over the device's WebSocket (up to 30s) just
     // because an hour passed. A directory never scanned still scans inline —
     // there is nothing to serve instead.
+    //
+    // Unscoped on purpose: a sub-agent or group-member run reaches here from
+    // inside a step's scheduled-work scope, whose step-boundary flush has a
+    // short budget — a rescan of this length would stall it. The refresh is
+    // not part of the step's settlement, so it goes straight to the host.
     if (cached?.workspace) {
       log('execAgent: serving stale workspace init for %s, refreshing in background', boundCwd);
-      after(() =>
+      afterUnscoped(() =>
         scanAndPersist().catch((error) => {
           log('execAgent: background workspace rescan failed for %s: %O', boundCwd, error);
         }),
