@@ -1893,6 +1893,7 @@ export default {
   'taskDetail.topicDrawer.collapse': 'Restore conversation panel',
   'taskDetail.topicDrawer.expand': 'Expand conversation panel',
   'taskDetail.topicDrawer.untitled': 'Untitled',
+  'taskDetail.topicMenu.continueTask': 'Continue Task in this Topic',
   'taskDetail.topicMenu.copyId': 'Copy Topic ID',
   'taskDetail.topicMenu.copyOperationId': 'Copy Operation ID',
   'taskDetail.topicMenu.delete': 'Delete Run',

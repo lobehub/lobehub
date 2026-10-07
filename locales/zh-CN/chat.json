@@ -2168,6 +2168,7 @@
   "taskDetail.topicDrawer.collapse": "恢复对话面板",
   "taskDetail.topicDrawer.expand": "展开对话面板",
   "taskDetail.topicDrawer.untitled": "未命名",
+  "taskDetail.topicMenu.continueTask": "在此话题继续任务",
   "taskDetail.topicMenu.copyId": "复制话题 ID",
   "taskDetail.topicMenu.copyOperationId": "复制 Operation ID",
   "taskDetail.topicMenu.delete": "删除运行",
