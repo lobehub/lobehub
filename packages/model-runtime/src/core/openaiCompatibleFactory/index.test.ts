@@ -3322,6 +3322,71 @@ describe('LobeOpenAICompatibleFactory', () => {
     });
 
     describe('tools parameter support', () => {
+      it.each([
+        ['missing choices', {}, 'no tool calls'],
+        ['empty choices', { choices: [] }, 'no tool calls'],
+        ['missing message', { choices: [{}] }, 'no tool calls'],
+        ['missing tools', { choices: [{ message: {} }] }, 'no tool calls'],
+        ['empty tools', { choices: [{ message: { tool_calls: [] } }] }, 'no tool calls'],
+        [
+          'invalid JSON',
+          {
+            choices: [
+              { message: { tool_calls: [{ function: { name: 'result', arguments: '{broken' } }] } },
+            ],
+          },
+          'invalid JSON',
+        ],
+        [
+          'null arguments',
+          {
+            choices: [
+              { message: { tool_calls: [{ function: { name: 'result', arguments: 'null' } }] } },
+            ],
+          },
+          'JSON object',
+        ],
+      ])(
+        'rejects %s with an actionable structured-output error',
+        async (_label, response, reason) => {
+          vi.spyOn(instance['client'].chat.completions, 'create').mockResolvedValue(
+            response as any,
+          );
+          await expect(
+            instance.generateObject({
+              messages: [{ content: 'Return a result', role: 'user' }],
+              model: 'test-model',
+              tools: [
+                { type: 'function', function: { name: 'result', parameters: { type: 'object' } } },
+              ],
+            }),
+          ).rejects.toThrow(`Invalid structured output: ${reason}`);
+        },
+      );
+
+      it.each([
+        ['missing output', {}, 'no tool calls'],
+        ['empty output', { output: [] }, 'no tool calls'],
+        ['text output', { output: [{ type: 'message' }] }, 'no tool calls'],
+        [
+          'invalid JSON',
+          { output: [{ type: 'function_call', name: 'result', arguments: '{broken' }] },
+          'invalid JSON',
+        ],
+      ])('rejects Responses API %s', async (_label, response, reason) => {
+        vi.spyOn(instance['client'].responses, 'create').mockResolvedValue(response as any);
+        await expect(
+          instance.generateObject({
+            messages: [{ content: 'Return a result', role: 'user' }],
+            model: 'test-model',
+            responseApi: true,
+            tools: [
+              { type: 'function', function: { name: 'result', parameters: { type: 'object' } } },
+            ],
+          }),
+        ).rejects.toThrow(`Invalid structured output: ${reason}`);
+      });
+
       it('should handle tools parameter with multiple tools', async () => {
         const mockResponse = {
           choices: [
@@ -3946,7 +4011,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         expect(requestPayload).not.toHaveProperty('reasoning_effort');
       });
 
-      it('should return undefined when no tool call found', async () => {
+      it('should reject when no tool call found', async () => {
         const mockResponse = {
           choices: [
             {
@@ -3971,18 +4036,15 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
         };
 
-        const result = await instanceWithToolCalling.generateObject(payload);
-
-        expect(consoleSpy).toHaveBeenCalledWith(
-          'no tool call found in structured output response:',
-          mockResponse.choices[0].message,
+        await expect(instanceWithToolCalling.generateObject(payload)).rejects.toThrow(
+          'Invalid structured output: no tool calls',
         );
-        expect(result).toBeUndefined();
+        expect(consoleSpy).not.toHaveBeenCalled();
 
         consoleSpy.mockRestore();
       });
 
-      it('should return undefined when tool call arguments parsing fails', async () => {
+      it('should reject when tool call arguments parsing fails', async () => {
         const mockResponse = {
           choices: [
             {
@@ -4015,13 +4077,10 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
         };
 
-        const result = await instanceWithToolCalling.generateObject(payload);
-
-        expect(consoleSpy).toHaveBeenCalledWith(
-          'parse tool call arguments error:',
-          mockResponse.choices[0].message.tool_calls[0],
+        await expect(instanceWithToolCalling.generateObject(payload)).rejects.toThrow(
+          'Invalid structured output: invalid JSON',
         );
-        expect(result).toBeUndefined();
+        expect(consoleSpy).not.toHaveBeenCalled();
 
         consoleSpy.mockRestore();
       });
