@@ -5,7 +5,16 @@ import { resolveClaudeCodeTranscriptPath } from './ensureResumeTranscript';
 /** Tail window read per step while scanning backwards for the last cost-state. */
 const CHUNK_BYTES = 64 * 1024;
 
+/**
+ * A cost-state record is a few hundred bytes. Any longer line (a large tool
+ * result, a pasted file) cannot be one, so it is skipped by offset without
+ * ever being buffered.
+ */
+const MAX_COST_STATE_LINE_BYTES = 16 * 1024;
+
 const COST_STATE_MARKER = '"type":"cost-state"';
+
+const NEWLINE = 0x0a;
 
 const parseCostState = (line: string): number | undefined => {
   if (!line.includes(COST_STATE_MARKER)) return undefined;
@@ -25,8 +34,10 @@ const parseCostState = (line: string): number | undefined => {
  * CC appends a `cost-state` record at the end of every run and restores the
  * newest one on `--resume`, which is why a resumed run's `total_cost_usd`
  * includes everything the session spent before. The record sits near the tail,
- * so the file is scanned backwards in chunks instead of loading a transcript
- * that can reach tens of megabytes.
+ * so the file is scanned backwards in fixed chunks for line boundaries instead
+ * of loading a transcript that can reach tens of megabytes. Only short lines
+ * are ever decoded; memory stays bounded by one chunk plus one candidate line
+ * however long the records behind the tail are.
  */
 export const readTranscriptSessionCost = async (filePath: string): Promise<number | undefined> => {
   let handle;
@@ -37,32 +48,46 @@ export const readTranscriptSessionCost = async (filePath: string): Promise<numbe
   }
 
   try {
-    const { size } = await handle.stat();
+    const fileHandle = handle;
+    const chunk = Buffer.alloc(CHUNK_BYTES);
+    let chunkStart = 0;
+    let chunkEnd = 0;
+
+    /** Decode `[start, end)` if it is short enough to be a cost-state record. */
+    const readLine = async (start: number, end: number): Promise<number | undefined> => {
+      const length = end - start;
+      if (length <= 0 || length > MAX_COST_STATE_LINE_BYTES) return undefined;
+      if (start >= chunkStart && end <= chunkEnd) {
+        return parseCostState(chunk.toString('utf8', start - chunkStart, end - chunkStart));
+      }
+      // The line straddles a chunk boundary: read just its bytes.
+      const line = Buffer.alloc(length);
+      await fileHandle.read(line, 0, length, start);
+      return parseCostState(line.toString('utf8'));
+    };
+
+    const { size } = await fileHandle.stat();
+    // Exclusive end of the line currently being walked back over.
+    let lineEnd = size;
     let position = size;
-    // Bytes of a line cut by the previous (later) chunk boundary.
-    let carry = Buffer.alloc(0);
 
     while (position > 0) {
       const length = Math.min(CHUNK_BYTES, position);
       position -= length;
-      const chunk = Buffer.alloc(length);
-      await handle.read(chunk, 0, length, position);
+      await fileHandle.read(chunk, 0, length, position);
+      chunkStart = position;
+      chunkEnd = position + length;
 
-      const buffer = Buffer.concat([chunk, carry]);
-      const lines = buffer.toString('utf8').split('\n');
-      // The first piece may be the tail of a line that starts in an earlier
-      // chunk; keep it for the next round unless this is the file start.
-      const head = position > 0 ? lines.shift() : undefined;
-
-      for (let i = lines.length - 1; i >= 0; i -= 1) {
-        const cost = parseCostState(lines[i]);
+      for (let i = length - 1; i >= 0; i -= 1) {
+        if (chunk[i] !== NEWLINE) continue;
+        const lineStart = position + i + 1;
+        const cost = await readLine(lineStart, lineEnd);
         if (cost !== undefined) return cost;
+        lineEnd = position + i;
       }
-
-      carry = head === undefined ? Buffer.alloc(0) : Buffer.from(head, 'utf8');
     }
 
-    return undefined;
+    return await readLine(0, lineEnd);
   } catch {
     return undefined;
   } finally {

@@ -52,6 +52,22 @@ describe('readTranscriptSessionCost', () => {
     expect(await readTranscriptSessionCost(file)).toBe(12.5);
   });
 
+  it('reaches a cost-state behind a single multi-megabyte record', async () => {
+    // An interrupted run can leave one huge tool-result line after the last
+    // cost-state; it is stepped over by offset, never accumulated.
+    const huge = JSON.stringify({ content: 'y'.repeat(5 * 1024 * 1024), type: 'user' });
+    const file = await writeTranscript([costState(7.25), huge]);
+
+    expect(await readTranscriptSessionCost(file)).toBe(7.25);
+  });
+
+  it('reads a cost-state on the first line without a trailing newline', async () => {
+    const file = path.join(dir, 'single.jsonl');
+    await writeFile(file, costState(1.5));
+
+    expect(await readTranscriptSessionCost(file)).toBe(1.5);
+  });
+
   it('returns undefined for a transcript without cost-state or a missing file', async () => {
     // a transcript LobeHub rebuilt after CC's GC carries no cost-state
     const file = await writeTranscript([turn('a'), turn('b')]);
