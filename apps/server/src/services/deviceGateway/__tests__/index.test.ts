@@ -13,6 +13,7 @@ const mockClient = vi.hoisted(() => ({
   executeMcpCall: vi.fn(),
   executeMessageApi: vi.fn(),
   executeToolCall: vi.fn(),
+  getDeviceMetrics: vi.fn(),
   getDeviceSystemInfo: vi.fn(),
   invokeRpc: vi.fn(),
   queryDeviceList: vi.fn(),
@@ -361,6 +362,44 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('queryDeviceMetrics', () => {
+    const params = { deviceId: 'dev-1', since: 1000, userId: 'user-1', workspaceId: 'ws-1' };
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('returns the gateway samples', async () => {
+      configure();
+      const samples = [{ observedAt: 2000 }];
+      mockClient.getDeviceMetrics.mockResolvedValue(samples);
+
+      await expect(new DeviceGateway().queryDeviceMetrics(params)).resolves.toEqual(samples);
+      expect(mockClient.getDeviceMetrics).toHaveBeenCalledWith('user-1', 'dev-1', {
+        since: 1000,
+        workspaceId: 'ws-1',
+      });
+    });
+
+    it('degrades to no samples when the gateway read fails', async () => {
+      configure();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockClient.getDeviceMetrics.mockRejectedValue(
+        new Error('device metrics read failed: HTTP 500'),
+      );
+
+      await expect(new DeviceGateway().queryDeviceMetrics(params)).resolves.toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('device metrics read failed'),
+        expect.objectContaining({
+          deviceId: 'dev-1',
+          error: 'device metrics read failed: HTTP 500',
+        }),
+      );
+      warn.mockRestore();
     });
   });
 

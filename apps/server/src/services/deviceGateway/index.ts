@@ -262,6 +262,10 @@ export class DeviceGateway {
    * The device's health samples held by the gateway (two days), observed at or
    * after `since`. Unlike the RPC reads this works while the device is
    * offline — the samples live in gateway storage, not on the device.
+   *
+   * A failed read degrades to no samples: the chart is a polled side panel,
+   * and surfacing a gateway blip as a 500 only turns each poll (and its SWR
+   * retries) into an error log. The next poll picks the history back up.
    */
   async queryDeviceMetrics(params: {
     deviceId: string;
@@ -271,10 +275,20 @@ export class DeviceGateway {
   }): Promise<DeviceMetricSample[]> {
     const client = this.getClient();
     if (!client) return [];
-    return client.getDeviceMetrics(params.userId, params.deviceId, {
-      since: params.since,
-      workspaceId: params.workspaceId,
-    });
+    try {
+      return await client.getDeviceMetrics(params.userId, params.deviceId, {
+        since: params.since,
+        workspaceId: params.workspaceId,
+      });
+    } catch (error) {
+      console.warn('[DeviceGateway] device metrics read failed; returning no samples', {
+        deviceId: params.deviceId,
+        error: error instanceof Error ? error.message : String(error),
+        userId: params.userId,
+        workspaceId: params.workspaceId,
+      });
+      return [];
+    }
   }
 
   /**
