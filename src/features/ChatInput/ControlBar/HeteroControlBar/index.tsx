@@ -197,11 +197,26 @@ const HeteroControlBar = memo(() => {
     );
   }
 
-  // On web there's no full-access badge / skeleton — just the workspace
-  // controls (the cloud repo switcher is rendered inside WorkspaceControls)
-  // plus the Claude quota badge when the run executes on a bound device that
-  // can sample it. The CLI model + thinking-effort selector now lives in the
-  // input's bottom-left action bar (see HeterogeneousChatInput), not here.
+  const codexPermissionControl =
+    agentId && !isLoading && heteroProvider?.type === 'codex' ? (
+      <CodexPermissionControl
+        agentId={agentId}
+        canConfigure={canConfigureResource}
+        provider={heteroProvider}
+        supportsNativePermissions={
+          (isLocalHeteroExecution ||
+            (executionTarget === 'device' &&
+              deviceCapabilities?.nativeCodexPermissions === true)) &&
+          heteroProvider.authMode !== 'api'
+        }
+      />
+    ) : null;
+
+  // Web previously showed only workspace controls and device quota. It now
+  // shares the Codex permission selector so capable devices expose their policy.
+  // The cloud repo switcher remains inside WorkspaceControls, and quota is
+  // shown only for a bound device that can sample it. The CLI model and thinking
+  // effort selector now live in the input's bottom-left action bar (see HeterogeneousChatInput), not here.
   if (!isDesktop) {
     if (!agentId) return null;
     return (
@@ -209,7 +224,8 @@ const HeteroControlBar = memo(() => {
         <Flexbox horizontal align={'center'} className={styles.leftGroup} gap={4}>
           <WorkspaceControls alwaysShowWorkspace agentId={agentId} />
         </Flexbox>
-        {(shouldShowApiCredits ||
+        {(codexPermissionControl ||
+          shouldShowApiCredits ||
           (shouldShowClaudeQuota && quotaDeviceId) ||
           (shouldShowCodexQuota && quotaDeviceId) ||
           (shouldShowKimiCodeQuota && quotaDeviceId)) && (
@@ -228,6 +244,7 @@ const HeteroControlBar = memo(() => {
             {shouldShowKimiCodeQuota && quotaDeviceId && (
               <KimiCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
             )}
+            {codexPermissionControl}
           </Flexbox>
         )}
       </Flexbox>
@@ -309,19 +326,7 @@ const HeteroControlBar = memo(() => {
           <ClaudeCodeQuotaMenu deviceId={quotaDeviceId} env={heteroProvider?.env} />
         )}
         {sdkRuntimeBadge}
-        {heteroProvider?.type === 'codex' ? (
-          <CodexPermissionControl
-            agentId={agentId}
-            canConfigure={canConfigureResource}
-            provider={heteroProvider}
-            supportsNativePermissions={
-              (isLocalHeteroExecution ||
-                (executionTarget === 'device' &&
-                  deviceCapabilities?.nativeCodexPermissions === true)) &&
-              heteroProvider.authMode !== 'api'
-            }
-          />
-        ) : (
+        {codexPermissionControl || (
           <Tooltip title={tChat('heteroAgent.fullAccess.tooltip')}>{fullAccessBadge}</Tooltip>
         )}
       </Flexbox>
