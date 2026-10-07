@@ -1289,6 +1289,9 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           return undefined;
         }
       } catch (error) {
+        // Provider HTTP normalization must not hide the structured-output recovery signal.
+        if (error instanceof StructuredOutputError) throw error;
+
         const handledError = this.handleError(error);
 
         if (

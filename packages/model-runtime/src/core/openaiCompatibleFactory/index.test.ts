@@ -3322,6 +3322,31 @@ describe('LobeOpenAICompatibleFactory', () => {
     });
 
     describe('tools parameter support', () => {
+      it('preserves structured-output errors when a provider wraps generic errors', async () => {
+        const handleError = vi.fn((error: any) => ({ error }));
+        const Runtime = createOpenAICompatibleRuntime({
+          provider: 'wrapped-provider',
+          chatCompletion: { handleError },
+        });
+        const runtime = new Runtime({ apiKey: 'test' });
+        vi.spyOn(runtime['client'].chat.completions, 'create').mockResolvedValue({
+          choices: [],
+        } as any);
+        await expect(
+          runtime.generateObject({
+            messages: [{ role: 'user', content: 'Return a result' }],
+            model: 'test-model',
+            tools: [
+              { type: 'function', function: { name: 'result', parameters: { type: 'object' } } },
+            ],
+          }),
+        ).rejects.toMatchObject({
+          name: 'StructuredOutputError',
+          message: 'Invalid structured output: no tool calls returned',
+        });
+        expect(handleError).not.toHaveBeenCalled();
+      });
+
       it.each([
         ['missing choices', {}, 'no tool calls'],
         ['empty choices', { choices: [] }, 'no tool calls'],
