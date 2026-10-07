@@ -1,11 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, InputPassword, Text } from '@lobehub/ui/base-ui';
-import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, InputPassword, Text } from '@lobehub/ui/base-ui';
+import { cssVar } from 'antd-style';
+import { CircleAlert } from 'lucide-react';
+import { memo, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 
 import type { SecretInputLabels } from './types';
+import { useSecretInputForm } from './useSecretInputForm';
 
 export interface SecretInputViewProps {
   /**
@@ -13,8 +16,13 @@ export interface SecretInputViewProps {
    * pinned below scrollable content (same contract as `AskUserQuestionView`).
    */
   actionsPortalTarget?: HTMLElement | null;
+  /**
+   * Why the user cannot enter the secret here, e.g. a missing permission.
+   * Replaces the fields and disables submit; cancel stays available.
+   */
+  blockedReason?: ReactNode;
   disabled?: boolean;
-  /** Non-secret failure message from the sink, shown above the fields. */
+  /** Short, human-readable failure message; never the sink's raw error. */
   error?: string;
   /** Field names to collect, e.g. environment variable names. */
   fields: string[];
@@ -26,68 +34,34 @@ export interface SecretInputViewProps {
    * Receives the plaintext values. The caller must hand them straight to its
    * sink (a credential store, a device vault) and report only a non-secret
    * reference onwards — never put them in tool arguments, results, plugin
-   * state, stores or logs. A rejection keeps the form open so the user can
-   * retry.
+   * state, stores or logs. A rejection keeps the values so the user can retry.
    */
   onSubmit: (values: Record<string, string>) => Promise<void>;
 }
 
 /**
- * Password-style form for secrets that must not enter the agent context.
- *
- * Values live in a ref, not React state or any store, so they never reach
- * devtools state snapshots, draft persistence or re-render props, and they are
- * dropped as soon as the submit settles or the card unmounts. Only which
- * fields are filled is kept in state, to enable the submit button.
+ * Password-style form for secrets that must not enter the agent context. See
+ * {@link useSecretInputForm} for how long the values are kept.
  */
 const SecretInputView = memo<SecretInputViewProps>(
-  ({ actionsPortalTarget, disabled, error, fields, labels, notice, onCancel, onSubmit }) => {
-    const valuesRef = useRef<Record<string, string>>({});
-    const [filled, setFilled] = useState<Set<string>>(() => new Set());
-    const [submitting, setSubmitting] = useState(false);
-    // Bumping the key remounts the uncontrolled inputs, clearing their DOM values.
-    const [formKey, setFormKey] = useState(0);
-
-    useEffect(
-      () => () => {
-        valuesRef.current = {};
-      },
-      [],
-    );
-
-    const handleChange = useCallback((field: string, value: string) => {
-      valuesRef.current[field] = value;
-      setFilled((prev) => {
-        const hasValue = value.length > 0;
-        if (prev.has(field) === hasValue) return prev;
-        const next = new Set(prev);
-        if (hasValue) next.add(field);
-        else next.delete(field);
-        return next;
-      });
-    }, []);
-
-    const clear = useCallback(() => {
-      valuesRef.current = {};
-      setFilled(new Set());
-      setFormKey((key) => key + 1);
-    }, []);
-
-    const handleSubmit = useCallback(async () => {
-      const values = Object.fromEntries(fields.map((field) => [field, valuesRef.current[field]]));
-      setSubmitting(true);
-      try {
-        await onSubmit(values);
-      } catch {
-        // The caller surfaces the failure through `error`; the user re-enters.
-      } finally {
-        clear();
-        setSubmitting(false);
-      }
-    }, [clear, fields, onSubmit]);
+  ({
+    actionsPortalTarget,
+    blockedReason,
+    disabled,
+    error,
+    fields,
+    labels,
+    notice,
+    onCancel,
+    onSubmit,
+  }) => {
+    const { complete, formKey, handleChange, handleSubmit, submitting } = useSecretInputForm({
+      fields,
+      onSubmit,
+    });
 
     const inert = disabled || submitting;
-    const canSubmit = !inert && fields.length > 0 && fields.every((field) => filled.has(field));
+    const canSubmit = !inert && !blockedReason && complete;
 
     const actions = (
       <Flexbox horizontal gap={8} justify={'flex-end'}>
@@ -103,28 +77,41 @@ const SecretInputView = memo<SecretInputViewProps>(
     return (
       <Flexbox gap={12}>
         {notice}
-        {error && <Alert title={error} type={'error'} />}
-        <Flexbox gap={8} key={formKey}>
-          {fields.map((field) => (
-            <Flexbox gap={4} key={field}>
-              <Text fontSize={12} type={'secondary'}>
-                {field}
-              </Text>
-              <InputPassword
-                data-1p-ignore
-                autoComplete={'off'}
-                data-lpignore={'true'}
-                disabled={inert}
-                placeholder={labels.placeholder(field)}
-                spellCheck={false}
-                onChange={(event) => handleChange(field, event.target.value)}
-                onPressEnter={() => {
-                  if (canSubmit) void handleSubmit();
-                }}
-              />
-            </Flexbox>
-          ))}
-        </Flexbox>
+        {blockedReason ? (
+          <Text fontSize={12} type={'warning'}>
+            {blockedReason}
+          </Text>
+        ) : (
+          <Flexbox gap={8} key={formKey}>
+            {fields.map((field) => (
+              <Flexbox gap={4} key={field}>
+                <Text fontSize={12} type={'secondary'}>
+                  {field}
+                </Text>
+                <InputPassword
+                  data-1p-ignore
+                  autoComplete={'off'}
+                  data-lpignore={'true'}
+                  disabled={inert}
+                  placeholder={labels.placeholder(field)}
+                  spellCheck={false}
+                  onChange={(event) => handleChange(field, event.target.value)}
+                  onPressEnter={() => {
+                    if (canSubmit) void handleSubmit();
+                  }}
+                />
+              </Flexbox>
+            ))}
+          </Flexbox>
+        )}
+        {error && (
+          <Flexbox horizontal align={'center'} gap={6} role={'alert'}>
+            <Icon color={cssVar.colorError} icon={CircleAlert} size={14} />
+            <Text fontSize={12} type={'danger'}>
+              {error}
+            </Text>
+          </Flexbox>
+        )}
         {actionsPortalTarget ? createPortal(actions, actionsPortalTarget) : actions}
       </Flexbox>
     );

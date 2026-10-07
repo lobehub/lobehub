@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type CredsWriteClient, saveCredsInput } from './saveCredsInput';
+import { canSaveCredsInput, type CredsWriteClient, saveCredsInput } from './saveCredsInput';
 
 const values = { OPENAI_API_KEY: 'sk-test-secret-value' };
 
@@ -72,5 +72,16 @@ describe('saveCredsInput', () => {
     client.createKV.mutate.mockRejectedValue(new Error('Failed to create KV credential'));
 
     await expect(saveCredsInput(client as CredsWriteClient, args, false, values)).rejects.toThrow();
+  });
+});
+
+describe('canSaveCredsInput', () => {
+  it('always allows personal credentials', () => {
+    expect(canSaveCredsInput({ canManageWorkspaceCreds: false, isWorkspace: false })).toBe(true);
+  });
+
+  it('requires the credential-management permission inside a workspace', () => {
+    expect(canSaveCredsInput({ canManageWorkspaceCreds: true, isWorkspace: true })).toBe(true);
+    expect(canSaveCredsInput({ canManageWorkspaceCreds: false, isWorkspace: true })).toBe(false);
   });
 });

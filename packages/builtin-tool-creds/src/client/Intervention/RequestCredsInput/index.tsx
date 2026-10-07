@@ -8,11 +8,17 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
+import { usePermission } from '@/hooks/usePermission';
 import { useClientDataSWR } from '@/libs/swr';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import type { RequestCredsInputParams } from '../../../types';
-import { type CredsWriteClient, findWritableCred, saveCredsInput } from './saveCredsInput';
+import {
+  canSaveCredsInput,
+  type CredsWriteClient,
+  findWritableCred,
+  saveCredsInput,
+} from './saveCredsInput';
 
 /**
  * Same scope the server runtime uses (`credsAccessor`): inside a workspace the
@@ -45,6 +51,8 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
   ({ actionsPortalTarget, args, disabled, interactionMode, onInteractionAction }) => {
     const { t } = useTranslation('tool');
     const { client, isWorkspace } = useScopedCredsClient();
+    const { allowed: canManageWorkspaceCreds } = usePermission('manage_provider_key');
+    const canSave = canSaveCredsInput({ canManageWorkspaceCreds, isWorkspace });
     const [error, setError] = useState<string>();
 
     const fieldNames = useMemo(
@@ -56,7 +64,9 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
 
     // Only metadata (id / key / owner) — list responses never carry values.
     const { data: existing } = useClientDataSWR(
-      isInteractive && args?.key ? ['requestCredsInput:existing', args.key, isWorkspace] : null,
+      isInteractive && canSave && args?.key
+        ? ['requestCredsInput:existing', args.key, isWorkspace]
+        : null,
       () => findWritableCred(client, args.key, isWorkspace),
     );
 
@@ -78,10 +88,12 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
 
     const handleCancel = useCallback(() => {
       void onInteractionAction?.({
-        reason: 'The user chose not to enter this credential.',
+        reason: canSave
+          ? 'The user chose not to enter this credential.'
+          : 'The user cannot save workspace credentials: only workspace admins can. A workspace admin needs to add this credential in the workspace settings.',
         type: 'skip',
       });
-    }, [onInteractionAction]);
+    }, [canSave, onInteractionAction]);
 
     const header = (
       <Flexbox gap={4}>
@@ -107,6 +119,7 @@ const RequestCredsInputIntervention = memo<BuiltinInterventionProps<RequestCreds
     return (
       <SecretInputView
         actionsPortalTarget={actionsPortalTarget}
+        blockedReason={canSave ? undefined : t('credsInput.notice.noPermission')}
         disabled={disabled}
         error={error}
         fields={fieldNames}

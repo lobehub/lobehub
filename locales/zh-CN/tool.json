@@ -85,6 +85,7 @@
   "connector.deleteAgentConfirmContent": "该连接器归属于助理「{{agent}}」。删除它会同时把这个工具从该助理中移除。",
   "connector.manageOnlyCreator": "仅创建者或工作区 Owner 可以管理此连接器",
   "connector.thisAgent": "该助理",
+  "credsInput.notice.noPermission": "只有工作区管理员可以保存工作区凭据。你可以跳过，或请管理员在工作区设置中添加这个凭据。",
   "credsInput.notice.overwrite": "已存在 key 为「{{key}}」的凭证，保存后将替换其中的值。",
   "credsInput.notice.personal": "将加密保存到你的个人凭证。输入的值直接写入存储，AI 无法看到。",
   "credsInput.notice.workspace": "将加密保存到当前工作区的凭证。输入的值直接写入存储，AI 无法看到。",

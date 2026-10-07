@@ -28,6 +28,22 @@ export interface CredsWriteClient {
 }
 
 /**
+ * Whether the user can save into the scope the agent reads. Personal
+ * credentials are always the user's own; workspace credentials need the
+ * workspace's credential-management permission, so a member without it gets
+ * an explanation instead of a form whose every save would be refused.
+ * Falling back to personal credentials would not help: inside a workspace the
+ * agent only reads the workspace's credentials.
+ */
+export const canSaveCredsInput = ({
+  canManageWorkspaceCreds,
+  isWorkspace,
+}: {
+  canManageWorkspaceCreds: boolean;
+  isWorkspace: boolean;
+}) => !isWorkspace || canManageWorkspaceCreds;
+
+/**
  * Finds a credential the scoped API can overwrite. A workspace list also holds
  * members' shared personal credentials, which only their owners can write.
  */
