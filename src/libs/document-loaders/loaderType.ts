@@ -20,6 +20,10 @@ export const getChunkingLoaderType = (filename: string): FileLoaderType | undefi
     return 'doc';
   }
 
+  if (name.endsWith('.xlsx')) {
+    return 'excel';
+  }
+
   if (name.endsWith('pdf')) {
     return 'pdf';
   }

@@ -6,6 +6,7 @@ import { CodeLoader } from './code';
 import { CsVLoader } from './csv';
 import { DocxLoader } from './docx';
 import { EPubLoader } from './epub';
+import { ExcelLoader } from './excel';
 import { LatexLoader } from './latex';
 import { MarkdownLoader } from './markdown';
 import { PdfLoader } from './pdf';
@@ -51,6 +52,10 @@ export class ChunkingLoader {
 
         case 'doc': {
           return await DocxLoader(fileBlob);
+        }
+
+        case 'excel': {
+          return await ExcelLoader(fileBlob);
         }
 
         case 'text': {
