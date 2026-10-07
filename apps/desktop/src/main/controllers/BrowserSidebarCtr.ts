@@ -309,26 +309,53 @@ export default class BrowserSidebarCtr extends ControllerModule {
     // pushState on the old page, and a same-document target settles loadURL
     // right away anyway.
     let committed = false;
+    let onCommit: (() => void) | undefined;
     const onNavigate = () => {
       committed = true;
+      onCommit?.();
     };
     webContents.on('did-navigate', onNavigate);
+    const deadline = Date.now() + NAVIGATION_SETTLE_TIMEOUT_MS;
     let settleTimer: ReturnType<typeof setTimeout> | undefined;
-    const outcome = await Promise.race([
-      webContents.loadURL(url).then(
-        () => ({ status: 'loaded' as const }),
-        (error: Error & { errno?: number }) => ({ error, status: 'failed' as const }),
-      ),
+    const waitUntilDeadline = () =>
       new Promise<{ status: 'pending' }>((resolve) => {
         settleTimer = setTimeout(
           () => resolve({ status: 'pending' }),
-          NAVIGATION_SETTLE_TIMEOUT_MS,
+          Math.max(0, deadline - Date.now()),
         );
-      }),
-    ]).finally(() => {
+      });
+    let outcome:
+      { error: Error & { errno?: number }; status: 'failed' } | { status: 'loaded' | 'pending' };
+    try {
+      outcome = await Promise.race([
+        webContents.loadURL(url).then(
+          () => ({ status: 'loaded' as const }),
+          (error: Error & { errno?: number }) => ({ error, status: 'failed' as const }),
+        ),
+        waitUntilDeadline(),
+      ]);
+      clearTimeout(settleTimer);
+
+      // ERR_ABORTED can reject as soon as the replacement navigation (a redirect
+      // or a newer load) starts, before it commits. Wait for that replacement
+      // within the same budget rather than reporting the previous document.
+      if (
+        outcome.status === 'failed' &&
+        outcome.error.errno === NAVIGATION_ABORTED_ERRNO &&
+        !committed &&
+        webContents.isLoading()
+      ) {
+        outcome = await Promise.race([
+          new Promise<{ status: 'loaded' }>((resolve) => {
+            onCommit = () => resolve({ status: 'loaded' });
+          }),
+          waitUntilDeadline(),
+        ]);
+      }
+    } finally {
       clearTimeout(settleTimer);
       webContents.removeListener('did-navigate', onNavigate);
-    });
+    }
 
     this.updateSnapshot(params.sessionId);
 

@@ -252,6 +252,61 @@ describe('BrowserSidebarCtr retained webview registration', () => {
         }),
       ).resolves.toEqual({ success: true });
     });
+
+    it('waits for a slow replacement navigation to commit after ERR_ABORTED', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      // A redirect rejects loadURL as the replacement starts; the replacement
+      // document only commits 10s later.
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        setTimeout(() => {
+          guest.getURL.mockReturnValue('https://example.com/landing');
+          guest.emit('did-navigate', {}, 'https://example.com/landing');
+        }, 10_000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      let settled: unknown;
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/redirects',
+      }).then((result) => (settled = result));
+      await vi.advanceTimersByTimeAsync(8000);
+      expect(settled).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(pending).resolves.toEqual({ success: true });
+      expect(guest.listenerCount('did-navigate')).toBe(1);
+      vi.useRealTimers();
+    });
+
+    it('does not report success when the replacement after ERR_ABORTED never commits', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/redirects',
+      });
+      await vi.advanceTimersByTimeAsync(15_000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'https://example.com/redirects has not responded within 15s, so the browser is still showing http://127.0.0.1:16001/. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.',
+        success: false,
+      });
+      expect(guest.listenerCount('did-navigate')).toBe(1);
+      vi.useRealTimers();
+    });
   });
 
   it('keeps sessions isolated and activates the most recently registered host', async () => {
