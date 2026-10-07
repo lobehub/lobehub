@@ -1737,7 +1737,7 @@ export class TaskModel {
    * lost, the Task keeps a `running` run forever. Everything downstream then
    * believes a dead run is live — the Goal view reads its frozen heartbeat as
    * activity, and the coordinator parks on `waiting_external` instead of
-   * recovering it (LOBE-12391). This finder is what lets a sweep settle those
+   * recovering it. This finder is what lets a sweep settle those
    * rows without depending on the lost delivery.
    *
    * The grace window is what keeps the sweep from racing the normal path: the

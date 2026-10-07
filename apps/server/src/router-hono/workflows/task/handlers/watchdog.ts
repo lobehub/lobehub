@@ -56,7 +56,7 @@ export async function watchdog(c: Context) {
     // The heartbeat net above cannot see every stuck Task: it requires a
     // configured `heartbeatTimeout`, which schedule and goal tasks do not set. A
     // run whose terminal delivery was lost leaves no trace here at all, so its
-    // Task would read as `running` forever (LOBE-12391). Settle those from the
+    // Task would read as `running` forever. Settle those from the
     // operation's own end instead.
     const reconciled = await reconcileOrphanedTaskRuns(db);
 

@@ -83,7 +83,7 @@ describe('resolveSandboxSessionConfig', () => {
 
   // A built instance's checkout lives on the sandbox's local disk, so commands
   // run there — while `cwd` keeps naming the instance's directory on the
-  // volume, which is what the call belongs to and may see (LOBE-14363).
+  // volume, which is what the call belongs to and may see.
   it('runs a built repository instance on local disk, scoped to its directory', async () => {
     findInstanceById.mockResolvedValue({
       configurationSnapshot: { sources: [{ kind: 'git', url: 'https://github.com/a/b' }] },
@@ -102,7 +102,7 @@ describe('resolveSandboxSessionConfig', () => {
     });
   });
 
-  // Regression (LOBE-14442): the definition never reached a conversation, so
+  // Regression: the definition never reached a conversation, so
   // the declared variables were missing from the agent's shell, the
   // maintenance command never ran once, and the environment's network switch
   // could not cut anything. All three are the execution plane acting on this

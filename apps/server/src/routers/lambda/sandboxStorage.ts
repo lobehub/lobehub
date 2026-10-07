@@ -456,7 +456,7 @@ const instanceProcedure = environmentProcedure.use(async (opts) => {
  * A personal account's root belongs to its owner alone, which is the one case
  * where no instance is needed.
  *
- * An instance's directory is never written through here (LOBE-14364): it is
+ * An instance's directory is never written through here: it is
  * the saved copy of the sandbox's work tree, written by the sandbox alone. A
  * write from outside would be overwritten by the next save, or leave the
  * directory disagreeing with the record the next restore reads it by.

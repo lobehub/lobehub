@@ -53,7 +53,7 @@ export interface ReconcileOrphanedRunsResult {
  * The run's terminal state normally reaches `task_topics` / `tasks` through its
  * `onComplete` webhook. That delivery is fire-and-forget, so when it is lost —
  * the watchdog abandoning a run is the common case — nothing settles the rows
- * and the Task keeps a `running` run forever (LOBE-12391). Downstream, that
+ * and the Task keeps a `running` run forever. Downstream, that
  * stale row reads as a live run: the Goal view shows the dead attempt's frozen
  * heartbeat, and the coordinator parks on it instead of recovering.
  *

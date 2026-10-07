@@ -11,7 +11,7 @@
  */
 const CODE_KEYS: Record<string, string> = {
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
-  // The execution plane calls this an instance now too (LOBE-14539). The old
+  // The execution plane calls this an instance now too. The old
   // code is kept until that rename is deployed everywhere, so a refusal from a
   // server still on the previous build reads as a sentence rather than a code.
   ENVIRONMENT_IN_USE: 'environments.instances.inUse',

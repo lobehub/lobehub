@@ -46,7 +46,7 @@ describe('MarketSandboxProvider', () => {
 
   // The instance the call belongs to and where it runs travel together: the
   // execution plane scopes a shared workspace by the first and runs commands
-  // in the second (LOBE-14363).
+  // in the second.
   it('forwards the instance directory and the local working directory together', async () => {
     const runBuildInTool = vi.fn(async () => ({ data: { result: {} }, success: true }));
     const marketService = {

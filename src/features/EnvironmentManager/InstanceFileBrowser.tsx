@@ -127,7 +127,7 @@ interface InstanceFileBrowserProps {
 
 /**
  * The files an instance has kept, in a window of its own — to look at, not to
- * change (LOBE-14364).
+ * change.
  *
  * This directory is the saved copy of the instance's work tree: the sandbox
  * runs the checkout on its own disk and writes it here, and it is the only

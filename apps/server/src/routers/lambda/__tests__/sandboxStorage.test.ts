@@ -230,7 +230,7 @@ describe('sandboxStorageRouter', () => {
     });
 
     // An instance's directory is the saved copy of its sandbox's work tree and
-    // is written by the sandbox alone (LOBE-14364): a write from here would be
+    // is written by the sandbox alone: a write from here would be
     // overwritten by the next save, or leave the directory disagreeing with
     // the record the next restore reads it by. Refused on the server, not only
     // hidden in the browser — and before the lookup, even for the owner.
@@ -399,7 +399,7 @@ describe('sandboxStorageRouter', () => {
         .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
 
       // The instance's own folder is where the checkout lands on the volume,
-      // which is what its file browser opens (LOBE-14362).
+      // which is what its file browser opens.
       expect(mockBuildInstance).toHaveBeenCalledWith({
         credentials: undefined,
         instanceDir: 'atlas',
