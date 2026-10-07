@@ -213,7 +213,6 @@ export class PluginMCPStoreActionImpl {
     if (!plugin) return;
 
     // Extract haveCloudEndpoint after plugin is loaded
-    // @ts-expect-error
     const { haveCloudEndpoint } = plugin || {};
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();

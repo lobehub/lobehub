@@ -580,7 +580,9 @@ export class DiscoverService {
           normalizedAuthor.name || (data.ownerId !== null ? `User${data.ownerId}` : 'Unknown'),
         avatar: data.avatar || normalizedAuthor.name || '',
         category: (data as any).category || 'general',
-        config: data.config || {},
+        // The market SDK types this as a bare record; the detail shape this
+        // builds declares the agent config it actually carries.
+        config: (data.config || {}) as unknown as DiscoverAssistantDetail['config'],
         createdAt: (data as any).createdAt,
         currentVersion: data.version,
         description: (data as any).description || data.summary,

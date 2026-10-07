@@ -72,23 +72,29 @@ export class MarketSandboxProvider implements SandboxProvider {
     );
 
     try {
-      const response = await marketService.getSDK().plugins.runBuildInTool(
-        toolName as CodeInterpreterToolName,
-        params as never,
-        {
-          // Cast: the published SDK's context type predates both fields. Market
-          // validates the request body with a non-strict schema, so a field it
-          // does not know yet is dropped rather than rejected — which is what
-          // `sandboxCwd` relies on until the execution plane consumes it.
+      const response = await marketService
+        .getSDK()
+        .plugins.runBuildInTool(toolName as CodeInterpreterToolName, params as never, {
+          // Deliberately NOT cast. Market validates this body with a non-strict
+          // schema, so an SDK that predates these fields drops them silently
+          // and the call runs in a throwaway sandbox while reporting success —
+          // which is exactly what shipped: the package was bumped in the cloud
+          // superproject only, this workspace resolved the older SDK, and every
+          // persistent run landed in /tmp for weeks without one error. Typing
+          // the context is what makes that a build failure instead.
           ...(sandboxMode && { sandboxMode }),
           ...(sandboxCwd && { sandboxCwd }),
           ...(sandboxWorkingDir && { sandboxWorkingDir }),
           ...(sandboxInstanceId && { sandboxInstanceId }),
-          ...(sandboxSpecification && { sandboxSpecification }),
+          // The SDK types this one loosely (`Record<string, unknown>`) while
+          // ours is a named shape, so only this field is widened — the rest
+          // stay checked, which is the point of dropping the blanket cast.
+          ...(sandboxSpecification && {
+            sandboxSpecification: sandboxSpecification as Record<string, unknown>,
+          }),
           topicId,
           userId,
-        } as never,
-      );
+        });
 
       log('Sandbox tool %s response: %O', toolName, response);
 
