@@ -1,7 +1,7 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type * as RedisLib from '@/server/services/redis/internal';
+import type * as RedisLib from '@/server/modules/Redis';
 
 import { AiAgentService } from '../index';
 
@@ -188,7 +188,7 @@ const { claimedKeys, mockTryInitializeRedisWithPrefix } = vi.hoisted(() => {
   };
   return { claimedKeys, mockTryInitializeRedisWithPrefix: vi.fn(async () => redis) };
 });
-vi.mock('@/server/services/redis/internal', async (importOriginal) => ({
+vi.mock('@/server/modules/Redis', async (importOriginal) => ({
   ...(await importOriginal<typeof RedisLib>()),
   tryInitializeRedisWithPrefix: mockTryInitializeRedisWithPrefix,
 }));

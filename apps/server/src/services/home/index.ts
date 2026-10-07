@@ -7,7 +7,7 @@ import {
   isRedisEnabled,
   RedisKeyNamespace,
   RedisKeys,
-} from '@/server/services/redis/internal';
+} from '@/server/modules/Redis';
 
 const log = debug('lobe-server:home-service');
 

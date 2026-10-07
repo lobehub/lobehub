@@ -13,7 +13,7 @@ vi.mock('@/envs/redis', () => ({
   getRedisConfig: getRedisConfigMock,
 }));
 
-vi.mock('@/server/services/redis/internal', () => ({
+vi.mock('@/server/modules/Redis', () => ({
   initializeRedis: initializeRedisMock,
 }));
 

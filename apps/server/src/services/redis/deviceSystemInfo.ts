@@ -1,7 +1,8 @@
 import type { DeviceSystemInfo } from '@lobechat/device-gateway-client';
 
+import { readThroughRedis, RedisKeys } from '@/server/modules/Redis';
+
 import { getRedisServiceClient } from './client';
-import { readThroughRedis, RedisKeys } from './internal';
 
 export const deviceSystemInfo = {
   async remember(

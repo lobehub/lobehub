@@ -23,7 +23,7 @@ import {
   isRedisEnabled,
   RedisKeyNamespace,
   RedisKeys,
-} from '@/server/services/redis/internal';
+} from '@/server/modules/Redis';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { type UpdateAgentResult } from './type';

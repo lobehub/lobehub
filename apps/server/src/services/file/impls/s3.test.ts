@@ -37,7 +37,7 @@ vi.mock('@/envs/redis', () => ({
   getRedisConfig: redisMocks.getRedisConfig,
 }));
 
-vi.mock('@/server/services/redis/internal', () => ({
+vi.mock('@/server/modules/Redis', () => ({
   initializeRedis: redisMocks.initializeRedis,
   isRedisEnabled: redisMocks.isRedisEnabled,
 }));

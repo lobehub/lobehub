@@ -1,6 +1,6 @@
 import debug from 'debug';
 
-import type { BaseRedisProvider } from '@/server/services/redis/internal/types';
+import type { BaseRedisProvider } from '@/server/modules/Redis/types';
 
 import { WorkflowRunGuardError } from './errors';
 import { buildWorkflowRunGuardKeys, buildWorkflowRunGuardRedisKey } from './keys';

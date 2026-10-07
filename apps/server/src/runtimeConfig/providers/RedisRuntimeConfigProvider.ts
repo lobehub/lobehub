@@ -1,7 +1,7 @@
 import debug from 'debug';
 
 import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis } from '@/server/services/redis/internal';
+import { initializeRedis } from '@/server/modules/Redis';
 
 import type {
   RuntimeConfigDomain,

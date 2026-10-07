@@ -11,7 +11,8 @@ callers do not choose a provider, prefix, key, SET options or claim lifetime.
 `client.ts` is the connection seam. All current domains share the existing `sendPathCache`
 connection and keyspace, preserving deployed cache/claim compatibility. A namespace is a key
 partition, not a reason to open another connection. Add a separate connection only for a
-transport requirement such as pub/sub or blocking commands. Client/provider code and its tests live in `internal/` inside this server service.
+transport requirement such as pub/sub or blocking commands. Client/provider code and its tests live in `apps/server/src/modules/Redis`.
+The service composes this infrastructure through domain methods.
 The former `src/libs/redis` directory is removed without forwarding exports.
 Do not export transport primitives from the business service barrel.
 
