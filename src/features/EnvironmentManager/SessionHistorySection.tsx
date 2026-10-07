@@ -96,16 +96,22 @@ const duration = (session: SandboxSessionRecord, running: boolean): string | und
 /**
  * Where a run's conversation lives, or `undefined` when it has no page.
  *
- * A conversation is addressed as `agent/<agentId>/<topicId>` — the topic alone
- * does not resolve, and a bare `/chat?topic=<id>` resolves to nothing at all,
- * which is what sent the panel's one way back into a run to the 404 page. The
- * workspace prefix is added by `useWorkspaceAwareNavigate`, so it is absent
- * here on purpose.
+ * A topic is addressed as `group/<groupId>/<topicId>` when it belongs to a
+ * group and `agent/<agentId>/<topicId>` otherwise — the topic alone does not
+ * resolve, and a bare `/chat?topic=<id>` resolves to nothing at all, which is
+ * what sent the panel's one way back into a run to the 404 page.
+ *
+ * A group topic carries an agent id too — the member that answered — so the
+ * group is checked FIRST; reading the agent would open that member's own
+ * surface instead of the conversation the run came from. The workspace prefix
+ * is added by `useWorkspaceAwareNavigate`, so it is absent here on purpose.
  */
-export const conversationPath = (session: SandboxSessionRecord): string | undefined =>
-  !session.management && session.topicId && session.topicAgentId
-    ? `/agent/${session.topicAgentId}/${session.topicId}`
-    : undefined;
+export const conversationPath = (session: SandboxSessionRecord): string | undefined => {
+  if (session.management || !session.topicId) return undefined;
+  if (session.topicGroupId) return `/group/${session.topicGroupId}/${session.topicId}`;
+
+  return session.topicAgentId ? `/agent/${session.topicAgentId}/${session.topicId}` : undefined;
+};
 
 const SessionRow = memo<{ running: boolean; session: SandboxSessionRecord }>(
   ({ running, session }) => {

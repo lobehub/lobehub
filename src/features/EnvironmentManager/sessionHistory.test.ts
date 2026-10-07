@@ -16,6 +16,7 @@ const session = (overrides: Partial<any>): any => ({
   snapshotBytes: null,
   startedAt: '2026-09-24T02:00:00.000Z',
   topicAgentId: null,
+  topicGroupId: null,
   topicId: null,
   topicTitle: null,
   ...overrides,
@@ -169,6 +170,14 @@ describe('conversationPath', () => {
     // The topic is another member's, or was deleted — a link built from half
     // the address would 404 exactly like the old one did.
     expect(conversationPath(session({ topicAgentId: null, topicId: 'tpc_1' }))).toBeUndefined();
+  });
+
+  it('sends a group run back to the group, not to the member that answered', () => {
+    // A group topic carries an agent id too — the member whose turn it was.
+    // Reading that first opens a different conversation than the run came from.
+    expect(
+      conversationPath(session({ topicAgentId: 'agt_1', topicGroupId: 'grp_1', topicId: 'tpc_1' })),
+    ).toBe('/group/grp_1/tpc_1');
   });
 
   it('offers nothing for a management session', () => {

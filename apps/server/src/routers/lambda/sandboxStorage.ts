@@ -1079,13 +1079,19 @@ export const sandboxStorageRouter = router({
               .findByIds(topicIds)
               .catch(() => [])
           : [];
-      // The agent as well as the title: a conversation is addressed as
-      // `agent/<agentId>/<topicId>`, so a link built from the topic alone
-      // cannot resolve and the panel's one way back into the run is a 404.
+      // Where the conversation lives, as well as what it is called: a topic is
+      // addressed as `group/<groupId>/<topicId>` when it belongs to a group and
+      // `agent/<agentId>/<topicId>` otherwise, so a link built from the topic
+      // alone cannot resolve and the panel's one way back into the run is a 404.
+      // A group topic carries BOTH ids, which is why the group one is returned
+      // rather than inferred from the absence of an agent.
       const topicInfo = new Map(
         topics
           .filter((topic) => topic.userId === ctx.userId)
-          .map((topic) => [topic.id, { agentId: topic.agentId, title: topic.title }]),
+          .map((topic) => [
+            topic.id,
+            { agentId: topic.agentId, groupId: topic.groupId, title: topic.title },
+          ]),
       );
 
       return {
@@ -1095,6 +1101,7 @@ export const sandboxStorageRouter = router({
           return {
             ...session,
             topicAgentId: info?.agentId ?? null,
+            topicGroupId: info?.groupId ?? null,
             topicTitle: info?.title || null,
           };
         }),
