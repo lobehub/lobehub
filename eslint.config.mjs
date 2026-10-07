@@ -162,6 +162,11 @@ const browserRuntimeRestrictedImportPatterns = [
 // Existing consumers are migration debt; this list only shrinks.
 const redisAccessRestrictedImportPaths = [
   {
+    message:
+      'Redis service connections are internal. Use domain methods from @/server/services/redis.',
+    name: '@/server/services/redis/client',
+  },
+  {
     allowTypeImports: true,
     message:
       'Redis client access belongs inside services/redis. Use a domain method or add one there.',
