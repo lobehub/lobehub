@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import { definePagedReplica } from './defineReplica';
 import {
   applyHeadPage,
   applyNextPage,
@@ -255,6 +256,44 @@ describe('cursor / backward paging (message-like transcript)', () => {
     expect(refreshed.currentPage).toBe(1);
   });
 
+  it.each(['backward', 'forward'] as const)(
+    'refreshes the head cursor before trimming %s pages',
+    (direction) => {
+      const config = {
+        ...messages,
+        direction,
+        sort: (a: Message, b: Message) =>
+          direction === 'backward' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt,
+      };
+      const view = (rows: Message[]) => (direction === 'backward' ? rows : [...rows].reverse());
+      const head = applyHeadPage<Message, Cursor>(
+        undefined,
+        { items: view(range(7, 10)), nextCursor: cursorOf(msg(7)) },
+        { pageSize: 4 },
+        config,
+      );
+      const extended = applyNextPage(
+        head,
+        { items: view(range(3, 6)), nextCursor: cursorOf(msg(3)) },
+        config,
+      );
+      const refreshed = applyHeadPage(
+        extended,
+        { items: view(range(6, 10)), nextCursor: cursorOf(msg(6)) },
+        { pageSize: 5 },
+        config,
+      );
+      expect(refreshed.nextCursor).toEqual(cursorOf(msg(3)));
+      for (const trimmed of [
+        collapseToHead(refreshed, config),
+        toPersistedPage(refreshed, config),
+      ]) {
+        expect(trimmed.items).toEqual(view(range(6, 10)));
+        expect(getNextPageCursor(trimmed, config)).toEqual(cursorOf(msg(6)));
+      }
+    },
+  );
+
   describe('synthetic group nodes', () => {
     interface Node extends Message {
       role?: 'compressedGroup' | 'user';
@@ -264,6 +303,37 @@ describe('cursor / backward paging (message-like transcript)', () => {
       isCursorable: (m) => m.role !== 'compressedGroup',
     };
     const group = (n: number): Node => ({ createdAt: n, id: `g${n}`, role: 'compressedGroup' });
+
+    it.each(['backward', 'forward'] as const)(
+      'retains synthetic head rows sorted outside the head in %s views',
+      (direction) => {
+        const config = {
+          ...grouped,
+          direction,
+          sort: (a: Node, b: Node) =>
+            direction === 'backward' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt,
+        };
+        const view = (rows: Node[]) => (direction === 'backward' ? rows : [...rows].reverse());
+        const head = applyHeadPage<Node, Cursor>(
+          undefined,
+          { items: view([group(0), ...range(7, 10)]), nextCursor: cursorOf(msg(7)) },
+          { pageSize: 5 },
+          config,
+        );
+        const extended = applyNextPage(
+          head,
+          { items: view(range(3, 6)), nextCursor: cursorOf(msg(3)) },
+          config,
+        );
+        for (const trimmed of [
+          collapseToHead(extended, config),
+          toPersistedPage(extended, config),
+        ]) {
+          expect(trimmed.items).toEqual(view([group(0), ...range(7, 10)]));
+          expect(trimmed.nextCursor).toEqual(cursorOf(msg(7)));
+        }
+      },
+    );
 
     it('never pins the join anchor on a synthetic node', () => {
       const head = applyHeadPage<Node, Cursor>(
@@ -391,5 +461,38 @@ describe('cursor / backward paging (message-like transcript)', () => {
     const capped = toPersistedPage(loadedTwoWindows(), { ...messages, persist: { maxItems: 2 } });
     expect(mids(capped)).toEqual(['m9', 'm10']);
     expect(capped.nextCursor).toBeUndefined();
+  });
+});
+
+describe('paged resource cursor types', () => {
+  it('preserves an object cursor in the configuration and resource', () => {
+    interface Cursor {
+      id: string;
+    }
+    const resource = definePagedReplica<undefined, Row, Cursor>({
+      key: () => 'rows',
+      name: 'rows',
+      version: 1,
+      paging: {
+        direction: 'backward',
+        getId: (row) => row.id,
+        mode: 'cursor',
+        deriveCursor: (row) => ({ id: row.id }),
+      },
+    });
+    expectTypeOf(resource.paging!.deriveCursor!).returns.toEqualTypeOf<Cursor>();
+    expectTypeOf(resource.fetcher!).parameter(1).toEqualTypeOf<Cursor | undefined>();
+    definePagedReplica<undefined, Row, Cursor>({
+      key: () => 'invalid',
+      name: 'invalid',
+      version: 1,
+      paging: {
+        direction: 'backward',
+        getId: (row) => row.id,
+        mode: 'cursor',
+        // @ts-expect-error An object-cursor resource cannot derive a string cursor.
+        deriveCursor: (row) => row.id,
+      },
+    });
   });
 });

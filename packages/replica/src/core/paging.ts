@@ -200,7 +200,7 @@ export const applyHeadPage = <TItem, TCursor>(
   current: ReplicaPagedData<TItem, TCursor> | undefined,
   page: ReplicaPageResult<TItem, TCursor>,
   options: { pageSize: number; reset?: boolean },
-  config: ReplicaPagingConfig<TItem>,
+  config: ReplicaPagingConfig<TItem, TCursor>,
   ctx: ReplicaPagingContext<TItem> = {},
 ): ReplicaPagedData<TItem, TCursor> => {
   const { getId, direction } = config;
@@ -274,9 +274,10 @@ export const applyHeadPage = <TItem, TCursor>(
     anchorId = boundary ? getId(boundary) : current.anchorId;
   }
 
+  const headNext = config.mode === 'cursor' ? page.nextCursor : current.pages?.[0]?.next;
   const pages = current.pages?.length
-    ? [{ ...current.pages[0], count: fresh.length }, ...current.pages.slice(1)]
-    : [{ count: fresh.length, next: current.nextCursor }];
+    ? [{ count: fresh.length, next: headNext }, ...current.pages.slice(1)]
+    : [{ count: fresh.length, next: headNext }];
   const data = {
     anchorId: anchorId ?? current.anchorId,
     currentPage: current.currentPage,
@@ -299,7 +300,7 @@ export const applyHeadPage = <TItem, TCursor>(
 export const applyNextPage = <TItem, TCursor>(
   current: ReplicaPagedData<TItem, TCursor>,
   page: ReplicaPageResult<TItem, TCursor>,
-  config: ReplicaPagingConfig<TItem>,
+  config: ReplicaPagingConfig<TItem, TCursor>,
   ctx: ReplicaPagingContext<TItem> = {},
 ): ReplicaPagedData<TItem, TCursor> => {
   const { getId, direction } = config;
@@ -353,7 +354,7 @@ export const applyNextPage = <TItem, TCursor>(
 export const insertHeadItems = <TItem, TCursor>(
   current: ReplicaPagedData<TItem, TCursor>,
   items: TItem[],
-  config: ReplicaPagingConfig<TItem>,
+  config: ReplicaPagingConfig<TItem, TCursor>,
 ): ReplicaPagedData<TItem, TCursor> => {
   const seen = new Set(current.items.map(config.getId));
   const added = dedupe(items, config.getId, seen);
@@ -403,16 +404,40 @@ export const hasPagedItem = <TItem>(
   config: Pick<ReplicaPagingConfig<TItem>, 'getId'>,
 ) => !!data?.items.some((item) => config.getId(item) === id);
 
+/** Select head-side rows without losing synthetic head rows sorted among older pages. */
+const takeHeadItems = <TItem, TCursor>(
+  items: TItem[],
+  count: number,
+  data: ReplicaPagedData<TItem, TCursor>,
+  config: ReplicaPagingConfig<TItem, TCursor>,
+): TItem[] => {
+  if (count === 0) return [];
+  const synthetic = new Set(data.headSyntheticIds);
+  const syntheticCount = items.filter((item) => synthetic.has(config.getId(item))).length;
+  const regular = items.filter((item) => !synthetic.has(config.getId(item)));
+  const regularCount = Math.max(0, count - syntheticCount);
+  const selected =
+    config.direction === 'forward'
+      ? regular.slice(0, regularCount)
+      : regular.slice(Math.max(0, regular.length - regularCount));
+  const ids = new Set(selected.map(config.getId));
+  return items
+    .filter((item) => synthetic.has(config.getId(item)) || ids.has(config.getId(item)))
+    .slice(
+      config.direction === 'forward' ? 0 : -count,
+      config.direction === 'forward' ? count : undefined,
+    );
+};
+
 /** Drop every loaded page but the head (e.g. after an edit inside older history). */
 export const collapseToHead = <TItem, TCursor>(
   current: ReplicaPagedData<TItem, TCursor>,
-  config: ReplicaPagingConfig<TItem>,
+  config: ReplicaPagingConfig<TItem, TCursor>,
 ): ReplicaPagedData<TItem, TCursor> => {
   if (current.currentPage === 0) return current;
   const head = current.pages?.[0];
   const count = head?.count ?? current.pageSize;
-  const items =
-    config.direction === 'forward' ? current.items.slice(0, count) : current.items.slice(-count);
+  const items = takeHeadItems(current.items, count, current, config);
   const nextCursor = config.mode === 'offset' ? (1 as TCursor) : (head?.next ?? undefined);
   return {
     ...current,
@@ -434,7 +459,7 @@ export const collapseToHead = <TItem, TCursor>(
  */
 export const toPersistedPage = <TItem, TCursor, TData extends ReplicaPagedData<TItem, TCursor>>(
   data: TData,
-  config: ReplicaPagingConfig<TItem>,
+  config: ReplicaPagingConfig<TItem, TCursor>,
   ctx: ReplicaPagingContext<TItem> = {},
 ): TData => {
   const { server } = splitClientOnly(data.items, ctx);
@@ -464,8 +489,7 @@ export const toPersistedPage = <TItem, TCursor, TData extends ReplicaPagedData<T
     count = Math.min(count, server.length);
   }
 
-  const items =
-    config.direction === 'forward' ? server.slice(0, count) : server.slice(server.length - count);
+  const items = takeHeadItems(server, count, data, config);
   const lastKept = pages[keptPages - 1];
   const nextCursor =
     config.mode === 'offset'
