@@ -23,6 +23,7 @@ describe('workbench stub surface', () => {
       'lambdaClient',
       'lambdaQuery',
       'toolsClient',
+      'withLlmRelay',
     ]);
     expect(surface.open.has('lambdaClient')).toBe(true);
 
