@@ -16,6 +16,7 @@ export {
   buildCodexAppServerArgs,
   buildCodexAppServerInput,
   buildCodexAppServerThreadParams,
+  type CodexApprovalDecision,
   CodexAppServerClient,
   type CodexAppServerClientOptions,
   CodexAppServerConnectionError,
@@ -23,6 +24,7 @@ export {
   CodexThreadSession,
   type CodexThreadSessionOptions,
   getCodexAppServerUnsupportedArgs,
+  isCodexApprovalDecision,
   isCodexAppServerCompatibilityError,
 } from '../codex';
 export type { UsageData } from '../types';

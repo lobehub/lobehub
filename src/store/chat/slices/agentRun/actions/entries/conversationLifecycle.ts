@@ -10,6 +10,7 @@ import type {
   ChatImageItem,
   ChatTopicMetadata,
   ChatVideoItem,
+  CodexForkTarget,
   ConversationContext,
   MessageMetadata,
   SendMessageParams,
@@ -70,6 +71,7 @@ import {
   topicSelectors,
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import { resolveCodexForkTarget } from '@/store/chat/slices/agentRun/actions/dispatch/codexForkTarget';
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
@@ -1256,10 +1258,16 @@ export class ConversationLifecycleActionImpl {
     // on — never hand another machine's path to this run (mirrors the server's
     // `topicPinFitsDevice`).
     const topicDeviceId = existingTopic?.metadata?.boundDeviceId;
+    const threadMetadata =
+      operationContext.topicId && operationContext.threadId
+        ? this.#get().threadMaps[operationContext.topicId]?.find(
+            (thread) => thread.id === operationContext.threadId,
+          )?.metadata
+        : undefined;
     const topicCwdMetadata =
       topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
         ? undefined
-        : existingTopic?.metadata;
+        : (threadMetadata ?? existingTopic?.metadata);
     const workingDirectory =
       resolveWorkingDirPath(topicCwdMetadata?.workingDirectoryConfig) ??
       topicCwdMetadata?.workingDirectory ??
@@ -1467,6 +1475,7 @@ export class ConversationLifecycleActionImpl {
     // ── External agent mode: delegate to heterogeneous agent CLI (desktop only) ──
     // Per-agent heterogeneousProvider config takes priority over the global gateway mode.
     if (runtimeType === 'hetero' && heterogeneousProvider) {
+      let codexForkTarget: CodexForkTarget | undefined;
       // Resolve cwd up-front so the new topic is bound to a project at
       // creation time. Otherwise the row stays NULL until the post-execution
       // metadata write — which never lands on cancel/error and meanwhile
@@ -1480,6 +1489,19 @@ export class ConversationLifecycleActionImpl {
       let heteroData: SendMessageServerResponse | undefined;
       try {
         throwIfSendAborted(signal);
+        if (heterogeneousProvider.type === 'codex' && newThread) {
+          if (!newThread.sourceMessageId) {
+            throw new Error('The selected Codex message is unavailable');
+          }
+          const source = dbMessageSelectors.getDbMessageById(newThread.sourceMessageId)(
+            this.#get(),
+          );
+          codexForkTarget = resolveCodexForkTarget(
+            source ? [source] : [],
+            newThread.sourceMessageId,
+            'after',
+          );
+        }
         heteroData = await aiChatService.sendMessageInServer(
           {
             agentId: operationContext.agentId,
@@ -1493,6 +1515,7 @@ export class ConversationLifecycleActionImpl {
               id: tempAssistantId,
               provider: heterogeneousProvider.type,
             },
+            newThread,
             newTopic: willCreateNewTopic
               ? {
                   // Same id the optimistic sidebar row already uses.
@@ -1555,12 +1578,14 @@ export class ConversationLifecycleActionImpl {
       // persisted topic, the hetero stream must target the real topic bucket; keeping
       // `isNew` would route chunks to `main_<agent>_<topic>_new`.
       const heteroTopicId = heteroData.topicId ?? operationContext.topicId;
+      const heteroThreadId = heteroData.createdThreadId ?? operationContext.threadId;
       const shouldResolveNewTopicKey = !!heteroTopicId && operationContext.scope !== 'thread';
       const heteroContext = {
         ...operationContext,
         // startOperation inherits from the parent op before merging this context.
         // Use an explicit false so the child exec op does not inherit `isNew: true`.
-        ...(shouldResolveNewTopicKey ? { isNew: false } : {}),
+        ...(shouldResolveNewTopicKey || heteroData.createdThreadId ? { isNew: false } : {}),
+        threadId: heteroThreadId,
         topicId: heteroTopicId,
       };
       const heteroResponseMeta = heteroData as SendMessageServerResponseMeta;
@@ -1588,6 +1613,9 @@ export class ConversationLifecycleActionImpl {
         action: 'sendMessage/serverResponse',
         context: heteroContext,
       });
+      if (heteroData.createdThreadId) {
+        this.#syncCreatedThread(operationId, heteroData.createdThreadId, context.sourceMessageId);
+      }
 
       // Handle new topic creation
       if (heteroData.isCreateNewTopic && heteroData.topicId) {
@@ -1736,9 +1764,20 @@ export class ConversationLifecycleActionImpl {
           (heteroContext.topicId
             ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
             : undefined) ?? existingTopic;
+        const thread =
+          heteroContext.topicId && heteroContext.threadId
+            ? this.#get().threadMaps[heteroContext.topicId]?.find(
+                (item) => item.id === heteroContext.threadId,
+              )
+            : undefined;
+        if (heterogeneousProvider.type === 'codex' && !codexForkTarget) {
+          codexForkTarget = thread?.metadata?.codexForkTarget;
+        }
+        const resumeMetadata = (thread?.metadata ?? topic?.metadata) as
+          ChatTopicMetadata | undefined;
         const providerBinding = heterogeneousProvider.authMode === 'api';
         const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
-          topic?.metadata,
+          resumeMetadata,
           workingDirectory,
           {
             currentBindingKey: providerBinding
@@ -1759,6 +1798,8 @@ export class ConversationLifecycleActionImpl {
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroExecutionAssistantId,
+          userMessageId: heteroData.userMessageId,
+          codexForkTarget,
           context: heteroExecutionContext,
           contextSelections: effectiveContextSelections,
           heterogeneousProvider: effectiveHeterogeneousProvider,

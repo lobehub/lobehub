@@ -6,7 +6,11 @@ import {
   isRemoteHeterogeneousType,
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
-import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
+import type {
+  CodexPermissionMode,
+  HeterogeneousApiConfig,
+  HeterogeneousAuthMode,
+} from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Alert, Button, Tabs } from '@lobehub/ui/base-ui';
@@ -84,6 +88,12 @@ const ProfileEditor = memo(() => {
     agentId,
     { topicId: null },
   );
+  const isLocalHeterogeneousExecution =
+    resolveExecutionTarget(effectiveAgencyConfig, {
+      clientExecutionAvailable: isDesktop,
+      isHetero: isHeterogeneous,
+      workspaceScoped,
+    }) === 'local' && heterogeneousProvider?.authMode !== 'api';
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -122,6 +132,20 @@ const ProfileEditor = memo(() => {
     await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
+      },
+    });
+  };
+
+  const updateCodexPermissionMode = async (permissionMode: CodexPermissionMode) => {
+    if (
+      !canEdit ||
+      heterogeneousProvider?.type !== 'codex' ||
+      (!isLocalHeterogeneousExecution && permissionMode !== 'full-access')
+    )
+      return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, permissionMode },
       },
     });
   };
@@ -206,6 +230,7 @@ const ProfileEditor = memo(() => {
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
               apiModeWorkspaceBlocked={isWorkspaceAgent}
+              isLocalExecution={isLocalHeterogeneousExecution}
               provider={heterogeneousProvider}
               serverDefaultAvailable={serverDefaultAvailable}
               serverDefaultLoading={serverCapabilityEnabled && serverCapability.isLoading}
@@ -214,6 +239,7 @@ const ProfileEditor = memo(() => {
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
+              onPermissionModeChange={updateCodexPermissionMode}
               onServerDefaultRetry={() => {
                 void serverCapability.mutate();
               }}

@@ -5,8 +5,12 @@ import type { LobeToolRenderType } from '../../tool';
 
 // ToolIntervention must be defined first to avoid circular dependency
 export interface ToolIntervention {
+  /** Native approval payload, kept separate from the tool execution arguments. */
+  arguments?: string;
   /** Stable sealed batch id, bound to one parked operation + assistant turn. */
   batchId?: string;
+  /** Runtime callback id; distinct from the tool call when one item asks more than once. */
+  interventionId?: string;
   /** Declaration order inside the sealed batch. */
   itemIndex?: number;
   /** Parked runtime operation this decision must resume or stop. */
@@ -27,9 +31,11 @@ export interface ToolIntervention {
 }
 
 export const ToolInterventionSchema = z.object({
+  arguments: z.string().optional(),
   batchId: z.string().optional(),
   itemIndex: z.number().int().nonnegative().optional(),
   operationId: z.string().optional(),
+  interventionId: z.string().optional(),
   rejectedReason: z.string().optional(),
   resolving: z.boolean().optional(),
   resolutionRequestId: z.string().optional(),

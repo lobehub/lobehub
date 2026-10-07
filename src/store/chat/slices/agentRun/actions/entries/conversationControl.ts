@@ -9,6 +9,7 @@ import {
   type ToolIntervention,
   type UIChatMessage,
 } from '@lobechat/types';
+import { isRecord } from '@lobechat/utils/object';
 import { t } from 'i18next';
 
 import { type ChatInputEditor } from '@/features/ChatInput';
@@ -1795,6 +1796,16 @@ export class ConversationControlActionImpl {
       console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
       return;
     }
+    const interventionId = toolMessage.pluginIntervention?.interventionId;
+    const isCodexApproval = toolMessage.plugin?.identifier === 'codex';
+    const codexDecision = isCodexApproval ? payload?.decision : undefined;
+    const isCodexRejected =
+      codexDecision === 'decline' ||
+      codexDecision === 'cancel' ||
+      (isRecord(codexDecision) &&
+        isRecord(codexDecision.applyNetworkPolicyAmendment) &&
+        isRecord(codexDecision.applyNetworkPolicyAmendment.network_policy_amendment) &&
+        codexDecision.applyNetworkPolicyAmendment.network_policy_amendment.action === 'deny');
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -1895,24 +1906,36 @@ export class ConversationControlActionImpl {
     } else if (actionType === 'submit') {
       await this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
-        { intervention: { status: 'approved' } },
+        {
+          intervention: isCodexRejected
+            ? {
+                rejectedReason:
+                  codexDecision === 'cancel' ? 'User cancelled' : 'User denied permission',
+                status: 'rejected',
+              }
+            : { status: 'approved' },
+        },
         optimisticContext,
       );
       // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
       // to `pluginState.askUserAnswers` so the Render component can show
       // Q&A pairs instead of parsing the bridge's prose `User answers:`
       // dump out of `content`. Best-effort — never block the IPC submit.
-      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      if (!isCodexApproval) {
+        await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      }
       // Bridge formats its own "User answers:" string for CC, so the eventual
       // tool_result re-rewrites this content. The optimistic write is just
       // for the brief gap between Submit and CC echoing the result back.
-      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        summary,
-        undefined,
-        optimisticContext,
-      );
+      if (!isCodexApproval) {
+        const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
+        await this.#get().optimisticUpdateMessageContent(
+          toolMessageId,
+          summary,
+          undefined,
+          optimisticContext,
+        );
+      }
     } else {
       const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
       await this.#get().optimisticUpdateMessagePlugin(
@@ -1955,8 +1978,14 @@ export class ConversationControlActionImpl {
           await import('@/services/electron/heterogeneousAgent');
         await heterogeneousAgentService.submitIntervention(
           actionType === 'submit'
-            ? { operationId, result: payload ?? {}, toolCallId }
-            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+            ? { interventionId, operationId, result: payload ?? {}, toolCallId }
+            : {
+                cancelReason: 'user_cancelled',
+                cancelled: true,
+                interventionId,
+                operationId,
+                toolCallId,
+              },
         );
       } else {
         const resolutionIntent = JSON.stringify(
@@ -1968,10 +1997,17 @@ export class ConversationControlActionImpl {
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, resolutionRequestId, result: payload ?? {}, toolCallId }
+            ? {
+                interventionId,
+                operationId,
+                resolutionRequestId,
+                result: payload ?? {},
+                toolCallId,
+              }
             : {
                 cancelReason: 'user_cancelled',
                 cancelled: true,
+                interventionId,
                 operationId,
                 resolutionRequestId,
                 toolCallId,
@@ -1981,6 +2017,18 @@ export class ConversationControlActionImpl {
       }
     } catch (err) {
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);
+      // NOTICE:
+      // A native request may expire while its optimistic write is awaiting persistence.
+      // The bridge then displays another callback for the same tool message.
+      // Restore only this callback; remove once approval writes become callback-scoped.
+      if (
+        isCodexApproval &&
+        interventionId &&
+        dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get())?.pluginIntervention
+          ?.interventionId !== interventionId
+      ) {
+        throw err;
+      }
       // Drop the in-flight hint first: the rollback below only reaches
       // `pluginIntervention` once the server echoes, and a failed publish must
       // never leave the card disabled waiting on an ACK that was never asked for.
@@ -2014,7 +2062,14 @@ export class ConversationControlActionImpl {
     // the intervention was raised; once the user submits/skips/cancels the
     // CC stream resumes so flip it back to `running`. The natural completion
     // (`runtime_end` → `writeTopicStatus('active')`) takes over from there.
-    if (isLocalDesktopHetero && effectiveContext.topicId) {
+    const currentIntervention = dbMessageSelectors.getDbMessageById(toolMessageId)(
+      this.#get(),
+    )?.pluginIntervention;
+    const nextCodexApprovalPending =
+      isCodexApproval &&
+      currentIntervention?.status === 'pending' &&
+      currentIntervention.interventionId !== interventionId;
+    if (isLocalDesktopHetero && effectiveContext.topicId && !nextCodexApprovalPending) {
       void this.#get().updateTopicStatus?.({
         agentId: effectiveContext.agentId,
         groupId: effectiveContext.groupId,

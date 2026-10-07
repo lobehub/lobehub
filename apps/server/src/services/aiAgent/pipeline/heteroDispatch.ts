@@ -19,7 +19,9 @@ import {
   applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   ChatErrorType,
+  getCodexAppServerPermissionMode,
   getWorkingDirEffectivePath,
+  resolveCodexPermissionMode,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
@@ -532,16 +534,6 @@ export const dispatchHeteroAgent = async (
     runAttachments.imageList && runAttachments.imageList.length > 0
       ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
       : undefined;
-  const heteroExecArgs = isLocalHeterogeneousType(heteroType)
-    ? buildHeteroExecArgs(
-        heterogeneousProvider?.type === heteroType
-          ? applyTopicModelToHeterogeneousProvider(
-              heterogeneousProvider,
-              pinnedHeterogeneousTopicModel,
-            )
-          : { type: heteroType },
-      )
-    : undefined;
 
   const heteroParams = {
     agentType: heteroType,
@@ -966,6 +958,54 @@ export const dispatchHeteroAgent = async (
     } catch (err) {
       log('execAgent: failed to init stream for local hetero: %O', err);
     }
+
+    const codexProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+    const codexMode =
+      heteroType === 'codex'
+        ? getCodexAppServerPermissionMode(
+            resolveCodexPermissionMode({
+              args: codexProvider?.args,
+              permissionMode: codexProvider?.permissionMode,
+            }),
+          )
+        : undefined;
+    if (codexMode && codexMode !== 'full-access') {
+      const detail =
+        'This Codex permission mode requires the local desktop app and cannot run through a connected device or cloud sandbox.';
+      const terminalReported = await finalizeHeteroDispatchError(deps, {
+        agentId: resolvedAgentId,
+        assistantMessageId,
+        detail,
+        message: 'Codex permission mode is unavailable on this execution target',
+        operationId,
+        topicId,
+      });
+      return {
+        agentId: resolvedAgentId,
+        assistantMessageId,
+        autoStarted: false,
+        createdAt: new Date().toISOString(),
+        error: detail,
+        message: detail,
+        operationId,
+        status: 'error',
+        success: false,
+        terminalReported,
+        timestamp: new Date().toISOString(),
+        topicId,
+        userMessageId: userMessageId ?? parentMessageId ?? '',
+      };
+    }
+    const heteroExecArgs = isLocalHeterogeneousType(heteroType)
+      ? buildHeteroExecArgs(
+          heterogeneousProvider?.type === heteroType
+            ? applyTopicModelToHeterogeneousProvider(
+                heterogeneousProvider,
+                pinnedHeterogeneousTopicModel,
+              )
+            : { type: heteroType },
+        )
+      : undefined;
 
     const heteroPlan = deviceHeteroPlan!;
 
