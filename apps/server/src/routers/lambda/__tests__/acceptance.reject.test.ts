@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { LobeChatDatabase } from '@lobechat/database';
-import { acceptances, agents, topics, verifyRuns } from '@lobechat/database/schemas';
+import { acceptances, agents, briefs, topics, verifyRuns } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -339,5 +339,56 @@ describe('acceptanceRouter reject', () => {
       .from(acceptances)
       .where(eq(acceptances.id, acceptanceId));
     expect(acceptance.status).toBe('delivered');
+  });
+
+  // The list and header controls decide an acceptance without the accept /
+  // reject procedures; the goal sign-off it carried must not stay open.
+  describe('goal sign-off', () => {
+    const seedSignOff = async () => {
+      const [brief] = await serverDB
+        .insert(briefs)
+        .values({
+          metadata: {
+            goal: {
+              goalId: 'goal_1',
+              goalTitle: 'Goal',
+              kind: 'signOff',
+              signOffAcceptanceId: acceptanceId,
+            },
+          },
+          summary: 'Sign it off',
+          title: 'Goal is done',
+          trigger: 'goal',
+          type: 'decision',
+          userId,
+        })
+        .returning();
+      return brief.id;
+    };
+    const readBrief = async (id: string) =>
+      (await serverDB.select().from(briefs).where(eq(briefs.id, id)))[0];
+
+    it.each([
+      ['closed', 'closed'],
+      ['rejected', 'requestChanges'],
+    ] as const)('settles it when the status is set to %s', async (status, action) => {
+      const briefId = await seedSignOff();
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+
+      await caller.updateStatus({ id: acceptanceId, status });
+
+      const brief = await readBrief(briefId);
+      expect(brief.resolvedAt).not.toBeNull();
+      expect(brief.resolvedAction).toBe(action);
+    });
+
+    it('settles it when a batch sweep closes the acceptance', async () => {
+      const briefId = await seedSignOff();
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+
+      await caller.updateStatusBatch({ ids: [acceptanceId], status: 'closed' });
+
+      expect((await readBrief(briefId)).resolvedAt).not.toBeNull();
+    });
   });
 });

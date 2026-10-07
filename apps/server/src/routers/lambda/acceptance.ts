@@ -222,6 +222,22 @@ const PURGE_PREVIEW_LIMIT = 20;
 const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed', 'rejected']);
 
 /**
+ * A decided acceptance has nothing left to sign: whichever control decided it,
+ * the inbox and the island stop asking for the goal sign-off it carried.
+ */
+const settleGoalSignOff = (
+  db: LobeChatDatabase,
+  acceptance: AcceptanceItem,
+  action: string,
+  comment?: string,
+) =>
+  new GoalBriefService(db, acceptance.userId, acceptance.workspaceId ?? undefined).settleSignOff(
+    acceptance.id,
+    action,
+    comment,
+  );
+
+/**
  * Apply one user-facing lifecycle override to an already-resolved,
  * already-authorized aggregate. Shared by the single-row menu action and the
  * list's multi-select sweep, so both obey exactly the same transition rules.
@@ -234,22 +250,26 @@ const acceptanceStatusOverrideSchema = z.enum(['delivered', 'accepted', 'closed'
  * not be forced back to a decision-pending state by hand.
  */
 const applyAcceptanceStatus = async (
+  db: LobeChatDatabase,
   service: AcceptanceService,
   acceptance: AcceptanceItem,
   status: z.infer<typeof acceptanceStatusOverrideSchema>,
 ) => {
   if (status === 'accepted') {
     await service.accept(acceptance.id);
+    await settleGoalSignOff(db, acceptance, 'signOff');
     return;
   }
 
   if (status === 'closed') {
     await service.acceptanceModel.updateStatus(acceptance.id, 'closed');
+    await settleGoalSignOff(db, acceptance, 'closed');
     return;
   }
 
   if (status === 'rejected') {
     await service.reject(acceptance.id, 'Rejected from the acceptance list — needs another round.');
+    await settleGoalSignOff(db, acceptance, 'requestChanges');
     return;
   }
 
@@ -399,11 +419,7 @@ export const acceptanceRouter = router({
 
       const accepted = await service.accept(acceptance.id, input.comment);
       // Signed where it lives — the inbox stops asking for the same sign-off.
-      await new GoalBriefService(
-        ctx.serverDB,
-        acceptance.userId,
-        acceptance.workspaceId ?? undefined,
-      ).settleSignOff(acceptance.id, 'signOff', input.comment);
+      await settleGoalSignOff(ctx.serverDB, acceptance, 'signOff', input.comment);
       return accepted;
     }),
 
@@ -1335,11 +1351,12 @@ export const acceptanceRouter = router({
         const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
         const rejected = await service.reject(acceptance.id, input.comment || undefined);
-        await new GoalBriefService(
+        await settleGoalSignOff(
           ctx.serverDB,
-          acceptance.userId,
-          acceptance.workspaceId ?? undefined,
-        ).settleSignOff(acceptance.id, 'requestChanges', input.comment || undefined);
+          acceptance,
+          'requestChanges',
+          input.comment || undefined,
+        );
         if (input.dispatch === false) {
           return { ...rejected, repairDispatch: { dispatched: false, reason: 'skipped' } };
         }
@@ -1469,7 +1486,7 @@ export const acceptanceRouter = router({
       const { acceptance, service } = await resolveAcceptanceForWrite(ctx, input.id);
 
       try {
-        await applyAcceptanceStatus(service, acceptance, input.status);
+        await applyAcceptanceStatus(ctx.serverDB, service, acceptance, input.status);
       } catch (error) {
         if (error instanceof TRPCError) throw error;
         throw new TRPCError({
@@ -1505,7 +1522,7 @@ export const acceptanceRouter = router({
       for (const id of new Set(input.ids)) {
         try {
           const { acceptance, service } = await resolveAcceptanceForWrite(ctx, id);
-          await applyAcceptanceStatus(service, acceptance, input.status);
+          await applyAcceptanceStatus(ctx.serverDB, service, acceptance, input.status);
           updated += 1;
         } catch (error) {
           console.error('[acceptance] batch status update failed for %s', id, error);
