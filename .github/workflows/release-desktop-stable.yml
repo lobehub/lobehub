@@ -29,6 +29,11 @@ on:
         description: 'Version to build (e.g., 2.0.0)'
         required: true
         type: string
+      cloud_ref:
+        description: 'Cloud commit SHA (40 lowercase hex characters); empty uses latest HEAD'
+        required: false
+        type: string
+        default: ''
       build_mac:
         description: 'Build macOS (ARM64)'
         required: false
@@ -124,13 +129,22 @@ jobs:
         id: cloud-ref
         if: steps.check.outputs.is_stable == 'true'
         env:
+          REQUESTED_CLOUD_REF: ${{ inputs.cloud_ref || '' }}
           CLOUD_REPOSITORY: ${{ vars.OVERLAY_REPOSITORY }}
           CLOUD_TOKEN: ${{ secrets.LOBEHUB_CLOUD_TOKEN }}
         run: |
           set -euo pipefail
           : "${CLOUD_REPOSITORY:?OVERLAY_REPOSITORY repository variable is not set}"
-          # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
-          cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
+          if [ -n "$REQUESTED_CLOUD_REF" ]; then
+            if [[ ! "$REQUESTED_CLOUD_REF" =~ ^[0-9a-f]{40}$ ]]; then
+              echo "::error::cloud_ref must be a full 40-character lowercase commit SHA"
+              exit 1
+            fi
+            cloud_ref="$REQUESTED_CLOUD_REF"
+          else
+            # checkout persist-credentials extraheader would send GITHUB_TOKEN and 404 the private cloud repo
+            cloud_ref=$(git -c http.https://github.com/.extraheader= ls-remote "https://x-access-token:${CLOUD_TOKEN}@github.com/${CLOUD_REPOSITORY}.git" HEAD | cut -f1)
+          fi
           if [[ ! "$cloud_ref" =~ ^[0-9a-f]{40}$ ]]; then
             echo "Unable to resolve Cloud revision"
             exit 1
