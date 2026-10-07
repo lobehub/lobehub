@@ -23,6 +23,12 @@ export const RedisKeyNamespace = {
    * Core LOBEHUB application keys (sessions, cache, etc.)
    */
   LOBEHUB: 'lobechat',
+  /**
+   * Short-lived derived answers the send path would otherwise re-fetch per
+   * turn (device system info, a skill's live tool list) and the one-shot
+   * claims that keep their background refreshes from piling up.
+   */
+  SEND_PATH_CACHE: 'sendPathCache',
 } as const;
 
 /**
@@ -60,5 +66,30 @@ export const RedisKeys = {
    */
   lobechat: {
     // Add lobechat scope keys here as needed
+  },
+  /**
+   * Send-path cache scope — see {@link RedisKeyNamespace.SEND_PATH_CACHE}.
+   * Every key carries the identity the answer depends on (user, pool, device,
+   * connection), never a shared one.
+   */
+  sendPathCache: {
+    /**
+     * A routed device's system info, per principal pool.
+     * Full key: sendPathCache:device_system_info:v1:{userId}:{pool}:{deviceId}
+     */
+    deviceSystemInfo: (userId: string, pool: string, deviceId: string): string =>
+      `device_system_info:v1:${userId}:${pool}:${deviceId}`,
+    /**
+     * One connected LobeHub skill's live tool list, per connection identity.
+     * Full key: sendPathCache:lobehub_skill_tools:v1:{userId}:{providerId}:{identity}
+     */
+    lobehubSkillTools: (userId: string, providerId: string, identity: string): string =>
+      `lobehub_skill_tools:v1:${userId}:${providerId}:${identity}`,
+    /**
+     * Claim held by the one background rescan of a bound directory.
+     * Full key: sendPathCache:workspace_rescan_claim:v1:{userId}:{pool}:{deviceId}:{cwd}
+     */
+    workspaceRescanClaim: (userId: string, pool: string, deviceId: string, cwd: string): string =>
+      `workspace_rescan_claim:v1:${userId}:${pool}:${deviceId}:${cwd}`,
   },
 } as const;

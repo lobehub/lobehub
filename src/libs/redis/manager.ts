@@ -1,5 +1,9 @@
+import debug from 'debug';
+
 import { IoRedisRedisProvider } from './redis';
 import { type BaseRedisProvider, type RedisConfig } from './types';
+
+const log = debug('lobe:redis');
 
 export const isRedisDisabledByEnv = () => !!process.env.DISABLE_REDIS;
 
@@ -139,3 +143,24 @@ export const initializeRedisWithPrefix = (config: RedisConfig, prefix: string) =
   PrefixedRedisManager.initialize(config, prefix);
 
 export const resetPrefixedRedisClient = (prefix?: string) => PrefixedRedisManager.reset(prefix);
+
+/**
+ * `initializeRedisWithPrefix` for callers that can live without Redis.
+ *
+ * The manager rejects when the connection cannot be established and retries
+ * on the next call (it drops the failed in-flight setup). A cache or a claim
+ * on a hot path must not turn that into a failed request: here the failure
+ * becomes `null`, the same answer the caller already handles for a disabled
+ * Redis, and the request proceeds without the cache.
+ */
+export const tryInitializeRedisWithPrefix = async (
+  config: RedisConfig,
+  prefix: string,
+): Promise<BaseRedisProvider | null> => {
+  try {
+    return await PrefixedRedisManager.initialize(config, prefix);
+  } catch (error) {
+    log('redis "%s" unavailable, continuing without it: %O', prefix, error);
+    return null;
+  }
+};

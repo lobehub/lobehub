@@ -1,6 +1,8 @@
 import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
+import type * as RedisLib from '@/libs/redis';
+
 // Import after mocks are set up
 import { DeviceGateway } from '../index';
 
@@ -26,11 +28,17 @@ const MockGatewayHttpClient = vi.hoisted(() =>
   }),
 );
 
-const { readThrough } = vi.hoisted(() => ({
-  readThrough: vi.fn((_key: string, read: () => Promise<unknown>) => read()),
-}));
+// The send-path cache rides on the unified Redis lib; hand it a fake provider
+// so the test sees which key and TTL the gateway asked for.
+const { cacheRedis, tryInitializeRedisWithPrefix } = vi.hoisted(() => {
+  const cacheRedis = { get: vi.fn(async () => null), set: vi.fn(async () => 'OK') };
+  return { cacheRedis, tryInitializeRedisWithPrefix: vi.fn(async () => cacheRedis) };
+});
 
-vi.mock('@/server/utils/readThroughCache', () => ({ readThrough }));
+vi.mock('@/libs/redis', async (importOriginal) => ({
+  ...(await importOriginal<typeof RedisLib>()),
+  tryInitializeRedisWithPrefix,
+}));
 
 vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
@@ -454,7 +462,8 @@ describe('DeviceGateway', () => {
 
       await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
 
-      expect(readThrough).not.toHaveBeenCalled();
+      expect(tryInitializeRedisWithPrefix).not.toHaveBeenCalled();
+      expect(cacheRedis.get).not.toHaveBeenCalled();
     });
 
     it('serves a recent answer through the cache when maxAge is set', async () => {
@@ -469,10 +478,11 @@ describe('DeviceGateway', () => {
 
       expect(result).toEqual(systemInfo);
       // The key carries user, pool and device so two principals never share an answer.
-      expect(readThrough).toHaveBeenCalledWith(
+      expect(cacheRedis.get).toHaveBeenCalledWith('device_system_info:v1:user-1:ws-1:dev-1');
+      expect(cacheRedis.set).toHaveBeenCalledWith(
         'device_system_info:v1:user-1:ws-1:dev-1',
-        expect.any(Function),
-        { ttlMs: 180_000 },
+        JSON.stringify(systemInfo),
+        { px: 180_000 },
       );
     });
   });

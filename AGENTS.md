@@ -25,6 +25,7 @@ The `acceptance` skill is generated from the default branch of [lobehub/acceptan
 For the full repository map or help locating a code layer, read the `project-overview` skill.
 
 - `apps/server/src`: backend runtime, routers, and services, imported through `@/server/*`. `src/app/(backend)` contains Next.js route shells only; do not put backend business logic there.
+- Server code reaches Redis only through the unified lib in `src/libs/redis` (`initializeRedis` / `initializeRedisWithPrefix`, keys registered in `keys.ts`, helpers like `getJSONFromRedis`, `readThroughRedis`, `claimRedisOnce`). Do not open an `ioredis` client or take the legacy raw agent-runtime client; when the lib lacks a primitive, add it there. ESLint enforces this for `apps/server/src`; the legacy consumers it still allows are listed in `eslint.config.mjs` and that list only shrinks.
 - `src/app`: Next.js HTML/auth shells. Web shell helpers belong under `src/libs` or the relevant app segment, not `src/server`.
 - `src/spa`: SPA entry points and React Router configuration. `src/routes` holds thin page segments that compose `src/features`; business UI and logic belong in features by domain.
 - `src/services` and `src/store`: client API services and Zustand state. Keep fetch/cache guidance in `data-fetching-architecture` and store conventions in `zustand`.

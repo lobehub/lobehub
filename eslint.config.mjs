@@ -158,6 +158,78 @@ const browserRuntimeRestrictedImportPatterns = [
   },
 ];
 
+// Server code reaches Redis through the unified lib (`@/libs/redis`: one
+// provider per key namespace, keys registered in `keys.ts`, helpers such as
+// `getJSONFromRedis` / `readThroughRedis` / `claimRedisOnce`). The agent
+// runtime's raw ioredis client predates it and 41 modules grew around it, each
+// hand-rolling its own key prefix, TTL and SET NX. Those are listed below so the
+// rule can be an error for every new file; the list only shrinks — move a
+// module onto `@/libs/redis` and delete its line here.
+const redisAccessRestrictedImportPaths = [
+  {
+    allowTypeImports: true,
+    message:
+      'Server code must not open its own ioredis client. Go through "@/libs/redis" (initializeRedis / initializeRedisWithPrefix, keys in RedisKeys) and add a helper there if the one you need is missing.',
+    name: 'ioredis',
+  },
+  {
+    message:
+      'The raw agent-runtime Redis client is legacy. New code goes through "@/libs/redis" (initializeRedisWithPrefix + RedisKeys); if you need a primitive it lacks, add it to the lib instead of taking the raw client.',
+    name: '@/server/modules/AgentRuntime/redis',
+  },
+];
+const redisAccessRestrictedSyntax = [
+  {
+    message:
+      'Server code must not open its own ioredis client, not even lazily. Go through "@/libs/redis".',
+    selector: "ImportExpression > Literal[value='ioredis']",
+  },
+];
+const legacyRawRedisClientConsumers = [
+  'apps/server/src/modules/AgentRuntime/redis.ts',
+  'apps/server/src/modules/AgentRuntime/AgentStateManager.ts',
+  'apps/server/src/modules/AgentRuntime/StreamEventManager.ts',
+  'apps/server/src/modules/AgentRuntime/adapters/ServerLLMTransport.ts',
+  'apps/server/src/modules/AgentRuntime/dispatchClientTool.ts',
+  'apps/server/src/modules/AgentRuntime/factory.ts',
+  'apps/server/src/router-hono/agent/handlers/gatewayCron.ts',
+  'apps/server/src/router-hono/agent/handlers/llmRelay.ts',
+  'apps/server/src/router-hono/agent/handlers/toolResult.ts',
+  'apps/server/src/router-hono/webhooks/handlers/github.ts',
+  'apps/server/src/routers/lambda/messenger.ts',
+  'apps/server/src/services/agentSignal/store/adapters/redis/shared.ts',
+  'apps/server/src/services/bot/BotCallbackService.ts',
+  'apps/server/src/services/bot/BotMessageRouter.ts',
+  'apps/server/src/services/bot/deferredMessages.ts',
+  'apps/server/src/services/bot/platforms/discord/chatComposition.ts',
+  'apps/server/src/services/bot/platforms/feishu/chatComposition.ts',
+  'apps/server/src/services/bot/platforms/feishu/reactionTracker.ts',
+  'apps/server/src/services/bot/platforms/telegram/guestSession.ts',
+  'apps/server/src/services/bot/platforms/wechat/service.ts',
+  'apps/server/src/services/bot/reactionState.ts',
+  'apps/server/src/services/connector/stateStore.ts',
+  'apps/server/src/services/editLock/index.ts',
+  'apps/server/src/services/gateway/GatewayManager.ts',
+  'apps/server/src/services/gateway/botConnectQueue.ts',
+  'apps/server/src/services/gateway/runtimeStatus.ts',
+  'apps/server/src/services/messenger/MessengerRouter.ts',
+  'apps/server/src/services/messenger/installations/wechat.ts',
+  'apps/server/src/services/messenger/linkTokenStore.ts',
+  'apps/server/src/services/messenger/oauth/stateStore.ts',
+  'apps/server/src/services/messenger/platforms/linq/webhook.ts',
+  'apps/server/src/services/messenger/platforms/wechat/binder.ts',
+  'apps/server/src/services/messenger/wechatPush.ts',
+  'apps/server/src/services/messenger/wechatQrSessionStore.ts',
+  'apps/server/src/services/onboardingProgress/index.ts',
+  'apps/server/src/services/resourceEvents/index.ts',
+  'apps/server/src/services/scm/ScmControlService.ts',
+  'apps/server/src/services/scm/oauth/stateStore.ts',
+  'apps/server/src/services/taskResultBridge/redisStore.ts',
+  'apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts',
+  'apps/server/src/services/toolExecution/serverRuntimes/message/index.ts',
+  'apps/server/src/services/understanding/sourceStore.ts',
+];
+
 const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false } = {}) => [
   'error',
   {
@@ -610,6 +682,32 @@ export default eslint(
         'error',
         ...useRefLazyInitRestrictedSyntax,
         ...uppercaseRestrictedSyntax,
+      ],
+    },
+  },
+  {
+    // Redis access boundary for server code (see `redisAccessRestrictedImportPaths`).
+    files: ['apps/server/src/**/*.{ts,tsx}'],
+    // Tests of the legacy consumers import the raw module to mock or seed it;
+    // the boundary is about production code paths.
+    ignores: [...legacyRawRedisClientConsumers, '**/*.test.{ts,tsx}', '**/__tests__/**'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          ...baseRestrictedImportOptions,
+          paths: [
+            ...(baseRestrictedImportOptions.paths ?? []),
+            ...redisAccessRestrictedImportPaths,
+          ],
+          patterns: baseRestrictedImportOptions.patterns ?? [],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        ...useRefLazyInitRestrictedSyntax,
+        ...uppercaseRestrictedSyntax,
+        ...redisAccessRestrictedSyntax,
       ],
     },
   },

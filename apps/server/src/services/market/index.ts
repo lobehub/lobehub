@@ -5,6 +5,13 @@ import debug from 'debug';
 import { type NextRequest } from 'next/server';
 import pMap from 'p-map';
 
+import { getRedisConfig } from '@/envs/redis';
+import {
+  readThroughRedis,
+  RedisKeyNamespace,
+  RedisKeys,
+  tryInitializeRedisWithPrefix,
+} from '@/libs/redis';
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
 import {
@@ -12,7 +19,6 @@ import {
   type SandboxStorageClient,
 } from '@/server/services/sandbox/storageFiles';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
-import { readThrough } from '@/server/utils/readThroughCache';
 
 import {
   listSkillToolsWithLiveFallback,
@@ -448,8 +454,9 @@ export class MarketService {
     if (!this.skillCacheScope) return read();
 
     const identity = [connection.createdAt ?? '', connection.providerUserId ?? ''].join('|');
-    return readThrough(
-      `lobehub_skill_tools:v1:${this.skillCacheScope}:${providerId}:${identity}`,
+    return readThroughRedis(
+      await tryInitializeRedisWithPrefix(getRedisConfig(), RedisKeyNamespace.SEND_PATH_CACHE),
+      RedisKeys.sendPathCache.lobehubSkillTools(this.skillCacheScope, providerId, identity),
       read,
       {
         shouldCache: (value) => Array.isArray(value?.tools) && value.tools.length > 0,

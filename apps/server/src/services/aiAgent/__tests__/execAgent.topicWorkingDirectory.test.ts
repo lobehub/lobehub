@@ -1,6 +1,8 @@
 import type * as ModelBankModule from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import type * as RedisLib from '@/libs/redis';
+
 import { AiAgentService } from '../index';
 
 /**
@@ -170,12 +172,25 @@ vi.mock('@/server/modules/Mecha', () => {
   };
 });
 
-// The background rescan claims itself before scanning; the claim store is
-// module state, so tests drive it explicitly instead of sharing it.
-const { mockClaimOnce } = vi.hoisted(() => ({ mockClaimOnce: vi.fn(async () => true) }));
-vi.mock('@/server/utils/readThroughCache', () => ({
-  claimOnce: mockClaimOnce,
-  readThrough: (_key: string, read: () => Promise<unknown>) => read(),
+// The background rescan claims itself (SET NX) through the unified Redis lib
+// before scanning. A fake provider keeps the claims in a Set so the test can
+// prove that concurrent sends coalesce on one scan.
+const { claimedKeys, mockTryInitializeRedisWithPrefix } = vi.hoisted(() => {
+  const claimedKeys = new Set<string>();
+  const redis = {
+    get: vi.fn(async () => null),
+    set: vi.fn(async (key: string, _value: unknown, options?: { nx?: boolean }) => {
+      if (!options?.nx) return 'OK';
+      if (claimedKeys.has(key)) return null;
+      claimedKeys.add(key);
+      return 'OK';
+    }),
+  };
+  return { claimedKeys, mockTryInitializeRedisWithPrefix: vi.fn(async () => redis) };
+});
+vi.mock('@/libs/redis', async (importOriginal) => ({
+  ...(await importOriginal<typeof RedisLib>()),
+  tryInitializeRedisWithPrefix: mockTryInitializeRedisWithPrefix,
 }));
 
 vi.mock('@/server/services/deviceGateway', () => ({
@@ -243,7 +258,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockUpdateDevice.mockResolvedValue(undefined);
     mockUpdateTopicMetadata.mockResolvedValue(undefined);
 
-    mockClaimOnce.mockImplementation(async () => true);
+    claimedKeys.clear();
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -343,12 +358,6 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
     );
     mockInitWorkspace.mockReturnValue(new Promise(() => {}));
-    const claimed = new Set<string>();
-    mockClaimOnce.mockImplementation(async (key: string) => {
-      if (claimed.has(key)) return false;
-      claimed.add(key);
-      return true;
-    });
 
     await Promise.all([
       service.execAgent({ agentId: 'agent-1', prompt: 'Hello' }),

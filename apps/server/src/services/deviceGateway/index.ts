@@ -74,7 +74,13 @@ import debug from 'debug';
 import { isAbsolute, relative, resolve } from 'pathe';
 
 import { gatewayEnv } from '@/envs/gateway';
-import { readThrough } from '@/server/utils/readThroughCache';
+import { getRedisConfig } from '@/envs/redis';
+import {
+  readThroughRedis,
+  RedisKeyNamespace,
+  RedisKeys,
+  tryInitializeRedisWithPrefix,
+} from '@/libs/redis';
 
 const log = debug('lobe-server:device-gateway');
 
@@ -292,8 +298,9 @@ export class DeviceGateway {
     const maxAgeMs = options?.maxAgeMs;
     if (!maxAgeMs || maxAgeMs <= 0) return query();
 
-    return readThrough(
-      `device_system_info:v1:${userId}:${workspaceId ?? 'personal'}:${deviceId}`,
+    return readThroughRedis(
+      await tryInitializeRedisWithPrefix(getRedisConfig(), RedisKeyNamespace.SEND_PATH_CACHE),
+      RedisKeys.sendPathCache.deviceSystemInfo(userId, workspaceId ?? 'personal', deviceId),
       query,
       { ttlMs: maxAgeMs },
     );
