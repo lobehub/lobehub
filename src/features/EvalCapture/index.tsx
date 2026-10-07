@@ -19,6 +19,8 @@ let formIdSeed = 0;
 
 export interface CreateEvalCaptureModalOptions {
   draft: CaptureDraft;
+  /** The assistant message being captured. */
+  messageId: string;
   /** Navigate to the saved case. Saving and inspecting are separate intents. */
   onView: (testCaseId: string) => void;
 }
@@ -32,6 +34,7 @@ export interface CreateEvalCaptureModalOptions {
  */
 export const createEvalCaptureModal = ({
   draft,
+  messageId,
   onView,
 }: CreateEvalCaptureModalOptions): ModalInstance => {
   const formId = `eval-capture-${formIdSeed++}`;
@@ -52,9 +55,9 @@ export const createEvalCaptureModal = ({
   const setLoading = (loading: boolean) =>
     ref.instance?.update({ footer: formFooter(loading) } as Partial<ImperativeModalProps>);
 
-  const onSaved = (testCaseId: string, datasetName: string) =>
+  const onSaved = (testCaseId: string, datasetName: string, existed?: boolean) =>
     ref.instance?.update({
-      content: <CaptureSuccess datasetName={datasetName} />,
+      content: <CaptureSuccess datasetName={datasetName} existed={existed} />,
       footer: (
         <ModalFooter>
           <Button onClick={() => ref.instance?.close()}>{t('capture.done', { ns: 'eval' })}</Button>
@@ -77,6 +80,7 @@ export const createEvalCaptureModal = ({
       <CaptureContent
         draft={draft}
         formId={formId}
+        messageId={messageId}
         onLoadingChange={setLoading}
         onSaved={onSaved}
       />

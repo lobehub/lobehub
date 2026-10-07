@@ -255,6 +255,61 @@ class AgentEvalService {
   async deleteRun(id: string) {
     return lambdaClient.agentEval.deleteRun.mutate({ id });
   }
+
+  // ============ Replay comparison ============
+  async getReplayComparison(runId: string) {
+    return lambdaClient.agentEval.getReplayComparison.query({ runId });
+  }
+
+  async listReplayComparisonsByTestCase(testCaseId: string) {
+    return lambdaClient.agentEval.listReplayComparisonsByTestCase.query({ testCaseId });
+  }
+
+  async startReplayComparison(params: {
+    datasetId: string;
+    name?: string;
+    targets: { model: string; provider: string }[];
+    testCaseIds?: string[];
+  }) {
+    return lambdaClient.agentEval.startReplayComparison.mutate(params);
+  }
+
+  /** A model-drafted, self-contained criteria for freezing a message. Saves nothing. */
+  async draftTestCaseCriteria(params: {
+    capturedOutputKind?: 'negative' | 'positive';
+    locale?: string;
+    messageId: string;
+    note?: string;
+  }) {
+    return lambdaClient.agentEval.draftTestCaseCriteria.mutate(params);
+  }
+
+  /** Freeze the LLM call behind an assistant message into a replayable test case. */
+  async freezeTestCaseFromMessage(params: {
+    capturedOutputKind?: 'negative' | 'positive';
+    criteria: string;
+    datasetId: string;
+    expected?: string;
+    messageId: string;
+  }) {
+    return lambdaClient.agentEval.freezeTestCaseFromMessage.mutate(params);
+  }
+
+  /** One run per model for the same agent — the agent's own model is overridden. */
+  async createSubjectRuns(params: {
+    config?: EvalRunInputConfig;
+    datasetId: string;
+    experimentId?: string;
+    name?: string;
+    subjects: { model: string; provider: string }[];
+    targetAgentId: string;
+  }) {
+    return lambdaClient.agentEval.createSubjectRuns.mutate(params);
+  }
+
+  async retryReplayComparisonErrors(runId: string) {
+    return lambdaClient.agentEval.retryReplayComparisonErrors.mutate({ runId });
+  }
 }
 
 export const agentEvalService = new AgentEvalService();

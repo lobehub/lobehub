@@ -901,6 +901,16 @@ export const sharedMainAreaChildren: RouteObject[] = [
             ),
             path: 'cases/:caseId',
           },
+          // A cross-model comparison replays a dataset's frozen cases, so like
+          // the dataset it is not scoped to a benchmark.
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/eval/comparisons/[runId]'),
+              'Desktop > Eval > Comparison Detail',
+            ),
+            handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('detail') }) },
+            path: 'comparisons/:runId',
+          },
         ],
         element: dynamicElement(
           () => import('@/routes/(main)/eval/(home)/_layout'),

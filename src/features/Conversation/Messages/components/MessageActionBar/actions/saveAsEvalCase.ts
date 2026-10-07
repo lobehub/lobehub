@@ -51,6 +51,7 @@ export const saveAsEvalCaseAction = defineAction({
 
           createEvalCaptureModal({
             draft,
+            messageId: ctx.id,
             onView: (testCaseId) => navigate(`/eval/cases/${testCaseId}`),
           });
         },

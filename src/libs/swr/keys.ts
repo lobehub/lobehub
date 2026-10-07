@@ -692,6 +692,8 @@ export const discoverKeys = {
 
 // ---- agent eval ---------------------------------------------------------
 export const evalKeys = {
+  /** Agents a run can target, for the run create / edit pickers. */
+  agentOptions: def('eval:agentOptions', () => ['eval:agentOptions']),
   benchmarkDetail: def('eval:benchmarkDetail', (id: string) => ['eval:benchmarkDetail', id]),
   benchmarks: def('eval:benchmarks', () => ['eval:benchmarks']),
   datasetDetail: def('eval:datasetDetail', (id: string) => ['eval:datasetDetail', id]),
@@ -700,9 +702,18 @@ export const evalKeys = {
   datasets: def('eval:datasets', (benchmarkId: string) => ['eval:datasets', benchmarkId]),
   experimentDetail: def('eval:experimentDetail', (id: string) => ['eval:experimentDetail', id]),
   experiments: def('eval:experiments', () => ['eval:experiments']),
+  replayComparison: def('eval:replayComparison', (runId: string) => [
+    'eval:replayComparison',
+    runId,
+  ]),
+  resumableCases: def('eval:resumableCases', (runId: string) => ['eval:resumableCases', runId]),
   runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
   runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
   runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
+  testCaseComparisons: def('eval:testCaseComparisons', (testCaseId: string) => [
+    'eval:testCaseComparisons',
+    testCaseId,
+  ]),
   testCaseDetail: def('eval:testCaseDetail', (id: string) => ['eval:testCaseDetail', id]),
   testCases: def('eval:testCases', (datasetId: string, limit?: number, offset?: number) => [
     'eval:testCases',
