@@ -350,7 +350,13 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
               // the reason this row is the one that cannot be picked, and
               // it says nothing about how long that lasts — there is no
               // way to end the run from here, so the wait is the answer.
-              <Tooltip title={t('sandboxStorage.runningHint')}>
+              // Only when somebody ELSE holds it, though: this conversation's
+              // own run leaves the row selectable, and telling the person to
+              // wait for a lease they already have describes a block that is
+              // not there.
+              <Tooltip
+                title={t(occupied ? 'sandboxStorage.runningHint' : 'sandboxStorage.runningOwnHint')}
+              >
                 <span>{t('sandboxStorage.running')}</span>
               </Tooltip>
             ) : undefined

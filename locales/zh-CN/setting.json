@@ -626,7 +626,7 @@
   "environments.instances.renameFailed": "重命名实例失败",
   "environments.instances.retryStatus": "重新检查",
   "environments.instances.running": "运行中",
-  "environments.instances.runningHint": "有一个对话的沙箱正占用着这个实例。那个对话安静约 15 分钟后会自动释放；运行记录里可以看到是哪一个。",
+  "environments.instances.runningHint": "这个实例还被一次运行占用着——可能是对话、构建，也可能是文件浏览器。那个运行安静约 15 分钟后会自动释放；运行记录里可以看到是哪一个。",
   "environments.instances.save": "保存",
   "environments.instances.showLog": "查看日志",
   "environments.instances.title": "环境实例",
