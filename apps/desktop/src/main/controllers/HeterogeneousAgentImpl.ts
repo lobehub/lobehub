@@ -1976,6 +1976,7 @@ export default class HeterogeneousAgentCtr {
         initialSessionCostUsd = await readClaudeCodeSessionCost({
           configDir: spawnEnv.CLAUDE_CONFIG_DIR ?? session.hostedProviderBinding?.profileDir,
           cwd,
+          home: spawnEnv.HOME,
           sessionId: session.agentSessionId,
         });
       }

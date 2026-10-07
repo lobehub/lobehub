@@ -1006,6 +1006,58 @@ describe('spawnAgent', () => {
     expect(spawnCalls[0].args).toContain('--include-partial-messages');
   });
 
+  it("charges a resumed claude run against the transcript under the child's HOME", async () => {
+    // The child gets an overridden HOME, so the transcript `--resume` loads
+    // (and its last cost-state) lives there, not under the parent's homedir.
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-home-'));
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-cwd-'));
+    tempDirs.push(home, cwd);
+    const sessionId = '72f65fa9-0355-45d3-b903-8f41027ed5f2';
+    const { resolveClaudeCodeTranscriptPath } = await import('./ensureResumeTranscript');
+    const transcript = (await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId }))!;
+    await mkdir(path.dirname(transcript), { recursive: true });
+    await writeFile(
+      transcript,
+      `${JSON.stringify({ sessionId, totalCostUSD: 69.67, type: 'cost-state' })}\n`,
+    );
+
+    const result = `${JSON.stringify({
+      is_error: false,
+      result: 'done',
+      total_cost_usd: 76.43,
+      type: 'result',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`;
+    const fake = createFakeProc({ stdoutChunks: [ccInit, result] });
+    nextFakeProc = fake.proc;
+    const configDir = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'claude-code',
+        cwd,
+        env: { HOME: home },
+        operationId: 'op-home',
+        prompt: 'continue',
+        resumeSessionId: sessionId,
+      });
+      fake.start();
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+      await handle.exit;
+
+      const resultUsage = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+      );
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
+    } finally {
+      if (configDir !== undefined) process.env.CLAUDE_CONFIG_DIR = configDir;
+    }
+  });
+
   it('appends --resume <id> for claude when resuming a session', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');

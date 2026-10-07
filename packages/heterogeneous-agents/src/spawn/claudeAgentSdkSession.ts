@@ -254,6 +254,7 @@ export class ClaudeAgentSdkSession {
           initialSessionCostUsd: await readClaudeCodeSessionCost({
             configDir: this.options.configDir ?? this.options.env.CLAUDE_CONFIG_DIR,
             cwd: this.options.cwd,
+            home: this.options.env.HOME,
             sessionId: this.options.resumeSessionId,
           }),
         });

@@ -106,6 +106,8 @@ export const readClaudeCodeSessionCost = async (params: {
   /** Claude profile root selected through CLAUDE_CONFIG_DIR. */
   configDir?: string;
   cwd: string;
+  /** The child's effective HOME, where `~/.claude` resolves without a config dir. */
+  home?: string;
   sessionId: string;
 }): Promise<number | undefined> => {
   try {

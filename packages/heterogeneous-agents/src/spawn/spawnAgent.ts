@@ -729,6 +729,9 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
       ? await readClaudeCodeSessionCost({
           configDir: options.env?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR,
           cwd,
+          // Resolve from the child's environment: an overridden HOME moves the
+          // transcript the CLI resumes from.
+          home: options.env?.HOME,
           sessionId: options.resumeSessionId,
         })
       : undefined;
