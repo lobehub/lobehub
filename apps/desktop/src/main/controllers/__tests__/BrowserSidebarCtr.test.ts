@@ -307,6 +307,37 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       expect(guest.listenerCount('did-navigate')).toBe(1);
       vi.useRealTimers();
     });
+
+    it('reports a replacement after ERR_ABORTED that stops without committing', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.getURL.mockReturnValue('http://127.0.0.1:16001/');
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        setTimeout(() => {
+          guest.emit('did-fail-load', {}, -102, 'ERR_CONNECTION_REFUSED', 'http://x/', true);
+          guest.emit('did-stop-loading');
+        }, 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/redirects',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'Could not open https://example.com/redirects: ERR_CONNECTION_REFUSED (-102). The browser is still showing http://127.0.0.1:16001/.',
+        success: false,
+      });
+      // Only the page's own listeners remain.
+      expect(guest.listenerCount('did-fail-load')).toBe(1);
+      expect(guest.listenerCount('did-stop-loading')).toBe(1);
+      vi.useRealTimers();
+    });
   });
 
   it('keeps sessions isolated and activates the most recently registered host', async () => {

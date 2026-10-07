@@ -345,12 +345,43 @@ export default class BrowserSidebarCtr extends ControllerModule {
         !committed &&
         webContents.isLoading()
       ) {
-        outcome = await Promise.race([
-          new Promise<{ status: 'loaded' }>((resolve) => {
-            onCommit = () => resolve({ status: 'loaded' });
-          }),
-          waitUntilDeadline(),
-        ]);
+        // The replacement can also fail, return a 204 or be cancelled; it then
+        // stops loading without ever committing.
+        let failure: string | undefined;
+        const onFailLoad = (
+          _event: unknown,
+          errorCode: number,
+          errorDescription: string,
+          _validatedURL: string,
+          isMainFrame: boolean,
+        ) => {
+          if (isMainFrame && errorCode !== NAVIGATION_ABORTED_ERRNO) {
+            failure = `${errorDescription} (${errorCode})`;
+          }
+        };
+        let onStop: (() => void) | undefined;
+        webContents.on('did-fail-load', onFailLoad);
+        try {
+          outcome = await Promise.race([
+            new Promise<{ status: 'loaded' }>((resolve) => {
+              onCommit = () => resolve({ status: 'loaded' });
+            }),
+            new Promise<{ error: Error; status: 'failed' }>((resolve) => {
+              onStop = () => {
+                if (committed) return;
+                resolve({
+                  error: new Error(failure ?? 'the page stopped loading before it opened'),
+                  status: 'failed',
+                });
+              };
+              webContents.on('did-stop-loading', onStop);
+            }),
+            waitUntilDeadline(),
+          ]);
+        } finally {
+          webContents.removeListener('did-fail-load', onFailLoad);
+          if (onStop) webContents.removeListener('did-stop-loading', onStop);
+        }
       }
     } finally {
       clearTimeout(settleTimer);
