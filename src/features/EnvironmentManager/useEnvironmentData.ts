@@ -276,8 +276,13 @@ export const useEnvironmentActions = () => {
       name: string;
       visibility?: EnvironmentVisibility;
     }) => {
-      await sandboxStorageService.createEnvironment(params);
+      // Returned, not discarded: an environment with no instance cannot run
+      // anything, so the caller chains straight into creating the first one and
+      // needs the id to do it.
+      const created = await sandboxStorageService.createEnvironment(params);
       await refreshEnvironments();
+
+      return created;
     },
 
     /**

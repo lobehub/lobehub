@@ -117,9 +117,14 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     setSelectedId((current) => (current === id ? undefined : id));
   };
 
-  // The row's shortcut: open the environment so the new instance is seen
-  // landing in its list, and ask for the instance in the same dialog the
-  // panel's own button opens.
+  // Open the environment so the new instance is seen landing in its list, and
+  // ask for the instance in the same dialog the panel's own button opens.
+  //
+  // Both the row's shortcut and the step straight after creating an
+  // environment: a specification with no instance runs nothing, so stopping at
+  // the new row would hand back an environment that cannot be used and no hint
+  // that anything is missing. Dismissing the instance dialog still lands on
+  // that environment's panel, whose empty state asks for the same thing.
   const createInstance = (id: string) => {
     setSelectedId(id);
     openCreateInstanceModal({ environmentId: id });
@@ -172,7 +177,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       <Button
         icon={<Icon icon={PlusIcon} />}
         type={'primary'}
-        onClick={() => openCreateEnvironmentModal(visibility)}
+        onClick={() => openCreateEnvironmentModal(visibility, createInstance)}
       >
         {t('environments.create')}
       </Button>
@@ -203,7 +208,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
               action={
                 <Button
                   icon={<Icon icon={PlusIcon} />}
-                  onClick={() => openCreateEnvironmentModal(visibility)}
+                  onClick={() => openCreateEnvironmentModal(visibility, createInstance)}
                 >
                   {t('environments.create')}
                 </Button>
