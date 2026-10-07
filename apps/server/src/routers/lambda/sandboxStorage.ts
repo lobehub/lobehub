@@ -1079,17 +1079,25 @@ export const sandboxStorageRouter = router({
               .findByIds(topicIds)
               .catch(() => [])
           : [];
-      const titles = new Map(
+      // The agent as well as the title: a conversation is addressed as
+      // `agent/<agentId>/<topicId>`, so a link built from the topic alone
+      // cannot resolve and the panel's one way back into the run is a 404.
+      const topicInfo = new Map(
         topics
           .filter((topic) => topic.userId === ctx.userId)
-          .map((topic) => [topic.id, topic.title]),
+          .map((topic) => [topic.id, { agentId: topic.agentId, title: topic.title }]),
       );
 
       return {
-        sessions: merged.map((session) => ({
-          ...session,
-          topicTitle: (session.topicId && titles.get(session.topicId)) || null,
-        })),
+        sessions: merged.map((session) => {
+          const info = session.topicId ? topicInfo.get(session.topicId) : undefined;
+
+          return {
+            ...session,
+            topicAgentId: info?.agentId ?? null,
+            topicTitle: info?.title || null,
+          };
+        }),
         unavailable: pages.includes(null),
       };
     }),
