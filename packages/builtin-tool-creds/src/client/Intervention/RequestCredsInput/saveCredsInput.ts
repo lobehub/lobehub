@@ -90,12 +90,17 @@ export const saveCredsInput = async (
 
 export type CredsInputSubmitStage = 'approve' | 'save';
 
+const sameValues = (a: Record<string, string>, b: Record<string, string>) =>
+  Object.keys(a).length === Object.keys(b).length &&
+  Object.entries(a).every(([key, value]) => b[key] === value);
+
 /**
  * Submit handler for the secure form: write the values, then approve the
  * call. The two steps fail independently. When the write succeeded but the
- * approval did not, a retry only approves again; it does not write the same
- * secret a second time. `onError` gets the failed stage so the card can say
- * which one to retry.
+ * approval did not, a retry with the same values only approves again; if the
+ * user edited a field in between, the new values are written first, so the
+ * approved credential is always what the form shows. `onError` gets the failed
+ * stage so the card can say which one to retry.
  */
 export const createCredsInputSubmit = ({
   approve,
@@ -106,17 +111,17 @@ export const createCredsInputSubmit = ({
   onError: (stage: CredsInputSubmitStage) => void;
   save: (values: Record<string, string>) => Promise<void>;
 }) => {
-  let saved = false;
+  let savedValues: Record<string, string> | undefined;
 
   return async (values: Record<string, string>) => {
-    if (!saved) {
+    if (!savedValues || !sameValues(values, savedValues)) {
       try {
         await save(values);
       } catch (error) {
         onError('save');
         throw error;
       }
-      saved = true;
+      savedValues = { ...values };
     }
 
     try {

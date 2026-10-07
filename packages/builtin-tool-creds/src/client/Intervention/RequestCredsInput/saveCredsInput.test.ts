@@ -132,4 +132,22 @@ describe('createCredsInputSubmit', () => {
     expect(save).toHaveBeenCalledTimes(1);
     expect(approve).toHaveBeenCalledTimes(2);
   });
+
+  it('writes edited values before retrying a failed approval', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    const approve = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('resume failed'))
+      .mockResolvedValueOnce(undefined);
+    const submit = createCredsInputSubmit({ approve, onError: vi.fn(), save });
+
+    await expect(submit(values)).rejects.toThrow();
+
+    const edited = { OPENAI_API_KEY: 'sk-test-edited-value' };
+    await submit(edited);
+
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenLastCalledWith(edited);
+    expect(approve).toHaveBeenCalledTimes(2);
+  });
 });
