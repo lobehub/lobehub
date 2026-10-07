@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 
-import TopicChatDrawer from './index';
+import TopicChatDrawer, { TopicChatDrawerBody } from './index';
 
 const mocks = vi.hoisted(() => ({
   agentState: {
@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     topicDataMap: {},
     topicDetailMap: {},
     useFetchTopicDetail: vi.fn(),
+    refreshTopicDetail: vi.fn().mockResolvedValue(undefined),
   },
   permission: {
     allowed: true,
@@ -274,6 +275,7 @@ describe('TopicChatDrawer', () => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
     mocks.chatState.useFetchTopicDetail.mockClear();
+    mocks.chatState.refreshTopicDetail.mockClear();
     mocks.chatState.portalStack = [];
     mocks.chatState.showPortal = false;
     mocks.chatState.closeArtifact.mockClear();
@@ -324,6 +326,50 @@ describe('TopicChatDrawer', () => {
       expect.objectContaining({ heteroType: 'claude-code', operationId: 'op-1' }),
       'agt_assignee',
     );
+  });
+
+  /** @example A completed same-Topic continuation still refreshes the receipt. */
+  it('passes completed operation changes from Task activity into the run inspector', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0].operationId = 'op-completed';
+    render(<TopicChatDrawer />);
+    /** @example No running marker is required to invalidate an older cached receipt. */
+    expect(mocks.chatState.refreshTopicDetail).toHaveBeenCalledWith('topic-1');
+  });
+
+  /** @example Embedded Topic B never reconnects against active drawer Topic A. */
+  it('keeps embedded operation context separate from an unrelated active drawer', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0].runningOperation = {
+      assistantMessageId: 'ast-1',
+      heteroType: 'codex',
+      operationId: 'op-drawer',
+    };
+    const { rerender } = render(
+      <TopicChatDrawerBody agentId={'embedded-agent'} topicId={'topic-2'} />,
+    );
+    /** @example An unrelated active drawer supplies no fallback operation. */
+    expect(useGatewayReconnect).toHaveBeenLastCalledWith('topic-2', undefined, 'embedded-agent');
+    /** @example No unrelated operation triggers a receipt refresh for Topic B. */
+    expect(mocks.chatState.refreshTopicDetail).not.toHaveBeenCalled();
+    const runningOperation = {
+      assistantMessageId: 'ast-2',
+      heteroType: 'codex',
+      operationId: 'op-embedded',
+    };
+    rerender(
+      <TopicChatDrawerBody
+        agentId={'embedded-agent'}
+        runningOperation={runningOperation}
+        topicId={'topic-2'}
+      />,
+    );
+    /** @example An explicit embedded run owns both streaming and receipt context. */
+    expect(useGatewayReconnect).toHaveBeenLastCalledWith(
+      'topic-2',
+      runningOperation,
+      'embedded-agent',
+    );
+    /** @example The embedded run refreshes its own Topic's receipt. */
+    expect(mocks.chatState.refreshTopicDetail).toHaveBeenCalledWith('topic-2');
   });
 
   it('hydrates the task assignee agent config for drawer messages', () => {

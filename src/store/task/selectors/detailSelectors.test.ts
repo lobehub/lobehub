@@ -282,6 +282,39 @@ describe('activeTaskRuntimeConfig', () => {
     }
   });
 
+  /** @example Runtime snapshots do not replace a user-provider API binding in Task previews. */
+  it('keeps runtime identity snapshots out of API-auth Task model overrides', () => {
+    // ROOT CAUSE:
+    //
+    // API pins accept provider IDs, so codex/openai from a Task snapshot previously
+    // became a native model in the inspector while server dispatch ignored it.
+    // Filter routing identities when converting Task config into a runtime pin.
+    const state = createState({
+      activeTaskId: 'T-1',
+      taskDetailMap: {
+        'T-1': { ...mockDetail, config: { model: 'codex', provider: 'openai' } },
+      },
+    });
+    const provider = {
+      apiConfig: { model: 'deepseek-v4-pro', providerId: 'deepseek' },
+      authMode: 'api' as const,
+      type: 'codex' as const,
+    };
+    /** @example codex/openai is a routing identity; the native API model stays inherited. */
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(provider)(state)?.[1]).toEqual({
+      key: 'model',
+      source: 'agent',
+      value: 'deepseek-v4-pro',
+    });
+    state.taskDetailMap['T-1'].config = { model: 'deepseek-v4-flash', provider: 'deepseek' };
+    /** @example Explicit native Task models continue to override the Agent's API model. */
+    expect(taskDetailSelectors.activeTaskRuntimeConfig(provider)(state)?.[1]).toEqual({
+      key: 'model',
+      source: 'task',
+      value: 'deepseek-v4-flash',
+    });
+  });
+
   it('restores Agent values when the Task pin is cleared', () => {
     const state = createState({
       activeTaskId: 'T-1',

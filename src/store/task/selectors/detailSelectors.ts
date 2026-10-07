@@ -1,3 +1,4 @@
+import { isHeterogeneousAgentModelId } from '@lobechat/const';
 import type {
   HeterogeneousProviderConfig,
   TaskDetailData,
@@ -71,10 +72,13 @@ const activeTaskProvider = (s: TaskStoreState) =>
 const activeTaskRuntimeConfig =
   (provider: HeterogeneousProviderConfig | undefined) => (s: TaskStoreState) => {
     if (!provider) return undefined;
-    return resolveHeterogeneousRuntimeConfig(provider, {
-      model: activeTaskModel(s),
-      provider: activeTaskProvider(s),
-    });
+    const model = activeTaskModel(s);
+    // Task snapshots can identify the runtime (codex/openai) rather than its
+    // native model. Match dispatch's guard before constructing a model pin.
+    return resolveHeterogeneousRuntimeConfig(
+      provider,
+      isHeterogeneousAgentModelId(model) ? undefined : { model, provider: activeTaskProvider(s) },
+    );
   };
 
 const activeTaskSubtasks = (s: TaskStoreState) => activeTaskDetail(s)?.subtasks ?? [];
