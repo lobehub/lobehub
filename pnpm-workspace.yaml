@@ -48,7 +48,6 @@ childConcurrency: 1
 allowBuilds:
   '@google/genai': true
   '@lobehub/editor': true
-  '@lobehub/editor@https://pkg.pr.new/@lobehub/editor@224': set this to true or false
   '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
@@ -62,7 +61,6 @@ allowBuilds:
   workerd: true
 
 overrides:
-  '@lobehub/editor': https://pkg.pr.new/@lobehub/editor@224
   '@ant-design/icons': 6.3.2
   '@react-pdf/image': 3.0.4
   '@types/react': 19.2.13
