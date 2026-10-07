@@ -13,7 +13,10 @@ import {
 } from '@lobechat/heterogeneous-agents';
 import { AskUserBridge } from '@lobechat/heterogeneous-agents/askUser';
 import { LobeBuiltinMcpServer } from '@lobechat/heterogeneous-agents/builtinMcp';
-import { HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV } from '@lobechat/heterogeneous-agents/protocol';
+import {
+  HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
+  HETERO_SESSION_BINDING_KEY_ENV,
+} from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
 import {
   createPiRpcAgentHandle,
@@ -550,6 +553,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
       operationId,
       options.topic!,
       process.env.LOBEHUB_ASSISTANT_MESSAGE_ID,
+      process.env[HETERO_SESSION_BINDING_KEY_ENV],
     );
     serverIngester = new CoalescingBatchIngester(sink, undefined, (error) => {
       // The server has stopped storing this run's events (its topic marker was

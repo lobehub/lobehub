@@ -64,6 +64,14 @@ By default the CLI connects to `https://app.lobehub.com`. To point it at a diffe
 
 Priority: `LOBEHUB_SERVER` env var > `settings.json` > default official URL.
 
+## Provider-bound Codex on a connected device
+
+A personal `lh connect` connection can execute a Codex agent configured with an API provider. Select that device in the product UI and send normally. The server and connector must both support the provider-bound dispatch protocol; older connectors reject the request instead of using their subscription login.
+
+The connector resolves the selected, enabled provider and model using its current personal authentication. It uses an isolated Codex profile and environment, while the child process receives operation-scoped authentication for reporting. Provider keys are not included in gateway requests or command-line arguments. A follow-up resumes only when its saved session belongs to the same binding; changing bindings starts a new native session with the conversation context.
+
+Use this path for personal Codex API bindings on a selected device. Workspace connections, deployment-default API bindings, and other heterogeneous runtimes do not support this device path. Desktop local execution keeps its existing provider support. The API model controls the run without overwriting a Topic's saved native model pin.
+
 ## Shell Completion
 
 ### Install completion for a linked CLI

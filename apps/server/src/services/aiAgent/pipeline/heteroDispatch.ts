@@ -398,7 +398,7 @@ export const dispatchHeteroAgent = async (
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
   });
-  const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
+  let resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
   let operationJwt: string;
@@ -419,6 +419,13 @@ export const dispatchHeteroAgent = async (
 
   // Read repos from topic metadata for sandbox setup (web/cloud only).
   const topic = await deps.topicModel.findById(topicId);
+  // A provider-owned session must never be resumed using native device auth.
+  if (
+    heterogeneousProvider?.authMode !== 'api' &&
+    topic?.metadata?.heteroSessionBindingKey &&
+    topic.metadata.heteroSessionBindingKey !== `native:v1:${heteroType}`
+  )
+    resumeSessionId = undefined;
   const topicRepos: string[] = topic?.metadata?.repos ?? [];
 
   // Resolve GitHub OAuth token for the sandbox. Always attempt so CC can use
@@ -735,7 +742,22 @@ export const dispatchHeteroAgent = async (
     }
   };
 
-  if (agentConfig.agencyConfig?.heterogeneousProvider?.authMode === 'api') {
+  const apiProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+  const deviceProviderBinding =
+    apiProvider?.type === 'codex' &&
+    apiProvider.authMode === 'api' &&
+    apiProvider.apiConfig &&
+    apiProvider.apiConfig.source !== 'server-default' &&
+    canUseDevice &&
+    deviceHeteroPlan?.kind === 'device' &&
+    !deps.workspaceId
+      ? {
+          kind: 'provider' as const,
+          apiConfig: apiProvider.apiConfig,
+          resumeBindingKey: topic?.metadata?.heteroSessionBindingKey,
+        }
+      : undefined;
+  if (apiProvider?.authMode === 'api' && !deviceProviderBinding) {
     const terminalReported = await finalizeHeteroDispatchError(deps, {
       agentId: resolvedAgentId,
       assistantMessageId,
@@ -1061,24 +1083,34 @@ export const dispatchHeteroAgent = async (
         dispatchDeviceId,
         dispatchWorkspaceId,
       );
+      const deviceParams = {
+        agentType: heteroType,
+        assistantMessageId,
+        args: heteroExecArgs,
+        cwd: deviceCwd,
+        deviceId: dispatchDeviceId,
+        imageList: heteroImageList,
+        jwt: operationJwt,
+        operationId,
+        prompt: heteroParams.prompt,
+        resumeSessionId,
+        resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
+        systemContext: deviceSystemContext,
+        topicId,
+        userId: deps.userId,
+        // Routing and ingest scopes remain independently authorized.
+        workspaceId: dispatchWorkspaceId,
+        ingestWorkspaceId: deps.workspaceId,
+      };
       const result = authorizationError
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
-        : await deviceGateway.dispatchAgentRun({
-            ...heteroParams,
-            agentId: resolvedAgentId,
-            args: heteroExecArgs,
-            cwd: deviceCwd,
-            deviceId: dispatchDeviceId,
-            resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
-            systemContext: deviceSystemContext,
-            // Route to the workspace pool when this is a workspace device; the
-            // operation JWT stays member-scoped (the run belongs to the member).
-            workspaceId: dispatchWorkspaceId,
-            // Topic scope for device-side heteroIngest/heteroFinish. Distinct
-            // from the routing workspace above: a workspace topic on a personal
-            // device still has to write back under `deps.workspaceId`.
-            ingestWorkspaceId: deps.workspaceId,
-          });
+        : deviceProviderBinding
+          ? await deviceGateway.dispatchProviderBoundAgentRun({
+              ...deviceParams,
+              agentType: 'codex',
+              providerBinding: deviceProviderBinding,
+            })
+          : await deviceGateway.dispatchAgentRun(deviceParams);
       if (!result.success) {
         log('execAgent: hetero device dispatch failed: %s', result.error);
         const terminalReported = await finalizeHeteroDispatchError(deps, {

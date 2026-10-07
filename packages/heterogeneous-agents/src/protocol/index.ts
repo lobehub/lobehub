@@ -21,6 +21,12 @@ export {
   type HeterogeneousPromptEngineInput,
   type HeterogeneousPromptImage,
 } from './promptEngine';
+export {
+  HETERO_SESSION_BINDING_KEY_ENV,
+  PROVIDER_BOUND_AGENT_RUN_METHOD,
+  type ProviderBoundAgentRun,
+  ProviderBoundAgentRunSchema,
+} from './providerBoundRun';
 export type {
   AgentContentBlock,
   AgentImageBlock,

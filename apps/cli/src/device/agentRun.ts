@@ -3,10 +3,12 @@ import { spawn } from 'node:child_process';
 import {
   buildHeteroExecStdinPayload,
   HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV,
+  HETERO_SESSION_BINDING_KEY_ENV,
   type HeteroExecImageRef,
 } from '@lobechat/heterogeneous-agents/protocol';
 import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDirectory';
 
+import { CLI_API_KEY_ENV_NAMES } from '../constants/auth';
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
 import { registerAgentRun } from './agentRunRegistry';
 
@@ -16,16 +18,22 @@ export interface SpawnHeteroAgentRunParams {
   /** Resolved `lh hetero exec` wrapper args. */
   args?: string[];
   assistantMessageId?: string;
+  /** Managed transient binding files are released on error or exit. */
+  cleanup?: () => Promise<void>;
   cwd?: string;
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
   jwt: string;
   operationId: string;
+  /** Prepared child environment replaces ambient auth; never sent over the gateway. */
+  preparedEnv?: NodeJS.ProcessEnv;
   prompt: string;
   /** System context used only by the automatic retry without native resume. */
   resumeFallbackSystemContext?: string;
   resumeSessionId?: string;
   serverUrl: string;
+  /** Identity of the profile that owns the reported native session. */
+  sessionBindingKey?: string;
   systemContext?: string;
   topicId: string;
   /** Topic/run workspace — forwarded as `LOBEHUB_WORKSPACE_ID` for ingest. */
@@ -120,12 +128,13 @@ export function spawnHeteroAgentRun(
   // A connector can itself be started inside another agent run. Its ambient
   // identity belongs to the launcher, not this dispatched conversation; CLI
   // evidence commands must never attach this run's outputs to that ancestor.
-  const childEnv = { ...process.env };
+  const childEnv = { ...(params.preparedEnv ?? process.env) };
   for (const key of [
     'LOBEHUB_AGENT_ID',
     'LOBEHUB_ASSISTANT_MESSAGE_ID',
     'LOBEHUB_TASK_ID',
     'LOBEHUB_WORKSPACE_ID',
+    ...CLI_API_KEY_ENV_NAMES,
   ]) {
     delete childEnv[key];
   }
@@ -147,6 +156,7 @@ export function spawnHeteroAgentRun(
         ...(params.agentId ? { LOBEHUB_AGENT_ID: params.agentId } : {}),
         ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
         [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
+        [HETERO_SESSION_BINDING_KEY_ENV]: params.sessionBindingKey ?? `native:v1:${agentType}`,
         LOBEHUB_JWT: jwt,
         LOBEHUB_OPERATION_ID: operationId,
         LOBEHUB_SERVER: serverUrl,
@@ -190,11 +200,13 @@ export function spawnHeteroAgentRun(
     });
 
     child.once('error', (err) => {
+      void params.cleanup?.().catch(() => logger?.error?.('Provider binding cleanup failed'));
       logger?.error?.(`hetero exec spawn failed (op=${operationId}): ${err.message}`);
       settle({ reason: err.message, status: 'rejected' });
     });
 
     child.on('exit', (code, signal) => {
+      void params.cleanup?.().catch(() => logger?.error?.('Provider binding cleanup failed'));
       // Only remove the registry entry if the exiting PID still owns this
       // task — a newer run that reused the same operationId must not be
       // cleared by a stale exit event.

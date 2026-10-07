@@ -518,6 +518,26 @@ describe('HeterogeneousAgentService', () => {
   });
 
   describe('heteroFinish', () => {
+    /** @example A legacy completion replaces an API identity instead of retaining it. */
+    it('clears an old binding key when a legacy producer finishes with a new session', async () => {
+      const { service, topicModel } = createService();
+      await service.heteroFinish({
+        agentType: 'codex',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+        result: 'success',
+        sessionId: 'native-session',
+      });
+      /** @example An explicit undefined must shadow the old metadata key during the shallow merge. */
+      expect(topicModel.updateMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({
+          heteroSessionId: 'native-session',
+          heteroSessionBindingKey: undefined,
+        }),
+      );
+    });
+
     it('publishes a terminal agent_runtime_end with the high-level result', async () => {
       const { manager, published, service } = createService();
 

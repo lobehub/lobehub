@@ -18,6 +18,7 @@ export class TrpcIngestSink implements IngestSink {
     private readonly operationId: string,
     private readonly topicId: string,
     private readonly assistantMessageId?: string,
+    private readonly sessionBindingKey?: string,
   ) {}
 
   async finish(params: Parameters<IngestSink['finish']>[0]): Promise<void> {
@@ -27,6 +28,7 @@ export class TrpcIngestSink implements IngestSink {
       operationId: this.operationId,
       topicId: this.topicId,
       ...params,
+      ...(this.sessionBindingKey ? { sessionBindingKey: this.sessionBindingKey } : {}),
     };
     // A native process may exit while the backend is restarting. Retain this
     // exact terminal receipt until acknowledged; never launch the agent again.
@@ -53,7 +55,11 @@ export class TrpcIngestSink implements IngestSink {
     const ack = (await this.client.aiAgent.heteroIngest.mutate({
       agentType: this.agentType,
       assistantMessageId: this.assistantMessageId,
-      events: events as any,
+      events: events.map((event) =>
+        event.type === 'stream_start' && this.sessionBindingKey
+          ? { ...event, data: { ...event.data, sessionBindingKey: this.sessionBindingKey } }
+          : event,
+      ),
       operationId: this.operationId,
       topicId: this.topicId,
     })) as { accepted?: boolean; reason?: string } | undefined;

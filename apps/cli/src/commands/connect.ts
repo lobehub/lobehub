@@ -20,6 +20,7 @@ import type {
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
+import { PROVIDER_BOUND_AGENT_RUN_METHOD } from '@lobechat/heterogeneous-agents/protocol';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import type { Command } from 'commander';
 
@@ -49,6 +50,7 @@ import {
 } from '../daemon/manager';
 import { listTasks } from '../daemon/taskRegistry';
 import { spawnHeteroAgentRun } from '../device/agentRun';
+import { spawnProviderBoundAgentRun } from '../device/providerBoundAgentRun';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -499,6 +501,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     deps: deviceControlDeps,
     error,
     // Read at dispatch time — `auth` may be refreshed mid-session.
+    getAuth: () => auth,
     getServerUrl: () => auth.serverUrl,
     info,
     isDaemonChild,
@@ -915,6 +918,7 @@ interface GatewayHandlerContext {
   deps: DeviceControlDeps;
   error: (msg: string) => void;
   /** Read at dispatch time — the underlying auth may be refreshed mid-session. */
+  getAuth: () => Awaited<ReturnType<typeof resolveToken>>;
   getServerUrl: () => string;
   info: (msg: string) => void;
   isDaemonChild: boolean;
@@ -1000,7 +1004,13 @@ function bindGatewayClientHandlers(
     else info(`Received rpc_request: method=${method} (${requestId})`);
 
     try {
-      const run = () => executeDeviceRpc(method, params, deps);
+      const run = () =>
+        method === PROVIDER_BOUND_AGENT_RUN_METHOD
+          ? spawnProviderBoundAgentRun(params, ctx.getAuth(), connectionWorkspaceId, {
+              error,
+              info,
+            })
+          : executeDeviceRpc(method, params, deps);
       const isMaintenance = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'].includes(method);
       const data = await (isMaintenance ? run() : maintenance.run(run));
       client.sendRpcResponse({ requestId, result: { data, success: true } });

@@ -21,9 +21,14 @@ import {
   isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
-import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
+import {
+  isProviderBindingTargetSupported,
+  resolveProviderBindingGuard,
+} from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import ApiModeModelBar from './ApiModeModelBar';
@@ -133,10 +138,18 @@ const HeterogeneousChatInput = memo(() => {
       isDesktopClient: isDesktop,
       providerType,
     });
-  const showApiModeModel = !!agentId && isApiAuth && executionTarget === 'local';
-  const apiModeTargetUnsupported = isApiAuth && executionTarget !== 'local';
+  const isWorkspaceAgent = useAgentStore((s) =>
+    Boolean(agentId && agentByIdSelectors.getAgentById(agentId)(s)?.workspaceId),
+  );
+  const apiModeTargetSupported = isProviderBindingTargetSupported(
+    executionTarget,
+    heterogeneousProvider,
+    isWorkspaceAgent,
+  );
+  const showApiModeModel = !!agentId && isApiAuth && apiModeTargetSupported;
+  const apiModeTargetUnsupported = isApiAuth && !apiModeTargetSupported;
   const validateProviderBinding =
-    (apiConfigMissing || !!providerApiConfig) && executionTarget === 'local';
+    (apiConfigMissing || !!providerApiConfig) && apiModeTargetSupported;
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
     resolveProviderBindingGuard({
       active: validateProviderBinding,

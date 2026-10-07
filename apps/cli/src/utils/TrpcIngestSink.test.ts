@@ -69,3 +69,52 @@ describe('heterogeneous completion delivery', () => {
     expect(mutate).toHaveBeenCalledTimes(7);
   });
 });
+
+/** @example A session id and its authentication profile are persisted together. */
+it('carries profile identity on the initial stream and terminal receipt', async () => {
+  const finish = vi.fn();
+  const ingest = vi.fn();
+  // NOTICE:
+  // Only two RPC procedures are exercised by this sink unit test.
+  // The generated TrpcClient also requires every unrelated router.
+  // Source/context: ../api/client.ts, TrpcClient.
+  // Remove this cast when a narrow ingest client interface is available.
+  const client = {
+    aiAgent: { heteroFinish: { mutate: finish }, heteroIngest: { mutate: ingest } },
+  } as unknown as TrpcClient;
+  const sink = new TrpcIngestSink(
+    client,
+    'codex',
+    'op',
+    'topic',
+    'message',
+    'provider-binding:v1:test',
+  );
+  await sink.ingest([
+    {
+      type: 'stream_start',
+      operationId: 'op',
+      stepIndex: 0,
+      timestamp: 1,
+      data: { sessionId: 'session' },
+    },
+  ]);
+  await sink.finish({ result: 'success', sessionId: 'session' });
+  /** @example Identity is durable even if the process is interrupted before finish. */
+  expect(ingest).toHaveBeenCalledWith(
+    expect.objectContaining({
+      events: [
+        expect.objectContaining({
+          data: { sessionId: 'session', sessionBindingKey: 'provider-binding:v1:test' },
+        }),
+      ],
+    }),
+  );
+  /** @example Finish cannot separate the profile from its session. */
+  expect(finish).toHaveBeenCalledWith(
+    expect.objectContaining({
+      sessionId: 'session',
+      sessionBindingKey: 'provider-binding:v1:test',
+    }),
+  );
+});

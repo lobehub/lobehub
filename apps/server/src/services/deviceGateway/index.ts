@@ -9,6 +9,10 @@ import {
   type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import {
+  PROVIDER_BOUND_AGENT_RUN_METHOD,
+  type ProviderBoundAgentRun,
+} from '@lobechat/heterogeneous-agents/protocol';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
@@ -1886,6 +1890,60 @@ export class DeviceGateway {
     } catch (error) {
       log('statPath: error for deviceId=%s — %O', deviceId, error);
       return undefined;
+    }
+  }
+
+  /**
+   * Dispatch a provider-bound run only to a connector implementing the dedicated RPC.
+   *
+   * Use when:
+   * - A personal Codex agent explicitly targets an authorized device.
+   * Expects:
+   * - No provider secrets; the connector resolves its own authenticated provider.
+   * Returns:
+   * - Success only after the connector acknowledges a prepared child process.
+   *
+   * Call stack:
+   * heteroDispatch (../aiAgent/pipeline)
+   *   -> dispatchProviderBoundAgentRun
+   *     -> GatewayHttpClient.invokeRpc
+   */
+  async dispatchProviderBoundAgentRun(
+    params: ProviderBoundAgentRun & {
+      deviceId: string;
+      userId: string;
+      workspaceId?: string;
+      ingestWorkspaceId?: string;
+    },
+  ): Promise<{ error?: string; errorData?: DeviceUnavailableErrorData; success: boolean }> {
+    if (params.workspaceId || params.ingestWorkspaceId) {
+      return { error: 'Provider binding requires a personal device connection.', success: false };
+    }
+    const client = this.getClient();
+    if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
+    const {
+      deviceId,
+      userId,
+      workspaceId: _workspace,
+      ingestWorkspaceId: _ingest,
+      ...payload
+    } = params;
+    try {
+      const result = await client.invokeRpc<{ status: 'accepted' | 'rejected'; reason?: string }>(
+        { channel: 'cli', deviceId, userId, timeout: 30_000 },
+        { method: PROVIDER_BOUND_AGENT_RUN_METHOD, params: payload },
+      );
+      return result.success && result.data?.status === 'accepted'
+        ? { success: true }
+        : {
+            error:
+              result.error ??
+              result.data?.reason ??
+              'Device does not support provider-bound execution. Update lh connect.',
+            success: false,
+          };
+    } catch {
+      return { error: 'Provider-bound device dispatch failed.', success: false };
     }
   }
 

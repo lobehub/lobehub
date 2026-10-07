@@ -19,7 +19,9 @@
     "./scanHost": "./src/scan/scanHost.ts",
     "./spawn": "./src/spawn/index.ts",
     "./transcript": "./src/transcript/index.ts",
-    "./workingDirectory": "./src/spawn/workingDirectory.ts"
+    "./workingDirectory": "./src/spawn/workingDirectory.ts",
+    "./providerBindingHost": "./src/providerBinding/nodeHost.ts",
+    "./codexProviderBinding": "./src/providerBinding/codex.ts"
   },
   "main": "./src/index.ts",
   "scripts": {

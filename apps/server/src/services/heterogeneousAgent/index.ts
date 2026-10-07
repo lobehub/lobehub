@@ -78,6 +78,8 @@ export interface HeterogeneousFinishParams {
   result: HeterogeneousFinishResult;
   /** True only when the producer proved the requested native session unusable. */
   resumeSessionInvalidated?: boolean;
+  /** Profile identity reported atomically with the native session. */
+  sessionBindingKey?: string;
   /**
    * Native CLI session id (e.g. CC's per-cwd session). Used in phase 2c to
    * persist on `topic.metadata` so a subsequent `lh hetero exec` run can
@@ -498,9 +500,13 @@ export class HeterogeneousAgentService {
     }
 
     const resumeBindingUpdate = sessionId
-      ? { heteroSessionId: sessionId }
+      ? {
+          heteroSessionId: sessionId,
+          // Legacy producers replace both fields so an old API binding cannot survive a new session.
+          heteroSessionBindingKey: params.sessionBindingKey,
+        }
       : result === 'error' && resumeSessionInvalidated
-        ? { heteroSessionId: undefined }
+        ? { heteroSessionId: undefined, heteroSessionBindingKey: undefined }
         : undefined;
     if (resumeBindingUpdate) {
       try {

@@ -1,6 +1,11 @@
 import path from 'node:path';
 
 import {
+  prepareCodexProviderBinding,
+  sanitizeCodexProviderBindingArgs,
+  sanitizeCodexProviderBindingEnv,
+} from '@lobechat/heterogeneous-agents/codexProviderBinding';
+import {
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
@@ -18,11 +23,12 @@ import {
 
 import type { HeterogeneousAgentBuildPlanParams, HeterogeneousAgentDriver } from '../types';
 
+export { sanitizeCodexProviderBindingArgs } from '@lobechat/heterogeneous-agents/codexProviderBinding';
+
 const hasAnyFlag = (args: string[], flags: readonly string[]) =>
   args.some((arg) => flags.includes(arg as (typeof flags)[number]));
 
 const HOST_PROVIDER_ID = 'lobehub';
-const HOST_API_KEY_ENV = 'LOBEHUB_CODEX_API_KEY';
 const SERVER_TOKEN_ENV = 'LOBEHUB_HETERO_TOKEN';
 const SERVER_DEFAULT_MODEL_CATALOG_FILE = 'models.json';
 
@@ -79,52 +85,6 @@ const OPENAI_MODEL = /^(?:gpt-|o\d)/;
 
 const CODEX_SERVER_DEFAULT_BASE_INSTRUCTIONS =
   'You are Codex, a coding agent working with the user in a shared workspace. Follow the provided instructions, use tools when helpful, verify your changes, and report results clearly.';
-
-const isConflictingConfigOverride = (value: string): boolean => {
-  const key = value.split('=', 1)[0]?.trim();
-  return (
-    key === 'model' ||
-    key === 'model_catalog_json' ||
-    key === 'model_provider' ||
-    key.startsWith('model_providers.')
-  );
-};
-
-export const sanitizeCodexProviderBindingArgs = (source: string[]): string[] => {
-  const args: string[] = [];
-  for (let index = 0; index < source.length; index += 1) {
-    const arg = source[index];
-    if (arg === '--model' || arg === '-m') {
-      index += 1;
-      continue;
-    }
-    if (arg.startsWith('--model=') || arg.startsWith('-m=')) continue;
-    if (arg === '--config' || arg === '-c') {
-      const value = source[index + 1];
-      if (value && isConflictingConfigOverride(value)) {
-        index += 1;
-        continue;
-      }
-    }
-    if (
-      (arg.startsWith('--config=') || arg.startsWith('-c=')) &&
-      isConflictingConfigOverride(arg.slice(arg.indexOf('=') + 1))
-    ) {
-      continue;
-    }
-    args.push(arg);
-  }
-  return args;
-};
-
-const sanitizeCodexProviderBindingEnv = (source: Record<string, string> | undefined) => {
-  const env = { ...source };
-  delete env.CODEX_HOME;
-  delete env.OPENAI_API_KEY;
-  delete env[HOST_API_KEY_ENV];
-  delete env[SERVER_TOKEN_ENV];
-  return env;
-};
 
 const tomlString = (value: string): string => JSON.stringify(value);
 
@@ -267,36 +227,7 @@ export const codexDriver: HeterogeneousAgentDriver = {
       stdinPayload,
     };
   },
-  prepareProviderBinding({ args, env, profileDir, resolution }) {
-    if (resolution.protocol !== 'openai-responses' || !resolution.endpoint) {
-      throw new Error('Codex provider binding requires a Responses API endpoint.');
-    }
-
-    const apiKey = resolution.runtimeConfig.keyVaults.apiKey?.trim();
-    if (!apiKey) throw new Error('Codex provider binding requires an API key.');
-
-    const config = [
-      `model_provider = ${tomlString(HOST_PROVIDER_ID)}`,
-      '',
-      `[model_providers.${HOST_PROVIDER_ID}]`,
-      `name = ${tomlString('LobeHub Provider')}`,
-      `base_url = ${tomlString(resolution.endpoint)}`,
-      `env_key = ${tomlString(HOST_API_KEY_ENV)}`,
-      'wire_api = "responses"',
-      'requires_openai_auth = false',
-      '',
-    ].join('\n');
-
-    return {
-      args: [...sanitizeCodexProviderBindingArgs(args), '--model', resolution.apiConfig.model],
-      env: {
-        ...sanitizeCodexProviderBindingEnv(env),
-        CODEX_HOME: profileDir,
-        [HOST_API_KEY_ENV]: apiKey,
-      },
-      profileFiles: [{ content: config, path: 'config.toml' }],
-    };
-  },
+  prepareProviderBinding: prepareCodexProviderBinding,
   prepareServerDefaultBinding({ args, endpoint, env, model, modelDescriptor, profileDir }) {
     const requestModel = formatServerDefaultHeterogeneousModel(model);
     // Codex has entries for OpenAI's models only; any other model is described

@@ -525,9 +525,16 @@ export class HeterogeneousPersistenceHandler {
    * `TopicModel.updateMetadata` merges into existing JSONB so this does NOT
    * clobber `runningOperation` / `workingDirectory` / other peer fields.
    */
-  private async persistSessionId(topicId: string, sessionId: string): Promise<void> {
+  private async persistSessionId(
+    topicId: string,
+    sessionId: string,
+    sessionBindingKey?: string,
+  ): Promise<void> {
     try {
-      await this.deps.topicModel.updateMetadata(topicId, { heteroSessionId: sessionId });
+      await this.deps.topicModel.updateMetadata(topicId, {
+        heteroSessionId: sessionId,
+        heteroSessionBindingKey: sessionBindingKey,
+      });
       log('persisted sessionId topic=%s sessionId=%s', topicId, sessionId);
     } catch (err) {
       log('persistSessionId failed topic=%s err=%O', topicId, err);
@@ -1125,7 +1132,12 @@ export class HeterogeneousPersistenceHandler {
         // next turn to spawn a fresh CC session and drop all `--resume` history.
         // Writing it here makes resume survive abandon. The terminal service
         // path may still overwrite it after verifying topic ownership.
-        await this.persistSessionId(state.topicId, sid);
+        const bindingKey = (event.data as { sessionBindingKey?: string }).sessionBindingKey;
+        await this.persistSessionId(
+          state.topicId,
+          sid,
+          typeof bindingKey === 'string' ? bindingKey : undefined,
+        );
       }
     }
 
