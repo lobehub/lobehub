@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { Workbook } from 'exceljs';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { ChunkingLoader } from '../../index';
 import { ExcelLoader } from '../index';
@@ -54,6 +54,46 @@ describe('ExcelLoader', () => {
     expect(chunks[0].pageContent).toBe(
       'Rich text: Hello world\nFormula: 2\nLink: Website\nDate: 2026-10-07\nNumber: 0\nBoolean: false\nError: #DIV/0!\ncolumn 8: Extra',
     );
+  });
+
+  it('uses populated columns without querying the worksheet width', async () => {
+    const workbook = new Workbook();
+    const sheet = workbook.addWorksheet('Sparse');
+    sheet.getCell('A1').value = 'Name';
+    sheet.getCell('XFD1').value = 'Amount';
+    sheet.getCell('A2').value = 'Alice';
+    sheet.getCell('XFD2').value = 42;
+    sheet.getCell('XFC3').value = 'No header';
+    const bytes = Buffer.from(await workbook.xlsx.writeBuffer());
+    const columnCount = vi.spyOn(Object.getPrototypeOf(sheet), 'columnCount', 'get');
+
+    try {
+      const chunks = await ExcelLoader(new Blob([bytes]));
+
+      expect(chunks.map((chunk) => chunk.pageContent)).toEqual([
+        'Name: Alice\nAmount: 42',
+        'column 16383: No header',
+      ]);
+      expect(chunks[1].metadata.row).toBe(3);
+      expect(columnCount).not.toHaveBeenCalled();
+    } finally {
+      columnCount.mockRestore();
+    }
+  });
+
+  it('uses the first non-empty row as headers and preserves physical row numbers', async () => {
+    const workbook = new Workbook();
+    const sheet = workbook.addWorksheet('Leading blanks');
+    sheet.getCell('B2').value = 'Plan';
+    sheet.getCell('D2').value = 'Price';
+    sheet.getCell('B4').value = 'Pro';
+    sheet.getCell('D4').value = 20;
+
+    const chunks = await ExcelLoader(new Blob([Buffer.from(await workbook.xlsx.writeBuffer())]));
+
+    expect(chunks).toHaveLength(1);
+    expect(chunks[0].pageContent).toBe('Plan: Pro\nPrice: 20');
+    expect(chunks[0].metadata).toMatchObject({ row: 4, sheetName: 'Leading blanks' });
   });
 
   it('reports malformed workbooks through the chunking error boundary', async () => {

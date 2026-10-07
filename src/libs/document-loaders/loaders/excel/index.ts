@@ -20,7 +20,7 @@ const cellToText = (value: CellValue): string => {
 
 /**
  * Chunks a `.xlsx` workbook into one document per data row, reusing the sheet's
- * first row as the column names — the same `header: value` shape `CsVLoader`
+ * first non-empty row as the column names — the same `header: value` shape `CsVLoader`
  * emits, so tabular data reaches the index identically whichever format it was
  * uploaded in.
  */
@@ -32,24 +32,26 @@ export const ExcelLoader = async (fileBlob: Blob): Promise<DocumentChunk[]> => {
 
   return workbook.worksheets.flatMap((sheet) => {
     const chunks: DocumentChunk[] = [];
-    let header: string[] = [];
+    const headers = new Map<number, string>();
+    let hasHeader = false;
 
     sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-      const cells: string[] = [];
-      for (let column = 1; column <= sheet.columnCount; column++) {
-        cells.push(cellToText(row.getCell(column).value));
-      }
-
-      if (rowNumber === 1) {
-        header = cells;
+      if (!hasHeader) {
+        row.eachCell({ includeEmpty: false }, (cell, column) => {
+          headers.set(column, cellToText(cell.value));
+        });
+        hasHeader = true;
         return;
       }
 
-      const content = cells
-        .map((value, index) => [header[index] || `column ${index + 1}`, value] as const)
-        .filter(([, value]) => value.trim() !== '')
-        .map(([column, value]) => `${column}: ${value}`)
-        .join('\n');
+      const lines: string[] = [];
+      row.eachCell({ includeEmpty: false }, (cell, column) => {
+        const value = cellToText(cell.value);
+        if (value.trim() === '') return;
+
+        lines.push(`${headers.get(column) || `column ${column}`}: ${value}`);
+      });
+      const content = lines.join('\n');
 
       if (!content) return;
 
