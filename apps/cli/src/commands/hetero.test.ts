@@ -257,7 +257,12 @@ describe('hetero exec command', () => {
       'op-1',
     ]);
     /** @example The normal server finish path retains the actual native outcome. */
-    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(expect.objectContaining({ result }));
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...(result === 'cancelled' ? { finalCancellation: true } : {}),
+        result,
+      }),
+    );
     /** @example Interrupted native history is never replayed through exec. */
     expect(mockSpawnAgent).not.toHaveBeenCalled();
   });

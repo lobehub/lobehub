@@ -62,6 +62,7 @@ export interface HeterogeneousIngestResult {
   reason?: HeteroIngestRejectionReason;
 }
 
+/** Producer outcome and native session identity for an operation finish receipt. */
 export interface HeterogeneousFinishParams {
   agentType: HeterogeneousAgentType;
   /** Initial assistant placeholder supplied by the producer. This remains
@@ -74,6 +75,8 @@ export interface HeterogeneousFinishParams {
    * `ChatMessageError.body`.
    */
   error?: { body?: Record<string, unknown>; message: string; type: string };
+  /** True when cancellation is the producer's final receipt. Legacy signals omit it. @default false */
+  finalCancellation?: boolean;
   operationId: string;
   result: HeterogeneousFinishResult;
   /** True only when the producer proved the requested native session unusable. */
@@ -354,10 +357,31 @@ export class HeterogeneousAgentService {
     }
   }
 
+  /**
+   * Persists a producer outcome and settles its owning operation.
+   *
+   * Use when:
+   * - A device or Desktop producer reports process completion.
+   *
+   * Expects:
+   * - An authorized operation; finalCancellation distinguishes terminal device
+   *   cancellation from a legacy Desktop signal that precedes another receipt.
+   *
+   * Returns:
+   * - After persistence and applicable lifecycle delivery; newer topic runs are preserved.
+   *
+   * Call stack:
+   *
+   * aiAgentRouter.heteroFinish
+   *   -> {@link HeterogeneousAgentService.heteroFinish}
+   *     -> {@link HeterogeneousPersistenceHandler.finish}
+   *     -> {@link CompletionLifecycle.completeOperation}
+   */
   async heteroFinish(params: HeterogeneousFinishParams): Promise<void> {
     const {
       agentType,
       assistantMessageId: seedAssistantMessageId,
+      finalCancellation,
       operationId,
       result: reportedResult,
       resumeSessionInvalidated,
@@ -375,6 +399,9 @@ export class HeterogeneousAgentService {
     const rejection =
       reportedResult === 'success' ? await this.readIngestRejection(operationId) : undefined;
     const result: HeterogeneousFinishResult = rejection ? 'error' : reportedResult;
+    const intermediateCancellation = result === 'cancelled' && !finalCancellation;
+    const completionReason =
+      result === 'success' ? 'done' : result === 'cancelled' ? 'interrupted' : 'error';
     const error = rejection
       ? buildIngestRejectionError(rejection)
       : normalizeHeterogeneousFinishError(agentType, params.error);
@@ -444,9 +471,10 @@ export class HeterogeneousAgentService {
       log('heteroFinish: failed to load operation lifecycle metadata (non-fatal): %O', err);
     }
 
-    // `cancelled` is only an intermediate process signal. Keep the marker for
-    // the following success/error terminal callback, which owns completion.
-    if (result !== 'cancelled') {
+    // Legacy `cancelled` calls are intermediate process signals: keep the marker
+    // for their following success/error callback. Device producers explicitly
+    // mark their final cancellation after native exit so it can settle now.
+    if (!intermediateCancellation) {
       try {
         const settled = await this.topicModel.settleRunningOperation(topicId, operationId);
         if (settled.status === 'conflict') {
@@ -476,10 +504,7 @@ export class HeterogeneousAgentService {
       // but this operation still owns its durable row and stream. Settle those
       // independent resources instead of leaving the old row `running`.
       try {
-        await this.agentOperationModel.settleRunning(
-          operationId,
-          result === 'success' ? 'done' : 'error',
-        );
+        await this.agentOperationModel.settleRunning(operationId, completionReason);
       } catch (err) {
         log('heteroFinish: failed to settle stale operation row (non-fatal): %O', err);
       }
@@ -534,15 +559,13 @@ export class HeterogeneousAgentService {
     // fire uniformly. The hooks were registered in-memory (local mode) and
     // serialized onto runningOperation (queue mode) at dispatch time.
     //
-    // Skip on `cancelled` — heteroFinish may be called twice: first with
-    // result=cancelled (termination signal) then with result=success/error
-    // (normal process exit). We must NOT clear runningOperation or fire hooks on
-    // cancelled so the subsequent success/error call still finds the hooks +
-    // assistantMessageId and dispatches exactly once. (cancelled→interrupted is a
-    // no-op for the task lifecycle anyway — onTopicComplete has no interrupted
-    // branch — and suppresses a spurious bot "stopped" message before the real
-    // result lands.)
-    if (result === 'cancelled') return;
+    // Skip legacy intermediate cancellation: those producers call again with
+    // success/error after process exit. Retaining hooks + assistantMessageId
+    // prevents duplicate lifecycle delivery and a spurious bot "stopped" message
+    // before the real result. An explicit final cancellation has no later receipt:
+    // settle it as interrupted, which never runs success verification or marks a
+    // task completed (onTopicComplete has no interrupted completion branch).
+    if (intermediateCancellation) return;
 
     // The owning agentId is authoritatively encoded in the operationId
     // (op_<ts>_agt_<id>_tpc_<id>_<suffix>, built at dispatch from the resolved
@@ -591,7 +614,12 @@ export class HeterogeneousAgentService {
               ...(startedAt ? { duration: Date.now() - new Date(startedAt).getTime() } : undefined),
               operationId,
             },
-            status: result === 'success' ? ThreadStatus.Completed : ThreadStatus.Failed,
+            status:
+              result === 'success'
+                ? ThreadStatus.Completed
+                : result === 'cancelled'
+                  ? ThreadStatus.Cancel
+                  : ThreadStatus.Failed,
           });
         }
       } catch (err) {
@@ -601,12 +629,10 @@ export class HeterogeneousAgentService {
 
     // Finalize the trace snapshot (uploads it; the terminal op row is written by
     // CompletionLifecycle.persistCompletion below). Runs on the real terminal only
-    // (cancelled returned above). Aggregates come from the accumulated steps;
+    // (intermediate cancellations returned above). Aggregates come from the accumulated steps;
     // missing fields stay null (schema treats null as "not measured"). Kept inside
     // its own try so an upload hiccup never blocks the lifecycle dispatch — verify
     // and hooks still fire, persistCompletion just records null aggregates.
-    // `result` is narrowed to 'success' | 'error' here — 'cancelled' returned above.
-    const completionReason = result === 'success' ? ('done' as const) : ('error' as const);
     let totals: Awaited<ReturnType<HeteroTraceRecorder['finalize']>> | undefined;
     try {
       totals = await this.traceRecorder.finalize(operationId, {

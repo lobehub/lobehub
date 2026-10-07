@@ -184,6 +184,21 @@ describe('aiAgentRouter.heteroIngest / heteroFinish', () => {
       ).rejects.toThrow();
     });
 
+    /** @example The device's final cancellation survives schema parsing and reaches the lifecycle owner. */
+    it('forwards the explicit terminal cancellation receipt', async () => {
+      await createCaller({ authKind: 'user' }).heteroFinish({
+        agentType: 'codex',
+        finalCancellation: true,
+        operationId: 'op-final-cancel',
+        result: 'cancelled',
+        topicId: 'topic-1',
+      });
+      /** @example Zod must not strip the finalCancellation field. */
+      expect(mockHeteroFinish).toHaveBeenCalledWith(
+        expect.objectContaining({ finalCancellation: true, result: 'cancelled' }),
+      );
+    });
+
     it("accepts a device user ingesting and finishing another member's workspace topic", async () => {
       const creatorId = await createTestUser(serverDB);
       const [workspace] = await serverDB

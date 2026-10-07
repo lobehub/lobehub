@@ -1294,6 +1294,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     try {
       await sink.finish({
         error: finishError,
+        // The native process and event drain have ended. Unlike a Desktop stop
+        // signal, this is the only terminal receipt the device wrapper sends.
+        finalCancellation: runResult === 'cancelled' || undefined,
         resumeSessionInvalidated: first.resumeNotFound || undefined,
         result: runResult,
         sessionId,
