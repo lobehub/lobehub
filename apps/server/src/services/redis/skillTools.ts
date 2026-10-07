@@ -1,6 +1,5 @@
-import { readThroughRedis, RedisKeys } from '@/libs/redis';
-
 import { getRedisServiceClient } from './client';
+import { readThroughRedis, RedisKeys } from './internal';
 
 export const skillTools = {
   async remember<T extends { tools?: unknown[] } | undefined>(

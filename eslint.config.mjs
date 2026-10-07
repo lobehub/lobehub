@@ -170,7 +170,7 @@ const redisAccessRestrictedImportPaths = [
     allowTypeImports: true,
     message:
       'Redis client access belongs inside services/redis. Use a domain method or add one there.',
-    name: '@/libs/redis',
+    name: '@/server/services/redis/internal',
   },
   {
     allowTypeImports: true,
@@ -192,7 +192,8 @@ const redisAccessRestrictedSyntax = [
   },
   {
     message: 'Redis client access belongs inside services/redis.',
-    selector: 'ImportExpression > Literal[value=/^@\\/libs\\/redis(?:\\/|$)/]',
+    selector:
+      'ImportExpression > Literal[value=/^@\\/server\\/services\\/redis\\/internal(?:\\/|$)/]',
   },
 ];
 const legacyRawRedisClientConsumers = [
@@ -724,7 +725,10 @@ export default eslint(
           ],
           patterns: [
             ...(baseRestrictedImportOptions.patterns ?? []),
-            { group: ['@/libs/redis/*'], message: 'Use domain methods in services/redis.' },
+            {
+              group: ['@/server/services/redis/internal/*'],
+              message: 'Use domain methods in services/redis.',
+            },
           ],
         },
       ],

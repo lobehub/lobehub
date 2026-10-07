@@ -2,7 +2,7 @@ import assetLinks from '@/../public/.well-known/assetlinks.json';
 import { appEnv } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis, isRedisEnabled } from '@/libs/redis';
+import { initializeRedis, isRedisEnabled } from '@/server/services/redis/internal';
 import { isDev } from '@/utils/env';
 
 const APPLE_TRUSTED_ORIGIN = 'https://appleid.apple.com';

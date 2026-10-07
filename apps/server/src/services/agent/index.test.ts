@@ -7,9 +7,13 @@ import { AgentModel } from '@/database/models/agent';
 import { AgentShareModel } from '@/database/models/agentShare';
 import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
-import type * as RedisModule from '@/libs/redis';
-import { initializeRedisWithPrefix, isRedisEnabled, RedisKeys } from '@/libs/redis';
 import { parseAgentConfig } from '@/server/globalConfig/parseDefaultAgent';
+import type * as RedisModule from '@/server/services/redis/internal';
+import {
+  initializeRedisWithPrefix,
+  isRedisEnabled,
+  RedisKeys,
+} from '@/server/services/redis/internal';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { AgentService } from './index';
@@ -55,7 +59,7 @@ vi.mock('@/envs/redis', () => ({
   getRedisConfig: vi.fn().mockReturnValue({ enabled: true }),
 }));
 
-vi.mock('@/libs/redis', async (importOriginal) => {
+vi.mock('@/server/services/redis/internal', async (importOriginal) => {
   const original = await importOriginal<typeof RedisModule>();
   return {
     ...original,

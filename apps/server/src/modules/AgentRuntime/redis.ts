@@ -2,7 +2,7 @@ import debug from 'debug';
 import Redis from 'ioredis';
 
 import { redisEnv } from '@/envs/redis';
-import { isRedisDisabledByEnv } from '@/libs/redis';
+import { isRedisDisabledByEnv } from '@/server/services/redis/internal';
 
 const log = debug('lobe-server:agent-runtime:redis');
 const timing = debug('lobe-server:agent-runtime:timing');

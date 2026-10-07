@@ -1,7 +1,7 @@
 import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
-import type * as RedisLib from '@/libs/redis';
+import type * as RedisLib from '@/server/services/redis/internal';
 
 // Import after mocks are set up
 import { DeviceGateway } from '../index';
@@ -35,7 +35,7 @@ const { cacheRedis, tryInitializeRedisWithPrefix } = vi.hoisted(() => {
   return { cacheRedis, tryInitializeRedisWithPrefix: vi.fn(async () => cacheRedis) };
 });
 
-vi.mock('@/libs/redis', async (importOriginal) => ({
+vi.mock('@/server/services/redis/internal', async (importOriginal) => ({
   ...(await importOriginal<typeof RedisLib>()),
   tryInitializeRedisWithPrefix,
 }));

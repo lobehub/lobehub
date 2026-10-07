@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   isRedisEnabled: vi.fn(),
 }));
 
-vi.mock('@/libs/redis', () => ({
+vi.mock('@/server/services/redis/internal', () => ({
   initializeRedis: mocks.initializeRedis,
   isRedisEnabled: mocks.isRedisEnabled,
 }));

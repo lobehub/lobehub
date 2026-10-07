@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/envs/app', () => ({ appEnv: mocks.appEnv }));
 vi.mock('@/envs/auth', () => ({ authEnv: mocks.authEnv }));
 vi.mock('@/envs/redis', () => ({ getRedisConfig: vi.fn() }));
-vi.mock('@/libs/redis', () => ({
+vi.mock('@/server/services/redis/internal', () => ({
   initializeRedis: vi.fn(),
   isRedisEnabled: vi.fn(() => false),
 }));
