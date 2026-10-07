@@ -83,6 +83,9 @@ jobs:
         run: bunx vitest run --config vitest.config.mts --silent='passed-only' tsdown.config.test.ts bundle.test.ts src/modelFacingDocs.test.ts
         working-directory: apps/cli
 
+      - name: Test message tool regressions
+        run: bun run --filter @lobechat/builtin-tool-message test --run --silent='passed-only'
+
       - name: Test packages with coverage
         run: |
           for package in $PACKAGES; do
