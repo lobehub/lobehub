@@ -376,8 +376,9 @@ export default class BrowserSidebarCtr extends ControllerModule {
               onStop = () => {
                 if (committed) return;
                 // A redirect that was cancelled or got a 204 leaves the requested
-                // document showing; one that failed outright shows its error page.
-                if (committedBeforeAbort && webContents.getURL() === committedUrl) {
+                // document showing; one that failed outright shows its error page,
+                // possibly under the same URL.
+                if (committedBeforeAbort && !failure && webContents.getURL() === committedUrl) {
                   resolve({ status: 'loaded' });
                   return;
                 }

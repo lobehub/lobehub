@@ -375,6 +375,42 @@ describe('BrowserSidebarCtr retained webview registration', () => {
       vi.useRealTimers();
     });
 
+    it('reports a same-URL reload of the committed page that fails', async () => {
+      vi.useFakeTimers();
+      const guest = createWebContents(7);
+      guest.isLoading.mockReturnValue(true);
+      guest.loadURL = vi.fn(async () => {
+        guest.getURL.mockReturnValue('https://example.com/start');
+        guest.emit('did-navigate', {}, 'https://example.com/start');
+        setTimeout(() => {
+          guest.emit(
+            'did-fail-load',
+            {},
+            -105,
+            'ERR_NAME_NOT_RESOLVED',
+            'https://example.com/start',
+            true,
+          );
+          guest.emit('did-stop-loading');
+        }, 1000);
+        throw Object.assign(new Error('ERR_ABORTED (-3)'), { errno: -3 });
+      });
+      await register(guest);
+
+      const pending = invokeIpc('browserSidebar.navigate', {
+        sessionId: 'topic:a',
+        url: 'https://example.com/start',
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      await expect(pending).resolves.toEqual({
+        error:
+          'Could not open https://example.com/start: ERR_NAME_NOT_RESOLVED (-105). The browser is showing its error page.',
+        success: false,
+      });
+      vi.useRealTimers();
+    });
+
     it('does not report success when the replacement after ERR_ABORTED never commits', async () => {
       vi.useFakeTimers();
       const guest = createWebContents(7);
