@@ -17,6 +17,17 @@ const projectWidgets = (projectId?: string) => (s: DashboardStore) =>
 const dashboardDetail = (dashboardId?: string) => (s: DashboardStore) =>
   dashboardId ? s.dashboardDetailMap[dashboardId] : undefined;
 
+/**
+ * Whether a loaded board lives somewhere other than this project (a home board
+ * or another project's), so a project route must not show it as its own.
+ * False until the board has loaded.
+ */
+const isDashboardOutsideProject =
+  (dashboardId: string, projectId: string) => (s: DashboardStore) => {
+    const detail = s.dashboardDetailMap[dashboardId];
+    return !!detail && detail.projectId !== projectId;
+  };
+
 /** A placed widget's hot read model, looked up across the boards already loaded. */
 const widgetById = (dashboardId: string, widgetId?: string) => (s: DashboardStore) =>
   widgetId
@@ -60,6 +71,7 @@ export const dashboardSelectors = {
   canManageDashboard,
   dashboardDetail,
   dashboardList,
+  isDashboardOutsideProject,
   isLayoutSaving,
   isWidgetAdding,
   isWidgetPublishing,
