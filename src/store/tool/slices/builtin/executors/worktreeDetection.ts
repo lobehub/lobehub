@@ -949,9 +949,22 @@ const resolveWorktreeAddFromDevice = async (
   }
 };
 
+const isWindowsPath = (p: string): boolean => /^[A-Z]:[\\/]/i.test(p) || p.startsWith('\\\\');
+
+/**
+ * The recorded worktree becomes the cwd of every later command on the source's
+ * device, so it must be an absolute path in the source's own filesystem namespace.
+ * A Windows source (`C:\repo`, `\\wsl.localhost\…`) whose command ran a nested
+ * shell — `wsl.exe -- bash -lc "git worktree add /tmp/wt"` — yields a POSIX path
+ * that does not exist for the Windows shell, and spawning there fails with ENOENT.
+ */
+const isWorktreePathOnSourceDevice = (path: string, source: string): boolean =>
+  isWindowsPath(source) ? isWindowsPath(path) : path.startsWith('/');
+
 /**
  * Turn a parse result into a recordable worktree: trust a statically resolved
- * path directly, otherwise read the real one back from the device.
+ * path directly, otherwise read the real one back from the device. Either way a
+ * path that is not usable as a cwd next to the source is dropped.
  */
 const resolveWorktreeAddInfo = async (
   parsed: WorktreeAddParseResult | undefined,
@@ -959,11 +972,13 @@ const resolveWorktreeAddInfo = async (
   boundDeviceId?: string,
 ): Promise<WorktreeAddInfo | undefined> => {
   if (!parsed) return undefined;
-  if (parsed.path) {
+  if (parsed.path && isWorktreePathOnSourceDevice(parsed.path, source)) {
     const branch = normalizeBranch(parsed.branch);
     return { ...(branch ? { branch } : {}), path: parsed.path };
   }
-  return resolveWorktreeAddFromDevice(parsed, source, boundDeviceId);
+  const fromDevice = await resolveWorktreeAddFromDevice(parsed, source, boundDeviceId);
+  if (!fromDevice || !isWorktreePathOnSourceDevice(fromDevice.path, source)) return undefined;
+  return fromDevice;
 };
 
 /**
