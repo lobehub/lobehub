@@ -99,6 +99,7 @@ export abstract class AcpAgentSession<
 
   private readonly cancelGraceMs: number;
   private readonly transport: HeterogeneousAgentRuntimeStatus['transport'];
+  private cancelRequested = false;
   private cancelTimer?: ReturnType<typeof setTimeout>;
   private hostClosed = false;
   private lastStatus?: HeterogeneousAgentRuntimeStatus['state'];
@@ -158,6 +159,15 @@ export abstract class AcpAgentSession<
       this.emitStatus('idle');
     } catch (cause) {
       if (this.hostClosed) return;
+      if (this.cancelRequested) {
+        // A host-driven cancel can kill the transport before session/cancel
+        // settles the prompt (e.g. a process-group signal racing the RPC).
+        // That death is the cancellation itself, not a crash — report the
+        // interrupted terminal, never a transport error.
+        await this.onRunCancelled?.();
+        await this.emitEvents(await this.pipeline.flush());
+        return;
+      }
       const error = cause instanceof Error ? cause : new Error(String(cause));
       await this.onRunFailure?.(error);
       this.emitStatus('error');
@@ -175,6 +185,7 @@ export abstract class AcpAgentSession<
    * `cancelled` stop reason. Force-closes after the grace period.
    */
   interrupt(): void {
+    this.cancelRequested = true;
     const sessionId = this.acpSessionId;
     if (!sessionId) {
       this.close();
@@ -188,6 +199,7 @@ export abstract class AcpAgentSession<
   /** Host-forced shutdown: suppresses further events and kills the child. */
   close(signal: NodeJS.Signals = 'SIGTERM'): void {
     if (this.hostClosed) return;
+    this.cancelRequested = true;
     this.hostClosed = true;
     this.onHostClose?.();
     this.client.close(signal);
@@ -277,6 +289,13 @@ export abstract class AcpAgentSession<
 
   /** Emit synthetic terminal events for a failed run before the error is rethrown. */
   protected onRunFailure?(error: Error): Promise<void>;
+
+  /**
+   * Emit the cancelled-turn terminal when a host interrupt killed the transport
+   * mid-prompt — the same shape the settled `stopReason: 'cancelled'` path
+   * produces, so downstream consumers cannot tell the two apart.
+   */
+  protected onRunCancelled?(): Promise<void>;
 
   /** Extra cleanup when the host force-closes the session. */
   protected onHostClose?(): void;

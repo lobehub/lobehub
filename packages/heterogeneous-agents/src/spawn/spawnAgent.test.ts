@@ -816,6 +816,44 @@ describe('spawnAgent', () => {
     }
   });
 
+  it('reports a host-interrupted Devin ACP run as interrupted, not a transport error', async () => {
+    const fake = createFakeAcpProc({ promptAutoComplete: false, sessionId: 'devin-session-1' });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        operationId: 'op-devin-interrupt',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      // The wrapper delivers the protocol-level cancel through `interrupt` when
+      // the OS signal already reached the agent through a shared process group.
+      expect(handle.interrupt).toBeTypeOf('function');
+      handle.interrupt?.('SIGINT');
+      fake.proc.emit('close', null, 'SIGINT');
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGINT' });
+      expect(events.some(({ type }) => type === 'error')).toBe(false);
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ reason: 'interrupted' }),
+          type: 'agent_runtime_end',
+        }),
+      );
+    } finally {
+      processKill.mockRestore();
+    }
+  });
+
   it('allows the official canonical trae-cli command to run through ACP', async () => {
     const fake = createFakeAcpProc();
     nextFakeProc = fake.proc;

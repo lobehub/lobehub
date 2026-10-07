@@ -104,6 +104,11 @@ describe('hetero exec command', () => {
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
+    // The suite may run inside a dispatched `lh hetero exec` (e.g. on a
+    // connected device), which sets this env for real — clear it so tests
+    // decide the process-group mode explicitly instead of inheriting the
+    // ambient wrapper's.
+    vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '');
     // Stub `process.exit` so the test runner doesn't tear down — but THROW a
     // sentinel rather than return, mirroring `process.exit`'s `never` return
     // type in production. Without throwing, the command's code after an
@@ -367,6 +372,55 @@ describe('hetero exec command', () => {
     for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
 
     sigintHandler?.();
+    expect(kill).not.toHaveBeenCalled();
+
+    resolveExit?.({ code: null, signal: 'SIGINT' });
+    await command;
+  });
+
+  // The same inherited-group SIGINT that kills `devin acp` must also notify the
+  // session transport: without `interrupt` the ACP session classifies the
+  // signal death as a transport crash and emits a terminal error card.
+  it('notifies session transports through interrupt() inside an inherited wrapper group', async () => {
+    vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+    let sigintHandler: (() => void) | undefined;
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT') sigintHandler = listener;
+      return process;
+    }) as typeof process.on);
+
+    let resolveExit:
+      ((result: { code: number | null; signal: NodeJS.Signals | null }) => void) | undefined;
+    const stderr = new PassThrough();
+    setImmediate(() => stderr.end());
+    const interrupt = vi.fn();
+    const kill = vi.fn();
+    mockSpawnAgent.mockResolvedValue({
+      events: {
+        [Symbol.asyncIterator]: () => ({
+          next: async () => ({ done: true, value: undefined }),
+        }),
+      },
+      exit: new Promise((resolve) => {
+        resolveExit = resolve;
+      }),
+      interrupt,
+      kill,
+      pid: 12_345,
+      stderr,
+    });
+
+    const command = runCmd(['hetero', 'exec', '--type', 'devin', '--prompt', 'hi']);
+    await vi.waitFor(() => {
+      expect(sigintHandler).toBeDefined();
+    });
+
+    sigintHandler?.();
+    // The signal may land before the async spawn binds `handle`; either way the
+    // remembered cancellation is replayed through `interrupt` once it binds.
+    await vi.waitFor(() => {
+      expect(interrupt).toHaveBeenCalledWith('SIGINT');
+    });
     expect(kill).not.toHaveBeenCalled();
 
     resolveExit?.({ code: null, signal: 'SIGINT' });
@@ -1126,8 +1180,11 @@ describe('hetero exec command', () => {
     for (let i = 0; i < 20 && !sigintHandler; i += 1) await Promise.resolve();
 
     sigintHandler?.();
-    await Promise.resolve();
-    expect(kill).toHaveBeenCalledWith('SIGINT');
+    // The signal can land before the async spawn binds `handle`; the remembered
+    // cancellation is then replayed through `handle.kill` once it binds.
+    await vi.waitFor(() => {
+      expect(kill).toHaveBeenCalledWith('SIGINT');
+    });
     expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
 
     resolveFirstEvent?.({

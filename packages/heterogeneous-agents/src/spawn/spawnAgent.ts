@@ -107,6 +107,15 @@ export interface SpawnAgentHandle {
    */
   exit: Promise<{ code: number | null; signal: NodeJS.Signals | null }>;
   /**
+   * Notify a session transport of host-initiated cancellation at the protocol
+   * level (ACP `session/cancel`, RPC abort). Present only on session
+   * transports — absent on one-shot CLI spawns where `kill` is the only
+   * cancel channel. Safe to invoke when an OS signal already reached the
+   * agent through a shared process group: it delivers no extra signal for
+   * graceful-cancel signals like SIGINT.
+   */
+  interrupt?: (signal?: NodeJS.Signals) => void;
+  /**
    * Send a signal to the child. A dedicated Unix process group is signaled as
    * a tree; inherited-group children receive a direct signal because their
    * outer wrapper owns group-level cancellation.
@@ -464,7 +473,7 @@ const createAcpSpawnBridge = () => {
     close: (signal?: NodeJS.Signals) => void;
     interrupt: () => void;
     run: () => Promise<void>;
-  }): Pick<SpawnAgentHandle, 'exit' | 'kill'> => {
+  }): Pick<SpawnAgentHandle, 'exit' | 'interrupt' | 'kill'> => {
     const exit: SpawnAgentHandle['exit'] = session
       .run()
       .then(() => getHostExit() ?? { code: 0, signal: null })
@@ -488,7 +497,10 @@ const createAcpSpawnBridge = () => {
       if (signal === 'SIGINT') session.interrupt();
       else session.close(signal);
     };
-    return { exit, kill };
+    // SIGINT goes through `session/cancel` — protocol-level, not an OS signal —
+    // so exposing `kill` as `interrupt` lets hosts mark a host-driven cancel
+    // even when the process group already delivered the OS signal itself.
+    return { exit, interrupt: kill, kill };
   };
 
   return { attach, events, onEvents, onStderr, stderr };
@@ -507,11 +519,12 @@ const createAcpSpawnHandle = (
   session: AcpSpawnSession,
   getSessionId: () => string | undefined = () => session.sessionId,
 ): SpawnAgentHandle => {
-  const { exit, kill } = bridge.attach(session);
+  const { exit, interrupt, kill } = bridge.attach(session);
 
   return {
     events: bridge.events,
     exit,
+    interrupt,
     kill,
     get pid() {
       return session.pid;
@@ -603,11 +616,12 @@ const spawnDroidAcpAgent = async (
     resumeSessionId: options.resumeSessionId,
     sessionId: options.operationId,
   });
-  const { exit, kill } = bridge.attach(session);
+  const { exit, interrupt, kill } = bridge.attach(session);
 
   return {
     events: bridge.events,
     exit,
+    interrupt,
     kill,
     get pid() {
       return session.pid;
