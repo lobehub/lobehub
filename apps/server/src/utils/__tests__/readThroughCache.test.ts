@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { readThrough } from '../readThroughCache';
+import { claimOnce, readThrough } from '../readThroughCache';
 
 const { redis, getClient } = vi.hoisted(() => {
   const redis = { get: vi.fn(), set: vi.fn() };
@@ -74,5 +74,35 @@ describe('readThrough', () => {
     ).rejects.toThrow('upstream');
 
     expect(redis.set).not.toHaveBeenCalled();
+  });
+});
+
+describe('claimOnce', () => {
+  it('claims through Redis SET NX and reports whether this caller won', async () => {
+    redis.set.mockResolvedValueOnce('OK').mockResolvedValueOnce(null);
+
+    await expect(claimOnce('rescan:dev-1', 45_000)).resolves.toBe(true);
+    await expect(claimOnce('rescan:dev-1', 45_000)).resolves.toBe(false);
+
+    expect(redis.set).toHaveBeenCalledWith(
+      'send_path_cache:claim:rescan:dev-1',
+      '1',
+      'PX',
+      45_000,
+      'NX',
+    );
+  });
+
+  it('falls back to a per-process claim without Redis, and lets it expire', async () => {
+    getClient.mockReturnValue(null);
+    vi.useFakeTimers();
+    try {
+      await expect(claimOnce('rescan:dev-2', 1000)).resolves.toBe(true);
+      await expect(claimOnce('rescan:dev-2', 1000)).resolves.toBe(false);
+      vi.advanceTimersByTime(1001);
+      await expect(claimOnce('rescan:dev-2', 1000)).resolves.toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

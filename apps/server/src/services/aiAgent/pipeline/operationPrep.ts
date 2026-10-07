@@ -28,6 +28,7 @@ import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngin
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
+import { claimOnce } from '@/server/utils/readThroughCache';
 import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
@@ -44,6 +45,13 @@ import type { ToolDiscoveryResult } from './toolDiscovery';
 import type { RunAttachments } from './turnSetup';
 
 const log = debug('lobe-server:ai-agent-service');
+
+/**
+ * How long one background workspace rescan holds its claim: the scan's own
+ * timeout (30s) plus the writeback, so a second refresh of the same directory
+ * is not started while the first is still walking it.
+ */
+const WORKSPACE_RESCAN_CLAIM_MS = 45 * 1000;
 
 export interface HistoryLoaderInput {
   appContext?: InternalExecAgentParams['appContext'];
@@ -341,13 +349,25 @@ const resolveWorkspaceInit = async (
     // inside a step's scheduled-work scope, whose step-boundary flush has a
     // short budget — a rescan of this length would stall it. The refresh is
     // not part of the step's settlement, so it goes straight to the host.
+    //
+    // Claimed before scanning: concurrent sends, sub-agents and group members
+    // that read the same stale entry would each schedule their own 30s walk
+    // and the same writeback. One of them wins the claim for the length of a
+    // scan; the others leave the refresh to it.
     if (cached?.workspace) {
       log('execAgent: serving stale workspace init for %s, refreshing in background', boundCwd);
-      afterUnscoped(() =>
-        scanAndPersist().catch((error) => {
+      const claimKey = `workspace_rescan:v1:${deps.userId}:${deviceWorkspaceId ?? 'personal'}:${activeDeviceId}:${boundCwd}`;
+      afterUnscoped(async () => {
+        try {
+          if (!(await claimOnce(claimKey, WORKSPACE_RESCAN_CLAIM_MS))) {
+            log('execAgent: workspace rescan for %s already in flight, skipping', boundCwd);
+            return;
+          }
+          await scanAndPersist();
+        } catch (error) {
           log('execAgent: background workspace rescan failed for %s: %O', boundCwd, error);
-        }),
-      );
+        }
+      });
       return { ...resolved, workspace: cached.workspace };
     }
 

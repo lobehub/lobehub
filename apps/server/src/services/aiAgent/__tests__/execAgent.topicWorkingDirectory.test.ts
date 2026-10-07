@@ -170,6 +170,14 @@ vi.mock('@/server/modules/Mecha', () => {
   };
 });
 
+// The background rescan claims itself before scanning; the claim store is
+// module state, so tests drive it explicitly instead of sharing it.
+const { mockClaimOnce } = vi.hoisted(() => ({ mockClaimOnce: vi.fn(async () => true) }));
+vi.mock('@/server/utils/readThroughCache', () => ({
+  claimOnce: mockClaimOnce,
+  readThrough: (_key: string, read: () => Promise<unknown>) => read(),
+}));
+
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     initWorkspace: mockInitWorkspace,
@@ -235,6 +243,7 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     mockUpdateDevice.mockResolvedValue(undefined);
     mockUpdateTopicMetadata.mockResolvedValue(undefined);
 
+    mockClaimOnce.mockImplementation(async () => true);
     service = new AiAgentService(mockDb, userId);
   });
 
@@ -316,6 +325,40 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
       workingDirectory: '/repo/default',
       workingDirectoryConfig: { path: '/repo/default' },
     });
+  });
+
+  it('lets only one of several concurrent sends refresh the same stale scan', async () => {
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [
+        {
+          path: '/repo/default',
+          workspace: { instructions: [], skills: [] },
+          workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
+        },
+      ],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    mockInitWorkspace.mockReturnValue(new Promise(() => {}));
+    const claimed = new Set<string>();
+    mockClaimOnce.mockImplementation(async (key: string) => {
+      if (claimed.has(key)) return false;
+      claimed.add(key);
+      return true;
+    });
+
+    await Promise.all([
+      service.execAgent({ agentId: 'agent-1', prompt: 'Hello' }),
+      service.execAgent({ agentId: 'agent-1', prompt: 'Hello again' }),
+      service.execAgent({ agentId: 'agent-1', prompt: 'And again' }),
+    ]);
+    // The refresh is scheduled off the send path; let it reach the claim.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
   });
 
   it('never rewrites a topic that is already pinned to a directory', async () => {

@@ -58,3 +58,42 @@ export const readThrough = async <T>(
 
   return value;
 };
+
+/** In-process claims for when Redis is unavailable: key → expiry (ms). */
+const localClaims = new Map<string, number>();
+
+/**
+ * Claim the right to do one piece of background work for `ttlMs`. The first
+ * caller gets `true`; every other caller with the same key gets `false` until
+ * the claim expires. Built for refreshes that fan out from concurrent sends
+ * (a workspace rescan over the device's WebSocket): one of them should do
+ * the work, the rest should not pile on.
+ *
+ * Atomic across instances through Redis `SET NX`. Without Redis the claim is
+ * per process — still enough to stop one instance scheduling the same scan
+ * ten times, which is the common shape of a stampede. A claim is never
+ * released early: a successful refresh makes the next read fresh anyway, and
+ * a failed one is retried once the claim expires.
+ */
+export const claimOnce = async (key: string, ttlMs: number): Promise<boolean> => {
+  const claimKey = `${KEY_PREFIX}:claim:${key}`;
+  const ttl = Math.max(1, Math.round(ttlMs));
+  const redis = getAgentRuntimeRedisClient();
+
+  if (redis) {
+    try {
+      return (await redis.set(claimKey, '1', 'PX', ttl, 'NX')) === 'OK';
+    } catch (error) {
+      log('claim failed for %s, falling back to a local claim: %O', key, error);
+    }
+  }
+
+  const now = Date.now();
+  if (localClaims.size > 1000) {
+    for (const [k, expiresAt] of localClaims) if (expiresAt <= now) localClaims.delete(k);
+  }
+  const expiresAt = localClaims.get(claimKey);
+  if (expiresAt && expiresAt > now) return false;
+  localClaims.set(claimKey, now + ttl);
+  return true;
+};
