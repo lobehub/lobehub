@@ -1,7 +1,7 @@
 'use client';
 
 import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
-import { Flexbox, Icon, Markdown, ScrollShadow } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { ActionIcon, confirmModal, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
@@ -30,18 +30,9 @@ const setStoredTab = (id: string, tab: string) => {
   localStorage.setItem(`${STORAGE_KEY_PREFIX}${id}`, tab);
 };
 
-const styles = createStaticStyles(({ css, cssVar }) => ({
+const styles = createStaticStyles(({ css }) => ({
   container: css`
     margin-block-end: 8px;
-    padding-block: 8px;
-    padding-inline: 12px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 12px;
-
-    background: ${cssVar.colorBgContainer};
-  `,
-  contentScroll: css`
-    max-height: min(40vh, 400px);
   `,
   header: css`
     .ant-tabs-nav {
@@ -165,19 +156,13 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
         </Flexbox>
       )}
       {!showPanelContent ? null : activeTab === 'summary' ? (
-        <ScrollShadow className={styles.contentScroll} offset={12} size={12}>
-          <Markdown style={{ overflow: 'unset' }} variant={'chat'}>
-            {content}
-          </Markdown>
-        </ScrollShadow>
+        <Markdown variant={'chat'}>{content}</Markdown>
       ) : (
-        <ScrollShadow className={styles.contentScroll} offset={12} size={12}>
-          <Flexbox className={styles.messagesContainer} gap={4}>
-            {compressedMessages?.map((msg) => (
-              <CompressedMessageItem key={msg.id} message={msg} />
-            ))}
-          </Flexbox>
-        </ScrollShadow>
+        <Flexbox className={styles.messagesContainer} gap={4}>
+          {compressedMessages?.map((msg) => (
+            <CompressedMessageItem key={msg.id} message={msg} />
+          ))}
+        </Flexbox>
       )}
     </Flexbox>
   );
