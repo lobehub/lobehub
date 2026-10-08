@@ -14,9 +14,32 @@ classifies a tier, and at **red** stops only the processes this run started.
 | Dev servers and type-check workers | A dev server and a type checker per run; concurrent runs multiply them. |
 | Recordings | Frame sequences held in memory until they are assembled and written. |
 
-**Swap exhaustion, not total RAM, is what freezes the host.** When a machine that
-was fine becomes unusable mid-run, measure `sysctl vm.swapusage` (macOS) or
-`/proc/meminfo` (Linux) before blaming the browser.
+**Low unused RAM is not necessarily memory pressure.** macOS can retain large
+reclaimable caches with little free RAM and no swapping. Use the kernel pressure
+signal rather than terminating services because of a low free-page percentage.
+
+## Platform policy
+
+- **macOS:** `kern.memorystatus_vm_pressure_level` exports `1` = normal,
+  `2` = warning, `4` = critical (not the kernel's internal enum). These map to
+  green/yellow/red. `swap` and `free` stay in samples as diagnostics; their
+  percentage thresholds do not apply on macOS. Swap allocation grows dynamically,
+  so its used percentage is not an exhaustion signal either. Explicit RSS/count
+  budgets still apply. Missing or unrecognized pressure is `unknown`, exits 2
+  on `check`, and never triggers automatic termination.
+- **Linux:** existing `MemAvailable / MemTotal` and swap-percentage thresholds
+  remain unchanged. They describe the host; this guard does not yet account for
+  cgroup limits or PSI. Do not infer container safety from a green host sample.
+- **Native Windows:** unsupported. WSL uses the Linux policy, not Windows host
+  memory monitoring.
+
+On macOS, `stop-owned` requires **three consecutive red samples** (about 20 seconds
+between the first and third at the default interval). Earlier red samples record
+`action: pending`; the third permits `action: stop-owned`. Any non-red sample,
+including unknown, resets the consecutive count. A one-shot `check` still reports
+the current tier immediately and never kills processes. Linux keeps its existing
+immediate red action. This confirmation window is an initial policy, not a
+guarantee that every workload tolerates that delay.
 
 ## Run it
 
@@ -36,13 +59,14 @@ bash "$GUARD" start \
 
 bash "$GUARD" claim --state-dir "$RUN_DIR" --pid "$BROWSER_DAEMON_PID"  # what this run started
 
-bash "$GUARD" check  --json                        # one verdict now; exit 0 green, 10 yellow, 20 red
+bash "$GUARD" check  --json                        # exit 0 green, 10 yellow, 20 red, 2 unknown/error
 bash "$GUARD" status --state-dir "$RUN_DIR" --json # samples, red/yellow counts, recorded events
 bash "$GUARD" stop   --state-dir "$RUN_DIR"        # at teardown, always
 ```
 
 Threshold spec: comma-separated `KEY=VALUE`, any subset of
 `swap=PCT`, `free=PCT`, `total.rss=MB`, `group.NAME.rss=MB`, `group.NAME.count=N`.
+`swap` and `free` thresholds apply on Linux only, per the platform policy above.
 `total.rss` is the summed RSS of the declared groups, so it stays 0 without
 `--group`. `--group NAME=PATTERN` is repeatable; the pattern is an ERE matched
 against each process command line. Keep patterns specific to the processes this run
@@ -75,7 +99,8 @@ mid-capture.
 | --- | --- |
 | green | Continue. |
 | yellow | Recycle before it becomes red: close idle browser sessions, drop the oldest recording frames, re-check. |
-| red | The guard stops this run's owned heavy processes. Keep the evidence already in hand, mark the remaining checks `blocked` with the reason, and publish. |
+| red | Pause new heavy work; inspect `events.jsonl` for pending confirmation or actual stops. After a stop, keep existing evidence and mark interrupted/unexecuted checks `blocked` until the environment recovers and they are exercised. |
+| unknown | Pressure could not be determined. No automatic termination; resolve the missing signal before treating the environment as healthy. |
 
 A red tier is a real observation, not a failure to hide: a check the run never
 exercised is `blocked`, never `passed`.

@@ -172,7 +172,12 @@ export const aiChatRouter = router({
           tools: input.tools,
         },
         {
-          metadata: { trigger: RequestTrigger.Chat, ...input.metadata },
+          metadata: {
+            trigger: RequestTrigger.Chat,
+            ...input.metadata,
+            // Preserve extensible metadata while using the originating request's UA.
+            userAgent: ctx.userAgent,
+          },
           tracing: { ...input.tracing, tracingId },
         },
       );

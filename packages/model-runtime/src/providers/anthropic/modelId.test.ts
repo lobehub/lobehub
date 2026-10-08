@@ -174,6 +174,8 @@ describe('isAlwaysThinkingClaudeModel', () => {
   it('should return false for models that accept disabled thinking', () => {
     expect(isAlwaysThinkingClaudeModel('claude-opus-5')).toBe(false);
     expect(isAlwaysThinkingClaudeModel('claude-sonnet-5')).toBe(false);
+    // Haiku 5.5 still accepts `disabled` at effort `high` or below.
+    expect(isAlwaysThinkingClaudeModel('claude-haiku-5-5')).toBe(false);
     expect(isAlwaysThinkingClaudeModel('claude-opus-4-8')).toBe(false);
     expect(isAlwaysThinkingClaudeModel('claude-sonnet-4-6')).toBe(false);
     expect(isAlwaysThinkingClaudeModel('gpt-5')).toBe(false);
@@ -212,6 +214,10 @@ describe('supportsClaudeEffortLevel', () => {
     ['claude-fable-5-1', 'xhigh', true],
     ['claude-mythos-preview', 'max', true],
     ['claude-mythos-preview', 'xhigh', false],
+    ['claude-haiku-5-5', 'low', true],
+    ['claude-haiku-5-5', 'xhigh', true],
+    ['global.anthropic.claude-haiku-5-5', 'max', true],
+    ['anthropic/claude-haiku-5.5', 'medium', true],
     ['gpt-5', 'high', false],
   ])('should report model %s effort %s support as %s', (model, effort, expected) => {
     expect(supportsClaudeEffortLevel(model, effort)).toBe(expected);
@@ -242,6 +248,7 @@ describe('rejectsForcedToolChoice', () => {
     expect(rejectsForcedToolChoice('claude-mythos-5')).toBe(false);
     expect(rejectsForcedToolChoice('claude-opus-5')).toBe(false);
     expect(rejectsForcedToolChoice('claude-sonnet-5')).toBe(false);
+    expect(rejectsForcedToolChoice('claude-haiku-5-5')).toBe(false);
     expect(rejectsForcedToolChoice('claude-opus-4-8')).toBe(false);
     expect(rejectsForcedToolChoice('gpt-5')).toBe(false);
   });
@@ -252,6 +259,7 @@ describe('rejectsDisabledThinkingAtEffort', () => {
     expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'xhigh')).toBe(true);
     expect(rejectsDisabledThinkingAtEffort('claude-opus-5', 'max')).toBe(true);
     expect(rejectsDisabledThinkingAtEffort('global.anthropic.claude-sonnet-5', 'max')).toBe(true);
+    expect(rejectsDisabledThinkingAtEffort('claude-haiku-5-5', 'xhigh')).toBe(true);
   });
 
   it('should keep every lower effort level valid alongside disabled thinking', () => {
