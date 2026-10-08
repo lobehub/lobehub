@@ -50,6 +50,7 @@ vi.mock('@/store/chat/selectors', () => ({
   chatPortalSelectors: {
     chunkText: (s: { chunkText?: string }) => s.chunkText,
     previewFileId: (s: { previewFileId?: string }) => s.previewFileId,
+    previewFileSource: () => undefined,
   },
 }));
 
