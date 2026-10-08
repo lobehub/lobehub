@@ -192,6 +192,14 @@ export const classifyToolInterventionPresentation = (
     return { interactionKind: 'custom', surface: 'form' };
   }
 
+  // The secure credential form writes the secret itself and then resolves the
+  // call as an ordinary approval, so it keeps tool-approval semantics. It is
+  // still a form: approving it anywhere but the card (Approve all, a push or
+  // notification action) would skip the form and never store the secret.
+  if (identifier === 'lobe-creds' && apiName === 'requestCredsInput') {
+    return { interactionKind: 'tool_approval', surface: 'form' };
+  }
+
   // Claude Code / Cursor ACP / Devin ACP / Droid ACP / Qoder expose provider-specific intervention
   // forms (permission, plan, bespoke prompts). They are intentionally kept
   // non-binary even when a newly added API name is not yet known to Web.

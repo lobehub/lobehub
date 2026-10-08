@@ -22,14 +22,18 @@ const extractProvider = (body: unknown): string | undefined => {
   return typeof p === 'string' ? p : undefined;
 };
 
-const extractMessage = (value: unknown, depth = 0): string | undefined => {
+/**
+ * Find the first human-readable message in an error value, walking the nested `error`,
+ * `_responseBody` and `body` layers that runtime payloads use.
+ */
+export const extractErrorMessage = (value: unknown, depth = 0): string | undefined => {
   if (typeof value === 'string') return value.trim() ? value : undefined;
   if (!isRecord(value) || depth > 5) return undefined;
   if (typeof value.message === 'string' && value.message.trim() && value.message !== 'error') {
     return value.message;
   }
   for (const nested of [value.error, value._responseBody, value.body]) {
-    const message = extractMessage(nested, depth + 1);
+    const message = extractErrorMessage(nested, depth + 1);
     if (message) return message;
   }
 };
@@ -197,9 +201,9 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
     };
     const message =
       (payload.message && payload.message !== 'error' ? payload.message : undefined) ??
-      extractMessage(payload.body) ??
-      extractMessage(payload._responseBody) ??
-      extractMessage(payload.error) ??
+      extractErrorMessage(payload.body) ??
+      extractErrorMessage(payload._responseBody) ??
+      extractErrorMessage(payload.error) ??
       String(payload.errorType);
 
     return enrichWithSpec({
@@ -222,7 +226,7 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
       typeof (error as { type: unknown }).type === 'number')
   ) {
     const formatted = error as ChatMessageError;
-    const message = extractMessage(formatted);
+    const message = extractErrorMessage(formatted);
     return enrichWithSpec({ ...formatted, ...(message ? { message } : {}) });
   }
 
@@ -256,7 +260,7 @@ export const normalizeChatMessageError = (error: unknown): ChatMessageError => {
   if (isRecord(error)) {
     return enrichWithSpec({
       body: error,
-      message: extractMessage(error) ?? 'Agent runtime error',
+      message: extractErrorMessage(error) ?? 'Agent runtime error',
       type:
         typeof error.code === 'string'
           ? (getErrorCodeSpec(error.code)?.code ?? AgentRuntimeErrorType.AgentRuntimeError)

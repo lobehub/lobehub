@@ -16,6 +16,9 @@ import TaskStatusIcon from '@/features/AgentTasks/features/TaskStatusIcon';
 import TaskTriggerTag from '@/features/AgentTasks/features/TaskTriggerTag';
 import { taskDetailPath } from '@/features/AgentTasks/shared/taskDetailPath';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
+// Deep import, not the feature barrel: the inbox renderer loads lazily with
+// HomeInbox, and this surface must not pull it into its own chunk.
+import { EntityLinkHostProvider } from '@/features/EntityLink/host';
 import HomeInbox from '@/features/HomeInbox';
 import AuthorChip from '@/features/HomeInbox/AuthorChip';
 import { filterTopicsForInboxScope } from '@/features/HomeInbox/scopeTogglePlacement';
@@ -38,6 +41,7 @@ import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
+import { HOME_ENTITY_PORTAL_SCOPE } from './acceptancePortalView';
 import GroupBlock from './components/GroupBlock';
 import { homeType } from './components/homeType';
 import RunningGlyph from './components/RunningGlyph';
@@ -363,9 +367,9 @@ const TaskContent = memo(() => {
     statuses: RECENT_TASK_STATUSES,
     visibility: 'all',
   });
-  const tasks = useTaskStore(taskListSelectors.taskList);
-  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal);
-  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit);
+  const tasks = useTaskStore(taskListSelectors.taskList(tasksSWR.queryKey));
+  const tasksTotal = useTaskStore(taskListSelectors.taskListTotal(tasksSWR.queryKey));
+  const tasksInit = useTaskStore(taskListSelectors.isTaskListInit(tasksSWR.queryKey));
   const taskCount = useGlobalStore(systemStatusSelectors.homeTaskCount);
   const shown = tasks.slice(0, taskCount);
 
@@ -538,7 +542,9 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
       return (
         <Flexbox gap={32}>
           {starters}
-          <HomeInbox inlineRail variant={'main'} />
+          <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+            <HomeInbox inlineRail variant={'main'} />
+          </EntityLinkHostProvider>
           <Recommendations variant={'main'} />
         </Flexbox>
       );
@@ -546,12 +552,14 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
 
     return (
       <Flexbox gap={32}>
-        <HomeInbox
-          inlineRail={inlineRail}
-          scope={scope}
-          variant={'main'}
-          onScopeChange={setScope}
-        />
+        <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+          <HomeInbox
+            inlineRail={inlineRail}
+            scope={scope}
+            variant={'main'}
+            onScopeChange={setScope}
+          />
+        </EntityLinkHostProvider>
         {!recentsHidden && (state !== 'ready' || topicRecents.length > 0) && (
           <GroupBlock
             actionAlwaysVisible
@@ -614,7 +622,9 @@ const HomeModeContent = memo<HomeModeContentProps>(({ inlineRail, mode, onSugges
     // hidden — task mode never surfaces them, folded or not.
     return (
       <Flexbox gap={32}>
-        <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
+        <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+          <HomeInbox hideNeedsYou hideUnread inlineRail variant={'main'} />
+        </EntityLinkHostProvider>
         {taskBlocks}
         <Recommendations variant={'main'} />
       </Flexbox>

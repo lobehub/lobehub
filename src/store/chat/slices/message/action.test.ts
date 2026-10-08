@@ -48,21 +48,26 @@ vi.stubGlobal(
 );
 
 // Mock service
-vi.mock('@/services/message', () => ({
-  messageService: {
-    getMessages: vi.fn(),
-    updateMessageError: vi.fn(),
-    removeMessage: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    removeMessagesByAssistant: vi.fn(),
-    removeMessages: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    createMessage: vi.fn(() => Promise.resolve({ id: 'new-message-id', messages: [] })),
-    updateMessage: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    updateMessageMetadata: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    updateMessagePlugin: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    updateMessagePluginError: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-    updateMessageRAG: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
-  },
-}));
+vi.mock('@/services/message', () => {
+  const getMessages = vi.fn();
+  return {
+    messageService: {
+      getMessages,
+      // The list cache reads pages; tests stub the plain list underneath.
+      getMessageListPage: vi.fn((params) => getMessages(params)),
+      updateMessageError: vi.fn(),
+      removeMessage: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+      removeMessagesByAssistant: vi.fn(),
+      removeMessages: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+      createMessage: vi.fn(() => Promise.resolve({ id: 'new-message-id', messages: [] })),
+      updateMessage: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+      updateMessageMetadata: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+      updateMessagePlugin: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+      updateMessagePluginError: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+      updateMessageRAG: vi.fn(() => Promise.resolve({ success: true, messages: [] })),
+    },
+  };
+});
 vi.mock('@/services/topic', () => ({
   topicService: {
     createTopic: vi.fn(() => Promise.resolve()),
@@ -1652,6 +1657,9 @@ describe('chatMessage actions', () => {
       expect(messageService.getMessages).toHaveBeenCalledWith({
         agentId: 'prefetch-agent',
         groupId: null,
+        // Whole tool payloads: the conversation read only asks for projected
+        // ones for a protocol-v2 client whose runs execute on the server.
+        projectToolPayloads: false,
         threadId: null,
         topicId: 'prefetch-topic',
       });
@@ -1731,6 +1739,7 @@ describe('chatMessage actions', () => {
       expect(messageService.getMessages).toHaveBeenCalledWith({
         agentId: 'prefetch-agent',
         groupId: null,
+        projectToolPayloads: false,
         threadId: null,
         topicId: 'cached-topic',
       });

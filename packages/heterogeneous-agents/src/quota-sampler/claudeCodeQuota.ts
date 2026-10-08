@@ -3,11 +3,11 @@ import { readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import path from 'node:path';
 
-import { parseClaudeAccountIdentity } from '../quota/identity';
 import { buildClaudeQuotaWindows } from '../quota/readings';
 import type { ClaudeCodeQuotaSnapshot, ClaudeCodeQuotaUnavailableReason } from '../quota/snapshot';
-import type { ClaudeUsagePayload } from '../quota/usageApi';
-import { mapClaudeUsageToReadings } from '../quota/usageApi';
+import { parseClaudeAccountIdentity } from './identity';
+import type { ClaudeUsagePayload } from './usageApi';
+import { mapClaudeUsageToReadings } from './usageApi';
 
 /**
  * How long a sampler host's snapshot cache may serve a Claude quota reading

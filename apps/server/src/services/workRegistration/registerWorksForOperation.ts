@@ -11,6 +11,7 @@ import {
   scanOperationFileEdits,
 } from '@lobechat/builtin-tools/fileEditScan';
 import type { WorkVersionCumulativeUsage, WorkVersionMetadata } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -324,8 +325,8 @@ export const registerWorksForOperation = async (
   // spawned AFTER its parent already reached a terminal state and ran its tree
   // scan, so the parent will never scan again and the repair's edits would be
   // lost. Distinguish by the parent's status:
-  //   - parent still active (idle / running / parked — waiting_for_human or
-  //     waiting_for_async_tool) → it will scan the whole
+  //   - parent still active (idle / running / parked — waiting_for_human,
+  //     waiting_for_async_tool or waiting_for_client) → it will scan the whole
   //     subtree on its own completion, so no-op here to avoid the duplicate.
   //   - parent already terminal (done / error / interrupted) → register this
   //     op's OWN edits (a legitimately new version for the repair), scanning
@@ -334,12 +335,7 @@ export const registerWorksForOperation = async (
   if (completingOp.parentOperationId) {
     const parentOp = await operationModel.findById(completingOp.parentOperationId);
     const parentStatus = parentOp?.status;
-    const parentActive =
-      !parentStatus ||
-      parentStatus === 'idle' ||
-      parentStatus === 'running' ||
-      parentStatus === 'waiting_for_human' ||
-      parentStatus === 'waiting_for_async_tool';
+    const parentActive = !parentStatus || isAgentOperationInFlight(parentStatus);
     if (parentActive) {
       log(
         '[%s] Skipping file Work registration: parent operation is still active (%s)',

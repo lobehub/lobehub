@@ -36,6 +36,7 @@ import CmdkLazy from '@/layout/GlobalProvider/CmdkLazy';
 import dynamic from '@/libs/next/dynamic';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 
+import ClientLlmWaitResume from './ClientLlmWaitResume';
 import DesktopAutoOidcOnFirstOpen from './DesktopAutoOidcOnFirstOpen';
 import GatewayMuxWarmup from './GatewayMuxWarmup';
 import RegisterHotkeys from './RegisterHotkeys';
@@ -94,6 +95,7 @@ const Layout: FC = () => {
         <Suspense fallback={null}>
           <HotkeyHelperPanel />
           <GatewayMuxWarmup />
+          <ClientLlmWaitResume />
           <HeteroRestartRecovery />
           <RegisterHotkeys />
           <CmdkLazy />

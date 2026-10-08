@@ -106,6 +106,7 @@ export const AcceptanceOverview = ({
               resourceCount={resourceCount}
               discussionCount={countDiscussionMessages({
                 approvals: [],
+                checks: data?.checks,
                 items,
                 rounds: data?.rounds.map(({ run }) => run) ?? [],
                 threads,

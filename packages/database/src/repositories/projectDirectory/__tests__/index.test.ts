@@ -168,6 +168,13 @@ describe('ProjectDirectoryRepository.bind', () => {
     expect(after.configurationSnapshot).toEqual(before.configurationSnapshot);
   });
 
+  it('reports a disabled environment of the same name instead of hitting its unique index', async () => {
+    const env = await new EnvironmentModel(db, userId).save({ name: base.name });
+    await db.update(environments).set({ enabled: false }).where(eq(environments.id, env.id));
+    await expect(repo.bind(base)).rejects.toThrow('Environment is disabled');
+    expect(await db.select().from(environments)).toHaveLength(1);
+  });
+
   it('rejects filing conversations for an agent fixed to another execution target', async () => {
     await db
       .update(agents)

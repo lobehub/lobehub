@@ -38,6 +38,14 @@ describe('withConversationGoalPrompt', () => {
     expect(conversationGoalPrompt).toContain('lh goal plan <goalId> --token <turnToken>');
   });
 
+  it('binds a goal the user names instead of creating a duplicate', () => {
+    // `goal:manage` reaches a device or gateway run only through `/goal`, so
+    // these instructions are the only way such a run can bind an existing goal.
+    expect(conversationGoalPrompt).toContain('lh goal bind-topic <goalId> --json');
+    expect(conversationGoalPrompt).toContain('do not create a new goal');
+    expect(conversationGoalPrompt).toContain('only allow creating or binding this goal');
+  });
+
   it('plans from the create output instead of reading the goal back', () => {
     // A device run holds an operation token, which the goal read endpoint
     // refuses; telling the agent to run `lh goal show` made its first command

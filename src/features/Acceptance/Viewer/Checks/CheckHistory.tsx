@@ -16,6 +16,7 @@ import { AnnotatedImage } from '../Evidence/Annotation';
 import { AttachmentThumbs } from '../Evidence/attachments';
 import { IMAGE_EVIDENCE, imageRatio } from '../Evidence/evidence';
 import { styles as evidenceStyles } from '../Evidence/styles';
+import { VideoFeedbackNotes } from '../Evidence/Video/VideoFeedbackNotes';
 import { styles } from './styles';
 import type { AcceptanceCheck, AcceptanceCheckReviewEntry, AcceptanceEvidence } from './types';
 
@@ -67,13 +68,10 @@ export const FeedbackCard = memo<{
   if (review.action === 'accept') return <AcceptedNote review={review} />;
   if (review.action === 'ignore') return <IgnoredNote review={review} />;
 
-  const groups = new Map<
-    string,
-    { comment?: string; rect: AcceptanceReviewAnnotation['rect'] }[]
-  >();
+  const groups = new Map<string, AcceptanceReviewAnnotation[]>();
   for (const annotation of review.annotations ?? []) {
     const bucket = groups.get(annotation.evidenceId) ?? [];
-    bucket.push({ comment: annotation.comment, rect: annotation.rect });
+    bucket.push(annotation);
     groups.set(annotation.evidenceId, bucket);
   }
 
@@ -101,6 +99,8 @@ export const FeedbackCard = memo<{
                 {annotation.comment}
               </Text>
             ));
+        if (evidence.type === 'video')
+          return <VideoFeedbackNotes key={evidenceId} notes={annotations} />;
         return (
           <AnnotatedImage
             annotations={annotations}

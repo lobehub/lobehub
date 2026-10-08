@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GatewayStreamNotifier } from '../GatewayStreamNotifier';
 import { FULL_STRIP_REDACTION, sanitizeGatewayEventData } from '../gatewayVisitorRedaction';
 import type { StreamChunkData } from '../StreamEventManager';
-import type { IStreamEventManager } from '../types';
+import type { IStreamEventManager, PublishAgentRuntimeEndParams } from '../types';
 
 // Mock global fetch
 const mockFetch = vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
@@ -43,6 +43,9 @@ describe('GatewayStreamNotifier', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // `clearAllMocks` keeps implementations, so a test that installs a fetch
+    // that never resolves would otherwise hang whichever test runs next.
+    mockFetch.mockReset().mockResolvedValue({ ok: true, text: () => Promise.resolve('') });
     inner = createMockInner();
     notifier = new GatewayStreamNotifier(inner, gatewayUrl, serviceToken);
   });
@@ -170,6 +173,7 @@ describe('GatewayStreamNotifier', () => {
       };
 
       await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+      await notifier.drainPushes('op-1');
 
       const pushed = JSON.parse(mockFetch.mock.calls[0][1].body).event.data;
       expect(pushed).toEqual({ finalContent: 'the answer', stepLabel: 'Step 2' });
@@ -181,6 +185,7 @@ describe('GatewayStreamNotifier', () => {
       const data = { reasoning: 'dropped', toolsCalling: [] };
 
       await notifier.publishStreamEvent('op-1', { data, stepIndex: 1, type: 'stream_end' });
+      await notifier.drainPushes('op-1');
 
       expect(JSON.parse(mockFetch.mock.calls[0][1].body).event.data).toEqual({});
     });
@@ -214,7 +219,9 @@ describe('GatewayStreamNotifier', () => {
       });
     });
 
-    it('awaits stream_end gateway push before resolving', async () => {
+    it('waits for the stream_end gateway push unless the caller defers pushes', async () => {
+      // Request-scoped callers (hetero ingest, routers) never drain, so the
+      // push must land before publishStreamEvent resolves.
       let resolveFetch!: () => void;
       mockFetch.mockImplementationOnce(
         () =>
@@ -223,28 +230,103 @@ describe('GatewayStreamNotifier', () => {
           }),
       );
 
-      const result = notifier.publishStreamEvent('op-1', {
-        data: { finalContent: 'final answer' },
-        stepIndex: 0,
-        type: 'stream_end' as const,
-      });
-      let resolved = false;
-      void result.then(() => {
-        resolved = true;
-      });
-
-      await Promise.resolve();
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `${gatewayUrl}/api/operations/push-event`,
-        expect.objectContaining({ method: 'POST' }),
-      );
-      expect(resolved).toBe(false);
+      let published = false;
+      const publish = notifier
+        .publishStreamEvent('op-1', {
+          data: { finalContent: 'final answer' },
+          stepIndex: 0,
+          type: 'stream_end' as const,
+        })
+        .then(() => {
+          published = true;
+        });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(published).toBe(false);
 
       resolveFetch();
+      await publish;
+      expect(published).toBe(true);
+    });
 
-      await expect(result).resolves.toBe('publishStreamEvent-result');
-      expect(resolved).toBe(true);
+    it('does not wait for the stream_end gateway push when deferred, but drainPushes does', async () => {
+      const notifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        undefined,
+        { deferPushes: true },
+      );
+      let resolveFetch!: () => void;
+      mockFetch.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveFetch = () => resolve({ ok: true, text: () => Promise.resolve('') });
+          }),
+      );
+
+      // The step publishes and moves on: the push is ordered, not awaited.
+      await expect(
+        notifier.publishStreamEvent('op-1', {
+          data: { finalContent: 'final answer' },
+          stepIndex: 0,
+          type: 'stream_end' as const,
+        }),
+      ).resolves.toBe('publishStreamEvent-result');
+
+      let drained = false;
+      const drain = notifier.drainPushes('op-1').then(() => {
+        drained = true;
+      });
+      await Promise.resolve();
+      expect(drained).toBe(false);
+
+      resolveFetch();
+      await drain;
+      expect(drained).toBe(true);
+    });
+
+    it('keeps a barrier behind the pushes issued before it, and ahead of later ones', async () => {
+      const notifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        undefined,
+        undefined,
+        { deferPushes: true },
+      );
+      const order: string[] = [];
+      let releaseChunk!: () => void;
+      mockFetch.mockImplementation((_url: string, init: { body: string }) => {
+        const { type } = JSON.parse(init.body).event;
+        if (type === 'stream_chunk') {
+          return new Promise((resolve) => {
+            releaseChunk = () => {
+              order.push('stream_chunk');
+              resolve({ ok: true, text: () => Promise.resolve('') });
+            };
+          });
+        }
+        order.push(type);
+        return Promise.resolve({ ok: true, text: () => Promise.resolve('') });
+      });
+
+      await notifier.publishStreamChunk('op-1', 0, { chunkType: 'text' } as StreamChunkData);
+      await notifier.publishStreamEvent('op-1', {
+        data: { finalContent: 'done' },
+        stepIndex: 0,
+        type: 'stream_end',
+      });
+      await notifier.publishStreamEvent('op-1', { data: {}, stepIndex: 1, type: 'step_start' });
+
+      // Nothing may pass the barrier while the chunk it waits for is in flight.
+      await Promise.resolve();
+      expect(order).toEqual([]);
+
+      releaseChunk();
+      await notifier.drainPushes('op-1');
+
+      expect(order).toEqual(['stream_chunk', 'stream_end', 'step_start']);
     });
 
     it('still returns inner result even if gateway fails', async () => {
@@ -584,6 +666,61 @@ describe('GatewayStreamNotifier', () => {
       expect(body.event.data.reasonDetail).toBe('Custom detail');
     });
 
+    describe('recordError', () => {
+      const endEventData = async (
+        params: Omit<PublishAgentRuntimeEndParams, 'operationId' | 'stepIndex'>,
+      ) => {
+        await notifier.publishAgentRuntimeEnd({ operationId: 'op-1', stepIndex: 0, ...params });
+        await new Promise((r) => setTimeout(r, 50));
+        const pushCall = mockFetch.mock.calls.find((c: any[]) => c[0].includes('push-event'));
+        return JSON.parse(pushCall![1].body).event.data;
+      };
+
+      it('keeps a user-side error off the gateway board', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: 'insufficient quota', type: 'InsufficientQuota' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'openai' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(false);
+      });
+
+      it('files a provider rate limit on our own provider', async () => {
+        const data = await endEventData({
+          finalState: {
+            error: { message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'claude-opus-5', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('classifies by the configured provider, not the upstream named in the error body', async () => {
+        // On our provider the normalized error names the upstream the router
+        // reached, never `lobehub` — trusting it would hide our own rate limit.
+        const data = await endEventData({
+          finalState: {
+            error: { body: { provider: 'azure' }, message: '429', type: 'RateLimitExceeded' },
+            modelRuntimeConfig: { model: 'gpt-5.6-sol', provider: 'lobehub' },
+          },
+          reason: 'error',
+        });
+
+        expect(data.recordError).toBe(true);
+      });
+
+      it('omits the flag on a non-error end', async () => {
+        const data = await endEventData({ finalState: {}, reason: 'completed' });
+
+        expect(data).not.toHaveProperty('recordError');
+      });
+    });
+
     it('includes errorType from finalState.error.type', async () => {
       const finalState = {
         error: { message: 'Budget exceeded', type: 'InsufficientBudgetForModel' },
@@ -899,6 +1036,149 @@ describe('GatewayStreamNotifier', () => {
     });
   });
 
+  describe('LLM relay routes', () => {
+    const executeData = {
+      attempt: 0,
+      callId: 'op-1:2:0',
+      deadlines: { claimMs: 15_000, firstChunkMs: 120_000, idleMs: 60_000, totalMs: 540_000 },
+      leaseToken: 'lease',
+      model: 'llama3',
+      operationId: 'op-1',
+      preferredClientId: 'tab-a',
+      provider: 'ollama',
+      runtimeProvider: 'ollama',
+      stepIndex: 2,
+    };
+
+    const callsTo = (path: string) =>
+      mockFetch.mock.calls.filter((c: any[]) => String(c[0]).endsWith(path));
+
+    beforeEach(() => {
+      mockFetch.mockReset();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        text: () => Promise.resolve('{"delivered":1,"success":true}'),
+      });
+    });
+
+    it('sends llm_execute to the routed endpoint, not as a broadcast stream event', async () => {
+      const result = await notifier.sendLlmExecute('op-1', executeData);
+
+      expect(result).toEqual({ delivered: 1, routed: true });
+      const [call] = callsTo('/api/operations/llm-execute');
+      expect(call[0]).toBe(`${gatewayUrl}/api/operations/llm-execute`);
+      expect(call[1].headers.Authorization).toBe(`Bearer ${serviceToken}`);
+      expect(JSON.parse(call[1].body)).toEqual({ data: executeData, operationId: 'op-1' });
+      expect(callsTo('/api/operations/push-event')).toHaveLength(0);
+    });
+
+    it('cancels and closes a call through their routes', async () => {
+      await notifier.sendLlmCancel('op-1', {
+        callId: 'op-1:2:0',
+        reason: 'interrupted',
+        stepIndex: 2,
+      });
+      await notifier.closeLlmCall('op-1', 'op-1:2:0');
+
+      expect(JSON.parse(callsTo('/api/operations/llm-cancel')[0][1].body)).toEqual({
+        data: { callId: 'op-1:2:0', reason: 'interrupted' },
+        operationId: 'op-1',
+      });
+      expect(JSON.parse(callsTo('/api/operations/llm-close')[0][1].body)).toEqual({
+        callId: 'op-1:2:0',
+        operationId: 'op-1',
+      });
+    });
+
+    it('falls back to a plain stream event on a gateway without the routes (404), and remembers it', async () => {
+      mockFetch.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('/llm-')
+            ? { ok: false, status: 404, text: () => Promise.resolve('404 page not found') }
+            : { ok: true, status: 200, text: () => Promise.resolve('') },
+        ),
+      );
+
+      expect(await notifier.sendLlmExecute('op-1', executeData)).toEqual({ routed: false });
+      await notifier.sendLlmCancel('op-1', { callId: 'op-1:2:0', reason: 'timeout', stepIndex: 2 });
+      await notifier.closeLlmCall('op-1', 'op-1:2:0');
+      await vi.waitFor(() => expect(callsTo('/api/operations/push-event')).toHaveLength(2));
+
+      const pushed = callsTo('/api/operations/push-event').map(
+        (c: any[]) => JSON.parse(c[1].body).event,
+      );
+      expect(pushed.map((e: any) => e.type)).toEqual(['llm_execute', 'llm_cancel']);
+      expect(pushed[0]).toMatchObject({ data: executeData, operationId: 'op-1', stepIndex: 2 });
+      expect(pushed[1].data).toEqual({ callId: 'op-1:2:0', reason: 'timeout' });
+      // Only the first relay call probed the route; cancel and close did not.
+      expect(callsTo('/api/operations/llm-execute')).toHaveLength(1);
+      expect(callsTo('/api/operations/llm-cancel')).toHaveLength(0);
+      expect(callsTo('/api/operations/llm-close')).toHaveLength(0);
+    });
+
+    it('stops probing the relay routes once a close returns 404', async () => {
+      mockFetch.mockImplementation((url: string) =>
+        Promise.resolve(
+          url.includes('/llm-close')
+            ? { ok: false, status: 404, text: () => Promise.resolve('404 page not found') }
+            : { ok: true, status: 200, text: () => Promise.resolve('') },
+        ),
+      );
+
+      await notifier.closeLlmCall('op-1', 'op-1:2:0');
+      await notifier.closeLlmCall('op-1', 'op-1:2:1');
+
+      expect(callsTo('/api/operations/llm-close')).toHaveLength(1);
+      expect(await notifier.sendLlmExecute('op-1', executeData)).toEqual({ routed: false });
+    });
+
+    it('times out a gateway that sends headers and then stalls the body', async () => {
+      vi.useFakeTimers();
+      try {
+        // Headers arrive; the body never does until the request is aborted.
+        mockFetch.mockImplementation((_url: string, init: RequestInit) =>
+          Promise.resolve({
+            ok: true,
+            status: 200,
+            text: () =>
+              new Promise((_resolve, reject) => {
+                init.signal!.addEventListener('abort', () => reject(new Error('aborted')));
+              }),
+          }),
+        );
+
+        const execute = notifier.sendLlmExecute('op-1', executeData);
+        const tool = notifier.sendToolExecute('op-1', {
+          apiName: 'readFile',
+          arguments: '{}',
+          executionTimeoutMs: 30_000,
+          identifier: 'local-system',
+          toolCallId: 'call-1',
+        });
+        const settled = Promise.allSettled([execute, tool]);
+        await vi.advanceTimersByTimeAsync(60_000);
+
+        const [executeResult, toolResult] = await settled;
+        expect(executeResult).toMatchObject({ reason: expect.any(Error), status: 'rejected' });
+        expect(toolResult).toMatchObject({ reason: expect.any(Error), status: 'rejected' });
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('rejects when the gateway refuses the dispatch for another reason', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: false,
+        status: 409,
+        text: () => Promise.resolve('{"delivered":0,"error":"OPERATION_ENDED"}'),
+      });
+
+      await expect(notifier.sendLlmExecute('op-1', executeData)).rejects.toThrow(/409/);
+      expect(callsTo('/api/operations/push-event')).toHaveLength(0);
+    });
+  });
+
   // ─── Single-connection multiplexing: mirror member events to supervisor op ───
 
   describe('mirrorToOperationId (single-connection multiplexing)', () => {
@@ -992,6 +1272,83 @@ describe('GatewayStreamNotifier', () => {
 
       const pushes = pushEventCalls().filter((b) => b.event?.data?.content === 'plain');
       expect(pushes.map((p) => p.operationId)).toEqual(['op-plain']);
+    });
+
+    it('mirrors a member terminal as a non-terminal member_runtime_end so the supervisor channel stays open (G-02)', async () => {
+      await notifier.publishAgentRuntimeInit('op-supervisor', { acceptsMemberRuntimeEnd: true });
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'done',
+        stepIndex: 1,
+      });
+
+      await new Promise((r) => setTimeout(r, 50));
+
+      const ends = pushEventCalls().filter(
+        (b) => b.event?.type === 'agent_runtime_end' || b.event?.type === 'member_runtime_end',
+      );
+      // The member's own channel still gets its real terminal.
+      expect(ends.filter((p) => p.operationId === 'op-member').map((p) => p.event.type)).toEqual([
+        'agent_runtime_end',
+      ]);
+      // The supervisor's channel must NOT receive an `agent_runtime_end`: the
+      // gateway DO treats any such event as the end of ITS session and
+      // broadcasts `session_complete`, cutting the supervisor stream short.
+      const mirrored = ends.filter((p) => p.operationId === 'op-supervisor');
+      expect(mirrored.map((p) => p.event.type)).toEqual(['member_runtime_end']);
+      expect(mirrored[0].event.operationId).toBe('op-member');
+      expect(mirrored[0].event.data.reason).toBe('done');
+    });
+
+    // Codex P1 on #20102: a client released before the rename (desktop, or a web
+    // tab from before a rolling deploy) only retires a member column on
+    // `agent_runtime_end`; renaming it for that client left the column running.
+    it('keeps the verbatim agent_runtime_end for a supervisor whose client predates member_runtime_end', async () => {
+      await notifier.publishAgentRuntimeInit('op-supervisor', {});
+      await notifier.publishAgentRuntimeInit('op-member', { mirrorToOperationId: 'op-supervisor' });
+
+      await notifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member',
+        reason: 'done',
+        stepIndex: 1,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const mirrored = pushEventCalls().filter(
+        (b) =>
+          b.operationId === 'op-supervisor' &&
+          (b.event?.type === 'agent_runtime_end' || b.event?.type === 'member_runtime_end'),
+      );
+      expect(mirrored.map((p) => p.event.type)).toEqual(['agent_runtime_end']);
+      expect(mirrored[0].event.operationId).toBe('op-member');
+    });
+
+    it('queue worker path: reads the supervisor client declaration from persisted metadata', async () => {
+      const resolveAccepts = vi.fn(async (op: string) => op === 'op-supervisor-q');
+      const workerNotifier = new GatewayStreamNotifier(
+        inner,
+        gatewayUrl,
+        serviceToken,
+        async (op) => (op === 'op-member-q' ? 'op-supervisor-q' : undefined),
+        undefined,
+        { resolveAcceptsMemberRuntimeEnd: resolveAccepts },
+      );
+
+      await workerNotifier.publishAgentRuntimeEnd({
+        finalState: {} as any,
+        operationId: 'op-member-q',
+        reason: 'done',
+        stepIndex: 1,
+      });
+      await new Promise((r) => setTimeout(r, 50));
+
+      const mirrored = pushEventCalls().filter((b) => b.operationId === 'op-supervisor-q');
+      expect(mirrored.map((p) => p.event.type)).toEqual(['member_runtime_end']);
+      expect(resolveAccepts).toHaveBeenCalledWith('op-supervisor-q');
     });
 
     it('stops mirroring after the member op reaches a terminal state', async () => {

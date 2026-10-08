@@ -19,6 +19,30 @@ afterEach(async () => {
 });
 
 describe('EnvironmentModel', () => {
+  it('seeds the regenerable paths a new environment cannot be useful without', async () => {
+    // Without these the sandbox runtime puts node_modules in the snapshot layer,
+    // where it counts against an allowance sized for source — the exact thing
+    // that makes a small plan unusable for the projects it is sold for.
+    const env = await model.create({ name: 'Seeded' });
+    expect(env.configuration.excludePaths).toEqual(['node_modules', '.venv', 'target']);
+  });
+
+  it('leaves an explicitly chosen list alone, including an empty one', async () => {
+    // The field is the author's promise about what can be rebuilt. Once they
+    // have decided, the platform must not put its own entries back.
+    const chosen = await model.create({
+      configuration: { excludePaths: ['dist'] },
+      name: 'Chosen',
+    });
+    expect(chosen.configuration.excludePaths).toEqual(['dist']);
+
+    const cleared = await model.create({
+      configuration: { excludePaths: [] },
+      name: 'Cleared',
+    });
+    expect(cleared.configuration.excludePaths).toEqual([]);
+  });
+
   it('creates, lists and updates environments in the owner scope', async () => {
     const env = await model.save({
       name: 'Shared GitHub',

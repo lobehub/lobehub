@@ -128,14 +128,13 @@ export class OperationActionsImpl {
 
     // If parent operation exists and context is not fully provided, inherit from parent
     let context: OperationContext = partialContext || {};
+    const parentOp = parentOperationId ? this.#get().operations[parentOperationId] : undefined;
+    const inheritedTurnStartTime = parentOp?.metadata.turnStartTime;
 
-    if (parentOperationId) {
-      const parentOp = this.#get().operations[parentOperationId];
-      if (parentOp) {
-        // Inherit parent's context, allow partial override
-        context = { ...parentOp.context, ...partialContext };
-        log('[startOperation] inherit context from parent %s: %o', parentOperationId, context);
-      }
+    if (parentOp) {
+      // Inherit parent's context, allow partial override
+      context = { ...parentOp.context, ...partialContext };
+      log('[startOperation] inherit context from parent %s: %o', parentOperationId, context);
     }
 
     log('[startOperation] create operation %s (type=%s, context=%o)', operationId, type, context);
@@ -151,6 +150,7 @@ export class OperationActionsImpl {
       abortController,
       metadata: {
         startTime: now,
+        ...(inheritedTurnStartTime === undefined ? {} : { turnStartTime: inheritedTurnStartTime }),
         ...metadata,
       },
       parentOperationId,

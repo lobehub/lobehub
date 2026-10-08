@@ -38,7 +38,7 @@ export class BriefModel {
   // share content rows), which would leak each member's briefs to everyone else
   // in the workspace. Brief ownership therefore always requires `user_id` to
   // match, in both personal and workspace mode.
-  private ownership = (): SQL =>
+  ownership = (): SQL =>
     this.workspaceId
       ? (and(eq(briefs.userId, this.userId), eq(briefs.workspaceId, this.workspaceId)) as SQL)
       : (and(eq(briefs.userId, this.userId), isNull(briefs.workspaceId)) as SQL);

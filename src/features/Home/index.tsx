@@ -6,6 +6,9 @@ import { lazy, memo, Suspense, useCallback, useEffect, useState } from 'react';
 
 import { useHomeUsageWidgetActive } from '@/business/client/features/HomeUsageWidget';
 import { useHomePromoLine } from '@/business/client/features/useHomePromoLine';
+// Deep import, not the feature barrel: the inbox renderer loads lazily with
+// HomeInbox, and Home must not pull it into its own chunk for one provider.
+import { EntityLinkHostProvider } from '@/features/EntityLink/host';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { useGlobalStore } from '@/store/global';
@@ -15,7 +18,7 @@ import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
-import { isAcceptancePortalView } from './acceptancePortalView';
+import { HOME_ENTITY_PORTAL_SCOPE, isAcceptancePortalView } from './acceptancePortalView';
 import { isHomeMinimalLayout } from './CustomizeModal/config';
 import HomeHeader from './HomeHeader';
 import HomeModeContent from './HomeModeContent';
@@ -137,13 +140,17 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   // Collapsed, the content takes part of the vacated rail track and re-centers
   // on what is left, so the page reads wider without going full-bleed.
+  // An enabled rail can render no cards; reclaim its space without changing preferences.
   contentCollapsed: css`
     @media (width > 1100px) {
-      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
-      width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
+      &[data-rail-collapsed='true'],
+      div:has(> #home-rail:empty) > & {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+        width: calc(100% + ${COLLAPSED_CONTENT_GAIN}px);
 
-      &:dir(rtl) {
-        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        &:dir(rtl) {
+          transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        }
       }
     }
   `,
@@ -169,10 +176,13 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   heroCollapsed: css`
     @media (width > 1100px) {
-      transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
+      &[data-rail-collapsed='true'],
+      div:has(> #home-rail:empty) > & {
+        transform: translateX(${COLLAPSED_CONTENT_OFFSET}px);
 
-      &:dir(rtl) {
-        transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        &:dir(rtl) {
+          transform: translateX(-${COLLAPSED_CONTENT_OFFSET}px);
+        }
       }
     }
   `,
@@ -210,7 +220,8 @@ const styles = createStaticStyles(({ css }) => ({
         transform: translateX(-${COLLAPSED_CONTENT_OFFSET * 2}px);
       }
 
-      &[data-collapsed='true'] {
+      &[data-collapsed='true'],
+      div:has(> #home-rail:empty) > div > & {
         transform: none;
       }
     }
@@ -392,11 +403,8 @@ const Home = memo(() => {
   return (
     <Flexbox className={styles.grid}>
       <div
-        className={cx(
-          styles.hero,
-          portraitVisible && styles.heroWithSpeech,
-          railCollapsed && styles.heroCollapsed,
-        )}
+        className={cx(styles.hero, portraitVisible && styles.heroWithSpeech, styles.heroCollapsed)}
+        data-rail-collapsed={railCollapsed}
       >
         <div className={styles.header}>
           <HomeHeader />
@@ -415,7 +423,8 @@ const Home = memo(() => {
       </div>
 
       <Flexbox
-        className={cx(styles.main, styles.content, railCollapsed && styles.contentCollapsed)}
+        className={cx(styles.main, styles.content, styles.contentCollapsed)}
+        data-rail-collapsed={railCollapsed}
         data-testid={'home-main'}
         gap={24}
       >
@@ -445,7 +454,11 @@ const Home = memo(() => {
           inert={railCollapsed}
         >
           <Suspense fallback={null}>
-            <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
+            {/* The inbox reads assistant replies, which carry internal entity
+                links; only the acceptance drawer can show a detail here. */}
+            <EntityLinkHostProvider portal={HOME_ENTITY_PORTAL_SCOPE}>
+              <HomeInbox {...RAIL_INBOX_PROPS} variant={'rail'} />
+            </EntityLinkHostProvider>
           </Suspense>
         </aside>
       )}

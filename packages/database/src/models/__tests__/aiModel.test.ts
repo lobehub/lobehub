@@ -15,6 +15,7 @@ vi.mock('@lobechat/business-model-bank/model-config', () => ({
     { id: 'gpt-4', providerId: 'openai', type: 'chat' },
     { id: 'dall-e-3', providerId: 'openai', type: 'image' },
     { id: 'gpt-4o', providerId: 'openai', type: 'chat' },
+    { id: 'whisper-1', providerId: 'openai', type: 'asr' },
   ]),
 }));
 
@@ -542,6 +543,30 @@ describe('AiModelModel', () => {
       const updatedModel = await aiProviderModel.findById(model.id);
       expect(updatedModel?.enabled).toBe(false);
       expect(updatedModel?.type).toBe('image');
+    });
+
+    it('keeps the builtin type when a toggle without a type creates the row', async () => {
+      await aiProviderModel.toggleModelEnabled({
+        enabled: true,
+        id: 'whisper-1',
+        providerId: 'openai',
+      });
+
+      const created = await aiProviderModel.findById('whisper-1');
+      expect(created).toMatchObject({ enabled: true, type: 'asr' });
+    });
+
+    it('does not rewrite the type of an existing row on a toggle without a type', async () => {
+      await aiProviderModel.create({ id: 'whisper-1', providerId: 'openai', type: 'chat' });
+
+      await aiProviderModel.toggleModelEnabled({
+        enabled: false,
+        id: 'whisper-1',
+        providerId: 'openai',
+      });
+
+      const updated = await aiProviderModel.findById('whisper-1');
+      expect(updated).toMatchObject({ enabled: false, type: 'chat' });
     });
 
     it('should write workspace model toggles without updating personal models', async () => {

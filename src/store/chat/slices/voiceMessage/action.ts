@@ -11,7 +11,7 @@ import type { StoreApi } from 'zustand';
 import { fileService } from '@/services/file';
 import { QUEUE_BLOCKING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
-import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
+import { isLocalOnlyMessage, LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getFileStoreState } from '@/store/file/store';
 import type { StoreSetter } from '@/store/types';
@@ -135,6 +135,8 @@ export class VoiceMessageActionImpl {
       this.#shouldDeleteAcceptedPreview(transaction, uploadedFile)
     ) {
       this.#deleteLocalMessage(transaction);
+    } else {
+      this.#promoteAdoptedMessage(transaction);
     }
     this.#deleteUploadState(transaction.messageId);
     URL.revokeObjectURL(transaction.previewUrl);
@@ -331,6 +333,40 @@ export class VoiceMessageActionImpl {
     return !wasAdoptedBySendLifecycle || hasPersistedReplacement;
   };
 
+  /**
+   * Turn an adopted row into an ordinary persisted message.
+   *
+   * The send lifecycle keeps the local-only scope on the row it adopts, so a server snapshot that
+   * lands before the turn is persisted cannot drop it while the upload is active. Once the upload
+   * state is gone that scope means "drop me": `replaceMessages` keeps local rows only while their
+   * upload is tracked. A full snapshot carries the server copy and replaces the row anyway, but a
+   * gateway `message_patch` never repeats an unchanged user row — the client re-submits its own
+   * bucket, and the still-local row would vanish mid-run.
+   */
+  #promoteAdoptedMessage = (transaction: VoiceMessageTransaction) => {
+    const messages = this.#get().dbMessagesMap[messageMapKey(transaction.context)] ?? [];
+    if (
+      !messages.some(
+        (message) => message.id === transaction.messageId && isLocalOnlyMessage(message),
+      )
+    )
+      return;
+
+    // `updateMessage` deep-merges and cannot delete a key, so swap the row in the full bucket.
+    this.#get().internal_dispatchMessage(
+      {
+        type: 'updateMessages',
+        value: messages.map((message) => {
+          if (message.id !== transaction.messageId) return message;
+
+          const { scope: _scope, ...metadata } = message.metadata ?? {};
+          return { ...message, metadata };
+        }),
+      },
+      { conversationContext: transaction.context },
+    );
+  };
+
   #finishTransaction = (transaction: VoiceMessageTransaction, uploadedFile: UploadFileItem) => {
     if (this.#transactions.get(transaction.messageId) !== transaction) return;
 
@@ -340,6 +376,8 @@ export class VoiceMessageActionImpl {
     // arrives, unless that replacement is already in the bucket.
     if (this.#shouldDeleteAcceptedPreview(transaction, uploadedFile)) {
       this.#deleteLocalMessage(transaction);
+    } else {
+      this.#promoteAdoptedMessage(transaction);
     }
     this.#deleteUploadState(transaction.messageId);
     URL.revokeObjectURL(transaction.previewUrl);

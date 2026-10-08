@@ -1,6 +1,6 @@
-import { type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Icon, Popover } from '@lobehub/ui';
+import { Flexbox, Icon, Popover } from '@lobehub/ui';
 import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,
@@ -36,7 +36,8 @@ interface TasksHeaderProps {
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     form: css`
-      label {
+      label,
+      label * {
         font-size: 13px !important;
         color: ${cssVar.colorTextSecondary} !important;
       }
@@ -50,6 +51,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
   const { t } = useTranslation('chat');
   const viewMode = useGlobalStore(systemStatusSelectors.taskListViewMode);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
+  const form = useForm();
   const groupingOptions = useMemo<Array<{ label: string; value: TaskGroupBy }>>(
     () => [
       { label: t('taskList.groupBy.none'), value: 'none' },
@@ -102,7 +104,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
       />
     ),
     label: viewMode === 'kanban' ? t('taskList.form.columns') : t('taskList.form.grouping'),
-  } satisfies FormItemProps;
+  } satisfies FormFieldProps;
 
   const showCompletedFormItem = {
     children: (
@@ -116,9 +118,9 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
     ),
     minWidth: undefined,
     label: t('taskList.form.showCompleted'),
-  } satisfies FormItemProps;
+  } satisfies FormFieldProps;
 
-  const formItems: FormItemProps[] = [
+  const formItems: FormFieldProps[] = [
     groupingFormItem,
     ...(isSubGroupingEnabled
       ? [
@@ -135,7 +137,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
               />
             ),
             label: t('taskList.form.subGrouping'),
-          } satisfies FormItemProps,
+          } satisfies FormFieldProps,
         ]
       : []),
     ...(isPinned('ordering')
@@ -166,7 +168,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
               </Flexbox>
             ),
             label: t('taskList.form.ordering'),
-          } satisfies FormItemProps,
+          } satisfies FormFieldProps,
         ]),
     {
       children: (
@@ -197,7 +199,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
             ),
             minWidth: undefined,
             label: t('taskList.form.showSubTasks'),
-          } satisfies FormItemProps,
+          } satisfies FormFieldProps,
         ]),
     // Only meaningful once sub-tasks are on the list — otherwise the toggle
     // would sit there controlling nothing.
@@ -215,7 +217,7 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
             ),
             minWidth: undefined,
             label: t('taskList.form.nestedSubTasks'),
-          } satisfies FormItemProps,
+          } satisfies FormFieldProps,
         ]
       : []),
   ];
@@ -243,12 +245,12 @@ const TasksGroupConfig = memo<TasksHeaderProps>(({ options, pinnedOptions, setOp
       />
       <Form
         className={styles.form}
+        form={form}
         items={viewMode === 'kanban' ? boardFormItems : formItems}
         itemsType={'flat'}
-        size={'small'}
         variant={'borderless'}
         styles={{
-          item: { padding: 0 },
+          item: { paddingBlock: 4, paddingInline: 0 },
         }}
       />
     </Flexbox>

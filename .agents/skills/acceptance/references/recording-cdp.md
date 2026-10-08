@@ -19,14 +19,23 @@ capture_frame() { agent-browser --session app screenshot "$1"; }
 # Electron alternative:
 # capture_frame() { agent-browser --cdp 9222 screenshot "$1"; }
 
+now() { python3 -c 'import time; print(f"{time.time():.3f}")'; }
+
 i=0
 while [ "$i" -lt 40 ]; do # about 20 seconds at 0.5 seconds per frame
   printf -v frame_number "%06d" "$i"
-  capture_frame "$FRAME_DIR/frame_$frame_number.png"
+  at=$(now)
+  capture_frame "$FRAME_DIR/frame_$frame_number.png" &&
+    echo "$FRAME_DIR/frame_$frame_number.png $at" >> "$FRAME_DIR/frames.log"
   i=$((i + 1))
   sleep 0.5
 done
 ```
+
+`frames.log` records when each frame was taken. A screenshot takes a variable
+share of each interval, so the log — not the nominal interval — is the clip's
+real timeline: assemble from it, and derive [chapters](./video-chapters.md)
+from its first line.
 
 Use a shorter interval such as `0.25` seconds for quick transitions and a longer
 interval such as `1` second for slow flows. Keep the capture scoped to the
@@ -35,9 +44,17 @@ behavior under review.
 ## Assemble and validate the clip
 
 ```bash
-# MP4
-ffmpeg -y -framerate 2 -i "$FRAME_DIR/frame_%06d.png" \
-  -c:v libx264 -crf 23 -pix_fmt yuv420p ./proof/flow.mp4
+# MP4 on the real timeline: each frame lasts until the next one was taken
+python3 - "$FRAME_DIR" > "$FRAME_DIR/concat.txt" <<'PY'
+import sys
+frames = [line.split() for line in open(f"{sys.argv[1]}/frames.log")]
+for (path, at), nxt in zip(frames, frames[1:] + [[None, float(frames[-1][1]) + 0.5]]):
+    print(f"file '{path}'\nduration {float(nxt[1]) - float(at):.3f}")
+print(f"file '{frames[-1][0]}'")
+PY
+ffmpeg -y -f concat -safe 0 -i "$FRAME_DIR/concat.txt" \
+  -vf "fps=30,scale=trunc(iw/2)*2:trunc(ih/2)*2" \
+  -c:v libx264 -crf 23 -pix_fmt yuv420p -movflags +faststart ./proof/flow.mp4
 
 # GIF with a generated palette
 ffmpeg -y -framerate 2 -i "$FRAME_DIR/frame_%06d.png" \
@@ -50,8 +67,11 @@ ffprobe -v error \
 ```
 
 Inspect the first frame, action frame, transient state, and settled frame before
-citing the artifact. Keep the original frame directory until verification is
-published; it is useful when a reviewer asks about a one-frame defect.
+citing the artifact. While driving, log a chapter for each step and each claim
+you verify ([video-chapters.md](./video-chapters.md)); the frames you inspect
+here are the ones your `check` chapters point at. Keep the original frame
+directory until verification is published; it is useful when a reviewer asks
+about a one-frame defect.
 
 ## Boundaries
 

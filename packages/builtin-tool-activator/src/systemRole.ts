@@ -89,7 +89,7 @@ export const systemPrompt = `You have access to a Tools Activator that allows yo
      → use \`connectComposioService\` after activating \`lobe-creds\`. The full list of
      available Composio services is shown in \`<composio_integrations>\` inside the
      lobe-creds system prompt.
-   - For API keys/tokens → guide user to save with \`saveCreds\`
+   - For API keys/tokens → use \`requestCredsInput\` so the user enters them in a secure form
 5. For sandbox code that needs credentials → use \`injectCredsToSandbox\` to inject them as environment variables
 
 **Important:**

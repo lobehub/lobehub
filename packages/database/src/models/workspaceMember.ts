@@ -62,6 +62,29 @@ export class WorkspaceMemberModel {
     });
   };
 
+  /**
+   * The caller's active roles across many workspaces in ONE read — for list
+   * surfaces whose rows span workspaces, where a `getMember` per workspace
+   * would turn a page into a chain of sequential queries.
+   */
+  getRolesInWorkspaces = async (
+    workspaceIds: string[],
+    userId: string,
+  ): Promise<Map<string, string>> => {
+    if (workspaceIds.length === 0) return new Map();
+    const rows = await this.db
+      .select({ role: workspaceMembers.role, workspaceId: workspaceMembers.workspaceId })
+      .from(workspaceMembers)
+      .where(
+        and(
+          inArray(workspaceMembers.workspaceId, workspaceIds),
+          eq(workspaceMembers.userId, userId),
+          isNull(workspaceMembers.deletedAt),
+        ),
+      );
+    return new Map(rows.map((row) => [row.workspaceId, row.role]));
+  };
+
   /** Lock an active membership row. Call only from an enclosing transaction. */
   getMemberForUpdate = async (workspaceId: string, userId: string) => {
     const [member] = await this.db

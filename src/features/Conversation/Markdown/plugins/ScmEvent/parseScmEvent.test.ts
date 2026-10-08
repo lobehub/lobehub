@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { parseAttributes, parseScmEvent, safeScmUrl } from './parseScmEvent';
+import {
+  getScmEventSource,
+  parseAttributes,
+  parseScmEvent,
+  safeScmUrl,
+  scmEventTitle,
+} from './parseScmEvent';
 
 // Mirrors what apps/server/src/services/scm/wakePrompt.ts emits.
 const ciInner = `<check conclusion="failure" name="Test" url="https://github.com/o/r/actions/runs/9/job/2">
@@ -112,5 +118,41 @@ describe('safeScmUrl', () => {
 
     expect(parsed.checks[0]).toMatchObject({ name: 'Test', url: undefined });
     expect(parsed.reviews[0]).toMatchObject({ author: 'a', url: undefined });
+  });
+});
+
+describe('getScmEventSource', () => {
+  it('reads the pull request a wake-up message is from', () => {
+    const content = `<scmEvent branch="fix/x" kind="review_commented" number="7" provider="github" repo="o/r" sha="260d994" url="https://github.com/o/r/pull/7">
+${reviewInner}
+</scmEvent>`;
+    const source = getScmEventSource(content);
+    expect(source).toEqual({
+      branch: 'fix/x',
+      kind: 'review_commented',
+      number: '7',
+      provider: 'github',
+      repo: 'o/r',
+      sha: '260d994',
+      url: 'https://github.com/o/r/pull/7',
+    });
+    expect(scmEventTitle(source!)).toBe('o/r #7');
+  });
+
+  it('is undefined for an ordinary message', () => {
+    expect(getScmEventSource('hello')).toBeUndefined();
+    expect(getScmEventSource(undefined)).toBeUndefined();
+  });
+
+  it('ignores a tag quoted inside an ordinary message', () => {
+    expect(
+      getScmEventSource('Why does this render?\n```\n<scmEvent repo="o/r" number="7">\n```'),
+    ).toBeUndefined();
+  });
+
+  it('titles a repo-less event by its url', () => {
+    expect(scmEventTitle({ url: 'https://github.com/o/r/pull/7' })).toBe(
+      'https://github.com/o/r/pull/7',
+    );
   });
 });

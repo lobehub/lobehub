@@ -14,7 +14,6 @@ import type {
   HeterogeneousTopicPin,
   LobeAgentAgencyConfig,
   RequestTrigger,
-  WorkingDirConfig,
 } from '@lobechat/types';
 import {
   applyTopicModelToHeterogeneousProvider,
@@ -45,6 +44,10 @@ import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAg
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
 import type { MarketService } from '@/server/services/market';
+import {
+  resolveSandboxSessionConfig,
+  type SandboxSessionConfig,
+} from '@/server/services/sandbox/session';
 
 import {
   type DeviceDispatchRoute,
@@ -54,19 +57,26 @@ import {
   supportsCloudHeterogeneousSandbox,
 } from '../helpers/heteroErrors';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
-import type { ExecRunContext } from '../types';
+import type {
+  BindTopicWorkingDirectoryParams,
+  ExecRunContext,
+  InternalExecAgentParams,
+} from '../types';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
 
 export interface HeteroDispatchDeps {
-  bindTopicWorkingDirectory: (params: {
-    config?: WorkingDirConfig;
-    currentWorkingDirectory?: string;
-    topicId: string;
-  }) => Promise<void>;
+  bindTopicWorkingDirectory: (params: BindTopicWorkingDirectoryParams) => Promise<void>;
   db: LobeChatDatabase;
-  getMarketService: () => Promise<MarketService>;
+  /**
+   * With a `sandboxStorage` claim, a service whose trust token carries the
+   * entitlement a persistent sandbox run needs — built for that run rather
+   * than taken from the cache, because the claim is signed into the token.
+   */
+  getMarketService: (options?: {
+    sandboxStorage: NonNullable<SandboxSessionConfig['claim']>;
+  }) => Promise<MarketService>;
   messageModel: MessageModel;
   resolveDeviceWorkspaceId: (deviceId: string | undefined) => Promise<string | undefined>;
   topicModel: TopicModel;
@@ -274,6 +284,7 @@ export interface HeteroDispatchInput {
   localDeviceId?: string;
   maxSteps?: number;
   memberDeviceOverride?: Pick<LobeAgentAgencyConfig, 'boundDeviceId' | 'executionTarget'>;
+  onOperationCreated?: InternalExecAgentParams['onOperationCreated'];
   operationTaskId?: string;
   parentOperationId?: string;
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
@@ -344,7 +355,7 @@ export const dispatchHeteroAgent = async (
   // Hooks belong to this operation's lifecycle. Persist their serializable
   // form on the durable operation row before dispatch; runningOperation below
   // remains a compatibility mirror for older terminal consumers.
-  if (hooks?.length) hookDispatcher.register(operationId, hooks);
+  hookDispatcher.register(operationId, hooks ?? []);
   const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
 
   // Persist a first-class agent_operations row for the hetero run. The id is
@@ -380,6 +391,8 @@ export const dispatchHeteroAgent = async (
     hookDispatcher.unregister(operationId);
     throw new Error('Failed to persist heterogeneous agent operation');
   }
+
+  await input.onOperationCreated?.(operationId);
 
   // Read resume session id for next-turn continuity.
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
@@ -468,6 +481,22 @@ export const dispatchHeteroAgent = async (
     }
   }
 
+  // Where a cloud-sandbox run keeps its files: the same resolution the plain
+  // cloud-sandbox runtime does, so a hetero topic bound to an environment
+  // instance runs in that instance rather than in a throwaway box. Only for
+  // providers the cloud sandbox can host at all; device-only providers never
+  // read it. Never throws — a failed lookup is the ephemeral sandbox.
+  const sandbox = supportsCloudHeterogeneousSandbox(heteroType)
+    ? await resolveSandboxSessionConfig({
+        isShareVisitorRun: !!ctx.shareGate,
+        serverDB: deps.db,
+        topicId,
+        userId: deps.userId,
+        workspaceId: deps.workspaceId,
+      })
+    : undefined;
+  const sandboxPlacement = sandbox && { cwd: sandbox.cwd, mode: sandbox.mode };
+
   // Build the primary context without conversation history. If native resume
   // fails, the CLI switches to the complete fallback prompt on its fresh
   // retry; successful same-session runs never consume the duplicate history.
@@ -482,6 +511,7 @@ export const dispatchHeteroAgent = async (
     conversationHistory: resumeSessionId ? undefined : conversationHistory,
     githubToken,
     repos: topicRepos,
+    sandbox: sandboxPlacement,
   });
   const resumeFallbackSystemContext =
     resumeSessionId && conversationHistory
@@ -490,6 +520,7 @@ export const dispatchHeteroAgent = async (
           conversationHistory,
           githubToken,
           repos: topicRepos,
+          sandbox: sandboxPlacement,
         })
       : undefined;
 
@@ -984,8 +1015,13 @@ export const dispatchHeteroAgent = async (
       const deviceCwdConfig = resolveDeviceWorkingDirectoryConfig({
         deviceDefaultCwd: boundDevice?.defaultCwd,
         deviceId: dispatchDeviceId,
+        devicePlatform: boundDevice?.platform,
         initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
         initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
+        // The run's repos, so a directory that IS one of them is skipped: this
+        // device cannot have it (`owner/repo` is a cloud repo identifier).
+        repos: topicRepos,
+        topicDeviceId: topic?.metadata?.boundDeviceId,
         topicWorkingDirectory: topic?.metadata?.workingDirectory,
         topicWorkingDirectoryConfig: topic?.metadata?.workingDirectoryConfig,
         workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
@@ -998,7 +1034,9 @@ export const dispatchHeteroAgent = async (
       // under the right project and the next turn reuses the same directory.
       await deps.bindTopicWorkingDirectory({
         config: deviceCwdConfig,
+        currentDeviceId: topic?.metadata?.boundDeviceId,
         currentWorkingDirectory: topic?.metadata?.workingDirectory,
+        deviceId: dispatchDeviceId,
         topicId,
       });
 
@@ -1027,6 +1065,7 @@ export const dispatchHeteroAgent = async (
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
         : await deviceGateway.dispatchAgentRun({
             ...heteroParams,
+            agentId: resolvedAgentId,
             args: heteroExecArgs,
             cwd: deviceCwd,
             deviceId: dispatchDeviceId,
@@ -1130,7 +1169,11 @@ export const dispatchHeteroAgent = async (
       // `aiAgent` import. Only this cloud-CLI branch needs it.
       const { spawnHeteroSandbox } =
         await import('@/server/services/heterogeneousAgent/sandboxRunner');
-      const marketService = await deps.getMarketService();
+      // The entitlement rides on the trust token; without it the execution
+      // plane routes to the ephemeral sandbox whatever the request says.
+      const marketService = await deps.getMarketService(
+        sandbox?.claim ? { sandboxStorage: sandbox.claim } : undefined,
+      );
       // The sandbox authenticates its nested `lh` calls with this JWT. The
       // narrow `hetero-operation` token (used for the device-dispatch path
       // above) is rejected by `oidcAuth`, so CC capabilities that hit
@@ -1146,6 +1189,16 @@ export const dispatchHeteroAgent = async (
         args: heteroExecArgs,
         jwt: sandboxJwt,
         marketService,
+        sandbox: sandbox && {
+          cwd: sandbox.cwd,
+          environment: sandbox.environment,
+          mode: sandbox.mode,
+          // The environment's variables, network access, maintenance command
+          // and sources all ride here; dropping it starts the run with none
+          // of them, and nothing reports that they were ignored.
+          specification: sandbox.specification,
+          workingDir: sandbox.workingDir,
+        },
         workspaceId: deps.workspaceId,
       }).catch(async (err) => {
         // Fire-and-forget: execAgent has already returned `autoStarted`, and

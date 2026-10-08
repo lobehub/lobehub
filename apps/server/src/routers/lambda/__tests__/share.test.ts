@@ -6,6 +6,17 @@ import { AgentShareModel } from '@/database/models/agentShare';
 import { TopicShareModel } from '@/database/models/topicShare';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
+const queryTopicTranscript = vi.fn();
+const messageModelConstructor = vi.fn();
+vi.mock('@/database/models/message', () => ({
+  MessageModel: class {
+    constructor(...args: unknown[]) {
+      messageModelConstructor(...args);
+    }
+    queryTopicTranscript = queryTopicTranscript;
+  },
+}));
+
 vi.mock('@/server/services/agentShare/deliveryStatsCache', () => ({
   getCachedDeliveryStats: (_db: unknown, _owner: string, _agent: string, load: () => unknown) =>
     load(),
@@ -130,6 +141,70 @@ vi.mock('@/server/featureFlags', () => ({
 const { shareRouter } = await import('../share');
 
 describe('shareRouter', () => {
+  describe('getSharedTopicText', () => {
+    beforeEach(() => vi.clearAllMocks());
+
+    it('reads beyond the first page in the share owner workspace and omits subtask text', async () => {
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockResolvedValue({
+        ownerId: 'owner',
+        topicId: 'topic',
+        workspaceId: 'workspace',
+        title: 'Shared topic',
+      } as never);
+      const prompts = Array.from({ length: 1000 }, (_, index) => ({
+        content: `Prompt ${index}`,
+        createdAt: new Date(index),
+        id: `${index}`,
+        parentId: index ? `${index - 1}` : null,
+        role: 'user',
+        threadId: null,
+      }));
+      queryTopicTranscript
+        .mockResolvedValueOnce({ items: prompts, total: 1002 })
+        .mockResolvedValueOnce({
+          items: [
+            {
+              content: 'Final answer',
+              createdAt: new Date(1000),
+              id: '1000',
+              parentId: '999',
+              role: 'assistant',
+            },
+            {
+              content: 'Subtask process',
+              createdAt: new Date(1001),
+              id: '1001',
+              role: 'assistant',
+              threadId: 'thread',
+            },
+          ],
+          total: 1002,
+        });
+      const caller = shareRouter.createCaller(await createContextInner({ userId: undefined }));
+      const result = await caller.getSharedTopicText({ shareId: 'public-share' });
+      expect(result.text).toContain('Prompt 0');
+      expect(result.text).toContain('Prompt 999');
+      expect(result.text).toContain('Final answer');
+      expect(result.text).not.toContain('Subtask process');
+      expect(queryTopicTranscript).toHaveBeenLastCalledWith({
+        limit: 1000,
+        offset: 1000,
+        topicId: 'topic',
+      });
+      expect(messageModelConstructor).toHaveBeenCalledWith(expect.anything(), 'owner', 'workspace');
+    });
+
+    it('does not read messages when access is denied', async () => {
+      vi.mocked(TopicShareModel.findByShareIdWithAccessCheck).mockRejectedValue(
+        new TRPCError({ code: 'FORBIDDEN' }),
+      );
+      const caller = shareRouter.createCaller(await createContextInner({ userId: undefined }));
+      await expect(caller.getSharedTopicText({ shareId: 'private-share' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      expect(queryTopicTranscript).not.toHaveBeenCalled();
+    });
+  });
   describe('getSharedAgent', () => {
     const agentShare = {
       agentAvatar: 'avatar.png',
@@ -156,6 +231,7 @@ describe('shareRouter', () => {
       userViewCount: 42,
       visibility: 'link',
       workspaceId: null,
+      workspaceSlug: null,
     };
 
     beforeEach(() => {
@@ -254,6 +330,7 @@ describe('shareRouter', () => {
         demoCases: [],
         featuredWorks: [],
         isOwner: false,
+        ownerWorkspaceSlug: null,
         shareId: 'agent-share-1',
         slug: 'shared-agent',
         stats: { ...emptyDeliveryStats, conversations: 12, views: 42, visitors: 7 },
@@ -397,6 +474,28 @@ describe('shareRouter', () => {
 
         await expect(resolve()).resolves.toEqual({ audio: false, image: false, video: false });
       });
+    });
+
+    it('returns the Workspace slug to the owner only', async () => {
+      vi.mocked(AgentShareModel.findBySlugOrId).mockResolvedValue({
+        ...agentShare,
+        workspaceId: 'workspace-1',
+        workspaceSlug: 'acme',
+      } as any);
+
+      const ownerCaller = shareRouter.createCaller(
+        await createContextInner({ userId: 'owner-user' }),
+      );
+      const visitorCaller = shareRouter.createCaller(
+        await createContextInner({ userId: 'visitor-user' }),
+      );
+
+      await expect(ownerCaller.getSharedAgent({ slugOrId: 'shared-agent' })).resolves.toMatchObject(
+        { ownerWorkspaceSlug: 'acme' },
+      );
+      await expect(
+        visitorCaller.getSharedAgent({ slugOrId: 'shared-agent' }),
+      ).resolves.toMatchObject({ ownerWorkspaceSlug: null });
     });
 
     it('does not count owner views', async () => {

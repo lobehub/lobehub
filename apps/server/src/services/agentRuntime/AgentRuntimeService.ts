@@ -2,6 +2,8 @@ import { randomUUID } from 'node:crypto';
 
 import type {
   Agent,
+  AgentRunClientLlmWait,
+  AgentRunLlmExecutor,
   AgentRuntimeContext,
   AgentState,
   GeneralAgentConfig,
@@ -17,7 +19,9 @@ import {
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
+import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
 import { parse } from '@lobechat/conversation-flow';
 import { getModelPropertyWithFallback } from '@lobechat/model-runtime';
 import {
@@ -35,15 +39,18 @@ import {
 import { ssrfSafeFetch } from '@lobechat/ssrf-safe-fetch';
 import {
   type ChatToolPayload,
+  type ClientLlmWaitItem,
   type EvalToolForwardingConfig,
   type ExecSubAgentParams,
   type ExecSubAgentResult,
   type ExecVirtualSubAgentParams,
+  type ResumeClientLlmWaitResult,
   type UIChatMessage,
 } from '@lobechat/types';
-import { RequestTrigger } from '@lobechat/types';
+import { ChatErrorType, RequestTrigger } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import debug from 'debug';
+import pMap from 'p-map';
 import urlJoin from 'url-join';
 
 import {
@@ -52,13 +59,26 @@ import {
 } from '@/business/server/agent-run/agentInterventionIdentity';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { MessageModel } from '@/database/models/message';
-import { UserModel } from '@/database/models/user';
 import { type LobeChatDatabase } from '@/database/type';
 import { appEnv } from '@/envs/app';
+import { isDeviceCapablePlan, isDeviceLockedPlan } from '@/helpers/executionTarget';
 import { type AgentRuntimeCoordinatorOptions } from '@/server/modules/AgentRuntime';
 import { AgentRuntimeCoordinator, createStreamEventManager } from '@/server/modules/AgentRuntime';
 import { runMayUseDevice } from '@/server/modules/AgentRuntime/executors/resolveRunActiveDeviceId';
 import { formatErrorForState } from '@/server/modules/AgentRuntime/formatErrorForState';
+import {
+  buildClientLlmWait,
+  buildClientLlmWaitMessageError,
+  buildClientLlmWaitResumeContext,
+  CLIENT_WAIT_REVERT_RETRY_DELAYS_MS,
+  isClientLlmWaitExpiryOf,
+  MIN_CLIENT_LLM_WAIT_REMAINING_MS,
+} from '@/server/modules/AgentRuntime/llmRelay/clientWait';
+import {
+  createClientLlmExecutorUnavailableError,
+  getClientLlmWaitableReason,
+} from '@/server/modules/AgentRuntime/llmRelay/errors';
+import { CLIENT_LLM_WAIT_CAPABILITY } from '@/server/modules/AgentRuntime/llmRelay/protocol';
 import { hasNonPersistedMessage } from '@/server/modules/AgentRuntime/messagePersistence';
 import {
   createRuntimeExecutors,
@@ -67,6 +87,7 @@ import {
 import { type IStreamEventManager } from '@/server/modules/AgentRuntime/types';
 import { emitAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { toAgentSignalTraceEvents } from '@/server/services/agentSignal/observability/traceEvents';
+import { traceStartStage } from '@/server/services/aiAgent/pipeline/sendTracing';
 import { FileService } from '@/server/services/file';
 import { mcpService } from '@/server/services/mcp';
 import { MessageService } from '@/server/services/message';
@@ -91,7 +112,7 @@ import { stepChangedCredentials } from './credentialFacts';
 import { logToolCallPc } from './formalObservation';
 import { type AgentHook, hookDispatcher } from './hooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
-import { buildMessagePatch } from './messagePatch';
+import { buildProjectedMessagePatch } from './messagePatch';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
 import { createDefaultSnapshotStore } from './snapshotStore';
 import { buildStepPresentation, formatTokenCount } from './stepPresentation';
@@ -121,6 +142,9 @@ if (process.env.VERCEL) {
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+
+/** Tries for a client wait's notice or expiry error on the assistant row. */
+const CLIENT_WAIT_ROW_WRITE_ATTEMPTS = 3;
 
 /**
  * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
@@ -162,6 +186,12 @@ const LEGACY_INTERRUPT_STATE_POLL_INTERVAL_MS = 30_000;
 const STEP_ABORT_POLL_MAX_BACKOFF = 8;
 const STEP_LOCK_HEARTBEAT_MS = 30_000;
 const DURABLE_LEASE_HEARTBEAT_EVERY_TICKS = 3;
+/**
+ * How long a `running` operation's durable lease may go unrefreshed, with its
+ * runtime state gone, before a stop request treats it as dead. Far above the
+ * heartbeat cadence (STEP_LOCK_HEARTBEAT_MS × DURABLE_LEASE_HEARTBEAT_EVERY_TICKS).
+ */
+const DEAD_OPERATION_LEASE_MS = 10 * 60 * 1000;
 const EVAL_TOOL_FORWARDING_HOOK_ID = 'eval-tool-forwarding';
 const INTERVENTION_LIFECYCLE_CHECKPOINT_KEY = '_agentInterventionLifecycle';
 
@@ -294,6 +324,60 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
   return { message: String(error) };
 };
 
+const SUB_AGENT_CREDIT_ERROR_TYPES = new Set<string>([
+  ChatErrorType.FreePlanLimit,
+  ChatErrorType.InsufficientBudgetForModel,
+  ChatErrorType.SubscriptionPlanLimit,
+]);
+
+/**
+ * A child stopped by the cost-admission gate fails with the bare message
+ * "Budget exceeded", which reads like a per-sub-agent allowance. The parent
+ * then retries or fans out more sub-agents against the same limit. Say which
+ * limit it is and who can lift it.
+ *
+ * Mirrors the bot reply copy (`bot/replyTemplate.ts`): the payer is not
+ * addressed as "you" and figures are never quoted, because a bot run is billed
+ * to its owner while the parent's reply may reach a shared channel.
+ */
+const formatSubAgentCreditErrorReason = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return;
+  const { body, errorType, type } = error as {
+    body?: { budget?: { budgetTypeAtError?: unknown } };
+    errorType?: unknown;
+    type?: unknown;
+  };
+  const creditType = [type, errorType].find(
+    (value): value is string =>
+      typeof value === 'string' && SUB_AGENT_CREDIT_ERROR_TYPES.has(value),
+  );
+  if (!creditType) return;
+
+  const budgetType = body?.budget?.budgetTypeAtError;
+  // InsufficientBudgetForModel means the allowance still has credits, just not
+  // enough for this model's estimated cost — a cheaper model may still fit, so
+  // the no-retry claim only holds for the same model (bot/replyTemplate gives
+  // the same "switch to a less expensive model" advice).
+  const modelCostShortfall = creditType === ChatErrorType.InsufficientBudgetForModel;
+  const shortfall = modelCostShortfall ? "can't cover this model's estimated cost" : 'are used up';
+  const limit =
+    budgetType === 'workspace'
+      ? `the workspace's shared LobeHub credits ${shortfall}; a workspace admin has to add credits`
+      : budgetType === 'workspace_member'
+        ? `this member's workspace credit allowance ${modelCostShortfall ? shortfall : 'is used up'}; a workspace admin has to raise it`
+        : modelCostShortfall
+          ? "the account's LobeHub credits are too low for this model; the account owner has to top up or upgrade"
+          : "the account's LobeHub plan limit was reached or the plan does not cover this model; the account owner has to upgrade the plan";
+
+  const advice = modelCostShortfall
+    ? 'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents on the same model will not get past it; a sub-agent that runs on a less expensive model may still fit. ' +
+      'Otherwise finish with what you already have and tell the user about the limit.'
+    : 'This limit is shared by every sub-agent and by this conversation, so retrying or dispatching more sub-agents will not get past it. ' +
+      'Finish with what you already have and tell the user about the limit.';
+
+  return `stopped by a LobeHub billing limit (${creditType}): ${limit}. ${advice}`;
+};
+
 /**
  * Extract a short, human-readable reason string from a failed operation's
  * `state.error`, for inlining into the tool-result `content` a parent agent
@@ -304,10 +388,22 @@ const formatErrorForMetadata = (error: unknown): Record<string, any> | undefined
  * error still rides on `pluginError`; this is just the readable summary.
  */
 const formatSubAgentErrorReason = (error: unknown): string | undefined => {
+  const creditReason = formatSubAgentCreditErrorReason(error);
+  if (creditReason) return creditReason;
+
   const message = formatErrorForMetadata(error)?.message;
   if (typeof message !== 'string') return undefined;
   const trimmed = message.trim();
   if (!trimmed) return undefined;
+  // "Operation abandoned: inactivity_watchdog" names an internal mechanism;
+  // the parent needs to know the child went silent and that its work survives.
+  if (trimmed.startsWith(ABANDONED_OPERATION_ERROR_PREFIX)) {
+    const cause = trimmed.slice(ABANDONED_OPERATION_ERROR_PREFIX.length).trim();
+    return (
+      `the sub-agent stopped making progress and the platform ended it (${cause || 'abandoned'}). ` +
+      'Anything it already did (searches, pages read, documents written) is kept in its thread.'
+    );
+  }
   // Keep the tool result compact — a runaway provider error body would otherwise
   // bloat the parent's LLM context.
   return trimmed.length > 300 ? `${trimmed.slice(0, 300)}…` : trimmed;
@@ -402,8 +498,6 @@ export interface AgentRuntimeServiceOptions {
    * circular import.
    */
   delegate?: AgentRuntimeDelegate;
-  /** Lightweight protocol capability seam; primarily injectable in tests. */
-  gatewayMuxEnabledResolver?: () => Promise<boolean>;
   /**
    * Opt IN to agent-share visitor rows for the models this service owns.
    * Reserved for share-runtime entry points that drive a visitor turn under
@@ -458,8 +552,6 @@ export class AgentRuntimeService {
   private coordinator: AgentRuntimeCoordinator;
   private delegate: AgentRuntimeDelegate;
   private humanIntervention: HumanInterventionHandler;
-  private gatewayMuxEnabled?: Promise<boolean>;
-  private gatewayMuxEnabledResolver: () => Promise<boolean>;
   private streamManager: IStreamEventManager;
   private queueService: QueueService | null;
   private traceRecorder: OperationTraceRecorder;
@@ -490,17 +582,13 @@ export class AgentRuntimeService {
   }
 
   constructor(db: LobeChatDatabase, userId: string, options?: AgentRuntimeServiceOptions) {
-    this.gatewayMuxEnabledResolver =
-      options?.gatewayMuxEnabledResolver ??
-      (() =>
-        new UserModel(db, userId)
-          .getUserPreference()
-          .then((preference) => preference?.lab?.enableGatewayMux === true));
-    // Use factory function to auto-select Redis or InMemory implementation
+    // Use factory function to auto-select Redis or InMemory implementation.
+    // Gateway pushes are deferred off the step path: every point where this
+    // invocation can stop or hand the run over calls `drainPushes` first.
     this.streamManager =
       options?.streamEventManager ??
       options?.coordinatorOptions?.streamEventManager ??
-      createStreamEventManager();
+      createStreamEventManager({ deferPushes: true });
     this.coordinator = new AgentRuntimeCoordinator({
       ...options?.coordinatorOptions,
       messagePatchModeResolver: (state) => this.usesGatewayMessagePatch(state),
@@ -509,7 +597,7 @@ export class AgentRuntimeService {
       // the client can use the pushed payload directly instead of refetching
       // from DB. Falls back gracefully when topicId isn't set.
       uiMessagesResolver: async (state) =>
-        (await this.usesGatewayMessagePatch(state)) ? undefined : this.queryUiMessages(state),
+        this.usesGatewayMessagePatch(state) ? undefined : this.queryUiMessages(state),
     });
     this.queueService =
       options?.queueService === null ? null : (options?.queueService ?? new QueueService());
@@ -610,6 +698,14 @@ export class AgentRuntimeService {
   // ==================== Operation Interruption ====================
 
   /**
+   * Whether someone already asked this run to stop (the interrupt sentinel is
+   * set), even though it may still be finishing its current step.
+   */
+  async isOperationInterrupted(operationId: string): Promise<boolean> {
+    return this.coordinator.isInterrupted(operationId);
+  }
+
+  /**
    * Interrupt a running agent operation by setting its state to 'interrupted'.
    * The agent will stop at the next step boundary (cannot abort an in-flight LLM call).
    * Works with both Redis and InMemory state managers via the coordinator abstraction.
@@ -624,9 +720,26 @@ export class AgentRuntimeService {
       // Absence alone is not proof of exit (e.g. another in-memory worker owns
       // the run). Only an owned, durably terminal operation can acknowledge it.
       const operation = await this.agentOperationModel.findById(operationId);
-      return (
-        !!operation && ['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)
-      );
+      if (!operation) return false;
+      if (['done', 'error', 'interrupted', 'abandoned'].includes(operation.status)) return true;
+
+      // A `running` row with no runtime state whose durable lease stopped
+      // refreshing long ago has nothing executing it: the step heartbeat moves
+      // `updatedAt` every few minutes while a step is live. Without this, the
+      // row stays `running` forever and every stop request on its task is
+      // refused as unconfirmed. Retire it atomically — a concurrent heartbeat
+      // moves `updatedAt` past the cutoff and wins, keeping a live run alive.
+      if (
+        operation.status === 'running' &&
+        operation.updatedAt &&
+        new Date(operation.updatedAt).getTime() < Date.now() - DEAD_OPERATION_LEASE_MS
+      ) {
+        return this.agentOperationModel.settleStaleRunning(
+          operationId,
+          new Date(Date.now() - DEAD_OPERATION_LEASE_MS),
+        );
+      }
+      return false;
     }
 
     if (state.status === 'done' || state.status === 'error' || state.status === 'interrupted') {
@@ -646,14 +759,85 @@ export class AgentRuntimeService {
     // shows — the step-boundary check then persists the interrupted state.
     await this.coordinator.markInterrupted(operationId);
 
-    await this.coordinator.saveAgentState(operationId, {
+    const parkedWait = state.status === 'waiting_for_client' ? state.clientLlmWait : undefined;
+    const interruptedState: AgentState = {
       ...state,
+      ...(state.status === 'waiting_for_client' && { clientLlmWait: undefined }),
       lastModified: new Date().toISOString(),
       status: 'interrupted',
-    });
+    };
+    await this.coordinator.saveAgentState(operationId, interruptedState);
+
+    // A run parked for a client has no step that would reach a boundary and
+    // settle it, so settle it here — otherwise the row and the topic stay live
+    // until the wait expires. Its waiting card goes too: nothing can continue it.
+    if (state.status === 'waiting_for_client') {
+      if (parkedWait?.assistantMessageId) {
+        await this.messageModel
+          .update(parkedWait.assistantMessageId, { error: null })
+          .catch((error) => log('[%s] Failed to clear the waiting notice: %O', operationId, error));
+      }
+      if (await this.agentOperationModel.settleClientWait(operationId, 'interrupted')) {
+        await this.completionLifecycle.dispatchHooks(operationId, interruptedState, 'interrupted');
+      } else if (parkedWait) {
+        // The wait's expiry claimed the row first and has not finished (its
+        // Redis state still read this park). Its retry would find the state
+        // this Stop just wrote and give up, so finish it here as the row says.
+        const row = await this.agentOperationModel.findById(operationId).catch(() => undefined);
+        if (row?.status === 'error') {
+          log('[%s] Stop lost to the wait expiry; finishing the expiry', operationId);
+          await this.endExpiredClientLlmWait(operationId, state, parkedWait);
+        }
+      }
+    }
 
     log('[%s] Operation interrupted', operationId);
     return true;
+  }
+
+  /**
+   * The relay executor a new run carries: the one its client declared, else —
+   * for a group member, whose stream is mirrored onto its parent's channel —
+   * its parent's, so a member on the same local model reaches the same device.
+   * A genuine sub-agent publishes `llm_execute` on its own channel, which no
+   * client subscribes to, so it inherits nothing and fails fast as
+   * `no_executor` instead of waiting out the claim. Best-effort: an expired
+   * parent leaves the member without one.
+   */
+  private async resolveLlmExecutor(
+    declared: AgentRunLlmExecutor | undefined,
+    parentOperationId: string | undefined,
+    streamsOnParentChannel: boolean,
+  ): Promise<AgentRunLlmExecutor | undefined> {
+    if (declared) return declared;
+    if (!parentOperationId || !streamsOnParentChannel) return;
+
+    return this.getLlmExecutor(parentOperationId);
+  }
+
+  /**
+   * The relay executor an operation carries, e.g. for an approval continuation
+   * that the parked operation's client resumes. Best-effort: an unknown or
+   * expired operation reads as none.
+   */
+  async getLlmExecutor(operationId: string): Promise<AgentRunLlmExecutor | undefined> {
+    try {
+      const state = await this.coordinator.loadAgentState(operationId);
+      return state?.host?.llmExecutor;
+    } catch (error) {
+      log('[%s] Failed to read the relay executor: %O', operationId, error);
+      return;
+    }
+  }
+
+  /**
+   * Whether the client that started this operation declared it handles
+   * `member_runtime_end`. An unknown or expired operation reads as `false`, so
+   * a continuation then keeps the verbatim terminal every client understands.
+   */
+  async acceptsMemberRuntimeEnd(operationId: string): Promise<boolean> {
+    const metadata = await this.coordinator.getOperationMetadata(operationId).catch(() => null);
+    return metadata?.acceptsMemberRuntimeEnd === true;
   }
 
   /**
@@ -689,6 +873,52 @@ export class AgentRuntimeService {
   /** Load the authoritative runtime state for a deterministic intervention continuation. */
   async loadInterventionContinuationState(operationId: string): Promise<AgentState | null> {
     return this.coordinator.loadAgentState(operationId);
+  }
+
+  /**
+   * The completion bridge of a group member run: from its runtime snapshot
+   * while it lives, else from the durable copy recorded on the operation row
+   * at start. Undefined for any run that is not a group member.
+   */
+  async loadGroupMemberBridge(operationId: string): Promise<
+    | {
+        agentId: string;
+        bridge: Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'>;
+        groupId?: string;
+        threadId?: string;
+        topicId?: string;
+      }
+    | undefined
+  > {
+    const state = await this.coordinator.loadAgentState(operationId);
+    if (state) {
+      const origin = state.origin;
+      const bridge = state.host?.hooks?.find((hook) => hook.id === 'group-member-bridge')?.webhook
+        ?.body as Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
+      if (origin?.lineage?.orchestrationRole !== 'member' || !origin.agentId || !bridge) {
+        return undefined;
+      }
+      return {
+        agentId: origin.agentId,
+        bridge,
+        groupId: origin.groupId ?? undefined,
+        threadId: origin.threadId ?? undefined,
+        topicId: origin.topicId ?? undefined,
+      };
+    }
+
+    const row = await this.agentOperationModel.findById(operationId);
+    const bridge = (row?.metadata as Record<string, unknown> | null | undefined)
+      ?.groupMemberBridge as
+      Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
+    if (!row?.agentId || !bridge) return undefined;
+    return {
+      agentId: row.agentId,
+      bridge,
+      groupId: row.chatGroupId ?? undefined,
+      threadId: row.threadId ?? undefined,
+      topicId: row.topicId ?? undefined,
+    };
   }
 
   /**
@@ -923,6 +1153,7 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      acceptsMemberRuntimeEnd,
       activeDeviceId,
       activeDeviceScope,
       operationId,
@@ -972,45 +1203,61 @@ export class AgentRuntimeService {
     // ends of the persistence lifecycle (start row here, terminal update
     // in dispatchHooks) and swallows DB errors so runtime startup is never
     // blocked.
-    const operationStartPersisted = await this.completionLifecycle.recordStart({
-      agentId: appContext?.agentId ?? null,
-      appContext: {
-        defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
-        documentId: appContext?.documentId,
-        groupId: appContext?.groupId,
-        scope: appContext?.scope,
-        sessionId: appContext?.sessionId,
-        sourceMessageId: appContext?.sourceMessageId,
-      },
-      chatGroupId: appContext?.groupId ?? null,
-      maxSteps,
-      // Persist the Agent Signal run marker on the operation row so server-side
-      // self-iteration tools can read it back (operation.metadata.agentSignal) at tool-call
-      // time — the trimmed appContext above intentionally drops it.
-      ...(appContext?.agentSignal || interventionResolution
-        ? {
-            metadata: {
-              ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
-              ...(interventionResolution
-                ? { agentInterventionContinuation: interventionResolution }
-                : {}),
-            },
-          }
-        : {}),
-      model: modelRuntimeConfig?.model,
-      modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
-      operationId,
-      parentOperationId: parentOperationId ?? null,
-      provider: modelRuntimeConfig?.provider,
-      taskId: appContext?.taskId ?? null,
-      threadId: appContext?.threadId ?? null,
-      topicId: appContext?.topicId ?? null,
-      trigger: appContext?.trigger,
-    });
+    // A group member's completion bridge lives in the runtime snapshot, which
+    // expires (2h). Keep a durable copy on the row so a late approval or a
+    // stop can still reach the member's supervisor (`loadGroupMemberBridge`).
+    const groupMemberBridge = hooks?.find((hook) => hook.id === 'group-member-bridge')?.webhook
+      ?.body as Omit<GroupActionMemberBridgeParams, 'operationId' | 'reason'> | undefined;
+    const operationStartPersisted = await traceStartStage('record_start', () =>
+      this.completionLifecycle.recordStart({
+        agentId: appContext?.agentId ?? null,
+        appContext: {
+          defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
+          documentId: appContext?.documentId,
+          editingAgentId: appContext?.editingAgentId,
+          groupId: appContext?.groupId,
+          scope: appContext?.scope,
+          sessionId: appContext?.sessionId,
+          sourceMessageId: appContext?.sourceMessageId,
+        },
+        chatGroupId: appContext?.groupId ?? null,
+        maxSteps,
+        // Persist the Agent Signal run marker on the operation row so server-side
+        // self-iteration tools can read it back (operation.metadata.agentSignal) at tool-call
+        // time — the trimmed appContext above intentionally drops it.
+        ...(appContext?.agentSignal || interventionResolution || groupMemberBridge
+          ? {
+              metadata: {
+                ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
+                ...(interventionResolution
+                  ? { agentInterventionContinuation: interventionResolution }
+                  : {}),
+                ...(groupMemberBridge ? { groupMemberBridge } : {}),
+              },
+            }
+          : {}),
+        model: modelRuntimeConfig?.model,
+        modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+        operationId,
+        parentOperationId: parentOperationId ?? null,
+        provider: modelRuntimeConfig?.provider,
+        taskId: appContext?.taskId ?? null,
+        threadId: appContext?.threadId ?? null,
+        topicId: appContext?.topicId ?? null,
+        trigger: appContext?.trigger,
+      }),
+    );
     if (interventionResolution && !operationStartPersisted) {
       throw new Error(
         `Failed to durably persist intervention continuation ${operationId} before dispatch`,
       );
+    }
+
+    // A member's durable bridge is what a Stop or a late approval falls back
+    // to once the runtime snapshot expires; a member without it could strand
+    // its supervisor, so fail the start instead.
+    if (groupMemberBridge && !operationStartPersisted) {
+      throw new Error(`Failed to durably persist group member ${operationId} before dispatch`);
     }
 
     if (interventionResolution) {
@@ -1060,6 +1307,12 @@ export class AgentRuntimeService {
           }))
         : undefined;
 
+      const llmExecutor = await this.resolveLlmExecutor(
+        params.llmExecutor,
+        parentOperationId,
+        appContext?.orchestrationRole === 'member',
+      );
+
       const initialState = {
         activatedStepTools,
         createdAt: new Date().toISOString(),
@@ -1081,7 +1334,9 @@ export class AgentRuntimeService {
         // What the host needs to deliver and retry the run. Hooks are stamped
         // right after creation once the dispatcher has serialized them.
         host: {
+          ...(params.clientProtocol === 2 && { clientProtocol: 2 as const }),
           ...(params.includeFinalState === true && { includeFinalState: true }),
+          ...(llmExecutor && { llmExecutor }),
           queue: { retries: queueRetries, retryDelay: queueRetryDelay },
         },
         // Run ledger — everything fixed at creation lives in the typed slots.
@@ -1186,35 +1441,39 @@ export class AgentRuntimeService {
       // not one per member (single-connection multiplexing).
       const mirrorToOperationId =
         appContext?.orchestrationRole === 'member' ? (parentOperationId ?? undefined) : undefined;
-      await this.coordinator.createAgentOperation(operationId, {
-        agentConfig,
-        // Persisted so a queue worker that never ran this op's init still
-        // applies the owner-configured visitor redaction policy instead of the
-        // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
-        visitorRedaction: agentShareVisitor
-          ? {
-              showErrorDetails: agentShareVisitor.showErrorDetails,
-              showModelInfo: agentShareVisitor.showModelInfo,
-            }
-          : undefined,
-        mirrorToOperationId,
-        modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
-        // Share-visitor runs execute as the creator (`userId`) but stream only
-        // to the visitor — the gateway registers the WS channel under this id.
-        streamOwnerUserId: agentShareVisitor?.visitorUserId,
-        userId,
-        workspaceId: this.workspaceId,
-      });
+      await traceStartStage('runtime_meta', () =>
+        this.coordinator.createAgentOperation(operationId, {
+          acceptsMemberRuntimeEnd,
+          agentConfig,
+          // Persisted so a queue worker that never ran this op's init still
+          // applies the owner-configured visitor redaction policy instead of the
+          // fail-closed full strip. See `gatewayVisitorRedaction.ts`.
+          visitorRedaction: agentShareVisitor
+            ? {
+                showErrorDetails: agentShareVisitor.showErrorDetails,
+                showModelInfo: agentShareVisitor.showModelInfo,
+              }
+            : undefined,
+          mirrorToOperationId,
+          modelRuntimeConfig: withoutFrozenModelFacts(modelRuntimeConfig),
+          // Share-visitor runs execute as the creator (`userId`) but stream only
+          // to the visitor — the gateway registers the WS channel under this id.
+          streamOwnerUserId: agentShareVisitor?.visitorUserId,
+          userId,
+          workspaceId: this.workspaceId,
+        }),
+      );
       operationCreated = true;
 
       // Save initial state
-      await this.coordinator.saveAgentState(operationId, initialState as any);
+      await traceStartStage('save_state', () =>
+        this.coordinator.saveAgentState(operationId, initialState as any),
+      );
 
       // Register external hooks
-      if (hooks && hooks.length > 0) {
-        hookDispatcher.register(operationId, hooks);
-        hooksRegistered = true;
-
+      hookDispatcher.register(operationId, hooks ?? []);
+      hooksRegistered = hookDispatcher.hasHooks(operationId);
+      if (hooksRegistered) {
         // Persist webhook configs to state metadata for production mode
         const serializedHooks = hookDispatcher.getSerializedHooks(operationId);
         if (serializedHooks && serializedHooks.length > 0) {
@@ -1262,6 +1521,8 @@ export class AgentRuntimeService {
         onInterventionPrepared?.();
       }
 
+      await params.onOperationCreated?.(operationId);
+
       throwIfAborted(signal, 'Agent execution aborted before first step scheduling');
 
       let messageId: string | undefined;
@@ -1274,17 +1535,20 @@ export class AgentRuntimeService {
         // Both local and queue modes use scheduleMessage
         // LocalQueueServiceImpl uses setTimeout + callback mechanism
         // QStashQueueServiceImpl schedules HTTP requests
-        messageId = await this.queueService.scheduleMessage({
-          context: initialContext,
-          deduplicationId,
-          delay: 50, // Short delay for startup
-          endpoint: `${this.baseURL}/run`,
-          operationId,
-          priority: 'high',
-          retryDelay: queueRetryDelay,
-          retries: queueRetries,
-          stepIndex: initialStepCount,
-        });
+        const queueService = this.queueService;
+        messageId = await traceStartStage('schedule_step', () =>
+          queueService.scheduleMessage({
+            context: initialContext,
+            deduplicationId,
+            delay: 50, // Short delay for startup
+            endpoint: `${this.baseURL}/run`,
+            operationId,
+            priority: 'high',
+            retryDelay: queueRetryDelay,
+            retries: queueRetries,
+            stepIndex: initialStepCount,
+          }),
+        );
         if (interventionResolution && deduplicationId) {
           await this.persistInterventionDispatchAck({
             deduplicationId,
@@ -1377,15 +1641,7 @@ export class AgentRuntimeService {
         // terminal Source of Truth — wiping the conversation the run just
         // produced. Visitor-facing redaction of the pushed snapshot happens in
         // `GatewayStreamNotifier`.
-        //
-        // A visitor snapshot additionally keeps its tool payloads whole: this
-        // query runs as the CREATOR, but the recovery RPC runs as the VISITOR
-        // against ownership-scoped reads that cannot see a creator-owned row,
-        // so a projected snapshot could never be filled back in.
-        {
-          allowShareVisitor: true,
-          skipToolProjection: !!agentState?.principal?.actor?.shareVisitor?.visitorUserId,
-        },
+        { allowShareVisitor: true },
       );
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back
@@ -1396,13 +1652,21 @@ export class AgentRuntimeService {
   }
 
   /** Native harness + Gateway mux is the only producer of message patches. */
-  private async usesGatewayMessagePatch(agentState: AgentState): Promise<boolean> {
+  /**
+   * Whether this run reconciles the client's message list through
+   * `message_patch` revisions instead of pushing whole `uiMessages` snapshots.
+   *
+   * Decided by the capability the starting client declared when the operation
+   * was created (`host.clientProtocol`), NOT by a user preference: the run is
+   * delivered to whatever bundle that client is, and a desktop build older than
+   * `message_patch` would drop every mid-run reconciliation it was sent.
+   *
+   * A share visitor is always excluded — the visitor surface has no
+   * owner-scoped read to reconcile against.
+   */
+  private usesGatewayMessagePatch(agentState: AgentState): boolean {
     if (agentState.principal?.actor?.shareVisitor) return false;
-    this.gatewayMuxEnabled ??= this.gatewayMuxEnabledResolver().catch((error) => {
-      console.error('[AgentRuntimeService] failed to read gateway mux preference: %O', error);
-      return false;
-    });
-    return this.gatewayMuxEnabled;
+    return agentState.host?.clientProtocol === 2;
   }
 
   /**
@@ -1423,6 +1687,8 @@ export class AgentRuntimeService {
       toolMessageId,
       verifyAsyncToolBarrier,
       asyncToolVerifyAttempt,
+      resumeClientLlm,
+      clientLlmWaitExpired,
       externalRetryCount = 0,
       lockRetryAttempt = 0,
       inlineContinuation = false,
@@ -1435,6 +1701,21 @@ export class AgentRuntimeService {
     // and bridge a `timeout` completion so the parked supervisor resumes/finishes.
     if (groupMemberTimeout) {
       return this.handleGroupMemberTimeout(groupMemberTimeout);
+    }
+
+    // Expiry check of a `waiting_for_client` park. It executes nothing: the CAS
+    // on the durable row decides whether the wait (still parked, same park) ends
+    // here or a resume already took the run. Ahead of the terminal-row guard
+    // below, because a retried expiry whose first attempt settled the row but
+    // failed to finish must still get to finish it.
+    if (clientLlmWaitExpired) {
+      const expired = await this.expireClientLlmWait(operationId, clientLlmWaitExpired);
+      return {
+        nextStepScheduled: false,
+        state: expired ? { status: 'error' } : {},
+        stepResult: null,
+        success: true,
+      };
     }
 
     // Redis keeps the resumable step state, but the durable operation row is
@@ -1602,6 +1883,7 @@ export class AgentRuntimeService {
               rejectAndContinue,
               rejectionReason,
               resumeAsyncTool,
+              resumeClientLlm,
               toolMessageId,
             },
             priority: 'high',
@@ -1739,7 +2021,7 @@ export class AgentRuntimeService {
           };
         }
 
-        const gatewayMessagePatchEnabled = await this.usesGatewayMessagePatch(agentState);
+        const gatewayMessagePatchEnabled = this.usesGatewayMessagePatch(agentState);
         const { uiMessages: stepStartUiMessages, messages: stepEntryMessages } =
           await this.queryStepEntryMessages(agentState);
         await this.streamManager.publishStreamEvent(operationId, {
@@ -1811,6 +2093,19 @@ export class AgentRuntimeService {
           // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
           await this.completionLifecycle.dispatchHooks(operationId, agentState, reason);
 
+          return {
+            nextStepScheduled: false,
+            state: agentState,
+            stepResult: null,
+            success: true,
+          };
+        }
+
+        // A run parked for a client moves only through its own resume: any other
+        // delivery (a duplicate, a stale redrive) would replay the call with no
+        // client to take it.
+        if (agentState.status === 'waiting_for_client' && !resumeClientLlm) {
+          log('[%s][%d] Skipping step — operation is waiting for a client', operationId, stepIndex);
           return {
             nextStepScheduled: false,
             state: agentState,
@@ -1983,6 +2278,9 @@ export class AgentRuntimeService {
 
         // Handle human intervention
         let currentContext = context;
+        // The wait this step resumes, if any: a resumed call that finds no client
+        // again re-parks under the same deadline, so retries never extend it.
+        let resumedClientLlmWait: AgentRunClientLlmWait | undefined;
         let currentState = agentState;
 
         if (humanInput || approvedToolCall || rejectionReason) {
@@ -2018,8 +2316,17 @@ export class AgentRuntimeService {
           // not this one. Drop ours rather than render a list that predates it.
           currentState.operationCredentials = undefined;
           currentState.lastModified = new Date().toISOString();
+          // A resume op (e.g. approving a callSubAgent) seeds its assistant
+          // placeholder before running the tool; when that tool is deferred the
+          // op parks with the seed unclaimed. Fill it now — creating another
+          // assistant leaves the seed as an empty "…" sibling branch that hides
+          // the real answer.
+          const seededAssistantMessageId = currentState.pendingAssistantMessageId;
           currentContext = {
-            payload: { parentMessageId: resumeParentMessageId },
+            payload: {
+              ...(seededAssistantMessageId && { assistantMessageId: seededAssistantMessageId }),
+              parentMessageId: resumeParentMessageId,
+            },
             phase: 'user_input',
           } as AgentRuntimeContext;
           log(
@@ -2028,6 +2335,29 @@ export class AgentRuntimeService {
             stepIndex,
             refreshed.length,
             resumeParentMessageId,
+          );
+        }
+
+        // Continue a run parked in `waiting_for_client`: a client that can run the
+        // provider asked for it (`resumeFromClientLlmWait` already recorded it as
+        // the run's executor). Replay the parked LLM turn into the assistant row
+        // it created, on the messages the parked step had.
+        if (resumeClientLlm && currentState.status === 'waiting_for_client') {
+          const wait = currentState.clientLlmWait;
+          resumedClientLlmWait = wait;
+          currentState = structuredClone(currentState);
+          currentState.status = 'running';
+          currentState.clientLlmWait = undefined;
+          currentState.error = undefined;
+          currentState.lastModified = new Date().toISOString();
+          if (wait?.assistantMessageId)
+            currentState.pendingAssistantMessageId = wait.assistantMessageId;
+          currentContext = buildClientLlmWaitResumeContext(wait);
+          log(
+            '[%s][%d] Resuming from waiting_for_client (assistant=%s)',
+            operationId,
+            stepIndex,
+            wait?.assistantMessageId,
           );
         }
 
@@ -2060,7 +2390,21 @@ export class AgentRuntimeService {
         // id through the same gate, so binding one here for a forbidden run buys
         // nothing and puts the device's working directory and system info into
         // the prompt variables (`serverCallLlmContextBuilder`).
-        if (!currentState.binding?.device?.id && runMayUseDevice(currentState)) {
+        //
+        // A run whose plan still leaves the device open (unrouted, not locked)
+        // keeps the remote-device picker for its whole lifetime, so it must keep
+        // following it: re-read on every step and let the latest activation win.
+        // Binding only once made every later `activateDevice` report success
+        // while local tools stayed on the first device.
+        const executionPlan = currentState.plan?.execution;
+        const deviceStillSelectable =
+          !!executionPlan &&
+          isDeviceCapablePlan(executionPlan) &&
+          !isDeviceLockedPlan(executionPlan);
+        if (
+          (!currentState.binding?.device?.id || deviceStillSelectable) &&
+          runMayUseDevice(currentState)
+        ) {
           // Interventions and async resumes can change tool rows after the
           // entry snapshot. Those paths still need a fresh device read.
           const canReuseEntryMessages =
@@ -2073,7 +2417,7 @@ export class AgentRuntimeService {
             currentState,
             canReuseEntryMessages ? stepEntryMessages : undefined,
           );
-          if (deviceContext) {
+          if (deviceContext && deviceContext.activeDeviceId !== currentState.binding?.device?.id) {
             currentState.binding = {
               ...currentState.binding,
               device: {
@@ -2176,6 +2520,20 @@ export class AgentRuntimeService {
           stepResult.newState.status = 'interrupted';
           stepResult.newState.lastModified = new Date().toISOString();
           log('[%s][%d] Operation was interrupted during step execution', operationId, stepIndex);
+        } else if (stepResult.newState.status === 'error') {
+          // No client could run the step's LLM call: park for one instead of
+          // failing (U4c). The parked state is what the step started from, so
+          // a resume replays the same call.
+          const parkedState = await this.parkForClientLlm(
+            operationId,
+            stepResult.newState,
+            currentContext,
+            resumedClientLlmWait?.expiresAt,
+            currentState,
+          );
+          if (parkedState) {
+            stepResult = { ...stepResult, newState: parkedState, nextContext: undefined };
+          }
         }
 
         // Decide whether to schedule next step (hoisted above the save: it also
@@ -2226,8 +2584,16 @@ export class AgentRuntimeService {
             skipWorks: shouldContinue,
           });
           if (settledUiMessages) {
+            // Projected: this branch runs only for a client that asked for
+            // protocol 2, which renders tool view models and can fetch a stored
+            // payload back. The model-facing lists are read elsewhere, straight
+            // off `MessageModel`, and stay whole.
             await this.streamManager.publishStreamEvent(operationId, {
-              data: buildMessagePatch(stepStartUiMessages, settledUiMessages, stepIndex + 1),
+              data: buildProjectedMessagePatch(
+                stepStartUiMessages,
+                settledUiMessages,
+                stepIndex + 1,
+              ),
               stepIndex,
               type: 'message_patch',
             });
@@ -2475,8 +2841,11 @@ export class AgentRuntimeService {
             log('[%s][%d] Next step %d deferred to caller', operationId, stepIndex, nextStepIndex);
           } else {
             // The next step runs in another invocation, which rebuilds the
-            // partial from the store — it has to see this step.
+            // partial from the store — it has to see this step. The gateway
+            // pushes this invocation issued have to land for the same reason:
+            // nothing carries them once it stops running.
             await this.traceRecorder.flushPartial();
+            await this.streamManager.drainPushes?.(operationId);
             await this.queueService.scheduleMessage({ ...next, endpoint: `${this.baseURL}/run` });
             nextStepScheduled = true;
             logToolCallPc(operationId, stepIndex, 'post.next_step_scheduled', () => ({
@@ -2505,11 +2874,15 @@ export class AgentRuntimeService {
             buildInvokeAgentResultAttributes({ completionReason: reason }),
           );
 
-          const completionSignalEvents = await this.completionLifecycle.emitSignalEvents(
-            operationId,
-            stepResult.newState,
-            reason,
-          );
+          // A client park is no completion: the run continues under this id.
+          const completionSignalEvents =
+            reason === 'waiting_for_client'
+              ? []
+              : await this.completionLifecycle.emitSignalEvents(
+                  operationId,
+                  stepResult.newState,
+                  reason,
+                );
           logToolCallPc(operationId, stepIndex, 'post.completion_signals', () => ({ reason }));
 
           // Dispatch completion hooks
@@ -2547,28 +2920,33 @@ export class AgentRuntimeService {
           // Finalize tracing snapshot. The error catch below uses the same
           // recorder so propagated failures still write the canonical S3
           // snapshot instead of orphaning the partial ().
+          // A client park is no trace boundary: keep the partial so the resumed
+          // steps extend the same trajectory and the real end finalizes it whole.
           const newStateError = stepResult.newState.error;
-          await this.traceRecorder.finalize(operationId, {
-            appendEventsToLastStep: completionSignalEvents,
-            completionReason: reason,
-            error: newStateError
-              ? {
-                  attribution: newStateError.attribution,
-                  body: newStateError.body,
-                  category: newStateError.category,
-                  countAsFailure: newStateError.countAsFailure,
-                  httpStatus: newStateError.httpStatus,
-                  message:
-                    this.completionLifecycle.extractErrorMessage(newStateError) ??
-                    JSON.stringify(newStateError),
-                  numericId: newStateError.numericId,
-                  retryable: newStateError.retryable,
-                  severity: newStateError.severity,
-                  type: String(newStateError.type ?? newStateError.errorType ?? 'unknown'),
-                }
-              : undefined,
-            state: stepResult.newState,
-          });
+          if (reason === 'waiting_for_client') {
+            await this.traceRecorder.flushPartial();
+          } else
+            await this.traceRecorder.finalize(operationId, {
+              appendEventsToLastStep: completionSignalEvents,
+              completionReason: reason,
+              error: newStateError
+                ? {
+                    attribution: newStateError.attribution,
+                    body: newStateError.body,
+                    category: newStateError.category,
+                    countAsFailure: newStateError.countAsFailure,
+                    httpStatus: newStateError.httpStatus,
+                    message:
+                      this.completionLifecycle.extractErrorMessage(newStateError) ??
+                      JSON.stringify(newStateError),
+                    numericId: newStateError.numericId,
+                    retryable: newStateError.retryable,
+                    severity: newStateError.severity,
+                    type: String(newStateError.type ?? newStateError.errorType ?? 'unknown'),
+                  }
+                : undefined,
+              state: stepResult.newState,
+            });
           logToolCallPc(operationId, stepIndex, 'post.trace_finalized', () => ({ reason }));
         }
 
@@ -2718,7 +3096,12 @@ export class AgentRuntimeService {
       // Parked runs (human input, async tools) and finished ones are read back
       // by a different invocation, so the partial cannot stay in memory only.
       // An inline hand-off keeps it: the next step runs on this recorder.
-      if (!handedOffInline) await this.traceRecorder.flushPartial();
+      if (!handedOffInline) {
+        await this.traceRecorder.flushPartial();
+        // Same boundary for the stream: an issued push is only guaranteed to
+        // reach the gateway while this invocation is still running.
+        await this.streamManager.drainPushes?.(operationId);
+      }
       // The inline step loop keeps the lock across step boundaries — releasing
       // here would open a window for a stale redelivery to claim it mid-run.
       // Its caller releases once, in a `finally`, for the whole invocation.
@@ -2741,8 +3124,10 @@ export class AgentRuntimeService {
     }
 
     // The steps this invocation inlined are still only in memory — the
-    // invocation that picks the run up reads the partial from the store.
+    // invocation that picks the run up reads the partial from the store, and
+    // the gateway pushes it issued have nothing else to carry them.
     await this.traceRecorder.flushPartial();
+    await this.streamManager.drainPushes?.(continuation.operationId);
 
     await this.queueService.scheduleMessage({
       ...continuation,
@@ -3251,6 +3636,469 @@ export class AgentRuntimeService {
     return true;
   }
 
+  // ==================== Waiting for a client (U4c) ====================
+
+  /**
+   * Park a step that failed because no client could run its LLM call — the
+   * provider is reachable only from the user's device and no LobeHub client
+   * took the call (a schedule, a bot, a CLI run, every tab closed). The run
+   * waits in `waiting_for_client` on the state the step started from, its
+   * assistant row says why, and an expiry check is armed. `undefined` when the
+   * error is not one a client can fix, or nothing could resume or expire the
+   * park (no queue) — the step then fails as before.
+   */
+  private async parkForClientLlm(
+    operationId: string,
+    errorState: AgentState,
+    context: AgentRuntimeContext | undefined,
+    notAfter?: string,
+    stepStartState?: AgentState,
+  ): Promise<AgentState | undefined> {
+    const reason = getClientLlmWaitableReason(errorState.error);
+    if (!reason || !this.queueService) return;
+
+    // A client that started the run but predates the wait takes the parked
+    // call's error as the run's end and settles it locally, while the row
+    // stays parked under its topic. Fail the step for it as before.
+    const declaredExecutor = errorState.host?.llmExecutor;
+    if (declaredExecutor && !declaredExecutor.capabilities?.includes(CLIENT_LLM_WAIT_CAPABILITY)) {
+      log("[%s] The run's client cannot wait for a client, failing instead", operationId);
+      return;
+    }
+
+    const errorBody = (errorState.error as { body?: { provider?: unknown } } | undefined)?.body;
+    const provider =
+      (typeof errorBody?.provider === 'string' && errorBody.provider) ||
+      errorState.modelRuntimeConfig?.provider ||
+      'unknown';
+
+    const topicId = errorState.origin?.topicId;
+    let assistantMessage: { id: string; parentId?: string | null } | undefined;
+    if (topicId) {
+      try {
+        const row = await this.messageModel.findLatestAssistantByOperationId({
+          operationId,
+          topicId,
+        });
+        if (row?.id) assistantMessage = { id: row.id, parentId: row.parentId };
+      } catch (error) {
+        log('[%s] Failed to find the parked call assistant row: %O', operationId, error);
+      }
+    }
+
+    // A client picks a wait up by subscribing to the run's stream, which needs
+    // the run's topic and assistant row. Without them nothing could claim the
+    // wait, so fail the step as before instead of parking it.
+    if (!topicId || !assistantMessage) {
+      log('[%s] No stream anchor to park on, failing instead', operationId);
+      return;
+    }
+
+    const wait = buildClientLlmWait({ assistantMessage, context, notAfter, provider, reason });
+    // A re-park with (almost) nothing left of its wait would arm an expiry that
+    // can land before this step commits and be overwritten by it. The wait is
+    // over anyway: fail the step with its actionable error instead.
+    if (Date.parse(wait.expiresAt) - Date.now() < MIN_CLIENT_LLM_WAIT_REMAINING_MS) {
+      log('[%s] Client wait already used up, failing instead', operationId);
+      return;
+    }
+    const parkedState: AgentState = {
+      ...errorState,
+      // The call never ran, so it does not spend a step: the resume replays it
+      // through `runtime.step`, which counts it (and applies the step limit)
+      // then. Keeping the incremented count would count it twice and, at the
+      // limit, replay it as a forced final answer.
+      ...(stepStartState && {
+        forceFinish: stepStartState.forceFinish,
+        stepCount: stepStartState.stepCount,
+      }),
+      clientLlmWait: wait,
+      error: undefined,
+      lastModified: wait.parkedAt,
+      status: 'waiting_for_client',
+    };
+
+    // Resume, expiry and Stop all key off the durable row, so it must say
+    // `waiting_for_client` before anything advertises the wait. If it cannot,
+    // fail the step as before rather than park a run nothing could settle.
+    try {
+      const recorded = await this.agentOperationModel.recordCompletion(operationId, {
+        completionReason: 'waiting_for_client',
+        status: 'waiting_for_client',
+      });
+      if (!recorded) {
+        log('[%s] No durable row to park on, failing instead', operationId);
+        return;
+      }
+    } catch (error) {
+      log('[%s] Could not record the client wait, failing instead: %O', operationId, error);
+      return;
+    }
+
+    // The expiry can fire at once (a re-park past its deadline), and it acts
+    // only on the park it names: the parked state and the waiting notice must
+    // already be in place, or it no-ops — or its terminal error is overwritten
+    // by the notice — and the run waits with nothing left to end it.
+    try {
+      await this.coordinator.saveAgentState(operationId, parkedState);
+    } catch (error) {
+      log('[%s] Could not save the parked state, failing instead: %O', operationId, error);
+      return;
+    }
+
+    // The notice is the only thing a client that cannot run the provider sees
+    // (its relay error handler re-reads the server-owned row), so a transient
+    // failure is retried rather than left as a silent park.
+    await this.updateAssistantRowWithRetry(operationId, assistantMessage.id, {
+      error: buildClientLlmWaitMessageError(wait),
+    });
+
+    try {
+      await this.queueService.scheduleMessage({
+        context: undefined,
+        delay: Math.max(Date.parse(wait.expiresAt) - Date.now(), 0),
+        endpoint: `${this.baseURL}/run`,
+        operationId,
+        payload: { clientLlmWaitExpired: wait.parkedAt },
+        priority: 'normal',
+        stepIndex: parkedState.stepCount,
+      });
+    } catch (error) {
+      // Without the expiry the run could wait forever: fail it now instead
+      // (the run's error then replaces the waiting notice on its row).
+      log('[%s] Could not arm the client wait expiry, failing instead: %O', operationId, error);
+      return;
+    }
+
+    log(
+      '[%s] Parked in waiting_for_client (provider=%s, reason=%s, until %s)',
+      operationId,
+      provider,
+      reason,
+      wait.expiresAt,
+    );
+    return parkedState;
+  }
+
+  /**
+   * Continue a run parked in `waiting_for_client` from the step it parked on.
+   * The asking client becomes the run's relay executor, so the replayed call
+   * is delivered to it. Single-fire: concurrent resumes (an automatic one and
+   * a click) race on the durable row and one wins.
+   */
+  async resumeFromClientLlmWait(params: {
+    llmExecutor?: AgentRunLlmExecutor;
+    operationId: string;
+  }): Promise<ResumeClientLlmWaitResult> {
+    const { llmExecutor, operationId } = params;
+    const state = await this.coordinator.loadAgentState(operationId);
+    if (!state || state.status !== 'waiting_for_client') return { resumed: false };
+    if (state.origin?.userId && state.origin.userId !== this.userId) return { resumed: false };
+
+    // Past its deadline the wait is over even if the expiry is still in flight
+    // (QStash can deliver late): leave the run to it rather than run the call
+    // after the advertised time.
+    const expiresAt = Date.parse(state.clientLlmWait?.expiresAt ?? '');
+    if (Number.isFinite(expiresAt) && Date.now() >= expiresAt) return { resumed: false };
+
+    const won = await this.agentOperationModel.tryResumeFromClientWait(operationId);
+    if (!won) return { resumed: false };
+
+    const wait = state.clientLlmWait;
+    // Past the claim, everything up to the queued step must land, or the run
+    // goes back to its wait: a `running` row with nothing queued is one that no
+    // resume, expiry or Stop can reach.
+    try {
+      await this.coordinator.saveAgentState(operationId, {
+        ...state,
+        host: { ...state.host, ...(llmExecutor && { llmExecutor }) },
+        lastModified: new Date().toISOString(),
+      });
+
+      // A Stop that landed after the claim could not settle the `running` row,
+      // and the save above may have overwritten its `interrupted` state. It
+      // marks the interrupt before saving, so any such Stop shows here; a later
+      // one saves after this and the queued step stops on it.
+      if (await this.coordinator.isInterrupted(operationId)) {
+        log('[%s] Stopped while being resumed; settling as interrupted', operationId);
+        const interruptedState: AgentState = {
+          ...state,
+          clientLlmWait: undefined,
+          lastModified: new Date().toISOString(),
+          status: 'interrupted',
+        };
+        await this.coordinator.saveAgentState(operationId, interruptedState);
+        if (await this.agentOperationModel.settleRunning(operationId, 'interrupted')) {
+          await this.completionLifecycle.dispatchHooks(
+            operationId,
+            interruptedState,
+            'interrupted',
+          );
+        }
+        return { resumed: false };
+      }
+
+      if (wait?.assistantMessageId) {
+        try {
+          await this.messageModel.update(wait.assistantMessageId, { error: null });
+        } catch (error) {
+          log('[%s] Failed to clear the waiting notice: %O', operationId, error);
+        }
+      }
+
+      await this.queueService?.scheduleMessage({
+        context: undefined,
+        delay: 100,
+        endpoint: `${this.baseURL}/run`,
+        operationId,
+        payload: { resumeClientLlm: true },
+        priority: 'high',
+        stepIndex: state.stepCount,
+      });
+    } catch (error) {
+      log('[%s] Could not hand the run to a client, staying parked: %O', operationId, error);
+      await this.restoreClientLlmWait(operationId, state);
+      throw error;
+    }
+
+    log('[%s] Resumed from waiting_for_client at step %d', operationId, state.stepCount);
+    return {
+      assistantMessageId: wait?.assistantMessageId,
+      resumed: true,
+      topicId: state.origin?.topicId ?? undefined,
+    };
+  }
+
+  /**
+   * Put a run whose resume claim could not be completed back into its wait.
+   * Other transitions may have raced the claim, so this re-reads the run
+   * first. If a Stop moved it on (its settle could not match the claimed
+   * `running` row), the row is settled to match instead of re-parked. If it is
+   * still this park, the durable row goes back first — it is what resume,
+   * expiry and Stop key off — and the expiry is re-armed, because one that
+   * fired while the row read `running` gave up. Each step is best-effort so
+   * one failure does not skip the rest.
+   */
+  private async restoreClientLlmWait(operationId: string, parkedState: AgentState) {
+    const wait = parkedState.clientLlmWait;
+    const current = await this.coordinator.loadAgentState(operationId).catch(() => null);
+    const stillParked =
+      current?.status === 'waiting_for_client' &&
+      current.clientLlmWait?.parkedAt === wait?.parkedAt;
+
+    if (!stillParked) {
+      if (current?.status === 'interrupted') {
+        const settled = await this.agentOperationModel
+          .settleRunning(operationId, 'interrupted')
+          .catch(() => false);
+        if (settled) {
+          await this.completionLifecycle
+            .dispatchHooks(operationId, current, 'interrupted')
+            .catch((error) => log('[%s] Failed to finish the stop: %O', operationId, error));
+        }
+      }
+      return;
+    }
+
+    // The visible wait is only worth restoring once the row is parked again:
+    // with the row stuck `running`, no resume, expiry or Stop can reach it, and
+    // the abandoned-run watchdog is what settles it.
+    if (!(await this.revertClientWaitResumeWithRetry(operationId))) {
+      log('[%s] Could not re-park the durable row; leaving it to the watchdog', operationId);
+      return;
+    }
+    await this.coordinator
+      .saveAgentState(operationId, parkedState)
+      .catch((error) => log('[%s] Failed to restore the parked state: %O', operationId, error));
+    if (wait?.assistantMessageId) {
+      await this.messageModel
+        .update(wait.assistantMessageId, { error: buildClientLlmWaitMessageError(wait) })
+        .catch((error) => log('[%s] Failed to restore the waiting notice: %O', operationId, error));
+    }
+    if (!wait) return;
+
+    // Duplicate expiries are no-ops (they match on `parkedAt` and the row CAS).
+    if (Date.now() >= Date.parse(wait.expiresAt)) {
+      await this.expireClientLlmWait(operationId, wait.parkedAt).catch((error) =>
+        log('[%s] Failed to expire the overdue wait: %O', operationId, error),
+      );
+      return;
+    }
+    await this.queueService
+      ?.scheduleMessage({
+        context: undefined,
+        delay: Math.max(Date.parse(wait.expiresAt) - Date.now(), 0),
+        endpoint: `${this.baseURL}/run`,
+        operationId,
+        payload: { clientLlmWaitExpired: wait.parkedAt },
+        priority: 'normal',
+        stepIndex: parkedState.stepCount,
+      })
+      .catch((error) => log('[%s] Failed to re-arm the wait expiry: %O', operationId, error));
+  }
+
+  /** Put the claimed row back to `waiting_for_client`, riding out a transient DB error. */
+  private async revertClientWaitResumeWithRetry(operationId: string): Promise<boolean> {
+    for (const delayMs of CLIENT_WAIT_REVERT_RETRY_DELAYS_MS) {
+      if (delayMs) await new Promise((resolve) => setTimeout(resolve, delayMs));
+      try {
+        // `false` means the row is no longer the claimed `running` one, so it
+        // is not ours to put back.
+        return await this.agentOperationModel.revertClientWaitResume(operationId);
+      } catch (error) {
+        log('[%s] Failed to re-park the durable row: %O', operationId, error);
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Runs of this user parked in `waiting_for_client`, with what a client needs
+   * to pick one up: the provider it must be able to run, and where the run's
+   * conversation lives so it can subscribe to the stream before resuming.
+   */
+  async listClientLlmWaits(providers?: string[]): Promise<ClientLlmWaitItem[]> {
+    const rows = await this.agentOperationModel.listWaitingForClient({ providers });
+    const items = await pMap(
+      rows,
+      async (row): Promise<ClientLlmWaitItem | undefined> => {
+        const state = await this.coordinator.loadAgentState(row.id).catch(() => null);
+        const wait = state?.clientLlmWait;
+        if (state?.status !== 'waiting_for_client' || !wait) return;
+        return {
+          agentId: state.origin?.agentId ?? undefined,
+          assistantMessageId: wait.assistantMessageId,
+          expiresAt: wait.expiresAt,
+          operationId: row.id,
+          provider: wait.provider,
+          threadId: state.origin?.threadId ?? undefined,
+          topicId: state.origin?.topicId ?? row.topicId ?? undefined,
+        };
+      },
+      { concurrency: 4 },
+    );
+    return items.filter((item): item is ClientLlmWaitItem => !!item);
+  }
+
+  /**
+   * End a `waiting_for_client` park nobody resumed in time. A no-op unless the
+   * run is still parked on the very wait that armed this check; the durable
+   * row CAS keeps a racing resume from being killed.
+   */
+  private async expireClientLlmWait(operationId: string, parkedAt: string): Promise<boolean> {
+    const state = await this.coordinator.loadAgentState(operationId);
+
+    // A redelivery after this expiry already ended the run but its lifecycle
+    // delivery threw (a critical hook asks QStash to retry): deliver it again,
+    // like a retried terminal step does.
+    if (state?.status === 'error' && isClientLlmWaitExpiryOf(state, parkedAt)) {
+      log('[%s] Redelivering the lifecycle of an expired client wait', operationId);
+      await this.finishClientLlmWaitExpiry(operationId, state);
+      return true;
+    }
+
+    if (state?.status !== 'waiting_for_client' || state.clientLlmWait?.parkedAt !== parkedAt) {
+      return false;
+    }
+
+    // Redis still holds this exact park. A row this CAS cannot claim is one a
+    // resume took (`running`), unless it is already `error`: then an earlier
+    // delivery of this expiry settled it and failed before finishing (resumes,
+    // Stop and failing steps all move the Redis state off this park first), so
+    // finish it now — QStash retries the delivery that threw.
+    const settled = await this.agentOperationModel.settleClientWait(operationId);
+    if (!settled) {
+      const row = await this.agentOperationModel.findById(operationId);
+      if (row?.status !== 'error') return false;
+      log('[%s] Finishing a client wait expiry that settled but did not finish', operationId);
+    }
+
+    await this.endExpiredClientLlmWait(operationId, state, state.clientLlmWait);
+
+    log('[%s] waiting_for_client expired (parked at %s)', operationId, parkedAt);
+    return true;
+  }
+
+  /**
+   * The terminal half of an expiry, once the durable row reads `error`: the
+   * parked call's row, the Redis state (which ends the stream) and the
+   * lifecycle. `state` is the run as it was parked on `wait`.
+   */
+  private async endExpiredClientLlmWait(
+    operationId: string,
+    state: AgentState,
+    wait: AgentRunClientLlmWait,
+  ) {
+    const provider = wait.provider;
+    const finalState: AgentState = {
+      ...state,
+      clientLlmWait: undefined,
+      error: formatErrorForState(
+        createClientLlmExecutorUnavailableError(provider, 'wait_timeout', {
+          waitedSince: wait.parkedAt,
+        }),
+      ),
+      lastModified: new Date().toISOString(),
+      status: 'error',
+    };
+
+    // The row gets the terminal error first: the save below ends the stream
+    // with a `uiMessages` snapshot read from the DB, and an open tab adopts it,
+    // so writing it later would leave that tab on the waiting notice. The
+    // lifecycle writes the same error again when it finalizes the run.
+    // A transient failure is retried here: the lifecycle's later write emits
+    // no message patch, so a tab that took the stale snapshot would keep the
+    // dead waiting notice until reload.
+    const assistantMessageId = wait.assistantMessageId;
+    if (assistantMessageId && finalState.error) {
+      const message = this.completionLifecycle.extractErrorMessage(finalState.error);
+      const error = { ...finalState.error, body: finalState.error.body ?? { message }, message };
+      await this.updateAssistantRowWithRetry(operationId, assistantMessageId, { error });
+    }
+
+    // Ends the stream (`agent_runtime_end`) and finalizes the run like any failure.
+    await this.coordinator.saveAgentState(operationId, finalState);
+    await this.completionLifecycle.emitSignalEvents(operationId, finalState, 'error');
+    await this.finishClientLlmWaitExpiry(operationId, finalState);
+  }
+
+  /**
+   * Write a client-wait notice or error onto the assistant row, retrying a
+   * transient failure: what a connected tab shows next is read from this row.
+   */
+  private async updateAssistantRowWithRetry(
+    operationId: string,
+    messageId: string,
+    value: Parameters<MessageModel['update']>[1],
+  ) {
+    for (let attempt = 1; attempt <= CLIENT_WAIT_ROW_WRITE_ATTEMPTS; attempt += 1) {
+      try {
+        await this.messageModel.update(messageId, value);
+        return;
+      } catch (error) {
+        log('[%s] Failed to write the assistant row (%d): %O', operationId, attempt, error);
+        if (attempt < CLIENT_WAIT_ROW_WRITE_ATTEMPTS) {
+          await new Promise((resolve) => setTimeout(resolve, 100 * attempt));
+        }
+      }
+    }
+  }
+
+  /** Lifecycle delivery of an expired client wait; safe to repeat on redelivery. */
+  private async finishClientLlmWaitExpiry(operationId: string, finalState: AgentState) {
+    const provider = (finalState.error as { body?: { provider?: string } } | undefined)?.body
+      ?.provider;
+    await this.completionLifecycle.dispatchHooks(operationId, finalState, 'error');
+    await this.traceRecorder.finalize(operationId, {
+      completionReason: 'error',
+      error: {
+        message: `No LobeHub client picked up the ${provider ?? 'local model'} call in time`,
+        type: String(finalState.error?.type ?? 'ClientLlmExecutorUnavailable'),
+      },
+      state: finalState,
+    });
+  }
+
   /**
    * Arm the next bounded `verifyAsyncToolBarrier` re-check for a parent op whose
    * resume attempt found it not yet resumable. Skipped for terminal states
@@ -3454,16 +4302,26 @@ export class AgentRuntimeService {
         );
       }
     }
-    const errorReason = failed ? formatSubAgentErrorReason(finalState?.error) : undefined;
-    const content = failed
+    const errorReason = failed
+      ? formatSubAgentErrorReason(finalState?.error ?? params.errorMessage)
+      : undefined;
+    const resultContent = failed
       ? errorReason
         ? `Sub-agent did not complete (${reason}): ${errorReason}`
         : `Sub-agent did not complete (${reason}).`
       : lastAssistantContent || 'Sub-agent completed without a textual answer.';
+    // callSubAgent results carry the sub-agent id so the parent can later send
+    // this same sub-agent a follow-up (`callSubAgent({ subAgentId })`) — e.g.
+    // to hand over what it gathered before failing — instead of redoing it.
+    const content = (await this.isCallSubAgentToolMessage(toolMessageId, threadId))
+      ? appendSubAgentReference(resultContent, threadId)
+      : resultContent;
 
     const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
       content,
-      pluginError: failed ? formatErrorForMetadata(finalState?.error) : undefined,
+      pluginError: failed
+        ? formatErrorForMetadata(finalState?.error ?? params.errorMessage)
+        : undefined,
       pluginState: {
         model: finalState?.modelRuntimeConfig?.model,
         status: failed ? 'error' : 'completed',
@@ -3493,6 +4351,24 @@ export class AgentRuntimeService {
       { parentOperationId },
       { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },
     );
+  }
+
+  /**
+   * Whether the bridged placeholder belongs to `lobe-agent.callSubAgent` (the
+   * same bridge also serves `callAgent`, whose children cannot be continued).
+   * Best-effort: a failed lookup only drops the id trailer, never the bridge.
+   */
+  private async isCallSubAgentToolMessage(
+    toolMessageId: string,
+    threadId: string | undefined,
+  ): Promise<boolean> {
+    if (!threadId) return false;
+    try {
+      return isCallSubAgentCall(await this.messageModel.findMessagePlugin(toolMessageId));
+    } catch (error) {
+      log('[%s] sub-agent bridge: failed to read tool plugin: %O', toolMessageId, error);
+      return false;
+    }
   }
 
   /**
@@ -3613,6 +4489,20 @@ export class AgentRuntimeService {
       threadId,
     } = params;
     const failed = reason === 'error' || reason === 'interrupted' || reason === 'timeout';
+
+    // Members answer to the supervisor's approval mode, so a member can park on
+    // a tool that needs the user's approval. That segment fires `onComplete`
+    // (so the approval surfaces), but the member has not answered yet: leave its
+    // anchor pending and the supervisor parked. The approval continuation
+    // inherits this bridge hook and reports the member's real outcome.
+    if (reason === 'waiting_for_human') {
+      log(
+        '[%s] group-member bridge: member parked for human approval, holding parent %s',
+        operationId,
+        parentOperationId,
+      );
+      return false;
+    }
 
     const finalState =
       params.finalState ?? (await this.coordinator.loadAgentState(operationId)) ?? undefined;
@@ -3863,7 +4753,7 @@ export class AgentRuntimeService {
   private async refreshMessagesFromDB(state: AgentState): Promise<AgentState['messages']> {
     const dbMessages = await this.queryMessagesFromDB(state);
 
-    const { flatList } = parse(dbMessages);
+    const { flatList } = parse(dbMessages, undefined, { threadId: state.origin?.threadId });
     return flatList as AgentState['messages'];
   }
 
@@ -3875,7 +4765,7 @@ export class AgentRuntimeService {
    */
   private async resolveLastAssistantMessageFromDB(state: AgentState): Promise<unknown> {
     const dbMessages = await this.queryMessagesFromDB(state);
-    const { flatList } = parse(dbMessages);
+    const { flatList } = parse(dbMessages, undefined, { threadId: state.origin?.threadId });
     const lastAssistant = findLastAssistantMessage(normalizeCompletionMessages(flatList));
     const lastAssistantId = typeof lastAssistant?.id === 'string' ? lastAssistant.id : undefined;
 
@@ -3958,10 +4848,7 @@ export class AgentRuntimeService {
     const [uiResult] = await Promise.all([
       (async () => {
         try {
-          return await this.messageService.prepareUiMessages(
-            messages,
-            !!state.principal?.actor?.shareVisitor?.visitorUserId,
-          );
+          return await this.messageService.prepareUiMessages(messages);
         } catch (error) {
           console.error('[queryStepEntryMessages] Failed to prepare UI messages: %O', error);
           return undefined;
@@ -3983,7 +4870,7 @@ export class AgentRuntimeService {
                 fileService!.getFullFileUrl(file.url),
               )
             : messages;
-          const { flatList } = parse(resolved);
+          const { flatList } = parse(resolved, undefined, { threadId: state.origin?.threadId });
           if (flatList.length > 0) state.messages = flatList as AgentState['messages'];
         } catch (error) {
           console.error('[queryStepEntryMessages] Failed to hydrate runtime messages: %O', error);
@@ -4214,6 +5101,9 @@ export class AgentRuntimeService {
     // Parked waiting for an async tool result (client tool / sub-agent)
     if (state.status === 'waiting_for_async_tool') return false;
 
+    // Parked waiting for a client to run the next LLM call
+    if (state.status === 'waiting_for_client') return false;
+
     // Error occurred
     if (state.status === 'error') return false;
 
@@ -4340,6 +5230,7 @@ export class AgentRuntimeService {
     if (state.status === 'interrupted') return 'interrupted';
     if (state.status === 'waiting_for_human') return 'waiting_for_human';
     if (state.status === 'waiting_for_async_tool') return 'waiting_for_async_tool';
+    if (state.status === 'waiting_for_client') return 'waiting_for_client';
     // Checked ahead of 'done' on purpose: a run the repeat guard cut short ends
     // in exactly that status, having emitted a turn with no tool calls. Reading
     // it as a plain 'done' is what made these runs uncountable.

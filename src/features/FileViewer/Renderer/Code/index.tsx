@@ -1,11 +1,11 @@
 'use client';
 
 import { Center, Flexbox, Highlighter } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { getLanguageFromFilename } from '@/utils/fileLanguage';
 
 import { useTextFileLoader } from '../../hooks/useTextFileLoader';
@@ -45,7 +45,7 @@ const CodeViewer = memo<CodeViewerProps>(({ url, fileName }) => {
         </Highlighter>
       ) : (
         <Center height={'100%'}>
-          <NeuralNetworkLoading size={36} />
+          <Spin size="large" />
         </Center>
       )}
     </Flexbox>

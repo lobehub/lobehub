@@ -1,10 +1,10 @@
 'use client';
 
 import { isMaskedBotCredential } from '@lobechat/const';
-import { Block, Flexbox, Form, FormGroup, FormItem, Icon } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui/base-ui';
-import { Button, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, type FormInstance, InputNumber, Popconfirm } from 'antd';
+import { Button, confirmModal, InputNumber, Select, Switch, Tag, Text } from '@lobehub/ui/base-ui';
+import { Form, type FormInstance, useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import {
   Fingerprint,
@@ -19,7 +19,6 @@ import {
   Trash2,
   UsersRound,
 } from 'lucide-react';
-import type { MouseEvent } from 'react';
 import { Fragment, memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,48 +37,10 @@ import {
 import { extractSettingsDefaults } from './formState';
 import type { ChannelFormValues } from './index';
 
-const prefixCls = 'ant';
-
 const styles = createStaticStyles(({ css, cssVar }) => ({
   advancedGroup: css`
     border-block-start: 1px solid ${cssVar.colorBorderSecondary};
     border-radius: 0 !important;
-
-    .${prefixCls}-collapse-item {
-      border-radius: 0 !important;
-    }
-
-    .${prefixCls}-collapse-header {
-      align-items: center !important;
-
-      margin-inline: -16px;
-      padding-block: 10px !important;
-      padding-inline: 16px !important;
-      border-block-end: 0 !important;
-
-      color: ${cssVar.colorTextSecondary} !important;
-
-      transition: background-color ${cssVar.motionDurationFast} ${cssVar.motionEaseInOut};
-
-      &:hover {
-        background: ${cssVar.colorBgTextHover};
-      }
-    }
-
-    .${prefixCls}-collapse-expand-icon {
-      align-self: center;
-      color: ${cssVar.colorTextSecondary} !important;
-    }
-
-    .${prefixCls}-collapse-title {
-      display: flex;
-      flex: 1 !important;
-      align-items: center;
-    }
-
-    .${prefixCls}-collapse-content-box {
-      padding-inline: 0 !important;
-    }
   `,
   advancedTitle: css`
     font-size: 13px;
@@ -98,73 +59,48 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-self: center;
     color: ${cssVar.colorTextSecondary};
   `,
-  form: css`
-    .${prefixCls}-form-item-label {
-      display: flex;
-      align-items: center;
-    }
-
-    .${prefixCls}-form-item-label > label {
-      align-items: center;
-      width: 100%;
-    }
-
-    .${prefixCls}-form-item-required::before {
-      align-self: center !important;
-    }
-
-    .${prefixCls}-form-item-control {
-      flex: 0 0 50% !important;
-      width: 50%;
-    }
-  `,
 }));
 
 // --------------- Validation rules builder ---------------
 
-export function buildRules(field: FieldSchema, t: (key: string) => string) {
-  const rules: any[] = [];
+const isEmptyValue = (value: unknown) =>
+  value === undefined || value === null || value === '' || (Array.isArray(value) && !value.length);
 
-  if (field.required) {
-    rules.push({ message: t(field.label), required: true });
-  }
+export function buildValidate(field: FieldSchema, t: (key: string) => string) {
+  const pattern = field.pattern ? new RegExp(field.pattern) : undefined;
+  const isNumber = field.type === 'number' || field.type === 'integer';
+  const { maximum, minimum } = field;
 
-  // Format constraint declared by the platform schema. Empty stays valid, so an
-  // untouched optional field does not trip it, and so does the placeholder the
-  // server returns in place of a stored secret — the save path swaps that back
-  // for the real value, and holding it to the platform's format here would make
-  // every unrelated edit demand the secret be retyped.
-  if (field.pattern) {
-    const pattern = new RegExp(field.pattern);
-    const message = field.patternMessage ? t(field.patternMessage) : t(field.label);
+  if (
+    !field.required &&
+    !pattern &&
+    !(isNumber && (typeof minimum === 'number' || typeof maximum === 'number'))
+  )
+    return undefined;
 
-    rules.push({
-      validator: (_: unknown, value: unknown) => {
-        if (typeof value !== 'string' || !value) return Promise.resolve();
-        if (isMaskedBotCredential(value)) return Promise.resolve();
-        return pattern.test(value) ? Promise.resolve() : Promise.reject(new Error(message));
-      },
-    });
-  }
+  return (value: unknown) => {
+    if (isEmptyValue(value)) return field.required ? t(field.label) : undefined;
 
-  if (field.type === 'number' || field.type === 'integer') {
-    if (typeof field.minimum === 'number') {
-      rules.push({
-        message: `${t(field.label)} ≥ ${field.minimum}`,
-        min: field.minimum,
-        type: 'number' as const,
-      });
+    // Format constraint declared by the platform schema. Empty stays valid, so an
+    // untouched optional field does not trip it, and so does the placeholder the
+    // server returns in place of a stored secret — the save path swaps that back
+    // for the real value, and holding it to the platform's format here would make
+    // every unrelated edit demand the secret be retyped.
+    if (
+      pattern &&
+      typeof value === 'string' &&
+      !isMaskedBotCredential(value) &&
+      !pattern.test(value)
+    )
+      return field.patternMessage ? t(field.patternMessage) : t(field.label);
+
+    if (isNumber && typeof value === 'number') {
+      if (typeof minimum === 'number' && value < minimum) return `${t(field.label)} ≥ ${minimum}`;
+      if (typeof maximum === 'number' && value > maximum) return `${t(field.label)} ≤ ${maximum}`;
     }
-    if (typeof field.maximum === 'number') {
-      rules.push({
-        message: `${t(field.label)} ≤ ${field.maximum}`,
-        max: field.maximum,
-        type: 'number' as const,
-      });
-    }
-  }
 
-  return rules.length > 0 ? rules : undefined;
+    return undefined;
+  };
 }
 
 // --------------- Single field component (memo'd) ---------------
@@ -225,8 +161,9 @@ const SchemaField = memo<SchemaFieldProps>(
     const disabled = formDisabled || featureLocked;
 
     // Conditional visibility: watch the sibling field specified by visibleWhen
-    const watchedValue = AntdForm.useWatch(
-      field.visibleWhen ? [parentKey, field.visibleWhen.field] : [],
+    const form = useFormInstance();
+    const watchedValue = useWatch(form, (values) =>
+      field.visibleWhen ? values[parentKey]?.[field.visibleWhen.field] : undefined,
     );
     if (field.visibleWhen) {
       // An array matches any of its entries, so one field can be shared by
@@ -243,7 +180,7 @@ const SchemaField = memo<SchemaFieldProps>(
     const label = renderFieldLabel(field, t);
 
     // Array of objects (e.g. user / channel allowlist) — needs Form.List, can't
-    // be expressed as a single control inside a name-bound FormItem.
+    // be expressed as a single control inside a name-bound Form.Field.
     if (field.type === 'array' && field.items?.type === 'object') {
       return (
         <ObjectListField
@@ -342,19 +279,17 @@ const SchemaField = memo<SchemaFieldProps>(
     }
 
     return (
-      <FormItem
+      <Form.Field
         avatar={renderFieldIcon(field)}
         divider={divider}
-        initialValue={field.default}
         label={label}
         minWidth={'max(50%, 400px)'}
-        name={[parentKey, field.key]}
-        rules={buildRules(field, t)}
-        valuePropName={field.type === 'boolean' ? 'checked' : undefined}
+        name={`${parentKey}.${field.key}`}
+        validate={buildValidate(field, t)}
         variant="outlined"
       >
         {children}
-      </FormItem>
+      </Form.Field>
     );
   },
 );
@@ -397,36 +332,31 @@ const ObjectListField = memo<ObjectListFieldProps>(
     const removeLabel = t('channel.allowListRemove');
 
     return (
-      <FormItem
+      <Form.Field
         avatar={icon}
         divider={divider}
         label={label}
         minWidth={'max(50%, 400px)'}
         variant="outlined"
       >
-        <AntdForm.List initialValue={field.default as unknown[]} name={[parentKey, field.key]}>
-          {(rows, { add, remove }) => (
+        <Form.List name={`${parentKey}.${field.key}`}>
+          {({ fields: rows, add, remove }) => (
             <Flexbox gap={8} style={{ width: '100%' }}>
               {rows.length === 0 && (
                 <Flexbox style={{ fontSize: 12, opacity: 0.6, paddingBlock: 4 }}>
                   {emptyLabel}
                 </Flexbox>
               )}
-              {rows.map(({ key, name }) => (
+              {rows.map(({ index, key, name }) => (
                 <Flexbox horizontal align="center" gap={8} key={key}>
                   {itemProps.map((sub) => (
-                    // `noStyle` skips the antd FormItem chrome that the parent
-                    // form's 50%-width override targets — without it each cell
-                    // collapses to half the row, leaving a wide gap between
-                    // the id and name inputs. The flex:1 wrapper takes over
-                    // sizing, and `minWidth:0` lets the input actually shrink.
                     <div key={sub.key} style={{ flex: 1, minWidth: 0 }}>
-                      <AntdForm.Item
-                        noStyle
-                        name={[name, sub.key]}
-                        rules={
+                      <Form.Field
+                        bare
+                        name={`${name}.${sub.key}`}
+                        validate={
                           sub.required
-                            ? [{ message: t(sub.label), required: true, whitespace: true }]
+                            ? (value?: string) => (value?.trim() ? undefined : t(sub.label))
                             : undefined
                         }
                       >
@@ -438,7 +368,7 @@ const ObjectListField = memo<ObjectListFieldProps>(
                               : t(sub.label)
                           }
                         />
-                      </AntdForm.Item>
+                      </Form.Field>
                     </div>
                   ))}
                   <Button
@@ -446,7 +376,7 @@ const ObjectListField = memo<ObjectListFieldProps>(
                     disabled={disabled}
                     icon={<Trash2 size={14} />}
                     type="text"
-                    onClick={() => remove(name)}
+                    onClick={() => remove(index)}
                   />
                 </Flexbox>
               ))}
@@ -466,8 +396,8 @@ const ObjectListField = memo<ObjectListFieldProps>(
               </Button>
             </Flexbox>
           )}
-        </AntdForm.List>
-      </FormItem>
+        </Form.List>
+      </Form.Field>
     );
   },
 );
@@ -480,21 +410,20 @@ const ApplicationIdField = memo<{ disabled?: boolean; divider?: boolean; field: 
     const t = _t as (key: string) => string;
 
     return (
-      <FormItem
+      <Form.Field
         avatar={renderFieldIcon(field)}
         divider={divider}
-        initialValue={field.default}
         label={renderFieldLabel(field, t)}
         minWidth={'max(50%, 400px)'}
         name="applicationId"
-        rules={buildRules(field, t)}
+        validate={buildValidate(field, t)}
         variant="outlined"
       >
         <FormInput
           disabled={disabled}
           placeholder={field.placeholder ? t(field.placeholder) : t(field.label)}
         />
-      </FormItem>
+      </Form.Field>
     );
   },
 );
@@ -581,10 +510,10 @@ const Body = memo<BodyProps>(
     const [settingsActive, setSettingsActive] = useState(userIdInitiallyMissing);
 
     const handleResetSettings = useCallback(() => {
-      form.setFieldsValue({
+      form.setValues({
         settings: extractSettingsDefaults(platformDef.schema) as Record<string, {} | undefined>,
       });
-      onValuesChange?.(form.getFieldsValue(true) as ChannelFormValues);
+      onValuesChange?.(form.getValues());
     }, [form, onValuesChange, platformDef.schema]);
 
     // A settings-field helper writes straight into the form, which does not
@@ -592,30 +521,16 @@ const Body = memo<BodyProps>(
     // reports its own write. Without this the page never sees the change and
     // the unsaved-changes affordances stay hidden.
     const handleFieldExtrasFilled = useCallback(() => {
-      onValuesChange?.(form.getFieldsValue(true) as ChannelFormValues);
+      onValuesChange?.(form.getValues());
     }, [form, onValuesChange]);
-
-    const handleSettingsHeaderClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (!target.closest(`.${prefixCls}-collapse-header`)) return;
-      if (target.closest(`.${prefixCls}-collapse-extra`)) return;
-
-      event.preventDefault();
-      event.stopPropagation();
-      setSettingsActive((active) => !active);
-    }, []);
 
     return (
       <Form
-        className={styles.form}
         form={form}
         gap={0}
         itemMinWidth={'max(50%, 400px)'}
-        requiredMark={false}
         style={{ maxWidth: 1024, padding: '16px 0', width: '100%' }}
         variant={'borderless'}
-        onValuesChange={(_, values) => onValuesChange?.(values as ChannelFormValues)}
       >
         <Block className={styles.container} variant={'outlined'}>
           {CustomCredentialBody ? (
@@ -670,64 +585,65 @@ const Body = memo<BodyProps>(
             </>
           )}
           {settingsFields.length > 0 && (
-            <div onClickCapture={handleSettingsHeaderClick}>
-              <FormGroup
-                collapsible
-                active={settingsActive}
-                className={styles.advancedGroup}
-                defaultActive={userIdInitiallyMissing}
-                keyValue={`settings-${platformDef.id}`}
-                title={<SettingsTitle schema={platformDef.schema} />}
-                variant="borderless"
-                extra={
-                  settingsActive ? (
-                    <Popconfirm
-                      title={t('channel.settingsResetConfirm')}
-                      onConfirm={disabled ? undefined : handleResetSettings}
-                    >
-                      <Button
-                        disabled={disabled}
-                        icon={<RotateCcw size={14} />}
-                        size="small"
-                        type="default"
-                      >
-                        {t('channel.settingsResetDefault')}
-                      </Button>
-                    </Popconfirm>
-                  ) : undefined
-                }
-                onCollapse={setSettingsActive}
-              >
-                {settingsFields.map((field) => {
-                  // Feature-gated fields (e.g. watch keywords) lock when the
-                  // resolved access meta reports the feature as not allowed.
-                  const featureLocked =
-                    !!field.paidFeature &&
-                    platformDef.access?.features?.[field.paidFeature]?.allowed === false;
-                  const FieldExtras =
-                    platformSettingsFieldExtrasMap[`${platformDef.id}:${field.key}`];
-                  return (
-                    <Fragment key={field.key}>
-                      <SchemaField
-                        divider
-                        disabled={disabled}
-                        featureLocked={featureLocked}
-                        field={field}
-                        parentKey="settings"
+            <Form.Group
+              collapsible
+              active={settingsActive}
+              className={styles.advancedGroup}
+              defaultActive={userIdInitiallyMissing}
+              keyValue={`settings-${platformDef.id}`}
+              title={<SettingsTitle schema={platformDef.schema} />}
+              variant="borderless"
+              extra={
+                settingsActive ? (
+                  <Button
+                    disabled={disabled}
+                    icon={<RotateCcw size={14} />}
+                    size="small"
+                    type="default"
+                    onClick={() =>
+                      confirmModal({
+                        content: t('channel.settingsResetConfirm'),
+                        okText: t('channel.settingsResetDefault'),
+                        title: t('channel.settingsResetDefault'),
+                        onOk: handleResetSettings,
+                      })
+                    }
+                  >
+                    {t('channel.settingsResetDefault')}
+                  </Button>
+                ) : undefined
+              }
+              onCollapse={setSettingsActive}
+            >
+              {settingsFields.map((field) => {
+                // Feature-gated fields (e.g. watch keywords) lock when the
+                // resolved access meta reports the feature as not allowed.
+                const featureLocked =
+                  !!field.paidFeature &&
+                  platformDef.access?.features?.[field.paidFeature]?.allowed === false;
+                const FieldExtras =
+                  platformSettingsFieldExtrasMap[`${platformDef.id}:${field.key}`];
+                return (
+                  <Fragment key={field.key}>
+                    <SchemaField
+                      divider
+                      disabled={disabled}
+                      featureLocked={featureLocked}
+                      field={field}
+                      parentKey="settings"
+                    />
+                    {FieldExtras && (
+                      <FieldExtras
+                        disabled={disabled || featureLocked}
+                        platformId={platformDef.id}
+                        savedValue={currentConfig?.settings?.[field.key]}
+                        onFilled={handleFieldExtrasFilled}
                       />
-                      {FieldExtras && (
-                        <FieldExtras
-                          disabled={disabled || featureLocked}
-                          platformId={platformDef.id}
-                          savedValue={currentConfig?.settings?.[field.key]}
-                          onFilled={handleFieldExtrasFilled}
-                        />
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </FormGroup>
-            </div>
+                    )}
+                  </Fragment>
+                );
+              })}
+            </Form.Group>
           )}
         </Block>
       </Form>

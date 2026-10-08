@@ -7,16 +7,10 @@ import {
   windowsToCalibrationIntervals,
 } from './calibration';
 import { computeTurnCostUsd, totalTokens } from './cost';
-import {
-  parseClaudeAccountIdentity,
-  parseClaudeCredentialPlan,
-  parseCodexAccountIdentity,
-} from './identity';
 import { selectAccount } from './loadBalancer';
 import { buildClaudeQuotaWindows } from './readings';
 import type { QuotaLimitReading } from './types';
 import { CLAUDE_SESSION_WINDOW_SECONDS, windowSecondsForKind } from './types';
-import { mapClaudeUsageToReadings, parseResetsAt } from './usageApi';
 import { findWindowAt, isWindowContaminated, projectWindows } from './windows';
 
 // ── cost ─────────────────────────────────────────────────────────────────────
@@ -57,71 +51,6 @@ describe('computeTurnCostUsd', () => {
 
   it('totalTokens sums all classes', () => {
     expect(totalTokens({ cacheRead: 3, input: 1, output: 2 })).toBe(6);
-  });
-});
-
-// ── identity ─────────────────────────────────────────────────────────────────
-describe('identity parsing', () => {
-  it('parses Claude ~/.claude.json oauthAccount', () => {
-    const id = parseClaudeAccountIdentity(
-      JSON.stringify({
-        oauthAccount: {
-          accountUuid: '687dc4eb-2aad-45fc-92be-402acbe51661',
-          displayName: 'Arvin',
-          emailAddress: 'a@example.com',
-          organizationRateLimitTier: 'default_claude_max_20x',
-          organizationType: 'claude_max',
-          organizationUuid: 'org-1',
-        },
-      }),
-    );
-    expect(id).toEqual({
-      displayName: 'Arvin',
-      email: 'a@example.com',
-      externalAccountId: '687dc4eb-2aad-45fc-92be-402acbe51661',
-      organizationId: 'org-1',
-      planTier: 'max',
-      rateLimitTier: 'default_claude_max_20x',
-    });
-  });
-
-  it('returns null without an account uuid', () => {
-    expect(parseClaudeAccountIdentity('{}')).toBeNull();
-    expect(parseClaudeAccountIdentity('not json')).toBeNull();
-  });
-
-  it('reads plan hints from the credential blob', () => {
-    const plan = parseClaudeCredentialPlan(
-      JSON.stringify({
-        claudeAiOauth: {
-          expiresAt: 123,
-          rateLimitTier: 'default_claude_max_20x',
-          subscriptionType: 'max',
-        },
-      }),
-    );
-    expect(plan).toEqual({
-      expiresAt: 123,
-      planTier: 'max',
-      rateLimitTier: 'default_claude_max_20x',
-    });
-  });
-
-  it('parses Codex auth.json + id_token claims', () => {
-    const claims = {
-      'email': 'a@example.com',
-      'https://api.openai.com/auth': { chatgpt_account_id: 'acc-x', chatgpt_plan_type: 'pro' },
-    };
-    const b64 = Buffer.from(JSON.stringify(claims)).toString('base64url');
-    const idToken = `h.${b64}.s`;
-    const id = parseCodexAccountIdentity(
-      JSON.stringify({ tokens: { account_id: 'acc-x', id_token: idToken } }),
-    );
-    expect(id).toEqual({ email: 'a@example.com', externalAccountId: 'acc-x', planTier: 'pro' });
-  });
-
-  it('returns null for empty codex auth', () => {
-    expect(parseCodexAccountIdentity('{}')).toBeNull();
   });
 });
 
@@ -293,92 +222,6 @@ describe('windowsToCalibrationIntervals', () => {
     const result = calibrateCapacity(windowsToCalibrationIntervals(windows))!;
     expect(result.capacityUsd).toBeGreaterThan(450);
     expect(result.capacityUsd).toBeLessThan(650);
-  });
-});
-
-// ── usage API mapping ─────────────────────────────────────────────────────────
-describe('mapClaudeUsageToReadings', () => {
-  it('parseResetsAt handles ISO / seconds / millis', () => {
-    expect(parseResetsAt('2026-07-12T20:50:00Z')).toBe(Date.parse('2026-07-12T20:50:00Z'));
-    expect(parseResetsAt(1_760_000_000)).toBe(1_760_000_000_000); // seconds → ms
-    expect(parseResetsAt(1_760_000_000_000)).toBe(1_760_000_000_000); // already ms
-    expect(parseResetsAt(null)).toBeNull();
-    expect(parseResetsAt('nonsense')).toBeNull();
-  });
-
-  it('parseResetsAt accepts an epoch delivered as a string', () => {
-    // resets_at is typed `number | string`, so the epoch can arrive quoted.
-    expect(parseResetsAt('1760000000')).toBe(1_760_000_000_000);
-    expect(parseResetsAt('1760000000000')).toBe(1_760_000_000_000);
-    expect(parseResetsAt(' 1760000000 ')).toBe(1_760_000_000_000);
-    // a short digit string must not be read as a year by Date.parse
-    expect(parseResetsAt('1784')).toBe(1_784_000);
-    expect(parseResetsAt('')).toBeNull();
-  });
-
-  it('maps the real /api/oauth/usage limits[] shape (session + weekly + Fable scoped)', () => {
-    // exactly the shape returned by the live endpoint
-    const payload = {
-      five_hour: { resets_at: '2026-07-12T20:50:00Z', utilization: 26 },
-      limits: [
-        {
-          group: 'session',
-          is_active: false,
-          kind: 'session',
-          percent: 26,
-          resets_at: '2026-07-12T20:50:00Z',
-          scope: null,
-          severity: 'normal',
-        },
-        {
-          group: 'weekly',
-          kind: 'weekly_all',
-          percent: 29,
-          resets_at: '2026-07-18T14:00:00Z',
-          scope: null,
-          severity: 'normal',
-        },
-        {
-          group: 'weekly',
-          is_active: true,
-          kind: 'weekly_scoped',
-          percent: 38,
-          resets_at: '2026-07-18T14:00:00Z',
-          scope: { model: { display_name: 'Fable' } },
-          severity: 'normal',
-        },
-      ],
-      seven_day: { resets_at: '2026-07-18T14:00:00Z', utilization: 29 },
-    };
-    const readings = mapClaudeUsageToReadings(payload, 1000);
-    expect(readings).toHaveLength(3);
-    expect(readings[0]).toMatchObject({
-      capturedAt: 1000,
-      limitType: 'session',
-      scopeKey: '',
-      utilization: 26,
-    });
-    expect(readings[0].resetsAt).toBe(Date.parse('2026-07-12T20:50:00Z'));
-    const fable = readings.find((r) => r.limitType === 'weekly_scoped')!;
-    expect(fable.scopeKey).toBe('Fable');
-    expect(fable.utilization).toBe(38);
-    expect(fable.isActive).toBe(true);
-  });
-
-  it('falls back to five_hour/seven_day when limits[] absent', () => {
-    const readings = mapClaudeUsageToReadings(
-      { five_hour: { resets_at: 1_760_000_000, utilization: 40 } },
-      1000,
-    );
-    expect(readings).toEqual([
-      {
-        capturedAt: 1000,
-        limitType: 'session',
-        resetsAt: 1_760_000_000_000,
-        scopeKey: '',
-        utilization: 40,
-      },
-    ]);
   });
 });
 

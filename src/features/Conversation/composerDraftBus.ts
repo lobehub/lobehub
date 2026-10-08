@@ -14,8 +14,13 @@ import { createWithEqualityFn } from 'zustand/traditional';
 interface ComposerDraftBusState {
   /** A receiver with a live editor is mounted and will consume drafts. */
   attached: boolean;
-  /** The pending draft, cleared by the receiver once applied. */
-  draft: { text: string } | null;
+  /**
+   * The pending draft, cleared by the receiver once applied. `append` adds it
+   * after what the user already typed instead of replacing it. A draft with a
+   * `target` waits until the conversation has settled on that agent's new
+   * topic, so the topic switch that follows a navigation cannot wipe it.
+   */
+  draft: { append?: boolean; target?: { agentId: string }; text: string } | null;
 }
 
 export const useComposerDraftBus = createWithEqualityFn<ComposerDraftBusState>()(() => ({
@@ -29,8 +34,19 @@ export const useComposerDraftBus = createWithEqualityFn<ComposerDraftBusState>()
  * can skip its success feedback — same contract the portal previously got
  * from a null editor.
  */
-export const draftToMainComposer = (text: string): boolean => {
+export const draftToMainComposer = (
+  text: string,
+  { append }: { append?: boolean } = {},
+): boolean => {
   if (!useComposerDraftBus.getState().attached) return false;
-  useComposerDraftBus.setState({ draft: { text } });
+  useComposerDraftBus.setState({ draft: { append, text } });
   return true;
+};
+
+/**
+ * Leave a draft for a new topic of `agentId`, for a surface that navigates
+ * into that conversation right after posting.
+ */
+export const queueDraftForMainComposer = (text: string, target: { agentId: string }) => {
+  useComposerDraftBus.setState({ draft: { target, text } });
 };

@@ -27,6 +27,11 @@ export interface UserGeneralConfig {
    * @default false
    */
   expandWorkflowWhileStreaming?: boolean;
+  /**
+   * Grayscale font antialiasing on macOS. Off falls back to the system default rendering.
+   * @default true
+   */
+  fontAntialiasing?: boolean;
   fontSize: number;
   highlighterTheme?: HighlighterProps['theme'];
   isDevMode: boolean;

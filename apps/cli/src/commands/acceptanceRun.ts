@@ -7,7 +7,8 @@ import type { VerifyAgentPlanConfig, VerifyCheckItem } from '@lobechat/types';
 import type { Command } from 'commander';
 import pc from 'picocolors';
 
-import { getTrpcClient } from '../api/client';
+import type { TrpcClient } from '../api/client';
+import { createPublicLambdaClient, getTrpcClient } from '../api/client';
 import { resolveWorkspaceId } from '../api/workspace';
 import { resolveServerUrl } from '../settings';
 import { ensureAcceptanceDirIgnored, ensureAcceptanceDirIgnoredFor } from '../utils/acceptanceDir';
@@ -27,6 +28,7 @@ import {
   deriveReportVerdict,
   evidenceDescriptionForFile,
   type EvidenceType,
+  findIdenticalLatestRound,
   genericContextFromResult,
   inlineTextEvidenceForFile,
   interactionCostFromReportDir,
@@ -37,6 +39,7 @@ import {
   printResults,
   pullRequestFromBranch,
   pullRequestFromResult,
+  reuseSourceCriteria,
   scenarioFromResult,
   screenProgrammaticTestChecks,
   subjectFromEnv,
@@ -72,8 +75,7 @@ const listMaterializedFiles = (directory: string): string[] => {
   });
 };
 
-async function installAction(options: InstallOptions): Promise<void> {
-  const client = await getTrpcClient();
+async function installAction(options: InstallOptions, client: TrpcClient): Promise<void> {
   const version = options.skillVersion?.replace(/^v/, '');
   const bundle = await client.verify.getSkillBundle.query({
     identifier: options.skill,
@@ -652,12 +654,16 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // the PR link after the ingest, whatever the scenario resolved to.
   let context: Record<string, unknown> | undefined;
   let pullRequest: ReturnType<typeof pullRequestFromResult>;
+  // Only a PR the report names is a delivery claim; the branch lookup below is
+  // best-effort provenance and may find a long-lived branch's unrelated PR.
+  let authoredPullRequest: ReturnType<typeof pullRequestFromResult>;
   if (scenario === 'coding') {
     const branch = typeof result.branch === 'string' ? result.branch : undefined;
     const surfaces = surfacesFromResult(result);
     // An authored PR wins; otherwise ask `gh` what the branch's PR is, so the
     // report links to it without the author having to remember the field.
-    pullRequest = pullRequestFromResult(result) ?? pullRequestFromBranch(branch);
+    authoredPullRequest = pullRequestFromResult(result);
+    pullRequest = authoredPullRequest ?? pullRequestFromBranch(branch);
     const contextEntries = Object.entries({
       branch,
       commit: typeof result.commit === 'string' ? result.commit : undefined,
@@ -697,6 +703,7 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   // An external repository has none of those, so create a first-class
   // standalone subject instead of making the caller manufacture a Task ID.
   let subject = subjectFromResult(result);
+  let foldTaskRunTopic = false;
   if (!requestedAcceptanceId && options.subject) {
     const ref = parseSubjectRef(options.subject);
     if (!ref) {
@@ -712,6 +719,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   } else if (!requestedAcceptanceId && !subject) {
     const ref = subjectFromEnv();
     if (ref) subject = { ref };
+    // Only the ambient topic may be folded onto its Task; an explicit subject stays exact.
+    foldTaskRunTopic = Boolean(ref);
   }
   if (!requestedAcceptanceId && !subject) {
     subject = {
@@ -720,10 +729,20 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
   }
   const requirement = options.requirement ?? subject?.requirement;
 
+  // The overall conclusion, rendered at the top of the report page. Read up
+  // front so the duplicate check below compares what would land.
+  const conclusion =
+    typeof summary.conclusion === 'string'
+      ? summary.conclusion
+      : typeof summary.note === 'string'
+        ? summary.note
+        : undefined;
+
   const client = await getTrpcClient();
   let acceptance;
+  let bundle;
   if (requestedAcceptanceId) {
-    const bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
+    bundle = await client.acceptance.getBundle.query({ id: requestedAcceptanceId });
     acceptance = bundle.acceptance;
     // ID-based reads can cross scopes, but creating a run uses the CLI's scope.
     // Reject before any writes instead of leaving an unattachable run behind.
@@ -749,14 +768,6 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
         );
       }
     }
-    plan = plan?.map((item) => ({
-      ...item,
-      sourceCriterionId:
-        item.sourceCriterionId ??
-        bundle.checks?.find((check) => check.id === item.id || check.planItem?.id === item.id)
-          ?.planItem?.sourceCriterionId ??
-        undefined,
-    }));
     subject = {
       ref: {
         subjectId: acceptance.subjectId,
@@ -768,10 +779,34 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       requirement,
       subjectId: subject!.ref.subjectId,
       subjectType: subject!.ref.subjectType,
+      ...(foldTaskRunTopic ? { foldTaskRunTopic } : {}),
       ...(subject!.ref.subjectType === 'standalone' && (title || goal)
         ? { title: title || goal }
         : {}),
     });
+    // The server may fold the subject (a Task's run topic lands on the Task).
+    subject = {
+      ...subject!,
+      ref: { subjectId: acceptance.subjectId, subjectType: acceptance.subjectType },
+    };
+    // A subject's acceptance may already hold rounds; this one has to line up
+    // with them exactly as an explicit `--acceptance` round does.
+    bundle = await client.acceptance.getBundle.query({ id: acceptance.id });
+  }
+  plan = reuseSourceCriteria(plan, bundle?.checks);
+
+  const identicalRound = findIdenticalLatestRound(bundle?.rounds, {
+    plan,
+    report: { content, summary: conclusion },
+  });
+  if (identicalRound) {
+    log.error(
+      `This report is identical to round ${identicalRound.roundIndex ?? '?'} (${identicalRound.id}) — nothing new to publish.`,
+    );
+    log.error(
+      `  To replace that round, delete it first: lh acceptance run delete ${identicalRound.id}`,
+    );
+    process.exit(1);
   }
   // The in-app conversation that ran this harness, if any (env-supplied).
   // Strictly the authoring conversation. `--operation` names the Agent Run
@@ -892,14 +927,8 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
     log.warn(`${item.id}: not executed; required evidence not published: ${types.join(', ')}.`);
   }
 
-  // 3. Write the report. `summary` is the overall conclusion (rendered at
-  //    the top of the report page); `content` is the full markdown detail.
-  const conclusion =
-    typeof summary.conclusion === 'string'
-      ? summary.conclusion
-      : typeof summary.note === 'string'
-        ? summary.note
-        : undefined;
+  // 3. Write the report. `summary` is the overall conclusion (read above);
+  //    `content` is the full markdown detail.
   // A 0-100 quality score lands on overallConfidence (0-1); the report page
   // surfaces it as the `score` stat.
   const score =
@@ -960,6 +989,24 @@ async function ingestReportAction(reportDir: string, options: IngestReportOption
       proposalPosted = true;
     } catch (e) {
       log.warn(`proposal not posted to the discussion: ${String(e)}`);
+    }
+  }
+
+  // 5. Link the PR to the acceptance itself. The round's context is a
+  //    snapshot of this ingest; the acceptance is what the PR delivers, and
+  //    the page reads its PRs from there. Only the report's own PR is linked:
+  //    a branch-inferred one stays round provenance. Never fatal: an older
+  //    server lacks the procedure, and the round itself is the deliverable.
+  if (authoredPullRequest?.url) {
+    try {
+      await client.acceptance.linkPullRequest.mutate({
+        id: acceptanceId,
+        title:
+          typeof authoredPullRequest.title === 'string' ? authoredPullRequest.title : undefined,
+        url: String(authoredPullRequest.url),
+      });
+    } catch (e) {
+      log.warn(`pull request not linked to the acceptance: ${String(e)}`);
     }
   }
 
@@ -1181,13 +1228,15 @@ export function attachAcceptanceRunCommands(acceptance: Command): void {
     acceptance
       .command('install')
       .description('Install the latest acceptance skill source into .agents/skills/acceptance'),
-  ).action(installAction);
+  ).action((options: InstallOptions) => installAction(options, createPublicLambdaClient()));
 
   withInstallOptions(
     acceptance
       .command('update')
       .description('Download the latest skill source, replacing its files and re-wiring harnesses'),
-  ).action((options: InstallOptions) => installAction({ ...options, force: true }));
+  ).action((options: InstallOptions) =>
+    installAction({ ...options, force: true }, createPublicLambdaClient()),
+  );
 
   const run = acceptance
     .command('run')
@@ -1297,14 +1346,14 @@ export function attachDeprecatedVerifyRunAliases(verify: Command): void {
       verify.command('init').description('Deprecated — use `lh acceptance install`'),
     ),
     'lh acceptance install',
-  ).action(installAction);
+  ).action(async (options: InstallOptions) => installAction(options, await getTrpcClient()));
 
   deprecate(
     withInstallOptions(
       verify.command('install').description('Deprecated — use `lh acceptance install`'),
     ),
     'lh acceptance install',
-  ).action(installAction);
+  ).action(async (options: InstallOptions) => installAction(options, await getTrpcClient()));
 
   deprecate(
     withIngestReportOptions(

@@ -127,7 +127,7 @@ export class DocumentActionImpl {
    * rows carry neither `knowledgeBaseId` nor `parentId`, so a title/emoji save merged
    * onto such a row cannot prove the row moved out of the current library/folder.
    * Treating "unknown" as "elsewhere" dropped the page from the explorer (and the
-   * sidebar tree that mirrors it) on every autosave (LOBE-14152).
+   * sidebar tree that mirrors it) on every autosave.
    */
   #isResourceVisibleInCurrentQuery = (
     resource: ResourceItem,

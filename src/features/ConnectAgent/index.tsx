@@ -9,15 +9,17 @@ import type {
 import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import type { DeviceListItem } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Alert,
   Button,
   Checkbox,
   createModal,
+  Input,
   type ModalInstance,
   ScrollArea,
   Text,
+  TextArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -830,12 +832,7 @@ const ConnectAgentContent = memo<ConnectAgentContentProps>(
               <Text style={{ textAlign: 'center' }} type={'secondary'}>
                 {t('connectAgent.create.noneDetectedHint')}
               </Text>
-              <Button
-                icon={<Icon icon={RefreshCw} size={13} />}
-                size={'small'}
-                type={'primary'}
-                onClick={rescan}
-              >
+              <Button icon={<Icon icon={RefreshCw} size={13} />} type={'primary'} onClick={rescan}>
                 {t('connectAgent.create.rescanDevice')}
               </Button>
             </Flexbox>

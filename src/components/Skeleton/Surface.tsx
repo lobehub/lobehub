@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, FormGroup, Grid } from '@lobehub/ui';
+import { Flexbox, Grid } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
 import type { ComponentType } from 'react';
 
@@ -67,7 +68,7 @@ const ListSkeleton = () => (
 
 const FormSkeleton = () => (
   <Flexbox align={'center'} padding={24}>
-    <FormGroup
+    <Form.Group
       collapsible={false}
       style={{ width: 'min(800px, 100%)' }}
       title={<SkeletonBar height={18} width={112} />}
@@ -93,7 +94,7 @@ const FormSkeleton = () => (
           </Flexbox>
         ))}
       </Flexbox>
-    </FormGroup>
+    </Form.Group>
   </Flexbox>
 );
 

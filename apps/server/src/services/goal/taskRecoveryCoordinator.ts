@@ -2,11 +2,15 @@ import type { GoalItem, TaskItem } from '@lobechat/types';
 import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
+import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
 import {
+  countChargedTaskAttempts,
+  countUnchargedRuns,
   isDeviceUnavailableFailure,
   resolveTaskAttemptBudget,
   resolveTaskMaxSteps,
@@ -16,6 +20,13 @@ import { claimGoalTask } from './taskClaim';
 
 const log = debug('lobe-server:goal-task-recovery');
 
+/**
+ * Goal statuses under which no recovery may start a run. `close` fences a goal
+ * by pausing it under its row lock before scanning live runs, so a recovery
+ * claim has to recheck the goal under that same lock.
+ */
+const GOAL_FENCED_STATUSES = new Set(['paused', 'achieved', 'failed', 'canceled']);
+
 export type TaskRecoveryOutcome =
   /** This call spawned the retry, and `operationId` is its run. */
   | 'started'
@@ -23,6 +34,8 @@ export type TaskRecoveryOutcome =
   | 'already-running'
   /** Someone settled the Task while this recovery was being decided. */
   | 'settled'
+  /** The goal was paused or ended (e.g. being closed) before the claim. */
+  | 'goal-stopped'
   | 'exhausted-cost'
   | 'exhausted-rounds'
   | 'spawn-failed';
@@ -55,7 +68,13 @@ export class TaskRecoveryCoordinator {
     task: TaskItem;
   }): Promise<TaskRecoveryResult> => {
     const { goal, task } = params;
-    const attempts = task.totalTopics || 0;
+    // A run lost to a machine problem was never judged, so it does not spend the
+    // budget; the coordinator's offline / quota / transient schedules bound those
+    // retries instead.
+    const runs = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTaskId(
+      task.id,
+    );
+    const attempts = countChargedTaskAttempts(task, countUnchargedRuns(runs));
     const attemptBudget = resolveTaskAttemptBudget(goal);
     if (attempts >= attemptBudget) return { outcome: 'exhausted-rounds' };
 
@@ -102,10 +121,24 @@ export class TaskRecoveryCoordinator {
       log('task %s was paused by an actor; leaving it alone', task.identifier);
       return { outcome: 'settled' };
     }
-    const claimed = await claimGoalTask(taskModel, { id: task.id, status: 'paused' }, 'running', {
-      error: null,
-      startedAt: new Date(),
+    // Claimed under the goal row lock, like `dispatchWork`: the tick decided on
+    // a goal snapshot, and a `close` may have fenced the goal (paused it) since.
+    // Claiming after that fence would start a run its running-topic scan never
+    // sees, and the goal would then be closed over a run still spending.
+    const claimed = await this.db.transaction(async (tx) => {
+      const currentGoal = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goal.id);
+      if (!currentGoal || GOAL_FENCED_STATUSES.has(currentGoal.status)) return 'goal-stopped';
+      return claimGoalTask(
+        new TaskModel(tx, this.userId, this.workspaceId),
+        { id: task.id, status: 'paused' },
+        'running',
+        { error: null, startedAt: new Date() },
+      );
     });
+    if (claimed === 'goal-stopped') {
+      log('task %s recovery skipped: goal %s is no longer running', task.identifier, goal.id);
+      return { outcome: 'goal-stopped' };
+    }
     if (!claimed) {
       log('task %s recovery lost the claim race', task.identifier);
       return { outcome: 'already-running' };

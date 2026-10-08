@@ -51,6 +51,44 @@ export const GOAL_COORDINATOR_ACTOR_ID = 'goal-coordinator';
 export const GOAL_ACCEPTANCE_TASK_TITLE = 'Complete full Goal acceptance';
 
 /**
+ * Fixed title of the decision node the coordinator opens when decomposition
+ * finds a question only the user can answer. Stored in English as data and
+ * matched by clients for localized copy, the same way as the acceptance title.
+ */
+export const GOAL_CLARIFICATION_TITLE = 'Clarify the goal';
+
+/**
+ * Fixed title of the decision node the coordinator opens when a machine problem
+ * needs a person: the setup is broken (a missing working directory, a CLI that is
+ * not installed, an unregistered device) or the automatic retries for a usage
+ * limit or a transport fault are spent. Nothing about the work is in question, so
+ * clients tell it apart from a judgment gate by this title, the same way as the
+ * clarification gate.
+ */
+export const GOAL_MACHINE_GATE_TITLE = 'Fix the setup, then retry';
+
+/**
+ * Fixed title of the decision node the main Agent opens when an ordinary
+ * planning turn escalates a question with its own answers. Matched by clients
+ * for localized copy, like the clarification title.
+ */
+export const GOAL_MANAGER_QUESTION_TITLE = 'Answer the main Agent';
+
+/**
+ * `briefs.trigger` of every brief a goal raises — its decision gates, its
+ * sign-off and its progress reports. `metadata.goal` says which one it is.
+ */
+export const GOAL_BRIEF_TRIGGER = 'goal';
+
+/** Option ids every clarification decision carries besides the planner's own choices. */
+export const GOAL_CLARIFICATION_OPTION = {
+  /** Answer in the free-text note; the note is the answer. */
+  answer: 'answer',
+  /** Proceed on the assumption the planner stated for this question. */
+  assume: 'assume',
+} as const;
+
+/**
  * Task error strings the Goal coordinator matches on to route a paused Task.
  *
  * These are a contract between whoever pauses a Task and the coordinator that
@@ -66,6 +104,27 @@ export const LEASE_EXPIRED_ERROR = 'Goal Task operation lease expired.';
  * coordinator recovers it the same way instead of asking a person.
  */
 export const ABANDONED_OPERATION_ERROR_PREFIX = 'Operation abandoned:';
+/**
+ * `task_topics.status` of a run that ended because its device was unavailable:
+ * the dispatch could not reach it, or the run was lost while the device was
+ * offline. Nothing judged the work, so the Goal coordinator does not charge the
+ * run to the Task's attempt budget and retries it on its own offline schedule.
+ */
+export const DEVICE_OFFLINE_RUN_STATUS = 'device_offline';
+/**
+ * `task_topics.status` of a run that ended on a provider or CLI usage limit
+ * ("You've hit your session limit · resets 4:30am"). The limit resets on its own
+ * and nothing judged the work, so the run is not charged to the attempt budget;
+ * the coordinator holds the Task until the reset and retries it.
+ */
+export const QUOTA_LIMITED_RUN_STATUS = 'quota_limited';
+/**
+ * `task_topics.status` of a run lost to a transport or runtime fault a retry
+ * plausibly fixes (a timeout, an output the server discarded, a write that did
+ * not persist). Not charged to the attempt budget; retried on a short bounded
+ * schedule before a person is asked.
+ */
+export const TRANSIENT_FAILED_RUN_STATUS = 'transient_failed';
 /** The verifier ran and judged the delivery short of the criteria. */
 export const VERIFICATION_FAILED_ERROR = 'Delivery did not pass verification.';
 /** The verifier itself could not run, so the delivery was never evaluated. */
@@ -95,3 +154,12 @@ export const VERIFICATION_UNJUDGEABLE_ERROR =
  */
 export const ACCEPTANCE_REVIEW_ERRORED_ERROR =
   'Acceptance review could not run; the delivery passed its verifiers but was never reviewed.';
+
+/**
+ * Fixed title of the wrap-up Task the coordinator dispatches once the
+ * Goal-level acceptance has ended (passed, failed / exhausted, or the Goal was
+ * failed / canceled). It writes the Goal report storyline. Stored in English as
+ * data; clients recognize it by this title. It never takes part in deciding the
+ * Goal's status — the coordinator ignores it when choosing its next move.
+ */
+export const GOAL_REPORT_TASK_TITLE = 'Write the Goal report';

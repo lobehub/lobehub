@@ -305,6 +305,82 @@ describe('GeneralChatAgent', () => {
     // agent used to finish with "completed without tool calls", writing an
     // empty assistant message while the requested work never ran. Reject the
     // calls instead so the model can retry with a real name.
+    it('explains a device-picker call on a device-locked run instead of asking for the exact name', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        plan: { execution: { deviceId: 'device-a', kind: 'device', target: 'local' } },
+      } as Partial<AgentState>);
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            {
+              id: 't1',
+              type: 'function',
+              function: {
+                name: 'lobe-remote-device____activateDevice',
+                arguments: '{"deviceId":"device-b"}',
+              },
+            },
+          ],
+        },
+      });
+
+      const result = (await agent.runner(context, state)) as any;
+
+      expect(result.type).toBe('resolve_blocked_tools');
+      expect(result.payload.blockedContent).toContain(
+        'lobe-remote-device____activateDevice is not available in this run',
+      );
+      expect(result.payload.blockedContent).toContain('locked to device "device-a"');
+      expect(result.payload.blockedContent).toContain('device selector');
+      expect(result.payload.blockedContent).not.toContain('Copy a name exactly');
+    });
+
+    it('keeps the typo feedback for other names batched with a locked picker call', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        plan: { execution: { deviceId: 'device-a', kind: 'device', target: 'local' } },
+      } as Partial<AgentState>);
+      const context = createMockContext('llm_result', {
+        hasToolsCalling: true,
+        toolsCalling: [],
+        parentMessageId: 'msg-1',
+        result: {
+          content: '',
+          tool_calls: [
+            {
+              id: 't1',
+              type: 'function',
+              function: { name: 'lobe-remote-device____activateDevice', arguments: '{}' },
+            },
+            { id: 't2', type: 'function', function: { name: 'activateTools', arguments: '{}' } },
+          ],
+        },
+      });
+
+      const result = (await agent.runner(context, state)) as any;
+
+      expect(result.payload.blockedContent).toBe(
+        'Tool call rejected: lobe-remote-device____activateDevice is not available in this run. Device switching is off for this run: it is locked to device "device-a", where the Local System tools already run. You cannot activate another device from here. If the user wants a different device, tell them to pick it in the device selector of the chat input and send the message again.' +
+          '\n\n' +
+          'Tool call rejected: no available tool is named activateTools. Copy a name exactly as declared in the tools schema and call it again.',
+      );
+    });
+
     it('should reject unresolvable tool_calls so the model can retry', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -906,152 +982,6 @@ describe('GeneralChatAgent', () => {
   });
 
   describe('tool_result phase', () => {
-    describe('Lobe Agent sub-agents (execSubAgent state)', () => {
-      it('should return exec_sub_agent for single sub-agent (execSubAgent)', async () => {
-        const agent = new GeneralChatAgent({
-          agentConfig: { maxSteps: 100 },
-          operationId: 'test-session',
-          modelRuntimeConfig: mockModelRuntimeConfig,
-        });
-
-        const state = createMockState();
-        const context = createMockContext('tool_result', {
-          parentMessageId: 'tool-msg-1',
-          stop: true,
-          data: {
-            state: {
-              type: 'execSubAgent',
-              parentMessageId: 'exec-parent-msg',
-              task: { instruction: 'Do something async', timeout: 30000 },
-            },
-          },
-        });
-
-        const result = await agent.runner(context, state);
-
-        expect(result).toEqual({
-          type: 'exec_sub_agent',
-          payload: {
-            parentMessageId: 'exec-parent-msg',
-            task: { instruction: 'Do something async', timeout: 30000 },
-          },
-        });
-      });
-
-      it('should return exec_sub_agents for multiple sub-agents (execSubAgents)', async () => {
-        const agent = new GeneralChatAgent({
-          agentConfig: { maxSteps: 100 },
-          operationId: 'test-session',
-          modelRuntimeConfig: mockModelRuntimeConfig,
-        });
-
-        const state = createMockState();
-        const tasks = [
-          { instruction: 'Task 1', timeout: 30000 },
-          { instruction: 'Task 2', timeout: 30000 },
-        ];
-        const context = createMockContext('tool_result', {
-          parentMessageId: 'tool-msg-1',
-          stop: true,
-          data: {
-            state: {
-              type: 'execSubAgents',
-              parentMessageId: 'exec-parent-msg',
-              tasks,
-            },
-          },
-        });
-
-        const result = await agent.runner(context, state);
-
-        expect(result).toEqual({
-          type: 'exec_sub_agents',
-          payload: {
-            parentMessageId: 'exec-parent-msg',
-            tasks,
-          },
-        });
-      });
-
-      it('should not trigger exec_sub_agent when stop is false', async () => {
-        const agent = new GeneralChatAgent({
-          agentConfig: { maxSteps: 100 },
-          operationId: 'test-session',
-          modelRuntimeConfig: mockModelRuntimeConfig,
-        });
-
-        const state = createMockState({
-          messages: [
-            { role: 'user', content: 'Hello' },
-            { role: 'assistant', content: '' },
-            { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
-          ] as any,
-        });
-        const context = createMockContext('tool_result', {
-          parentMessageId: 'tool-msg-1',
-          stop: false, // stop is false, should not trigger exec_sub_agent
-          data: {
-            state: {
-              type: 'execSubAgent',
-              parentMessageId: 'exec-parent-msg',
-              task: { instruction: 'Do something async' },
-            },
-          },
-        });
-
-        const result = await agent.runner(context, state);
-
-        // Should return call_llm instead of exec_sub_agent
-        expect(result).toEqual({
-          type: 'call_llm',
-          payload: {
-            assistantMessageId: undefined,
-            messages: state.messages,
-            model: 'gpt-4o-mini',
-            parentMessageId: 'tool-msg-1',
-            provider: 'openai',
-            tools: undefined,
-          },
-        });
-      });
-
-      it('should not trigger exec_sub_agent when data.state is undefined', async () => {
-        const agent = new GeneralChatAgent({
-          agentConfig: { maxSteps: 100 },
-          operationId: 'test-session',
-          modelRuntimeConfig: mockModelRuntimeConfig,
-        });
-
-        const state = createMockState({
-          messages: [
-            { role: 'user', content: 'Hello' },
-            { role: 'assistant', content: '' },
-            { role: 'tool', content: 'Result', tool_call_id: 'call-1' },
-          ] as any,
-        });
-        const context = createMockContext('tool_result', {
-          parentMessageId: 'tool-msg-1',
-          stop: true,
-          data: {}, // No state property
-        });
-
-        const result = await agent.runner(context, state);
-
-        // Should return call_llm instead of exec_sub_agent
-        expect(result).toEqual({
-          type: 'call_llm',
-          payload: {
-            assistantMessageId: undefined,
-            messages: state.messages,
-            model: 'gpt-4o-mini',
-            parentMessageId: 'tool-msg-1',
-            provider: 'openai',
-            tools: undefined,
-          },
-        });
-      });
-    });
-
     it('should return call_llm when no pending tools', async () => {
       const agent = new GeneralChatAgent({
         agentConfig: { maxSteps: 100 },
@@ -2304,6 +2234,34 @@ describe('GeneralChatAgent', () => {
           provider: 'openai',
           tools: undefined,
         },
+      });
+    });
+
+    it('fills a resume-seeded assistant placeholder and keeps the summary prompt', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const state = createMockState({
+        messages: [{ role: 'user', content: 'Execute tasks' }] as any,
+        pendingAssistantMessageId: 'msg-parked',
+      });
+
+      const context = createMockContext('sub_agents_batch_result', {
+        parentMessageId: 'task-parent-msg',
+        results: [],
+      });
+
+      const result = (await agent.runner(context, state)) as any;
+
+      expect(result.type).toBe('call_llm');
+      expect(result.payload.assistantMessageId).toBe('msg-parked');
+      expect(result.payload.messages.at(-1)).toEqual({
+        content:
+          'All tasks above have been completed. Please summarize the results or continue with your response following user query language.',
+        role: 'user',
       });
     });
 

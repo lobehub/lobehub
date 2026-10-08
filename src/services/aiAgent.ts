@@ -1,15 +1,37 @@
+import type { AgentStreamClientFeature } from '@lobechat/agent-gateway-client';
+import { CLIENT_PROTOCOL_VERSION } from '@lobechat/agent-gateway-client';
 import type {
+  ClientLlmWaitItem,
   ExecAgentAppContext,
+  ExecAgentLlmExecutor,
   ExecAgentResult,
+  ResumeClientLlmWaitResult,
   RuntimeMentionedAgent,
   ScheduleAgentRunParams,
   ScheduleAgentRunResult,
   UserInterventionConfig,
 } from '@lobechat/types';
 
+import { canUseGatewayProtocolV2 } from '@/helpers/gatewayProtocol';
 import { lambdaClient } from '@/libs/trpc/client';
+import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
 
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
+
+/** Gateway stream features every run started from this client handles. */
+const STREAM_FEATURES: AgentStreamClientFeature[] = ['member_runtime_end'];
+
+/** An older server's strict input schema rejected the `streamFeatures` key. */
+const isUnknownStreamFeaturesError = (error: unknown): boolean => {
+  const { data, message } = (error ?? {}) as { data?: { code?: string }; message?: unknown };
+
+  return (
+    data?.code === 'BAD_REQUEST' &&
+    typeof message === 'string' &&
+    message.includes('unrecognized_keys') &&
+    message.includes('streamFeatures')
+  );
+};
 
 /**
  * Resume instruction for an operation that hit `human_approve_required`. When
@@ -96,6 +118,16 @@ export interface GetAgentInterventionReviewBySourceParams {
   targets: Array<{ toolCallId: string; toolMessageId: string }>;
 }
 
+/** Must not exceed the server's `ExecAgentSchema.clientOperations` bound. */
+export const MAX_CLIENT_OPERATION_SNAPSHOT = 10;
+
+export interface ClientOperationSnapshot {
+  isAborting?: boolean;
+  operationId: string;
+  status: string;
+  visibleLoadingDone?: boolean;
+}
+
 export interface ExecAgentTaskParams {
   agentId?: string;
   appContext?: ExecAgentAppContext;
@@ -107,6 +139,12 @@ export interface ExecAgentTaskParams {
    * sends only; resume / regeneration must not replay them.
    */
   clientIds?: { assistantMessageId?: string; topicId?: string; userMessageId?: string };
+  /**
+   * Server runs the composer tracked on this conversation at send time. The
+   * server records them only when this send has to stop a run the client left
+   * live, to tell whether the client never saw it or its stop never landed.
+   */
+  clientOperations?: ClientOperationSnapshot[];
   deviceId?: string;
   existingMessageIds?: string[];
   /** File IDs of already-uploaded attachments to attach to the new user message */
@@ -241,7 +279,26 @@ class AiAgentService {
     params: ExecAgentTaskParams,
     options?: { signal?: AbortSignal },
   ): Promise<ExecAgentResult> {
-    return await lambdaClient.aiAgent.execAgent.mutate(params, options);
+    // Ask for protocol-v2 delivery — message revisions instead of whole message
+    // snapshots — when this client both understands it and is inside the
+    // rollout. Anything else stays on the pushed snapshots, which is what an
+    // older bundle needs to render the run at all. A caller may still pin it
+    // (a replay harness asserting v1 delivery).
+    const clientProtocol = canUseGatewayProtocolV2() ? CLIENT_PROTOCOL_VERSION : undefined;
+    // Inside the `agent_llm_relay` rollout this tab offers to run the LLM calls
+    // of providers only this device can reach (a local Ollama, a private
+    // endpoint); the server hands them over as `llm_execute`.
+    const llmExecutor = buildLlmExecutorDeclaration();
+
+    return await lambdaClient.aiAgent.execAgent.mutate(
+      {
+        clientProtocol,
+        ...(llmExecutor && { llmExecutor }),
+        ...params,
+        streamFeatures: STREAM_FEATURES,
+      },
+      options,
+    );
   }
 
   /**
@@ -293,6 +350,22 @@ class AiAgentService {
     return await lambdaClient.aiAgent.interruptTask.mutate(params);
   }
 
+  /** Runs parked in `waiting_for_client`, waiting for a client to run their LLM call. */
+  /** Runs parked for a client, narrowed to `providers` (the ones this client can run). */
+  async listClientLlmWaits(providers?: string[]): Promise<ClientLlmWaitItem[]> {
+    return await lambdaClient.aiAgent.listClientLlmWaits.query(
+      providers ? { providers } : undefined,
+    );
+  }
+
+  /** Continue a run parked in `waiting_for_client`, with this client as its executor. */
+  async resumeClientLlmWait(params: {
+    llmExecutor: ExecAgentLlmExecutor;
+    operationId: string;
+  }): Promise<ResumeClientLlmWaitResult> {
+    return await lambdaClient.aiAgent.resumeClientLlmWait.mutate(params);
+  }
+
   /**
    * Tell a running server operation whether user messages are queued behind it,
    * so it hands the turn back at its next step boundary.
@@ -325,7 +398,19 @@ class AiAgentService {
   async resolveAgentInterventionBySource(
     params: ResolveAgentInterventionBySourceParams,
   ): Promise<ResolveAgentInterventionBySourceResult> {
-    const result = await lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate(params);
+    const mutate = lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate;
+    let result: Awaited<ReturnType<typeof mutate>>;
+    try {
+      // This client subscribes to the continuation it starts.
+      result = await mutate({ ...params, streamFeatures: STREAM_FEATURES });
+    } catch (error) {
+      // A server from before `streamFeatures` validates this input strictly and
+      // rejects the unknown key before claiming anything, so resending the same
+      // resolution without it is safe. That server never renames a mirrored
+      // member terminal, so dropping the declaration loses nothing.
+      if (!isUnknownStreamFeaturesError(error)) throw error;
+      result = await mutate(params);
+    }
 
     if (!result.success) return { handled: false };
 

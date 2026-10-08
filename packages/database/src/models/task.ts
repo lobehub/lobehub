@@ -1,4 +1,5 @@
 import type {
+  AgentOperationStatus,
   CheckpointConfig,
   NewTask,
   TaskActivityLogPayload,
@@ -6,11 +7,18 @@ import type {
   TaskAutomationMode,
   TaskAutomationSnapshot,
   TaskItem,
+  TaskRunTrigger,
   TaskSubtaskProgress,
   TaskVerifyConfig,
   WorkspaceData,
   WorkspaceDocNode,
   WorkspaceTreeNode,
+} from '@lobechat/types';
+import {
+  clearTaskReposSelection,
+  readTaskExecutionConfig,
+  toTaskExecutionConfigPatch,
+  withoutTaskExecutionSelection,
 } from '@lobechat/types';
 import {
   and,
@@ -33,6 +41,8 @@ import type { AnyPgColumn } from 'drizzle-orm/pg-core';
 
 import { merge } from '@/utils/merge';
 
+import type { AgentOperationError } from '../schemas/agentOperations';
+import { agentOperations } from '../schemas/agentOperations';
 import { documents } from '../schemas/file';
 import type {
   NewTaskActivity,
@@ -68,6 +78,35 @@ const TRACKED_TASK_COLUMNS = [
   'scheduleTimezone',
   'status',
 ] as const;
+
+/**
+ * Operation outcomes the orphaned-run reconciliation settles.
+ *
+ * An allow-list on purpose. `done` needs the success path's own inputs (the
+ * run's last assistant content, the creator bridge) and `interrupted` belongs
+ * to the interrupt path, so converging either from a sweep would mislabel the
+ * outcome; and an operation status added later is skipped rather than guessed
+ * at.
+ */
+const ORPHANED_RUN_OPERATION_STATUSES: AgentOperationStatus[] = ['abandoned', 'error'];
+
+/** One `running` Task run whose operation has already ended — see the finder. */
+export interface OrphanedRunningTopic {
+  completionReason: string | null;
+  /**
+   * The failure the operation recorded, when it recorded one — the raw
+   * `state.error`, so its message may be nested (`{ errorType, error: { message } }`).
+   */
+  operationError: AgentOperationError | null;
+  operationId: string;
+  operationStatus: AgentOperationStatus;
+  taskId: string;
+  taskIdentifier: string;
+  topicId: string;
+  trigger: TaskRunTrigger | null;
+  userId: string;
+  workspaceId: string | null;
+}
 
 /** The automation columns folded into one value — see `TaskAutomationSnapshot`. */
 /**
@@ -109,6 +148,68 @@ const snapshotAutomation = (row: {
     mode: row.automationMode,
     schedulePattern: row.schedulePattern,
     scheduleTimezone: row.scheduleTimezone,
+  };
+};
+
+// Foreign-key id columns a caller may clear or leave unset. LLM tool calls often
+// fill optional ids with "" — that must mean "unset", never reach the FK as ''.
+const TASK_NULLABLE_REF_KEYS = ['assigneeAgentId', 'assigneeUserId', 'parentTaskId'] as const;
+
+const normalizeTaskRefs = <
+  T extends Partial<Record<(typeof TASK_NULLABLE_REF_KEYS)[number], unknown>>,
+>(
+  data: T,
+): T => {
+  const normalized = { ...data };
+  for (const key of TASK_NULLABLE_REF_KEYS) {
+    const value = normalized[key];
+    if (typeof value === 'string' && !value.trim()) {
+      (normalized as Record<string, unknown>)[key] = null;
+    }
+  }
+  return normalized;
+};
+
+/**
+ * The data to write when a task moves to another assignee, with the previous
+ * assignee's cloud-repo selection dropped in the same write.
+ *
+ * `repos` resolve against the assignee agent's provider env, so they belong to
+ * the agent they were picked for: carrying them to another agent leaves every
+ * later run pointing at a repository the new assignee cannot open. The
+ * machine-local axes (the device pin and a path on that machine) are the user's
+ * own and stay.
+ *
+ * Only a change of the AGENT counts, and only when the write does not state an
+ * execution of its own — a writer that moves the assignee AND names a directory
+ * is describing the new assignee's run on purpose. Returns `data` untouched when
+ * there is nothing to drop.
+ */
+const withStaleReposCleared = (
+  before: { assigneeAgentId: string | null; config: unknown },
+  data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+): Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>> => {
+  // Nothing to drop for a task that had no assignee to begin with (the runner's
+  // "unassigned → inbox agent" fallback), nor for a write that keeps it.
+  if (!before.assigneeAgentId) return data;
+  if (data.assigneeAgentId === undefined || data.assigneeAgentId === before.assigneeAgentId) {
+    return data;
+  }
+
+  const statedExecution = (data.config as Record<string, unknown> | undefined)?.execution;
+  if (statedExecution !== undefined) return data;
+
+  const currentConfig = (before.config ?? {}) as Record<string, unknown>;
+  const cleared = clearTaskReposSelection(readTaskExecutionConfig(currentConfig));
+  if (cleared === readTaskExecutionConfig(currentConfig)) return data;
+
+  return {
+    ...data,
+    config: {
+      ...currentConfig,
+      ...(data.config as Record<string, unknown> | undefined),
+      execution: toTaskExecutionConfigPatch(cleared),
+    },
   };
 };
 
@@ -239,6 +340,7 @@ export class TaskModel {
     buildWorkspaceWhere(
       { userId: this.userId, workspaceId: this.workspaceId },
       {
+        isDeleted: tasks.isDeleted,
         userId: tasks.createdByUserId,
         visibility: tasks.visibility,
         workspaceId: tasks.workspaceId,
@@ -280,8 +382,9 @@ export class TaskModel {
     const prefix = alias ? sql.raw(`${alias}.`) : sql.raw('');
     return this.workspaceId
       ? sql`${prefix}workspace_id = ${this.workspaceId}
-            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})`
-      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL`;
+            AND (${prefix}visibility = 'public' OR ${prefix}created_by_user_id = ${this.userId})
+            AND ${prefix}is_deleted IS NOT TRUE`
+      : sql`${prefix}created_by_user_id = ${this.userId} AND ${prefix}workspace_id IS NULL AND ${prefix}is_deleted IS NOT TRUE`;
   };
 
   private buildListConditions = ({
@@ -316,9 +419,9 @@ export class TaskModel {
 
   /**
    * Look up a task's visibility so child-row inserts (deps, docs, topics) can
-   * mirror it without forcing every call site to know the value. Defaults to
-   * `'public'` if the task is missing (keeps inserts idempotent — the
-   * onConflictDoNothing path stays valid).
+   * mirror it without forcing every call site to know the value. Missing or
+   * trashed parents fail closed so no child can be attached after deletion or
+   * through a model constructed for the wrong scope.
    */
   private async getTaskVisibility(taskId: string): Promise<'private' | 'public'> {
     const row = await this.db
@@ -326,7 +429,8 @@ export class TaskModel {
       .from(tasks)
       .where(and(eq(tasks.id, taskId), this.ownership()))
       .limit(1);
-    return row[0]?.visibility ?? 'public';
+    if (!row[0]) throw new Error(`Task not found: ${taskId}`);
+    return row[0].visibility;
   }
 
   // ========== CRUD ==========
@@ -337,7 +441,7 @@ export class TaskModel {
     },
     options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
-    const { identifierPrefix = 'T', ...rest } = data;
+    const { identifierPrefix = 'T', ...rest } = normalizeTaskRefs(data);
 
     // Retry loop to handle concurrent creates (parallel tool calls)
     const maxRetries = options.maxRetries ?? 5;
@@ -456,9 +560,39 @@ export class TaskModel {
   ): Promise<TaskItem | null> {
     if (Object.keys(data).length === 0) return this.findById(id);
 
-    const updated = await this.db
+    // A reassignment is not a plain column write: the row being moved away from
+    // decides whether the previous assignee's cloud-repo selection has to go,
+    // so read it under a lock — a config write landing between the read and the
+    // merge below would be lost. Every writer of the assignee column comes
+    // through here (`updateWithLog`, the update procedure, the coordinator's
+    // handoff/restart, the runner's inbox fallback), so this is the one place
+    // the invariant has to hold; `updateWithLog` locks its own read for the
+    // activity log and then delegates.
+    if (data.assigneeAgentId === undefined) return this.writeRow(this.db, id, data);
+
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [before] = await runner
+        .select({ assigneeAgentId: tasks.assigneeAgentId, config: tasks.config })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!before) return null;
+
+      return this.writeRow(runner, id, withStaleReposCleared(before, data));
+    });
+  }
+
+  /** The column write itself — the assignee rule lives in `update`. */
+  private async writeRow(
+    db: LobeChatDatabase,
+    id: string,
+    data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
+  ): Promise<TaskItem | null> {
+    const updated = await db
       .update(tasks)
-      .set({ ...data, updatedAt: new Date() })
+      .set({ ...normalizeTaskRefs(data), updatedAt: new Date() })
       .where(and(eq(tasks.id, id), this.ownership()))
       .returning();
     return updated[0] || null;
@@ -557,7 +691,7 @@ export class TaskModel {
             inArray(works.resourceId, taskIds),
             buildWorkspaceWhere(
               { userId: this.userId, workspaceId: this.workspaceId },
-              { userId: works.userId, workspaceId: works.workspaceId },
+              { isDeleted: works.isDeleted, userId: works.userId, workspaceId: works.workspaceId },
             ),
           ),
         );
@@ -640,6 +774,35 @@ export class TaskModel {
       LIMIT 1
     `);
     return result.rows.length > 0;
+  }
+
+  /**
+   * Row-lock the task for the rest of the enclosing transaction. Serializes a
+   * run recording its topic against a delete deciding there is nothing left to
+   * interrupt. Returns false when the task no longer exists.
+   */
+  async lockForUpdate(id: string): Promise<boolean> {
+    const rows = await this.db
+      .select({ id: tasks.id })
+      .from(tasks)
+      .where(and(eq(tasks.id, id), this.ownership()))
+      .for('update');
+
+    return rows.length > 0;
+  }
+
+  /**
+   * Delete a task only while it still has `status`. Lets a delete that
+   * inspected the task's runs lose cleanly to a run that started meanwhile,
+   * instead of removing the row out from under it.
+   */
+  async deleteIfStatus(id: string, status: string): Promise<boolean> {
+    const deleted = await this.db
+      .delete(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.status, status), this.ownership()))
+      .returning({ id: tasks.id });
+
+    return deleted.length > 0;
   }
 
   /** See {@link delete}: bulk task deletion likewise leaves Work artifacts intact. */
@@ -1287,7 +1450,7 @@ export class TaskModel {
     id: string,
     currentStatus: string,
     status: string,
-    extra?: { completedAt?: Date; error?: string | null; startedAt?: Date },
+    extra?: { completedAt?: Date | null; error?: string | null; startedAt?: Date },
   ): Promise<TaskItem | null> {
     const [task] = await this.db
       .update(tasks)
@@ -1331,15 +1494,40 @@ export class TaskModel {
 
   /**
    * Safely merge-update the task's config object.
-   * Reads the current config, shallow-merges the incoming partial, and writes back.
+   * Reads the current config, deep-merges the incoming partial, and writes back.
+   *
+   * The read is taken under a row lock: several independent writers merge into
+   * this one column (model, run location, checkpoint, review, verify), and two
+   * of them reading the same snapshot would let the later whole-column write
+   * silently drop the other's key.
    */
   async updateTaskConfig(id: string, partial: Record<string, unknown>): Promise<TaskItem | null> {
-    const task = await this.findById(id);
-    if (!task) return null;
+    return this.rewriteConfig(id, (current) => merge(current, partial));
+  }
 
-    const current = (task.config as Record<string, unknown>) || {};
-    const config = merge(current, partial);
-    return this.update(id, { config });
+  /**
+   * Read-modify-write of the `config` column under a row lock. Every writer that
+   * derives the next config from the current one must come through here, so two
+   * of them cannot read the same snapshot and drop each other's key.
+   */
+  private async rewriteConfig(
+    id: string,
+    next: (current: Record<string, any>) => Record<string, unknown>,
+  ): Promise<TaskItem | null> {
+    return this.db.transaction(async (tx) => {
+      const runner = tx as LobeChatDatabase;
+      const [task] = await runner
+        .select({ config: tasks.config })
+        .from(tasks)
+        .where(and(eq(tasks.id, id), this.ownership()))
+        .for('update')
+        .limit(1);
+      if (!task) return null;
+
+      return this.writeRow(runner, id, {
+        config: next((task.config as Record<string, any>) || {}),
+      });
+    });
   }
 
   // ========== Context (runtime state) ==========
@@ -1436,18 +1624,16 @@ export class TaskModel {
     id: string,
     patch: { [K in keyof TaskVerifyConfig]?: TaskVerifyConfig[K] | null },
   ): Promise<TaskItem | null> {
-    const task = await this.findById(id);
-    if (!task) return null;
+    return this.rewriteConfig(id, (config) => {
+      const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
 
-    const config = (task.config as Record<string, any>) || {};
-    const next: Record<string, any> = { ...(config.verify as TaskVerifyConfig | undefined) };
+      for (const [key, value] of Object.entries(patch)) {
+        if (value === null) delete next[key];
+        else if (value !== undefined) next[key] = value;
+      }
 
-    for (const [key, value] of Object.entries(patch)) {
-      if (value === null) delete next[key];
-      else if (value !== undefined) next[key] = value;
-    }
-
-    return this.update(id, { config: { ...config, verify: next } });
+      return { ...config, verify: next };
+    });
   }
 
   // Check if a task should pause after a topic completes
@@ -1496,6 +1682,37 @@ export class TaskModel {
       );
   }
 
+  /**
+   * Atomically move `context.scheduler.lastDispatchedOccurrenceAt` from
+   * `expected` to `next`. Returns false when another writer changed it first.
+   *
+   * The schedule dispatcher reserves a cron occurrence this way before
+   * publishing its execution, so a later tick inside the grace window (or an
+   * overlapping dispatcher run) cannot publish the same occurrence again while
+   * the first delivery is still queued.
+   */
+  static async swapDispatchedScheduleOccurrence(
+    db: LobeChatDatabase,
+    taskId: string,
+    expected: string | null,
+    next: string | null,
+  ): Promise<boolean> {
+    const current = sql`coalesce(${tasks.context}, '{}'::jsonb)`;
+    const rows = await db
+      .update(tasks)
+      .set({
+        context: sql`${current} || jsonb_build_object('scheduler', coalesce(${current} -> 'scheduler', '{}'::jsonb) || jsonb_build_object('lastDispatchedOccurrenceAt', ${next}::text))`,
+      })
+      .where(
+        and(
+          eq(tasks.id, taskId),
+          sql`coalesce(${current} -> 'scheduler' ->> 'lastDispatchedOccurrenceAt', '') = ${expected ?? ''}`,
+        ),
+      )
+      .returning({ id: tasks.id });
+    return rows.length > 0;
+  }
+
   // Find stuck tasks (running but heartbeat timed out)
   // Only checks tasks that have both lastHeartbeatAt and heartbeatTimeout set
   static async findStuckTasks(db: LobeChatDatabase): Promise<TaskItem[]> {
@@ -1510,6 +1727,71 @@ export class TaskModel {
           sql`${tasks.lastHeartbeatAt} < now() - make_interval(secs => ${tasks.heartbeatTimeout})`,
         ),
       );
+  }
+
+  /**
+   * Running Task runs whose operation has already ended.
+   *
+   * The terminal state of a run reaches `task_topics` / `tasks` through the
+   * run's `onComplete` webhook, and that delivery is fire-and-forget: when it is
+   * lost, the Task keeps a `running` run forever. Everything downstream then
+   * believes a dead run is live — the Goal view reads its frozen heartbeat as
+   * activity, and the coordinator parks on `waiting_external` instead of
+   * recovering it. This finder is what lets a sweep settle those
+   * rows without depending on the lost delivery.
+   *
+   * The grace window is what keeps the sweep from racing the normal path: the
+   * operation is settled before its hook is dispatched, so only a run that has
+   * been over for longer than any delivery lag is treated as orphaned.
+   */
+  static async findOrphanedRunningTopics(
+    db: LobeChatDatabase,
+    options: { limit?: number; staleBefore: Date },
+  ): Promise<OrphanedRunningTopic[]> {
+    const { limit = 200, staleBefore } = options;
+
+    return (
+      db
+        .select({
+          completionReason: agentOperations.completionReason,
+          operationError: agentOperations.error,
+          operationId: agentOperations.id,
+          operationStatus: agentOperations.status,
+          taskId: tasks.id,
+          taskIdentifier: tasks.identifier,
+          // Non-null by the guard below; the column is only nullable because a
+          // legacy row could have been written without one.
+          topicId: sql<string>`${taskTopics.topicId}`,
+          trigger: taskTopics.trigger,
+          userId: tasks.createdByUserId,
+          workspaceId: tasks.workspaceId,
+        })
+        .from(taskTopics)
+        // The run row names the operation it belongs to; a row without one cannot
+        // be judged against an operation at all and is left alone.
+        .innerJoin(agentOperations, eq(taskTopics.operationId, agentOperations.id))
+        .innerJoin(tasks, eq(taskTopics.taskId, tasks.id))
+        .where(
+          and(
+            eq(taskTopics.status, 'running'),
+            // Only a Task that still believes it is running is repaired here.
+            // One that left `running` was settled deliberately — by the user, or
+            // by a cascade that already cancelled its run — and must not be
+            // dragged back into a failure.
+            eq(tasks.status, 'running'),
+            isNotNull(taskTopics.operationId),
+            // A run row with no topic cannot be driven through the lifecycle.
+            isNotNull(taskTopics.topicId),
+            // Sub-agent children extend their parent's turn and never own the
+            // Task's run row, so only a top-level operation may settle it.
+            isNull(agentOperations.parentOperationId),
+            inArray(agentOperations.status, ORPHANED_RUN_OPERATION_STATUSES),
+            sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt}) < ${staleBefore}`,
+          ),
+        )
+        .orderBy(sql`coalesce(${agentOperations.completedAt}, ${agentOperations.updatedAt})`)
+        .limit(limit)
+    );
   }
 
   // ========== Dependencies ==========
@@ -1870,9 +2152,8 @@ export class TaskModel {
 
   async addComment(data: Omit<NewTaskComment, 'id'>): Promise<TaskCommentItem> {
     // Mirror the parent task's visibility onto the comment so subsequent
-    // reads/writes can be filtered without a JOIN. Falls back to 'public'
-    // if the task is somehow not visible (defensive — the caller should
-    // already have validated the task via `resolveOrThrow`).
+    // reads/writes can be filtered without a JOIN. `getTaskVisibility` also
+    // provides the final live-parent write fence.
     const visibility = await this.getTaskVisibility(data.taskId);
     const [comment] = await this.db
       .insert(taskComments)
@@ -2011,8 +2292,18 @@ export class TaskModel {
     id: string,
     data: Partial<Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>>,
     actor: { agentId?: string | null; userId?: string | null },
+    options: {
+      /**
+       * Deep-merged into the `config` column under this update's row lock,
+       * instead of replacing it. A client that edits one key (the schedule
+       * cap) must not send back a whole-config snapshot that can predate
+       * another tab's or member's write of a different key.
+       */
+      configPatch?: Record<string, unknown>;
+    } = {},
   ): Promise<TaskItem | null> {
-    const touched = TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
+    const { configPatch } = options;
+    const touched = !!configPatch || TRACKED_TASK_COLUMNS.some((col) => data[col] !== undefined);
     // Nothing to diff against: an ordinary rename should not pay for a lock.
     if (!touched) return this.update(id, data);
 
@@ -2037,7 +2328,21 @@ export class TaskModel {
       if (!before) return null;
 
       const scoped = new TaskModel(runner, this.userId, this.workspaceId);
-      const updated = await scoped.update(id, data);
+
+      // The reassignment rule — dropping the previous assignee's cloud-repo
+      // selection — lives in `update`, which is the only writer of the assignee
+      // column, so this locked read is kept for the activity-log diff only and
+      // the write below re-checks the rule in the same transaction.
+      const writeData = configPatch
+        ? {
+            ...data,
+            config: merge(
+              ((data.config ?? before.config) as Record<string, unknown> | null) ?? {},
+              configPatch,
+            ),
+          }
+        : data;
+      const updated = await scoped.update(id, writeData);
       if (!updated) return null;
 
       const events: { payload: TaskActivityLogPayload; type: TaskActivityLogType }[] = [];
@@ -2298,7 +2603,14 @@ export class TaskModel {
             assigneeAgentId: null,
             assigneeUserId: null,
             automationMode: original.automationMode,
-            config: original.config ?? {},
+            // The run location is dropped the way the other cross-scope refs
+            // are: a pinned machine, a path on it and a repo set all name
+            // something in the scope this task came from, and the clone's first
+            // assignment cannot clean them up later (it has no previous assignee
+            // to diff against — see `updateWithLog`).
+            config: withoutTaskExecutionSelection(
+              original.config as null | Record<string, unknown>,
+            ),
             context: {
               ...(original.context as Record<string, unknown>),
               duplicatedFrom: original.id,

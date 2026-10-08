@@ -32,6 +32,8 @@ import {
 import { getFileExtension } from './Body.helpers';
 import MarkdownImage from './MarkdownImage';
 import PreviewToolbar, { ToolbarActionButton } from './PreviewToolbar';
+import UnsupportedPreview from './UnsupportedPreview';
+import VideoPreview from './VideoPreview';
 
 // Deferred: pulls in react-pdf, only needed once a binary document is opened.
 const DocumentPreview = lazy(() => import('@/features/FileViewer/Renderer/Document'));
@@ -495,6 +497,18 @@ const ActiveFileView = memo<ActiveFileViewProps>(
       return <ImagePreview blob={preview.blob} filename={filename} />;
     }
 
+    if (preview.type === 'video') {
+      return (
+        <VideoPreview
+          allowExternalFile={allowExternalFilePreview}
+          filePath={filePath}
+          key={filePath}
+          revision={preview.revision}
+          workingDirectory={workingDirectory}
+        />
+      );
+    }
+
     if (preview.type === 'document') {
       return (
         <Suspense fallback={<Loading />}>
@@ -515,9 +529,11 @@ const ActiveFileView = memo<ActiveFileViewProps>(
 
     if (preview.type !== 'text') {
       return (
-        <Center height={'100%'} width={'100%'}>
-          <Empty description={t('workingPanel.localFile.binary')} />
-        </Center>
+        <UnsupportedPreview
+          filePath={filePath}
+          isLocalFile={!sandboxTopicId && !deviceId && isDesktop}
+          oversized={preview.type === 'binary' && preview.oversized}
+        />
       );
     }
 

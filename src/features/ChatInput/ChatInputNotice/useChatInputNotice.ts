@@ -29,6 +29,17 @@ interface ResolveChatInputNoticeParams {
   isResourceViewOnly?: boolean;
 }
 
+interface ResolvedChatInputNotice {
+  action?: 'enableModel';
+  key:
+    | 'input.agentModeUnsupportedModel'
+    | 'input.modelDisabled'
+    | 'input.modelUnavailable'
+    | 'input.viewOnlyAgent'
+    | 'input.viewOnlyGroup';
+  type: 'warning';
+}
+
 const findEnabledChatModel = (
   enabledChatModelList: EnabledProviderWithModels[],
   model: string,
@@ -39,7 +50,20 @@ const findEnabledChatModel = (
     ?.children.find((item) => item.id === model);
 };
 
-export const resolveChatInputNotice = ({
+/**
+ * Resolves every persistent notice that applies to the active chat input.
+ *
+ * Use when:
+ * - Rendering the compact notice summary and its expanded stack
+ * - Inspecting simultaneous permission and model configuration problems
+ *
+ * Expects:
+ * - Fully resolved resource access and effective model state
+ *
+ * Returns:
+ * - Notices ordered from the broadest input blocker to narrower configuration issues
+ */
+export const resolveChatInputNotices = ({
   currentChatModel,
   isEffectiveModelPending,
   isGroupContext,
@@ -48,14 +72,17 @@ export const resolveChatInputNotice = ({
   isModelConfigReady,
   isResourceViewOnly,
 }: ResolveChatInputNoticeParams) => {
+  const notices: ResolvedChatInputNotice[] = [];
+
   // View-level General access on the bound agent/group makes the whole input
-  // read-only — that outranks any model-config notice (nothing can be sent).
+  // read-only. Keep it first so legacy single-notice consumers retain their
+  // blocker-first behavior while the stack can still explain narrower issues.
   if (isResourceViewOnly)
-    return {
+    notices.push({
       action: undefined,
       key: isGroupContext ? 'input.viewOnlyGroup' : 'input.viewOnlyAgent',
       type: 'warning',
-    } as const;
+    });
 
   // Model-config notices don't apply to heterogeneous agents (own toolchain),
   // before the model runtime config is ready, or before the effective model is
@@ -74,13 +101,12 @@ export const resolveChatInputNotice = ({
     !currentChatModel
   ) {
     if (isModelDisabled)
-      return {
+      notices.push({
         action: 'enableModel' as const,
         key: 'input.modelDisabled',
         type: 'warning',
-      } as const;
-
-    return { action: undefined, key: 'input.modelUnavailable', type: 'warning' } as const;
+      });
+    else notices.push({ key: 'input.modelUnavailable', type: 'warning' });
   }
 
   // Use-level General access (can chat, can't edit the shared config) is
@@ -88,7 +114,23 @@ export const resolveChatInputNotice = ({
   // states a permission without naming what it blocks. The locked
   // controls explain themselves instead — see `useModelLockTooltip` for the
   // model triggers and the fixed-target tooltip on the device chip.
+  return notices;
 };
+
+/**
+ * Resolves the highest-priority notice for legacy single-notice consumers.
+ *
+ * Use when:
+ * - A surface can render only one notice
+ *
+ * Expects:
+ * - The same resolved state accepted by {@link resolveChatInputNotices}
+ *
+ * Returns:
+ * - The first applicable notice, or undefined when the input has no notice
+ */
+export const resolveChatInputNotice = (params: ResolveChatInputNoticeParams) =>
+  resolveChatInputNotices(params)[0];
 
 /** Union of every notice shape `resolveChatInputNotice` can return. */
 export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNotice>> & {
@@ -98,7 +140,19 @@ export type ChatInputNotice = NonNullable<ReturnType<typeof resolveChatInputNoti
   onAction?: () => Promise<void>;
 };
 
-export const useChatInputNotice = (): ChatInputNotice | undefined => {
+/**
+ * Collects all persistent notices for the active chat input.
+ *
+ * Use when:
+ * - Rendering the notice summary and expandable stack beside the composer actions
+ *
+ * Expects:
+ * - Chat, agent, permission, and model stores to be available through their providers
+ *
+ * Returns:
+ * - Ordered notices with any available recovery action attached
+ */
+export const useChatInputNotices = (): ChatInputNotice[] => {
   const { t } = useTranslation('chat');
   const { allowed: canManageAiInfra, reason: aiInfraPermissionReason } =
     usePermission('manage_provider_key');
@@ -197,7 +251,7 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
   );
   const { canUseResource, isGroupContext } = useChatInputResourceAccess();
 
-  const notice = resolveChatInputNotice({
+  const notices = resolveChatInputNotices({
     currentChatModel,
     isEffectiveModelPending:
       isAgentConfigLoading || isMemberOverridePending || isActiveTopicPending,
@@ -257,13 +311,29 @@ export const useChatInputNotice = (): ChatInputNotice | undefined => {
     updateTopicModel,
   ]);
 
-  if (notice?.action !== 'enableModel') return notice;
-
-  return {
-    ...notice,
-    actionDisabled: !canManageAiInfra,
-    actionDisabledReason: canManageAiInfra ? undefined : aiInfraPermissionReason,
-    actionLoading,
-    onAction: canManageAiInfra ? handleEnableModel : undefined,
-  };
+  return notices.map((notice) =>
+    notice.action === 'enableModel'
+      ? {
+          ...notice,
+          actionDisabled: !canManageAiInfra,
+          actionDisabledReason: canManageAiInfra ? undefined : aiInfraPermissionReason,
+          actionLoading,
+          onAction: canManageAiInfra ? handleEnableModel : undefined,
+        }
+      : notice,
+  );
 };
+
+/**
+ * Returns the highest-priority persistent notice for compatibility.
+ *
+ * Use when:
+ * - A caller has not adopted the multi-notice stack yet
+ *
+ * Expects:
+ * - The same providers required by {@link useChatInputNotices}
+ *
+ * Returns:
+ * - The first notice, or undefined when no notice applies
+ */
+export const useChatInputNotice = (): ChatInputNotice | undefined => useChatInputNotices()[0];

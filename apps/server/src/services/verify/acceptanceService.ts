@@ -12,14 +12,21 @@ import type {
   VerifyAgentPlanConfig,
   VerifyCheckDecisionDetail,
   VerifyCheckItem,
+  VerifyCheckTally,
   VerifyRunDecisionDetail,
   VerifySurface,
 } from '@lobechat/types';
 import debug from 'debug';
 
-import { AcceptanceModel } from '@/database/models/acceptance';
+import {
+  type AcceptanceListProject,
+  type AcceptanceListScope,
+  type AcceptanceListSource,
+  AcceptanceModel,
+} from '@/database/models/acceptance';
 import { AgentModel } from '@/database/models/agent';
 import { DocumentModel } from '@/database/models/document';
+import { GoalModel } from '@/database/models/goal';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
@@ -35,7 +42,7 @@ import type {
   VerifyRunItem,
 } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
-import { TaskService } from '@/server/services/task';
+import { notTrashed } from '@/database/utils/softDelete';
 import { ExpertiseRejectionWorkflow } from '@/server/workflows/expertiseRejection';
 
 import { type AcceptanceMergeSummary, mergeAcceptanceRounds } from './acceptanceMerge';
@@ -280,6 +287,30 @@ export const buildAcceptanceCheckUnion = (
   return [...grouped.values(), ...[...rows.values()].filter((row) => !grouped.has(row.id))];
 };
 
+/**
+ * The union's own three-way split, counted — the number a summary can show
+ * without opening the list.
+ *
+ * It counts UNION ROWS, not one round's result rows. A repair round re-runs the
+ * check it was asked to fix and carries the rest forward, so the current round's
+ * rows are a subset of the union: counting them would print "1 passed" beside a
+ * list that expands to the repaired check plus everything it carried, and the
+ * two readings of one acceptance would contradict each other.
+ */
+export const tallyCheckUnion = (checks: AcceptanceCheckRow[]): VerifyCheckTally => {
+  let failed = 0;
+  let passed = 0;
+  let unjudged = 0;
+  for (const check of checks) {
+    if (check.state === 'passed') passed++;
+    else if (check.state === 'failed') failed++;
+    // `uncertain` and `not_executed` are both "planned, never judged" — the same
+    // split the acceptance's criteria list draws.
+    else unjudged++;
+  }
+  return { failed, passed, total: checks.length, unjudged };
+};
+
 // ============================================
 // User review overlay — the per-check human verdict layered onto the union.
 // An accept or ignore is sticky across rounds; a reject binds to the round it
@@ -316,6 +347,8 @@ export interface AcceptanceCheckReviewEvent {
   comment?: string;
   /** When the decision was made (ISO 8601; falls back to the row's timestamps). */
   createdAt: string;
+  /** Who decided (user id). Absent on legacy rows, which only the owner could write. */
+  decidedBy?: string;
   /** Uploaded/pasted screenshots backing the reject (FKs to files). */
   fileIds?: string[];
   /** The result row the decision is stamped on. */
@@ -355,6 +388,7 @@ export const buildCheckReviewOverlay = (
       annotations: detail?.annotations,
       comment: detail?.comment,
       createdAt: detail?.decidedAt ?? (result.completedAt ?? result.createdAt)?.toISOString() ?? '',
+      decidedBy: detail?.decidedBy,
       fileIds: detail?.fileIds,
       id: result.id,
       // A carried-forward check is judged at the CURRENT round even though its
@@ -426,6 +460,15 @@ export interface AcceptanceSubjectSummary {
 
 /** The list filter as a status set — one definition for the flat and paged reads. */
 export type AcceptanceListFilter = 'active' | 'all' | 'completed';
+
+/** Every narrowing the list panel can apply, shared by the flat and paged reads. */
+export interface AcceptanceListOptions {
+  filter?: AcceptanceListFilter;
+  /** A project id, or `null` for acceptances filed under no project. */
+  projectId?: AcceptanceListProject;
+  scope?: AcceptanceListScope;
+  source?: AcceptanceListSource;
+}
 
 const statusesForFilter = (filter: AcceptanceListFilter): AcceptanceStatus[] | undefined => {
   if (filter === 'active')
@@ -539,6 +582,41 @@ export class AcceptanceService {
         ? { metadata: { title: defaults.title } }
         : {}),
     });
+  };
+
+  /**
+   * The ingest entry point (`lh acceptance run ingest`). An agent authoring its
+   * own report inside a Task run only knows its topic, so a topic subject that
+   * is a Task's run topic is folded onto that Task — otherwise the delivery
+   * lands on a topic aggregate no task surface reads, and the Task page shows
+   * no acceptance at all. A topic that already owns an acceptance keeps it, so
+   * its earlier rounds are not split across two aggregates; recurring
+   * (automation) tasks stay on their per-tick topic.
+   */
+  ensureForIngest = async (
+    subjectType: AcceptanceSubjectType,
+    subjectId: string,
+    defaults?: { requirement?: string; title?: string },
+  ): Promise<AcceptanceItem> => {
+    const taskId =
+      subjectType === 'topic' ? await this.resolveRunTopicTaskId(subjectId) : undefined;
+    if (taskId) return this.ensureForSubject('task', taskId, defaults);
+    return this.ensureForSubject(subjectType, subjectId, defaults);
+  };
+
+  private resolveRunTopicTaskId = async (topicId: string): Promise<string | undefined> => {
+    const taskTopic = await new TaskTopicModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findByTopicId(topicId);
+    if (!taskTopic) return;
+    if (await this.acceptanceModel.findBySubject('topic', topicId)) return;
+    const task = await new TaskModel(this.db, this.userId, this.workspaceId).findById(
+      taskTopic.taskId,
+    );
+    if (!task || task.automationMode) return;
+    return task.id;
   };
 
   private resolveSubjectProjectId = async (
@@ -694,7 +772,14 @@ export class AcceptanceService {
     // Only the newest round counts — `listByAcceptance` is ascending, and an
     // older draft the chain has moved past is an abandoned ledger position.
     const latest = (await this.runModel.listByAcceptance(acceptanceId)).at(-1);
-    const draft = latest && isDraftVerifyRun(latest) ? latest : undefined;
+    // A run that already executed cannot fold (`foldIntoRound` refuses any source
+    // with results): its verdicts belong to its own round. It is appended after
+    // the draft instead — the path a verification driven by the CLI takes, since
+    // it writes its results before the Task drive binds the round.
+    const draft =
+      latest && isDraftVerifyRun(latest) && (await this.resultModel.listByRun(runId)).length === 0
+        ? latest
+        : undefined;
     if (draft) {
       const folded = await this.runModel.foldIntoRound(runId, draft.id);
       await this.recomputeStatus(acceptanceId);
@@ -794,6 +879,23 @@ export class AcceptanceService {
       await this.acceptanceModel.updatePolicyStatus(acceptanceId, status);
       log('acceptance %s → %s (from round %d)', acceptanceId, status, current.roundIndex);
     }
+
+    // Rounds settled outside the verifier pipeline — an ingested round (no
+    // status, settled by its report) or a completed acceptance flow
+    // (`delivered`) — have nothing else to drive the task. Rounds the server
+    // verifier runs (`passed` / `failed` / `errored`) are driven once, after
+    // any auto-repair, by `driveTaskFromVerify`; completing here would race it.
+    //
+    // Reconciled on every recompute of a delivered aggregate, not only on the
+    // transition: a completion that failed once is retried by the next round,
+    // report or flow event instead of leaving the task open for good. An
+    // already-completed task is a no-op.
+    if (
+      status === 'delivered' &&
+      (!current.status || current.status === 'delivered') &&
+      acceptance.subjectType === 'task'
+    )
+      await this.completeTaskForDelivery(acceptanceId, acceptance.subjectId);
     return status;
   };
 
@@ -935,12 +1037,15 @@ export class AcceptanceService {
    * decision detail through the prompt builder.
    */
   reject = async (acceptanceId: string, comment?: string): Promise<AcceptanceItem> => {
-    await this.requireDecidableAcceptance(acceptanceId);
+    const acceptance = await this.requireDecidableAcceptance(acceptanceId);
 
     const settled = await this.stampDecision(acceptanceId, 'reject', comment);
     await this.acceptanceModel.updateStatus(acceptanceId, 'rejected');
 
     this.distilSettledRound(acceptanceId, settled);
+
+    if (acceptance.subjectType === 'task')
+      await this.reopenRejectedTaskSubject(acceptance.subjectId);
 
     return (await this.acceptanceModel.findById(acceptanceId))!;
   };
@@ -1119,9 +1224,10 @@ export class AcceptanceService {
   };
 
   /**
-   * Accepting a task subject completes the task when verification didn't
-   * already (e.g. the round failed but the user accepted anyway). Best-effort:
-   * a task error must not undo the recorded acceptance.
+   * Completes a task subject that verification didn't already settle — on
+   * accept (e.g. the round failed but the user accepted anyway) and when an
+   * ingested round delivers. Best-effort: a task error must not undo the
+   * recorded acceptance.
    */
   private completeTaskSubject = async (subjectId: string): Promise<void> => {
     try {
@@ -1130,14 +1236,99 @@ export class AcceptanceService {
       if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) return;
 
       // TaskService cascades checkpoint / sibling rollup / downstream unlock —
-      // the same completion path settle.ts drives on a passed verify.
+      // the same completion path settle.ts drives on a passed verify. Loaded
+      // lazily because `TaskService` reaches this module through its acceptance
+      // resolution, so a static import would close a module cycle.
+      const { TaskService } = await import('../task');
       await new TaskService(this.db, this.userId, this.workspaceId).updateStatus({
         id: task.id,
         status: 'completed',
       });
-      log('acceptance accepted → task %s completed', task.id);
+      log('acceptance → task %s completed', task.id);
     } catch (error) {
       log('completeTaskSubject failed (non-fatal): %O', error);
+    }
+  };
+
+  /**
+   * The task whose status follows its acceptance's lifecycle: delivered →
+   * completed, rejected → reopened. Goal graph tasks are driven by their
+   * coordinator (a paused task is its retry signal) and recurring tasks stay
+   * on their schedule, so neither follows the acceptance.
+   */
+  private resolveLifecycleTask = async (subjectId: string) => {
+    const task = await new TaskModel(this.db, this.userId, this.workspaceId).resolve(subjectId);
+    if (!task || task.automationMode) return null;
+
+    const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findByGraphTask(
+      task.id,
+    );
+    return goal ? null : task;
+  };
+
+  /**
+   * A delivered acceptance completes its task: the delivery is in, and the
+   * user's accept / reject decides from here. Shared by every settlement path.
+   *
+   * A reject can land at any point around the completion, so the decision is
+   * read on both sides of the write: rejected before → the task is left alone;
+   * rejected in between → the reject saw an unfinished task and did not reopen
+   * it, so it is reopened here. Best-effort — never fails the caller.
+   *
+   * @returns `completed` when the task now reads completed, `rejected` when a
+   * reject won, `skipped` when the task does not follow the acceptance or could
+   * not be completed.
+   */
+  completeTaskForDelivery = async (
+    acceptanceId: string,
+    subjectId: string,
+  ): Promise<'completed' | 'rejected' | 'skipped'> => {
+    try {
+      const task = await this.resolveLifecycleTask(subjectId);
+      if (!task) return 'skipped';
+
+      const before = await this.acceptanceModel.findPolicyById(acceptanceId);
+      if (before?.status === 'rejected') return 'rejected';
+      if (before?.status !== 'delivered') return 'skipped';
+
+      await this.completeTaskSubject(task.id);
+      // `completeTaskSubject` is best-effort and swallows its own failures (e.g. a
+      // running operation that could not be interrupted). Only a task that really
+      // reads completed counts — anything else lets the caller fall back.
+      const written = await new TaskModel(this.db, this.userId, this.workspaceId).findById(task.id);
+      if (written?.status !== 'completed') return 'skipped';
+
+      const after = await this.acceptanceModel.findPolicyById(acceptanceId);
+      if (after?.status === 'rejected') {
+        await this.reopenRejectedTaskSubject(task.id);
+        return 'rejected';
+      }
+      return 'completed';
+    } catch (error) {
+      log('completeTaskForDelivery failed (non-fatal): %O', error);
+      return 'skipped';
+    }
+  };
+
+  /**
+   * Rejecting a delivery reopens the task it completed, so the task is not left
+   * reading "done" while its repair is pending. Only a completed task moves —
+   * one the user already paused, canceled or restarted keeps its own state.
+   */
+  private reopenRejectedTaskSubject = async (subjectId: string): Promise<void> => {
+    try {
+      const task = await this.resolveLifecycleTask(subjectId);
+      if (task?.status !== 'completed') return;
+
+      await new TaskModel(this.db, this.userId, this.workspaceId).updateStatusIfCurrent(
+        task.id,
+        'completed',
+        'paused',
+        { completedAt: null },
+      );
+      log('acceptance rejected → task %s reopened as paused', task.id);
+    } catch (error) {
+      log('reopenRejectedTaskSubject failed (non-fatal): %O', error);
     }
   };
 
@@ -1286,7 +1477,18 @@ export class AcceptanceService {
       if (!cur || round > cur.round) latest.set(run.acceptanceId, { id: run.id, round });
     }
 
-    const reports = await this.reportModel.findByRuns([...latest.values()].map((v) => v.id));
+    // Unscoped on purpose, like the run read above: the run ids derive from
+    // acceptance ids the caller's list query already authorized, and a
+    // participated row's report belongs to its owner — an owner-scoped read
+    // would need one query per owner.
+    const runIds = [...latest.values()].map((v) => v.id);
+    const reports =
+      runIds.length > 0
+        ? await this.db.query.verifyReports.findMany({
+            columns: { totalChecks: true, verifyRunId: true },
+            where: (report, { inArray }) => inArray(report.verifyRunId, runIds),
+          })
+        : [];
     const totalByRun = new Map(reports.map((report) => [report.verifyRunId, report.totalChecks]));
     for (const [acceptanceId, { id: runId }] of latest) {
       const total = totalByRun.get(runId);
@@ -1302,15 +1504,12 @@ export class AcceptanceService {
    * carries the latest round's check count for the panel's at-a-glance line.
    */
   listWithSubjects = async (
-    options: {
-      filter?: 'active' | 'all' | 'completed';
+    options: AcceptanceListOptions & {
       limit?: number;
-      projectId?: string;
       q?: string;
     } = {},
   ) => {
     const { filter = 'all', limit = 50, q } = options;
-    const statuses = statusesForFilter(filter);
     const normalizedQuery = q?.trim().toLocaleLowerCase();
 
     // A title search must span the complete owned set. Subject titles live in
@@ -1318,74 +1517,155 @@ export class AcceptanceService {
     // applying the result cap instead of searching only the latest page.
     const candidates = await this.acceptanceModel.query({
       limit: normalizedQuery ? undefined : limit,
-      statuses,
+      projectId: options.projectId,
+      scope: options.scope,
+      source: options.source,
+      statuses: statusesForFilter(filter),
       unbounded: Boolean(normalizedQuery),
-      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
-    const subjects = await this.resolveSubjects(candidates);
-    const withSubjects = candidates.map((row) => ({
-      row,
-      subject: subjects.get(row.id)!,
-    }));
+    const subjects = await this.resolveSubjectsForList(candidates);
     const matched = normalizedQuery
-      ? withSubjects
-          .filter(({ row, subject }) =>
-            (subject.title || row.subjectId).toLocaleLowerCase().includes(normalizedQuery),
+      ? candidates
+          .filter((row) =>
+            (subjects.get(row.id)?.title || row.subjectId)
+              .toLocaleLowerCase()
+              .includes(normalizedQuery),
           )
           .slice(0, limit)
-      : withSubjects;
-    const rows = matched.map(({ row }) => row);
-    const [checkCounts, projects] = await Promise.all([
-      this.latestCheckCounts(rows.map((row) => row.id)),
-      this.resolveProjects(rows),
-    ]);
+      : candidates;
 
-    return matched.map(({ row, subject }) => ({
-      ...row,
-      checkCount: checkCounts.get(row.id) ?? null,
-      project: projects.get(row.id) ?? null,
-      subject,
-    }));
+    return this.decorateListRows(matched, subjects);
   };
 
   /**
    * The paged twin of {@link listWithSubjects} — one scroll page of the list
    * panel, newest first.
    *
-   * Takes the same `filter` vocabulary, applied in the QUERY: a page of
+   * Takes the same filter vocabulary, applied in the QUERY: a page of
    * "in progress" is thirty in-progress rows, not thirty rows of which some
    * happen to be in progress. Search deliberately has no paged form — a title
    * search must span the whole owned set, which is what `listWithSubjects`
    * already does; the panel asks that one when a query is active.
    */
-  listPageWithSubjects = async (options: {
-    cursor?: string;
-    filter?: AcceptanceListFilter;
-    limit?: number;
-    projectId?: string;
-  }) => {
+  listPageWithSubjects = async (
+    options: AcceptanceListOptions & {
+      cursor?: string;
+      limit?: number;
+    },
+  ) => {
     const { items, nextCursor } = await this.acceptanceModel.queryPage({
       cursor: options.cursor,
       limit: options.limit,
+      projectId: options.projectId,
+      scope: options.scope,
+      source: options.source,
       statuses: statusesForFilter(options.filter ?? 'all'),
-      ...(options.projectId ? { projectId: options.projectId } : {}),
     });
 
-    const subjects = await this.resolveSubjects(items);
-    const [checkCounts, projects] = await Promise.all([
-      this.latestCheckCounts(items.map((row) => row.id)),
-      this.resolveProjects(items),
-    ]);
-
     return {
-      items: items.map((row) => ({
-        ...row,
-        checkCount: checkCounts.get(row.id) ?? null,
-        project: projects.get(row.id) ?? null,
-        subject: subjects.get(row.id)!,
-      })),
+      items: await this.decorateListRows(items, await this.resolveSubjectsForList(items)),
       nextCursor,
     };
+  };
+
+  private isInOwnScope = (row: AcceptanceItem) =>
+    row.workspaceId
+      ? row.workspaceId === this.workspaceId
+      : !this.workspaceId && row.userId === this.userId;
+
+  /**
+   * Subject headers for a mixed list. Rows in the caller's own scope go through
+   * the scoped models as before. A participated row may belong to any number of
+   * other owners, whose task/topic/document the caller's models cannot see —
+   * those resolve in ONE unscoped read per subject type, so the cost stays
+   * fixed however many owners a page spans. Safe because the list query has
+   * already applied the read rule to these rows, and the bundle shows the same
+   * title to anyone who can open them.
+   */
+  private resolveSubjectsForList = async (
+    rows: AcceptanceItem[],
+  ): Promise<Map<string, AcceptanceSubjectSummary>> => {
+    const own = rows.filter(this.isInOwnScope);
+    const foreign = rows.filter((row) => !this.isInOwnScope(row));
+    const [ownSubjects, foreignSubjects] = await Promise.all([
+      own.length > 0 ? this.resolveSubjects(own) : new Map<string, AcceptanceSubjectSummary>(),
+      this.resolveForeignSubjects(foreign),
+    ]);
+    return new Map([...ownSubjects, ...foreignSubjects]);
+  };
+
+  private resolveForeignSubjects = async (
+    rows: AcceptanceItem[],
+  ): Promise<Map<string, AcceptanceSubjectSummary>> => {
+    const result = new Map<string, AcceptanceSubjectSummary>();
+    if (rows.length === 0) return result;
+
+    const idsOf = (type: AcceptanceSubjectType) =>
+      rows.filter((row) => row.subjectType === type).map((row) => row.subjectId);
+    const titles = new Map<string, string | null>();
+    try {
+      const [taskIds, topicIds, documentIds] = [idsOf('task'), idsOf('topic'), idsOf('document')];
+      const [taskRows, topicRows, documentRows] = await Promise.all([
+        taskIds.length > 0
+          ? this.db.query.tasks.findMany({
+              columns: { id: true, identifier: true, name: true },
+              where: (task, { and, inArray }) =>
+                and(inArray(task.id, taskIds), notTrashed(task.isDeleted)),
+            })
+          : [],
+        topicIds.length > 0
+          ? this.db.query.topics.findMany({
+              columns: { id: true, title: true },
+              where: (topic, { and, inArray }) =>
+                and(inArray(topic.id, topicIds), notTrashed(topic.isDeleted)),
+            })
+          : [],
+        documentIds.length > 0
+          ? this.db.query.documents.findMany({
+              columns: { id: true, title: true },
+              where: (document, { and, inArray }) =>
+                and(inArray(document.id, documentIds), notTrashed(document.isDeleted)),
+            })
+          : [],
+      ]);
+      for (const task of taskRows) titles.set(`task:${task.id}`, task.name ?? task.identifier);
+      for (const topic of topicRows) titles.set(`topic:${topic.id}`, topic.title ?? null);
+      for (const document of documentRows)
+        titles.set(`document:${document.id}`, document.title ?? null);
+    } catch (error) {
+      log('resolveForeignSubjects failed (non-fatal): %O', error);
+    }
+
+    for (const row of rows) {
+      const override = row.metadata?.title;
+      const overrideTitle =
+        typeof override === 'string' && override.trim() ? override.trim() : null;
+      result.set(row.id, {
+        id: row.subjectId,
+        title: overrideTitle ?? titles.get(`${row.subjectType}:${row.subjectId}`) ?? null,
+        type: row.subjectType as AcceptanceSubjectType,
+      });
+    }
+    return result;
+  };
+
+  private decorateListRows = async (
+    rows: AcceptanceItem[],
+    subjects: Map<string, AcceptanceSubjectSummary>,
+  ) => {
+    const [checkCounts, projects] = await Promise.all([
+      this.latestCheckCounts(rows.map((row) => row.id)),
+      // Projects stay in the caller's scope: another owner's project name is
+      // theirs, and a row filed under it simply reads as unfiled here.
+      this.resolveProjects(rows),
+    ]);
+
+    return rows.map((row) => ({
+      ...row,
+      checkCount: checkCounts.get(row.id) ?? null,
+      project: projects.get(row.id) ?? null,
+      subject: subjects.get(row.id)!,
+    }));
   };
 
   /**
@@ -1456,5 +1736,51 @@ export class AcceptanceService {
       this.reportModel.findByRuns(runIds),
     ]);
     return { evidence, reports, results, runs };
+  };
+
+  /**
+   * The union tally of several acceptances at once, counted from the SAME check
+   * union each acceptance page renders (`tallyCheckUnion` over
+   * `buildAcceptanceCheckUnion`), so a summary row and the list it expands to
+   * can never disagree about what a round chain judged.
+   *
+   * Batched on purpose: a surface that summarises many acceptances runs on a
+   * poll, so this is two statements regardless of how many it covers. An
+   * acceptance with no round at all is ABSENT from the map — a caller must not
+   * read "absent" as "nothing passed".
+   */
+  getCheckTalliesByAcceptances = async (
+    acceptanceIds: string[],
+  ): Promise<Map<string, VerifyCheckTally>> => {
+    const ids = [...new Set(acceptanceIds.filter(Boolean))];
+    const tallies = new Map<string, VerifyCheckTally>();
+    if (ids.length === 0) return tallies;
+
+    const runs = await this.runModel.listByAcceptances(ids);
+    const results = await this.resultModel.listByRuns(runs.map((run) => run.id));
+
+    const resultsByRun = new Map<string, VerifyCheckResultItem[]>();
+    for (const result of results) {
+      if (!result.verifyRunId) continue;
+      const bucket = resultsByRun.get(result.verifyRunId) ?? [];
+      bucket.push(result);
+      resultsByRun.set(result.verifyRunId, bucket);
+    }
+
+    const runsByAcceptance = new Map<string, VerifyRunItem[]>();
+    for (const run of runs) {
+      if (!run.acceptanceId) continue;
+      const bucket = runsByAcceptance.get(run.acceptanceId) ?? [];
+      bucket.push(run);
+      runsByAcceptance.set(run.acceptanceId, bucket);
+    }
+
+    for (const [acceptanceId, acceptanceRuns] of runsByAcceptance) {
+      const checks = buildAcceptanceCheckUnion(
+        acceptanceRuns.map((run) => ({ results: resultsByRun.get(run.id) ?? [], run })),
+      );
+      tallies.set(acceptanceId, tallyCheckUnion(checks));
+    }
+    return tallies;
   };
 }

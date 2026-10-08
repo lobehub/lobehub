@@ -1,3 +1,8 @@
+import {
+  DEVICE_OFFLINE_RUN_STATUS,
+  QUOTA_LIMITED_RUN_STATUS,
+  TRANSIENT_FAILED_RUN_STATUS,
+} from '@lobechat/const/goal';
 import type { BriefDecision, TaskTopicHandoff } from '@lobechat/types';
 import { and, count, desc, eq, gte, inArray, sql } from 'drizzle-orm';
 
@@ -7,7 +12,15 @@ import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
 
-const TERMINAL_TOPIC_STATUSES = new Set(['canceled', 'completed', 'failed', 'timeout']);
+export const TERMINAL_TOPIC_STATUSES = new Set([
+  'canceled',
+  'completed',
+  DEVICE_OFFLINE_RUN_STATUS,
+  'failed',
+  QUOTA_LIMITED_RUN_STATUS,
+  'timeout',
+  TRANSIENT_FAILED_RUN_STATUS,
+]);
 
 export class TaskTopicModel {
   private readonly userId: string;
@@ -45,7 +58,7 @@ export class TaskTopicModel {
    * stamp `topics.completedAt` so duration can be computed at read time, and
    * promote `topics.status` to 'completed' on a clean finish.
    */
-  private async markTopicEnded(topicId: string, status: string): Promise<void> {
+  async markTopicEnded(topicId: string, status: string): Promise<void> {
     const setClause: { completedAt: Date; status?: 'completed' } = { completedAt: new Date() };
     if (status === 'completed') setClause.status = 'completed';
 
@@ -233,6 +246,69 @@ export class TaskTopicModel {
     );
 
     return result.length;
+  }
+
+  /**
+   * Flip one run out of `running` — but only while it is still that exact run.
+   *
+   * Unlike {@link updateStatus}, a miss is a real answer rather than a silent
+   * no-op: a row a newer operation has already replaced, or one another writer
+   * settled a moment ago, returns `false`. Only the run row is written; the
+   * topic's end stamp is the caller's to commit alongside it — see
+   * `TaskRunClaimRepo`.
+   */
+  async claimRunIfRunning(topicId: string, operationId: string, status: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, operationId),
+          eq(taskTopics.status, 'running'),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    return result.length > 0;
+  }
+
+  /**
+   * Put a run claimed by {@link claimRunIfRunning} back to `running`.
+   *
+   * Keyed on the same operation as the claim, so a newer run that took the row
+   * over in between is never reopened. Only the run row is written; clearing the
+   * topic's end stamp is the caller's — see `TaskRunClaimRepo`.
+   */
+  async reopenRun(topicId: string, operationId: string, fromStatus: string): Promise<boolean> {
+    const result = await this.db
+      .update(taskTopics)
+      .set({ status: 'running' })
+      .where(
+        and(
+          eq(taskTopics.topicId, topicId),
+          eq(taskTopics.operationId, operationId),
+          eq(taskTopics.status, fromStatus),
+          this.ownership(),
+        ),
+      )
+      .returning({ topicId: taskTopics.topicId });
+
+    return result.length > 0;
+  }
+
+  /** Undo {@link markTopicEnded}'s end stamp for a run that is live again. */
+  async clearTopicEnded(topicId: string): Promise<void> {
+    await this.db
+      .update(topics)
+      .set({ completedAt: null })
+      .where(
+        and(
+          eq(topics.id, topicId),
+          buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+        ),
+      );
   }
 
   async findByTopicId(topicId: string): Promise<TaskTopicItem | null> {

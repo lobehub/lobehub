@@ -1,8 +1,6 @@
 'use client';
 
-import { Checkbox, Tag } from '@lobehub/ui/base-ui';
-import { Badge, Table, Tooltip, Typography } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
+import { Badge, Checkbox, Table, type TableColumn, Tag, Text, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -94,17 +92,19 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
     });
   }, [confirm, onSelectionReady, selectedIds]);
 
-  const columns: ColumnsType<ResumableCase> = useMemo(
+  const columns: TableColumn<ResumableCase>[] = useMemo(
     () => [
       {
         key: 'select',
         render: (_: any, record: ResumableCase) => (
           <Tooltip title={record.canResume ? undefined : record.reason}>
-            <Checkbox
-              checked={selectedIds.includes(record.testCaseId)}
-              disabled={!record.canResume}
-              onChange={(checked) => handleToggleRow(record.testCaseId, checked)}
-            />
+            <span style={{ display: 'inline-flex' }}>
+              <Checkbox
+                checked={selectedIds.includes(record.testCaseId)}
+                disabled={!record.canResume}
+                onChange={(checked) => handleToggleRow(record.testCaseId, checked)}
+              />
+            </span>
           </Tooltip>
         ),
         title: (
@@ -128,12 +128,9 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
       {
         key: 'input',
         render: (_: any, record: ResumableCase) => (
-          <Typography.Paragraph
-            ellipsis={{ expandable: true, rows: 2, symbol: '...' }}
-            style={{ margin: 0 }}
-          >
+          <Text as={'p'} ellipsis={{ rows: 2, tooltipWhenOverflow: true }}>
             {record.input}
-          </Typography.Paragraph>
+          </Text>
         ),
         title: t('table.columns.input'),
       },
@@ -141,7 +138,9 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
         key: 'status',
         render: (_: any, record: ResumableCase) => (
           <Tooltip title={record.canResume ? undefined : record.reason}>
-            <StatusLabel status={record.resumeStatus} />
+            <span style={{ display: 'inline-flex' }}>
+              <StatusLabel status={record.resumeStatus} />
+            </span>
           </Tooltip>
         ),
         title: t('table.columns.status'),
@@ -164,7 +163,6 @@ const BatchResumeContent: FC<BatchResumeContentProps> = ({
       pagination={{
         pageSize,
         showSizeChanger: true,
-        size: 'small',
         onShowSizeChange: (_, size) => setPageSize(size),
       }}
     />

@@ -2,8 +2,7 @@
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Avatar, Divider } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -83,7 +82,7 @@ export const BatchCreateAgentsStreaming = memo<BuiltinStreamingProps<BatchCreate
                   ))}
                 </Flexbox>
               )}
-              <Divider />
+              <Divider style={{ marginBlock: 24 }} />
               {agent.systemRole && (
                 <div className={styles.systemRole}>
                   <Markdown animated variant={'chat'}>

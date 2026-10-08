@@ -18,8 +18,23 @@ export interface KanbanColumnDefinition {
   droppable: boolean;
   groupMeta?: TaskGroupMeta;
   key: string;
-  targetStatus: 'backlog' | 'canceled' | 'completed' | null;
+  /**
+   * `running` is not a plain status write: dropping a task there starts a run,
+   * and the server moves it to `running` once the run is dispatched.
+   */
+  targetStatus: 'backlog' | 'canceled' | 'completed' | 'running' | null;
 }
+
+/**
+ * Statuses a task can be started from — mirrors the detail page's Run button.
+ * `scheduled` is excluded because automation owns its next run.
+ */
+export const KANBAN_RUNNABLE_STATUSES = new Set<TaskStatus>([
+  'backlog',
+  'completed',
+  'failed',
+  'paused',
+]);
 
 export interface KanbanAssigneeUpdate {
   assigneeAgentId?: string | null;
@@ -41,7 +56,7 @@ export const getKanbanColumnHeaderVariant = ({
 
 export const STATUS_KANBAN_COLUMNS: KanbanColumnDefinition[] = [
   { droppable: true, key: 'backlog', targetStatus: 'backlog' },
-  { droppable: false, key: 'running', targetStatus: null },
+  { droppable: true, key: 'running', targetStatus: 'running' },
   { droppable: false, key: 'needsInput', targetStatus: null },
   { droppable: true, key: 'done', targetStatus: 'completed' },
   { droppable: true, key: 'canceled', targetStatus: 'canceled' },
@@ -160,6 +175,9 @@ export const canDropTaskIntoKanbanColumn = (
   column: KanbanColumnDefinition,
 ): boolean => {
   if (!column.droppable) return false;
+  if (groupBy === 'status' && column.targetStatus === 'running') {
+    return KANBAN_RUNNABLE_STATUSES.has(task.status as TaskStatus);
+  }
   if (groupBy !== 'member' || column.groupMeta?.groupBy !== 'member') return true;
 
   const targetAssigneeUserId = column.groupMeta.assigneeUserId;
@@ -167,6 +185,14 @@ export const canDropTaskIntoKanbanColumn = (
 
   return task.visibility !== 'private' || task.createdByUserId === targetAssigneeUserId;
 };
+
+export const findKanbanTask = (
+  taskGroups: TaskGroupItem[],
+  identifier: string,
+): TaskListItem | undefined =>
+  taskGroups
+    .flatMap((group) => group.tasks as TaskListItem[])
+    .find((item) => item.identifier === identifier);
 
 export const moveTaskBetweenKanbanGroups = (
   taskGroups: TaskGroupItem[],

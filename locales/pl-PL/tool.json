@@ -159,6 +159,7 @@
   "localFiles.open": "Otwórz",
   "localFiles.openFile": "Otwórz Plik",
   "localFiles.openFolder": "Otwórz Folder",
+  "localFiles.openInPanel": "Otwórz w panelu bocznym",
   "localFiles.outOfScope.requestedPaths": "Żądane ścieżki",
   "localFiles.outOfScope.warning": "Ostrzeżenie: Następujące ścieżki znajdują się poza skonfigurowanym katalogiem roboczym. Proszę potwierdzić, czy chcesz zezwolić na dostęp.",
   "localFiles.outOfScope.workingDirectory": "Katalog roboczy",

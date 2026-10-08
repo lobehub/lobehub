@@ -156,7 +156,7 @@ const Header = memo<HeaderProps>(
             toast.error(t('channel.deleteAllFailed'));
           }
         },
-        title: t('channel.deleteAllConfirm'),
+        title: t('channel.deleteAllChannels'),
       });
     }, [agentId, deleteAllBotProviders, disabled, providers, t]);
 

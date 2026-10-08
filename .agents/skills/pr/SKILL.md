@@ -62,7 +62,17 @@ A feature or fix needs a published acceptance round before the PR is opened (AGE
 - Follow the source-label, privacy, and AI assistance rules in **PR Template** below when creating or updating a PR. Do not request prompt disclosure or block the normal PR workflow waiting for consent to publish a conversation.
 - Write the body to a temporary file and use `--body-file` to preserve formatting.
 
-### 7. Open in browser
+### 7. Link the PR to its acceptance
+
+An acceptance round published before the PR existed carries no PR, and reusing that round is correct, so nothing else ever tells the acceptance about the PR. Right after `gh pr create`, record the link through the production publish environment. If step 1 reused a known acceptance and skipped the lookup, `publish_lh` is not defined yet: run [Publish auth preflight](../../acceptance/PROCESS.md#publish-auth-preflight) now to define and verify it.
+
+```bash
+publish_lh acceptance link-pr <acceptanceId> "$(gh pr view --json url --jq .url)"
+```
+
+Do this for each PR in a stack; they share one acceptance. Skip it when the PR states that no acceptance is needed. A later round links itself only when its `result.json` names the PR (`pullRequest`); a PR inferred from the branch is recorded on the round but never linked. If the installed CLI lacks `link-pr`, or the server rejects it as unknown, mention that in the reply instead of retrying.
+
+### 8. Open in browser
 
 `gh pr view --web`
 
@@ -74,6 +84,15 @@ Use [`.github/PULL_REQUEST_TEMPLATE.md`](../../../.github/PULL_REQUEST_TEMPLATE.
 - **AI assistance**: apply the template's organization-member exemption to details only, never to the source label. When required, fill its six fields using the final diff and verification evidence, not private conversation summaries. Use one section per PR, combining tools/models across sessions; report unknown metadata and unperformed review/checks honestly.
 
 Prompts and transcripts are private by default and are not required fields. Only if the author explicitly requests sharing them, review the exact proposed text for sensitive information and obtain confirmation before publishing that text. Authorization to create or update a PR is not consent to publish a conversation. Check attached logs and screenshots for sensitive information too.
+
+### No production data identifiers
+
+PR titles, bodies, comments and review replies are public. Never put an identifier or detail taken from production data in them, even when that is where the bug was found:
+
+- Record ids: topic (`tpc_…`), message (`msg_…`), operation (`op_…`), agent (`agt_…`), document (`docs_…`), user, device and bot ids. This includes agent vent ids and ids of internal reproduction reports.
+- User details: device or host names, local paths, file names, quoted user text, and app links to a user's agent or topic.
+
+Describe the evidence instead: "observed in a production topic", "a user with two desktops (device A and device B)". Obvious placeholders (`tpc_xxx`, `C:\Users\user`) are fine in examples. Commit hashes, deployment ids and code identifiers are not production data. The same rule applies to commit messages and code comments.
 
 ## Notes
 

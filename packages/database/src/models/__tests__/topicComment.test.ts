@@ -134,6 +134,37 @@ describe('TopicCommentModel', () => {
       });
     });
 
+    it('should reject a topic in the recycle bin', async () => {
+      await serverDB
+        .update(topics)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(topics.id, workspaceTopicId));
+
+      await expect(
+        authorModel.createWithMentions({
+          clientId: 'trashed-topic',
+          content: 'no',
+          topicId: workspaceTopicId,
+        }),
+      ).rejects.toThrow(TOPIC_COMMENT_TOPIC_NOT_FOUND);
+    });
+
+    it('should reject an anchor message in the recycle bin', async () => {
+      await serverDB
+        .update(messages)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(messages.id, anchoredMessageId));
+
+      await expect(
+        authorModel.createWithMentions({
+          clientId: 'trashed-message',
+          content: 'no',
+          messageId: anchoredMessageId,
+          topicId: workspaceTopicId,
+        }),
+      ).rejects.toThrow(TOPIC_COMMENT_MESSAGE_NOT_IN_TOPIC);
+    });
+
     it('should snapshot a truncated anchorPreview for message-anchored comments', async () => {
       const result = await authorModel.createWithMentions({
         clientId: 'client-2',

@@ -1,4 +1,5 @@
-import { Block, Flexbox, Input, Popover, stopPropagation } from '@lobehub/ui';
+import { Block, Flexbox, Popover, stopPropagation } from '@lobehub/ui';
+import { Input } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

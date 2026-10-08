@@ -1,13 +1,22 @@
 import type { GoalAdvanceEffect, GoalMetricCriteriaState } from '@lobechat/agent-tracing';
 import { buildGoalRequirement } from '@lobechat/builtin-tool-goal';
-import { GOAL_COORDINATOR_ACTOR_ID } from '@lobechat/const/goal';
+import {
+  DEVICE_OFFLINE_RUN_STATUS,
+  GOAL_CLARIFICATION_OPTION,
+  GOAL_CLARIFICATION_TITLE,
+  GOAL_COORDINATOR_ACTOR_ID,
+  GOAL_MACHINE_GATE_TITLE,
+} from '@lobechat/const/goal';
 import type {
+  ChatTopicMetadata,
   GoalConfig,
   GoalCreateConfig,
+  GoalDecisionOption,
   GoalEdgeKind,
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
+  GoalManagerAsk,
   GoalMetricCriterion,
   GoalNodeAcceptance,
   GoalNodeKind,
@@ -20,6 +29,7 @@ import type {
   TaskTopicHandoff,
   WorkVersionEventItem,
 } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import { experimentOwner, provenanceParentId } from '@lobechat/utils/goalGraph';
 import { TRPCError } from '@trpc/server';
 import { sql } from 'drizzle-orm';
@@ -54,22 +64,35 @@ import {
   LEASE_EXPIRED_ERROR,
   MEASURED_ACCEPTANCE_PAUSE_REASON,
   needsMetricCriteria,
+  NO_FRONTIER_PAUSE_REASON,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
 import { experimentResults, exploreGraph } from './exploreGraph';
+import { classifyGoalFailure, isMachineFailureClass } from './failureClass';
+import { GoalBriefService } from './goalBriefs';
+import { lastAnsweredGateAt, planMachineRecovery } from './machineRecovery';
 import { answeredProblem, GoalManagerService, problemKey } from './manager';
 import {
+  classifyRunFailure,
+  countConsecutiveDeviceOfflineRuns,
   DEFAULT_MANAGER_MAX_TURNS,
-  DEVICE_RECONNECT_WAIT_MS,
+  DEVICE_OFFLINE_GATE_REASON,
   isDeviceUnavailableFailure,
   managerTurnsSpent,
+  nextDeviceOfflineRetryAt,
+  QUOTA_RESET_MARGIN_MS,
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
   resolveTaskMaxSteps,
   VERIFY_SETTLE_GRACE_MS,
 } from './recoveryPolicy';
+import { isGoalReportNode, withoutGoalReport } from './report';
+import { GoalReportService } from './reportService';
+import { GoalReportStore } from './reportStore';
+import { scheduleGoalAdvance } from './scheduler';
 import { GoalSupervisorService } from './supervisor';
+import { statusAuthoredByActor } from './supervisor/policy';
 import { claimGoalTask } from './taskClaim';
 import { TaskRecoveryCoordinator } from './taskRecoveryCoordinator';
 import {
@@ -78,9 +101,31 @@ import {
   toFrontierTaskState,
   toTraceGraphState,
 } from './traceObservation';
+import {
+  clarificationOptions,
+  collectClarificationAnswers,
+  hasAskedClarification,
+  normalizeUnderstanding,
+  UNDERSTANDING_CONFIDENCE,
+} from './understanding';
+import { GoalWaitService } from './wait';
 
 const TASK_NODE_CLAIM_TTL_MS = 5 * 60 * 1000;
+/**
+ * Tick outcomes after which the Goal-level acceptance may have just ended: the
+ * Goal was achieved, failed or canceled, or parked on a gate (an acceptance
+ * whose attempts ran out opens one). Every other outcome skips the check.
+ */
+const REPORT_CHECK_OUTCOMES = new Set<GoalTickResult['outcome']>([
+  'achieved',
+  'failed',
+  'waiting_human',
+]);
+/** A Goal whose delivery the owner can still send back for rework. */
+const REOPENABLE_GOAL_STATUSES = new Set(['achieved', 'running']);
 const TASK_DESCRIPTION_MAX_LENGTH = 255;
+/** Ends a person reached, or the coordinator's verdict of success: nothing reopens these but `resume`. */
+const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
 
@@ -157,9 +202,53 @@ export interface CreateGoalNodeInput {
  */
 const DELIVERABLE_EVENTS_PER_RUN = 200;
 
+/**
+ * What answering a gate does to the Task it was opened for. The coordinator's
+ * own options say it through their fixed ids; an option the main Agent wrote
+ * for its own question names its effect, and one that names none only records
+ * the answer — the Agent reads it on its next turn.
+ */
+const decisionOptionEffect = (
+  option: GoalDecisionOption | undefined,
+  sourceTitle?: string,
+): 'fail' | 'retire' | 'retry' | undefined => {
+  if (!option) return undefined;
+  if (option.effect) return option.effect;
+  if (option.id === 'retry' || option.id === 'retire') return option.id;
+  if (option.id === 'fail' && sourceTitle === GOAL_ACCEPTANCE_TASK_TITLE) return 'fail';
+  return undefined;
+};
+
+/**
+ * The comment a retried Task carries into its next attempt. A bare "retry"
+ * adds nothing the run does not already know; a chosen direction or a note is
+ * exactly what the owner wants the next attempt to act on.
+ */
+const decisionGuidance = (
+  question: string,
+  option: GoalDecisionOption | undefined,
+  note?: string,
+): string | undefined => {
+  const custom = option && option.id !== 'retry' ? option : undefined;
+  const trimmed = note?.trim();
+  if (!custom && !trimmed) return undefined;
+  return [
+    'Owner decision on the recovery gate for this Task.',
+    `Question: ${question}`,
+    custom
+      ? `Chosen: ${custom.label}${custom.description ? ` — ${custom.description}` : ''}`
+      : undefined,
+    trimmed ? `Guidance: ${trimmed}` : undefined,
+  ]
+    .filter(Boolean)
+    .join('\n');
+};
+
 export class GoalService {
   private readonly acceptanceService: AcceptanceService;
   private readonly agentModel: AgentModel;
+  /** What the goal tells the person through the inbox: gates, sign-off, findings. */
+  private readonly briefs: GoalBriefService;
   private readonly goalModel: GoalModel;
   /**
    * Graph writes attributed to the person who asked for them: seeding a goal,
@@ -185,6 +274,7 @@ export class GoalService {
   ) {
     this.acceptanceService = new AcceptanceService(db, userId, workspaceId);
     this.agentModel = new AgentModel(db, userId, workspaceId);
+    this.briefs = new GoalBriefService(db, userId, workspaceId);
     this.goalModel = new GoalModel(db, userId, workspaceId);
     this.graphModel = new GoalGraphModel(db, userId, workspaceId);
     this.coordinatorGraph = new GoalGraphModel(db, userId, workspaceId, {
@@ -226,37 +316,11 @@ export class GoalService {
      */
     localRun?: { agentId: string; topicId: string },
   ): Promise<{ graph: GoalGraphSnapshot; turnToken: string }> => {
-    const operation = await new AgentOperationModel(
-      this.db,
-      this.userId,
-      this.workspaceId,
-    ).findOwnOperationById(operationId);
-    let agentId: string;
-    let topicId: string;
-    if (operation) {
-      if (operation.status !== 'running')
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'The conversation run has already ended',
-        });
-      if (!operation.agentId || !operation.topicId)
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          message: 'Only a conversation run with an agent can create a goal it supervises',
-        });
-      agentId = operation.agentId;
-      topicId = operation.topicId;
-    } else {
-      const topic = localRun
-        ? await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
-            localRun.topicId,
-          )
-        : undefined;
-      if (!localRun || !topic || topic.agentId !== localRun.agentId)
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Conversation run not found' });
-      agentId = localRun.agentId;
-      topicId = topic.id;
-    }
+    const { agentId, topicId } = await this.resolveTopicRun(
+      operationId,
+      localRun,
+      'Only a run in a topic with an agent can create a goal it supervises',
+    );
 
     const created = await this.create({
       ...input,
@@ -278,6 +342,107 @@ export class GoalService {
       await this.goalModel.delete(created.goal.id).catch(() => {});
       throw error;
     }
+  };
+
+  /**
+   * The agent and topic of the run with this id, taken from the server's
+   * operation row; never from the caller while that row exists. A local desktop
+   * run has no row, so its env-provided topic and agent are accepted only when
+   * the topic is the caller's and belongs to that agent.
+   */
+  private resolveTopicRun = async (
+    operationId: string,
+    localRun: { agentId: string; topicId: string } | undefined,
+    noAgentMessage: string,
+  ): Promise<{ agentId: string; topicId: string }> => {
+    const operation = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findOwnOperationById(operationId);
+    if (operation) {
+      if (operation.status !== 'running')
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The conversation run has already ended',
+        });
+      if (!operation.agentId || !operation.topicId)
+        throw new TRPCError({ code: 'BAD_REQUEST', message: noAgentMessage });
+      return { agentId: operation.agentId, topicId: operation.topicId };
+    }
+    const topic = localRun
+      ? await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
+          localRun.topicId,
+        )
+      : undefined;
+    if (!localRun || !topic || topic.agentId !== localRun.agentId)
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Run not found' });
+    return { agentId: localRun.agentId, topicId: topic.id };
+  };
+
+  /**
+   * Attach an existing goal to the topic of the run with this id, so it
+   * is supervised from there exactly as if it had been created there with
+   * `/goal`: the topic's agent becomes the goal agent, the topic
+   * becomes its `topic` subject and management topic. Graph, Tasks,
+   * budgets and status are kept. A change of goal agent moves unfinished Tasks
+   * the way `setAgent` does (unless `goalOnly`, or the goal has a dedicated
+   * executor). Returns a `turnToken` when the binding run was adopted as a
+   * planning turn.
+   */
+  bindTopic = async (
+    goalId: string,
+    operationId: string,
+    options?: {
+      force?: boolean;
+      goalOnly?: boolean;
+      /** A local desktop run's topic; see `resolveTopicRun`. */
+      localRun?: { agentId: string; topicId: string };
+    },
+  ) => {
+    const { agentId, topicId } = await this.resolveTopicRun(
+      operationId,
+      options?.localRun,
+      'Only a run in a topic with an agent can supervise a goal',
+    );
+    // A run row names its topic, but the topic must still be the caller's and
+    // the run's agent's: the binding makes that agent plan into it.
+    const topic = await new TopicModel(this.db, this.userId, this.workspaceId).findOwnTopicById(
+      topicId,
+    );
+    if (!topic || topic.agentId !== agentId)
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+    await assertAgentUsableBy(this.db, agentId, {
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+
+    // One transaction: the agent change and the Task moves it implies commit
+    // together. Committed apart, a failed move left the goal already on the new
+    // agent, and the retry — seeing no agent change — never moved the Tasks.
+    const { bound, reassignedTaskIds } = await this.db.transaction(async (tx) => {
+      const bound = await new GoalManagerService(tx, this.userId, this.workspaceId).bindTopic(
+        goalId,
+        { agentId, operationId, topicId },
+        { force: options?.force },
+      );
+      const reassignedTaskIds =
+        bound.previousAgentId === agentId
+          ? []
+          : await new GoalService(tx, this.userId, this.workspaceId).followGoalAgent(
+              bound.goal,
+              agentId,
+              options?.goalOnly,
+            );
+      return { bound, reassignedTaskIds };
+    });
+    return {
+      graph: await this.requireGraph(goalId),
+      previousSubject: bound.previousSubject,
+      reassignedTaskIds,
+      topicId,
+      turnToken: bound.turnToken,
+    };
   };
 
   create = async (input: CreateGoalGraphInput): Promise<GoalGraphSnapshot> => {
@@ -337,6 +502,28 @@ export class GoalService {
         manager: { instruction: managerOptions?.instruction, maxTurns: managerOptions?.maxTurns },
       };
     }
+    // Supervision is a creation invariant, not a creation option: every Goal
+    // recovers its own dropped dispatches, so a caller may tune the incident cap
+    // but never opt out. This is the single choke point — the CLI, the `/goal`
+    // tool, tRPC and REST all land here — so no client can create an
+    // unsupervised Goal. A legacy `enabled: false` is rejected rather than
+    // silently rewritten: the caller asked for the opposite of what it would
+    // get, and hiding that would make the surprise surface later, mid-run.
+    const requestedSupervision = config?.supervision;
+    if (requestedSupervision?.enabled === false)
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: 'Supervision is required for every goal and cannot be disabled',
+      });
+    config = {
+      ...config,
+      supervision: {
+        enabled: true,
+        ...(requestedSupervision?.maxIncidents === undefined
+          ? {}
+          : { maxIncidents: requestedSupervision.maxIncidents }),
+      },
+    };
     // A supplied requirement is the user-reviewed goal document. Criteria live
     // separately; only synthesize a document when the caller omitted one.
     const requirement =
@@ -515,6 +702,21 @@ export class GoalService {
       value: input.value,
     });
 
+    const manager = goal.config?.managerState;
+    if (
+      manager?.wait &&
+      point &&
+      new Date(point.observedAt).getTime() >= Date.parse(manager.startedAt)
+    ) {
+      await new GoalWaitService(this.db, this.userId, this.workspaceId).deliver(goalId, {
+        waitToken: manager.token,
+        eventId: point.id,
+        type: 'metric.observed',
+        key: input.key,
+        reference: series.id,
+        summary: `${input.key} = ${input.value} at ${point.observedAt}`,
+      });
+    }
     return { point, series, shouldAdvance: await this.reopenIfMeasurementCleared(goalId) };
   };
 
@@ -671,14 +873,15 @@ export class GoalService {
 
   graph = async (goalId: string) => {
     const graph = await this.requireGraph(goalId);
-    const [runHeartbeats, deliveredAt, acceptances, assignees, spend] = await Promise.all([
+    const [runHeartbeats, deliveredAt, acceptances, assignees, spend, report] = await Promise.all([
       this.collectRunHeartbeats(graph),
       this.collectDeliveredAt(graph),
       this.collectAcceptances(graph),
       this.collectAssignees(graph),
       this.resolveSpend(graph),
+      new GoalReportStore(this.db, this.userId, this.workspaceId).state(graph),
     ]);
-    return { ...graph, acceptances, assignees, deliveredAt, runHeartbeats, spend };
+    return { ...graph, acceptances, assignees, deliveredAt, report, runHeartbeats, spend };
   };
 
   /**
@@ -707,6 +910,23 @@ export class GoalService {
   };
 
   /**
+   * The coordinator calls a goal achieved once its own acceptance passes, but
+   * the person who asked for it has not said so yet. Ask them — wherever they
+   * are — through the inbox, tied to the Goal-level acceptance they sign.
+   */
+  private requestSignOff = async (graph: GoalGraphSnapshot) => {
+    const terminal = graph.nodes.find(
+      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && !!node.taskId,
+    );
+    if (!terminal) return;
+    const acceptance = (await this.collectAcceptances(graph))?.[terminal.id];
+    if (!acceptance) return;
+    // `openSignOff` re-reads the acceptance under a row lock: one the owner
+    // already signed asks nothing.
+    await this.briefs.openSignOff(graph.goal, acceptance.id);
+  };
+
+  /**
    * Verification state per task node.
    *
    * Every dispatched task already owns an Acceptance (`createResponsibleTask`
@@ -714,6 +934,11 @@ export class GoalService {
    * against — never the judgment. A reader could see that a task finished and
    * still have no idea whether it held up, which is the gap that made the page
    * feel unverifiable.
+   *
+   * Each level's tally rides along so the page can show its standing without
+   * opening it. That tally is counted from the same check union the level
+   * expands to (so a summary row can never contradict its own list), and it is
+   * one batched read, never one per acceptance — this runs on every graph poll.
    */
   private collectAcceptances = async (
     graph: GoalGraphSnapshot,
@@ -729,11 +954,18 @@ export class GoalService {
       taskNodes.map((node) => node.taskId),
     );
 
+    // An acceptance with no round yet is absent from the tally map, not zero —
+    // keep "no round" and "judged nothing" apart on the page.
+    const tallies = await this.acceptanceService.getCheckTalliesByAcceptances(
+      rows.map((row) => row.id),
+    );
+
     const result: Record<string, GoalNodeAcceptance> = {};
     for (const row of rows) {
       const nodeId = nodeByTaskId.get(row.subjectId);
       if (!nodeId) continue;
-      result[nodeId] = { id: row.id, status: row.status };
+      const checks = tallies.get(row.id);
+      result[nodeId] = { id: row.id, status: row.status, ...(checks ? { checks } : {}) };
     }
     return Object.keys(result).length > 0 ? result : undefined;
   };
@@ -1071,6 +1303,7 @@ export class GoalService {
         graph.goal.config?.supervisorState,
       ),
       new GoalManagerService(this.db, this.userId, this.workspaceId).usage(
+        graph.goal.id,
         graph.goal.config?.managerState,
       ),
     ]);
@@ -1099,6 +1332,10 @@ export class GoalService {
    * coordinator creates from here on goes to the new agent and — unless the
    * caller opts out — the unfinished ones move with it. A goal whose Tasks go
    * to a dedicated executor keeps them there; see `setTaskAgent`.
+   *
+   * The management conversation moves with supervision: it lives in the goal
+   * agent's own history, so it is re-created for the new agent here instead of
+   * being left pointing at the previous agent's topic until the next claim.
    */
   setAgent = async (
     goalId: string,
@@ -1112,12 +1349,31 @@ export class GoalService {
     const goal = await this.goalModel.update(goalId, { agentId });
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
 
-    const reassignedTaskIds =
-      options?.goalOnly || goal.config?.taskAgentId
-        ? []
-        : await this.reassignUnfinishedTasks(goalId, agentId);
-    return { goal, reassignedTaskIds };
+    // The receipt carries the management topic, so the caller must get the row
+    // with the migrated one — not the copy read before the handoff.
+    const migrated = await new GoalManagerService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).moveConversationTo(goalId, agentId);
+
+    const reassignedTaskIds = await this.followGoalAgent(goal, agentId, options?.goalOnly);
+    return {
+      goal: migrated ? ((await this.goalModel.findById(goalId)) ?? goal) : goal,
+      reassignedTaskIds,
+    };
   };
+
+  /**
+   * After the goal agent changed: when that agent also does the goal's Tasks,
+   * unfinished ones follow it unless the caller keeps them (`goalOnly`). A goal
+   * with a dedicated executor keeps its Tasks there.
+   */
+  private followGoalAgent = async (
+    goal: Pick<GoalItem, 'config' | 'id'>,
+    agentId: string,
+    goalOnly?: boolean,
+  ) => (goalOnly || goal.config?.taskAgentId ? [] : this.reassignUnfinishedTasks(goal.id, agentId));
 
   /**
    * Route the goal's Tasks to a dedicated executor, or back to the goal agent
@@ -1207,7 +1463,11 @@ export class GoalService {
     const graph = await this.requireGraph(goalId);
 
     const unfinishedNodes = graph.nodes.filter(
-      (node) => node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status),
+      (node) =>
+        node.kind === 'task' &&
+        !isGoalReportNode(graph, node) &&
+        node.taskId &&
+        !TERMINAL_NODE_STATUSES.has(node.status),
     );
     const unfinishedNodeIds = new Set(unfinishedNodes.map((node) => node.id));
     const unfinishedTaskIds = unfinishedNodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
@@ -1273,6 +1533,176 @@ export class GoalService {
       goal = (await this.resume(goalId)) ?? goal;
     }
     return { goal, restartedTaskIds };
+  };
+
+  /**
+   * Task access under the goal owner's principal — the identity the goal's
+   * coordinator creates and runs its Tasks as. Only for acting on Tasks already
+   * bound to this goal's nodes, after the caller's right to manage the goal has
+   * been checked.
+   */
+  private goalOwnerTaskScope = (goal: { userId: string }) =>
+    goal.userId === this.userId
+      ? {
+          taskModel: this.taskModel,
+          taskService: this.taskService,
+          taskTopicModel: this.taskTopicModel,
+        }
+      : {
+          taskModel: new TaskModel(this.db, goal.userId, this.workspaceId),
+          taskService: new TaskService(this.db, goal.userId, this.workspaceId),
+          taskTopicModel: new TaskTopicModel(this.db, goal.userId, this.workspaceId),
+        };
+
+  /**
+   * Retire Task nodes a person no longer wants run — a duplicated plan branch,
+   * work that landed elsewhere. Without this a stray node that never got a Task
+   * stays unfinished forever and the coordinator can never reach acceptance.
+   *
+   * Nodes are retired as one set: any unfinished Task still depending on a node
+   * in the set must be in the set too, otherwise it would wait on a
+   * prerequisite that will never resolve.
+   */
+  retireNodes = async (
+    goalId: string,
+    nodeIds: string[],
+    reason?: string,
+  ): Promise<{ retiredNodeIds: string[] }> => {
+    const graph = await this.requireGraph(goalId);
+    const targetIds = new Set(nodeIds);
+
+    const targets = [...targetIds].map((nodeId) => {
+      const node = graph.nodes.find((item) => item.id === nodeId);
+      if (!node) throw new TRPCError({ code: 'NOT_FOUND', message: `Node ${nodeId} not found` });
+      if (node.kind !== 'task') {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Node ${nodeId} is a ${node.kind}; only task nodes can be retired`,
+        });
+      }
+      // An already-retired node is accepted so an interrupted retirement (its
+      // fence landed, stopping the run did not) can be finished by retrying.
+      if (node.status !== 'retired' && TERMINAL_NODE_STATUSES.has(node.status)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: `Node ${nodeId} is already ${node.status}`,
+        });
+      }
+      // Retiring the terminal acceptance fails the whole Goal; that verdict
+      // belongs to its decision gate, not to a graph edit.
+      if (node.title === GOAL_ACCEPTANCE_TASK_TITLE) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'The Goal acceptance task cannot be retired',
+        });
+      }
+      return node;
+    });
+
+    const strandedIds = graph.edges
+      .filter(
+        (edge) =>
+          edge.kind === 'depends_on' &&
+          targetIds.has(edge.targetNodeId) &&
+          !targetIds.has(edge.sourceNodeId),
+      )
+      .map((edge) => graph.nodes.find((node) => node.id === edge.sourceNodeId))
+      .filter(
+        (node): node is NonNullable<typeof node> =>
+          !!node && node.kind === 'task' && !TERMINAL_NODE_STATUSES.has(node.status),
+      )
+      .map((node) => node.id);
+    if (strandedIds.length > 0) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: `Unfinished tasks depend on these nodes; retire them together: ${[...new Set(strandedIds)].join(', ')}`,
+      });
+    }
+
+    // Fence the nodes BEFORE looking for their Tasks. The snapshot above can
+    // miss a Task a concurrent tick is creating for a proposed node; once the
+    // node reads `retired`, `bindTask` (which only binds an `active` node) can
+    // no longer attach that Task, and the creator discards it.
+    for (const node of targets) {
+      if (node.status === 'retired') continue;
+      await this.graphModel.updateNodeStatus(goalId, node.id, 'retired', reason);
+    }
+
+    // Stop what the nodes are still running, so a retired node cannot keep
+    // spending or deliver into the Goal afterwards. Bound Tasks are read after
+    // the fence so a Task bound just before it is included.
+    const fenced = await this.requireGraph(goalId);
+    const taskIds = fenced.nodes.flatMap((node) =>
+      targetIds.has(node.id) && node.taskId ? [node.taskId] : [],
+    );
+    if (taskIds.length > 0) {
+      // The caller may be a workspace owner retiring a colleague's goal (the
+      // router authorizes that). The nodes' Tasks were created by the goal's
+      // coordinator, which runs as the goal's owner — and may be `private`,
+      // inherited from that owner's private agent — so reads under the caller's
+      // visibility would miss them and leave them running. Stop them under the
+      // goal owner's principal instead, limited to the Tasks bound to the nodes
+      // being retired.
+      const { taskModel, taskService, taskTopicModel } = this.goalOwnerTaskScope(fenced.goal);
+      const cancelTasks = async () => {
+        for (const id of taskIds) {
+          // CAS against the status just read; a runner flipping the Task to
+          // `running` in between makes it miss, so re-read and try again.
+          for (let attempt = 0; attempt < 3; attempt++) {
+            const [task] = await taskModel.findByIds([id]);
+            if (!task || ['canceled', 'completed', 'failed'].includes(task.status)) break;
+            if (await taskModel.updateStatusIfCurrent(id, task.status, 'canceled')) break;
+          }
+        }
+      };
+      // Cancel the Tasks FIRST: that is the fence a run still being dispatched
+      // checks under the Task's row lock before recording its operation, so a
+      // run started from here on stops itself (TaskRunnerService.runTask).
+      // Runs recorded before the fence are then found and stopped below.
+      await cancelTasks();
+      for (const topic of await taskTopicModel.findRunningByTaskIds(taskIds)) {
+        if (topic.topicId) await taskService.cancelTopic(topic.topicId);
+      }
+      // `cancelTopic` parks its Task as `paused`; settle them back to canceled.
+      await cancelTasks();
+    }
+
+    // A pending recovery gate on a retired node asks a question nobody needs
+    // answered any more; left pending it keeps the Goal parked in review.
+    for (const decision of fenced.decisions) {
+      if (decision.status !== 'pending') continue;
+      const gatedByTarget = fenced.edges.some(
+        (edge) =>
+          edge.kind === 'leads_to' &&
+          edge.targetNodeId === decision.nodeId &&
+          targetIds.has(edge.sourceNodeId),
+      );
+      if (gatedByTarget) {
+        await this.graphModel.cancelDecision(goalId, decision.id, 'Superseded by node retirement');
+      }
+    }
+
+    // Reopen a goal the coordinator parked because of what was just retired:
+    // `review` held by the retired node's gate, or `paused` by `no_frontier`
+    // (the stray branch left nothing runnable). A pause somebody chose — or
+    // one the coordinator took for another reason, like a budget — is left.
+    const after = await this.requireGraph(goalId);
+    const lastTransition = after.events.find((event) => event.entityType === 'goal');
+    const parkedOnNoFrontier =
+      after.goal.status === 'paused' &&
+      !after.goal.config?.pausedBy &&
+      lastTransition?.actorType !== 'user' &&
+      lastTransition?.reason === NO_FRONTIER_PAUSE_REASON;
+    if (after.goal.status === 'review' || parkedOnNoFrontier) {
+      const hasPendingDecision = after.decisions.some((decision) => decision.status === 'pending');
+      if (!hasPendingDecision) {
+        await this.transitionStatus(after.goal, 'running', 'nodes retired by user', 'user');
+      } else if (parkedOnNoFrontier) {
+        await this.transitionStatus(after.goal, 'review', 'nodes retired by user', 'user');
+      }
+    }
+
+    return { retiredNodeIds: targets.map((node) => node.id) };
   };
 
   setBudget = async (
@@ -1366,7 +1796,10 @@ export class GoalService {
     if (
       stoppedByExploration &&
       before.nodes.filter(
-        (node) => node.kind === 'task' && node.title !== GOAL_ACCEPTANCE_TASK_TITLE,
+        (node) =>
+          node.kind === 'task' &&
+          node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
+          !isGoalReportNode(before, node),
       ).length >= (goal.config?.exploration?.maxExperiments ?? 0)
     )
       return goal;
@@ -1384,13 +1817,177 @@ export class GoalService {
     const status = graph.decisions.some((decision) => decision.status === 'pending')
       ? 'review'
       : 'running';
-    await this.setPauseReason(goalId, undefined);
-    const goal = await this.transitionStatus(graph.goal, status, 'resumed by user', 'user');
-    return goal ?? graph.goal;
+    // Compare-and-set under the row lock `close` commits under: a resume that
+    // read the goal before a concurrent close ended it must not write its stale
+    // `running` over the ended goal, where the close already put interrupted
+    // Tasks back to `backlog` and they would dispatch again. Reopening an ended
+    // goal still works — that resume reads the ended status itself.
+    return this.db.transaction(async (tx) => {
+      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      if (current.status !== graph.goal.status) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The goal changed while it was being resumed; try again.',
+        });
+      }
+      await model.updatePauseReason(goalId, undefined);
+      if (current.status === status) return current;
+      const updated = await model.updateStatus(goalId, status);
+      await new GoalGraphModel(tx, this.userId, this.workspaceId)
+        .recordGoalStatus(goalId, current.status, status, 'resumed by user')
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      return updated ?? current;
+    });
+  };
+
+  /**
+   * A person ends the goal themselves — declaring it achieved or dropping it.
+   *
+   * Everything still spending on the goal is interrupted first — the main
+   * Agent's planning turn, the supervisor's diagnosis and every Task run — the
+   * same way `delete` does, because a terminal status alone only stops the
+   * coordinator from dispatching more. Reopening goes through `resume`, which
+   * accepts any status.
+   */
+  close = async (goalId: string, to: 'achieved' | 'canceled') => {
+    // Fence new claims before scanning: `dispatchWork` claims under this row
+    // lock and only while the goal reads `running`, so an advance overlapping
+    // the close cannot start a Task after the scan below. The pause is the
+    // person's, so no measurement lifts it if the close is refused later on.
+    await this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      // Only a goal that can still dispatch needs fencing.
+      if (!current || ['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) return;
+      await model.updateStatus(goalId, 'paused');
+      await model.updatePauseReason(goalId, 'user');
+      await new GoalGraphModel(db, this.userId, this.workspaceId).recordGoalStatus(
+        goalId,
+        current.status,
+        'paused',
+        'Stopping Goal before closing',
+      );
+    });
+    const graph = await this.requireGraph(goalId);
+
+    // Deliberately not swallowed, as in `delete`: an operation whose exit is
+    // unconfirmed keeps spending, and a goal reading "ended" would hide it. The
+    // goal stays paused so nothing new starts, and the person can retry.
+    const notClosed = (error: unknown) =>
+      new TRPCError({
+        cause: error,
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Could not stop the work still running for this goal, so it was not closed. Try again once the run is reachable.',
+      });
+    try {
+      if (graph.goal.config?.manager)
+        await new GoalManagerService(this.db, this.userId, this.workspaceId).stop(graph);
+      if (graph.goal.config?.supervision?.enabled || graph.goal.config?.supervisorState)
+        await new GoalSupervisorService(this.db, this.userId, this.workspaceId).stop(graph);
+    } catch (error) {
+      throw notClosed(error);
+    }
+
+    const unfinishedTaskIds = graph.nodes.flatMap((node) =>
+      node.kind === 'task' && node.taskId && !TERMINAL_NODE_STATUSES.has(node.status)
+        ? [node.taskId]
+        : [],
+    );
+    if (unfinishedTaskIds.length > 0) {
+      // Claims whose run has not been recorded yet. `dispatchWork` marks the
+      // Task `running` before `runTask` records the topic, so the scan below
+      // cannot see that run, and only a recorded run can be interrupted with
+      // confirmation. A fresh claim therefore refuses the close: the goal stays
+      // fenced, and a retry a moment later finds the run recorded and stops it
+      // the confirmed way. A claim older than the operation lease is one whose
+      // startup died; it is withdrawn to `backlog` under the task row lock the
+      // recording also takes, so a straggler recording stops its own run.
+      const staleBefore = Date.now() - resolveOperationLeaseTimeout(graph.goal);
+      let starting = false;
+      for (const taskId of unfinishedTaskIds) {
+        await this.db.transaction(async (tx) => {
+          const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
+          if (!(await taskModel.lockForUpdate(taskId))) return;
+          const task = await taskModel.findById(taskId);
+          if (task?.status !== 'running') return;
+          const recorded = await new TaskTopicModel(
+            tx,
+            this.userId,
+            this.workspaceId,
+          ).findRunningByTaskIds([taskId]);
+          if (recorded.length > 0) return;
+          if (task.updatedAt.getTime() > staleBefore) {
+            starting = true;
+            return;
+          }
+          await taskModel.updateStatusIfCurrent(taskId, 'running', 'backlog', { error: null });
+        });
+      }
+      if (starting)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'A run for this goal is still starting, so it was not closed. No new work will start; try again in a moment.',
+        });
+
+      const runningTopics = await this.taskTopicModel.findRunningByTaskIds(unfinishedTaskIds);
+      for (const topic of runningTopics) {
+        if (!topic.topicId) continue;
+        try {
+          await this.taskService.cancelTopic(topic.topicId);
+        } catch (error) {
+          throw notClosed(error);
+        }
+        // Reset right after its own interruption, as in `restart`: left `paused`
+        // it reads as parked on a person and a reopened goal waits on it. Doing
+        // it per run means a later failed interruption cannot strand the ones
+        // already stopped — a retry no longer sees them as running. CAS so a
+        // row a concurrent tick just moved is never yanked.
+        const task = await this.taskModel.findById(topic.taskId);
+        if (task && task.status !== 'completed') {
+          await this.taskModel.updateStatusIfCurrent(task.id, task.status, 'backlog', {
+            error: null,
+          });
+        }
+      }
+    }
+    // Commit under the same lock the fence took, and only if the fence still
+    // holds: a resume from another tab during the interruption pass lets an
+    // advance claim work this pass never saw, and ending the goal over it
+    // would leave that run spending on a goal reading "ended".
+    const reason = to === 'achieved' ? 'marked achieved by user' : 'canceled by user';
+    const goal = await this.db.transaction(async (db) => {
+      const model = new GoalModel(db, this.userId, this.workspaceId);
+      const current = await model.lockById(goalId);
+      if (!current) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      if (!['paused', 'achieved', 'failed', 'canceled'].includes(current.status)) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'The goal was resumed while it was being closed, so it was not closed.',
+        });
+      }
+      await model.updatePauseReason(goalId, undefined);
+      if (current.status === to) return current;
+      const updated = await model.updateStatus(goalId, to);
+      await new GoalGraphModel(db, this.userId, this.workspaceId)
+        .recordGoalStatus(goalId, current.status, to, reason)
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+      return updated;
+    });
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return goal;
   };
 
   decide = async (goalId: string, decisionId: string, optionId: string, resolution?: string) => {
     const graph = await this.requireGraph(goalId);
+    // A goal a person ended stays ended: a gate another tab still shows must
+    // not reopen it. Checked again under the lock before the status moves.
+    if (GOAL_ENDED_STATUSES.has(graph.goal.status)) {
+      throw new TRPCError({ code: 'CONFLICT', message: 'This goal has ended' });
+    }
     const decision = graph.decisions.find((item) => item.id === decisionId);
     if (!decision || decision.status !== 'pending') {
       throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
@@ -1398,6 +1995,12 @@ export class GoalService {
     if (decision.options?.length && !decision.options.some((option) => option.id === optionId)) {
       throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
     }
+    // The note *is* the answer for this option; an empty one would re-plan the
+    // goal on nothing and the question could never be asked again.
+    if (optionId === GOAL_CLARIFICATION_OPTION.answer && !resolution?.trim()) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
+    }
+    const chosen = decision.options?.find((option) => option.id === optionId);
     const resolved = await this.graphModel.resolveDecision(
       goalId,
       decisionId,
@@ -1418,25 +2021,190 @@ export class GoalService {
           source.taskId,
           true,
         );
-      if (optionId === 'retry' && source.taskId) {
+      const effect = decisionOptionEffect(chosen, source.title);
+      if (effect === 'retry' && source.taskId) {
         await this.taskModel.updateStatus(source.taskId, 'backlog', { error: null });
         await this.graphModel.updateNodeStatus(goalId, source.id, 'active', resolution);
-      } else if (
-        optionId === 'retire' ||
-        (optionId === 'fail' && source.title === GOAL_ACCEPTANCE_TASK_TITLE)
-      ) {
+        // The note is guidance for the next attempt, so it goes where that
+        // attempt reads: the Task's comments are part of every run prompt.
+        // On the node status alone it was recorded and never read again.
+        const guidance = decisionGuidance(decision.question, chosen, resolution);
+        if (guidance)
+          await this.taskModel.addComment({
+            authorUserId: this.userId,
+            content: guidance,
+            taskId: source.taskId,
+            userId: this.userId,
+          });
+      } else if (effect === 'retire') {
         await this.graphModel.updateNodeStatus(goalId, source.id, 'retired', resolution);
       }
     }
-    const terminalAcceptanceFailed =
-      source?.title === GOAL_ACCEPTANCE_TASK_TITLE &&
-      (optionId === 'retire' || optionId === 'fail');
-    await this.transitionStatus(
-      graph.goal,
-      terminalAcceptanceFailed ? 'failed' : 'running',
-      `decision "${decision.question}" resolved: ${optionId}`,
-    );
+    // Ending the terminal acceptance ends the Goal: `fail` is a verdict that
+    // the Goal failed, `retire` abandons it without one.
+    const terminalAcceptance = source?.title === GOAL_ACCEPTANCE_TASK_TITLE;
+    const terminalEffect = decisionOptionEffect(chosen, source?.title);
+    const nextStatus =
+      terminalAcceptance && terminalEffect === 'fail'
+        ? 'failed'
+        : terminalAcceptance && terminalEffect === 'retire'
+          ? 'canceled'
+          : 'running';
+    // Serialized with `close`, which commits under this row lock: a goal that
+    // ended while this answer was being written is left ended.
+    await this.db.transaction(async (tx) => {
+      const current = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goalId);
+      if (!current || GOAL_ENDED_STATUSES.has(current.status)) return;
+      if (current.status === nextStatus) return;
+      await new GoalModel(tx, this.userId, this.workspaceId).updateStatus(goalId, nextStatus);
+      await new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      })
+        .recordGoalStatus(
+          goalId,
+          current.status,
+          nextStatus,
+          `decision "${decision.question}" resolved: ${optionId}`,
+        )
+        .catch((error) => console.error('[GoalService] failed to record goal status:', error));
+    });
     return resolved;
+  };
+
+  /**
+   * The owner sent the Goal's delivery back (提出修改 on the Goal-level
+   * acceptance). The acceptance passing is what ended the Goal, so without a
+   * reopen the coordinator reads it as still achieved and nothing reworks it.
+   * The acceptance Task goes back to the queue — its next attempt reads the
+   * rejected round's comment through the prompt builder — and the Goal runs
+   * again. When that attempt is accepted the Goal is achieved anew, and the
+   * wrap-up writes a new report version for the new result.
+   *
+   * Returns the reopened Goal id, or undefined when `taskId` is not a settled
+   * Goal-level acceptance of a Goal that can still be reworked; a stopped Goal
+   * is continued from its result, not reopened by a sign-off.
+   */
+  reopenForChanges = async (taskId: string, comment?: string): Promise<string | undefined> => {
+    const goal = await this.goalModel.findByGraphTask(taskId);
+    if (!goal || !REOPENABLE_GOAL_STATUSES.has(goal.status)) return undefined;
+    const graph = await this.requireGraph(goal.id);
+    const node = graph.nodes.find(
+      (candidate) =>
+        candidate.kind === 'task' &&
+        candidate.taskId === taskId &&
+        candidate.title === GOAL_ACCEPTANCE_TASK_TITLE,
+    );
+    if (node?.status !== 'resolved') return undefined;
+
+    const reason = comment ? `Changes requested: ${comment}` : 'Changes requested';
+    await this.taskModel.updateStatus(taskId, 'backlog', { error: null });
+    await this.graphModel.updateNodeStatus(goal.id, node.id, 'active', reason);
+    await this.goalModel.update(goal.id, {
+      config: {
+        ...graph.goal.config,
+        changeRequest: {
+          ...(comment ? { comment } : {}),
+          requestedAt: new Date().toISOString(),
+          taskId,
+        },
+      },
+    });
+    await this.transitionStatus(graph.goal, 'running', reason, 'user');
+    return goal.id;
+  };
+
+  /**
+   * Answer a goal's clarification round in one go. Each answer resolves like a
+   * single `decide`; the caller schedules one advance afterwards, so the
+   * re-plan sees every answer instead of running after the first.
+   */
+  answerClarifications = async (
+    goalId: string,
+    answers: Array<{ decisionId: string; optionId: string; resolution?: string }>,
+  ) => {
+    const graph = await this.requireGraph(goalId);
+    const decisions = new Map(graph.decisions.map((decision) => [decision.id, decision]));
+
+    // Check the whole round before writing any of it: one bad answer used to
+    // leave the ones before it resolved, and the client's retry then failed on
+    // those. An answer already recorded as given is a retry, not a conflict.
+    const toResolve = answers.filter((answer) => {
+      const decision = decisions.get(answer.decisionId);
+      if (!decision) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Pending decision not found' });
+      }
+      if (decision.status === 'resolved' && decision.resolvedOptionId === answer.optionId) {
+        return false;
+      }
+      if (decision.status !== 'pending') {
+        throw new TRPCError({ code: 'CONFLICT', message: 'Decision was already resolved' });
+      }
+      if (decision.options?.length && !decision.options.some((o) => o.id === answer.optionId)) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Unknown decision option' });
+      }
+      if (answer.optionId === GOAL_CLARIFICATION_OPTION.answer && !answer.resolution?.trim()) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'This answer needs a note' });
+      }
+      return true;
+    });
+
+    for (const answer of toResolve) {
+      await this.decide(goalId, answer.decisionId, answer.optionId, answer.resolution);
+    }
+  };
+
+  /**
+   * Everything the approval island asks outside a goal's page: the gates
+   * waiting on the person (clarification rounds have their own form) and the
+   * finished goals waiting for their sign-off.
+   */
+  pendingForIsland = async () => {
+    const [decisions, signOffs] = await Promise.all([
+      this.goalModel.listPendingDecisions(),
+      this.briefs.listOpenSignOffs(),
+    ]);
+    return {
+      decisions: decisions.map((row) => ({ ...row, options: row.options ?? [] })),
+      signOffs,
+    };
+  };
+
+  /** Pending clarifications grouped by goal, for surfaces outside the goal page. */
+  pendingClarifications = async () => {
+    const rows = await this.goalModel.listPendingClarifications();
+    const byGoal = new Map<
+      string,
+      {
+        agentId: string | null;
+        goalId: string;
+        questions: Array<{
+          decisionId: string;
+          description: string | null;
+          options: GoalDecisionOption[];
+          question: string;
+        }>;
+        requirement: string | null;
+        title: string;
+      }
+    >();
+    for (const row of rows) {
+      const group = byGoal.get(row.goalId) ?? {
+        agentId: row.agentId,
+        goalId: row.goalId,
+        questions: [],
+        requirement: row.requirement,
+        title: row.goalTitle,
+      };
+      group.questions.push({
+        decisionId: row.decisionId,
+        description: row.description,
+        options: row.options ?? [],
+        question: row.question,
+      });
+      byGoal.set(row.goalId, group);
+    }
+    return [...byGoal.values()];
   };
 
   /**
@@ -1452,8 +2220,30 @@ export class GoalService {
    * runtime's event array.
    */
   tick = async (goalId: string, options?: GoalTickOptions): Promise<GoalTickResult> => {
+    const result = await this.tickOnce(goalId, options);
+    if (REPORT_CHECK_OUTCOMES.has(result.outcome)) await this.dispatchGoalReport(goalId);
+    return result;
+  };
+
+  /**
+   * The wrap-up branch. Runs after the move rather than as one: it only fires
+   * once the Goal-level acceptance has ended, and whatever happens to it — a
+   * dispatch that throws, a run that fails or times out — must not change the
+   * outcome the coordinator just reported or the Goal's status.
+   */
+  private dispatchGoalReport = async (goalId: string) => {
+    try {
+      await new GoalReportService(this.db, this.userId, this.workspaceId).dispatchIfDue(goalId);
+    } catch (error) {
+      console.error('[GoalService] wrap-up report dispatch failed:', error);
+    }
+  };
+
+  private tickOnce = async (goalId: string, options?: GoalTickOptions): Promise<GoalTickResult> => {
     const at = Date.now();
-    const graph = await this.requireGraph(goalId);
+    // The coordinator never sees the wrap-up report node: it runs after the
+    // Goal-level acceptance and does not take part in the Goal's status.
+    const graph = withoutGoalReport(await this.requireGraph(goalId));
     if (graph.goal.config?.manager) {
       // The system's own planner leads whenever the Goal has one: a main Agent is
       // the fallback for problems that planner cannot express, not a replacement
@@ -1552,17 +2342,16 @@ export class GoalService {
         });
       }
 
-      // The measured half of acceptance stopped the goal short of its delivery
-      // contract. Nothing to create and nothing to settle — the next
-      // observation is what moves it, which can be days away.
-      //
-      // Park it for the same reason `no_frontier` does: a `running` goal that
-      // always reports `no_progress` is picked by every sweep forever, and a
-      // long-horizon goal waiting on a measurement would sit in that state for
-      // its whole life — enough of them crowd genuinely stranded goals out of
-      // the newest-first scan limit. `recordObservation` resumes it when a
-      // measurement actually clears the gate.
+      // Managed Goals reconsider the same contract after a shortfall. Unmanaged
+      // Goals park until an observation clears the gate, keeping them out of
+      // the sweep while they have no action to take.
       case 'measured_acceptance': {
+        const replanning = await new GoalManagerService(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).reconsiderAcceptance(graph, move.message);
+        if (replanning) return observe(replanning);
         await this.setPauseReason(goalId, 'measured_acceptance');
         await this.transitionStatus(graph.goal, 'paused', move.message);
         effects.push({ type: 'goal_status', detail: 'paused' });
@@ -1609,7 +2398,7 @@ export class GoalService {
         // sweep's window. A `running` goal that always reports `no_progress` is
         // picked by every scan forever, and enough of them starve every other
         // stalled goal out of the newest-first limit.
-        await this.transitionStatus(graph.goal, 'paused', 'no eligible task to advance');
+        await this.transitionStatus(graph.goal, 'paused', NO_FRONTIER_PAUSE_REASON);
         effects.push({ type: 'goal_status', detail: 'paused' });
         return observe({ goalId, message: move.message, outcome: move.outcome });
       }
@@ -1645,9 +2434,7 @@ export class GoalService {
           }
 
           case 'recover_lease': {
-            return observe(
-              await this.resumeAbandonedTaskRecovery(graph, acting!.id, task, effects),
-            );
+            return observe(await this.recoverLostRun(graph, acting!.id, task, effects));
           }
 
           case 'recover_verification': {
@@ -1655,16 +2442,24 @@ export class GoalService {
           }
 
           case 'failure_decision': {
-            const waiting = await this.waitForDevice(graph, acting!.id, task, effects);
+            const waiting =
+              (await this.waitForDevice(graph, acting!.id, task, effects)) ??
+              (await this.waitForQuotaReset(graph, acting!.id, task, effects));
             if (waiting) return observe(waiting);
+            const held = await this.holdForMachineFailure(graph, acting!.id, task, effects);
+            if (held) return observe(held);
             const supervision = await new GoalSupervisorService(
               this.db,
               this.userId,
               this.workspaceId,
             ).reviewFailure(graph, acting!.id, task);
             if (supervision) return observe(supervision);
+            // A machine failure the supervisor gave up on still asks for a fix,
+            // not a judgment about the work.
             return observe(
-              await this.gateOrTakeOver(graph, acting!.id, task.id, move.message, effects),
+              await this.gateOrTakeOver(graph, acting!.id, task.id, move.message, effects, {
+                machine: isMachineFailureClass(classifyGoalFailure(task.error).class),
+              }),
             );
           }
 
@@ -1732,6 +2527,11 @@ export class GoalService {
         await this.coordinatorGraph.updateNodeStatus(goalId, node.id, 'resolved', 'Goal achieved');
         effects.push({ detail: 'resolved', nodeId: node.id, type: 'node_status' });
       }
+      // Ask for the sign-off before the goal turns terminal: nothing ticks an
+      // achieved goal again, so a failed write after the transition would lose
+      // the ask for good. Failing here leaves the goal open for the next tick,
+      // and the write is idempotent per acceptance.
+      await this.requestSignOff(graph);
       await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
       effects.push({ type: 'goal_status', detail: 'achieved' });
       return { goalId, message: move.message, outcome: 'achieved' };
@@ -1995,6 +2795,18 @@ export class GoalService {
       };
     }
 
+    // The goal was paused or ended (a close fenced it) while this advance was
+    // deciding: start nothing and do not reopen it.
+    if (recovery.outcome === 'goal-stopped') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Goal stopped while recovery was being decided',
+        nodeId,
+        outcome: 'no_progress',
+        taskId: task.id,
+      };
+    }
+
     // Nothing failed: somebody settled the Task while this advance was deciding.
     // Opening a gate would ask them to judge their own decision.
     if (recovery.outcome === 'settled') {
@@ -2012,7 +2824,9 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted'
           : 'Automatic recovery could not start the next attempt';
-    return this.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects);
+    return this.gateOrTakeOver(graph, nodeId, task.id, exhaustedReason, effects, {
+      machine: recovery.outcome === 'spawn-failed',
+    });
   };
 
   /** Claim the task for dispatch and start its run. */
@@ -2247,7 +3061,40 @@ export class GoalService {
     });
     if (!reclaimed) return undefined;
 
+    return this.recoverLostRun(graph, nodeId, task, effects);
+  };
+
+  /**
+   * Recover a Task whose run was lost rather than judged — its lease expired or
+   * the gateway watchdog abandoned it.
+   *
+   * A run lost because its device went offline mid-run is the same failure as a
+   * dispatch that never reached the device, only noticed later: the laptop went
+   * to sleep with the run on it. It is re-marked as an offline run so it neither
+   * spends the attempt budget nor retries into a device that is still gone.
+   */
+  private recoverLostRun = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    effects: GoalAdvanceEffect[] = [],
+  ): Promise<GoalTickResult> => {
+    await this.markRunLostToOfflineDevice(task.id);
+    const held = await this.holdForOfflineDevice(graph, nodeId, task, effects);
+    if (held) return held;
     return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+  };
+
+  /**
+   * Re-mark the Task's latest lost run as an offline run when the device it ran
+   * on is offline now. Only a device the gateway can vouch for counts: without
+   * presence the run stays a charged attempt, exactly as before.
+   */
+  private markRunLostToOfflineDevice = async (taskId: string) => {
+    const [latest] = await this.taskTopicModel.findWithHandoff(taskId, 1);
+    if (!latest?.topicId || (latest.status !== 'timeout' && latest.status !== 'failed')) return;
+    if ((await this.readRunDevicePresence(latest)) !== 'offline') return;
+    await this.taskTopicModel.updateStatus(taskId, latest.topicId, DEVICE_OFFLINE_RUN_STATUS);
   };
 
   private resumeAbandonedTaskRecovery = async (
@@ -2299,6 +3146,18 @@ export class GoalService {
       };
     }
 
+    // The goal was paused or ended (a close fenced it) while this advance was
+    // deciding: start nothing and do not reopen it.
+    if (recovery.outcome === 'goal-stopped') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Goal stopped while recovery was being decided',
+        nodeId,
+        outcome: 'no_progress',
+        taskId: task.id,
+      };
+    }
+
     // Nothing failed: somebody settled the Task while this advance was deciding.
     // Opening a gate would ask them to judge their own decision.
     if (recovery.outcome === 'settled') {
@@ -2316,7 +3175,79 @@ export class GoalService {
         : recovery.outcome === 'exhausted-rounds'
           ? 'Task attempt budget was exhausted after an operation was abandoned'
           : 'Automatic recovery could not restart an abandoned operation';
-    return this.gateOrTakeOver(graph, nodeId, task.id, reason, effects);
+    return this.gateOrTakeOver(graph, nodeId, task.id, reason, effects, {
+      machine: recovery.outcome === 'spawn-failed',
+    });
+  };
+
+  /** The machine-recovery plan for a paused Task, over its runs since a person last answered its gate. */
+  private planMachineRecoveryFor = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    now = new Date(),
+  ) => {
+    // A person's Retry restarts the schedule they overrode.
+    const answeredAt = lastAnsweredGateAt(graph, nodeId);
+    const runs = (await this.taskTopicModel.findByTaskId(task.id)).filter(
+      (run) => !answeredAt || new Date(run.updatedAt) > answeredAt,
+    );
+    return planMachineRecovery({ error: task.error, now, runs, taskUpdatedAt: task.updatedAt });
+  };
+
+  /**
+   * Recover a Task stopped by a machine problem without asking anyone to judge it
+   * (see `planMachineRecovery`): a usage limit is waited out until it resets, a
+   * transport fault is retried a few times, and neither run spends the attempt
+   * budget. A broken setup — or a schedule that ran out — opens a machine gate
+   * that says what to fix. Judgment failures return nothing and keep the
+   * supervisor and the ordinary gate.
+   */
+  private holdForMachineFailure = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    effects: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult | undefined> => {
+    if (task.status !== 'paused' || !task.error) return;
+    // A supervised goal already has an owner for transport faults: the supervisor
+    // diagnoses and retries them (see `recoveryEligibility`), so the deterministic
+    // schedule stays out of its way rather than racing it for the same Task.
+    const supervised = !!graph.goal.config?.supervision?.enabled || !!graph.goal.config?.manager;
+    if (supervised && classifyGoalFailure(task.error).class === 'transient') return;
+    const now = new Date();
+    const plan = await this.planMachineRecoveryFor(graph, nodeId, task, now);
+    if (plan.action === 'none') return;
+    // A pause somebody made is theirs; the error text it kept proves nothing.
+    if (statusAuthoredByActor(await this.taskModel.getActivities(task.id, 20), task.status)) return;
+
+    if (plan.action === 'gate')
+      return this.gateOrTakeOver(graph, nodeId, task.id, plan.reason, effects, { machine: true });
+    if (plan.action === 'retry')
+      return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+
+    // The sweep re-ticks a held goal, but only on its own cadence; the tick that
+    // first sees the failure also books an advance for the retry time. Later
+    // sweep ticks do not, so a long hold does not pile up queued advances.
+    if (now.getTime() - plan.failedAt.getTime() <= MACHINE_HOLD_SCHEDULE_WINDOW_MS) {
+      await scheduleGoalAdvance({
+        delay: Math.max(
+          1,
+          Math.min(MAX_ADVANCE_DELAY_S, Math.ceil((plan.retryAt.getTime() - now.getTime()) / 1000)),
+        ),
+        goalId: graph.goal.id,
+        trigger: 'wake',
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+      });
+    }
+    return {
+      goalId: graph.goal.id,
+      message: `Task ${task.identifier}: ${plan.message}`,
+      nodeId,
+      outcome: 'waiting_external',
+      taskId: task.id,
+    };
   };
 
   /**
@@ -2324,18 +3255,9 @@ export class GoalService {
    *
    * A sleeping laptop or a restarting desktop app is the usual cause, and it
    * fixes itself: the gate it used to open waited hours for someone to press
-   * Retry once the device had long reconnected. While that device is offline
-   * the goal simply waits — the sweep keeps asking — and spends nothing. Once
-   * it is back, the Task retries through the ordinary recovery path, so a
-   * binding that stays broken still ends at the attempt budget's gate. Past the
-   * reconnect window a person is asked after all, since the device is not
-   * coming back on its own.
-   *
-   * Presence is read for the exact device the failed dispatch was routed to,
-   * in the pool it was routed through: a workspace goal may run on a personal
-   * device, and another device coming online proves nothing about this one.
-   * Without a recorded route, or without a device gateway at all, there is
-   * nothing to wait for and the existing failure path decides.
+   * Retry once the device had long reconnected. While the device is offline the
+   * goal waits — the sweep keeps asking — and spends nothing; the retry then
+   * goes through the ordinary recovery path.
    */
   private waitForDevice = async (
     graph: GoalGraphSnapshot,
@@ -2344,29 +3266,178 @@ export class GoalService {
     effects: GoalAdvanceEffect[],
   ): Promise<GoalTickResult | undefined> => {
     if (task.status !== 'paused' || !isDeviceUnavailableFailure(task.error)) return;
-    if (!deviceGateway.isConfigured) return;
-    if (new Date(task.updatedAt).getTime() < Date.now() - DEVICE_RECONNECT_WAIT_MS) return;
+    const held = await this.holdForOfflineDevice(graph, nodeId, task, effects);
+    if (held) return held;
+    return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
+  };
 
-    const [latestRun] = await this.taskTopicModel.findWithHandoff(task.id, 1);
-    const operation = latestRun?.operationId
-      ? await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
-          latestRun.operationId,
-        )
-      : undefined;
-    const route = readDeviceDispatchRoute(operation?.error);
-    if (!route) return;
-
-    const devices = await deviceGateway.queryDeviceList(route.userId, route.workspaceId);
-    if (devices.some((device) => device.deviceId === route.deviceId))
+  /**
+   * Hold a Task whose run a usage window refused until that window reopens.
+   *
+   * An external Agent past its session limit refuses every run until the reset
+   * its error reports. The supervisor used to read that as "spending requires
+   * user action" and open a gate, which then waited on a person to press Retry
+   * long after the window had reset. The coordinator now waits out the reset
+   * itself and retries through the ordinary recovery path, which charges the
+   * attempt as before. That bounds a window that keeps refusing.
+   */
+  private waitForQuotaReset = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    effects: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult | undefined> => {
+    if (task.status !== 'paused') return;
+    const [latest] = await this.taskTopicModel.findWithHandoff(task.id, 1);
+    if (!latest?.operationId) return;
+    const operation = await new AgentOperationModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).findById(latest.operationId);
+    const failure = classifyRunFailure(operation?.error, task.error ?? '');
+    if (failure.kind !== 'quota_reset') return;
+    // A refusal whose text names the limit is recorded as an uncharged run
+    // (`resolveFailedRunStatus`), so the attempt budget no longer bounds a window
+    // that keeps refusing; the uncharged quota schedule does. Once it is spent,
+    // fall through and `holdForMachineFailure` asks a person to fix the account.
+    if (
+      classifyGoalFailure(task.error).class === 'quota' &&
+      (await this.planMachineRecoveryFor(graph, nodeId, task)).action === 'gate'
+    )
+      return;
+    const retryAt = failure.resetsAt! + QUOTA_RESET_MARGIN_MS;
+    if (retryAt <= Date.now()) {
+      // The retry is a paid run, and recovery only checks the Task's own attempts
+      // and cost. Past the Goal's deadline, rounds or spend it is not this path's
+      // to start: ordinary failure handling takes it, and that gates it.
+      const budget = await this.evaluateBudget(graph.goal, graph);
+      if (budget.costLimitReached || budget.roundLimitReached || budget.deadlinePassed) return;
       return this.resumeAbandonedTaskRecovery(graph, nodeId, task, effects);
-
+    }
+    // The sweep would get here too, but only on its own cadence; the reset is a
+    // known time, so ask for that tick directly. One wake per Goal: the claim
+    // fails while an earlier-or-equal wake is still pending. A reset further out
+    // than the queue's longest delay is re-armed when the capped wake fires.
+    const target = new Date(retryAt).toISOString();
+    const armed = GoalWaitService.arm(target);
+    // Claim on the reset itself, not on `armedUntil`: that rounds the delay up to
+    // whole seconds from each tick's own clock, so two ticks before the same reset
+    // would read as different wakes. Only a capped wake stores its earlier fire time.
+    const capped = Date.parse(armed.armedUntil) < retryAt;
+    if (
+      await new GoalModel(this.db, this.userId, this.workspaceId).armQuotaRetryWake(
+        graph.goal.id,
+        capped ? armed.armedUntil : target,
+      )
+    )
+      await new GoalWaitService(this.db, this.userId, this.workspaceId).schedule(
+        graph.goal.id,
+        armed.delay,
+      );
     return {
       goalId: graph.goal.id,
-      message: `Task ${task.identifier} is waiting for its device to reconnect`,
+      message: `Task ${task.identifier} is waiting for its usage window to reset at ${new Date(retryAt).toISOString()}`,
       nodeId,
       outcome: 'waiting_external',
       taskId: task.id,
     };
+  };
+
+  /**
+   * The offline retry schedule. Offline runs are not charged to the attempt
+   * budget, so this is what bounds them: each consecutive one pushes the next
+   * retry further out (see `nextDeviceOfflineRetryAt`), and once the offline
+   * retries are spent a person is asked. Presence only brings a retry forward —
+   * a device seen back online is retried at once — so a deployment without a
+   * device gateway, or a run with no recorded device, still retries on schedule.
+   *
+   * Returns nothing when the Task should retry now.
+   */
+  private holdForOfflineDevice = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    task: TaskItem,
+    effects: GoalAdvanceEffect[],
+  ): Promise<GoalTickResult | undefined> => {
+    const runs = await this.taskTopicModel.findByTaskId(task.id);
+    const offlineRuns = countConsecutiveDeviceOfflineRuns(runs);
+    // A dispatch failure is an offline run even when it left no run behind.
+    if (!offlineRuns && !isDeviceUnavailableFailure(task.error)) return;
+
+    const lastFailureAt = new Date(offlineRuns ? runs[0].updatedAt : task.updatedAt);
+    const retryAt = nextDeviceOfflineRetryAt(offlineRuns, lastFailureAt);
+    if (!retryAt)
+      return this.gateOrTakeOver(graph, nodeId, task.id, DEVICE_OFFLINE_GATE_REASON, effects, {
+        machine: true,
+      });
+    if (retryAt.getTime() <= Date.now()) return;
+
+    const [latest] = await this.taskTopicModel.findWithHandoff(task.id, 1);
+    if (latest && (await this.readRunDevicePresence(latest)) === 'online') return;
+
+    return {
+      goalId: graph.goal.id,
+      message: `Task ${task.identifier} is waiting for its device to reconnect; next retry at ${retryAt.toISOString()}`,
+      nodeId,
+      outcome: 'waiting_external',
+      taskId: task.id,
+    };
+  };
+
+  /**
+   * Whether the device a run was routed to is connected right now.
+   *
+   * Presence is read for the exact device the run used, in the pool it was
+   * routed through: a workspace goal may run on a personal device, and another
+   * device coming online proves nothing about this one. A failed dispatch
+   * records its route on the operation error; a run that got going leaves its
+   * device on the topic. A topic bound to a device without a recorded pool is
+   * looked up in every pool this goal can route through.
+   */
+  private readRunDevicePresence = async (run: {
+    metadata?: ChatTopicMetadata | null;
+    operationId?: string | null;
+  }): Promise<'offline' | 'online' | 'unknown'> => {
+    if (!deviceGateway.isConfigured) return 'unknown';
+
+    const operation = run.operationId
+      ? await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
+          run.operationId,
+        )
+      : undefined;
+    const dispatchRoute = readDeviceDispatchRoute(operation?.error);
+    const running = run.metadata?.runningOperation;
+    const runningDevice =
+      running?.deviceId && running.operationId === run.operationId ? running : undefined;
+
+    let deviceId: string | undefined;
+    let pools: { userId: string; workspaceId?: string }[];
+    if (dispatchRoute) {
+      deviceId = dispatchRoute.deviceId;
+      pools = [{ userId: dispatchRoute.userId, workspaceId: dispatchRoute.workspaceId }];
+    } else if (runningDevice) {
+      deviceId = runningDevice.deviceId;
+      pools = [
+        {
+          userId: runningDevice.deviceUserId ?? this.userId,
+          workspaceId: runningDevice.deviceWorkspaceId,
+        },
+      ];
+    } else {
+      deviceId = run.metadata?.boundDeviceId;
+      pools = [
+        { userId: this.userId },
+        ...(this.workspaceId ? [{ userId: this.userId, workspaceId: this.workspaceId }] : []),
+      ];
+    }
+    if (!deviceId) return 'unknown';
+
+    for (const pool of pools) {
+      const devices = await deviceGateway.queryDeviceList(pool.userId, pool.workspaceId);
+      if (devices.some((device) => device.deviceId === deviceId)) return 'online';
+    }
+    return 'offline';
   };
 
   private buildTaskInstruction = (
@@ -2423,12 +3494,41 @@ export class GoalService {
       }
 
       const generator = new GoalCriteriaGeneratorService(this.db, this.userId, this.workspaceId);
-      const plan = await generator.decompose({ requirement }).catch(() => undefined);
+      const clarifications = collectClarificationAnswers(graph);
+      const plan = await generator
+        .decompose({ clarifications, requirement })
+        .catch(() => undefined);
+      // A graph without a problem node has nowhere to hang a question, so its
+      // questions are planned around as assumptions like a re-plan's would be.
+      const understanding = plan
+        ? normalizeUnderstanding(
+            plan,
+            hasAskedClarification(graph) || !problem,
+            clarifications.map((item) => item.question),
+          )
+        : undefined;
 
       const draftTasks: GoalDecompositionDraft['tasks'] = plan?.tasks ?? [
-        { instruction: problem?.description ?? requirement, title: graph.goal.title },
+        {
+          // The user's answers are authoritative; a planner failure after the
+          // clarification round must not start the work without them.
+          instruction: [
+            // After a clarification round, scope the work by the original request
+            // plus the answers — never by a summary a planner wrote earlier.
+            clarifications.length > 0 ? requirement : (problem?.description ?? requirement),
+            clarifications.length > 0
+              ? `Answered clarifications (authoritative):\n${clarifications
+                  .map((item) => `- Q: ${item.question}\n  A: ${item.answer}`)
+                  .join('\n')}`
+              : undefined,
+          ]
+            .filter(Boolean)
+            .join('\n\n'),
+          title: graph.goal.title,
+        },
       ];
 
+      const askedDecisions: { id: string; question: string }[] = [];
       // Only the current lease owner may commit. The model call above does not
       // hold a database lock; all graph changes below share one short transaction.
       const committed = await this.db.transaction(async (tx) => {
@@ -2457,10 +3557,56 @@ export class GoalService {
           return undefined;
         const committedEffects: GoalAdvanceEffect[] = [];
 
+        const asking = Boolean(understanding?.ask.length && currentProblem);
         if (plan && currentProblem) {
           // The node's description becomes the planner's own words for the core
-          // question — not the acceptance boilerplate the goal row keeps.
-          await writer.updateNodeDescription(goalId, currentProblem.id, plan.problemStatement);
+          // question — not the acceptance boilerplate the goal row keeps. A plan
+          // that stops to ask commits no tasks, so it keeps the user's own words:
+          // the re-plan, or its fallback, must still read the original request.
+          await writer.updateNodeDescription(
+            goalId,
+            currentProblem.id,
+            asking ? (currentProblem.description ?? plan.problemStatement) : plan.problemStatement,
+            understanding && UNDERSTANDING_CONFIDENCE[understanding.level],
+          );
+        }
+        if (understanding) {
+          await goalModel.updateUnderstanding(goalId, {
+            assumptions: understanding.assumptions,
+            level: understanding.level,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+
+        // A question only the user can answer is asked before anything runs:
+        // Tasks planned on a wrong reading of the goal are the most expensive
+        // way to find out. No Task is created, so the next plan — made with the
+        // answers — starts from the same empty graph.
+        if (asking && understanding && currentProblem) {
+          for (const question of understanding.ask) {
+            const node = await writer.createNode(goalId, {
+              description: question.impact,
+              kind: 'decision',
+              status: 'waiting',
+              title: GOAL_CLARIFICATION_TITLE,
+            });
+            if (!node) throw new Error('Failed to open a clarification decision');
+            await writer.createEdge(goalId, currentProblem.id, node.id, 'leads_to');
+            const decision = await writer.createDecision(goalId, node.id, {
+              authority: 'user',
+              options: clarificationOptions(question),
+              question: question.question,
+              requestedUserId: this.userId,
+            });
+            if (decision) askedDecisions.push({ id: decision.id, question: question.question });
+            committedEffects.push({
+              detail: question.question,
+              nodeId: currentProblem.id,
+              targetId: node.id,
+              type: 'opened_decision',
+            });
+          }
+          return committedEffects;
         }
 
         const createdIds: string[] = [];
@@ -2519,6 +3665,20 @@ export class GoalService {
       }
       effects.push(...committed);
 
+      const asked = committed.filter((effect) => effect.type === 'opened_decision').length;
+      if (asked > 0) {
+        await this.briefs.openClarification(
+          graph.goal,
+          askedDecisions.map((decision) => decision.id),
+          askedDecisions.map((decision) => decision.question),
+        );
+        return {
+          goalId,
+          message: `Asked ${asked} clarification question${asked > 1 ? 's' : ''} before planning`,
+          outcome: 'advanced' as const,
+        };
+      }
+
       return {
         goalId,
         message: plan
@@ -2576,6 +3736,17 @@ export class GoalService {
    * linked at their newest version, so a document refined across rounds is one
    * deliverable with a history rather than several deliverables.
    *
+   * Two rules keep one deliverable from being declared once per task:
+   *
+   * - **Created only.** A Work none of the task's runs created is someone
+   *   else's artifact this task happened to revise. A shared backlog document
+   *   that every run appends to is the case that surfaced this: without the
+   *   rule the document is declared as the output of every task in the goal.
+   * - **Claimed once per goal.** The first node to deliver a Work owns it. A
+   *   later node that revises it adds no link and no lifecycle event, so the
+   *   history reads "C1-c delivered the backlog" instead of repeating the same
+   *   deliverable under each task.
+   *
    * `task` Works are deliberately excluded: the responsible task's own Work is
    * the execution container and the caller already links it. `file` Works are
    * opt-in at the registry (conversation lists do not want every exported
@@ -2599,14 +3770,29 @@ export class GoalService {
       rootOperationIds: operationIds,
     });
 
-    const newestByWork = new Map<string, WorkVersionEventItem>();
+    const claimedWorkIds = await this.coordinatorGraph.listProducedWorkIds(goalId);
+
+    // Per Work: whether the task's runs created it, and the newest version they
+    // registered. `created` is sticky across the run's versions — a document
+    // written in round one and revised in round three is still this task's
+    // deliverable, while one that was only ever revised is not.
+    const harvestByWork = new Map<string, { created: boolean; item: WorkVersionEventItem }>();
     for (const item of Object.values(byOperation).flat()) {
       if (item.type === 'task') continue;
-      const seen = newestByWork.get(item.id);
-      if (!seen || seen.version.createdAt < item.version.createdAt) newestByWork.set(item.id, item);
+      const seen = harvestByWork.get(item.id);
+      const created = item.version.changeType === 'created';
+      if (!seen) {
+        harvestByWork.set(item.id, { created, item });
+        continue;
+      }
+      harvestByWork.set(item.id, {
+        created: seen.created || created,
+        item: seen.item.version.createdAt < item.version.createdAt ? item : seen.item,
+      });
     }
 
-    for (const item of newestByWork.values()) {
+    for (const [workId, { created, item }] of harvestByWork) {
+      if (!created || claimedWorkIds.has(workId)) continue;
       const link = await this.coordinatorGraph.attachWorkVersion(
         goalId,
         nodeId,
@@ -2631,6 +3817,18 @@ export class GoalService {
     taskId: string,
     effects: GoalAdvanceEffect[] = [],
   ): Promise<GoalTickResult> => {
+    // `graph` can predate a retirement that landed while this tick ran. A
+    // retired node's late output must not enter the Goal as a finding or
+    // deliverable (and `updateNodeStatus` refuses to revive the node).
+    if ((await this.coordinatorGraph.getNodeStatus(graph.goal.id, nodeId)) === 'retired') {
+      return {
+        goalId: graph.goal.id,
+        message: 'Node was retired; the task outcome is discarded',
+        nodeId,
+        outcome: 'no_progress',
+        taskId,
+      };
+    }
     const existingFinding = graph.edges.some(
       (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
     );
@@ -2659,7 +3857,18 @@ export class GoalService {
       type: 'node_status',
       detail: 'resolved',
     });
-    if (completedWork?.currentVersionId) {
+    // The container link is written once per node — at dispatch, or by
+    // `ensureTaskWorkVersion` for a node that never got one. Re-linking the
+    // completed version only appended a second identical row for the same task:
+    // the goal's task-container links were one per settle round instead of one
+    // per node, which is where half of the graph's hidden Work links came from.
+    const containerLinked = graph.workVersions.some(
+      (link) =>
+        link.nodeId === nodeId &&
+        link.relation === 'produced' &&
+        link.work?.workId === completedWork?.id,
+    );
+    if (completedWork?.currentVersionId && !containerLinked) {
       await this.coordinatorGraph.attachWorkVersion(
         graph.goal.id,
         nodeId,
@@ -2679,16 +3888,21 @@ export class GoalService {
     );
     if (!existingFinding) {
       const handoff = latest?.handoff as TaskTopicHandoff | null;
+      const title =
+        handoff?.title ??
+        handoff?.summary ??
+        `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`;
+      // The finding is written by whoever did the work. Recorded as the owner,
+      // it read as something the person had said themselves.
+      const author = (await this.taskModel.findById(taskId))?.assigneeAgentId ?? graph.goal.agentId;
       const finding = await this.coordinatorGraph.createNode(graph.goal.id, {
         confidence: 1,
+        createdByAgentId: author ?? undefined,
         description: handoff?.content ?? handoff?.summary ?? undefined,
         kind: 'finding',
         scopeId: experimentOwner(graph, nodeId),
         status: 'resolved',
-        title:
-          handoff?.title ??
-          handoff?.summary ??
-          `Completed: ${graph.nodes.find((node) => node.id === nodeId)?.title}`,
+        title,
       });
       if (finding) {
         effects.push({ detail: 'finding', nodeId, targetId: finding.id, type: 'created_node' });
@@ -2733,6 +3947,7 @@ export class GoalService {
     taskId: string,
     reason: string,
     effects: GoalAdvanceEffect[] = [],
+    gate: FailureGateOptions = {},
   ): Promise<GoalTickResult> => {
     const takeover = await new GoalManagerService(this.db, this.userId, this.workspaceId).takeOver(
       graph,
@@ -2743,14 +3958,22 @@ export class GoalService {
     // said: the person answering should see the Agent's reasoning, not just the
     // coordinator's own reason for stopping.
     const answered = answeredProblem(graph.goal.config?.managerState);
-    const diagnosis =
-      answered?.key === problemKey({ reason, taskId }) ? answered.reason.slice(0, 600) : undefined;
+    const own = answered?.key === problemKey({ reason, taskId }) ? answered : undefined;
+    // An Agent that asked a real question gets it asked as written, with its
+    // own answers as the buttons; its diagnosis is what the gate stands on.
+    if (own?.ask)
+      return this.openFailureDecision(graph, nodeId, taskId, reason, effects, {
+        ...gate,
+        ask: { ...own.ask, diagnosis: own.reason },
+      });
+    const diagnosis = own ? own.reason.slice(0, 600) : undefined;
     return this.openFailureDecision(
       graph,
       nodeId,
       taskId,
       diagnosis ? `${reason} — main Agent: ${diagnosis}` : reason,
       effects,
+      gate,
     );
   };
 
@@ -2760,6 +3983,7 @@ export class GoalService {
     taskId: string,
     reason: string,
     effects: GoalAdvanceEffect[] = [],
+    gate: FailureGateOptions = {},
   ): Promise<GoalTickResult> => {
     return this.db.transaction(async (tx) => {
       const currentGoal = await new GoalModel(tx, this.userId, this.workspaceId).lockById(
@@ -2787,7 +4011,7 @@ export class GoalService {
           taskId,
         };
       }
-      return service.openFailureDecisionLocked(current, nodeId, taskId, reason, effects);
+      return service.openFailureDecisionLocked(current, nodeId, taskId, reason, effects, gate);
     });
   };
 
@@ -2797,42 +4021,78 @@ export class GoalService {
     taskId: string,
     reason: string,
     effects: GoalAdvanceEffect[],
+    gate: FailureGateOptions = {},
   ): Promise<GoalTickResult> => {
     const existingDecisionNode = graph.edges
       .filter((edge) => edge.sourceNodeId === nodeId && edge.kind === 'leads_to')
       .map((edge) => graph.nodes.find((node) => node.id === edge.targetNodeId))
       .find((node) => node?.kind === 'decision' && node.status !== 'resolved');
     if (!existingDecisionNode) {
+      const terminalAcceptance =
+        graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
+        GOAL_ACCEPTANCE_TASK_TITLE;
+      // The terminal acceptance gate keeps its own three-way shape: ending the
+      // Goal is a verdict even when a machine problem is what stopped it.
+      const machine = !!gate.machine && !terminalAcceptance;
+      const { ask } = gate;
       const node = await this.coordinatorGraph.createNode(graph.goal.id, {
-        description: reason,
+        // What the gate stands on: the main Agent's diagnosis when it asked,
+        // else the coordinator's own reason for stopping.
+        description: ask ? `${reason}\n\n${ask.diagnosis}` : reason,
         kind: 'decision',
         status: 'waiting',
-        title: 'Choose how to recover failed task',
+        title: machine ? GOAL_MACHINE_GATE_TITLE : 'Choose how to recover failed task',
         scopeId: experimentOwner(graph, nodeId),
       });
       if (node) {
         effects.push({ detail: reason, nodeId, targetId: node.id, type: 'opened_decision' });
         await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, node.id, 'leads_to');
-        const terminalAcceptance =
-          graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
-          GOAL_ACCEPTANCE_TASK_TITLE;
-        await this.coordinatorGraph.createDecision(graph.goal.id, node.id, {
-          authority: 'user',
-          options: terminalAcceptance
-            ? [
-                { id: 'retry', label: 'Retry goal acceptance' },
-                { id: 'fail', label: 'Fail goal' },
-              ]
-            : [
-                { id: 'retry', label: 'Retry task' },
-                { id: 'retire', label: 'Retire task' },
-              ],
-          question: terminalAcceptance
-            ? `${reason}. Retry Goal acceptance or fail this Goal?`
-            : `${reason}. Retry or retire this task node?`,
-          recommendedOptionId: 'retry',
-          requestedUserId: this.userId,
-        });
+        const decision = await this.coordinatorGraph.createDecision(
+          graph.goal.id,
+          node.id,
+          ask
+            ? {
+                authority: 'user',
+                options: ask.options,
+                question: ask.question,
+                recommendedOptionId: ask.recommendedOptionId,
+                requestedUserId: this.userId,
+              }
+            : {
+                authority: 'user',
+                options: machine
+                  ? [
+                      { id: 'retry', label: 'I fixed it — retry' },
+                      { id: 'retire', label: 'Retire task' },
+                    ]
+                  : terminalAcceptance
+                    ? [
+                        { id: 'retry', label: 'Retry goal acceptance' },
+                        // Drop the acceptance Task and end the Goal without a verdict —
+                        // unlike `fail`, which records that the Goal was judged failed.
+                        { id: 'retire', label: 'Abandon goal acceptance' },
+                        { id: 'fail', label: 'Fail goal' },
+                      ]
+                    : [
+                        { id: 'retry', label: 'Retry task' },
+                        { id: 'retire', label: 'Retire task' },
+                      ],
+                question: machine
+                  ? `${reason}. Fix it, then retry or retire this task node?`
+                  : terminalAcceptance
+                    ? `${reason}. Retry Goal acceptance, abandon it, or fail this Goal?`
+                    : `${reason}. Retry or retire this task node?`,
+                recommendedOptionId: 'retry',
+                requestedUserId: this.userId,
+              },
+        );
+        if (decision)
+          await this.briefs.openDecision(graph.goal, {
+            decisionId: decision.id,
+            options: decision.options,
+            question: decision.question,
+            recommendedOptionId: decision.recommendedOptionId,
+          });
       }
     }
     await this.coordinatorGraph.updateNodeStatus(graph.goal.id, nodeId, 'waiting', reason);
@@ -2847,13 +4107,20 @@ export class GoalService {
   };
 }
 
-/** Operation states that still own their run; the lease path reclaims them, not this. */
-const IN_FLIGHT_OPERATION_STATUSES = new Set([
-  'idle',
-  'running',
-  'waiting_for_async_tool',
-  'waiting_for_human',
-]);
+interface FailureGateOptions {
+  /** The main Agent's own question for this gate, asked as written with its diagnosis. */
+  ask?: GoalManagerAsk & { diagnosis: string };
+  /**
+   * The gate is about a machine problem (broken setup, spent retry schedule), not
+   * the work: it opens as a machine gate that asks for a fix, not a judgment.
+   */
+  machine?: boolean;
+}
+
+/** A machine hold books its own advance only from the tick that first saw the failure. */
+const MACHINE_HOLD_SCHEDULE_WINDOW_MS = 15 * 60 * 1000;
+/** Queue delays are bounded; the sweep covers anything further out. */
+const MAX_ADVANCE_DELAY_S = 86_400;
 
 /**
  * Whether a Task topic is still `running` although its run has already ended.
@@ -2874,7 +4141,9 @@ const isOrphanedRun = async (
   staleBefore: Date,
 ): Promise<boolean> => {
   const operation = await operationModel.findById(operationId);
-  if (!operation || IN_FLIGHT_OPERATION_STATUSES.has(operation.status)) return false;
+  // Still-owned states (including a run parked for a client) are the lease
+  // path's to reclaim, not this.
+  if (!operation || isAgentOperationInFlight(operation.status)) return false;
   const endedAt = operation.completedAt ?? operation.updatedAt;
   return new Date(endedAt) < staleBefore;
 };

@@ -1,6 +1,8 @@
 import type { BriefArtifacts } from '../brief';
 import type { ChatFileItem } from '../message/ui/chat';
 
+export * from './execution';
+
 // ── Task type aliases ──
 
 export type TaskStatus =
@@ -608,6 +610,8 @@ export interface TaskDetailData {
   error?: string | null;
   /** Files attached to the task instruction (persistent context for every run). */
   files?: ChatFileItem[];
+  /** The goal this task (or its nearest goal-bound ancestor) belongs to; null when none. */
+  goal?: { id: string; title: string } | null;
   // heartbeat.interval: periodic execution interval | heartbeat.timeout+lastAt: watchdog monitoring (detects stuck tasks)
   heartbeat?: {
     interval?: number | null;

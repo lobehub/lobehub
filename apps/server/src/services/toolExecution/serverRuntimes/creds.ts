@@ -5,7 +5,9 @@ import debug from 'debug';
 import { UserModel } from '@/database/models/user';
 import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { MarketService } from '@/server/services/market';
+import { resolveSandboxSessionConfig } from '@/server/services/sandbox';
 
+import { resolveContentWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:creds-runtime');
@@ -169,22 +171,6 @@ export class ServerCredsService implements ICredsService {
 
     return result as any;
   }
-
-  async saveKVCred(params: {
-    description?: string;
-    key: string;
-    name: string;
-    type: 'kv-env' | 'kv-header';
-    values: Record<string, string>;
-  }): Promise<{ id: number }> {
-    log('saveKVCred: key=%s, name=%s, type=%s', params.key, params.name, params.type);
-
-    const result = await this.credsAccessor().createKV(params);
-
-    log('saveKVCred success: id=%d', result.id);
-
-    return result;
-  }
 }
 
 /**
@@ -197,13 +183,18 @@ export const credsRuntime: ServerRuntimeRegistration = {
       throw new Error('userId is required for Creds execution');
     }
 
-    if (context.workspaceId) {
+    // Recovered, not read off the context: the dispatch and resume paths drop
+    // it, and credentials must be injected into the SAME sandbox session the
+    // commands run in — the sandbox runtimes recover it the same way.
+    const workspaceId = await resolveContentWorkspaceId(context);
+
+    if (workspaceId) {
       if (!context.serverDB) {
         throw new Error('serverDB is required for workspace Creds execution');
       }
 
       const membership = await new WorkspaceMemberModel(context.serverDB, context.userId).getMember(
-        context.workspaceId,
+        workspaceId,
         context.userId,
       );
       if (!membership) {
@@ -215,7 +206,7 @@ export const credsRuntime: ServerRuntimeRegistration = {
       'Creating CredsExecutionRuntime for userId=%s, topicId=%s, workspaceId=%s',
       context.userId,
       context.topicId,
-      context.workspaceId,
+      workspaceId,
     );
 
     // Read market accessToken from DB so server-side creds runtime can authenticate.
@@ -230,14 +221,31 @@ export const credsRuntime: ServerRuntimeRegistration = {
       }
     }
 
+    // Credentials are injected INTO a sandbox, so this call has to agree with
+    // the cloud-sandbox and skills runtimes about which one. A token without the
+    // entitlement routes to the ephemeral runtime, and the injection lands in a
+    // different sandbox than the commands that need it — or tears down the live
+    // one on the way.
+    const sandbox = await resolveSandboxSessionConfig({
+      isShareVisitorRun: Boolean(context.agentShareVisitor),
+      serverDB: context.serverDB,
+      topicId: context.topicId,
+      userId: context.userId,
+      workspaceId,
+    });
+
     const marketService = new MarketService({
       accessToken,
-      userInfo: { userId: context.userId, workspaceId: context.workspaceId },
+      userInfo: {
+        sandboxStorage: sandbox.claim,
+        userId: context.userId,
+        workspaceId,
+      },
     });
 
     const credsService = new ServerCredsService(
       marketService,
-      context.workspaceId,
+      workspaceId,
       Boolean(context.agentShareVisitor),
     );
 

@@ -296,7 +296,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     const output = await runtime.readFile({ path: '/tmp/big.txt' });
 
-    expect(output.content).toBe('(lines 1-200 of 2545)\n1 first 200 lines…');
+    expect(output.content).toBe(
+      '1 first 200 lines…\n[Showing lines 1-200 of 2545 lines, 148370 characters. To continue, call readFile again with path="/tmp/big.txt" and loc=[200, 400].]',
+    );
   });
 
   it('omits the window marker when the window reaches the end of the file', async () => {
@@ -385,7 +387,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt', startLine: 1 });
 
-    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain(
+      '[Showing lines 1-200 of 2545 lines, 148370 characters. To continue, call readFile again with path="/tmp/big.txt", startLine=201 and endLine=400.]',
+    );
     expect(output.content).toContain('1 some lines');
   });
 
@@ -406,7 +410,9 @@ describe('LocalSystemExecutionRuntime.readFile', () => {
 
     const output = await runtime.readFile({ endLine: 200, path: '/tmp/big.txt' });
 
-    expect(output.content).toContain('(lines 1-200 of 2545)');
+    expect(output.content).toContain(
+      '[Showing lines 1-200 of 2545 lines, 148370 characters. To continue, call readFile again with path="/tmp/big.txt", startLine=201 and endLine=400.]',
+    );
     expect(output.content).toContain('1 some lines');
   });
 
@@ -731,6 +737,46 @@ describe('LocalSystemExecutionRuntime.executeToolCall — dispatch', () => {
   });
 });
 
+describe('LocalSystemExecutionRuntime shell session lookups', () => {
+  // Regression: a shell_id that reaches a device process which never issued it
+  // (app restarted, or two device processes for one machine) came back as
+  // "[UNKNOWN_EXEC_ERROR] Tool execution failed" — the service's reason was
+  // dropped, so the model could not tell a lost session from a failed command.
+  const notFound =
+    'Shell ID sh-1a2b3c-4 not found in this device process. It may have been started by a different or restarted process; its output is not available here.';
+
+  it('surfaces the not-found reason for getCommandOutput', async () => {
+    const service = createService({
+      getCommandOutput: vi.fn().mockResolvedValue({
+        error: notFound,
+        output: '',
+        running: false,
+        stderr: '',
+        stdout: '',
+        success: false,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('getCommandOutput', { shell_id: 'sh-1a2b3c-4' });
+
+    expect(output?.success).toBe(false);
+    expect(output?.content).toBe(notFound);
+  });
+
+  it('surfaces the not-found reason for killCommand', async () => {
+    const service = createService({
+      killCommand: vi.fn().mockResolvedValue({ error: notFound, success: false }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('killCommand', { shell_id: 'sh-1a2b3c-4' });
+
+    expect(output?.success).toBe(false);
+    expect(output?.content).toBe(notFound);
+  });
+});
+
 describe('LocalSystemExecutionRuntime.runCommand', () => {
   it('surfaces a pre-spawn failure reason instead of UNKNOWN_EXEC_ERROR', async () => {
     // A command that never starts has no process, so no stderr and no exit
@@ -750,6 +796,28 @@ describe('LocalSystemExecutionRuntime.runCommand', () => {
 
     expect(output.content).toContain('Local Sandbox requires a working directory');
     expect(output.content).not.toContain('UNKNOWN_EXEC_ERROR');
+  });
+
+  it('keeps stdout when a failed command reports neither an error nor stderr', async () => {
+    // A CLI that prints its failure on stdout and exits non-zero, reported
+    // with `success: false` and nothing else to explain it. The generic
+    // fallback used to replace the only diagnostic the model could act on.
+    const service = createService({
+      runCommand: vi.fn().mockResolvedValue({
+        exit_code: 1,
+        stderr: '',
+        stdout: '✗ Provider deepseek check failed\nError: InvalidProviderAPIKey\n',
+        success: false,
+      }),
+    });
+    const runtime = new LocalSystemExecutionRuntime(service);
+
+    const output = await runtime.executeToolCall('runCommand', {
+      command: 'lh provider test deepseek',
+    });
+
+    expect(output?.content).toContain('Error: InvalidProviderAPIKey');
+    expect(output?.content).not.toContain('UNKNOWN_EXEC_ERROR');
   });
 
   it('reports whether the command was actually sandboxed', async () => {

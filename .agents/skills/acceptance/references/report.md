@@ -182,9 +182,9 @@ supersedes? }`.
    Topic, or Document owns the work. To publish a repair into that same history, add
    `--acceptance <acceptanceId>` using the ID printed by the first ingest. The
    command uploads cases + evidence + report body and returns `acceptanceUrl`
-   for the stable acceptance page, plus `roundUrl` for this round's snapshot
-   (`null` when no round index is available). Copy `acceptanceUrl` verbatim in
-   the final reply, and add `roundUrl` verbatim when it is non-null.
+   for the stable acceptance page, which opens on the latest round. Copy
+   `acceptanceUrl` verbatim in the final reply; do not add the `roundUrl` the
+   command also returns.
    Never reconstruct the host, path, or round query: the CLI resolves the
    configured server, including self-hosted installations. See
    [Final handoff](../SKILL.md#final-handoff-mandatory).
@@ -404,6 +404,25 @@ Choose the layout by comparison intent, not by the source image dimensions:
 
 A comparison pair means the same view in two states — sequential steps of a
 flow are ordinary ordered evidence with captions, not a pair.
+
+### Video chapters
+
+A `video` evidence entry takes `chapters`: `step` (an action, with `label`),
+`check` (a claim true of that frame, with `note`) and `flag` (an anomaly you
+noticed and disclose, with `note`), each at `t` seconds. The page puts them on
+the player's timeline and captions each claim over its frame:
+
+```json
+{ "path": "assets/scroll-top.mp4",
+  "description": "Five scrolls at the top of a short topic.",
+  "chapters": [
+    { "kind": "step", "t": 6, "label": "Scroll #3" },
+    { "kind": "check", "t": 7.9, "note": "Scroll #3: no skeleton, first question still in place" }
+  ] }
+```
+
+Derive `t` from logged marks, never from memory, and disclose every anomaly as a
+`flag` — [video-chapters.md](./video-chapters.md).
 
 ## Rules
 

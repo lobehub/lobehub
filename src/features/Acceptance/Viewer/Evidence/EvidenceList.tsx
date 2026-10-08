@@ -1,8 +1,10 @@
 'use client';
 
+import { readEvidenceChapters } from '@lobechat/const/verify';
+import type { AcceptanceReviewAnnotation } from '@lobechat/types';
 import { Flexbox, Image } from '@lobehub/ui';
 import { useResponsive } from 'antd-style';
-import { memo } from 'react';
+import { memo, type ReactNode } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';
 
@@ -20,12 +22,14 @@ import {
 import type { AcceptanceEvidence } from '../Checks/types';
 import { AnnotatedImage } from '../Evidence/Annotation';
 import { ScreenshotTiles } from '../Evidence/ScreenshotTiles';
-import { IMAGE_EVIDENCE, imageRatio, isVisual } from './evidence';
+import { IMAGE_EVIDENCE, imageRatio, isAnnotatable, isVisual } from './evidence';
+import FloatingCommentAction, { FLOATING_ACTION_HOST } from './FloatingCommentAction';
 import type { EvidenceOverlayMap } from './overlay';
 import { styles } from './styles';
+import { VideoEvidencePlayer } from './Video/VideoEvidencePlayer';
 
 /** Flat media for a comparison side — the card frames it, so no own border/radius. */
-const comparisonContent = (item: AcceptanceEvidence) => {
+const comparisonContent = (item: AcceptanceEvidence, action?: ReactNode) => {
   if (item.type === 'video')
     return <video controls src={item.fileUrl!} style={{ display: 'block', width: '100%' }} />;
   if (item.type === 'audio')
@@ -41,13 +45,14 @@ const comparisonContent = (item: AcceptanceEvidence) => {
     return (
       <ScreenshotTiles
         flat
+        action={action}
         alt={item.description ?? item.fileName ?? item.type}
         fileHeight={item.fileHeight}
         fileWidth={item.fileWidth}
         src={item.fileUrl}
       />
     );
-  return (
+  const image = (
     <Image
       preview
       alt={item.description ?? item.fileName ?? item.type}
@@ -57,10 +62,22 @@ const comparisonContent = (item: AcceptanceEvidence) => {
       variant={'borderless'}
     />
   );
+  if (!action) return image;
+  return (
+    <div style={{ position: 'relative' }} {...{ [FLOATING_ACTION_HOST]: '' }}>
+      {image}
+      {action}
+    </div>
+  );
 };
 
 export const EvidenceList = memo<{
   evidence: AcceptanceEvidence[];
+  /**
+   * Comment on (or mark) one picture straight from it — floats over each
+   * annotatable image, labelled for what it opens.
+   */
+  onComment?: { label: string; open: (id: string) => void };
   onReviewEvidence?: (id: string) => void;
   /**
    * Regions to draw over an evidence image, keyed by evidence id. Used by the
@@ -69,8 +86,16 @@ export const EvidenceList = memo<{
    * in one row), the boxes land on the image that is already here.
    */
   overlays?: EvidenceOverlayMap;
-}>(({ evidence, overlays, onReviewEvidence }) => {
+  /** A freshly signed URL for one evidence — lets a video recover an expired link. */
+  onRefreshEvidenceUrl?: (evidenceId: string) => Promise<string | undefined>;
+  /** The standing reject's notes — video ones are pinned to the player's timeline. */
+  reviewNotes?: AcceptanceReviewAnnotation[];
+}>(({ evidence, overlays, onComment, onRefreshEvidenceUrl, onReviewEvidence, reviewNotes }) => {
   const { md = true } = useResponsive();
+  const commentAction = (item: AcceptanceEvidence) =>
+    onComment && isAnnotatable(item) ? (
+      <FloatingCommentAction title={onComment.label} onClick={() => onComment.open(item.id)} />
+    ) : undefined;
   const sorted = [...evidence].sort((a, b) => (isVisual(b) ? 1 : 0) - (isVisual(a) ? 1 : 0));
   if (sorted.length === 0) return null;
 
@@ -97,7 +122,7 @@ export const EvidenceList = memo<{
       readEvidenceComparison(item.metadata)?.label ??
       meaningfulEvidenceCaption(item.description) ??
       undefined,
-    content: comparisonContent(item),
+    content: comparisonContent(item, commentAction(item)),
   });
 
   const consumedScreenshotIds = new Set<string>();
@@ -125,14 +150,16 @@ export const EvidenceList = memo<{
         const caption = description && <span className={styles.caption}>{description}</span>;
         if (item.fileUrl && item.type === 'video')
           return (
-            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
-              <video
-                controls
-                src={item.fileUrl}
-                style={{ borderRadius: 8, maxHeight: 360, maxWidth: '100%', width: 'auto' }}
-              />
-              {caption}
-            </Flexbox>
+            <VideoEvidencePlayer
+              caption={caption}
+              chapters={readEvidenceChapters(item.metadata)}
+              key={item.id}
+              notes={reviewNotes?.filter((note) => note.evidenceId === item.id)}
+              src={item.fileUrl}
+              onRefreshSource={
+                onRefreshEvidenceUrl ? () => onRefreshEvidenceUrl(item.id) : undefined
+              }
+            />
           );
         if (item.fileUrl && item.type === 'audio')
           return (
@@ -149,36 +176,45 @@ export const EvidenceList = memo<{
             </Flexbox>
           );
         if (!md && onReviewEvidence && item.fileUrl && IMAGE_EVIDENCE.has(item.type)) {
+          const action = commentAction(item);
+          // The tap reviews; the comment shortcut sits beside the button rather
+          // than inside it, since a button cannot hold another one.
           return (
-            <button
+            <div
               key={item.id}
-              type={'button'}
-              style={{
-                padding: 0,
-                width: '100%',
-                border: 0,
-                background: 'none',
-                textAlign: 'start',
-                cursor: 'pointer',
-              }}
-              onClick={() => onReviewEvidence(item.id)}
+              style={{ position: 'relative', width: '100%' }}
+              {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}
             >
-              <img
-                alt={item.description ?? item.fileName ?? item.type}
-                loading={'lazy'}
-                src={item.fileUrl}
+              <button
+                type={'button'}
                 style={{
-                  display: 'block',
-                  maxWidth: '100%',
+                  padding: 0,
                   width: '100%',
-                  height: 180,
-                  objectFit: 'cover',
-                  objectPosition: 'top',
-                  borderRadius: 8,
+                  border: 0,
+                  background: 'none',
+                  textAlign: 'start',
+                  cursor: 'pointer',
                 }}
-              />
-              {caption}
-            </button>
+                onClick={() => onReviewEvidence(item.id)}
+              >
+                <img
+                  alt={item.description ?? item.fileName ?? item.type}
+                  loading={'lazy'}
+                  src={item.fileUrl}
+                  style={{
+                    display: 'block',
+                    maxWidth: '100%',
+                    width: '100%',
+                    height: 180,
+                    objectFit: 'cover',
+                    objectPosition: 'top',
+                    borderRadius: 8,
+                  }}
+                />
+                {caption}
+              </button>
+              {action}
+            </div>
           );
         }
         const overlay = overlays?.get(item.id);
@@ -204,6 +240,7 @@ export const EvidenceList = memo<{
                 const shotCaption = meaningfulEvidenceCaption(shot.description);
                 return (
                   <ScreenshotTiles
+                    action={commentAction(shot)}
                     alt={shot.description ?? shot.fileName ?? shot.type}
                     annotations={overlays?.get(shot.id)}
                     fileHeight={shot.fileHeight}
@@ -222,8 +259,15 @@ export const EvidenceList = memo<{
           );
         }
         if (item.fileUrl && IMAGE_EVIDENCE.has(item.type)) {
+          const action = commentAction(item);
           return (
-            <Flexbox gap={4} key={item.id} style={{ maxWidth: '100%', width: 'fit-content' }}>
+            <Flexbox
+              gap={4}
+              key={item.id}
+              style={{ maxWidth: '100%', position: 'relative', width: 'fit-content' }}
+              {...(action ? { [FLOATING_ACTION_HOST]: '' } : {})}
+            >
+              {action}
               {overlay?.length ? (
                 <AnnotatedImage
                   annotations={overlay}

@@ -336,16 +336,23 @@ export const imageRouter = router({
         generationsWithTasks.forEach(({ generation, asyncTaskId }) => {
           log('Starting background async task %s for generation %s', asyncTaskId, generation.id);
 
-          asyncCaller.image.createImage({
-            generationBatchId: createdBatch.id,
-            generationId: generation.id,
-            generationTopicId,
-            model,
-            params: generationParams,
-            provider,
-            taskId: asyncTaskId,
-            workspaceId: wsId,
-          });
+          asyncCaller.image
+            .createImage({
+              generationBatchId: createdBatch.id,
+              generationId: generation.id,
+              generationTopicId,
+              model,
+              params: generationParams,
+              provider,
+              taskId: asyncTaskId,
+              workspaceId: wsId,
+            })
+            // The async router owns the task's status and billing once the request
+            // reaches it; a failed HTTP response here (e.g. a proxy timing out a
+            // long generation) does not mean the task failed, so only log it.
+            .catch((error: unknown) => {
+              console.error('Async image task %s request failed: %O', asyncTaskId, error);
+            });
         });
 
         log('All %d background async image generation tasks started', generationsWithTasks.length);

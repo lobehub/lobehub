@@ -1,3 +1,7 @@
+import {
+  AgentManagementManifest,
+  resolveAgentManagementManifest,
+} from '@lobechat/builtin-tool-agent-management';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -170,6 +174,43 @@ describe('resolveDiscoveryPool', () => {
     );
     expect(pool.sourceMap).toEqual({ gmail: 'composio', linear: 'lobehubSkill' });
     expect(pool.manifestMap.gmail).toBeDefined();
+  });
+
+  describe('context-aware builtin manifests', () => {
+    const agentManagement = {
+      identifier: AgentManagementManifest.identifier,
+      manifest: AgentManagementManifest,
+      resolveManifest: resolveAgentManagementManifest,
+    };
+    const apiNames = (m?: LobeToolManifest) => m?.api.map((api) => api.name);
+
+    it('resolves a discoverable builtin for the run, so a sub-agent cannot activate callAgent', () => {
+      const pool = resolveDiscoveryPool(
+        request({ builtinTools: [agentManagement], manifestContext: { isSubAgent: true } }),
+      );
+
+      const discovered = pool.manifestMap[AgentManagementManifest.identifier];
+      expect(apiNames(discovered)).not.toContain('callAgent');
+      expect(apiNames(discovered)).toContain('getAgentDetail');
+      expect(discovered.systemRole).toContain('Dispatching work to other agents is not available');
+    });
+
+    it('keeps callAgent discoverable in a top-level run', () => {
+      const pool = resolveDiscoveryPool(
+        request({ builtinTools: [agentManagement], manifestContext: { isSubAgent: false } }),
+      );
+      expect(apiNames(pool.manifestMap[AgentManagementManifest.identifier])).toContain('callAgent');
+    });
+
+    it('drops a builtin whose resolver opts out of the run', () => {
+      const pool = resolveDiscoveryPool(
+        request({
+          builtinTools: [{ ...builtin('lobe-opt-out'), resolveManifest: () => null }],
+          manifestContext: {},
+        }),
+      );
+      expect(pool.manifestMap['lobe-opt-out']).toBeUndefined();
+    });
   });
 });
 

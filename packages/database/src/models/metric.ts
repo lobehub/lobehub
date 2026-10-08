@@ -215,6 +215,70 @@ export class MetricModel {
     return row;
   };
 
+  /**
+   * Append many observations to one series in a single insert — for samplers
+   * that report a batch (e.g. a widget's time series). Same
+   * ownership rule as {@link addPoint}; returns the inserted count, 0 when the
+   * series is not the caller's.
+   */
+  addPoints = async (metricId: string, points: AddMetricPointParams[]): Promise<number> => {
+    if (points.length === 0) return 0;
+    const series = await this.findById(metricId);
+    if (!series) return 0;
+
+    const rows = await this.db
+      .insert(metricPoints)
+      .values(
+        points.map((point) =>
+          buildWorkspacePayload(
+            { userId: this.userId, workspaceId: this.workspaceId },
+            { ...point, metricId },
+          ),
+        ),
+      )
+      .returning({ id: metricPoints.id });
+    return rows.length;
+  };
+
+  /**
+   * Append only the points newer than the series' latest stored point — for
+   * samplers that re-report a sliding window. The read and the insert run
+   * under a row lock on the series, so two writers reporting the same window
+   * at once serialize and the second one finds nothing new (no unique key on
+   * `(metric_id, observed_at)` to lean on). A timestamp repeated inside the
+   * batch is written once, keeping the value reported last. Returns the
+   * inserted count, 0 when the series is not the caller's.
+   */
+  appendNewerPoints = async (
+    metricId: string,
+    points: (AddMetricPointParams & { observedAt: Date })[],
+  ): Promise<number> => {
+    if (points.length === 0) return 0;
+
+    return this.db.transaction(async (tx) => {
+      const [series] = await tx
+        .select({ id: metrics.id })
+        .from(metrics)
+        .where(and(eq(metrics.id, metricId), this.seriesOwnership()))
+        .limit(1)
+        .for('update');
+      if (!series) return 0;
+
+      const scoped = new MetricModel(
+        tx as unknown as LobeChatDatabase,
+        this.userId,
+        this.workspaceId,
+      );
+      const latest = await scoped.latestPoint(metricId);
+      // Last value wins for a timestamp the batch reports more than once.
+      const byTime = new Map(points.map((p) => [p.observedAt.getTime(), p]));
+      const fresh = [...byTime.values()].filter(
+        (p) => !latest || p.observedAt.getTime() > latest.observedAt.getTime(),
+      );
+      return scoped.addPoints(metricId, fresh);
+    });
+  };
+
   /** The most recent observation — what numeric acceptance criteria read. */
   latestPoint = async (metricId: string): Promise<MetricPointItem | undefined> => {
     const [row] = await this.db

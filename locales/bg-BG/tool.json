@@ -159,6 +159,7 @@
   "localFiles.open": "Отвори",
   "localFiles.openFile": "Отвори файл",
   "localFiles.openFolder": "Отвори папка",
+  "localFiles.openInPanel": "Отвори в страничния панел",
   "localFiles.outOfScope.requestedPaths": "Заявени пътища",
   "localFiles.outOfScope.warning": "Предупреждение: Следните пътища са извън конфигурираната работна директория. Моля, потвърдете, че желаете да разрешите достъп.",
   "localFiles.outOfScope.workingDirectory": "Работна директория",

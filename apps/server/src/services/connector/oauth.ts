@@ -7,6 +7,7 @@ import {
   registerClient,
   startAuthorization,
 } from '@modelcontextprotocol/sdk/client/auth.js';
+import { InvalidClientError } from '@modelcontextprotocol/sdk/server/auth/errors.js';
 import type {
   AuthorizationServerMetadata,
   OAuthClientInformationFull,
@@ -15,6 +16,7 @@ import type {
 } from '@modelcontextprotocol/sdk/shared/auth.js';
 import debug from 'debug';
 
+import type { OIDCConfig } from '@/database/schemas';
 import { appEnv } from '@/envs/app';
 
 const log = debug('lobe-server:connector:oauth');
@@ -127,6 +129,26 @@ export const registerDynamicClient = async (params: {
   });
 };
 
+const TOKEN_ENDPOINT_AUTH_METHODS = new Set<string>([
+  'client_secret_basic',
+  'client_secret_post',
+  'none',
+]);
+
+/**
+ * The token endpoint auth method a dynamic registration settled on: what the
+ * server echoed back (it may override the request), else what was requested.
+ */
+export const registeredAuthMethod = (
+  registration: OAuthClientInformationFull,
+  metadata: AuthorizationServerMetadata,
+): RegistrationAuthMethod => {
+  const echoed = registration.token_endpoint_auth_method;
+  return echoed && TOKEN_ENDPOINT_AUTH_METHODS.has(echoed)
+    ? (echoed as RegistrationAuthMethod)
+    : selectRegistrationAuthMethod(metadata);
+};
+
 /**
  * Build the authorization-code redirect URL (with PKCE). Returns the URL to
  * open in the popup plus the `codeVerifier` that must be stashed (server-side,
@@ -155,6 +177,68 @@ export const buildAuthorizationUrl = async (params: {
   return { authorizationUrl: authorizationUrl.toString(), codeVerifier };
 };
 
+type TokenEndpointAuthMethod = NonNullable<OIDCConfig['tokenEndpointAuthMethod']>;
+
+/**
+ * Client information for token requests. The stored auth method is passed
+ * through so the SDK uses it instead of its own preference (it picks
+ * `client_secret_basic` whenever a secret exists), which servers that enforce
+ * the registered method reject with `invalid_client`.
+ */
+export const toClientInformation = (
+  oidc: Pick<OIDCConfig, 'clientId' | 'clientSecret' | 'tokenEndpointAuthMethod'>,
+): OAuthClientInformationMixed => ({
+  client_id: oidc.clientId!,
+  client_secret: oidc.clientSecret,
+  ...(oidc.tokenEndpointAuthMethod && {
+    token_endpoint_auth_method: oidc.tokenEndpointAuthMethod,
+  }),
+});
+
+const alternateSecretMethod = (
+  clientInformation: OAuthClientInformationMixed,
+  metadata: AuthorizationServerMetadata,
+): TokenEndpointAuthMethod | undefined => {
+  if (!clientInformation.client_secret) return;
+  if (
+    'token_endpoint_auth_method' in clientInformation &&
+    clientInformation.token_endpoint_auth_method
+  )
+    return;
+  // Without a recorded method the SDK tried basic when the server supports it,
+  // and post otherwise; the other one is the only remaining confidential option.
+  const supported = metadata.token_endpoint_auth_methods_supported ?? [];
+  const tried =
+    supported.length === 0 || supported.includes('client_secret_basic')
+      ? 'client_secret_basic'
+      : 'client_secret_post';
+  const other = tried === 'client_secret_basic' ? 'client_secret_post' : 'client_secret_basic';
+  return supported.length === 0 || supported.includes(other) ? other : undefined;
+};
+
+/**
+ * Run a token request, retrying once with the other confidential auth method
+ * when the server rejects the client and no method is on record — the case
+ * for pre-registered clients, whose registered method the user never told us.
+ * Returns the method that worked so callers can persist it.
+ */
+const withClientAuthFallback = async (
+  clientInformation: OAuthClientInformationMixed,
+  metadata: AuthorizationServerMetadata,
+  request: (clientInformation: OAuthClientInformationMixed) => Promise<OAuthTokens>,
+): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> => {
+  try {
+    return { tokens: await request(clientInformation) };
+  } catch (error) {
+    const other =
+      error instanceof InvalidClientError && alternateSecretMethod(clientInformation, metadata);
+    if (!other) throw error;
+    log('token endpoint rejected client auth, retrying with %s', other);
+    const tokens = await request({ ...clientInformation, token_endpoint_auth_method: other });
+    return { authMethod: other, tokens };
+  }
+};
+
 /** Exchange the authorization code for tokens (callback step). */
 export const exchangeConnectorCode = async (params: {
   authorizationCode: string;
@@ -164,16 +248,17 @@ export const exchangeConnectorCode = async (params: {
   metadata: AuthorizationServerMetadata;
   redirectUri: string;
   resource?: string;
-}): Promise<OAuthTokens> => {
-  return exchangeAuthorization(params.authorizationServerUrl, {
-    authorizationCode: params.authorizationCode,
-    clientInformation: params.clientInformation,
-    codeVerifier: params.codeVerifier,
-    metadata: params.metadata,
-    redirectUri: params.redirectUri,
-    resource: params.resource ? new URL(params.resource) : undefined,
-  });
-};
+}): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> =>
+  withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
+    exchangeAuthorization(params.authorizationServerUrl, {
+      authorizationCode: params.authorizationCode,
+      clientInformation,
+      codeVerifier: params.codeVerifier,
+      metadata: params.metadata,
+      redirectUri: params.redirectUri,
+      resource: params.resource ? new URL(params.resource) : undefined,
+    }),
+  );
 
 /** Refresh an expired access token using the stored refresh token. */
 export const refreshConnectorToken = async (params: {
@@ -182,11 +267,12 @@ export const refreshConnectorToken = async (params: {
   metadata: AuthorizationServerMetadata;
   refreshToken: string;
   resource?: string;
-}): Promise<OAuthTokens> => {
-  return refreshAuthorization(params.authorizationServerUrl, {
-    clientInformation: params.clientInformation,
-    metadata: params.metadata,
-    refreshToken: params.refreshToken,
-    resource: params.resource ? new URL(params.resource) : undefined,
-  });
-};
+}): Promise<{ authMethod?: TokenEndpointAuthMethod; tokens: OAuthTokens }> =>
+  withClientAuthFallback(params.clientInformation, params.metadata, (clientInformation) =>
+    refreshAuthorization(params.authorizationServerUrl, {
+      clientInformation,
+      metadata: params.metadata,
+      refreshToken: params.refreshToken,
+      resource: params.resource ? new URL(params.resource) : undefined,
+    }),
+  );

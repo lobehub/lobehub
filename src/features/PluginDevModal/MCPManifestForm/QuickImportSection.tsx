@@ -1,6 +1,7 @@
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
+import { type LobeToolCustomPlugin } from '@lobechat/types';
+import { Flexbox } from '@lobehub/ui';
+import { Alert, Button, TextArea } from '@lobehub/ui/base-ui';
+import { type FormInstance } from '@lobehub/ui/base-ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,7 +13,7 @@ import { electronStylish } from '@/styles/electron';
 import { parseMcpInput } from './utils';
 
 interface QuickImportSectionProps {
-  form: FormInstance;
+  form: FormInstance<LobeToolCustomPlugin>;
   isEditMode?: boolean;
   onClearConnectionError?: () => void;
 }
@@ -66,25 +67,25 @@ const QuickImportSection = ({
     // Check for duplicate identifier (only in create mode)
     if (!isEditMode && pluginIds.includes(identifier)) {
       // Update form fields even if duplicate, so user sees the pasted values
-      form.setFieldsValue({
+      form.setValues({
         customParams: { mcp: mcpConfig },
         identifier,
       });
       // Trigger validation to show Form.Item error
-      form.validateFields(['identifier']);
+      form.validate(['identifier']);
       setIsImportModalVisible(false); // Close modal even on duplicate error
       setJsonInput(''); // Clear modal input
       return;
     }
 
     // All checks passed, fill the form
-    form.setFieldsValue({
+    form.setValues({
       customParams: { mcp: mcpConfig },
       identifier,
     });
 
     // Clear potential old validation error on identifier field
-    form.setFields([{ errors: [], name: 'identifier' }]);
+    form.setErrors({ identifier: undefined });
 
     // Clear modal state and close (or rather, hide the import UI)
     setIsImportModalVisible(false);

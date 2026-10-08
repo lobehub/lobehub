@@ -582,6 +582,45 @@ describe('callLlmFinalizer', () => {
     });
   });
 
+  it('records a client-executed attempt and its estimated usage on the message', async () => {
+    const messages = createMessageTransport();
+
+    await finalizeCallLlmTurn({
+      assistantMessageId: 'assistant-1',
+      events: [],
+      host: createHost(messages),
+      model: 'llama3',
+      output: createOutput({
+        executionSite: 'client',
+        usage: { totalInputTokens: 9, totalOutputTokens: 3, totalTokens: 12 },
+        usageEstimated: true,
+      }),
+      provider: 'ollama',
+      shouldReplayAssistantReasoning: false,
+      state: AgentRuntime.createInitialState({ operationId: 'operation-1' }),
+    });
+
+    expect(messages.update).toHaveBeenCalledWith(
+      'assistant-1',
+      expect.objectContaining({
+        metadata: expect.objectContaining({ executionSite: 'client', usageEstimated: true }),
+      }),
+    );
+
+    await persistInterruptedCallLlmResult({
+      assistantMessageId: 'assistant-2',
+      host: createHost(messages),
+      output: createOutput({ content: 'Partial', executionSite: 'client' }),
+    });
+
+    expect(messages.update).toHaveBeenLastCalledWith(
+      'assistant-2',
+      expect.objectContaining({
+        metadata: { executionSite: 'client', interruptedMidStream: true },
+      }),
+    );
+  });
+
   it('persists partial interrupted output and skips empty interruptions', async () => {
     const messages = createMessageTransport();
     const host = createHost(messages);

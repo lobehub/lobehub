@@ -1,12 +1,10 @@
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Tag, toast } from '@lobehub/ui/base-ui';
-import { Card } from 'antd';
+import { Block, DropdownMenu, Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Spin, Tag, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowRight, ChevronRight, Database, Ellipsis, Pencil, Play, Trash2 } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
 
@@ -16,9 +14,7 @@ import TestCaseTable from './TestCaseTable';
 
 const styles = createStaticStyles(({ css }) => ({
   card: css`
-    .ant-card-body {
-      padding: 0;
-    }
+    border-radius: ${cssVar.borderRadiusLG};
   `,
   // Tonal figure block that leads with the dataset's headline metric — its
   // test-case count — given mono weight so it reads as a result at a glance.
@@ -191,7 +187,7 @@ const DatasetCard = memo<DatasetCardProps>(
     }, [dataset.id, onRefresh, t]);
 
     return (
-      <Card className={styles.card}>
+      <Block className={styles.card} variant={'outlined'}>
         <div
           className={styles.datasetHeader}
           role="button"
@@ -264,7 +260,7 @@ const DatasetCard = memo<DatasetCardProps>(
           <div className={styles.expandedSection}>
             {loading ? (
               <Flexbox align="center" justify="center" style={{ padding: '48px 24px' }}>
-                <NeuralNetworkLoading size={48} />
+                <Spin size="large" />
               </Flexbox>
             ) : total === 0 ? (
               <TestCaseEmptyState onAddCase={onAddCase} onImport={onImport} />
@@ -294,7 +290,7 @@ const DatasetCard = memo<DatasetCardProps>(
             </Flexbox>
           </div>
         )}
-      </Card>
+      </Block>
     );
   },
 );

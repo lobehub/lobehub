@@ -1,7 +1,6 @@
 import { agentDisplayName } from '@lobechat/types';
 import { Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { Breadcrumb as BaseBreadcrumb, Text } from '@lobehub/ui/base-ui';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -131,7 +130,7 @@ const Breadcrumb = memo<BreadcrumbProps>(({ taskId }) => {
     : undefined;
 
   return (
-    <AntBreadcrumb
+    <BaseBreadcrumb
       className={styles.breadcrumb}
       separator={<Icon icon={ChevronRight} />}
       items={[

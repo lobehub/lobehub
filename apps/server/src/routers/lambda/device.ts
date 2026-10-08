@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import {
   requireWorkspaceRole,
+  requireWorkspaceRoleWhenScoped,
   type WorkspaceRole,
   wsCompatProcedure,
   wsProcedure,
@@ -63,11 +64,11 @@ const SCAN_TIMEOUT_MS = 10_000;
  * else's enrollment, while shared cleanup remains an owner action.
  */
 /**
- * Exposing a port is at least as sensitive as reading the filesystem, so a
- * workspace device is gated the same way `browseDirectory` gates new paths:
- * only the enrolling member or a workspace owner.
+ * Gate an action that operates the machine itself — exposing a port, updating
+ * its app — the same way `browseDirectory` gates new paths: on a workspace
+ * device, only the enrolling member or a workspace owner.
  */
-const assertTunnelDeviceWritable = async (
+const assertDeviceOperable = async (
   ctx: {
     deviceModel: DeviceModel;
     userId: string;
@@ -75,6 +76,7 @@ const assertTunnelDeviceWritable = async (
     workspaceRole?: WorkspaceRole;
   },
   deviceId: string,
+  action: string,
 ) => {
   if (!ctx.workspaceId) return;
 
@@ -83,10 +85,16 @@ const assertTunnelDeviceWritable = async (
   if (!canEditWorkspaceDevice(ctx.workspaceRole, ctx.userId, row.userId)) {
     throw new TRPCError({
       code: 'FORBIDDEN',
-      message: 'Only the enrolling member or a workspace owner can expose a port on this device.',
+      message: `Only the enrolling member or a workspace owner can ${action} on this device.`,
     });
   }
 };
+
+/** Exposing a port is at least as sensitive as reading the filesystem. */
+const assertTunnelDeviceWritable = (
+  ctx: Parameters<typeof assertDeviceOperable>[0],
+  deviceId: string,
+) => assertDeviceOperable(ctx, deviceId, 'expose a port');
 
 /** Append a freshly minted access token to a tunnel URL. */
 const buildTunnelOpenUrl = async (
@@ -178,6 +186,15 @@ const workspaceFileProcedure = deviceProcedure.input(workspaceFileInput).use(asy
   await assertWorkspaceRootApproved(opts.ctx.deviceModel, deviceId, workingDirectory);
   return opts.next();
 });
+
+/**
+ * `workspaceFileProcedure` for routes that change files on the device. In a
+ * shared workspace a read-only viewer may browse the tree but not alter it, so
+ * writes also need at least the `member` role; personal mode stays open.
+ */
+const workspaceFileWriteProcedure = workspaceFileProcedure.use(
+  requireWorkspaceRoleWhenScoped('member'),
+);
 
 export const deviceRouter = router({
   /**
@@ -412,6 +429,7 @@ export const deviceRouter = router({
         env: z.record(z.string(), z.string()).optional(),
         type: z.enum([
           'codebuddy',
+          'codex',
           'cursor',
           'droid',
           'devin',
@@ -938,7 +956,7 @@ export const deviceRouter = router({
    * Move files/folders within a directory on a remote device, via the device's
    * `moveLocalFiles` RPC. Powers the Files tree's drag-to-move in device mode.
    */
-  moveProjectFiles: workspaceFileProcedure
+  moveProjectFiles: workspaceFileWriteProcedure
     .input(
       z.object({
         items: z.array(z.object({ newPath: z.string(), oldPath: z.string() })),
@@ -958,7 +976,7 @@ export const deviceRouter = router({
    * Rename a single file/folder in a directory on a remote device, via the
    * device's `renameLocalFile` RPC.
    */
-  renameProjectFile: workspaceFileProcedure
+  renameProjectFile: workspaceFileWriteProcedure
     .input(
       z.object({
         newName: z.string(),
@@ -980,7 +998,7 @@ export const deviceRouter = router({
    * Save edited content back to a file on a remote device, via the device's
    * `writeLocalFile` RPC. Powers remote save in the LocalFile editor.
    */
-  writeProjectFile: workspaceFileProcedure
+  writeProjectFile: workspaceFileWriteProcedure
     .input(
       z.object({
         content: z.string(),
@@ -992,6 +1010,82 @@ export const deviceRouter = router({
         content: input.content,
         deviceId: input.deviceId,
         path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Create a new file on a remote device, via the device's `createLocalFile`
+   * RPC. Fails instead of overwriting when the path is taken.
+   */
+  createProjectFile: workspaceFileWriteProcedure
+    .input(
+      z.object({
+        content: z.string().optional(),
+        path: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.createProjectFile({
+        content: input.content,
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Create a new folder on a remote device, via the device's
+   * `createLocalDirectory` RPC. Fails when the path is taken.
+   */
+  createProjectDirectory: workspaceFileWriteProcedure
+    .input(z.object({ path: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.createProjectDirectory({
+        deviceId: input.deviceId,
+        path: input.path,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Copy files/folders on a remote device, via the device's `copyLocalFiles`
+   * RPC. An item without `targetPath` is duplicated in place.
+   */
+  copyProjectFiles: workspaceFileWriteProcedure
+    .input(
+      z.object({
+        items: z
+          .array(z.object({ sourcePath: z.string(), targetPath: z.string().optional() }))
+          .min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.copyProjectFiles({
+        deviceId: input.deviceId,
+        items: input.items,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+        workingDirectory: input.workingDirectory,
+      });
+    }),
+
+  /**
+   * Move files/folders to a remote device's trash, via the device's
+   * `trashLocalFiles` RPC. Devices without a trash reject rather than delete.
+   */
+  trashProjectFiles: workspaceFileWriteProcedure
+    .input(z.object({ paths: z.array(z.string()).min(1) }))
+    .mutation(async ({ ctx, input }) => {
+      return deviceGateway.trashProjectFiles({
+        deviceId: input.deviceId,
+        paths: input.paths,
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
         workingDirectory: input.workingDirectory,
@@ -1179,6 +1273,7 @@ export const deviceRouter = router({
           hostname: d.hostname ?? live?.hostname ?? null,
           identitySource: d.identitySource,
           lastSeen: d.lastSeenAt.toISOString(),
+          metadata: d.metadata,
           online: channels.length > 0,
           platform: d.platform ?? live?.platform ?? null,
           registered: true,
@@ -1294,6 +1389,46 @@ export const deviceRouter = router({
         workspaceId: ctx.workspaceId,
       });
       return result ?? null;
+    }),
+
+  // ─── Remote app update ───
+  //
+  // Update the desktop app on a device from anywhere: check (a found update
+  // downloads on its own), poll progress, then restart into it. Restarting
+  // interrupts whatever the machine is running, so every step is gated like
+  // exposing a port.
+
+  getAppUpdateState: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update the app');
+      return deviceGateway.getAppUpdateState({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  checkAppUpdate: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update the app');
+      return deviceGateway.checkAppUpdate({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  installAppUpdate: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'update the app');
+      return deviceGateway.installAppUpdate({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
     }),
 
   /** Live tunnel links the caller can reach, newest first. */

@@ -1,6 +1,7 @@
 import { GatewayMuxClient } from '@lobechat/agent-gateway-client';
 
 import { aiAgentService } from '@/services/aiAgent';
+import { getLlmRelayClientId } from '@/services/llmRelay';
 import { shareChatService } from '@/services/shareChat';
 
 export interface GatewayMuxIdentity {
@@ -15,6 +16,15 @@ export interface GatewayMuxIdentity {
 }
 
 const registry = new Map<string, GatewayMuxClient>();
+
+/**
+ * Identities whose mux gave up on protocol v2 (`/v2/ws` missing, the token
+ * endpoint absent, the hub refusing the token). Page-scoped on purpose: a
+ * reload retries v2, so a transient outage does not pin the tab to v1 for the
+ * rest of the session, while a deployment that genuinely has no v2 only pays
+ * the dial budget once per page.
+ */
+const unavailableIdentities = new Set<string>();
 
 const identityKey = ({ agentShareId, gatewayUrl }: GatewayMuxIdentity): string =>
   `${gatewayUrl}|${agentShareId ?? 'owner'}`;
@@ -47,6 +57,9 @@ export const getGatewayMux = (identity: GatewayMuxIdentity): GatewayMuxClient =>
   let mux = registry.get(key);
   if (!mux) {
     mux = new GatewayMuxClient({
+      // The owner socket uses the id this tab declares as its LLM executor,
+      // so the hub can hand `llm_execute` to the tab that started the run.
+      ...(!identity.agentShareId && { clientId: getLlmRelayClientId() }),
       gatewayUrl: identity.gatewayUrl,
       getToken: buildGetToken(identity),
       keepAlive: true,
@@ -54,6 +67,24 @@ export const getGatewayMux = (identity: GatewayMuxIdentity): GatewayMuxClient =>
     registry.set(key, mux);
   }
   return mux;
+};
+
+/**
+ * Whether protocol v2 has already failed for this identity on this page, in
+ * which case the caller must use the v1 per-operation socket instead.
+ */
+export const isGatewayMuxUnavailable = (identity: GatewayMuxIdentity): boolean =>
+  unavailableIdentities.has(identityKey(identity));
+
+/**
+ * Record that protocol v2 does not work for this identity, and forget the dead
+ * mux so a later `getGatewayMux` never hands out a client that will not dial
+ * again. Called by the transport when the mux reports itself `unavailable`.
+ */
+export const markGatewayMuxUnavailable = (identity: GatewayMuxIdentity): void => {
+  const key = identityKey(identity);
+  unavailableIdentities.add(key);
+  registry.delete(key);
 };
 
 /**
@@ -66,4 +97,7 @@ export const getGatewayMux = (identity: GatewayMuxIdentity): GatewayMuxClient =>
 export const resetGatewayMuxRegistry = (): void => {
   for (const mux of registry.values()) mux.disconnect();
   registry.clear();
+  // A new user-data context is a new deployment as far as this page knows
+  // (the desktop app switching remote servers), so the v2 verdict starts over.
+  unavailableIdentities.clear();
 };

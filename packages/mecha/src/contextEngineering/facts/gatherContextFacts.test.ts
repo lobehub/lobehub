@@ -299,6 +299,39 @@ describe('gatherContextFacts', () => {
         mentionedAgents: [{ id: 'agt_9', title: 'Nine' }],
       });
     });
+
+    it('invites no delegation inside a sub-agent run, where callAgent is rejected', async () => {
+      const listRecentAgents = vi.fn(async () => recent);
+      const facts = await gatherContextFacts(
+        request({
+          enabledToolIds: ['lobe-agent-management'],
+          isSubAgent: true,
+          mentionedAgents: [{ id: 'agt_9', title: 'Nine' }] as never,
+        }),
+        {
+          listEnabledProviders: async () => [{ id: 'openai', models: [], name: 'OpenAI' }],
+          listRecentAgents,
+        },
+      );
+
+      const ctx = facts.step.agentManagementContext!;
+      expect(listRecentAgents).not.toHaveBeenCalled();
+      expect(ctx.availableAgents).toBeUndefined();
+      expect(ctx.mentionedAgents).toBeUndefined();
+      // Its own id stays, for updateAgent / installPlugin on itself.
+      expect(ctx.currentAgent).toEqual({ id: 'agt_1', title: 'Helper' });
+      // CRUD facts for createAgent / updateAgent still flow.
+      expect(ctx.availableProviders).toEqual([{ id: 'openai', models: [], name: 'OpenAI' }]);
+    });
+
+    it('invites no delegation in an auto-mode sub-agent without the tool', async () => {
+      const listRecentAgents = vi.fn(async () => recent);
+      const facts = await gatherContextFacts(request({ isSubAgent: true }), { listRecentAgents });
+      expect(listRecentAgents).not.toHaveBeenCalled();
+      expect(facts.step.agentManagementContext).toEqual({
+        currentAgent: { id: 'agt_1', title: 'Helper' },
+      });
+    });
   });
 
   it('lists LobeHub skill connectors in the official tool catalog with their status', () => {
@@ -369,5 +402,39 @@ describe('gatherContextFacts', () => {
       appUrl: 'https://x',
       workspace: { slug: 'team' },
     });
+  });
+});
+
+describe('which tool counts as reaching the sandbox', () => {
+  const persistence = { cwd: 'lobehub-dev', mode: 'persistent' as const };
+
+  it('describes the persistent workspace for a run that only has the always-on skills tool', async () => {
+    // `lobe-skills` runCommand opens the same session in the same directory as
+    // the cloud-sandbox tool, and it ships with every run. Gating the placement
+    // on the optional tool left a skills-driven run reading the ephemeral
+    // wording while its commands ran in a persistent workspace.
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-skills'] }), {
+      resolveSandboxPersistence: async () => persistence,
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('persistent workspace');
+    expect(facts.variables.sandbox_workspace).toContain('`lobehub-dev`');
+  });
+
+  it('still describes it for the cloud-sandbox tool on its own', async () => {
+    const facts = await gatherContextFacts(request({ enabledToolIds: ['lobe-cloud-sandbox'] }), {
+      resolveSandboxPersistence: async () => persistence,
+    });
+
+    expect(facts.variables.sandbox_workspace).toContain('persistent workspace');
+  });
+
+  it('asks for nothing when no tool can run a command in the sandbox', async () => {
+    const resolveSandboxPersistence = vi.fn(async () => persistence);
+    await gatherContextFacts(request({ enabledToolIds: ['lobe-agent'] }), {
+      resolveSandboxPersistence,
+    });
+
+    expect(resolveSandboxPersistence).not.toHaveBeenCalled();
   });
 });

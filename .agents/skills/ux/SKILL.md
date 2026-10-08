@@ -144,7 +144,7 @@ Use this scan to identify applicable checks, then read the linked module for its
 
 **Feedback — loading & system response** ([feedback.md](references/feedback.md))
 
-- [ ] Use project loaders rather than antd `Spin`.
+- [ ] Loading form matches the scenario table in [feedback §4.1](references/feedback.md).
 - [ ] Match skeleton structure to measured rendered layouts, including platform and route variants.
 - [ ] Loading and load-more failures have visible recovery paths; failed items persist rather than auto-dismiss.
 - [ ] Dependent-fetch gates release on settled data, absence, or error; error/not-found branches remain reachable.

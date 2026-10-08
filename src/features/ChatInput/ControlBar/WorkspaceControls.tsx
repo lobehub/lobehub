@@ -1,14 +1,15 @@
 'use client';
 
 import { Tooltip } from '@lobehub/ui';
-import { memo } from 'react';
+import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatInputResourceAccess } from '@/features/ChatInput/hooks/useChatInputResourceAccess';
 
 import CloudRepoSwitcher from './CloudRepoSwitcher';
 import HeteroDeviceSwitcher from './HeteroDeviceSwitcher';
-import { useWorkspaceSurface } from './useWorkspaceSurface';
+import SandboxStorageSection from './SandboxStorageSection';
+import { useWorkspaceSurface, type WorkspaceSurface } from './useWorkspaceSurface';
 import WorkingDirectorySection from './WorkingDirectorySection';
 
 interface WorkspaceControlsProps {
@@ -36,10 +37,10 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
     const { t } = useTranslation('setting');
     const { canConfigureResource, canUseResource } = useChatInputResourceAccess();
     // Resolved from the effective (override-merged) execution target so the
-    // surface follows the device THIS member's run actually targets.
-    const surface = useWorkspaceSurface(agentId, alwaysShowWorkspace);
+    // surfaces follow the device THIS member's run actually targets.
+    const surfaces = useWorkspaceSurface(agentId, alwaysShowWorkspace);
 
-    const renderWorkspace = () => {
+    const renderSurface = (surface: WorkspaceSurface) => {
       switch (surface) {
         case 'workingDirectory': {
           return <WorkingDirectorySection agentId={agentId} />;
@@ -47,48 +48,56 @@ const WorkspaceControls = memo<WorkspaceControlsProps>(
         case 'cloudRepo': {
           return <CloudRepoSwitcher agentId={agentId} />;
         }
-        default: {
-          return null;
+        case 'sandbox': {
+          return <SandboxStorageSection agentId={agentId} />;
         }
       }
     };
 
     // The directory picker and git controls write shared agent config / run
-    // device git mutations, so members without edit access see the whole
-    // cluster disabled. The device switcher handles its own use-level gate.
-    const workspace = renderWorkspace();
+    // device git mutations, so members without edit access see that cluster
+    // disabled. The device switcher handles its own use-level gate.
+    //
+    // The sandbox is exempt: its choice lands in the topic's own metadata, not
+    // in the shared agent row, so a member who may use the agent may choose
+    // where their own run keeps its files. Gated one surface at a time, so a
+    // run that shows both keeps the sandbox chip live while the repo switcher
+    // is inert.
+    const withAccessGate = (surface: WorkspaceSurface) => {
+      const node = renderSurface(surface);
+      if (canConfigureResource || surface === 'sandbox') return node;
+
+      return (
+        <Tooltip
+          title={t(
+            canUseResource ? 'permission.accessTag.useOnlyTip' : 'permission.accessTag.viewOnlyTip',
+          )}
+        >
+          {/* Outer div catches hover for the tooltip; the inner one makes
+              the controls inert. */}
+          <div style={{ alignItems: 'center', display: 'flex', gap: 4 }}>
+            <div
+              style={{
+                alignItems: 'center',
+                display: 'flex',
+                gap: 4,
+                opacity: 0.5,
+                pointerEvents: 'none',
+              }}
+            >
+              {node}
+            </div>
+          </div>
+        </Tooltip>
+      );
+    };
 
     return (
       <>
         <HeteroDeviceSwitcher agentId={agentId} />
-        {workspace &&
-          (canConfigureResource ? (
-            workspace
-          ) : (
-            <Tooltip
-              title={t(
-                canUseResource
-                  ? 'permission.accessTag.useOnlyTip'
-                  : 'permission.accessTag.viewOnlyTip',
-              )}
-            >
-              {/* Outer div catches hover for the tooltip; the inner one makes
-                  the controls inert. */}
-              <div style={{ alignItems: 'center', display: 'flex', gap: 4 }}>
-                <div
-                  style={{
-                    alignItems: 'center',
-                    display: 'flex',
-                    gap: 4,
-                    opacity: 0.5,
-                    pointerEvents: 'none',
-                  }}
-                >
-                  {workspace}
-                </div>
-              </div>
-            </Tooltip>
-          ))}
+        {surfaces.map((surface) => (
+          <Fragment key={surface}>{withAccessGate(surface)}</Fragment>
+        ))}
       </>
     );
   },

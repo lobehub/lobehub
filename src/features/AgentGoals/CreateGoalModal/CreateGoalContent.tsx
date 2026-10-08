@@ -5,8 +5,15 @@ import type { CreateGoalParams, GoalCriterionDraft } from '@lobechat/builtin-too
 import { DEFAULT_GOAL_MAX_ROUNDS } from '@lobechat/const/verify';
 import { useEditor } from '@lobehub/editor/react';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { InputNumber } from 'antd';
+import {
+  ActionIcon,
+  Button,
+  InputNumber,
+  Spin,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   ArrowLeft,
@@ -22,7 +29,6 @@ import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } fr
 import { useTranslation } from 'react-i18next';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -472,7 +478,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   justify={'space-between'}
                 >
                   <Flexbox horizontal align={'center'} gap={8}>
-                    <NeuralNetworkLoading size={18} />
+                    <Spin size="small" variant="network" />
                     <div
                       aria-label={t('createGoal.generating')}
                       className={styles.generatingTextViewport}
@@ -598,7 +604,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                   min={2}
                   size={'small'}
                   style={{ width: '100%' }}
-                  value={plan.maxIterations ?? undefined}
+                  value={plan.maxIterations ?? null}
                   variant={'filled'}
                   suffix={
                     <Text fontSize={12} type={'secondary'}>

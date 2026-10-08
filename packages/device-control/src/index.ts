@@ -1,5 +1,11 @@
 export { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
-export { DEVICE_RPC_METHODS, type DeviceRpcMethod, executeDeviceRpc } from './dispatch';
+export {
+  APP_UPDATE_UNSUPPORTED_MESSAGE,
+  DEVICE_RPC_METHODS,
+  type DeviceRpcMethod,
+  executeDeviceRpc,
+  TRASH_UNSUPPORTED_MESSAGE,
+} from './dispatch';
 export {
   defaultCopyAssetForPublish,
   defaultGetLocalFilePreview,
@@ -13,6 +19,12 @@ export {
   type ListListeningPortsParams,
   type ListListeningPortsResult,
 } from './listeningPorts';
+export {
+  deviceMetricsBacklogFileName,
+  DeviceMetricsSampler,
+  type DeviceMetricsSamplerOptions,
+  pushMetrics,
+} from './metrics';
 export {
   defaultGetProjectFileIndex,
   defaultListProjectDirectory,

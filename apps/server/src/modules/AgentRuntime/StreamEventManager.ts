@@ -150,6 +150,8 @@ export interface StreamChunkData {
   reasoning?: string;
   /** Multimodal reasoning parts (text + images) */
   reasoningParts?: Array<{ text: string; type: 'text' } | { image: string; type: 'image' }>;
+  /** Relayed LLM attempt this chunk re-publishes; the executor client skips its own echo. */
+  relayCallId?: string;
   toolsCalling?: ChatToolPayload[];
 }
 

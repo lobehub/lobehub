@@ -1,5 +1,5 @@
+import type { ItemType } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
-import { type ItemType } from 'antd/es/menu/interface';
 import { BoxIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

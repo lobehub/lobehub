@@ -1141,8 +1141,6 @@ paths:
               required:
                 - name
       responses:
-        "200":
-          description: Response
         "201":
           content:
             application/json:
@@ -2735,8 +2733,6 @@ paths:
                 - name
               additionalProperties: false
       responses:
-        "200":
-          description: Response
         "201":
           content:
             application/json:
@@ -11623,6 +11619,1073 @@ paths:
           description: Internal server error
       tags:
         - files
+  /api/v1/goals:
+    get:
+      operationId: getApiV1Goals
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+        - in: query
+          name: projectId
+          schema:
+            type: string
+        - in: query
+          name: statuses
+          schema:
+            type: string
+        - in: query
+          name: topicId
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - goals
+    post:
+      operationId: postApiV1Goals
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                config:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                criteria:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      description:
+                        type: string
+                      instruction:
+                        type: string
+                      title:
+                        type: string
+                        minLength: 1
+                    required:
+                      - title
+                deadline:
+                  type: string
+                  format: date-time
+                  pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                maxTotalCost:
+                  type: number
+                  exclusiveMinimum: 0
+                problemDescription:
+                  type: string
+                projectId:
+                  type: string
+                requirement:
+                  type: string
+                tasks:
+                  type: array
+                  items:
+                    anyOf:
+                      - type: string
+                        minLength: 1
+                      - type: object
+                        properties:
+                          description:
+                            type: string
+                          title:
+                            type: string
+                            minLength: 1
+                        required:
+                          - title
+                title:
+                  type: string
+                  minLength: 1
+              required:
+                - title
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - goals
+  /api/v1/goals/{id}:
+    get:
+      operationId: getApiV1GoalsById
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - goals
+    patch:
+      operationId: patchApiV1GoalsById
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                budget:
+                  type: object
+                  properties:
+                    deadline:
+                      anyOf:
+                        - type: string
+                          format: date-time
+                          pattern: ^(?:(?:\d\d[2468][048]|\d\d[13579][26]|\d\d0[48]|[02468][048]00|[13579][26]00)-02-29|\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\d|30)|(?:02)-(?:0[1-9]|1\d|2[0-8])))T(?:(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d+)?(?:Z))$
+                        - type: "null"
+                    maxAttemptsPerTask:
+                      type: integer
+                      exclusiveMinimum: 0
+                      maximum: 9007199254740991
+                    maxConcurrentTasks:
+                      anyOf:
+                        - type: integer
+                          minimum: 1
+                          maximum: 10
+                        - type: "null"
+                    maxExperiments:
+                      type: integer
+                      minimum: 1
+                      maximum: 200
+                    maxManagerTurns:
+                      type: integer
+                      minimum: 1
+                      maximum: 100
+                    maxRounds:
+                      anyOf:
+                        - type: integer
+                          exclusiveMinimum: 0
+                          maximum: 9007199254740991
+                        - type: "null"
+                    maxStepsPerRun:
+                      anyOf:
+                        - type: integer
+                          exclusiveMinimum: 0
+                          maximum: 9007199254740991
+                        - type: "null"
+                    maxTotalCost:
+                      anyOf:
+                        - type: number
+                          exclusiveMinimum: 0
+                        - type: "null"
+                requirement:
+                  type: string
+                  minLength: 1
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - goals
+    delete:
+      operationId: deleteApiV1GoalsById
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - goals
+  /api/v1/goals/{id}/supervision:
+    get:
+      operationId: getGoalSupervision
+      tags:
+        - goals
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/goals/{id}/advance:
+    post:
+      operationId: advanceGoal
+      tags:
+        - goals
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/goals/{id}/pause:
+    post:
+      operationId: pauseGoal
+      tags:
+        - goals
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/goals/{id}/resume:
+    post:
+      operationId: resumeGoal
+      tags:
+        - goals
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/goals/{id}/restart:
+    post:
+      operationId: restartGoal
+      tags:
+        - goals
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                  minLength: 1
   /api/v1/knowledge-bases:
     get:
       operationId: getApiV1KnowledgeBases
@@ -13220,6 +14283,430 @@ paths:
             type: string
             format: uuid
             pattern: ^([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}|00000000-0000-0000-0000-000000000000|ffffffff-ffff-ffff-ffff-ffffffffffff)$
+          required: true
+  /api/v1/memories/persona:
+    get:
+      operationId: getMemoryPersona
+      summary: Get the current persona document
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/memories/persona/versions:
+    get:
+      operationId: listMemoryPersonaVersions
+      summary: List persona document versions
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/memories:
+    delete:
+      operationId: deleteAllMemories
+      summary: Delete all memory entries
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/memories/{category}/{id}:
+    delete:
+      operationId: deleteMemoryEntry
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: category
+          schema:
+            type: string
+            enum:
+              - identities
+              - preferences
+              - contexts
+              - activities
+              - experiences
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/memories/{category}:
+    get:
+      operationId: listMemoryCategory
+      tags:
+        - memories
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: category
+          schema:
+            type: string
+            enum:
+              - identities
+              - preferences
+              - contexts
+              - activities
+              - experiences
           required: true
   /api/v1/message-translations/{messageId}:
     post:
@@ -15100,6 +16587,615 @@ paths:
           description: Internal server error
       tags:
         - models
+  /api/v1/notifications:
+    get:
+      operationId: getApiV1Notifications
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+        - in: query
+          name: cursor
+          schema:
+            type: string
+        - in: query
+          name: isRead
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - "true"
+                  - "false"
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: unreadOnly
+          schema:
+            anyOf:
+              - type: boolean
+              - type: string
+                enum:
+                  - "true"
+                  - "false"
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - notifications
+  /api/v1/notifications/unread-count:
+    get:
+      operationId: getUnreadNotificationCount
+      summary: Get the unread notification count
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/notifications/counts:
+    get:
+      operationId: getNotificationCounts
+      summary: Get per-category notification counts
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  minItems: 1
+                  type: array
+                  items:
+                    type: string
+                    minLength: 1
+              required:
+                - ids
+  /api/v1/notifications/read-all:
+    post:
+      operationId: markAllNotificationsRead
+      summary: Mark every notification as read
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/notifications/archive-all:
+    post:
+      operationId: archiveAllNotifications
+      summary: Archive every notification
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Invalid request
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+  /api/v1/notifications/{id}/archive:
+    post:
+      operationId: archiveNotification
+      tags:
+        - notifications
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
   /api/v1/permissions:
     get:
       operationId: getApiV1Permissions
@@ -16447,6 +18543,7 @@ paths:
                             properties:
                               type:
                                 type: string
+                                format: starts_with
                                 pattern: ^lobe-.*
                             required:
                               - type
@@ -17392,6 +19489,1048 @@ paths:
           description: Internal server error
       tags:
         - roles
+  /api/v1/signals/source-events:
+    post:
+      operationId: emitSourceEvent
+      tags:
+        - signals
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                payload:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                scopeKey:
+                  type: string
+                sourceId:
+                  type: string
+                  minLength: 1
+                sourceType:
+                  type: string
+                  enum:
+                    - client.gateway.error
+                    - client.gateway.runtime_end
+                    - client.gateway.step_complete
+                    - client.gateway.stream_start
+                    - client.runtime.complete
+                    - client.runtime.start
+                timestamp:
+                  type: number
+              required:
+                - payload
+                - sourceId
+                - sourceType
+  /api/v1/signals/trigger:
+    post:
+      operationId: triggerSourceEvent
+      tags:
+        - signals
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                agentId:
+                  type: string
+                payloadOverride:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                scopeKey:
+                  type: string
+                sourceId:
+                  type: string
+                sourceType:
+                  type: string
+                  enum:
+                    - agent.nightly_review.requested
+                    - agent.self_reflection.requested
+                    - agent.self_feedback_intent.declared
+                    - agent.user.message
+                    - tool.outcome.completed
+                    - tool.outcome.failed
+                timestamp:
+                  type: number
+                topicId:
+                  type: string
+              required:
+                - sourceType
+  /api/v1/signals/receipts:
+    get:
+      operationId: listSignalReceipts
+      tags:
+        - signals
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: query
+          name: agentId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: cursor
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 50
+        - in: query
+          name: sinceCreatedAt
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+        - in: query
+          name: topicId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+  /api/v1/tasks:
+    get:
+      operationId: getApiV1Tasks
+      parameters:
+        - in: query
+          name: assigneeAgentId
+          schema:
+            type: string
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+        - in: query
+          name: offset
+          schema:
+            type: integer
+            minimum: 0
+            maximum: 9007199254740991
+        - in: query
+          name: projectId
+          schema:
+            type: string
+        - in: query
+          name: statuses
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+    post:
+      operationId: postApiV1Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assigneeAgentId:
+                  type: string
+                assigneeUserId:
+                  type: string
+                automationMode:
+                  type: string
+                  enum:
+                    - heartbeat
+                    - schedule
+                config:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                createdByAgentId:
+                  type: string
+                description:
+                  type: string
+                instruction:
+                  type: string
+                  minLength: 1
+                name:
+                  type: string
+                parentTaskId:
+                  type: string
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 4
+                projectId:
+                  type: string
+                schedulePattern:
+                  type: string
+                scheduleTimezone:
+                  type: string
+                visibility:
+                  type: string
+                  enum:
+                    - private
+                    - public
+              required:
+                - instruction
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+  /api/v1/tasks/{id}:
+    get:
+      operationId: getApiV1TasksById
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+    patch:
+      operationId: patchApiV1TasksById
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assigneeAgentId:
+                  type:
+                    - string
+                    - "null"
+                assigneeUserId:
+                  type:
+                    - string
+                    - "null"
+                automationMode:
+                  anyOf:
+                    - type: string
+                      enum:
+                        - heartbeat
+                        - schedule
+                    - type: "null"
+                config:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+                description:
+                  type:
+                    - string
+                    - "null"
+                instruction:
+                  type: string
+                name:
+                  type: string
+                parentTaskId:
+                  type:
+                    - string
+                    - "null"
+                priority:
+                  type: integer
+                  minimum: 0
+                  maximum: 4
+                schedulePattern:
+                  type:
+                    - string
+                    - "null"
+                scheduleTimezone:
+                  type:
+                    - string
+                    - "null"
+              additionalProperties: false
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+    delete:
+      operationId: deleteApiV1TasksById
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
+  /api/v1/tasks/{id}/status:
+    patch:
+      operationId: patchApiV1TasksByIdStatus
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+                status:
+                  type: string
+                  enum:
+                    - backlog
+                    - running
+                    - scheduled
+                    - paused
+                    - completed
+                    - failed
+                    - canceled
+              required:
+                - status
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: true
+                    type:
+                      - array
+                      - object
+                      - "null"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      tags:
+        - tasks
   /api/v1/topics:
     get:
       operationId: getApiV1Topics
@@ -18275,7 +21414,7 @@ paths:
                   anyOf:
                     - type: string
                       format: email
-                      pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                      pattern: ^(?:[A-Za-z0-9_'+\-]+\.)*[A-Za-z0-9_'+\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
                     - type: "null"
                 firstName:
                   type:
@@ -18501,7 +21640,7 @@ paths:
                   anyOf:
                     - type: string
                       format: email
-                      pattern: ^(?!\.)(?!.*\.\.)([A-Za-z0-9_'+\-\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
+                      pattern: ^(?:[A-Za-z0-9_'+\-]+\.)*[A-Za-z0-9_'+\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\-]*\.)+[A-Za-z]{2,}$
                     - type: "null"
                 firstName:
                   type:

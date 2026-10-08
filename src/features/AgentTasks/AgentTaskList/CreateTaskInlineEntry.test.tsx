@@ -177,6 +177,35 @@ vi.mock('../features/TaskPriorityTag', () => ({
   ),
 }));
 
+/**
+ * The run-location / working-directory cluster talks to the device list, the
+ * workspace preference and the agent store. Stubbed here so this suite stays
+ * about the composer's own contract — which is that whatever the cluster hands
+ * over is what reaches `createTask`, and that an untouched composer sends
+ * nothing at all. The cluster's own rendering is covered by its own suite.
+ */
+const executionControlsMock = vi.hoisted(() => ({
+  value: undefined as undefined | { boundDeviceId?: string },
+}));
+
+vi.mock('../features/TaskExecutionControls', () => ({
+  default: ({
+    onChange,
+    value,
+  }: {
+    onChange: (execution?: { boundDeviceId?: string }) => void;
+    value?: { boundDeviceId?: string };
+  }) => {
+    executionControlsMock.value = value;
+    return (
+      <div data-pinned={value?.boundDeviceId ?? ''} data-testid="execution-controls">
+        <span data-testid="pin-device" onClick={() => onChange({ boundDeviceId: 'device-a' })} />
+        <span data-testid="unpin-device" onClick={() => onChange(undefined)} />
+      </div>
+    );
+  },
+}));
+
 vi.mock('../features/AssigneeAgentSelector', () => ({
   default: ({
     children,
@@ -252,7 +281,7 @@ vi.mock('../shared/useAgentVisibility', () => ({
 }));
 
 /** Flips the Labs toggles the composer still reads. */
-const setLabs = (lab: { enableTopicAcceptance?: boolean }) => {
+const setLabs = (lab: { enableGoals?: boolean }) => {
   userStateMock.lab = lab as Record<string, boolean>;
 };
 
@@ -377,6 +406,68 @@ describe('CreateTaskInlineEntry', () => {
     });
   });
 
+  it('creates the task with no execution config when no run location is pinned', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    // The whole point of the contract: an untouched composer must create the
+    // ordinary task it always did — the run inherits the assignee agent.
+    await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+    expect('config' in createTaskMock.mock.calls[0][0]).toBe(false);
+  });
+
+  it('sends the pinned device as the task execution config', async () => {
+    editorMarkdownMock.value = 'Coordinate the release';
+    render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('pin-device'));
+    fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+    await waitFor(() =>
+      expect(createTaskMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: {
+            execution: {
+              boundDeviceId: 'device-a',
+              repos: null,
+              workingDirectory: null,
+              workingDirectoryConfig: null,
+            },
+          },
+        }),
+      ),
+    );
+  });
+
+  it('keeps the pinned device in the draft and drops it when unpinned', async () => {
+    // The draft is only written once there is something to restore.
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+    fireEvent.click(screen.getByTestId('pin-device'));
+
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft.execution).toEqual({ boundDeviceId: 'device-a' });
+    });
+
+    rerender(<CreateTaskInlineEntry placeholder="reload" variant="hero" />);
+    fireEvent.click(screen.getByTestId('unpin-device'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('execution-controls')).toHaveAttribute('data-pinned', ''),
+    );
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-1:all') || '{}',
+      );
+      expect(draft.execution).toBeUndefined();
+    });
+  });
+
   it('resets member assignment and draft persistence when the workspace changes', async () => {
     editorMarkdownMock.value = 'Coordinate the release';
     const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
@@ -402,6 +493,36 @@ describe('CreateTaskInlineEntry', () => {
         localStorage.getItem('lobehub:task-create-draft:workspace-2:all') || '{}',
       );
       expect(draft.assigneeUserId).toBeUndefined();
+    });
+  });
+
+  it('drops the previous scope’s run location when the destination has no draft', async () => {
+    // The composer stays mounted across a workspace/agent switch, and the reset
+    // runs before the destination draft is read — a scope with no draft returns
+    // early, so the run location has to be part of the baseline. Otherwise the
+    // new scope inherits a device (or a directory) picked for the old one and
+    // creates its task there, where it may not even be reachable.
+    editorMarkdownMock.value = 'Coordinate the release';
+    const { rerender } = render(<CreateTaskInlineEntry variant="hero" />);
+
+    fireEvent.click(screen.getByTestId('pin-device'));
+    await waitFor(() =>
+      expect(screen.getByTestId('execution-controls')).toHaveAttribute('data-pinned', 'device-a'),
+    );
+
+    activeWorkspaceMock.id = 'workspace-3';
+    // The real workspace hook publishes a store update. Change one prop here as
+    // well so the memoized test component observes the mocked hook value.
+    rerender(<CreateTaskInlineEntry placeholder="Empty workspace" variant="hero" />);
+
+    await waitFor(() =>
+      expect(screen.getByTestId('execution-controls')).toHaveAttribute('data-pinned', ''),
+    );
+    await waitFor(() => {
+      const draft = JSON.parse(
+        localStorage.getItem('lobehub:task-create-draft:workspace-3:all') || '{}',
+      );
+      expect(draft.execution).toBeUndefined();
     });
   });
 
@@ -496,7 +617,7 @@ describe('CreateTaskInlineEntry', () => {
 
   describe('intent recognition', () => {
     beforeEach(() => {
-      setLabs({ enableTopicAcceptance: true });
+      setLabs({ enableGoals: true });
       editorMarkdownMock.value = 'Write a project plan';
     });
 
@@ -583,6 +704,46 @@ describe('CreateTaskInlineEntry', () => {
       ]);
       // One press: the rewrite and the create, with no page in between.
       await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+    });
+
+    it('creates with the answer a keyboard pick submits in the same keystroke', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+      await screen.findByText('taskIntent.reviewStep');
+
+      // A digit picks the option and, being the last answer, submits at once.
+      fireEvent.keyDown(document.body, { key: '1' });
+
+      await waitFor(() => expect(synthesizeInstructionMock).toHaveBeenCalledTimes(1));
+      expect(synthesizeInstructionMock.mock.calls[0][0].answers).toEqual([
+        { answer: 'lobe-chat', question: 'Which repo?' },
+      ]);
+    });
+
+    it('creates the draft as typed when the questions are skipped, even after a pick', async () => {
+      analyzeIntentMock.mockResolvedValue({
+        ...clearReading,
+        clarifications: [{ options: ['lobe-chat'], question: 'Which repo?' }],
+        confidence: 'medium',
+      });
+
+      render(<CreateTaskInlineEntry variant="hero" />);
+      fireEvent.keyDown(screen.getByTestId('task-editor'), { key: 'Enter', metaKey: true });
+
+      await screen.findByText('taskIntent.reviewStep');
+      fireEvent.click(screen.getByText('lobe-chat'));
+      fireEvent.click(screen.getByText('taskIntent.skipQuestions'));
+
+      await waitFor(() => expect(createTaskMock).toHaveBeenCalledTimes(1));
+      // Skipping is declining to narrow the scope: no rewrite, no answers.
+      expect(synthesizeInstructionMock).not.toHaveBeenCalled();
+      expect(createTaskMock.mock.calls[0][0].instruction).not.toContain('lobe-chat');
     });
 
     it('names the last step "create", answered or not', async () => {

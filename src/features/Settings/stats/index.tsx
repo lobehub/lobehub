@@ -1,10 +1,9 @@
 'use client';
 
-import { FormGroup, Grid, Icon } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Grid, Icon } from '@lobehub/ui';
+import { DatePicker, Divider, Tabs } from '@lobehub/ui/base-ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { ProviderIcon } from '@lobehub/ui/icons';
-import { type DatePickerProps } from 'antd';
-import { DatePicker, Divider } from 'antd';
 import dayjs from 'dayjs';
 import { Brain, UserIcon } from 'lucide-react';
 import { memo, type ReactNode, useEffect, useState } from 'react';
@@ -69,25 +68,20 @@ const StatsSetting = memo<StatsSettingProps>(
       }
     }, [dateStrings]);
 
-    const handleDateChange: DatePickerProps['onChange'] = (dates, dateStrings) => {
-      // Handle both single date and array
-      const actualDate = Array.isArray(dates) ? dates[0] : dates;
-      if (actualDate) {
-        setDateRange(actualDate);
-      }
-      if (typeof dateStrings === 'string') {
-        setDateStrings(dateStrings);
-      }
+    const handleDateChange = (date: Date | null) => {
+      if (!date) return;
+      const month = dayjs(date);
+      setDateRange(month);
+      setDateStrings(month.format('YYYY-MM'));
     };
 
     return (
       <>
         {showSettingHeader && <SettingHeader title={t('tab.stats')} />}
         {/* ========== Header Section ========== */}
-        <FormGroup
+        <Form.Group
           collapsible={false}
           extra={headerNode === undefined ? <ShareButton /> : undefined}
-          gap={16}
           variant={'filled'}
           title={
             headerNode === undefined ? (
@@ -103,23 +97,27 @@ const StatsSetting = memo<StatsSettingProps>(
             <TotalMessages mobile={mobile} />
             <TotalTokens />
           </Grid>
-          <Divider dashed />
+          <Divider dashed style={{ marginBlock: 24 }} />
           <AiHeatmaps mobile={mobile} />
-          <Divider dashed />
+          <Divider dashed style={{ marginBlock: 24 }} />
           <Grid gap={16} rows={3} style={{ paddingBottom: 12 }}>
             <ModelsRank />
             <AssistantsRank mobile={mobile} />
             <TopicsRank mobile={mobile} />
           </Grid>
-        </FormGroup>
-        <FormGroup
+        </Form.Group>
+        <Form.Group
           collapsible={false}
-          gap={16}
-          title={t('tab.usage')}
+          title={<span style={{ lineHeight: '35px' }}>{t('tab.usage')}</span>}
           variant={'filled'}
           extra={
             <>
-              <DatePicker picker="month" value={dateRange} onChange={handleDateChange} />
+              <DatePicker
+                format="YYYY-MM"
+                mode="month"
+                value={dateRange.toDate()}
+                onChange={handleDateChange}
+              />
               <Tabs
                 activeKey={groupBy}
                 style={{ marginLeft: 8 }}
@@ -148,9 +146,6 @@ const StatsSetting = memo<StatsSettingProps>(
               />
             </>
           }
-          styles={{
-            title: { lineHeight: '35px' },
-          }}
         >
           <AsyncBoundary data={data} error={error} errorVariant={'block'} onRetry={() => mutate()}>
             <UsageCards
@@ -159,7 +154,7 @@ const StatsSetting = memo<StatsSettingProps>(
               isLoading={isLoading}
               resolveUser={resolveUser}
             />
-            <Divider />
+            <Divider style={{ marginBlock: 24 }} />
             <UsageTrends
               data={data}
               groupBy={groupBy}
@@ -169,7 +164,7 @@ const StatsSetting = memo<StatsSettingProps>(
           </AsyncBoundary>
           <div style={{ height: 24 }} />
           <UsageTable dateStrings={dateStrings} />
-        </FormGroup>
+        </Form.Group>
       </>
     );
   },

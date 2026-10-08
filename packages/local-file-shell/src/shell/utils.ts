@@ -296,6 +296,194 @@ export const getShellInfo = async (): Promise<ShellInfo> =>
     : { displayName: '/bin/sh', path: '/bin/sh', type: 'sh' };
 
 /**
+ * Locate the spans of a PowerShell script whose text PowerShell takes
+ * literally with respect to cmd-style `%VAR%`: single-quoted strings (`''` is
+ * an escaped quote), single- and double-quoted here-strings, and comments.
+ * Returns sorted, non-overlapping `[start, end)` ranges.
+ *
+ * Ordinary double-quoted strings are scanned over (so an apostrophe inside
+ * `"it's"` does not open a single-quoted string) but not reported: `%VAR%`
+ * inside them is still a reference the author expected to expand. Their
+ * `$( ... )` subexpressions are code, so they are lexed like the top level.
+ * This is a lexer-grade approximation, not a parser — an unterminated literal
+ * extends to the end of the script, which errs on the side of leaving text
+ * untouched.
+ */
+/**
+ * A completed PowerShell expression token after which `#` opens a comment
+ * (`$x = 1# …`, `$x = $y# …`), optionally preceded by operator characters
+ * (`$x =1# …`): a numeric literal (decimal, hex, exponent, type suffix and
+ * multiplier like `1.5e3`, `0xFF`, `10kb`) or a variable (`$name`,
+ * `$env:NAME`, `${any name}`).
+ */
+const COMPLETED_EXPRESSION_TOKEN =
+  /^[-+*/%=!<>]*(?:(?:0x[\da-f]+|(?:\d+(?:\.\d*)?|\.\d+)(?:e[-+]?\d+)?)(?:u?[lsy]|[dnu])?(?:kb|mb|gb|tb|pb)?|\$(?:\{[^}]*\}|[\w?:]+))$/i;
+
+/**
+ * Whether a `#` at `index` begins a PowerShell comment, i.e. sits at the start
+ * of a token or right after a completed expression token, rather than inside a
+ * bare word (see the call site).
+ */
+const startsPowerShellComment = (script: string, index: number): boolean => {
+  let j = index - 1;
+  while (j >= 0 && !/[\s;|&(){},]/.test(script[j])) j -= 1;
+  const run = script.slice(j + 1, index);
+  return run === '' || /^[-+*/%=!<>]+$/.test(run) || COMPLETED_EXPRESSION_TOKEN.test(run);
+};
+
+const findPowerShellLiteralRanges = (script: string): Array<[number, number]> => {
+  const ranges: Array<[number, number]> = [];
+  const length = script.length;
+
+  /** Scan an expandable `"..."` body from `i`; returns the index after the closing quote. */
+  const scanExpandableString = (from: number): number => {
+    let i = from;
+    while (i < length) {
+      const char = script[i];
+      if (char === '`') {
+        i += 2;
+      } else if (char === '$' && script[i + 1] === '(') {
+        i = scanCode(i + 2, true);
+      } else if (char === '"') {
+        if (script[i + 1] !== '"') return i + 1;
+        i += 2;
+      } else {
+        i += 1;
+      }
+    }
+    return length;
+  };
+
+  /**
+   * Scan a `@"..."@` here-string whose body starts at `bodyStart`; returns the
+   * index after the closing `"@`. The body text is literal, but its `$( ... )`
+   * subexpressions are executed, so they are lexed as code and left out of the
+   * literal ranges.
+   */
+  const scanExpandableHereString = (openerStart: number, bodyStart: number): number => {
+    let segmentStart = openerStart;
+    let i = bodyStart;
+    while (i < length) {
+      const char = script[i];
+      if (char === '\n' && script[i + 1] === '"' && script[i + 2] === '@') {
+        ranges.push([segmentStart, i + 3]);
+        return i + 3;
+      }
+      if (char === '`') {
+        i += 2;
+      } else if (char === '$' && script[i + 1] === '(') {
+        ranges.push([segmentStart, i + 2]);
+        i = scanCode(i + 2, true);
+        segmentStart = i;
+      } else {
+        i += 1;
+      }
+    }
+    ranges.push([segmentStart, length]);
+    return length;
+  };
+
+  /**
+   * Scan code from `i`. Inside a subexpression, stops after the `)` that
+   * closes it; returns the index where scanning ended.
+   */
+  function scanCode(from: number, inSubexpression: boolean): number {
+    let depth = 0;
+    let i = from;
+
+    while (i < length) {
+      const char = script[i];
+
+      // Backtick escapes the next character (`` `' `` is a literal apostrophe).
+      if (char === '`') {
+        i += 2;
+        continue;
+      }
+
+      // Here-string: `@'` / `@"` must be followed by a line break; it closes
+      // at `'@` / `"@` at the start of a line.
+      if (char === '@' && (script[i + 1] === "'" || script[i + 1] === '"')) {
+        const quote = script[i + 1];
+        const opener = /^[\t ]*\r?\n/.exec(script.slice(i + 2));
+        if (opener) {
+          if (quote === '"') {
+            i = scanExpandableHereString(i, i + 2 + opener[0].length);
+            continue;
+          }
+          const close = script.indexOf(`\n${quote}@`, i + 2 + opener[0].length - 1);
+          const end = close === -1 ? length : close + 3;
+          ranges.push([i, end]);
+          i = end;
+          continue;
+        }
+      }
+
+      if (char === "'") {
+        let j = i + 1;
+        while (j < length) {
+          if (script[j] === "'") {
+            if (script[j + 1] === "'") {
+              j += 2;
+              continue;
+            }
+            break;
+          }
+          j += 1;
+        }
+        const end = Math.min(j + 1, length);
+        ranges.push([i, end]);
+        i = end;
+        continue;
+      }
+
+      if (char === '"') {
+        i = scanExpandableString(i + 1);
+        continue;
+      }
+
+      // Comments: `<# ... #>` blocks, and `#` to the end of the line unless it
+      // sits inside a bare word (`a#b` is one argument). Skipped so an
+      // apostrophe in a comment does not swallow the code after it.
+      if (char === '<' && script[i + 1] === '#') {
+        const close = script.indexOf('#>', i + 2);
+        const end = close === -1 ? length : close + 2;
+        ranges.push([i, end]);
+        i = end;
+        continue;
+      }
+      // `#` opens a comment only where a new token starts: after whitespace or
+      // a token terminator (`; | & ( ) { } ,`), or after a run made only of
+      // operator characters that is itself a token (`2 -# …`, `$x =# …`).
+      // Once a bare word has started, `#` is part of it (`a-#b`, `key=#v`,
+      // `x:#y`). Command-mode arguments like `-#x` are misread as comments,
+      // which only leaves the rest of that line unrewritten — the safe side.
+      if (char === '#' && startsPowerShellComment(script, i)) {
+        const newline = script.indexOf('\n', i);
+        const end = newline === -1 ? length : newline;
+        ranges.push([i, end]);
+        i = end;
+        continue;
+      }
+
+      if (inSubexpression) {
+        if (char === '(') depth += 1;
+        if (char === ')') {
+          if (depth === 0) return i + 1;
+          depth -= 1;
+        }
+      }
+
+      i += 1;
+    }
+
+    return length;
+  }
+
+  scanCode(0, false);
+  return ranges;
+};
+
+/**
  * Rewrite environment variable references in a command string to the **target
  * shell's native syntax**, for the syntaxes that shell cannot resolve itself.
  * The value is never inlined — the spawned process receives `env`, so the shell
@@ -307,7 +495,12 @@ export const getShellInfo = async (): Promise<ShellInfo> =>
  *   `$env:VAR`, `$VAR` and `${VAR}` are valid PowerShell syntax that PowerShell
  *   resolves itself — rewriting them here would corrupt legitimate scripts (the
  *   `$env:FOO='bar'` assignment form, or script-local variables like
- *   `foreach ($path in ...)` colliding with the `PATH` env var).
+ *   `foreach ($path in ...)` colliding with the `PATH` env var). The rewrite
+ *   applies to bare words and ordinary `"..."` strings only: single-quoted
+ *   strings (`'...'`), here-strings (`@'...'@` and `@"..."@`) and comments are
+ *   left verbatim. PowerShell never expands `%VAR%` there, and those blocks are
+ *   usually file content — e.g. a `.cmd` batch file written through a
+ *   here-string, whose `set "PATH=...;%PATH%"` must reach disk unchanged.
  * - cmd target: PowerShell/bash forms (`$env:VAR`, `${VAR}`, `$VAR`) are
  *   rewritten to `%VAR%`; existing `%VAR%` is already cmd-native.
  * - Git Bash target: cmd-style `%VAR%` and PowerShell-style `$env:VAR` are
@@ -366,9 +559,18 @@ export const normalizeEnvVarRefs = (
   if (shell === 'pwsh' || shell === 'powershell') {
     // cmd style: %VAR% — the name may contain parentheses, e.g. %ProgramFiles(x86)%.
     // `${env:VAR}` expands as a single token even when the value has spaces.
-    return command.replaceAll(/%([A-Z_][\w()]*)%/gi, (match, name: string) =>
-      envNames.has(name.toLowerCase()) ? `\${env:${name}}` : match,
-    );
+    const rewrite = (code: string): string =>
+      code.replaceAll(/%([A-Z_][\w()]*)%/gi, (match, name: string) =>
+        envNames.has(name.toLowerCase()) ? `\${env:${name}}` : match,
+      );
+
+    let result = '';
+    let cursor = 0;
+    for (const [start, end] of findPowerShellLiteralRanges(command)) {
+      result += rewrite(command.slice(cursor, start)) + command.slice(start, end);
+      cursor = end;
+    }
+    return result + rewrite(command.slice(cursor));
   }
 
   // cmd.exe target: rewrite to cmd-native %VAR%.
@@ -419,9 +621,17 @@ export const getShellConfig = async (command: string): Promise<{ args: string[];
     // streams) and $OutputEncoding (used when piping into native commands) to
     // UTF-8 before the user command runs. The [Console] setter can throw when
     // no console is attached, hence the try/catch.
+    //
+    // Progress records are silenced too. With stderr redirected, Windows
+    // PowerShell serializes every progress update (e.g. the "Preparing modules
+    // for first use." that module auto-loading emits) into the stderr log as a
+    // CLIXML block. The inline preview decodes CLIXML, but the saved log the
+    // result points the model to does not, so reading it back returned raw XML
+    // in a mis-decoded code page. There is no progress bar to show here anyway.
     const encodingPreamble =
       'try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}' +
-      '\n$OutputEncoding = [System.Text.Encoding]::UTF8\n';
+      '\n$OutputEncoding = [System.Text.Encoding]::UTF8' +
+      "\n$ProgressPreference = 'SilentlyContinue'\n";
     const exitGuard =
       '\n$__lobeExecOk = $?' +
       '\nif (-not $__lobeExecOk) {' +

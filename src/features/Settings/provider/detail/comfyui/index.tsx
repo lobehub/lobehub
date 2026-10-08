@@ -42,7 +42,7 @@ const useComfyUICard = (): ProviderItem => {
       ),
       desc: t('comfyui.baseURL.desc'),
       label: t('comfyui.baseURL.title'),
-      name: [KeyVaultsConfigKey, 'baseURL'],
+      name: `${KeyVaultsConfigKey}.baseURL`,
     },
 
     // Authentication Type Selector - Always shown
@@ -58,7 +58,7 @@ const useComfyUICard = (): ProviderItem => {
       ),
       desc: t('comfyui.authType.desc'),
       label: t('comfyui.authType.title'),
-      name: [KeyVaultsConfigKey, 'authType'],
+      name: `${KeyVaultsConfigKey}.authType`,
     },
   ];
 
@@ -73,7 +73,7 @@ const useComfyUICard = (): ProviderItem => {
         ),
         desc: t('comfyui.username.desc'),
         label: t('comfyui.username.title'),
-        name: [KeyVaultsConfigKey, 'username'],
+        name: `${KeyVaultsConfigKey}.username`,
       },
       {
         children: isLoading ? (
@@ -86,7 +86,7 @@ const useComfyUICard = (): ProviderItem => {
         ),
         desc: t('comfyui.password.desc'),
         label: t('comfyui.password.title'),
-        name: [KeyVaultsConfigKey, 'password'],
+        name: `${KeyVaultsConfigKey}.password`,
       },
     );
   }
@@ -100,7 +100,7 @@ const useComfyUICard = (): ProviderItem => {
       ),
       desc: t('comfyui.apiKey.desc'),
       label: t('comfyui.apiKey.title'),
-      name: [KeyVaultsConfigKey, 'apiKey'],
+      name: `${KeyVaultsConfigKey}.apiKey`,
     });
   }
 
@@ -119,7 +119,7 @@ const useComfyUICard = (): ProviderItem => {
       ),
       desc: t('comfyui.customHeaders.desc'),
       label: t('comfyui.customHeaders.title'),
-      name: [KeyVaultsConfigKey, 'customHeaders'],
+      name: `${KeyVaultsConfigKey}.customHeaders`,
     });
   }
 

@@ -27,6 +27,8 @@ import {
   getPullRequestState,
   PR_STATE_VISUAL,
 } from '@/features/AgentSidebar/Topic/List/Item/metaCardData';
+import ThreadListSection from '@/features/AgentSidebar/Topic/TopicListContent/ThreadList/ThreadListSection';
+import { TopicBackgroundActivity } from '@/features/BackgroundActivity/TopicSection';
 import BranchSwitcher from '@/features/ChatInput/ControlBar/BranchSwitcher';
 import WorktreeSwitcher from '@/features/ChatInput/ControlBar/WorktreeSwitcher';
 import { getAllWorkSummaries } from '@/features/Conversation/store/slices/data/workSummaries';
@@ -45,6 +47,7 @@ import {
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
+import GoalSection from '../GoalSection';
 import ProgressSection from '../ProgressSection';
 import { collectChangeStats, isLinkedWorktreeCheckout, shouldShowCiLabel } from './overviewData';
 import OverviewHeader from './OverviewHeader';
@@ -388,14 +391,7 @@ const Overview = memo<OverviewProps>(
       ) : (
         gitRows
       )
-    ) : (
-      <OverviewRow
-        icon={FilesIcon}
-        trailing={<ChevronRight />}
-        value={t('workingPanel.overview.files')}
-        onClick={() => onOpenTab('files')}
-      />
-    );
+    ) : null;
 
     return (
       <Flexbox className={styles.body}>
@@ -423,6 +419,7 @@ const Overview = memo<OverviewProps>(
           </>
         )}
 
+        <TopicBackgroundActivity topicId={topicId} />
         {environmentAvailable && !workingDirectory && (
           <Empty
             className={cx(sectionStyles.section, styles.emptyWorkspace)}
@@ -432,6 +429,7 @@ const Overview = memo<OverviewProps>(
           />
         )}
 
+        <GoalSection className={sectionStyles.section} />
         <ProgressSection className={sectionStyles.section} />
 
         {visibleWorks.length > 0 && (
@@ -469,7 +467,21 @@ const Overview = memo<OverviewProps>(
           />
         )}
 
+        {/* Thread rows open in the Portal; the list labels itself as subagents and
+            sits in its own section so the resource rows below aren't grouped under it. */}
+        {topicId && <ThreadListSection topicId={topicId} />}
+
         <Flexbox className={sectionStyles.section}>
+          {hasWorkspace && (
+            <OverviewRow
+              weak
+              icon={FilesIcon}
+              iconSize={15}
+              trailing={<ChevronRight />}
+              value={t('workingPanel.overview.files')}
+              onClick={() => onOpenTab('files')}
+            />
+          )}
           <OverviewRow
             weak
             icon={SkillsIcon}

@@ -14,6 +14,7 @@ import { getPluginMode, upsertPluginMode } from '@lobechat/types';
 
 import { getHiddenBuiltinModelsForUser } from '@/business/server/aiProvider';
 import { AgentModel } from '@/database/models/agent';
+import { ConnectorModel } from '@/database/models/connector';
 import { PluginModel } from '@/database/models/plugin';
 import { AiInfraRepos } from '@/database/repositories/aiInfra';
 import { AgentService } from '@/server/services/agent';
@@ -21,6 +22,12 @@ import { DiscoverService } from '@/server/services/discover';
 import { filterHiddenProviderModels } from '@/utils/aiProvider';
 
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
+import {
+  NEXT_RUN_NOTE,
+  resolveOrInstallMarketPlugin,
+  resolvePluginIdentifier,
+  unresolvablePluginResult,
+} from './pluginResolution';
 import { type ServerRuntimeRegistration } from './types';
 
 const MAX_MODELS = 20;
@@ -28,6 +35,19 @@ const MAX_MODELS = 20;
 const handleError = (error: unknown, message: string): ToolExecutionResult => {
   const err = error as Error;
   return { content: `${message}: ${err.message}`, success: false };
+};
+
+/**
+ * The builder run is owned by the builtin builder agent, so `ctx.agentId` is the
+ * builder itself — never the agent the user is editing. Without an explicit
+ * editing target the write must fail loudly: falling back to `ctx.agentId`
+ * silently rewrote the builder's own row while reporting success.
+ */
+const noEditingTargetResult: ToolExecutionResult = {
+  content:
+    'No agent is being edited in this conversation, so nothing was changed. Ask the user to open the target agent and use the Agent Builder panel there.',
+  error: { message: 'Missing editing target agent', type: 'NoEditingTarget' },
+  success: false,
 };
 
 export const agentBuilderRuntime: ServerRuntimeRegistration = {
@@ -40,6 +60,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
     const agentModel = new AgentModel(context.serverDB, userId, context.workspaceId);
     const agentService = new AgentService(context.serverDB, userId, context.workspaceId);
     const pluginModel = new PluginModel(context.serverDB, userId, context.workspaceId);
+    const connectorModel = new ConnectorModel(context.serverDB, userId, context.workspaceId);
     const aiInfraRepos = new AiInfraRepos(context.serverDB, userId, {}, context.workspaceId);
     /**
      * Market list endpoints require an authenticated caller, and `DiscoverService`
@@ -182,15 +203,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdateAgentConfigParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.editingAgentId ?? ctx.agentId;
-
-        if (!agentId) {
-          return {
-            content: 'No active agent found',
-            error: { message: 'No active agent found', type: 'NoAgentContext' },
-            success: false,
-          };
-        }
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
 
         try {
           const agent = await agentModel.getAgentConfigById(agentId);
@@ -207,6 +221,20 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             const { pluginId, enabled } = params.togglePlugin;
             const isEnabled = getPluginMode(agent.plugins ?? undefined, pluginId) === 'pinned';
             const shouldEnable = enabled !== undefined ? enabled : !isEnabled;
+
+            // Enabling pins the id into the agent's config; an id that resolves
+            // to no loadable tool would be reported as enabled yet never load.
+            // Checked before any write so a rejected call changes nothing.
+            // Disabling stays unvalidated so stale entries can always be removed.
+            if (shouldEnable) {
+              const resolution = await resolvePluginIdentifier(
+                pluginId,
+                { connectorModel, pluginModel },
+                { agentId },
+              );
+              if (resolution.status !== 'loadable')
+                return unresolvablePluginResult(pluginId, resolution);
+            }
 
             // upsertPluginMode preserves an already-matching entry as-is and
             // flips a disabled entry back to pinned in place, instead of
@@ -260,15 +288,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: UpdatePromptParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.editingAgentId ?? ctx.agentId;
-
-        if (!agentId) {
-          return {
-            content: 'No active agent found',
-            error: { message: 'No active agent found', type: 'NoAgentContext' },
-            success: false,
-          };
-        }
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
 
         try {
           await agentModel.update(agentId, {
@@ -292,15 +313,8 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         params: InstallPluginParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const agentId = ctx.editingAgentId ?? ctx.agentId;
-
-        if (!agentId) {
-          return {
-            content: 'No active agent found',
-            error: { message: 'No active agent found', type: 'NoAgentContext' },
-            success: false,
-          };
-        }
+        const agentId = ctx.editingAgentId;
+        if (!agentId) return noEditingTargetResult;
 
         const { identifier, source } = params;
 
@@ -345,23 +359,13 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
-          const existing = await pluginModel.findById(identifier);
-          if (!existing) {
-            let manifest: any;
-            try {
-              manifest = await discoverService.getMcpManifest({ identifier });
-            } catch {
-              // proceed without manifest if fetch fails; tool will be unusable until manifest loads
-            }
-            await pluginModel.create({ identifier, manifest: manifest as any, type: 'plugin' });
-          } else if (!existing.manifest) {
-            try {
-              const manifest = await discoverService.getMcpManifest({ identifier });
-              await pluginModel.update(identifier, { manifest: manifest as any });
-            } catch {
-              // best-effort backfill
-            }
-          }
+          const { installedNow, resolution } = await resolveOrInstallMarketPlugin(
+            identifier,
+            { connectorModel, discoverService, pluginModel },
+            { agentId, source: 'market' },
+          );
+          if (resolution.status !== 'loadable')
+            return unresolvablePluginResult(identifier, resolution);
 
           if (getPluginMode(agent.plugins ?? undefined, identifier) !== 'pinned') {
             await agentModel.updateConfig(agentId, {
@@ -374,7 +378,7 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
           }
 
           return {
-            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}"`,
+            content: `Successfully enabled plugin "${identifier}" for agent "${agentId}".${installedNow ? NEXT_RUN_NOTE : ''}`,
             state: { agentId, installed: true, pluginId: identifier, success: true },
             success: true,
           };

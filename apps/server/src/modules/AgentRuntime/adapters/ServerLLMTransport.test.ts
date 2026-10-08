@@ -12,6 +12,10 @@ vi.mock('@/server/modules/ModelRuntime', () => ({
   initModelRuntimeFromDB: vi.fn(),
 }));
 
+vi.mock('../llmRelay/resolveLlmExecutionSite', () => ({
+  resolveLlmExecutionSite: vi.fn(async () => ({ site: 'server' })),
+}));
+
 describe('ServerLLMTransport.stream · conversation affinity', () => {
   it('retains the conversation ID across compression requests and runtime recreation', async () => {
     const chat = vi.fn().mockImplementation(async () => new Response(''));

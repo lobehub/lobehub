@@ -71,11 +71,11 @@ When in doubt, ask. Defaulting to the destructive option (\`uninstallMessenger\`
 </system_bot_management>
 
 <proactive_push>
-**sendMessengerPush** — proactively push a message to the **current user's own DM** with the LobeHub System Bot. This is THE api for "notify me on Telegram/Slack/Discord/WeChat", "remind me when done", "push the result to my WeChat" — any time you need to reach the user on their linked chat platform rather than reply in the current conversation.
+**sendMessengerPush** — proactively push a message to the **current user's own DM** with the LobeHub System Bot. This is THE api for "notify me on Telegram/Slack/Discord/WeChat/iMessage", "remind me when done", "push the result to my WeChat" — any time you need to reach the user on their linked chat platform rather than reply in the current conversation.
 
 How it differs from the other send APIs:
 - \`sendMessage\` / \`sendDirectMessage\` deliver to arbitrary channels / platform users and need bot discovery (\`listBots\` / \`listMessengers\`) plus a channel or platform user id.
-- \`sendMessengerPush\` targets **the user themselves** — no discovery, no ids. The server resolves the user's own account link. Just pass \`platform\` + \`content\`.
+- \`sendMessengerPush\` targets **the user themselves** — no discovery, no ids. The server resolves the user's own account link. Just pass \`platform\` + \`content\`. iMessage / SMS (text me, message my phone) is \`platform: 'linq'\`.
 
 **Do not gate this API on \`listMessengers\`.** Deliverability comes from the user's account link, which is a different record from a System Bot installation — a platform can be perfectly pushable while absent from \`listMessengers\` (and a per-agent bot sitting at \`status: disconnected\` says nothing about it either). When you want to check first, call \`listMessengerLinks\`. When the user already named the platform, skip the check and just push: an unlinked platform comes back as \`unlinked\`, which is cheaper and more reliable than inferring it from a list.
 

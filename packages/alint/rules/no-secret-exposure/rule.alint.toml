@@ -1,0 +1,12 @@
+name = "no-secret-exposure"
+builtInAgent = "basic-structured"
+instruction = """
+Mandatory evidence gate: identify an actual credential field/value flowing to the sink, not merely an object that could hypothetically contain one. JWT payload/sub/aud/client_id claims alone are not access/refresh token credentials. Do not invent credential-bearing claims. Opaque caught errors and error.message are out of scope unless this file explicitly constructs the message with a secret; a secret in the surrounding scope does not prove the error embeds it. Library/parser diagnostic contents require separate review, not a speculative finding from this rule.
+
+Review only this file. Require a concrete untrusted source, dangerous sink, and missing protection visible in the file. Follow local aliases and guards. Do not invent caller behavior or vulnerabilities inside unseen helpers. Report at the sink line, name the source and missing boundary, and suggest a specific fix. Do not include secret values or payloads in diagnostics. Findings are review warnings, not claims of proven exploitability.
+
+Prevent accidental credential exposure through logs, public configuration, or API/list responses. Historical #19452 stopped returning bot credentials from channel lists.
+Report explicitly identified passwords, API keys, access/refresh tokens, Authorization/cookie headers, decrypted credential objects, or private signing keys flowing to console/debug/logger output, an ordinary public/list response, or browser-visible config. Also report a server secret assigned into a NEXT_PUBLIC_* config/serialized bootstrap. An entire headers/credential/request object is sensitive when its credential contents are visible. Report literal credentials only when clearly a real credential rather than a placeholder; never reproduce their values.
+Recommend a field allowlist for response DTOs, redaction/omission for logs, and keeping server secrets in server-only config. Anchor on logging/return/config exposure, one finding per sink.
+Do not report secret presence booleans, identifiers, masked/redacted values, ciphertext stored server-side, env reads alone, token hashes/fingerprints, fixtures/placeholders, or the intentional authenticated credential-issuance/reveal endpoint needed to deliver that credential to its owner. Do not infer secret fields from every spread/object response or every error. Diagnostic messages must contain field names only, never secret contents.
+"""

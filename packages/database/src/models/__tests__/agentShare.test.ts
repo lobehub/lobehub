@@ -203,6 +203,7 @@ describe('AgentShareModel', () => {
         ownerId: userId,
         shareId: share.id,
         workspaceId,
+        workspaceSlug: 'agent-share-test-workspace',
       });
       await expect(
         AgentShareModel.readCurrentVisitorCaps(serverDB, workspaceAgentId),
@@ -684,6 +685,21 @@ describe('AgentShareModel', () => {
         shareId: created.id,
         workspaceId,
       });
+    });
+
+    it('hides a share and revokes its run when the agent is in the recycle bin', async () => {
+      const share = await agentShareModel.create(agentId, 'link');
+      await serverDB
+        .update(agents)
+        .set({ deletedAt: new Date(), isDeleted: true })
+        .where(eq(agents.id, agentId));
+
+      expect(await AgentShareModel.findByShareId(serverDB, share.id)).toBeNull();
+      expect(await AgentShareModel.findBySlugOrId(serverDB, 'shareable-agent')).toBeNull();
+      expect(await agentShareModel.getByAgentId(agentId)).toBeNull();
+      expect(
+        await AgentShareModel.isRunStillAuthorized(serverDB, { agentId, shareId: share.id }),
+      ).toBe(false);
     });
 
     it('returns null for an unknown UUID', async () => {

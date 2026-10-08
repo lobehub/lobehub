@@ -257,6 +257,8 @@ export interface GetAgentInterventionReviewBySourceParams {
   actorUserId: string;
   batchId: string;
   operationId: string;
+  /** Set only by the share-visitor path; see {@link AgentInterventionShareVisitorScope}. */
+  shareVisitor?: AgentInterventionShareVisitorScope;
   targets: AgentInterventionSourceTarget[];
   workspaceId?: string;
 }
@@ -278,12 +280,27 @@ export type GetAgentInterventionReviewBySourceResult =
       sourceItemMap: Record<string, string>;
     });
 
+/**
+ * A share visitor resolving an intervention on their OWN share run. The caller
+ * (`shareChat.resolveInterventionBySource`) has already authenticated the visitor and
+ * proved they own `topicId` under a live share of `agentId`; the business slot
+ * must still bind the durable batch to exactly this owner/agent/topic and to a
+ * share-run operation, and must refuse every other actor for a share run.
+ */
+export interface AgentInterventionShareVisitorScope {
+  agentId: string;
+  ownerUserId: string;
+  topicId: string;
+}
+
 export interface ResolveAgentInterventionBySourceParams {
   action: AgentInterventionSourceAction;
   actorUserId: string;
   batchId: string;
   operationId: string;
   resolutionRequestId: string;
+  /** Set only by the share-visitor resolve path; see {@link AgentInterventionShareVisitorScope}. */
+  shareVisitor?: AgentInterventionShareVisitorScope;
   targets: AgentInterventionSourceTarget[];
   workspaceId?: string;
 }
@@ -298,6 +315,11 @@ export interface ResolveAgentInterventionBySourceParams {
  */
 export interface AgentInterventionRuntimeAppContext {
   documentId?: string | null;
+  /**
+   * The agent a builder run edits. Without it an `agent_builder` continuation
+   * resumes with no target (the run is owned by the builder itself).
+   */
+  editingAgentId?: string;
   groupId?: string | null;
   scope?: MessageMapScope;
   sessionId?: string;
@@ -483,6 +505,12 @@ export interface NotifyAgentInterventionRequiredParams {
   context: Omit<AgentInterventionReviewContext, 'agent' | 'topic' | 'triggerRequest'>;
   deadline?: number;
   items: NotifyAgentInterventionItem[];
+  /**
+   * Set when the parked run is a share VISITOR's run. The visitor resolves it
+   * on the share page; owner-facing delivery (push, Live Activity, Review
+   * links) must be skipped — the owner is not the approver of that run.
+   */
+  shareVisitorUserId?: string;
   summary: string;
   /**
    * A partial per-card decision may re-park the unresolved rows in a new

@@ -7,6 +7,10 @@ import pMap from 'p-map';
 
 import { type TrustedClientUserInfo } from '@/libs/trusted-client';
 import { generateTrustedClientToken, getTrustedClientTokenForSession } from '@/libs/trusted-client';
+import {
+  createSandboxStorageClient,
+  type SandboxStorageClient,
+} from '@/server/services/sandbox/storageFiles';
 import { getToolAccessDeniedError } from '@/server/services/toolExecution/errorClassification';
 
 import {
@@ -747,6 +751,24 @@ export class MarketService {
       const denial = getToolAccessDeniedError(error, err.message);
       if (denial)
         return { content: JSON.stringify({ error: denial }), error: denial, success: false };
+
+      // Market's auth middleware answers with a flat OAuth-style body, e.g.
+      // `{ error: 'invalid_trust_token', error_description: 'Token expired' }`.
+      // Keep the description so the model can tell an expired token from a
+      // revoked authorization, and the code so callers can react to it.
+      if (typeof skillError === 'string') {
+        const description =
+          typeof errorBody.error_description === 'string' ? errorBody.error_description : undefined;
+        return {
+          content: JSON.stringify({ error: skillError, error_description: description }),
+          error: {
+            code: skillError,
+            message: description ? `${skillError}: ${description}` : skillError,
+          },
+          success: false,
+        };
+      }
+
       const content = skillError ? JSON.stringify(skillError) : err.message;
 
       return {
@@ -928,6 +950,21 @@ export class MarketService {
     const result = await response.json();
     log('uploadCredFile success: fileHashId=%s', result.fileHashId);
     return result;
+  }
+
+  /**
+   * Client for the persistent sandbox workspace's file API.
+   *
+   * Not on the SDK yet, so it is hand-written against the same endpoints; it
+   * lives in its own module and only borrows this service's auth headers, so
+   * replacing it with the generated client later is a deletion. The workspace it
+   * addresses is always the one the caller's signed entitlement names.
+   */
+  getSandboxStorageClient(): SandboxStorageClient {
+    return createSandboxStorageClient({
+      baseURL: MARKET_BASE_URL,
+      headers: this.oauthProxyHeaders,
+    });
   }
 
   // ============================== Direct SDK Access ==============================

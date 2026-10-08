@@ -89,6 +89,30 @@ export const buildCiFailurePrompt = (params: {
   return lines.join('\n');
 };
 
+/**
+ * Review bots that only look again when asked, keyed by their GitHub login.
+ * Codex reviews a pull request once on open; a pushed fix goes unreviewed
+ * unless someone comments the command.
+ */
+const REREVIEW_COMMANDS: Record<string, string> = {
+  'chatgpt-codex-connector[bot]': '@codex review',
+};
+
+/**
+ * Asks the agent to re-request review from the bots that gave this feedback.
+ * The comment is posted as the PR author, which the control half skips, so it
+ * never wakes the agent itself; a clean re-review is a reaction, not a
+ * review, so the loop ends there, and `SCM_MAX_WAKES` bounds it otherwise.
+ */
+const rereviewRequest = (feedback: GitHubReviewFeedback[]) => {
+  const commands = [
+    ...new Set(feedback.map((item) => REREVIEW_COMMANDS[item.author]).filter(Boolean)),
+  ];
+  if (commands.length === 0) return '';
+  const list = commands.map((command) => `\`${command}\``).join(' and ');
+  return ` If you pushed a fix, then comment ${list} on the pull request so the reviewer checks it again; do not comment it when you changed nothing.`;
+};
+
 /** The message an agent receives when reviewers request changes or comment. */
 export const buildReviewPrompt = (params: {
   feedback: GitHubReviewFeedback[];
@@ -115,7 +139,7 @@ export const buildReviewPrompt = (params: {
     feedback.length === 0 ? ' The review carried no text; open the pull request to read it.' : '';
   lines.push(
     instruction(
-      `${lead}${missing} Address each point, or explain in your reply why it should stay as is. ${sameCheckout(row)}`,
+      `${lead}${missing} Address each point, or explain in your reply why it should stay as is. ${sameCheckout(row)}${rereviewRequest(feedback)}`,
     ),
     closeTag,
   );

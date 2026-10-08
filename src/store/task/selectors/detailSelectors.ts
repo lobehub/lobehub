@@ -57,6 +57,8 @@ const activeTaskDependencies = (s: TaskStoreState) => activeTaskDetail(s)?.depen
 
 const activeTaskParent = (s: TaskStoreState) => activeTaskDetail(s)?.parent;
 
+const activeTaskGoal = (s: TaskStoreState) => activeTaskDetail(s)?.goal;
+
 // Periodic execution interval (seconds); 0 or undefined means not configured
 const activeTaskPeriodicInterval = (s: TaskStoreState) =>
   activeTaskDetail(s)?.heartbeat?.interval ?? 0;
@@ -144,6 +146,7 @@ export const taskDetailSelectors = {
   activeTaskInstruction,
   activeTaskInstructionRevision,
   activeTaskName,
+  activeTaskGoal,
   activeTaskParent,
   activeTaskPeriodicInterval,
   activeTaskPriority,

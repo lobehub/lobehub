@@ -2,6 +2,7 @@ import { LayersEnum } from '@lobechat/types';
 import { and, eq, ne, sql } from 'drizzle-orm';
 
 import { userMemories } from '../../../schemas';
+import { notTrashed } from '../../../utils/softDelete';
 import type { FtsSearchBackendResponse, FtsSearchMemoryResult } from '../types';
 import type { PostgresFtsSearchContext } from './context';
 import type { PostgresFtsSearchField } from './dialect';
@@ -41,6 +42,7 @@ export async function searchMemories(
         eq(userMemories.userId, context.userId),
         // Experience memory is retired and has no page to land on; keep it out of unified search.
         ne(userMemories.memoryLayer, LayersEnum.Experience),
+        notTrashed(userMemories.isDeleted),
         dialect.match(MEMORY_FIELDS, preparedQuery),
       ),
     )

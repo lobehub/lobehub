@@ -1,7 +1,6 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +12,7 @@ import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useSaveState } from '@/hooks/useSaveState';
 import { useUserStore } from '@/store/user';
 import { settingsSelectors } from '@/store/user/slices/settings/selectors';
+import { type UserGeneralConfig } from '@/types/user/settings';
 
 import Preview from './Preview';
 import { ThemeSwatchesNeutral, ThemeSwatchesPrimary } from './ThemeSwatches';
@@ -22,10 +22,15 @@ const Appearance = memo(() => {
   const { general } = useUserStore(settingsSelectors.currentSettings, isEqual);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm({
+    initialValues: general,
+    values: general,
+    onValuesChange: (value) => save(() => setSettings({ general: value })),
+  });
 
   if (!isUserStateInit) return <SettingsSectionSkeleton />;
 
-  const theme: FormGroupItemType = {
+  const theme: FormGroupItem<UserGeneralConfig> = {
     children: [
       {
         children: <Preview />,
@@ -60,11 +65,10 @@ const Appearance = memo(() => {
   return (
     <Form
       collapsible={false}
-      initialValues={general}
+      form={form}
       items={[theme]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={(value) => save(() => setSettings({ general: value }))}
       {...FORM_STYLE}
     />
   );

@@ -24,6 +24,8 @@
   "actions.copyLinkSuccess": "Link kopiert",
   "actions.copySessionId": "Sitzungs-ID kopieren",
   "actions.copySessionIdSuccess": "Sitzungs-ID kopiert",
+  "actions.copyTopicPrompt": "Themenaufforderung kopieren",
+  "actions.copyTopicPromptSuccess": "Themenaufforderung kopiert",
   "actions.copyWorkingDirectory": "Arbeitsverzeichnis kopieren",
   "actions.copyWorkingDirectorySuccess": "Arbeitsverzeichnis kopiert",
   "actions.diagnose": "Nachrichtenkette überprüfen",

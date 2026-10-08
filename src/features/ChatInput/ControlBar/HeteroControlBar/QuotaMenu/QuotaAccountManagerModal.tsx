@@ -1,11 +1,12 @@
 'use client';
 
 import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
-import { DropdownMenu, Flexbox, Icon, Input } from '@lobehub/ui';
+import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  Input,
   type ModalInstance,
   RadioGroup,
   Switch,

@@ -27,6 +27,8 @@ import {
   userSettings,
 } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { notTrashed } from '../utils/softDelete';
+import { hasLiveParentTopic } from '../utils/topicVisibility';
 import { AGENT_TRANSFER_PENDING_OWNER_DELETE, AgentTransferJobModel } from './agentTransferJob';
 
 type DecryptUserKeyVaults = (
@@ -98,7 +100,15 @@ export class UserModel {
         userCreatedAt: users.createdAt,
       })
       .from(users)
-      .leftJoin(messages, and(eq(messages.userId, users.id), eq(messages.role, 'user')))
+      .leftJoin(
+        messages,
+        and(
+          eq(messages.userId, users.id),
+          eq(messages.role, 'user'),
+          notTrashed(messages.isDeleted),
+          hasLiveParentTopic(messages.topicId),
+        ),
+      )
       .where(eq(users.id, this.userId))
       .groupBy(users.createdAt);
 
@@ -394,6 +404,32 @@ export class UserModel {
       .onConflictDoUpdate({
         set: {
           tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || ${toolPatch}`,
+        },
+        target: userSettings.id,
+      });
+  };
+
+  /**
+   * Atomically replace the ordered search-provider and/or crawler-impl lists
+   * inside the `tool` column, leaving every other key untouched. Same rationale
+   * as `mergeToolInterventionSetting`: a whole-column write built from a
+   * possibly-stale tab snapshot would revert sibling keys (e.g. approvalMode)
+   * changed from other tabs.
+   */
+  replaceToolChannelsSetting = async (value: {
+    crawlerImpls?: string[];
+    searchProviders?: string[];
+  }) => {
+    const patch: Record<string, string[]> = {};
+    if (value.crawlerImpls) patch.crawlerImpls = value.crawlerImpls;
+    if (value.searchProviders) patch.searchProviders = value.searchProviders;
+
+    return this.db
+      .insert(userSettings)
+      .values({ id: this.userId, tool: patch })
+      .onConflictDoUpdate({
+        set: {
+          tool: sql`coalesce(${userSettings.tool}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
         },
         target: userSettings.id,
       });

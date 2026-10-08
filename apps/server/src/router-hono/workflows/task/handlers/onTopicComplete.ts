@@ -6,6 +6,7 @@ import type { Context } from 'hono';
 import { tasks } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
+import { isRunAlreadySettled } from '@/server/services/taskLifecycle/reconcile';
 
 const log = debug('lobe-server:workflows:task:on-topic-complete');
 
@@ -65,6 +66,23 @@ export async function onTopicComplete(c: Context) {
       .where(and(eq(tasks.id, taskId), eq(tasks.createdByUserId, userId)))
       .limit(1);
     const wsId = taskRow?.workspaceId ?? undefined;
+
+    // A delivery delayed past the orphaned-run grace window can land after the
+    // reconciliation sweep already settled this run. Driving the lifecycle again
+    // would double-apply it (a second urgent error brief, double fuse counting),
+    // so ack and stop — QStash must not retry a delivery that has nothing to do.
+    if (
+      await isRunAlreadySettled(db, userId, wsId, {
+        operationId,
+        reason: reason || 'done',
+        taskId,
+        topicId,
+      })
+    ) {
+      log('Skipped: run %s of task %s was already settled', operationId, taskId);
+      return c.json({ skipped: 'already-settled', success: true });
+    }
+
     const taskLifecycle = new TaskLifecycleService(db, userId, wsId);
 
     await taskLifecycle.onTopicComplete({

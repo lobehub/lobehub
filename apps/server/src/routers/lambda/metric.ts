@@ -1,4 +1,5 @@
 import type { MetricSubjectType } from '@lobechat/types';
+import { METRIC_SUBJECT_TYPES } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
@@ -9,6 +10,7 @@ import { GoalModel } from '@/database/models/goal';
 import { MetricModel } from '@/database/models/metric';
 import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
+import { WidgetModel } from '@/database/models/widget';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -31,7 +33,7 @@ const metricWriteProcedure = metricProcedure.use(withScopedPermission('agent:upd
 const idInput = z.object({ id: z.string() });
 const subjectInput = z.object({
   subjectId: z.string(),
-  subjectType: z.enum(['goal', 'task', 'agent', 'project', 'workspace']),
+  subjectType: z.enum(METRIC_SUBJECT_TYPES),
 });
 const configSchema = z.object({
   direction: z.enum(['higher_is_better', 'lower_is_better']).optional(),
@@ -103,6 +105,9 @@ const assertSubjectVisible = async (
       case 'task': {
         return new TaskModel(db, ctx.userId, workspaceId).findById(subjectId);
       }
+      case 'widget': {
+        return new WidgetModel(db, ctx.userId, workspaceId).findById(subjectId);
+      }
       case 'workspace': {
         return workspaceId === subjectId;
       }
@@ -118,6 +123,21 @@ const assertSubjectVisible = async (
  * measures. Doubles as orphan protection — a series whose subject was deleted
  * stops resolving instead of lingering as readable, writable telemetry.
  */
+/**
+ * Widget series are written only by the widget's own runs (see
+ * `services/widget/metrics`), which own the fixed `value` / `series:<name>`
+ * keys. Letting the generic API create, append to, edit or delete them would
+ * let any workspace member pre-claim those keys or rewrite a coworker's trend,
+ * since series ownership here widens to the whole workspace. Reads stay open.
+ */
+const assertSubjectWritable = (subjectType: MetricSubjectType) => {
+  if (subjectType === 'widget')
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: "Widget metrics are written by the widget's runs, not through the metric API",
+    });
+};
+
 const requireVisibleSeries = async (
   db: LobeChatDatabase,
   ctx: { metricModel: MetricModel; userId: string; workspaceId?: string | null },
@@ -146,7 +166,8 @@ export const metricRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
-        await requireVisibleSeries(ctx.serverDB, ctx, input.id);
+        const series = await requireVisibleSeries(ctx.serverDB, ctx, input.id);
+        assertSubjectWritable(series.subjectType);
         const point = await ctx.metricModel.addPoint(input.id, {
           actorId: ctx.userId,
           actorType: 'user',
@@ -165,6 +186,7 @@ export const metricRouter = router({
   deleteSeries: metricWriteProcedure.input(idInput).mutation(async ({ input, ctx }) => {
     try {
       const series = await requireVisibleSeries(ctx.serverDB, ctx, input.id);
+      assertSubjectWritable(series.subjectType);
       // Workspace visibility lets any member read the series; deleting it (and
       // cascading every observation) stays with the creator or an owner.
       assertWorkspaceRowManageable(ctx, series.userId, 'metric series');
@@ -295,6 +317,7 @@ export const metricRouter = router({
       try {
         const { id, ...patch } = input;
         const existing = await requireVisibleSeries(ctx.serverDB, ctx, id);
+        assertSubjectWritable(existing.subjectType);
         // Definition edits rewrite the render/evaluation contract for everyone
         // reading the series — creator or workspace owner only.
         assertWorkspaceRowManageable(ctx, existing.userId, 'metric series');
@@ -317,6 +340,7 @@ export const metricRouter = router({
     )
     .mutation(async ({ input, ctx }) => {
       try {
+        assertSubjectWritable(input.subjectType);
         await assertSubjectVisible(ctx.serverDB, ctx, input.subjectType, input.subjectId);
         const series = await ctx.metricModel.ensure(input);
         if (!series)

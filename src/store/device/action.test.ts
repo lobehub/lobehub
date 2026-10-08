@@ -1,6 +1,7 @@
 import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEVICE_LIST_SWR_KEY } from '@/features/DeviceManager/const';
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
@@ -69,6 +70,21 @@ describe('DeviceAction', () => {
         deviceId: 'dev-1',
       });
       expect(mutate).toHaveBeenCalledWith(deviceKeys.listDevices());
+    });
+
+    // Task controls read the workspace-scoped `useDeviceList` entry, so a cwd
+    // write that only revalidated this store's key left them showing stale recents.
+    it('also revalidates the canonical device-list cache', async () => {
+      useDeviceStore.setState({ devices: [buildDevice()] });
+
+      await useDeviceStore.getState().clearDeviceDefaultCwd('dev-1');
+
+      const matcher = vi
+        .mocked(mutate)
+        .mock.calls.map(([key]) => key)
+        .find((key): key is (key: unknown) => boolean => typeof key === 'function');
+      expect(matcher?.([DEVICE_LIST_SWR_KEY, 'ws-1'])).toBe(true);
+      expect(matcher?.(deviceKeys.listDevices())).toBe(false);
     });
 
     it('does nothing when the target device does not exist', async () => {

@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Popover, Text, toast } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Divider,
+  Input,
+  Popover,
+  Spin,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
   AnchorIcon,
@@ -19,7 +28,6 @@ import { Link, useParams } from 'react-router';
 import urlJoin from 'url-join';
 
 import GeneratingBorder from '@/components/GeneratingBorder';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import AgentBreadcrumb from '@/features/AgentBreadcrumb';
 import { useResolvedAgentRouteId } from '@/features/AgentRoute/useResolvedAgentRouteId';
 import NavHeader from '@/features/NavHeader';
@@ -460,7 +468,7 @@ const CreateDomainPage = memo(() => {
                         justify={'space-between'}
                       >
                         <Flexbox horizontal align={'center'} gap={8}>
-                          <NeuralNetworkLoading size={18} />
+                          <Spin size="small" variant="network" />
                           <div
                             aria-label={t('create.generating')}
                             className={styles.generatingTextViewport}
@@ -526,7 +534,7 @@ const CreateDomainPage = memo(() => {
                     </Button>
                   </Flexbox>
                 </Flexbox>
-                <Divider style={{ margin: 0 }} />
+                <Divider />
                 <Flexbox className={styles.reviewSection} gap={12}>
                   <Flexbox horizontal align={'flex-start'} gap={8} justify={'space-between'}>
                     <Text fontSize={14} type={'secondary'}>

@@ -1,6 +1,6 @@
-import { Flexbox, Form, Markdown } from '@lobehub/ui';
+import { Flexbox, Markdown } from '@lobehub/ui';
 import { Button } from '@lobehub/ui/base-ui';
-import { Form as AForm } from 'antd';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import * as m from 'motion/react-m';
 import { memo, useState } from 'react';
@@ -44,7 +44,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCancel }) => {
   const { t } = useTranslation(['plugin', 'common']);
-  const [form] = AForm.useForm();
   const [loading, setLoading] = useState(false);
 
   const { installMCPPlugin } = useToolStore();
@@ -61,6 +60,8 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
       setLoading(false);
     }
   };
+
+  const form = useForm<Record<string, any>>({ onSubmit: handleSubmit });
 
   const handleCancel = () => {
     if (onCancel) {
@@ -119,14 +120,11 @@ const MCPConfigForm = memo<MCPConfigFormProps>(({ configSchema, identifier, onCa
                   {item.desc as string}
                 </Markdown>
               ),
-              key: item.label,
               label: item.label,
               name: item.name,
-              rules: [{ required: true }],
+              required: true,
               tag: item.tag,
-              valuePropName: item.type === 'boolean' ? 'checked' : undefined,
             }))}
-          onFinish={handleSubmit}
         />
       </m.div>
 

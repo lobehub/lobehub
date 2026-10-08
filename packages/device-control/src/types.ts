@@ -272,7 +272,35 @@ export interface WorkspaceScanDeps {
  * - The CLI uses the portable defaults exported from this package
  *   (`defaultGetLocalFilePreview`, `defaultGetProjectFileIndex`).
  */
+// ─── Trash ───
+
+/** Mirrors `@lobechat/electron-client-ipc` `TrashLocalFilesParams`. */
+export interface TrashLocalFilesParams {
+  paths: string[];
+}
+
+export interface TrashLocalFilesResultItem {
+  error?: string;
+  /** The path as it was requested, so the caller can reconcile its own rows. */
+  path: string;
+  success: boolean;
+}
+
+/** Per-path outcome in request order; `success` is true only when every path was trashed. */
+export interface TrashLocalFilesResult {
+  items: TrashLocalFilesResultItem[];
+  success: boolean;
+}
+
 export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps {
+  /**
+   * Start an app update check on this client; an available update downloads
+   * automatically. Returns right away with the updated state — callers poll
+   * {@link DeviceControlDeps.getAppUpdateState} for progress. Optional: only
+   * the desktop app can update itself, so the CLI omits the three app-update
+   * handlers and the dispatcher fails the RPC with a stable reason.
+   */
+  checkAppUpdate?: () => Promise<AppUpdateState>;
   /** Copy a publish asset (possibly outside the workspace) to a path inside the workspace. */
   copyAssetForPublish?: (params: CopyAssetForPublishParams) => Promise<CopyAssetForPublishResult>;
   /**
@@ -285,10 +313,17 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
    * the RPC with a clear reason.
    */
   enrollWorkspace?: (params: EnrollWorkspaceParams) => Promise<EnrollWorkspaceResult>;
+  /** Where this client's app update stands: current version, stage, progress. */
+  getAppUpdateState?: () => Promise<AppUpdateState>;
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
   getProjectFileIndex: (params: ProjectFileIndexParams) => Promise<ProjectFileIndexResult>;
+  /**
+   * Restart into a downloaded update. Resolves before the app quits so the
+   * response still reaches the caller; rejects when nothing is downloaded.
+   */
+  installAppUpdate?: () => Promise<InstallAppUpdateResult>;
   /** Query a heterogeneous CLI's model catalog on this execution host. */
   listHeterogeneousAgentModels?: (
     params: ListHeterogeneousAgentModelsParams,
@@ -299,6 +334,13 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   ) => Promise<ExternalAssetForPublishResult>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
+  /**
+   * Move files/folders to the OS trash. Optional: only a host with a desktop
+   * shell (Electron `shell.trashItem`) has a recoverable trash, so the CLI omits
+   * it and the dispatcher fails the RPC with {@link TRASH_UNSUPPORTED_MESSAGE}
+   * rather than degrading to a permanent delete.
+   */
+  trashLocalFiles?: (params: TrashLocalFilesParams) => Promise<TrashLocalFilesResult>;
   /**
    * Drop this machine's enrollment in a workspace pool: close the
    * workspace-principal connection and clear any persisted auto-reconnect
@@ -320,6 +362,7 @@ export interface ListHeterogeneousAgentModelsParams {
   env?: Record<string, string>;
   type:
     | 'codebuddy'
+    | 'codex'
     | 'cursor'
     | 'devin'
     | 'droid'
@@ -346,7 +389,8 @@ export type HeterogeneousAgentModelCatalog =
           | 'command_failed'
           | 'device_unavailable'
           | 'timeout'
-          | 'unsupported_client';
+          | 'unsupported_client'
+          | 'unsupported_configuration';
         message: string;
       };
       status: 'error';
@@ -382,4 +426,29 @@ export interface EnrollWorkspaceResult {
 
 export interface UnenrollWorkspaceParams {
   workspaceId: string;
+}
+
+// ─── Remote app update ───
+
+/**
+ * Structural mirror of the desktop updater's stage, plus `unsupported` for a
+ * client that can't update itself (a dev build, or updates turned off).
+ */
+export type AppUpdateStage =
+  'checking' | 'downloaded' | 'downloading' | 'error' | 'idle' | 'latest' | 'unsupported';
+
+export interface AppUpdateState {
+  /** Version the client is running right now. */
+  currentVersion: string;
+  errorMessage?: string;
+  /** Download progress, 0–100. Present while `stage` is `downloading`. */
+  progress?: number;
+  stage: AppUpdateStage;
+  /** Version being downloaded or ready to install. */
+  targetVersion?: string;
+}
+
+export interface InstallAppUpdateResult {
+  /** Version the client restarts into. */
+  targetVersion: string;
 }

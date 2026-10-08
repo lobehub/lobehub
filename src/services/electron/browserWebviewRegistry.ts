@@ -7,6 +7,22 @@ export const MAX_RETAINED_BROWSER_WEBVIEWS = 10;
 const RETAINED_IN_USE_GRACE_MS = 60_000;
 const BOUNDS_POLL_INTERVAL_MS = 100;
 const RESIZE_BRIDGE_WIDTH = 10;
+/**
+ * Where a guest waits while no pane shows it. It must stay inside the viewport:
+ * Chromium stops compositing a guest moved off-screen, so `capturePage` then
+ * hangs or rejects with `UnknownVizError` and `requestAnimationFrame` stalls —
+ * a background agent could navigate and read such a page but never screenshot
+ * it. Opacity 0 plus `pointer-events: none` keeps it invisible and inert.
+ */
+const PARKED_STYLE = {
+  height: '800px',
+  left: '0px',
+  opacity: '0',
+  pointerEvents: 'none',
+  position: 'fixed',
+  top: '0',
+  width: '1200px',
+} as const;
 const RESIZE_HANDLE_SELECTOR =
   '.ant-draggable-panel-left-handle, .ant-draggable-panel-right-handle';
 
@@ -96,15 +112,7 @@ class BrowserWebviewRegistry {
     retained.lastUsedAt = Date.now();
     retained.lastBoundsKey = undefined;
     retained.visible = false;
-    Object.assign(webview.style, {
-      height: '800px',
-      left: '-10000px',
-      opacity: '0',
-      pointerEvents: 'none',
-      position: 'fixed',
-      top: '0',
-      width: '1200px',
-    });
+    Object.assign(webview.style, PARKED_STYLE);
   }
 
   ensure(sessionId: string): Promise<BrowserWebviewElement> {
@@ -149,15 +157,7 @@ class BrowserWebviewRegistry {
     };
     this.retained.set(sessionId, retained);
     getHiddenHost().append(webview);
-    Object.assign(webview.style, {
-      height: '800px',
-      left: '-10000px',
-      opacity: '0',
-      pointerEvents: 'none',
-      position: 'fixed',
-      top: '0',
-      width: '1200px',
-    });
+    Object.assign(webview.style, PARKED_STYLE);
 
     return ready;
   }
@@ -218,14 +218,7 @@ class BrowserWebviewRegistry {
     // ancestor collapses to zero. Checking the host alone therefore misses the
     // closed state and leaves the guest's last compositor frame on screen.
     if (clippedByAncestor || bounds.width <= 0 || bounds.height <= 0) {
-      Object.assign(retained.webview.style, {
-        height: '800px',
-        left: '-10000px',
-        opacity: '0',
-        pointerEvents: 'none',
-        top: '0',
-        width: '1200px',
-      });
+      Object.assign(retained.webview.style, PARKED_STYLE);
       if (retained.interactionBridge) {
         retained.interactionBridge.style.pointerEvents = 'none';
         retained.interactionBridge.style.visibility = 'hidden';

@@ -1,13 +1,12 @@
 'use client';
 
-import { CheckCircleFilled } from '@ant-design/icons';
 import { type ChatMessageError } from '@lobechat/types';
-import { TraceNameMap } from '@lobechat/types';
+import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
-import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Alert, Button, Select } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter } from '@lobehub/ui';
+import { Alert, Button, Select, Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
+import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -166,6 +165,7 @@ const Checker = memo<ConnectionCheckerProps>(
           topicId: checkModel,
           traceName: TraceNameMap.ConnectivityChecker,
         },
+        trigger: RequestTrigger.ProviderCheck,
       });
     };
 
@@ -186,7 +186,7 @@ const Checker = memo<ConnectionCheckerProps>(
             listItemHeight={36}
             options={sortedModels.map((id) => ({ label: id, value: id }))}
             popupClassName={cx(styles.popup)}
-            suffixIcon={isProviderConfigUpdating && <Icon spin icon={Loader2Icon} />}
+            suffixIcon={isProviderConfigUpdating && <Spin size="small" />}
             value={checkModel}
             optionRender={({ value }) => {
               return (
@@ -215,16 +215,8 @@ const Checker = memo<ConnectionCheckerProps>(
           />
           <Button
             disabled={!canManageProvider || isProviderConfigUpdating}
+            icon={pass ? CircleCheckIcon : undefined}
             loading={loading}
-            icon={
-              pass ? (
-                <CheckCircleFilled
-                  style={{
-                    color: cssVar.colorSuccess,
-                  }}
-                />
-              ) : undefined
-            }
             style={
               pass
                 ? {

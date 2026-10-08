@@ -188,6 +188,7 @@ const mockFileModelDeleteUnreferenced = vi.fn();
 const mockFileModelDeleteMany = vi.fn();
 const mockFileModelFindById = vi.fn();
 const mockFileModelFindByIds = vi.fn();
+const mockFileModelFindKnowledgeBaseIds = vi.fn().mockResolvedValue([]);
 const mockFileModelQuery = vi.fn();
 const mockFileModelUpdate = vi.fn();
 const mockFileModelUpdateGlobalFile = vi.fn();
@@ -205,6 +206,7 @@ vi.mock('@/database/models/file', () => ({
       deleteMany: mockFileModelDeleteMany,
       findById: mockFileModelFindById,
       findByIds: mockFileModelFindByIds,
+      findKnowledgeBaseIds: mockFileModelFindKnowledgeBaseIds,
       query: mockFileModelQuery,
       update: mockFileModelUpdate,
       updateGlobalFile: mockFileModelUpdateGlobalFile,
@@ -278,6 +280,7 @@ const mockDocumentModelFindById = vi.fn();
 const mockDocumentModelFindBySlug = vi.fn();
 const mockDocumentModelTransferTo = vi.fn();
 const mockDocumentModelSubtreeHasForeignRows = vi.fn().mockResolvedValue(false);
+const mockDocumentModelSyncFromFile = vi.fn().mockResolvedValue([]);
 
 vi.mock('@/database/repositories/knowledge', () => ({
   KnowledgeRepo: vi.fn(function () {
@@ -295,6 +298,7 @@ vi.mock('@/database/models/document', () => ({
       findById: mockDocumentModelFindById,
       findBySlug: mockDocumentModelFindBySlug,
       subtreeHasForeignRows: mockDocumentModelSubtreeHasForeignRows,
+      syncFromFile: mockDocumentModelSyncFromFile,
       transferTo: mockDocumentModelTransferTo,
     };
   }),
@@ -1066,6 +1070,34 @@ describe('fileRouter', () => {
 
       expect(result.url).toBe('https://lobehub.com/f/test-id');
     });
+
+    it('should expose the libraries the file belongs to', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+      mockFileModelFindKnowledgeBaseIds.mockResolvedValueOnce(['kb-1']);
+
+      const result = await caller.findById({ id: 'test-id' });
+
+      expect(mockFileModelFindKnowledgeBaseIds).toHaveBeenCalledWith('test-id');
+      expect(result.knowledgeBaseIds).toEqual(['kb-1']);
+    });
+  });
+
+  describe('getReadableUrl', () => {
+    it('should throw when the file does not exist', async () => {
+      mockFileModelFindById.mockResolvedValue(null);
+
+      await expect(caller.getReadableUrl({ id: 'invalid-id' })).rejects.toThrow(TRPCError);
+    });
+
+    it('should return the storage URL instead of the /f/:id proxy', async () => {
+      mockFileModelFindById.mockResolvedValue(mockFile);
+      mockFileServiceGetFullFileUrl.mockResolvedValue('https://s3.example.com/test-url?sig=1');
+
+      const result = await caller.getReadableUrl({ id: 'test-id' });
+
+      expect(mockFileServiceGetFullFileUrl).toHaveBeenCalledWith('test-url');
+      expect(result.url).toBe('https://s3.example.com/test-url?sig=1');
+    });
   });
 
   describe('getFileItemById', () => {
@@ -1379,6 +1411,10 @@ describe('fileRouter', () => {
       await caller.updateFile({ id: 'file-1', parentId: 'parent-folder' });
 
       expect(mockFileModelUpdate).toHaveBeenCalledWith('file-1', { parentId: 'docs_parent' });
+      expect(mockDocumentModelSyncFromFile).toHaveBeenCalledWith('file-1', {
+        name: undefined,
+        parentId: 'docs_parent',
+      });
     });
 
     it('should strip forged agent-share provenance from metadata updates', async () => {
@@ -1393,6 +1429,7 @@ describe('fileRouter', () => {
       });
 
       expect(mockFileModelUpdate).toHaveBeenCalledWith('file-1', { metadata: { width: 100 } });
+      expect(mockDocumentModelSyncFromFile).not.toHaveBeenCalled();
     });
   });
 

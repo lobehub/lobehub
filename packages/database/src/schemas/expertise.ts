@@ -2,6 +2,7 @@ import type {
   ExpertiseAnchorCandidate,
   ExpertiseBacktestResult,
   ExpertiseCanonEntry,
+  ExpertiseEnforcement,
   ExpertiseEvidenceSpecItem,
   ExpertiseInsightEvidenceRef,
   ExpertiseLayerDefinition,
@@ -9,6 +10,7 @@ import type {
   ExpertiseReasonKind,
   ExpertiseReasonSource,
   ExpertiseRevisionEvidence,
+  ExpertiseRuleDirection,
 } from '@lobechat/types';
 import { isNotNull, isNull, sql } from 'drizzle-orm';
 import type { AnyPgColumn } from 'drizzle-orm/pg-core';
@@ -34,6 +36,7 @@ import { timestamps, timestamptz, varchar255 } from './_helpers';
 import { agents } from './agent';
 import { agentOperations } from './agentOperations';
 import { documents } from './file';
+import { messages } from './message';
 import { projects } from './project';
 import { users } from './user';
 import { verifyCheckResults, verifyCriteria, verifyEvidence } from './verify';
@@ -364,6 +367,25 @@ export const expertiseLessons = pgTable(
     }),
     retiredAt: timestamptz('retired_at'),
 
+    /**
+     * Where the reviewer put this rule in their own ordering; lower first, ties by creation.
+     * Nullable with an app-side default: rows that predate the column read as unordered and sort
+     * after the ones the reviewer placed.
+     */
+    sortOrder: integer('sort_order').$defaultFn(() => 0),
+    /**
+     * Whether breaking it should hold the delivery (`block`) or only inform the agent (`remind`).
+     * Nullable with an app-side default; readers treat null as `remind`.
+     */
+    enforcement: text('enforcement')
+      .$type<ExpertiseEnforcement>()
+      .$defaultFn(() => 'remind'),
+    /**
+     * Whether the rule guides toward something (`positive`) or names what gets a delivery sent back
+     * (`negative`). Null until judged; nullable without a default so adding it never rewrites rows.
+     */
+    direction: text('direction').$type<ExpertiseRuleDirection>(),
+
     /** Where a lesson ends up: compiled into a machine-runnable criterion. Mental-model-layer lessons are always not-compilable. */
     compilability: text('compilability', { enum: EXPERTISE_COMPILABILITIES })
       .notNull()
@@ -604,6 +626,16 @@ export const expertiseHits = pgTable(
       onDelete: 'set null',
     }),
 
+    /**
+     * For a hit observed in a conversation, the message it was observed in — the conversation
+     * counterpart of `sourceCheckResultId`, so the reviewer can jump from a rule to the exact turn
+     * that taught it. Resolved from a verbatim excerpt at ingestion time, so it is null whenever
+     * the excerpt could not be found (and for every hit written before the column existed).
+     */
+    sourceMessageId: text('source_message_id').references(() => messages.id, {
+      onDelete: 'set null',
+    }),
+
     /** A person overruling it → feeds use-it-or-lose-it, so this lesson is more conservative next time. */
     userDecision: text('user_decision', { enum: EXPERTISE_HIT_USER_DECISIONS }),
     userDecisionAt: timestamptz('user_decision_at'),
@@ -625,6 +657,10 @@ export const expertiseHits = pgTable(
     index('expertise_hits_run_idx').on(t.runId),
     index('expertise_hits_domain_outcome_idx').on(t.domainId, t.outcome),
     index('expertise_hits_operation_idx').on(t.operationId),
+    // Deleting a message has to find the hits to null out; without this every delete scans.
+    index('expertise_hits_source_message_idx')
+      .on(t.sourceMessageId)
+      .where(isNotNull(t.sourceMessageId)),
   ],
 );
 

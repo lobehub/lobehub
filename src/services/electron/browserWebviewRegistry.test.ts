@@ -93,8 +93,22 @@ describe('browserWebviewRegistry', () => {
     await browserWebviewRegistry.detach('topic-1', viewport);
 
     expect(webview?.parentElement).toBe(retainedHost);
-    expect(webview?.style.left).toBe('-10000px');
+    expect(webview?.style.left).toBe('0px');
     expect(webview?.style.opacity).toBe('0');
+  });
+
+  it('parks a background guest inside the viewport so Chromium keeps drawing it', async () => {
+    // An off-screen guest gets no compositor frames: capturePage then hangs or
+    // rejects with UnknownVizError, which broke screenshots for background runs.
+    const webview = await resolveWebview('background-topic');
+
+    expect(webview).toHaveStyle({
+      left: '0px',
+      opacity: '0',
+      pointerEvents: 'none',
+      position: 'fixed',
+      top: '0px',
+    });
   });
 
   it('resyncs fixed bounds when the host moves without resizing', async () => {
@@ -121,7 +135,7 @@ describe('browserWebviewRegistry', () => {
     vi.useRealTimers();
   });
 
-  it('moves a zero-sized guest offscreen so its last compositor frame cannot remain visible', async () => {
+  it('hides a zero-sized guest so its last compositor frame cannot remain visible', async () => {
     vi.useFakeTimers();
 
     const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
@@ -142,7 +156,12 @@ describe('browserWebviewRegistry', () => {
     await vi.advanceTimersByTimeAsync(120);
 
     const bridge = document.querySelector<HTMLElement>('[data-browser-resize-bridge="true"]');
-    expect(webview).toHaveStyle({ left: '-10000px', opacity: '0', width: '1200px' });
+    expect(webview).toHaveStyle({
+      left: '0px',
+      opacity: '0',
+      pointerEvents: 'none',
+      width: '1200px',
+    });
     expect(bridge).toHaveStyle({ pointerEvents: 'none', visibility: 'hidden' });
 
     width = 360;
@@ -155,7 +174,7 @@ describe('browserWebviewRegistry', () => {
     vi.useRealTimers();
   });
 
-  it('moves the guest offscreen when a collapsed ancestor clips a fixed-width host', async () => {
+  it('hides the guest when a collapsed ancestor clips a fixed-width host', async () => {
     vi.useFakeTimers();
 
     const { browserWebviewRegistry } = await import('./browserWebviewRegistry');
@@ -180,7 +199,12 @@ describe('browserWebviewRegistry', () => {
     panelWidth = 0;
     await vi.advanceTimersByTimeAsync(120);
 
-    expect(webview).toHaveStyle({ left: '-10000px', opacity: '0', width: '1200px' });
+    expect(webview).toHaveStyle({
+      left: '0px',
+      opacity: '0',
+      pointerEvents: 'none',
+      width: '1200px',
+    });
 
     panelWidth = 360;
     await vi.advanceTimersByTimeAsync(120);

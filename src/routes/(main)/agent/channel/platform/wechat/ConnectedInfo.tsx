@@ -1,6 +1,7 @@
 'use client';
 
-import { Flexbox, FormItem, Icon } from '@lobehub/ui';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { Fingerprint, KeyRound, UserRound } from 'lucide-react';
@@ -33,7 +34,7 @@ const ReadOnlyField = memo<{
   const InputComponent = password ? FormPassword : FormInput;
 
   return (
-    <FormItem
+    <Form.Field
       avatar={<Icon className={styles.fieldIcon} icon={icon} size={20} />}
       divider={divider}
       label={label}
@@ -41,7 +42,7 @@ const ReadOnlyField = memo<{
       variant="outlined"
     >
       <InputComponent readOnly value={value || ''} />
-    </FormItem>
+    </Form.Field>
   );
 });
 

@@ -36,6 +36,7 @@ export const MIN_BOT_HISTORY_LIMIT = 1;
  * - wechat: 2MB image — empirical: iLink silently drops larger images
  *   (every API call returns 200 yet the message never renders); 20MB file
  *   as a best-effort cap, the iLink protocol documents no explicit number.
+ * - linq: 10MB — Linq's documented ceiling for media it fetches by URL.
  *
  * `textMaxChars` is the single-message character cap used to batch the
  * download-link fallbacks: Discord rejects a message over 2000 chars,
@@ -57,10 +58,11 @@ export interface MessengerAttachmentBudget {
 const MB = 1024 * 1024;
 
 export const MESSENGER_ATTACHMENT_BUDGETS: Record<
-  'discord' | 'slack' | 'telegram' | 'wechat',
+  'discord' | 'slack' | 'telegram' | 'wechat' | 'linq',
   MessengerAttachmentBudget
 > = {
   discord: { fileMaxBytes: 10 * MB, imageMaxBytes: 10 * MB, textMaxChars: 2000 },
+  linq: { fileMaxBytes: 10 * MB, imageMaxBytes: 10 * MB, textMaxChars: 2000 },
   slack: { fileMaxBytes: 50 * MB, imageMaxBytes: 50 * MB, textMaxChars: 3000 },
   telegram: { fileMaxBytes: 20 * MB, imageMaxBytes: 5 * MB, textMaxChars: 4096 },
   wechat: { fileMaxBytes: 20 * MB, imageMaxBytes: 2 * MB, textMaxChars: 2000 },

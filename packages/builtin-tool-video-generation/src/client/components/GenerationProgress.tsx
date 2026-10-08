@@ -1,13 +1,11 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { Progress } from 'antd';
+import { Progress, Spin, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { MAX_ESTIMATED_PROGRESS, useEstimatedProgress } from '@/hooks/useEstimatedProgress';
 
 import { formatDuration } from '../utils/formatDuration';
@@ -39,7 +37,7 @@ export const GenerationProgress = memo<GenerationProgressProps>(
     return (
       <Flexbox align={'center'} gap={8}>
         {progress === null ? (
-          <NeuralNetworkLoading size={48} />
+          <Spin size="large" />
         ) : (
           <Progress percent={progress} size={56} type={'circle'} />
         )}

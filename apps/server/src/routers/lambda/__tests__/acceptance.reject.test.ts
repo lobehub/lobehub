@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 
 import type { LobeChatDatabase } from '@lobechat/database';
-import { acceptances, agents, topics, verifyRuns } from '@lobechat/database/schemas';
+import { acceptances, agents, briefs, topics, verifyRuns } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RbacPermissionModule from '@/business/server/trpc-middlewares/rbacPermission';
 import type * as AcceptanceModelModule from '@/database/models/acceptance';
 import type * as GoalModelModule from '@/database/models/goal';
+import type * as GoalServiceModule from '@/server/services/goal';
 
 import { acceptanceRouter } from '../acceptance';
 import { cleanupTestUser, createTestContext, createTestUser } from './integration/setup';
@@ -59,6 +60,20 @@ vi.mock('@/database/models/goal', async (importOriginal) => {
   }
   return { ...actual, GoalModel };
 });
+const mockReopenForChanges = vi.fn();
+vi.mock('@/server/services/goal', async (importOriginal) => {
+  const actual = await importOriginal<typeof GoalServiceModule>();
+  return {
+    ...actual,
+    GoalService: vi.fn().mockImplementation(function () {
+      return { reopenForChanges: mockReopenForChanges };
+    }),
+  };
+});
+const mockScheduleGoalAdvance = vi.fn();
+vi.mock('@/server/services/goal/scheduler', () => ({
+  scheduleGoalAdvance: (...args: unknown[]) => mockScheduleGoalAdvance(...args),
+}));
 vi.mock('@/database/models/acceptance', async (importOriginal) => {
   const actual = await importOriginal<typeof AcceptanceModelModule>();
   class AcceptanceModel extends actual.AcceptanceModel {
@@ -108,6 +123,8 @@ describe('acceptanceRouter reject', () => {
 
   afterEach(async () => {
     mockExecAgent.mockReset();
+    mockReopenForChanges.mockReset();
+    mockScheduleGoalAdvance.mockReset();
     flags.denyMessageCreate = false;
     flags.failRepairingStamp = false;
     flags.goalOwnsTask = false;
@@ -155,6 +172,9 @@ describe('acceptanceRouter reject', () => {
           prompt: expect.stringContaining(`lh acceptance feedback ${acceptanceId} --actionable`),
         }),
       );
+      // The round-level reason is not printed by `feedback --actionable`, so
+      // the agent only learns it from the prompt.
+      expect(mockExecAgent.mock.calls[0][0].prompt).toContain('Tab title missing');
       const [run] = await serverDB.select().from(verifyRuns).where(eq(verifyRuns.id, runId));
       expect(run.decisionDetail?.comment).toBe('Tab title missing');
     });
@@ -221,6 +241,41 @@ describe('acceptanceRouter reject', () => {
       expect(mockExecAgent).not.toHaveBeenCalled();
     });
 
+    it('reopens the Goal a rejected Goal-level acceptance ended, and queues its rework', async () => {
+      await serverDB
+        .update(acceptances)
+        .set({ subjectId: 'task_goal_acceptance', subjectType: 'task' })
+        .where(eq(acceptances.id, acceptanceId));
+      flags.goalOwnsTask = true;
+      mockReopenForChanges.mockResolvedValue('goal_1');
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      const result = await caller.reject({ comment: 'Add a day-one agenda', id: acceptanceId });
+
+      expect(result.repairDispatch).toEqual({ dispatched: false, reason: 'goal_coordinator' });
+      expect(mockReopenForChanges).toHaveBeenCalledWith(
+        'task_goal_acceptance',
+        'Add a day-one agenda',
+      );
+      expect(mockScheduleGoalAdvance).toHaveBeenCalledWith(
+        expect.objectContaining({ goalId: 'goal_1', trigger: 'decide', userId }),
+      );
+    });
+
+    it('does not queue an advance when the Goal was not reopened', async () => {
+      await serverDB
+        .update(acceptances)
+        .set({ subjectId: 'task_goal', subjectType: 'task' })
+        .where(eq(acceptances.id, acceptanceId));
+      flags.goalOwnsTask = true;
+      mockReopenForChanges.mockResolvedValue(undefined);
+
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+      await caller.reject({ comment: 'Rework the draft', id: acceptanceId });
+
+      expect(mockScheduleGoalAdvance).not.toHaveBeenCalled();
+    });
+
     it('still reports the dispatch when the repairing stamp fails after the run started', async () => {
       const { agentId, topicId } = await seedTopic();
       await seedOrigin({ topicId });
@@ -284,5 +339,56 @@ describe('acceptanceRouter reject', () => {
       .from(acceptances)
       .where(eq(acceptances.id, acceptanceId));
     expect(acceptance.status).toBe('delivered');
+  });
+
+  // The list and header controls decide an acceptance without the accept /
+  // reject procedures; the goal sign-off it carried must not stay open.
+  describe('goal sign-off', () => {
+    const seedSignOff = async () => {
+      const [brief] = await serverDB
+        .insert(briefs)
+        .values({
+          metadata: {
+            goal: {
+              goalId: 'goal_1',
+              goalTitle: 'Goal',
+              kind: 'signOff',
+              signOffAcceptanceId: acceptanceId,
+            },
+          },
+          summary: 'Sign it off',
+          title: 'Goal is done',
+          trigger: 'goal',
+          type: 'decision',
+          userId,
+        })
+        .returning();
+      return brief.id;
+    };
+    const readBrief = async (id: string) =>
+      (await serverDB.select().from(briefs).where(eq(briefs.id, id)))[0];
+
+    it.each([
+      ['closed', 'closed'],
+      ['rejected', 'requestChanges'],
+    ] as const)('settles it when the status is set to %s', async (status, action) => {
+      const briefId = await seedSignOff();
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+
+      await caller.updateStatus({ id: acceptanceId, status });
+
+      const brief = await readBrief(briefId);
+      expect(brief.resolvedAt).not.toBeNull();
+      expect(brief.resolvedAction).toBe(action);
+    });
+
+    it('settles it when a batch sweep closes the acceptance', async () => {
+      const briefId = await seedSignOff();
+      const caller = acceptanceRouter.createCaller(createTestContext(userId));
+
+      await caller.updateStatusBatch({ ids: [acceptanceId], status: 'closed' });
+
+      expect((await readBrief(briefId)).resolvedAt).not.toBeNull();
+    });
   });
 });

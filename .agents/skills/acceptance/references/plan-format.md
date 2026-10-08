@@ -103,8 +103,7 @@ again; then hand off per SKILL.md (acceptance URL + `coverage: n/n`).
 
 ## Resolve the plan round's handoff links
 
-`result submit --json` returns an internal `url`, not `acceptanceUrl` or
-`roundUrl`. Some plans need no evidence submissions at all. In both cases, resolve
+`result submit --json` returns an internal `url`, not `acceptanceUrl`. Some plans need no evidence submissions at all. In both cases, resolve
 the supplied operation ID with `lh verify plan state <operationId> --json`, then
 read its `verifyRunId` using `lh acceptance run get <runId> --json`. The run's
 `acceptanceId` and `roundIndex` identify the existing handoff; do not substitute a
@@ -112,7 +111,8 @@ result ID, subject ID, or the most recent round from another acceptance.
 
 Keep the same CLI server, account, and workspace as the verification. This example
 reads the resolved server from `lh doctor --offline --json` (`endpoints.resolution`
-check, `evidence.serverUrl`), preserving self-hosted hosts and ports. Doctor may exit
+check, `evidence.serverUrl`). Cloud browser links use `https://lobehub.com`;
+self-hosted and development origins retain their hosts and ports. Doctor may exit
 nonzero for unrelated diagnostics while still returning this field; only a valid
 endpoint result is used. No repair, network doctor probe, or remote write is requested.
 The example requires Node.js and the existing CLI commands, not a new CLI release:
@@ -128,7 +128,9 @@ const endpoint = JSON.parse(doctor.stdout).checks?.find((check) => check.id === 
 if (!['ok', 'warn'].includes(endpoint?.status) || !endpoint.evidence?.serverUrl) {
   throw new Error('Handoff blocked: the CLI did not resolve its server URL.');
 }
-const origin = new URL(endpoint.evidence.serverUrl).origin;
+const server = new URL(endpoint.evidence.serverUrl);
+const isCloud = server.hostname === 'lobehub.com' || server.hostname.endsWith('.lobehub.com');
+const origin = isCloud ? 'https://lobehub.com' : server.origin;
 const query = (...args) => JSON.parse(execFileSync('lh', [...args, '--json'], { encoding: 'utf8' }));
 const state = query('verify', 'plan', 'state', operationId);
 const runId = state?.verifyRunId;
@@ -138,18 +140,16 @@ if (run?.id !== runId || run.operationId !== operationId || !run.acceptanceId ||
   throw new Error('Handoff blocked: the operation run must already be attached to an acceptance and round.');
 }
 const acceptanceUrl = new URL(`/acceptance/${encodeURIComponent(run.acceptanceId)}`, origin);
-const roundUrl = new URL(acceptanceUrl);
-roundUrl.searchParams.set('r', String(run.roundIndex));
 console.log(JSON.stringify({
   acceptanceId: run.acceptanceId, verifyRunId: runId, roundIndex: run.roundIndex,
-  acceptanceUrl: acceptanceUrl.href, roundUrl: roundUrl.href,
+  acceptanceUrl: acceptanceUrl.href,
 }, null, 2));
 NODE
 ```
 
 Using the IDs printed by the lookup, read back
 `lh acceptance view <acceptanceId> --json` and confirm its round ledger contains
-this `verifyRunId` and `roundIndex`, then copy the lookup's links into the final
+this `verifyRunId` and `roundIndex`, then copy the lookup's `acceptanceUrl` into the final
 handoff with the observed evidence coverage. The lookup neither settles the
 round nor supplies a verifier verdict or user acceptance.
 

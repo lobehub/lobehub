@@ -326,6 +326,7 @@ export default {
   'permission.collaborators.libraryDesc':
     'Collaborators can open this knowledge base and view the files inside even when the access level is "No access"',
   'permission.collaborators.remove': 'Remove',
+  'permission.collaborators.removeConfirmDesc': '{{name}} will lose access to this resource.',
   'permission.collaborators.removeConfirmTitle': 'Remove {{name}}?',
   'permission.collaborators.title': 'Collaborators',
   'permission.generalAccess.trigger': 'Members: {{level}}',
@@ -610,12 +611,42 @@ export default {
   'devices.actions.edit': 'Edit',
   'devices.actions.refresh': 'Refresh',
   'devices.actions.remove': 'Remove',
+  'devices.appUpdate.checkFailed': "Couldn't check for updates: {{message}}",
+  'devices.appUpdate.confirmDesc':
+    'LobeHub on this device will quit and restart. Anything it is running, including agent tasks, will be interrupted.',
+  'devices.appUpdate.confirmTitle': 'Restart and update to v{{version}}?',
+  'devices.appUpdate.downloading': 'Downloading v{{version}}',
+  'devices.appUpdate.installFailed':
+    "The device came back on v{{version}}, so the update didn't apply. Check for updates to try again.",
+  'devices.appUpdate.ready': 'v{{version}} is downloaded and ready to install',
+  'devices.appUpdate.restarting': 'Restarting…',
+  'devices.appUpdate.restartingHint': 'Waiting for the device to come back on v{{version}}',
+  'devices.appUpdate.timedOut':
+    "The device hasn't come back online. Check the app on that machine.",
+  'devices.appUpdate.unavailable': "Couldn't read the desktop app's update status. Try again.",
+  'devices.appUpdate.unsupported.cli':
+    'lh connect answered instead of the desktop app. Stop lh connect on this device, then try again.',
+  'devices.appUpdate.unsupported.devBuild': "Development builds can't update themselves.",
+  'devices.appUpdate.unsupported.outdated':
+    "This app version can't be updated remotely. Update it once on the device to enable remote updates.",
+  'devices.appUpdate.updated': 'Updated to v{{version}}',
   'devices.channel.connected': 'Connected {{time}}',
+  'devices.channel.unknown': 'Unknown client',
   'devices.currentBadge': 'This device',
+  'devices.agents.empty': 'No agents found on this device',
+  'devices.agents.error': 'Could not check this device: {{error}}',
+  'devices.agents.installed': 'Installed',
+  'devices.agents.offline':
+    'This device is offline. Installed agents are detected once it reconnects.',
+  'devices.agents.rescan': 'Check again',
+  'devices.agents.scanning': 'Checking installed agents…',
   'devices.detail.addDir': 'Add directory',
   'devices.detail.connections': 'Connections',
   'devices.detail.noRecent': 'No recent directories',
   'devices.detail.recentDirs': 'Recent directories',
+  'devices.detail.tabs.agents': 'Agent runtimes',
+  'devices.detail.tabs.files': 'Directories',
+  'devices.detail.tabs.overview': 'Overview',
   'devices.edit.browse': 'Browse…',
   'devices.edit.cancel': 'Cancel',
   'devices.edit.defaultCwd': 'Default working directory',
@@ -667,6 +698,29 @@ export default {
   'devices.fallbackBadge': 'Unstable identity',
   'devices.fallbackTooltip':
     "This device couldn't be identified by its machine ID, so reinstalling the app may create a duplicate entry.",
+  'devices.health.cpu': 'CPU',
+  'devices.health.error': "Couldn't load health data",
+  'devices.health.loading': 'Loading health data…',
+  'devices.health.retry': 'Retry',
+  'devices.health.cpuCores_one': 'CPU · {{count}} core',
+  'devices.health.cpuCores_other': 'CPU · {{count}} cores',
+  'devices.health.level.critical': 'Critical',
+  'devices.health.level.high': 'High',
+  'devices.health.level.missing': 'No data',
+  'devices.health.level.normal': 'Normal',
+  'devices.health.level.offline': 'Disconnected',
+  'devices.health.loadShort': 'Load',
+  'devices.health.load_one': 'Load · {{count}} core',
+  'devices.health.load_other': 'Load · {{count}} cores',
+  'devices.health.empty':
+    'No health data yet. It starts recording once this device runs the latest LobeHub desktop app or CLI.',
+  'devices.health.memory': 'Memory',
+  'devices.health.now': 'Now',
+  'devices.health.status.missing': 'No data — asleep, off, or LobeHub not running',
+  'devices.health.status.offline': 'Running but disconnected',
+  'devices.health.status.online': 'Online',
+  'devices.health.status.pending': 'Not uploaded yet',
+  'devices.health.title': 'Health · last 12 hours',
   'devices.lastSeen': 'Last connected {{time}}',
   'devices.remove.confirm': 'Remove this device?',
   'devices.remove.confirmDesc':
@@ -913,7 +967,7 @@ export default {
   'myAgents.actions.deprecate': 'Deprecate Permanently',
   'myAgents.actions.deprecateConfirmContent':
     'After deprecation, this agent will be permanently removed from the market and cannot be republished. This action is irreversible, please proceed with caution.',
-  'myAgents.actions.deprecateConfirmTitle': 'Confirm Deprecate Agent?',
+  'myAgents.actions.deprecateConfirmTitle': 'Deprecate Agent',
   'myAgents.actions.deprecateError': 'Failed to deprecate agent',
   'myAgents.actions.deprecateLoading': 'Deprecating agent...',
   'myAgents.actions.deprecateSuccess': 'Agent deprecated',
@@ -1084,6 +1138,9 @@ export default {
   'settingAppearance.contextMenuMode.disabled': 'Disabled',
   'settingAppearance.contextMenuMode.title': 'Right-Click Menu Mode',
   'settingAppearance.desktop.title': 'Desktop',
+  'settingAppearance.font.antialiasing.desc':
+    'Render text with grayscale antialiasing for a thinner, crisper look. Turn off to use the system default rendering. Only affects macOS.',
+  'settingAppearance.font.antialiasing.title': 'Font Antialiasing',
   'settingAppearance.font.fontFamily.default': 'System Default',
   'settingAppearance.font.fontFamily.desc':
     'Choose a font installed on this device for the whole interface. System Default follows the built-in font stack of your current language.',
@@ -1138,6 +1195,9 @@ export default {
   'settingChat.enableHistoryCount.setlimited': 'Set limited history messages',
   'settingChat.enableHistoryCount.title': 'Limit History Message Count',
   'settingChat.enableHistoryCount.unlimited': 'Unlimited history message count',
+  'settingChat.enableStaleToolResultTrim.desc':
+    'Replace outdated tool outputs (overwritten file reads, old browser snapshots, stale command output) with short placeholders in the model context to save tokens. Disable if the assistant needs full historical tool output.',
+  'settingChat.enableStaleToolResultTrim.title': 'Trim Stale Tool Results',
   'settingChat.enableStreaming.desc':
     'Enable streaming output to display responses in real-time. When disabled, only the complete response is shown.',
   'settingChat.enableStreaming.title': 'Enable Streaming Output',
@@ -1374,6 +1434,7 @@ export default {
     'storage, files, import, export, backup, reset, clear data, clear storage, knowledge base, account deletion, delete account',
   'settingsSearch.tabKeywords.systemTools':
     'system tools, built-in tools, system, node, python, cli, environment',
+  'settingsSearch.tabKeywords.trash': 'trash, recycle bin, deleted, restore, undelete, recover',
   'settingsSearch.tabKeywords.usage': 'usage, consumption, quota, spend, statistics',
   'settingSystem.oauth.info.desc': 'Logged in',
   'settingSystem.oauth.info.title': 'Account Information',
@@ -1443,22 +1504,11 @@ export default {
   'settingSystemTools.tools.qwen.desc': 'Qwen Code - Alibaba Qwen agentic coding CLI',
   'settingSystemTools.tools.rg.desc': 'ripgrep - extremely fast text search tool',
   'settingSystemTools.tools.uv.desc': 'uv - extremely fast Python package manager',
-  'settingTTS.openai.sttModel': 'OpenAI Speech-to-Text Model',
   'settingTTS.openai.title': 'OpenAI',
   'settingTTS.openai.ttsModel': 'OpenAI Text-to-Speech Model',
   'settingTTS.showAllLocaleVoice.desc':
     'If closed, only voices in the current language will be displayed',
   'settingTTS.showAllLocaleVoice.title': 'Show All Locale Voices',
-  'settingTTS.stt': 'Speech Recognition Settings',
-  'settingTTS.sttAutoStop.desc':
-    'When closed, speech recognition will not end automatically and requires manual click to stop',
-  'settingTTS.sttAutoStop.title': 'Auto Stop Speech Recognition',
-  'settingTTS.sttLocale.desc':
-    'The language of the speech input, this option can improve the accuracy of speech recognition',
-  'settingTTS.sttLocale.title': 'Speech Recognition Language',
-  'settingTTS.sttService.desc':
-    "Where 'browser' is the native speech recognition service of the browser",
-  'settingTTS.sttService.title': 'Speech Recognition Service',
   'settingTTS.submit': 'Update Voice Service',
   'settingTTS.title': 'Speech Service',
   'settingTTS.tts': 'Text-to-Speech Settings',
@@ -1469,6 +1519,16 @@ export default {
     'Select a voice for the current agent, different TTS services support different voices',
   'settingTTS.voice.preview': 'Voice Preview',
   'settingTTS.voice.title': 'Text-to-Speech Voice',
+  'settingTool.crawler.desc':
+    'Order the services used to read full web pages. Higher items are tried first; disabled ones are skipped. Some sites, such as PDFs and YouTube, always use a dedicated service.',
+  'settingTool.crawler.title': 'Web Reader',
+  'settingTool.empty': 'No services available',
+  'settingTool.item.disabled': 'Disabled',
+  'settingTool.item.enabled': 'Enabled',
+  'settingTool.item.locked': 'Keep at least one service enabled',
+  'settingTool.search.desc':
+    'Order the services used to search the web. Higher items are tried first; disabled ones are skipped.',
+  'settingTool.search.title': 'Search Engines',
   'skillGroup.agentConnectors': 'Agent Connectors',
   'skillGroup.builtinSkills': 'Built-in Skills',
   'skillGroup.builtinTools': 'Built-in Tools',
@@ -1558,6 +1618,8 @@ When I am ___, I need ___
   'storageOverage.consent.rate':
     'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
   'storageOverage.consent.title': 'Enable Storage Pay-as-you-go',
+  'storageOverage.mobileManaged.desc':
+    'Your plan was purchased in an app store, so storage pay-as-you-go cannot be enabled here. Manage this subscription where you bought it.',
   'storageOverage.currentPlanLocked.desc':
     'Your current plan does not support storage pay-as-you-go. After it ends, subscribe to a plan to enable it.',
   'storageOverage.desc':
@@ -1582,6 +1644,17 @@ When I am ___, I need ___
   'storageOverage.noPaymentMethod': 'Please add a payment method to enable storage pay-as-you-go.',
   'storageOverage.rate':
     'About {{limitedMonthlyRate}}/GB/month for a limited time (regular {{regularMonthlyRate}}).',
+  // The sandbox workspace is the same bargain on different storage, so only
+  // what actually differs is restated: what it is, what it costs, and what
+  // stops when it is turned off. Everything else — consent terms, cap,
+  // payment-method prompt — is shared word for word.
+  'storageOverage.sandbox.title': 'Sandbox Storage Pay-as-you-go',
+  'storageOverage.sandbox.desc':
+    "Bill for sandbox workspace storage beyond your plan's included size, instead of stopping at it.",
+  'storageOverage.sandbox.rate': 'About {{regularMonthlyRate}}/GB/month.',
+  'storageOverage.sandbox.consent.rate': 'About {{regularMonthlyRate}}/GB/month.',
+  'storageOverage.sandbox.disableConfirm.blockWrites':
+    'If your workspace is still above the included size, agents will be unable to write to it.',
   'storageOverage.subscriptionRequired.action': 'View plans',
   'storageOverage.subscriptionRequired.desc':
     'Subscribe to a plan to enable storage pay-as-you-go for overage usage.',
@@ -1622,6 +1695,10 @@ When I am ___, I need ___
   'systemAgent.agentMeta.modelDesc':
     'Model used to generate names, descriptions, avatars, and tags',
   'systemAgent.agentMeta.title': 'Profile Generation',
+  'systemAgent.asr.modelDesc':
+    'Transcribes voice messages to Claude Code and other external agents, which only accept text. Voice input for those agents stays hidden while no model is set or its provider is not enabled.',
+  'systemAgent.asr.placeholder': 'Select a speech-to-text model',
+  'systemAgent.asr.title': 'Voice Message Transcription',
   'systemAgent.expertise.modelDesc':
     'Model used to draft expertise domains and extract reusable experience from conversations.',
   'systemAgent.expertise.title': 'Agent Self-Evolution',
@@ -1738,12 +1815,54 @@ When I am ___, I need ___
   'tab.skillIntegration': 'Integration',
   'tab.stats': 'Analytics',
   'tab.storage': 'Storage',
+  'tab.trash': 'Trash',
   'tab.sync': 'Cloud Sync',
   'tab.systemTools': 'System Tools',
+  'tab.tools': 'Tools',
   'tab.tts': 'Text-to-Speech',
   'tab.uploadZip': 'Upload Zip',
   'tab.uploadZip.desc': 'Upload a local .zip or .skill file',
   'tab.usage': 'Usage',
+  'tools.builtins.lobe-attachments.description':
+    'Page through attached files that were too long to include in full',
+  'tools.builtins.lobe-attachments.title': 'Attachments',
+  'trash.actions.empty': 'Empty trash',
+  'trash.actions.emptyType': 'Empty {{type}}',
+  'trash.actions.loadMore': 'Load more',
+  'trash.actions.purge': 'Delete forever',
+  'trash.actions.restore': 'Restore',
+  'trash.columns.deletedAt': 'Deleted',
+  'trash.columns.expiresIn': 'Auto-deletes',
+  'trash.columns.name': 'Name',
+  'trash.columns.type': 'Type',
+  'trash.desc':
+    'Deleted items stay here for {{days}} days and can be restored. After that they are removed permanently.',
+  'trash.empty.desc':
+    'Conversations, agents and messages you delete land here for {{days}} days before they are removed for good.',
+  'trash.empty.title': 'Trash is empty',
+  'trash.emptyConfirm.content': 'Permanently delete {{count}} item(s)? This cannot be undone.',
+  'trash.emptyConfirm.title': 'Empty trash',
+  'trash.emptyType.desc': 'No deleted {{type}} right now.',
+  'trash.expiresIn.days': 'in {{count}} days',
+  'trash.expiresIn.soon': 'within a day',
+  'trash.filter.all': 'All',
+  'trash.loadFailed.desc': 'Check your connection and try again.',
+  'trash.loadFailed.title': 'Could not load the trash',
+  'trash.meta.children': '{{count}} items inside',
+  'trash.purgeConfirm.content': 'Permanently delete "{{title}}"? This cannot be undone.',
+  'trash.purgeConfirm.title': 'Delete forever',
+  'trash.restore.failed.notFound': 'This item no longer exists.',
+  'trash.restore.failed.parentTrashed':
+    'Its agent, topic or previous message is still in the trash. Restore that first.',
+  'trash.restore.success': 'Restored',
+  'trash.purge.success': 'Deleted permanently',
+  'trash.title': 'Trash',
+  'trash.type.agent': 'Agent',
+  'trash.type.dashboard': 'Dashboard',
+  'trash.type.message': 'Message',
+  'trash.type.topic': 'Topic',
+  'trash.type.widget': 'Widget',
+  'trash.untitled': 'Untitled',
   'workspace.create.descPlaceholder': 'Describe what this workspace is for (optional)',
   'workspace.create.namePlaceholder': 'e.g. Acme Team',
   'workspace.create.submit': 'Create workspace',
@@ -1840,6 +1959,10 @@ When I am ___, I need ___
     'Free workspaces are limited to {{maxSeats}} seats and do not include monthly workspace credits. You can keep using the workspace and upgrade again in the future.',
   'workspace.billingPage.billing.cancelPlanModal.overLimitDesc':
     'This workspace currently has {{currentSeats}} billable members. Free supports up to {{maxSeats}} seats. Remove members or change them to {{viewerRole}} before canceling the plan.',
+  'workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_one':
+    'This workspace has {{pending}} pending invites and Free supports up to {{maxSeats}} seats, so {{count}} of them will no longer fit. The seat goes to whoever accepts first, and the other is turned away when they try to join. To choose who keeps it, revoke the other invite before continuing.',
+  'workspace.billingPage.billing.cancelPlanModal.pendingInvitationsNotice_other':
+    'This workspace has {{pending}} pending invites and Free supports up to {{maxSeats}} seats, so {{count}} of them will no longer fit. Seats go to whoever accepts first, and the rest are turned away when they try to join. To choose who keeps a seat, revoke the other invites before continuing.',
   'workspace.billingPage.billing.cancelPlanModal.seatLimit': '{{maxSeats}} seats',
   'workspace.billingPage.billing.cancelPlanModal.title': 'Cancel plan?',
   'workspace.billingPage.billing.downgradePlanModal.body':
@@ -3785,4 +3908,226 @@ When I am ___, I need ___
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
+  'tab.environments': 'Environments',
+  'environments.desc':
+    'What a sandbox run needs around it: a repository, its setup, its variables. Each instance built from one keeps its own files between sessions.',
+  'environments.create': 'New environment',
+  'environments.cancel': 'Cancel',
+  'environments.createFailed': 'Could not create the environment',
+  'environments.namePlaceholder': 'Environment name',
+  'environments.empty': 'No environments yet',
+  'environments.removeFailed': 'Could not delete this environment',
+  'environments.saveFailed': 'Could not save this change',
+  'environments.instances.removeFailed': 'Could not delete this instance',
+  'environments.instances.removing': 'Deleting — removing its folder and everything in it',
+  'environments.instances.removeConfirmTitle': 'Delete instance {{name}}?',
+  'environments.instances.removeConfirmContent':
+    'Its folder and everything it kept — installed packages, reports, data — will be deleted. This cannot be undone.',
+  'environments.remove': 'Delete environment',
+  'environments.removeConfirmTitle': 'Delete environment {{name}}?',
+  'environments.removeConfirmContent':
+    'Its specification, variables and saved snapshot go with it, and cannot be recovered.',
+  'environments.storage.used': '{{used}} of {{total}}',
+  'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
+  'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
+  'environments.storage.over':
+    'Over the storage limit. Saving a file is refused until you delete something.',
+  'environments.duplicateName': 'You already have an environment with this name',
+  'environments.hasInstances': 'Remove its instances first',
+  'environments.loadFailed.title': 'Could not check your plan',
+  'environments.loadFailed.desc':
+    'We could not reach the service that says whether this account has a persistent workspace. Nothing is wrong with your environments.',
+  'environments.loadFailed.retry': 'Try again',
+  'environments.unavailable.title': 'Persistent sandbox is not available here',
+  'environments.unavailable.desc':
+    'Environments describe a persistent cloud workspace, and this deployment does not provide one.',
+  'environments.upgrade.title': 'Upgrade to Pro to unlock sandbox environments',
+  'environments.upgrade.desc':
+    'Give cloud-sandbox runs a persistent working directory. An environment describes what the sandbox needs — repositories, setup, variables — and its instances keep everything between sessions.',
+  'environments.upgrade.cta': 'Upgrade to Pro',
+  'environments.upgrade.benefits.environments.title': 'Sandbox setup written once',
+  'environments.upgrade.benefits.environments.desc':
+    'Repositories, setup command and variables live in the environment; every sandbox built from it starts ready.',
+  'environments.upgrade.benefits.persist.title': 'Files survive the sandbox',
+  'environments.upgrade.benefits.persist.desc':
+    'The working directory is kept when the sandbox is recycled; the next run continues where the last stopped.',
+  'environments.upgrade.benefits.instances.title': 'One instance per task',
+  'environments.upgrade.benefits.instances.desc':
+    'Parallel conversations each run in their own instance of the environment, so nothing overwrites anything else.',
+  'environments.github.label': 'Repository',
+  'environments.github.notConnected':
+    'No GitHub connection yet — connect one to build an environment from a repository',
+  'environments.nameLabel': 'Name',
+  'environments.github.optional': 'optional',
+  'environments.github.organization': 'Organization',
+  'environments.github.organizationPlaceholder': 'Search organizations',
+  'environments.github.repository': 'Repository',
+  'environments.github.repositoryPlaceholder': 'Search repositories',
+  'environments.github.repositoryPending': 'Choose an organization first',
+  'environments.github.noRepositories': 'This connection cannot see any repositories yet',
+  'environments.github.connect': 'Connect GitHub',
+  'environments.github.reviewAccess': 'Review access',
+  'environments.instances.create': 'New instance',
+  'environments.form.description': 'Description',
+  'environments.form.descriptionPlaceholder': 'What this environment is for',
+  'environments.form.sources': 'Source code',
+  'environments.form.sourcesHint':
+    'Cloned over HTTPS before anything else runs. Private repositories are not supported yet — a specification holds no credentials.',
+  'environments.form.ref': 'Branch or tag',
+  'environments.form.refDefault': 'Repository default branch',
+  'environments.form.path': 'Folder',
+  'environments.form.addSource': 'Add repository',
+  'environments.form.removeSource': 'Remove repository',
+  'environments.form.bootstrap': 'Setup command',
+  'environments.form.bootstrapHint':
+    'Runs once in the checkout, with network access, before the conversation starts.',
+  'environments.form.env': 'Environment variables',
+  'environments.form.envHint':
+    'Non-secret values only — these are stored as plain text and copied into every instance.',
+  'environments.form.addEnv': 'New variable',
+  'environments.form.envCount_one': '{{count}} variable',
+  'environments.form.envCount_other': '{{count}} variables',
+  'environments.form.envEmpty': 'No variables yet',
+  'environments.form.envEmptyHint': 'Add one, or paste a whole .env file in the',
+  'environments.form.rawEditor': 'Raw editor',
+  'environments.form.rawEditorHint':
+    'One KEY=value per line, the way a .env file reads. Blank lines and # comments are ignored; saving replaces every variable.',
+  'environments.form.rawInvalid': 'Line {{line}} is not KEY=value',
+  'environments.form.removeEnv': 'Remove variable',
+  'environments.form.internetAccess': 'Agent internet access',
+  'environments.form.internetAccessHint':
+    'Setup always has network access. This controls the conversation itself.',
+  'environments.form.saved': 'Saved',
+  'environments.form.editEnv': 'Edit variable',
+  'environments.form.changeRepository': 'Change repository',
+  'environments.form.disconnect': 'Disconnect',
+  'environments.instances.title': 'Instances',
+  'environments.instances.desc':
+    'An instance is a working copy of this environment, with its own folder and its own installed packages. Conversations run inside an instance, and several can run side by side without touching each other.',
+  'environments.instances.empty': 'No instances yet',
+  'environments.instances.emptyHint':
+    'Create one, then pick it under "Working Directory" in the chat input.',
+  'environments.instances.emptyReadonly':
+    'Nobody has created an instance of this environment yet. Only its owner can add one.',
+  'environments.instances.count_one': '{{count}} instance',
+  'environments.instances.count_other': '{{count}} instances',
+  'environments.instances.add': 'New instance',
+  'environments.instances.namePlaceholder': 'Instance name',
+  // One line, because the field fills itself in from the name: almost nobody
+  // has a decision to make here, and a paragraph over a solved field reads as
+  // a warning that something is about to go wrong.
+  'environments.instances.directoryHint': 'Folder path. Cannot be changed once created.',
+  'environments.sessions.stale': 'No end recorded',
+  'environments.instances.remove': 'Delete instance',
+  'environments.instances.rename': 'Rename instance',
+  'environments.instances.renameFailed': 'Could not rename this instance',
+  'environments.instances.directoryLocked':
+    'The folder cannot be changed after the instance is built — delete it and create another to move it.',
+  'environments.instances.duplicateDirectory': 'Another instance already uses this folder',
+  'environments.instances.overlappingDirectory':
+    "This folder is inside another instance's folder, or contains one",
+  'environments.instances.createFailed': 'Could not create the instance',
+  'environments.form.maintenance': 'Maintenance command',
+  'environments.form.maintenanceHint':
+    'Runs each time work resumes in an instance — refreshing a checkout, reapplying a migration. Not the setup command again: that one is expensive and is meant to run once.',
+  'environments.form.exclude': 'Regenerable paths',
+  'environments.form.excludeHint':
+    'One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.',
+  'environments.meta.creatorTooltip': 'Created by {{name}}',
+  'environments.meta.unknownCreator': 'Unknown',
+  'environments.meta.createdAt': 'Created {{time}}',
+  'environments.meta.storage': 'Using {{size}}',
+  'environments.detail.close': 'Close',
+  'environments.detail.tabs.settings': 'Settings',
+  'environments.sessions.title': 'Run history',
+  'environments.sessions.desc':
+    'The most recent sessions that ran in these instances and the builds of them, newest first, with how each ended and whether what it installed was saved.',
+  'environments.sessions.empty': 'Nothing has run here yet',
+  'environments.sessions.emptyHint':
+    'Every conversation and build in one of its instances will show up here.',
+  'environments.sessions.unavailable':
+    'Part of the history could not be read — some instances are missing from this list',
+  'environments.sessions.running': 'Running',
+  'environments.sessions.activeSession': 'A sandbox is running in {{instance}} right now',
+  'environments.sessions.activeBuild': '{{instance}} is being built right now',
+  'environments.sessions.openConversation': 'Open conversation',
+  'environments.sessions.history': 'History',
+  'environments.sessions.historyEmpty': 'No finished runs yet',
+  'environments.sessions.kind.build': 'Build',
+  'environments.sessions.kind.console': 'File browser',
+  'environments.sessions.kind.conversation': 'Conversation',
+  'environments.sessions.snapshotSaved': 'Saved {{size}}',
+  'environments.sessions.snapshotFailed': 'Not saved',
+  'environments.sessions.reason.idle': 'Stopped after idling',
+  'environments.sessions.reason.expired': 'Reached its time limit',
+  'environments.sessions.reason.switched': 'Replaced by another environment',
+  'environments.sessions.reason.explicit': 'Stopped',
+  'environments.sessions.reason.lost': 'Ended unexpectedly',
+  'environments.sessions.reason.build_succeeded': 'Built',
+  'environments.sessions.reason.build_failed': 'Build failed',
+  'environments.sessions.reason.build_timeout': 'Build timed out',
+  'environments.sessions.reason.build_gone': 'Build interrupted',
+  'environments.form.desc':
+    'What an instance is built from — where the code comes from and what makes it usable.',
+  'environments.form.appliesOnBuild':
+    'Applied when an instance is created. Existing instances keep the definition they were made with — a rebuild replays that one, so use a new instance to pick this up.',
+  'environments.refresh': 'Refresh',
+  'environments.emptyPublished': 'Nothing published to this workspace yet',
+  'environments.visibility.tabs.workspace': 'Workspace',
+  'environments.visibility.tabs.private': 'Private',
+  'environments.visibility.publish': 'Publish to Workspace',
+  'environments.visibility.createPublishedConfirmTitle':
+    'Create this environment in the workspace?',
+  'environments.visibility.publishConfirmTitle': 'Publish this environment to the workspace?',
+  'environments.visibility.publicTag': 'Published',
+  'environments.visibility.changeFailed': "Could not change this environment's visibility",
+  'environments.visibility.readonlyHint':
+    'Published to this workspace by its creator: you can run in this environment, but only they can change what it builds.',
+  'environments.files.browse': 'Browse files',
+  'environments.files.back': 'Back',
+  'environments.files.empty': 'This directory is empty',
+  'environments.files.binary': 'Not a text file, so it cannot be shown here.',
+  'environments.files.unreadable': 'This file could not be read',
+  'environments.files.listFailed': 'This directory could not be listed',
+  'environments.files.invalidPath': "The name has to stay inside this instance's directory",
+  'environments.files.truncated': 'Only the first entries are shown',
+  'environments.mine': 'My environments',
+  'environments.form.basics': 'Basics',
+  'environments.form.setup': 'Setup',
+  'environments.form.runtime': 'Runtime and storage',
+  'environments.instances.confirm': 'Create',
+  'environments.instances.save': 'Save',
+  // Materializing an instance: the clone and the bootstrap. Minutes long by
+  // nature, which is why it is a state of the row rather than a spinner on a
+  // button, and why the log is one click away instead of gone.
+  'environments.instances.building': 'Building — cloning and installing',
+  'environments.instances.buildStatusUnknown': 'Lost track of this build',
+  'environments.instances.retryStatus': 'Check again',
+  'environments.instances.buildFailed': 'Build failed',
+  'environments.instances.rebuild': 'Rebuild',
+  'environments.instances.build': 'Build',
+  'environments.instances.buildConfirmTitle': 'Build instance {{name}}?',
+  'environments.instances.buildStartFailed': 'Could not start the build',
+  // Context-free on purpose: the same code refuses a rebuild and a delete, so
+  // a sentence that only mentions rebuilding was wrong half the time.
+  'environments.instances.running': 'Running',
+  'environments.instances.occupancyUnavailable':
+    'Could not read which instances are running right now',
+  'environments.instances.inUse':
+    'A conversation is using this instance — try again once that run ends',
+  'environments.instances.runningHint':
+    'A run is still using this instance — a conversation, a build, or the file browser. It is released on its own roughly 15 minutes after that run goes quiet; Run history shows which one is holding it.',
+  'environments.instances.notBuilt': 'Not built yet — nothing has been cloned or installed',
+  'environments.instances.rebuildConfirmContent':
+    "This clears the instance's folder, then clones the code again and runs the setup script. Everything in it now — changes made in conversations, installed packages, reports, data — will be lost. This cannot be undone.",
+  'environments.instances.rebuildConfirmTitle': 'Rebuild instance {{name}}?',
+  'environments.instances.showLog': 'Show log',
+  'environments.instances.hideLog': 'Hide log',
+  'environments.instances.directoryLabel': 'Directory',
+  'environments.files.up': 'Up one level',
+  'environments.files.readOnlyHint':
+    'Read-only: kept in sync by the sandbox. Dependencies such as node_modules are not shown.',
+  'environments.files.openHint': 'Double-click a folder to open it, or a file to view it',
+  'environments.files.unusedInstance':
+    'Nothing here yet. The code appears once the instance is built or a conversation runs in it.',
 };

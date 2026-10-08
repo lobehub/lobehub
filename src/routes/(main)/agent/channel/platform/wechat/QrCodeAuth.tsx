@@ -1,18 +1,15 @@
 'use client';
 
-import { InfoCircleOutlined } from '@ant-design/icons';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, type ButtonProps, Text } from '@lobehub/ui/base-ui';
-import { QRCode } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Button, type ButtonProps, QRCode, Spin, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { QrCode, RefreshCw } from 'lucide-react';
+import { InfoIcon, QrCode, RefreshCw } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { agentBotProviderService } from '@/services/agentBotProvider';
 
-const QR_CODE_SIZE = 220;
+const QR_CODE_SIZE = 188;
 const QR_POLL_INTERVAL_MS = 2000;
 const QR_SLOT_SIZE = 240;
 
@@ -164,7 +161,7 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
               {t('channel.wechatGenerateQrCode')}
             </Button>
           )}
-          {state.stage === 'loading' && <NeuralNetworkLoading size={48} />}
+          {state.stage === 'loading' && <Spin size="large" />}
           {state.stage === 'ready' && <QRCode size={QR_CODE_SIZE} value={state.imageUrl} />}
           {state.stage === 'error' && (
             <Flexbox className={styles.error} gap={12}>
@@ -187,7 +184,7 @@ const QrCodeAuth = memo<QrCodeAuthProps>(
 
         {showTips && (
           <Text className={styles.tips} type="secondary">
-            <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
+            <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
             {t('channel.wechatTips')}
           </Text>
         )}

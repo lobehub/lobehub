@@ -5,22 +5,26 @@ import type {
   UpdaterStage,
   UpdaterState,
 } from '@lobechat/electron-client-ipc';
-import { app as electronApp } from 'electron';
-import log from 'electron-log';
-import { autoUpdater } from 'electron-updater';
+import { app as electronApp, BrowserWindow } from 'electron';
 import semver from 'semver';
 
 import { isDev, isWindows } from '@/const/env';
-import { getDesktopEnv } from '@/env';
 import { UPDATE_CHANNEL, UPDATE_SERVER_URL, updaterConfig } from '@/modules/updater/configs';
+import { createUpdateEngine, type UpdateEngine } from '@/modules/updater/engine';
 import { extractRestoreRoute } from '@/modules/updater/utils';
 import { createLogger } from '@/utils/logger';
 
 import type { App as AppCore } from '../App';
 
-const FORCE_DEV_UPDATE_CONFIG = getDesktopEnv().FORCE_DEV_UPDATE_CONFIG;
-
 const logger = createLogger('core:UpdaterManager');
+
+/**
+ * How long to wait for electron-updater to take the process down after
+ * `quitAndInstall()`. A Linux package install runs `pkexec`/`sudo` through
+ * `spawnSync`, so this timer cannot fire while the installer is still working —
+ * it only fires when the hand-off failed outright.
+ */
+const INSTALL_HANDOFF_TIMEOUT = 60 * 1000;
 
 export class UpdaterManager {
   private app: AppCore;
@@ -28,6 +32,7 @@ export class UpdaterManager {
   private downloading: boolean = false;
   private updateAvailable: boolean = false;
   private currentChannel: UpdateChannel = UPDATE_CHANNEL;
+  private engine?: UpdateEngine;
   /** Incremented on each channel switch to invalidate in-flight checks */
   private checkGeneration: number = 0;
   /** Generation at the start of the current active check */
@@ -50,11 +55,6 @@ export class UpdaterManager {
 
   constructor(app: AppCore) {
     this.app = app;
-
-    log.transports.file.level = 'info';
-    autoUpdater.logger = log;
-
-    logger.debug(`[Updater] Log file should be at: ${log.transports.file.getFile().path}`);
   }
 
   get mainWindow() {
@@ -110,38 +110,20 @@ export class UpdaterManager {
     // Read persisted channel from store (defaults to build-time UPDATE_CHANNEL)
     this.currentChannel = this.app.storeManager.get('updateChannel') ?? UPDATE_CHANNEL;
 
-    autoUpdater.autoDownload = false;
-    autoUpdater.autoInstallOnAppQuit = false;
-
-    const useDevConfig = isDev || FORCE_DEV_UPDATE_CONFIG;
-    if (useDevConfig) {
-      autoUpdater.forceDevUpdateConfig = true;
-      logger.info(
-        `Using dev update config (isDev=${isDev}, FORCE_DEV_UPDATE_CONFIG=${FORCE_DEV_UPDATE_CONFIG})`,
-      );
-      logger.info('Dev mode: Using dev-app-update.yml for update configuration');
-    } else {
-      autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
-      logger.info(
-        `Production mode: channel=${this.currentChannel}, allowPrerelease=${this.currentChannel !== 'stable'}`,
-      );
-      this.configureUpdateProvider();
+    try {
+      this.engine = await createUpdateEngine(this.currentChannel);
+      this.engine.configure(this.currentChannel);
+    } catch (error) {
+      logger.error('Failed to initialize updater:', error);
+      this.setStage('error', { error: error instanceof Error ? error.message : String(error) });
+      return;
     }
-
-    // Keep every release channel rollback-capable. Assign this after configuring the provider because
-    // electron-updater's channel setter mutates allowDowngrade as a side effect.
-    autoUpdater.allowDowngrade = true;
-
     this.registerEvents();
 
     if (updaterConfig.app.autoCheckUpdate) {
       setTimeout(() => this.checkForUpdates(), 60 * 1000);
       setInterval(() => this.checkForUpdates(), updaterConfig.app.checkUpdateInterval);
     }
-
-    logger.debug(
-      `Initialized with channel: ${autoUpdater.channel}, allowPrerelease: ${autoUpdater.allowPrerelease}`,
-    );
 
     logger.info('UpdaterManager initialization completed');
   };
@@ -153,20 +135,15 @@ export class UpdaterManager {
     logger.info(`Switching update channel: ${this.currentChannel} -> ${channel}`);
 
     this.currentChannel = channel;
-    autoUpdater.allowPrerelease = channel !== 'stable';
-    this.configureUpdateProvider();
-
-    // Reapply after configureUpdateProvider for the same channel-setter side effect as initialize.
-    autoUpdater.allowDowngrade = true;
-    logger.info('allowDowngrade=true');
-
     this.installLaterVersion = null;
+    this.updateAvailable = false;
+    this.latestUpdateInfo = null;
 
     this.mainWindow.broadcast('updateChannelChanged', channel);
 
     // Invalidate any in-flight check and schedule a recheck
     this.checkGeneration++;
-    if (this.checking) {
+    if (this.checking || this.downloading) {
       this.pendingRecheck = true;
     } else {
       this.checkForUpdates();
@@ -177,31 +154,35 @@ export class UpdaterManager {
    * Check for updates
    */
   public checkForUpdates = async ({ manual = false }: { manual?: boolean } = {}) => {
-    if (this.checking || this.downloading) return;
+    if (manual) void this.app.coreUpdateManager.checkForUpdates({ manual: true });
+    if (!this.engine || this.checking || this.downloading) return;
+
+    // electron-updater has no updater implementation for every Linux
+    // distribution format we ship: snap refreshes through snapd, the `tar.gz`
+    // archive has no installer at all, and AppImageUpdater needs the APPIMAGE
+    // env only the AppImage runtime exports. For those, `checkForUpdates()`
+    // resolves `null` without emitting a single event, which would leave the
+    // UI spinning on "checking" forever. Say so instead.
+    if (!this.engine.isActive()) {
+      logger.warn(
+        'Updater is inactive for this installation (unsupported distribution format or unpacked build) — in-app update is unavailable',
+      );
+      this.setStage('unsupported');
+      return;
+    }
 
     this.checking = true;
     this.activeGeneration = this.checkGeneration;
-
-    autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
 
     logger.info(
       `${manual ? 'Manually checking' : 'Auto checking'} for updates... (gen=${this.activeGeneration})`,
     );
 
-    logger.info('[Updater Config] Channel:', autoUpdater.channel);
-    logger.info('[Updater Config] currentChannel:', this.currentChannel);
-    logger.info('[Updater Config] allowPrerelease:', autoUpdater.allowPrerelease);
-    logger.info('[Updater Config] currentVersion:', autoUpdater.currentVersion?.version);
-    logger.info('[Updater Config] allowDowngrade:', autoUpdater.allowDowngrade);
-    logger.info('[Updater Config] autoDownload:', autoUpdater.autoDownload);
-    logger.info('[Updater Config] forceDevUpdateConfig:', autoUpdater.forceDevUpdateConfig);
-    logger.info('[Updater Config] Build channel from config:', UPDATE_CHANNEL);
-    logger.info('[Updater Config] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
-
     this.setStage('checking');
 
     try {
-      await autoUpdater.checkForUpdates();
+      this.engine.configure(this.currentChannel);
+      await this.engine.checkForUpdates();
     } catch (error) {
       if (this.isStaleCheck()) return;
 
@@ -231,10 +212,26 @@ export class UpdaterManager {
   };
 
   /**
+   * Check for updates because someone explicitly asked to update this app from
+   * another device. An earlier local "install later" would keep the found
+   * update from downloading, so the explicit request overrides it.
+   */
+  public checkForUpdatesOnRequest = () => {
+    if (this.installLaterVersion) {
+      logger.info(
+        `Remote update requested; clearing install-later for v${this.installLaterVersion}`,
+      );
+      this.installLaterVersion = null;
+    }
+
+    void this.checkForUpdates({ manual: true });
+  };
+
+  /**
    * Download update
    */
   public downloadUpdate = async () => {
-    if (this.downloading || !this.updateAvailable) return;
+    if (!this.engine || this.downloading || !this.updateAvailable) return;
 
     this.downloading = true;
     logger.info('Downloading update...');
@@ -242,7 +239,7 @@ export class UpdaterManager {
     this.setStage('downloading');
 
     try {
-      await autoUpdater.downloadUpdate();
+      await this.engine.downloadUpdate();
     } catch (error) {
       this.downloading = false;
       logger.error('Error downloading update:', error);
@@ -253,7 +250,7 @@ export class UpdaterManager {
     }
   };
 
-  private captureRestoreRoute = () => {
+  captureRestoreRoute = () => {
     try {
       const url = this.mainWindow.webContents?.getURL();
       if (!url) return;
@@ -272,14 +269,18 @@ export class UpdaterManager {
    * Install update immediately
    */
   public installNow = () => {
+    if (!this.engine || !this.updateAvailable) return;
     logger.info('Installing update now...');
 
     this.captureRestoreRoute();
 
     this.app.isQuiting = true;
+    // Suppress the `window-all-closed` quit in App.ts: on Linux it fires as soon
+    // as the loop below closes the last window and would tear the process down
+    // before the deferred quitAndInstall() runs.
+    this.app.isInstallingUpdate = true;
 
     logger.info('Closing all windows before update installation...');
-    const { BrowserWindow, app } = require('electron');
     if (!isWindows) {
       const allWindows = BrowserWindow.getAllWindows();
       allWindows.forEach((window: any) => {
@@ -290,11 +291,25 @@ export class UpdaterManager {
     }
 
     logger.info('Releasing single instance lock...');
-    app.releaseSingleInstanceLock();
+    electronApp.releaseSingleInstanceLock();
 
     setTimeout(() => {
-      logger.info('Calling autoUpdater.quitAndInstall...');
-      autoUpdater.quitAndInstall(true, true);
+      const engine = this.engine;
+      logger.info(`Calling ${engine?.kind} quitAndInstall...`);
+      engine?.quitAndInstall();
+
+      // electron-updater's quitAndInstall() only quits once the installer took
+      // over. If it bailed out (no installer path, package manager missing,
+      // sudo prompt refused) we would be left with a window-less process that
+      // never quits, because window-all-closed is suppressed above. Quit on our
+      // own in that case; after a successful hand-off the process is already
+      // gone. Sparkle owns its own termination and may still be prompting.
+      if (engine?.kind !== 'electron-updater') return;
+      setTimeout(() => {
+        logger.warn('quitAndInstall did not end the process, quitting explicitly');
+        this.app.isInstallingUpdate = false;
+        electronApp.quit();
+      }, INSTALL_HANDOFF_TIMEOUT);
     }, 100);
   };
 
@@ -304,7 +319,8 @@ export class UpdaterManager {
   public installLater = () => {
     logger.info('Update will be installed on next restart');
 
-    autoUpdater.autoInstallOnAppQuit = true;
+    if (!this.engine) return;
+    this.engine.installOnQuit();
     if (this.latestUpdateInfo?.version) {
       this.installLaterVersion = this.latestUpdateInfo.version;
       logger.info(`Suppressing further prompts for version ${this.installLaterVersion}`);
@@ -399,62 +415,17 @@ export class UpdaterManager {
     }, 300);
   };
 
-  /**
-   * Strip trailing channel path from URL so we can re-append the correct channel.
-   * Handles both base URL (https://cdn.example.com) and legacy URLs with channel suffixes.
-   */
-  private getBaseUpdateUrl(): string | undefined {
-    if (!UPDATE_SERVER_URL) return undefined;
-    return UPDATE_SERVER_URL.replace(/\/(stable|nightly|canary|beta)\/?$/, '');
-  }
-
-  /**
-   * Configure update provider — all channels use generic HTTP provider (S3)
-   * URL format: {base}/{channel}/
-   * electron-updater looks for {channel}-mac.yml
-   */
-  private configureUpdateProvider() {
-    const baseUrl = this.getBaseUpdateUrl();
-    if (baseUrl) {
-      const feedUrl = `${baseUrl}/${this.currentChannel}`;
-      autoUpdater.channel = this.currentChannel;
-
-      logger.info(`Configuring generic provider for ${this.currentChannel} channel`);
-      logger.info(`Update server URL: ${feedUrl}`);
-      logger.info(
-        `Channel set to: ${this.currentChannel} (will look for ${this.currentChannel}-mac.yml)`,
-      );
-
-      autoUpdater.setFeedURL({
-        provider: 'generic',
-        url: feedUrl,
-      });
-    } else {
-      // Fallback to GitHub when no S3 URL configured (local dev)
-      logger.info(
-        `No UPDATE_SERVER_URL configured, falling back to GitHub provider for ${this.currentChannel} channel`,
-      );
-
-      autoUpdater.setFeedURL({
-        owner: 'lobehub',
-        provider: 'github',
-        repo: 'lobehub',
-      });
-
-      autoUpdater.allowPrerelease = this.currentChannel !== 'stable';
-    }
-  }
-
   private registerEvents() {
-    logger.debug('Registering updater events');
+    if (this.engine) this.bindEngine(this.engine);
+  }
 
-    autoUpdater.on('checking-for-update', () => {
+  private bindEngine(engine: UpdateEngine) {
+    engine.on('checking-for-update', () => {
       logger.info('[Updater] Checking for update...');
-      logger.info('[Updater] Current channel:', autoUpdater.channel);
-      logger.info('[Updater] Current allowPrerelease:', autoUpdater.allowPrerelease);
+      logger.info('[Updater] Current channel:', this.currentChannel);
     });
 
-    autoUpdater.on('update-available', (info) => {
+    engine.on('update-available', (info) => {
       logger.info(
         `Update available: ${info.version} (activeGen=${this.activeGeneration}, currentGen=${this.checkGeneration})`,
       );
@@ -469,6 +440,8 @@ export class UpdaterManager {
         logger.info(
           `Skipping auto-download — install-later acknowledged for v${this.installLaterVersion}, incoming v${info.version}`,
         );
+        // Finish the check with the cached update still installable, without reopening its prompt.
+        this.setStage('downloaded');
         return;
       }
 
@@ -478,7 +451,8 @@ export class UpdaterManager {
       this.downloadUpdate();
     });
 
-    autoUpdater.on('update-not-available', (info) => {
+    engine.on('update-not-available', (info) => {
+      if (this.isStaleCheck()) return;
       logger.info(`Update not available. Current: ${info.version}`);
 
       this.setStage('latest');
@@ -487,7 +461,9 @@ export class UpdaterManager {
       }, 5000);
     });
 
-    autoUpdater.on('error', async (err) => {
+    engine.on('error', async (err) => {
+      this.downloading = false;
+      if (this.isStaleCheck()) return;
       const message = err instanceof Error ? err.message : String(err);
 
       if (this.isMissingUpdateManifestError(err)) {
@@ -500,9 +476,7 @@ export class UpdaterManager {
       }
 
       logger.error('Error in auto-updater:', err);
-      logger.error('[Updater Error Context] Channel:', autoUpdater.channel);
       logger.error('[Updater Error Context] currentChannel:', this.currentChannel);
-      logger.error('[Updater Error Context] allowPrerelease:', autoUpdater.allowPrerelease);
       logger.error('[Updater Error Context] UPDATE_SERVER_URL:', UPDATE_SERVER_URL || '(not set)');
 
       this.mainWindow.broadcast('updateError', err.message);
@@ -512,7 +486,8 @@ export class UpdaterManager {
       }, 3000);
     });
 
-    autoUpdater.on('download-progress', (progressObj) => {
+    engine.on('download-progress', (progressObj) => {
+      if (this.isStaleCheck()) return;
       logger.debug(
         `Download speed: ${progressObj.bytesPerSecond} - Downloaded ${progressObj.percent}% (${progressObj.transferred}/${progressObj.total})`,
       );
@@ -522,9 +497,10 @@ export class UpdaterManager {
       this.mainWindow.broadcast('updateDownloadProgress', progressObj);
     });
 
-    autoUpdater.on('update-downloaded', (info) => {
+    engine.on('update-downloaded', (info) => {
       logger.info(`Update downloaded: ${info.version}`);
       this.downloading = false;
+      if (this.isStaleCheck()) return;
 
       this.maybeClearInstallLaterGuard(info.version);
 
@@ -540,8 +516,6 @@ export class UpdaterManager {
 
       this.mainWindow.broadcast('updateReady', updateInfo);
     });
-
-    logger.debug('Updater events registered');
   }
 
   /**
@@ -585,7 +559,7 @@ export class UpdaterManager {
   }
 
   private getCurrentUpdateInfo(): UpdateInfo {
-    const version = autoUpdater.currentVersion?.version || electronApp.getVersion();
+    const version = electronApp.getVersion();
     return {
       kind: 'app',
       releaseDate: new Date().toISOString(),

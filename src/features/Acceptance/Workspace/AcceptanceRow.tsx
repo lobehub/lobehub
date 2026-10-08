@@ -32,6 +32,7 @@ import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 
+import { acceptanceListPath } from '../Viewer/routes';
 import { getAcceptanceStatusActions } from '../Viewer/statusActions';
 import { openAcceptanceDeleteConfirm } from './AcceptanceDeleteConfirm';
 import { openMergeAcceptanceModal } from './MergeAcceptanceModal';
@@ -233,7 +234,7 @@ const AcceptanceRow = memo<{
         setMutating(true);
         try {
           await verifyService.deleteAcceptance(item.id, purge);
-          if (active) navigate('/acceptance', { replace: true });
+          if (active) navigate(acceptanceListPath(), { replace: true });
           await onChanged();
           toast.success(t('acceptance.workspace.deleteSuccess'));
         } finally {
@@ -334,8 +335,10 @@ const AcceptanceRow = memo<{
       // Only where the grouping does not already say it, and only when the row
       // actually has one — stamping "ungrouped" on every other row would cost a
       // line of height to say nothing.
+      // Someone else's acceptance (a participated row) offers no menu: every
+      // entry in it is a write its owner alone may make.
       actions={
-        selectable ? undefined : (
+        selectable || !item.canManage ? undefined : (
           <DropdownMenu
             iconSpaceMode={'group'}
             items={menuItems}
@@ -380,8 +383,8 @@ const AcceptanceRow = memo<{
           : undefined
       }
       onClick={(e) => {
-        if (selectable || e.shiftKey || e.metaKey || e.ctrlKey) {
-          onToggleSelect?.(e.shiftKey);
+        if (onToggleSelect && (selectable || e.shiftKey || e.metaKey || e.ctrlKey)) {
+          onToggleSelect(e.shiftKey);
           return;
         }
         navigate(`/acceptance/${item.id}`);

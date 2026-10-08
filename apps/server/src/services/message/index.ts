@@ -2,7 +2,6 @@ import { type LobeChatDatabase } from '@lobechat/database';
 import { CompressionRepository } from '@lobechat/database';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
-import { projectToolViewModels } from '@lobechat/tool-view-model';
 import {
   type CreateMessageParams,
   type HeterogeneousToolStateSnapshot,
@@ -13,9 +12,9 @@ import {
 import { createTimingHelpers, getDurationMs } from '@lobechat/utils';
 
 import { MessageModel } from '@/database/models/message';
-import { UserModel } from '@/database/models/user';
 
 import { FileService } from '../file';
+import { TrashService } from '../trash';
 import { resolveMessageFileUrls } from './resolveMessageFileUrls';
 
 /** Apply the same error contract to single and batched message writes. */
@@ -108,43 +107,13 @@ export class MessageService {
   private messageModel: MessageModel;
   private fileService: FileService;
   private compressionRepository: CompressionRepository;
-  private userModel: UserModel;
-  private toolProjectionEnabled?: Promise<boolean>;
+  private trashService: TrashService;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
     this.fileService = new FileService(db, userId, workspaceId);
     this.compressionRepository = new CompressionRepository(db, userId, workspaceId);
-    this.userModel = new UserModel(db, userId);
-  }
-
-  /**
-   * Whether this user's reads hand back projected tool payloads.
-   *
-   * Gated on the `gatewayMux` lab opt-in, because that is exactly the cohort for
-   * which the browser never assembles an LLM context itself. Off the mux, a run
-   * can execute client-side against `dbMessagesMap`, so the read path IS the
-   * model path there and a projected tool result would silently disappear from
-   * the model's context.
-   *
-   * Memoized per service instance: a gateway run calls `queryMessages` once per
-   * step, and a lab preference cannot change mid-run. Fails to `false`, which
-   * keeps today's whole payload — never the direction that loses data.
-   *
-   * Turning the lab OFF does not invalidate message lists the client already
-   * cached in their projected form. Deliberately not handled: the mux is on its
-   * way to being the only runtime, at which point the gate goes away entirely.
-   */
-  private isToolProjectionEnabled(): Promise<boolean> {
-    this.toolProjectionEnabled ??= this.userModel
-      .getUserPreference()
-      .then((preference) => preference?.lab?.enableGatewayMux === true)
-      .catch((error) => {
-        console.error('[MessageService] failed to read lab preference: %O', error);
-        return false;
-      });
-
-    return this.toolProjectionEnabled;
+    this.trashService = new TrashService(db, userId, workspaceId);
   }
 
   /**
@@ -219,42 +188,25 @@ export class MessageService {
        * authorized may opt in.
        */
       allowShareVisitor?: boolean;
-      /**
-       * Keep the stored tool payloads whole. Set for a shared-agent visitor's
-       * snapshot: it is produced under the CREATOR's identity, but the recovery
-       * RPC runs as the VISITOR against ownership-scoped reads, which cannot see
-       * a creator-owned row — a projected snapshot would be unrecoverable.
-       */
-      skipToolProjection?: boolean;
     },
   ): Promise<UIChatMessage[]> {
-    const messages = await this.messageModel.query(params, {
+    return this.messageModel.query(params, {
       ...this.getQueryOptions(),
       ...(options?.allowShareVisitor && { allowShareVisitor: true }),
     });
-
-    return options?.skipToolProjection ? messages : this.projectToolPayloads(messages);
-  }
-
-  /** Build the UI view from an already authorized, unprocessed DB snapshot. */
-  async prepareUiMessages(messages: UIChatMessage[], skipToolProjection = false) {
-    const resolved = await resolveMessageFileUrls(messages, (file) =>
-      this.fileService.getFileAccessUrl(file),
-    );
-    return skipToolProjection ? resolved : this.projectToolPayloads(resolved);
   }
 
   /**
-   * Reduce tool payloads to render-facing view models, for the mux cohort only.
+   * Build the UI view from an already authorized, unprocessed DB snapshot.
    *
-   * Public because `message.getMessages` reads through its own `MessageModel`
-   * rather than {@link queryMessages} — it passes different query options — so
-   * the router applies this step itself. Both UI reads must go through here;
-   * only the shared-topic branch stays unprojected, since an anonymous visitor
-   * has no authenticated way to fetch the stored payload back.
+   * Never projects: this is the PUSH path, and a pushed snapshot is only ever
+   * sent to a client that did not declare protocol 2 — an older bundle that
+   * cannot fetch an omitted payload back. Protocol-2 clients receive a
+   * `message_patch` revision instead and read through `message.getMessages`,
+   * which is where the projection decision is made.
    */
-  async projectToolPayloads(messages: UIChatMessage[]): Promise<UIChatMessage[]> {
-    return (await this.isToolProjectionEnabled()) ? projectToolViewModels(messages) : messages;
+  async prepareUiMessages(messages: UIChatMessage[]) {
+    return resolveMessageFileUrls(messages, (file) => this.fileService.getFileAccessUrl(file));
   }
 
   /**
@@ -399,20 +351,26 @@ export class MessageService {
   }
 
   /**
-   * Remove messages with optional message list return
-   * Pattern: delete + conditional query
+   * Remove messages with optional message list return.
+   * Recycle bin: the rows are stamped (children re-parented, usage recomputed)
+   * and registered so they can be restored; the hard delete runs at purge.
+   * `permanent` skips the bin for internal cleanup whose rows must never come
+   * back (e.g. the partial rows a restart recovery replaces with the
+   * authoritative transcript — restoring them would revive a stale branch).
+   * Pattern: trash + conditional query
    */
-  async removeMessages(ids: string[], options?: QueryOptions) {
-    await this.messageModel.deleteMessages(ids);
+  async removeMessages(ids: string[], options?: QueryOptions, removal?: { permanent?: boolean }) {
+    if (removal?.permanent) await this.messageModel.deleteMessages(ids);
+    else await this.trashService.trashMessages(ids);
     return this.queryWithSuccess(options);
   }
 
   /**
    * Remove single message with optional message list return
-   * Pattern: delete + conditional query
+   * Pattern: trash + conditional query
    */
   async removeMessage(id: string, options?: QueryOptions) {
-    await this.messageModel.deleteMessage(id);
+    await this.trashService.trashMessages([id]);
     return this.queryWithSuccess(options);
   }
 

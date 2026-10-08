@@ -159,6 +159,7 @@
   "localFiles.open": "열기",
   "localFiles.openFile": "파일 열기",
   "localFiles.openFolder": "폴더 열기",
+  "localFiles.openInPanel": "사이드 패널에서 열기",
   "localFiles.outOfScope.requestedPaths": "요청된 경로",
   "localFiles.outOfScope.warning": "경고: 다음 경로는 설정된 작업 디렉터리 외부에 있습니다. 접근을 허용하시겠습니까?",
   "localFiles.outOfScope.workingDirectory": "작업 디렉터리",

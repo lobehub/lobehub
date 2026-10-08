@@ -1,11 +1,12 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
   type ModalInstance,
   Text,
+  TextArea,
   useModalContext,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -18,6 +19,7 @@ import {
   AttachmentUploadButton,
   useFeedbackAttachments,
 } from '../Evidence/attachments';
+import RejectFeedbackPreview from './RejectFeedbackPreview';
 
 const styles = createStaticStyles(({ css }) => ({
   warning: css`
@@ -103,11 +105,17 @@ export const openAcceptModal = (options: AcceptContentProps): ModalInstance =>
   });
 
 interface RejectContentProps {
+  /** Previews the open feedback the repair agent reads alongside the reason, so
+      the reviewer knows whose comments and screenshots ride along. */
+  acceptanceId: string;
+  /** The rounds name an authoring agent — the server sends the reject back to
+      it. Without one the dialog promises no next round: it copies the prompt. */
+  dispatchAvailable: boolean;
   /** Perform the reject with an optional reason; resolve true to close. */
   onConfirm: (comment: string) => Promise<boolean>;
 }
 
-const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
+const RejectContent = memo<RejectContentProps>(({ acceptanceId, dispatchAvailable, onConfirm }) => {
   const { t: translate } = useTranslation('verify');
   const { close } = useModalContext();
   const [comment, setComment] = useState('');
@@ -125,8 +133,13 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
 
   return (
     <Flexbox gap={16}>
+      {/* What the repair prompt carries besides the reason leads the dialog —
+            otherwise nobody can tell whether teammates' notes go along. */}
+      <RejectFeedbackPreview acceptanceId={acceptanceId} />
       <Text fontSize={13} type={'secondary'}>
-        {translate('acceptance.reject.description')}
+        {translate(
+          dispatchAvailable ? 'acceptance.reject.description' : 'acceptance.reject.descriptionCopy',
+        )}
       </Text>
       <TextArea
         autoSize={{ maxRows: 6, minRows: 3 }}
@@ -139,7 +152,11 @@ const RejectContent = memo<RejectContentProps>(({ onConfirm }) => {
           {translate('acceptance.actions.cancel')}
         </Button>
         <Button loading={loading} type={'primary'} onClick={handleConfirm}>
-          {translate('acceptance.actions.confirmReject')}
+          {translate(
+            dispatchAvailable
+              ? 'acceptance.actions.confirmReject'
+              : 'acceptance.actions.confirmRejectCopy',
+          )}
         </Button>
       </Flexbox>
     </Flexbox>
@@ -156,7 +173,7 @@ export const openRejectModal = (options: RejectContentProps): ModalInstance =>
     maskClosable: true,
     styles: frostedModalStyles,
     title: t('acceptance.actions.reject', { ns: 'verify' }),
-    width: 'min(90vw, 480px)',
+    width: 'min(90vw, 520px)',
   });
 
 interface GroupFeedbackContentProps {

@@ -2,6 +2,8 @@ import type {
   AgentInterventionRequestData,
   AgentInterventionResponseData,
   AgentStreamEvent,
+  LlmCancelData,
+  LlmExecuteData,
   MessagePatchData,
   StepCompleteData,
   StreamChunkData,
@@ -12,11 +14,16 @@ import type {
   ToolStartData,
   ToolStateChunkData,
 } from '@lobechat/agent-gateway-client';
+import { isSessionTerminalEvent } from '@lobechat/agent-gateway-client';
 import { normalizeHeterogeneousMessageError } from '@lobechat/heterogeneous-agents/errors';
 import { normalizeChatMessageError } from '@lobechat/model-runtime/errors';
 import type { BuiltinToolResult, ConversationContext, UIChatMessage } from '@lobechat/types';
+import { isClientLlmWaitableError } from '@lobechat/types';
 import { isRecord, pickNonEmptyString, toRecord } from '@lobechat/utils/object';
 
+import { readConversationMessages } from '@/helpers/conversationMessageRead';
+import { llmRelayExecutor } from '@/services/llmRelay';
+import type { RelayProtocolChunk } from '@/services/llmRelay/protocolChunks';
 import { messageService } from '@/services/message';
 import { didToolMutateWorkView, workService } from '@/services/work';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
@@ -88,9 +95,7 @@ const fetchAndReplaceMessages = async (
   const skipWorks = options?.skipWorks;
   const snapshotGeneration = options?.snapshotGeneration;
   const started = snapshotGeneration?.current;
-  const messages = await messageService.getMessages(
-    skipWorks ? { ...context, skipWorks } : context,
-  );
+  const messages = await readConversationMessages(skipWorks ? { ...context, skipWorks } : context);
   if (snapshotGeneration && snapshotGeneration.current !== started) return undefined;
   if (snapshotGeneration) snapshotGeneration.current += 1;
   get().replaceMessages(messages, { context, preserveWorks: skipWorks });
@@ -400,6 +405,12 @@ export const createGatewayEventHandler = (
     reasoningOperationId = undefined;
   };
 
+  // Reply of the relayed LLM attempt this tab is executing (`llm_execute`),
+  // rendered from the local model output instead of the server's echo. Reset
+  // per call id: a re-dispatched attempt starts its reply over.
+  let relayRender:
+    { callId: string; content: string; messageId: string; reasoning: string } | undefined;
+
   // Sequential processing queue — ensures stream_chunk waits for stream_start's fetch
   let processingChain: Promise<void> = Promise.resolve();
 
@@ -549,6 +560,55 @@ export const createGatewayEventHandler = (
     toolStateBootstrapPromiseByCallId.set(data.toolCallId, trackedBootstrapPromise);
   };
 
+  /**
+   * Optimistic render of a relayed attempt this tab executes: the local model's
+   * text and reasoning land on the step's assistant message as they are
+   * produced, and the server's echo of the same output (`relayCallId`) is
+   * skipped. Tool calls, `stream_end` and the step's message patch still come
+   * from the server, so its final state overrides what was rendered here.
+   */
+  const applyLocalRelayOutput = (call: LlmExecuteData, chunk: RelayProtocolChunk) => {
+    const messageId = call.assistantMessageId;
+    if (!messageId || terminalState) return;
+    if (chunk.type !== 'text' && chunk.type !== 'reasoning') return;
+    if (typeof chunk.data !== 'string' || !chunk.data) return;
+
+    if (relayRender?.callId !== call.callId) {
+      relayRender = { callId: call.callId, content: '', messageId, reasoning: '' };
+    }
+    const isCurrent = messageId === currentAssistantMessageId;
+    hasStreamedContent = true;
+
+    if (chunk.type === 'text') {
+      relayRender.content += chunk.data;
+      if (isCurrent) {
+        endReasoningIfNeeded();
+        accumulatedContent = relayRender.content;
+      }
+      // The whole reply so far, not the delta: a chunk that raced ahead of
+      // `stream_start` (the message shell not in the store yet) is not lost.
+      get().internal_dispatchMessage(
+        { id: messageId, type: 'updateMessage', value: { content: relayRender.content } },
+        dispatchContext,
+      );
+      return;
+    }
+
+    relayRender.reasoning += chunk.data;
+    if (isCurrent) {
+      startReasoningIfNeeded();
+      accumulatedReasoning = relayRender.reasoning;
+    }
+    get().internal_dispatchMessage(
+      {
+        id: messageId,
+        type: 'updateMessage',
+        value: { reasoning: { content: relayRender.reasoning } },
+      },
+      dispatchContext,
+    );
+  };
+
   return (event: AgentStreamEvent) => {
     if (terminalState) return;
 
@@ -564,8 +624,12 @@ export const createGatewayEventHandler = (
       return;
     }
 
-    if (event.type === 'agent_runtime_end' || event.type === 'error') {
+    // A parked LLM call's error is not terminal: the run streams on in this
+    // same session once a client resumes it.
+    if (isSessionTerminalEvent(event)) {
       terminalState = event.type === 'error' ? 'error' : 'completed';
+      // A relayed attempt this tab still runs for the run is moot now.
+      llmRelayExecutor.cancelOperation(event.operationId || gatewayOperationId);
     }
 
     switch (event.type) {
@@ -630,9 +694,37 @@ export const createGatewayEventHandler = (
           // current id.
           endReasoningIfNeeded();
 
-          // Reset accumulators for the new stream
-          accumulatedContent = '';
-          accumulatedReasoning = '';
+          // Reset accumulators for the new stream — unless this tab already
+          // rendered the step's relayed reply locally ahead of `stream_start`.
+          const localRelay =
+            relayRender && relayRender.messageId === currentAssistantMessageId
+              ? relayRender
+              : undefined;
+          accumulatedContent = localRelay?.content ?? '';
+          accumulatedReasoning = localRelay?.reasoning ?? '';
+          // Output that raced ahead of the shell inserted above was dispatched
+          // to a missing id (a no-op), and the server echo of it is skipped:
+          // put it on the message now.
+          if (localRelay?.content) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { content: localRelay.content },
+              },
+              dispatchContext,
+            );
+          }
+          if (localRelay?.reasoning) {
+            get().internal_dispatchMessage(
+              {
+                id: localRelay.messageId,
+                type: 'updateMessage',
+                value: { reasoning: { content: localRelay.reasoning } },
+              },
+              dispatchContext,
+            );
+          }
           get().updateOperationMetadata(operationId, { visibleLoadingDone: false });
 
           // Native gateway streams carry `assistantMessage.id` directly on
@@ -692,6 +784,14 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as StreamChunkData | undefined;
           if (!data) return;
+
+          // Echo of a relayed attempt this tab ran: already rendered locally.
+          if (
+            (data.chunkType === 'text' || data.chunkType === 'reasoning') &&
+            llmRelayExecutor.ownsCall(data.relayCallId)
+          ) {
+            return;
+          }
 
           if (data.chunkType === 'text' && data.content) {
             // `lh hetero exec` coalesces main-agent text into full-text
@@ -1043,6 +1143,27 @@ export const createGatewayEventHandler = (
         break;
       }
 
+      case 'llm_execute': {
+        // The server hands this tab one LLM attempt for a provider only this
+        // device can reach. Started right away, not queued: the queue may be
+        // waiting on a DB read, and the claim deadline is 15 s. Its output is
+        // rendered through the queue so it keeps its order with stream_start.
+        const data = event.data as LlmExecuteData | undefined;
+        if (!data?.callId || context.agentShareId) break;
+        void llmRelayExecutor.execute(data, {
+          onOutput: (chunk) => {
+            enqueue(() => applyLocalRelayOutput(data, chunk));
+          },
+        });
+        break;
+      }
+
+      case 'llm_cancel': {
+        const data = event.data as LlmCancelData | undefined;
+        if (data?.callId) llmRelayExecutor.cancel(data);
+        break;
+      }
+
       case 'tool_end': {
         const data = event.data as ToolEndData | undefined;
         const completedToolCallId =
@@ -1312,6 +1433,20 @@ export const createGatewayEventHandler = (
           const messageError = normalizeHeterogeneousMessageError(
             normalizeChatMessageError(event.data),
           );
+
+          // A relayed LLM call no client took: the server parks the run in
+          // `waiting_for_client` (or, if it cannot, fails it and writes the
+          // error itself), so this is not the run's end and the row is not ours
+          // to write — persisting it here would replace the waiting notice, and
+          // a stream replay on reconnect would do so long after the park. Show
+          // what the server wrote instead.
+          if (isClientLlmWaitableError(messageError)) {
+            get().internal_toggleToolCallingStreaming(currentAssistantMessageId, undefined);
+            endReasoningIfNeeded();
+            await refreshMessagesFromDb().catch(console.error);
+            return;
+          }
+
           const errorMessage = messageError.message;
 
           void emitAgentSignal({

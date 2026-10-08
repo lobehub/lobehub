@@ -140,7 +140,13 @@ describe('describeGatewayRequestFailure', () => {
   });
 
   it('reports a dead gateway host as an undelivered call', () => {
-    const failure = describeGatewayRequestFailure(new TypeError('fetch failed'), 'tool call');
+    // undici reports a refused connect as `fetch failed` with the code on `cause`.
+    const failure = describeGatewayRequestFailure(
+      Object.assign(new TypeError('fetch failed'), {
+        cause: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:443' },
+      }),
+      'tool call',
+    );
 
     expect(failure.code).toBe(DeviceTransportErrorCode.GatewayUnreachable);
     expect(failure.content).toContain('never ran on the device');
@@ -163,6 +169,53 @@ describe('describeGatewayRequestFailure', () => {
     );
 
     expect(failure.code).toBe(DeviceTransportErrorCode.GatewayUnreachable);
+  });
+
+  it('recognises a failed DNS lookup and Bun connect failure as undelivered', () => {
+    expect(
+      describeGatewayRequestFailure(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'ENOTFOUND', message: 'getaddrinfo ENOTFOUND gateway.invalid' },
+        }),
+        'tool call',
+      ).code,
+    ).toBe(DeviceTransportErrorCode.GatewayUnreachable);
+    expect(
+      describeGatewayRequestFailure(
+        new TypeError('Unable to connect. Is the computer able to access the url?'),
+        'tool call',
+      ).code,
+    ).toBe(DeviceTransportErrorCode.GatewayUnreachable);
+  });
+
+  // The request had already reached the gateway when these connections dropped,
+  // so the gateway may have relayed it and the device may have run it. Saying
+  // "never ran" tells the model to repeat a write that already happened.
+  it.each([
+    ['undici reset (ECONNRESET)', { code: 'ECONNRESET', message: 'read ECONNRESET' }],
+    [
+      'undici peer close (UND_ERR_SOCKET)',
+      { code: 'UND_ERR_SOCKET', message: 'other side closed' },
+    ],
+  ])('does not claim a %s call never ran', (_label, cause) => {
+    const failure = describeGatewayRequestFailure(
+      Object.assign(new TypeError('fetch failed'), { cause }),
+      'tool call',
+    );
+
+    expect(failure.code).toBe(DeviceTransportErrorCode.GatewayError);
+    expect(failure.content).not.toContain('never ran');
+    expect(failure.content).toContain('unclear whether the device ran it');
+  });
+
+  it.each([
+    'socket hang up',
+    'The socket connection was closed unexpectedly. For more information, pass `verbose: true` in the second argument to fetch()',
+  ])('does not claim a dropped connection (%s) never ran', (message) => {
+    const failure = describeGatewayRequestFailure(new TypeError(message), 'tool call');
+
+    expect(failure.code).toBe(DeviceTransportErrorCode.GatewayError);
+    expect(failure.content).not.toContain('never ran');
   });
 
   it('does not invent a cause for an unrecognised failure', () => {

@@ -25,6 +25,8 @@ import RecentlyViewed from './RecentlyViewed';
 import { useTrayMenuSync } from './TrayMenu/useTrayMenuSync';
 
 const isMac = isMacOS();
+const COLLAPSED_NAVIGATION_BAR_WIDTH = 150;
+const MAC_COLLAPSED_NAVIGATION_BAR_WIDTH = 116;
 
 // A persistent titlebar toggle must not share the sidebar toggle's id, or it
 // would create a duplicate DOM id and get caught by NavPanelDraggable's hover CSS.
@@ -45,6 +47,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     &[data-popup-open] {
       border-radius: ${cssVar.borderRadiusSM};
       background-color: ${cssVar.colorFillTertiary};
+    }
+  `,
+  root: css`
+    transition: width 0.2s ${cssVar.motionEaseOut};
+
+    @media (prefers-reduced-motion: reduce) {
+      transition: none;
     }
   `,
 }));
@@ -119,11 +128,18 @@ const NavigationBar = memo(() => {
 
   const isLeftPanelVisible = leftPanelWidth > 0;
   const macTrafficLightPadding = getMacTrafficLightPadding(isMac, isWindowFullScreen);
+  const collapsedWidth =
+    (isMac ? MAC_COLLAPSED_NAVIGATION_BAR_WIDTH : COLLAPSED_NAVIGATION_BAR_WIDTH) +
+    macTrafficLightPadding;
+  const navigationWidth = isLeftPanelVisible
+    ? Math.max(leftPanelWidth - 12, collapsedWidth)
+    : collapsedWidth;
 
   return (
     <Flexbox
       horizontal
       align="center"
+      className={styles.root}
       data-width={leftPanelWidth}
       gap={8}
       justify={isMac ? 'space-between' : 'end'}
@@ -131,9 +147,8 @@ const NavigationBar = memo(() => {
         paddingLeft: macTrafficLightPadding,
         paddingRight: 8,
         // Expanded: span the sidebar width so the right group hugs its right edge.
-        // Collapsed (macOS): shrink to content so the controls cluster at the left edge.
-        width: isLeftPanelVisible ? `${leftPanelWidth - 12}px` : isMac ? 'auto' : '150px',
-        transition: !isLeftPanelVisible ? 'width 0.2s' : 'none',
+        // Collapsed: keep a concrete width so the titlebar controls can animate.
+        width: navigationWidth,
       }}
     >
       {/* The persistent panel toggle is macOS-only; other platforms keep the

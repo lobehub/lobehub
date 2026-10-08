@@ -1,11 +1,11 @@
-import type { ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import treeKill from 'tree-kill';
-
 import type { GetCommandOutputParams, GetCommandOutputResult, KillCommandResult } from '../types';
+import type { ShellBackend, ShellHandle, ShellOutputFile, ShellOutputFiles } from './backend';
+import { ChildProcessBackend } from './child-process-backend';
 import { decodeClixml } from './clixml';
 import { buildOutputPreview } from './utils';
 
@@ -67,39 +67,52 @@ const GET_COMMAND_OUTPUT_HEAD_RATIO = 0;
 const OUTPUT_PREVIEW_TOTAL_MAX_BYTES = 22 * 1024;
 const OUTPUT_PREVIEW_STREAM_MAX_BYTES = 18 * 1024;
 const OUTPUT_PREVIEW_SECONDARY_MIN_BYTES = 4 * 1024;
-const KILL_SIGNAL: NodeJS.Signals = 'SIGKILL';
 
-export interface ShellOutputFile {
-  fd: number;
-  /** Tracks the parent fd only; child stdio close is tracked by ShellProcess.closedAt. */
-  fdClosed?: boolean;
-  path: string;
-}
-
-export interface ShellOutputFiles {
-  stderr: ShellOutputFile;
-  stdout: ShellOutputFile;
-}
+export type { ShellOutputFile, ShellOutputFiles } from './backend';
 
 export interface ShellProcess {
+  /** Backend that spawned the command; defaults to the manager's own. */
+  backend?: ShellBackend;
   closed?: Promise<void>;
   closedAt?: number;
   endedAt?: number;
   exitCode: number | null;
   outputFiles: ShellOutputFiles;
-  process: ChildProcess;
+  process: ShellHandle;
   spawnError?: Error;
   startedAt?: number;
 }
 
+/**
+ * Not-found text for a shell id this process never issued. Shell ids travel
+ * through the model and the device gateway, so a lookup can land on a device
+ * process other than the one that started the command (the app restarted, or
+ * two device processes are connected for the same machine). Say so, so the
+ * model re-runs the command instead of debugging a command that may be fine.
+ */
+const shellNotFoundError = (shellId: string): string =>
+  `Shell ID ${shellId} not found in this device process. It may have been started by a different or restarted process; its output is not available here.`;
+
 export class ShellProcessManager {
+  /** Default backend for commands spawned through this manager. */
+  readonly backend: ShellBackend;
+
   private nextShellId = 1;
+
+  /**
+   * Per-instance random prefix for shell ids. A bare counter restarts at 1 in
+   * every process, so `sh-3` from one device process named an unrelated
+   * command in another and getCommandOutput returned that command's output.
+   * The prefix makes an id from another process miss (not found) instead.
+   */
+  private readonly shellIdToken = randomBytes(3).toString('hex');
 
   private readonly outputRunDir: string;
 
   private processes = new Map<string, ShellProcess>();
 
-  constructor(outputRoot?: string) {
+  constructor(outputRoot?: string, backend: ShellBackend = new ChildProcessBackend()) {
+    this.backend = backend;
     const date = new Date();
 
     this.outputRunDir = path.join(
@@ -111,7 +124,7 @@ export class ShellProcessManager {
   }
 
   createShellId(): string {
-    return `sh-${this.nextShellId++}`;
+    return `sh-${this.shellIdToken}-${this.nextShellId++}`;
   }
 
   createOutputFiles(shellId: string): ShellOutputFiles {
@@ -194,7 +207,7 @@ export class ShellProcessManager {
     const shellProcess = this.processes.get(shell_id);
     if (!shellProcess) {
       return {
-        error: `Shell ID ${shell_id} not found`,
+        error: shellNotFoundError(shell_id),
         output: '',
         running: false,
         stderr: '',
@@ -203,13 +216,13 @@ export class ShellProcessManager {
       };
     }
 
-    const { process: childProcess } = shellProcess;
+    const { process: handle } = shellProcess;
 
-    let exitCode = childProcess.exitCode ?? shellProcess.exitCode;
+    let exitCode = handle.exitCode ?? shellProcess.exitCode;
     // A signal-terminated child (killCommand on POSIX) never gets an exitCode
     // and its 'exit' event has already fired — waiting would just burn the
     // full observation timeout before returning the killed command's output.
-    if (exitCode === null && childProcess.signalCode == null) {
+    if (exitCode === null && handle.signalCode == null) {
       const budget =
         typeof timeout === 'number' && Number.isFinite(timeout)
           ? Math.min(Math.max(Math.trunc(timeout), 0), MAX_OBSERVATION_TIMEOUT_MS)
@@ -225,11 +238,11 @@ export class ShellProcessManager {
           await Promise.race([
             new Promise<void>((resolve) => {
               onError = resolve;
-              childProcess.once('error', onError);
+              handle.once('error', onError);
             }),
             new Promise<void>((resolve) => {
               onExit = resolve;
-              childProcess.once('exit', onExit);
+              handle.once('exit', onExit);
             }),
             new Promise<void>((resolve) => {
               timer = setTimeout(resolve, waitTimeout);
@@ -237,13 +250,13 @@ export class ShellProcessManager {
           ]);
         } finally {
           if (timer) clearTimeout(timer);
-          if (onError) childProcess.off('error', onError);
-          if (onExit) childProcess.off('exit', onExit);
+          if (onError) handle.off('error', onError);
+          if (onExit) handle.off('exit', onExit);
         }
       }
     }
 
-    exitCode = childProcess.exitCode ?? shellProcess.exitCode;
+    exitCode = handle.exitCode ?? shellProcess.exitCode;
     if (exitCode !== null) {
       shellProcess.endedAt ??= Date.now();
       await shellProcess.closed;
@@ -291,7 +304,7 @@ export class ShellProcessManager {
     // without one, and so does a child that failed to spawn. Leaving the caller
     // to guess from `exit_code` alone is how a killed session gets described as
     // still running.
-    const signal = childProcess.signalCode ?? undefined;
+    const signal = handle.signalCode ?? undefined;
     const running = exitCode === null && !signal && !shellProcess.spawnError;
 
     return {
@@ -322,11 +335,11 @@ export class ShellProcessManager {
   kill(shell_id: string): KillCommandResult {
     const shellProcess = this.processes.get(shell_id);
     if (!shellProcess) {
-      return { error: `Shell ID ${shell_id} not found`, success: false };
+      return { error: shellNotFoundError(shell_id), success: false };
     }
 
     try {
-      killProcessTree(shellProcess.process);
+      (shellProcess.backend ?? this.backend).kill(shell_id);
       // Keep the registry entry: getCommandOutput after a kill must still be
       // able to return the output produced before termination, exactly like a
       // naturally-exited command. Output fds are closed by the 'close' handler
@@ -339,11 +352,13 @@ export class ShellProcessManager {
 
   cleanupAll(): void {
     for (const [id, sp] of this.processes) {
+      const backend = sp.backend ?? this.backend;
       try {
-        killProcessTree(sp.process);
+        backend.kill(id);
       } catch {
         // Ignore
       }
+      backend.release?.(id);
       this.closeOutputFiles(sp.outputFiles);
       this.processes.delete(id);
     }
@@ -378,17 +393,6 @@ export class ShellProcessManager {
     };
   }
 }
-
-const killProcessTree = (childProcess: ChildProcess): void => {
-  const { pid } = childProcess;
-
-  if (pid) {
-    treeKill(pid, KILL_SIGNAL);
-    return;
-  }
-
-  childProcess.kill(KILL_SIGNAL);
-};
 
 // Keep the inline preview under the model-facing budget while preserving both
 // streams when stdout and stderr are both present.

@@ -1197,6 +1197,41 @@
       "when": 1790215059199,
       "tag": "0170_acceptance_comment_source",
       "breakpoints": true
+    },
+    {
+      "idx": 171,
+      "version": "7",
+      "when": 1790354510012,
+      "tag": "0171_expertise_lessons_order_enforcement",
+      "breakpoints": true
+    },
+    {
+      "idx": 172,
+      "version": "7",
+      "when": 1790630241509,
+      "tag": "0172_expertise_hits_source_message",
+      "breakpoints": true
+    },
+    {
+      "idx": 173,
+      "version": "7",
+      "when": 1790854414712,
+      "tag": "0173_agent_accounts",
+      "breakpoints": true
+    },
+    {
+      "idx": 174,
+      "version": "7",
+      "when": 1791109715438,
+      "tag": "0174_widgets_dashboards",
+      "breakpoints": true
+    },
+    {
+      "idx": 175,
+      "version": "7",
+      "when": 1791169090046,
+      "tag": "0175_environment_visibility_and_build_state",
+      "breakpoints": true
     }
   ],
   "version": "6"

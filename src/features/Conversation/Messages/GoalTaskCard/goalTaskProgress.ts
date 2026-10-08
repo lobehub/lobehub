@@ -5,6 +5,7 @@ export type GoalTaskPhase =
   | 'canceled'
   | 'error'
   | 'paused'
+  | 'planning'
   | 'repairing'
   | 'review'
   | 'running'
@@ -20,9 +21,17 @@ interface GoalTaskProgressInput {
   taskTotal?: number;
 }
 
-const resolvePhase = (status?: GoalStatus, pendingDecisions = 0): GoalTaskPhase => {
+const resolvePhase = (status?: GoalStatus, pendingDecisions = 0, taskTotal = 0): GoalTaskPhase => {
   if (pendingDecisions > 0) return 'waiting';
   switch (status) {
+    // A goal adopted from a conversation turns `running` the moment it is
+    // created, before its first plan lands any Task — both read as planning.
+    case 'planning': {
+      return 'planning';
+    }
+    case 'running': {
+      return taskTotal > 0 ? 'running' : 'planning';
+    }
     case 'achieved': {
       return 'achieved';
     }
@@ -58,7 +67,7 @@ export const getGoalTaskProgress = (input: GoalTaskProgressInput) => {
 
   return {
     passed,
-    phase: resolvePhase(input.status, input.pendingDecisions),
+    phase: resolvePhase(input.status, input.pendingDecisions, input.taskTotal),
     progress: total > 0 ? Math.round((passed / total) * 100) : 0,
     total,
   };

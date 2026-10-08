@@ -51,6 +51,7 @@ A builtin tool is a package the agent runtime can call. It ships **five faces**:
 5. **UI defaults to "do nothing".** Inspector is required (the header strip). Render/Placeholder/Streaming/Intervention/Portal are added **only when there's something specific to show** — empty registries are fine.
 6. **Style with `createStaticStyles + cssVar.*`** (zero-runtime). Fall back to `createStyles + token` only when you genuinely need runtime values. Use `@lobehub/ui` components, not raw antd.
 7. **i18n keys live in `packages/locales/src/default/plugin.ts`.** Inspector titles must come from `t('builtins.<identifier>.apiName.<api>')` so something renders while args stream.
+8. **A failed long-running call should be continuable, not just inspectable.** Example: when `callSubAgent` stops halfway, the user says "keep going". So the fix was an optional `subAgentId` on `callSubAgent` that appends a new instruction to the same sub-agent thread — not a new "look up that run" API the model has to remember to call before retrying from scratch. Add a new API only when a user would ask for it on its own.
 
 ---
 
@@ -79,7 +80,7 @@ packages/builtin-tool-<name>/
         └── components/       # shared subcomponents used by the surfaces above
 ```
 
-**Older packages** (`builtin-tool-task`, `builtin-tool-calculator`, etc.) still have `src/executor/` as a sibling of `src/client/`. That's grandfathered; **don't relocate without a deliberate refactor**. New packages and new APIs added to existing packages should follow the layout above.
+**Older packages** (`builtin-tool-calculator`, etc.) still have `src/executor/` as a sibling of `src/client/`. That's grandfathered; **don't relocate without a deliberate refactor**. New packages and new APIs added to existing packages should follow the layout above.
 
 `package.json` exports map:
 

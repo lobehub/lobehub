@@ -45,8 +45,6 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 10.5px;
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
   `,
   headerRow: css`
     cursor: pointer;

@@ -36,6 +36,10 @@ const DEFAULT_BROWSER_URL = 'about:blank';
 const HTTP_URL_PATTERN = /^https?:\/\//i;
 const LOCAL_URL_PATTERN = /^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?(?:[/?#].*)?$/i;
 const SUPPORTED_PROTOCOLS = new Set(['about:', 'http:', 'https:']);
+/** How long `navigate` waits for the load to finish before reporting it as still loading. */
+const NAVIGATION_SETTLE_TIMEOUT_MS = 15_000;
+/** net::ERR_ABORTED — the navigation was superseded rather than failed. */
+const NAVIGATION_ABORTED_ERRNO = -3;
 
 const DEFAULT_OVERLAY_LABELS: AgentOverlayLabels = {
   controlling: 'Agent is controlling this page',
@@ -296,13 +300,61 @@ export default class BrowserSidebarCtr extends ControllerModule {
     page.url = url;
     page.error = undefined;
 
-    await webContents.loadURL(url).catch((error: Error) => {
-      // A superseded navigation rejects here; the did-fail-load handler already
-      // records anything worth surfacing.
-      logger.debug(`Navigation to ${url} did not settle cleanly: ${error.message}`);
+    // `loadURL` only settles once every subresource has loaded, which never
+    // happens on pages with a hanging request — the tool call then sat until
+    // the gateway timeout. Past the cap, report the page as still loading, but
+    // only once the requested document has committed: before that, getURL()
+    // and the main frame still belong to the previous page. Only a cross-document
+    // commit counts: `did-navigate-in-page` also fires for hash changes and
+    // pushState on the old page, and a same-document target settles loadURL
+    // right away anyway.
+    let committed = false;
+    const onNavigate = () => {
+      committed = true;
+    };
+    webContents.on('did-navigate', onNavigate);
+    let settleTimer: ReturnType<typeof setTimeout> | undefined;
+    const outcome = await Promise.race([
+      webContents.loadURL(url).then(
+        () => ({ status: 'loaded' as const }),
+        (error: Error & { errno?: number }) => ({ error, status: 'failed' as const }),
+      ),
+      new Promise<{ status: 'pending' }>((resolve) => {
+        settleTimer = setTimeout(
+          () => resolve({ status: 'pending' }),
+          NAVIGATION_SETTLE_TIMEOUT_MS,
+        );
+      }),
+    ]).finally(() => {
+      clearTimeout(settleTimer);
+      webContents.removeListener('did-navigate', onNavigate);
     });
 
     this.updateSnapshot(params.sessionId);
+
+    // ERR_ABORTED means another navigation took over (a redirect or a newer
+    // load); the page that replaced it is the real outcome. Anything else —
+    // connection refused, a 204 or a download — left the requested page
+    // unopened, so say so instead of reporting whatever page is still showing.
+    if (outcome.status === 'failed' && outcome.error.errno !== NAVIGATION_ABORTED_ERRNO) {
+      logger.debug(`Navigation to ${url} failed: ${outcome.error.message}`);
+      const current = webContents.getURL();
+      // A refused connection commits Chromium's error page under the requested URL.
+      const showing =
+        current === url ? 'showing its error page' : `still showing ${current || 'a blank page'}`;
+      return {
+        error: `Could not open ${url}: ${outcome.error.message}. The browser is ${showing}.`,
+        success: false,
+      };
+    }
+
+    if (outcome.status === 'pending' && !committed) {
+      return {
+        error: `${url} has not responded within ${NAVIGATION_SETTLE_TIMEOUT_MS / 1000}s, so the browser is still showing ${webContents.getURL() || 'a blank page'}. The load continues in the background — check with readPage or snapshot before acting on the page, or navigate again.`,
+        success: false,
+      };
+    }
+
     return { success: true };
   }
 

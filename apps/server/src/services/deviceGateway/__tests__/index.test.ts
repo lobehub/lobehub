@@ -13,6 +13,7 @@ const mockClient = vi.hoisted(() => ({
   executeMcpCall: vi.fn(),
   executeMessageApi: vi.fn(),
   executeToolCall: vi.fn(),
+  getDeviceMetrics: vi.fn(),
   getDeviceSystemInfo: vi.fn(),
   invokeRpc: vi.fn(),
   queryDeviceList: vi.fn(),
@@ -42,6 +43,69 @@ describe('DeviceGateway', () => {
     vi.clearAllMocks();
     mockEnv.DEVICE_GATEWAY_URL = undefined;
     mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = undefined;
+  });
+
+  describe('remote app update', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+    const params = { deviceId: 'device-1', userId: 'user-1' };
+
+    it('asks the desktop channel for the update state', async () => {
+      configure();
+      const state = { currentVersion: '2.1.0', stage: 'downloaded', targetVersion: '2.2.0' };
+      mockClient.invokeRpc.mockResolvedValue({ data: state, success: true });
+
+      await expect(new DeviceGateway().getAppUpdateState(params)).resolves.toEqual({
+        state,
+        status: 'ok',
+      });
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: 'desktop', deviceId: 'device-1', userId: 'user-1' }),
+        { method: 'getAppUpdateState' },
+      );
+    });
+
+    it('returns the version the device restarts into', async () => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ data: { targetVersion: '2.2.0' }, success: true });
+
+      await expect(new DeviceGateway().installAppUpdate(params)).resolves.toEqual({
+        status: 'ok',
+        targetVersion: '2.2.0',
+      });
+    });
+
+    it.each([
+      'This device client does not support remote updates',
+      'Unknown device RPC method: checkAppUpdate',
+    ])('reports a client that cannot update remotely as unsupported (%s)', async (error) => {
+      configure();
+      mockClient.invokeRpc.mockResolvedValue({ error, success: false });
+
+      await expect(new DeviceGateway().checkAppUpdate(params)).resolves.toEqual({
+        message: error,
+        status: 'unsupported',
+      });
+    });
+
+    it('reports an unreachable device as unavailable', async () => {
+      configure();
+      mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
+
+      await expect(new DeviceGateway().getAppUpdateState(params)).resolves.toEqual({
+        message: 'timeout',
+        status: 'unavailable',
+      });
+    });
+
+    it('reports unavailable without a configured gateway', async () => {
+      await expect(new DeviceGateway().installAppUpdate(params)).resolves.toMatchObject({
+        status: 'unavailable',
+      });
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
   });
 
   describe('isConfigured', () => {
@@ -298,6 +362,44 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
+    });
+  });
+
+  describe('queryDeviceMetrics', () => {
+    const params = { deviceId: 'dev-1', since: 1000, userId: 'user-1', workspaceId: 'ws-1' };
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('returns the gateway samples', async () => {
+      configure();
+      const samples = [{ observedAt: 2000 }];
+      mockClient.getDeviceMetrics.mockResolvedValue(samples);
+
+      await expect(new DeviceGateway().queryDeviceMetrics(params)).resolves.toEqual(samples);
+      expect(mockClient.getDeviceMetrics).toHaveBeenCalledWith('user-1', 'dev-1', {
+        since: 1000,
+        workspaceId: 'ws-1',
+      });
+    });
+
+    it('degrades to no samples when the gateway read fails', async () => {
+      configure();
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      mockClient.getDeviceMetrics.mockRejectedValue(
+        new Error('device metrics read failed: HTTP 500'),
+      );
+
+      await expect(new DeviceGateway().queryDeviceMetrics(params)).resolves.toEqual([]);
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('device metrics read failed'),
+        expect.objectContaining({
+          deviceId: 'dev-1',
+          error: 'device metrics read failed: HTTP 500',
+        }),
+      );
+      warn.mockRestore();
     });
   });
 
@@ -970,7 +1072,10 @@ describe('DeviceGateway', () => {
         expect(result).toEqual({ success: true });
         expect(mockClient.invokeRpc).toHaveBeenCalledWith(
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
-          { method: 'writeLocalFile', params: { content: 'next', path: '/proj/src/App.tsx' } },
+          {
+            method: 'writeLocalFile',
+            params: { content: 'next', path: '/proj/src/App.tsx', workspaceRoot: '/proj' },
+          },
         );
       });
 
@@ -1041,6 +1146,303 @@ describe('DeviceGateway', () => {
       });
     });
 
+    describe('createProjectFile', () => {
+      it('invokes createLocalFile when the path is inside the workspace', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          data: { path: '/proj/new.ts', success: true },
+          success: true,
+        });
+
+        const proxy = new DeviceGateway();
+        const result = await proxy.createProjectFile({
+          deviceId: 'dev-1',
+          path: '/proj/new.ts',
+          userId: 'user-1',
+          workingDirectory: '/proj',
+        });
+
+        expect(result).toEqual({ path: '/proj/new.ts', success: true });
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+          { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+          {
+            method: 'createLocalFile',
+            params: { content: undefined, path: '/proj/new.ts', workspaceRoot: '/proj' },
+          },
+        );
+      });
+
+      it('throws without invoking the rpc when the path escapes the workspace', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.createProjectFile({
+            deviceId: 'dev-1',
+            path: '/proj/../evil.sh',
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/outside the approved workspace/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+
+      it('surfaces a device that has not shipped the rpc yet as an error', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          error: 'Unknown device RPC method: createLocalFile',
+          success: false,
+        });
+
+        const proxy = new DeviceGateway();
+        await expect(
+          proxy.createProjectFile({
+            deviceId: 'dev-1',
+            path: '/proj/new.ts',
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow('Unknown device RPC method: createLocalFile');
+      });
+    });
+
+    describe('createProjectDirectory', () => {
+      it('invokes createLocalDirectory when the path is inside the workspace', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          data: { path: '/proj/src/new', success: true },
+          success: true,
+        });
+
+        const proxy = new DeviceGateway();
+        await expect(
+          proxy.createProjectDirectory({
+            deviceId: 'dev-1',
+            path: '/proj/src/new',
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).resolves.toEqual({ path: '/proj/src/new', success: true });
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+          { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+          {
+            method: 'createLocalDirectory',
+            params: { path: '/proj/src/new', workspaceRoot: '/proj' },
+          },
+        );
+      });
+
+      it('throws without invoking the rpc when the path escapes the workspace', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.createProjectDirectory({
+            deviceId: 'dev-1',
+            path: '/tmp/outside',
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/outside the approved workspace/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('copyProjectFiles', () => {
+      it('invokes copyLocalFiles when source and target stay inside the workspace', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          data: [{ sourcePath: '/proj/a.ts', success: true, targetPath: '/proj/a copy.ts' }],
+          success: true,
+        });
+
+        const proxy = new DeviceGateway();
+        const items = [
+          { sourcePath: '/proj/a.ts' },
+          { sourcePath: '/proj/b', targetPath: '/proj/c' },
+        ];
+        await proxy.copyProjectFiles({
+          deviceId: 'dev-1',
+          items,
+          userId: 'user-1',
+          workingDirectory: '/proj',
+        });
+
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+          { deviceId: 'dev-1', timeout: 60_000, userId: 'user-1' },
+          { method: 'copyLocalFiles', params: { items, workspaceRoot: '/proj' } },
+        );
+      });
+
+      it('throws when a source lies outside the workspace', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.copyProjectFiles({
+            deviceId: 'dev-1',
+            items: [{ sourcePath: '/Users/me/.ssh/id_rsa', targetPath: '/proj/key' }],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/outside the approved workspace/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+
+      it('throws when a target lies outside the workspace', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.copyProjectFiles({
+            deviceId: 'dev-1',
+            items: [{ sourcePath: '/proj/secrets.env', targetPath: '/tmp/exfil.env' }],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/outside the approved workspace/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+
+      it('refuses to duplicate the workspace root (the copy would land outside it)', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.copyProjectFiles({
+            deviceId: 'dev-1',
+            items: [{ sourcePath: '/proj' }],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/workspace root/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('trashProjectFiles', () => {
+      it('invokes trashLocalFiles when every path is inside the workspace', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          data: { items: [{ path: '/proj/a.ts', success: true }], success: true },
+          success: true,
+        });
+
+        const proxy = new DeviceGateway();
+        await expect(
+          proxy.trashProjectFiles({
+            deviceId: 'dev-1',
+            paths: ['/proj/a.ts'],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).resolves.toEqual({ items: [{ path: '/proj/a.ts', success: true }], success: true });
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+          { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
+          { method: 'trashLocalFiles', params: { paths: ['/proj/a.ts'], workspaceRoot: '/proj' } },
+        );
+      });
+
+      it('throws when any path escapes the workspace', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.trashProjectFiles({
+            deviceId: 'dev-1',
+            paths: ['/proj/a.ts', '/Users/me/Documents'],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/outside the approved workspace/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+
+      it.each(['/proj', '/proj/', '/proj/src/..'])(
+        'refuses to trash the workspace root itself (%s)',
+        async (rootPath) => {
+          configure();
+          const proxy = new DeviceGateway();
+
+          await expect(
+            proxy.trashProjectFiles({
+              deviceId: 'dev-1',
+              paths: [rootPath],
+              userId: 'user-1',
+              workingDirectory: '/proj',
+            }),
+          ).rejects.toThrow(/workspace root/);
+          expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+        },
+      );
+
+      it('surfaces a device without a trash as an error, not a delete', async () => {
+        configure();
+        mockClient.invokeRpc.mockResolvedValue({
+          error: 'This device does not support moving files to the trash',
+          success: false,
+        });
+
+        const proxy = new DeviceGateway();
+        await expect(
+          proxy.trashProjectFiles({
+            deviceId: 'dev-1',
+            paths: ['/proj/a.ts'],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow('This device does not support moving files to the trash');
+        expect(mockClient.invokeRpc).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe('workspace root guard on rename / move', () => {
+      it('refuses to rename the workspace root itself', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.renameProjectFile({
+            deviceId: 'dev-1',
+            newName: 'renamed',
+            path: '/proj',
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/workspace root/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+
+      it('refuses to move the workspace root itself', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.moveProjectFiles({
+            deviceId: 'dev-1',
+            items: [{ newPath: '/proj/inner', oldPath: '/proj' }],
+            userId: 'user-1',
+            workingDirectory: '/proj',
+          }),
+        ).rejects.toThrow(/workspace root/);
+        expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+      });
+
+      it('contains Windows workspace roots with Windows semantics', async () => {
+        configure();
+        const proxy = new DeviceGateway();
+
+        await expect(
+          proxy.trashProjectFiles({
+            deviceId: 'dev-1',
+            paths: ['C:\\proj\\'],
+            userId: 'user-1',
+            workingDirectory: 'C:\\proj',
+          }),
+        ).rejects.toThrow(/workspace root/);
+      });
+    });
+
     describe('moveProjectFiles', () => {
       it('throws when any item moves out of the workspace', async () => {
         configure();
@@ -1082,7 +1484,10 @@ describe('DeviceGateway', () => {
           { deviceId: 'dev-1', timeout: 30_000, userId: 'user-1' },
           {
             method: 'moveLocalFiles',
-            params: { items: [{ newPath: '/proj/b.ts', oldPath: '/proj/a.ts' }] },
+            params: {
+              items: [{ newPath: '/proj/b.ts', oldPath: '/proj/a.ts' }],
+              workspaceRoot: '/proj',
+            },
           },
         );
       });

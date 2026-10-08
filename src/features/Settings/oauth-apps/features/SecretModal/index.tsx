@@ -9,8 +9,8 @@ import { useTranslation } from 'react-i18next';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   secret: css`
-    padding-block: 8px;
-    padding-inline: 12px;
+    padding-block: 4px;
+    padding-inline: 12px 4px;
     border-radius: ${cssVar.borderRadius};
 
     font-family: ${cssVar.fontFamilyCode};
@@ -31,8 +31,8 @@ const ClientSecretContent: FC<ClientSecretContentProps> = ({ clientSecret }) => 
   return (
     <Flexbox gap={12}>
       <Alert message={t('oauthApp.secret.onceWarning')} type={'warning'} />
-      <div className={styles.secret}>{clientSecret}</div>
-      <Flexbox horizontal justify={'flex-end'}>
+      <Flexbox horizontal align={'center'} className={styles.secret} gap={8}>
+        <Flexbox flex={1}>{clientSecret}</Flexbox>
         <CopyButton content={clientSecret} title={t('oauthApp.secret.copy')} />
       </Flexbox>
       <Text style={{ fontSize: 12 }} type={'secondary'}>

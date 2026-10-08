@@ -1,27 +1,34 @@
 'use client';
 
-import type { AcceptanceCommentItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
+import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/types';
+import { Flexbox, Icon } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { BadgeCheck, GitCommitHorizontal } from 'lucide-react';
+import { BadgeCheck, GitCommitHorizontal, MessageSquare, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { Link } from 'react-router';
 
 import { useUserStore } from '@/store/user';
 import { authSelectors, userProfileSelectors } from '@/store/user/selectors';
 import { buildAuthReturnUrl, currentReturnPath } from '@/utils/authReturnUrl';
 
+import { checkDisplayTitle } from '../../utils';
 import { useAcceptanceScope } from '../AcceptanceScope';
+import { collectEvidenceById } from '../Checks/CheckHistory';
+import type { AcceptanceCheck } from '../Checks/types';
+import { acceptanceCheckPath } from '../routes';
 import { useAcceptanceBundle } from '../useAcceptanceBundle';
 import { commentAnchorId, useCommentAnchor } from './anchor';
 import CommentCard, { commentAuthorName, CommentAvatar } from './CommentCard';
 import CommentComposer from './CommentComposer';
+import CommentThread from './CommentThread';
 import type { DiscussionEntry } from './discussionTimeline';
 import { buildDiscussionTimeline } from './discussionTimeline';
 import { useAcceptanceComments } from './hooks';
 import { styles, TIMELINE_NODE } from './styles';
+import ThreadEvidence from './ThreadEvidence';
 import TimelineEvent from './TimelineEvent';
 
 /** Enough room to start writing without the box dominating the column. */
@@ -60,6 +67,36 @@ const local = createStaticStyles(({ css }) => ({
     padding-block: 16px;
     font-size: 13px;
     color: ${cssVar.colorTextTertiary};
+  `,
+  checkLink: css`
+    font-weight: 500;
+    color: ${cssVar.colorText};
+
+    &:hover {
+      color: ${cssVar.colorText};
+      text-decoration: underline;
+    }
+  `,
+  quote: css`
+    padding-block: 8px;
+    padding-inline: 12px;
+    border-inline-start: 2px solid ${cssVar.colorBorder};
+
+    font-size: 13px;
+    line-height: 1.65;
+    color: ${cssVar.colorText};
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  `,
+  regionBody: css`
+    padding-block: 4px 12px;
+    padding-inline: 14px;
+  `,
+  regionHeader: css`
+    padding-block: 10px 6px;
+    padding-inline: 14px;
+    font-size: 13px;
+    color: ${cssVar.colorTextSecondary};
   `,
   signInPrompt: css`
     padding-block: 16px;
@@ -158,6 +195,107 @@ const TimelineMessage = memo<{
 TimelineMessage.displayName = 'AcceptanceTimelineMessage';
 
 /**
+ * "C2 · title", the way the checklist names a check. A link out of the page
+ * route opens that check's own view; an embedded viewer has no route of its own,
+ * so there it is just the name.
+ */
+const CheckReference = memo<{ check?: AcceptanceCheck }>(({ check }) => {
+  const { t } = useTranslation('verify');
+  const { acceptanceId, embedded } = useAcceptanceScope();
+  if (!check) return null;
+  const label = `C${check.seq} · ${checkDisplayTitle(check.title, t('acceptance.checks.holisticTitle'))}`;
+  if (embedded) return <span className={local.checkLink}>{label}</span>;
+  return (
+    <Link className={local.checkLink} to={acceptanceCheckPath(acceptanceId, check.id)}>
+      {label}
+    </Link>
+  );
+});
+
+CheckReference.displayName = 'AcceptanceDiscussionCheckReference';
+
+/**
+ * A note circled on a screenshot, as a pull request shows a review comment in
+ * its Conversation: which check it is about, the picture it points at, and the
+ * thread itself — still answerable and closable from here.
+ */
+const TimelineRegion = memo<{
+  anchored: boolean;
+  canComment: boolean;
+  canResolve: boolean;
+  check?: AcceptanceCheck;
+  onDelete: (id: string) => Promise<void>;
+  onReply: (rootId: string, content: string, attachments: { fileId: string }[]) => Promise<void>;
+  onResolve: (rootId: string, resolved: boolean) => Promise<void>;
+  thread: AcceptanceCommentThread;
+}>(({ anchored, canComment, canResolve, check, onDelete, onReply, onResolve, thread }) => {
+  const { t } = useTranslation('verify');
+  const { root } = thread;
+  const evidence =
+    check && root.evidenceId ? collectEvidenceById(check).get(root.evidenceId) : undefined;
+  const stale = Boolean(
+    check && root.evidenceId && !check.evidence.some((item) => item.id === root.evidenceId),
+  );
+
+  return (
+    <Flexbox
+      horizontal
+      align={'flex-start'}
+      className={styles.timelineEntry}
+      gap={12}
+      id={commentAnchorId(root.id)}
+    >
+      <span className={styles.timelineNode}>
+        <CommentAvatar comment={root} size={TIMELINE_NODE} />
+      </span>
+      <Flexbox className={cx(styles.box, anchored && styles.boxAnchored)}>
+        <Flexbox horizontal align={'center'} className={local.regionHeader} gap={6} wrap={'wrap'}>
+          <Icon icon={MessageSquare} size={13} />
+          <span>
+            {check
+              ? t('acceptance.comments.regionOn', { name: commentAuthorName(root.author) })
+              : commentAuthorName(root.author)}
+          </span>
+          <CheckReference check={check} />
+        </Flexbox>
+        <Flexbox
+          horizontal
+          align={'flex-start'}
+          className={local.regionBody}
+          gap={16}
+          wrap={'wrap'}
+        >
+          {evidence && (
+            <ThreadEvidence
+              comment={root}
+              evidence={evidence}
+              stale={stale}
+              roundIndex={
+                check?.timeline.find((entry) =>
+                  entry.evidence.some((item) => item.id === root.evidenceId),
+                )?.roundIndex
+              }
+            />
+          )}
+          <Flexbox flex={1} style={{ minWidth: 220 }}>
+            <CommentThread
+              canComment={canComment}
+              canResolve={canResolve}
+              thread={thread}
+              onDelete={onDelete}
+              onReply={onReply}
+              onResolve={onResolve}
+            />
+          </Flexbox>
+        </Flexbox>
+      </Flexbox>
+    </Flexbox>
+  );
+});
+
+TimelineRegion.displayName = 'AcceptanceTimelineRegion';
+
+/**
  * The delivery's chat: one message per turn, strung on a rail with the rounds
  * that landed and the approvals people gave, and the composer at the end.
  *
@@ -172,26 +310,60 @@ const AcceptanceDiscussion = memo(() => {
   const viewerId = useUserStore(userProfileSelectors.userId);
   const isSignedIn = useUserStore(authSelectors.isLogin);
   const { data } = useAcceptanceBundle(acceptanceId);
-  const { canComment, create, error, isLoading, items, react, remove, threads } =
-    useAcceptanceComments(acceptanceId);
+  const {
+    canApprove,
+    canComment,
+    create,
+    error,
+    isLoading,
+    items,
+    react,
+    remove,
+    setResolved,
+    threads,
+  } = useAcceptanceComments(acceptanceId);
 
   const currentRunId = data?.rounds.at(-1)?.run.id;
   const anchoredId = useCommentAnchor(items, embedded);
+  const checksById = useMemo(
+    () => new Map((data?.checks ?? []).map((check) => [check.id, check])),
+    [data?.checks],
+  );
 
   const timeline = useMemo(
     () =>
       buildDiscussionTimeline({
         approvals: items.filter((item) => item.kind === 'approval'),
+        checks: data?.checks,
         items,
         rounds: (data?.rounds ?? []).map(({ run }) => ({
           createdAt: run.createdAt,
+          decisionDetail: run.decisionDetail,
           id: run.id,
           roundIndex: run.roundIndex,
+          userDecision: run.userDecision,
         })),
         threads,
       }),
-    [data?.rounds, items, threads],
+    [data?.checks, data?.rounds, items, threads],
   );
+
+  // Same rule as on the check row: whoever raised a note may close it, and
+  // the delivery's reviewers may close anyone's.
+  const canResolveThread = useCallback(
+    (thread: AcceptanceCommentThread) =>
+      canApprove ||
+      (Boolean(viewerId) && thread.root.authorUserId === viewerId && !thread.root.deletedAt),
+    [canApprove, viewerId],
+  );
+  const replyToRegion = (rootId: string, content: string, attachments: { fileId: string }[]) =>
+    create({
+      attachments,
+      clientId: `${rootId}:${Date.now()}`,
+      content,
+      contextRunId: currentRunId,
+      parentCommentId: rootId,
+    });
 
   if (isLoading && timeline.length === 0 && !canComment) return null;
 
@@ -207,6 +379,55 @@ const AcceptanceDiscussion = memo(() => {
           roundIndex={entry.roundIndex}
           onReact={react}
         />
+      );
+    if (entry.kind === 'region')
+      return (
+        <TimelineRegion
+          anchored={entry.thread.root.id === anchoredId}
+          canComment={canComment}
+          canResolve={canResolveThread(entry.thread)}
+          key={entry.thread.root.id}
+          thread={entry.thread}
+          check={
+            entry.thread.root.checkItemId
+              ? checksById.get(entry.thread.root.checkItemId)
+              : undefined
+          }
+          onDelete={remove}
+          onReply={replyToRegion}
+          onResolve={setResolved}
+        />
+      );
+    if (entry.kind === 'checkReject') {
+      const check = checksById.get(entry.checkItemId);
+      return (
+        <TimelineEvent
+          at={entry.at}
+          icon={Undo2}
+          key={`reject-${entry.checkItemId}-${entry.at.getTime()}`}
+          text={
+            <>
+              <CheckReference check={check} />{' '}
+              {t('acceptance.comments.checkRejected', { round: entry.roundIndex })}
+              {entry.annotationCount > 0 &&
+                ` · ${t('acceptance.comments.checkRejectedRegions', { count: entry.annotationCount })}`}
+            </>
+          }
+        >
+          {entry.comment && <div className={local.quote}>{entry.comment}</div>}
+        </TimelineEvent>
+      );
+    }
+    if (entry.kind === 'roundReject')
+      return (
+        <TimelineEvent
+          at={entry.at}
+          icon={Undo2}
+          key={`round-reject-${entry.roundIndex}`}
+          text={t('acceptance.comments.roundRejected', { round: entry.roundIndex })}
+        >
+          {entry.comment && <div className={local.quote}>{entry.comment}</div>}
+        </TimelineEvent>
       );
     if (entry.kind === 'approval') {
       const who =

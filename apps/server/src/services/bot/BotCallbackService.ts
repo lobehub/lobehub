@@ -181,7 +181,8 @@ export class BotCallbackService {
         workspaceId: body.workspaceId,
       });
 
-    const entry = platformRegistry.getPlatform(platform);
+    const entry =
+      platformRegistry.getPlatform(platform) ?? messengerPlatformRegistry.getPlatform(platform);
     const canEdit = entry?.supportsMessageEdit !== false;
     const replyLocale = getBotReplyLocale(platform);
     const reactionMode = normalizeBotReactionMode(settings.reactionMode);

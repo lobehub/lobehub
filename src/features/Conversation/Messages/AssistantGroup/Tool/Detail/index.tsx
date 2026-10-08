@@ -9,6 +9,7 @@ import AbortResponse from './AbortResponse';
 import LoadingPlaceholder from './LoadingPlaceholder';
 import RejectedResponse from './RejectedResponse';
 import ToolRender from './Render';
+import { shouldShowCustomToolRender } from './shouldShowCustomToolRender';
 
 interface RenderProps {
   apiName: string;
@@ -125,7 +126,6 @@ const Render = memo<RenderProps>(
             content={result.content || ''}
             messageId={toolMessageId}
             pluginState={result.state}
-            showCustomToolRender={result.error ? false : showCustomToolRender}
             toolCallId={toolCallId}
             plugin={{
               apiName,
@@ -133,6 +133,12 @@ const Render = memo<RenderProps>(
               identifier,
               type: type as any,
             }}
+            showCustomToolRender={shouldShowCustomToolRender({
+              apiName,
+              identifier,
+              result,
+              showCustomToolRender,
+            })}
           />
         </Flexbox>
       </Suspense>

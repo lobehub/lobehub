@@ -59,7 +59,7 @@ describe('chatTopicMetadataUpdateSchema', () => {
     expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
   });
 
-  it('preserves orchestration roles on running operations', () => {
+  it('rejects client-written orchestration roles on running operations', () => {
     const metadata = {
       runningOperation: {
         assistantMessageId: 'assistant-supervisor',
@@ -73,6 +73,58 @@ describe('chatTopicMetadataUpdateSchema', () => {
         operationId: 'operation-supervisor',
         orchestrationRole: 'supervisor' as const,
       },
+    };
+
+    expect(chatTopicMetadataUpdateSchema.safeParse(metadata).success).toBe(false);
+  });
+
+  it('accepts clearing a stale running operation and omitting it', () => {
+    expect(chatTopicMetadataUpdateSchema.parse({ runningOperation: null })).toEqual({
+      runningOperation: null,
+    });
+    expect(chatTopicMetadataUpdateSchema.parse({})).toEqual({});
+  });
+
+  const operation = { assistantMessageId: 'assistant-1', operationId: 'operation-1' };
+  const hooks = [
+    {
+      id: 'client-hook',
+      type: 'onComplete',
+      webhook: { body: { userId: 'client-supplied' }, url: 'https://example.com/hook' },
+    },
+  ];
+
+  it.each([
+    ['root hooks', { ...operation, hooks }],
+    ['child hooks', { ...operation, childOperations: [{ ...operation, hooks }] }],
+    ['operation identifiers without hooks', operation],
+    ['empty object', {}],
+    ['array', []],
+    ['string', 'operation-1'],
+    ['boolean', false],
+    ['number', 1],
+  ])('rejects %s instead of silently stripping runtime state', (_, runningOperation) => {
+    const result = chatTopicMetadataUpdateSchema.safeParse({
+      model: 'test-model',
+      runningOperation,
+    });
+
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      expect(result.error.issues.some((issue) => issue.path[0] === 'runningOperation')).toBe(true);
+    }
+  });
+
+  it('preserves supported metadata patches alongside a stale-marker clear', () => {
+    const metadata = {
+      boundDeviceId: 'device-1',
+      model: 'test-model',
+      onboardingSession: { phase: 'summary', finishedAt: '2026-09-29T00:00:00.000Z' },
+      provider: 'test-provider',
+      reasoningConfig: { gpt5ReasoningEffort: 'high' },
+      repos: ['owner/repo'],
+      runningOperation: null,
+      workingDirectory: '/repo',
     };
 
     expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
@@ -108,6 +160,20 @@ describe('chatTopicMetadataUpdateSchema', () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it('carries the sandbox binding through — a stripped key writes nothing and still answers 200', () => {
+    const metadata = { sandboxInstanceId: 'a2c1d0e4-0000-4000-8000-000000000000' };
+
+    expect(chatTopicMetadataUpdateSchema.parse(metadata)).toEqual(metadata);
+  });
+
+  it('carries the sandbox mode through, and rejects a mode outside the pair', () => {
+    for (const sandboxMode of ['ephemeral', 'persistent'] as const) {
+      expect(chatTopicMetadataUpdateSchema.parse({ sandboxMode })).toEqual({ sandboxMode });
+    }
+
+    expect(chatTopicMetadataUpdateSchema.safeParse({ sandboxMode: 'forever' }).success).toBe(false);
   });
 
   it('keeps the onboarding feedback comment limit at the shared contract boundary', () => {

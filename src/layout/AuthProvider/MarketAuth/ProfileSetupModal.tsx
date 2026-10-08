@@ -1,13 +1,13 @@
 'use client';
 
-import { Center, Flexbox, Icon, Input, TextArea, Tooltip } from '@lobehub/ui';
-import { confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { type UploadProps } from 'antd';
-import { Form, Upload } from 'antd';
+import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { confirmModal, Input, Text, TextArea, toast, Upload } from '@lobehub/ui/base-ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { cssVar } from 'antd-style';
 import { CircleHelp, Globe, ImagePlus, Trash2 } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 
 import EmojiPicker from '@/components/EmojiPicker';
 import ImperativeModal from '@/components/ImperativeModal';
@@ -72,7 +72,11 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
   }) => {
     const { t } = useTranslation('marketAuth');
 
-    const [form] = Form.useForm<FormValues>();
+    const form = useForm<FormValues>({
+      initialValues: { description: '', displayName: '', userName: '', website: '' },
+    });
+    const displayName = useWatch(form, 'displayName');
+    const userName = useWatch(form, 'userName');
     const [loading, setLoading] = useState(false);
     const locale = useGlobalStore(globalGeneralSelectors.currentLanguage);
 
@@ -143,7 +147,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
           .replaceAll(/[^\w-]/g, '')
           .slice(0, 32);
 
-        form.setFieldsValue({
+        form.setValues({
           description: userProfile?.description || '',
           displayName: existingDisplayName,
           userName: existingUserName || generatedUserName,
@@ -192,13 +196,10 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
     }, []);
 
     // Handle banner upload
-    const handleBannerUpload: UploadProps['customRequest'] = useCallback(
-      async (options: Parameters<NonNullable<UploadProps['customRequest']>>[0]) => {
-        const file = options.file as File;
-
+    const handleBannerUpload = useCallback(
+      async (file: File) => {
         if (file.size > MAX_FILE_SIZE) {
           toast.error(t('profileSetup.errors.fileTooLarge'));
-          options.onError?.(new Error('File too large'));
           return;
         }
 
@@ -207,12 +208,10 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
           const result = await uploadWithProgress({ file });
           if (result?.url) {
             setBannerUrl(result.url);
-            options.onSuccess?.(result);
           }
         } catch (error) {
           console.error('[ProfileSetupModal] Banner upload failed:', error);
           toast.error(t('profileSetup.errors.uploadFailed'));
-          options.onError?.(error as Error);
         } finally {
           setBannerUploading(false);
         }
@@ -233,7 +232,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
       }
 
       try {
-        const values = await form.validateFields();
+        const { valid } = await form.validate();
+        if (!valid) return;
+        const values = form.getValues();
         setLoading(true);
 
         // Build socialLinks from OAuth profiles and website input
@@ -327,7 +328,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
 
     const handleSubmit = useCallback(async () => {
       try {
-        const values = await form.validateFields();
+        const { valid } = await form.validate();
+        if (!valid) return;
+        const values = form.getValues();
         const oldUserName = userProfile?.userName;
 
         // If userName changed and it's not first-time setup, show confirmation
@@ -385,28 +388,28 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
         onCancel={handleCancel}
         onOk={handleSubmit}
       >
-        <Form form={form} layout="vertical">
+        <Form form={form} gap={0} layout="vertical">
           <Flexbox horizontal gap={24}>
             <Flexbox flex={1}>
-              <Form.Item
+              <Form.Field
                 label={t('profileSetup.fields.displayName.label')}
                 name="displayName"
-                rules={[
-                  { message: t('profileSetup.fields.displayName.required'), required: true },
-                  {
-                    max: 50,
-                    message: t('profileSetup.fields.displayName.maxLength'),
-                  },
-                ]}
+                required={t('profileSetup.fields.displayName.required')}
+                validate={(value?: string) =>
+                  value && value.length > 50
+                    ? t('profileSetup.fields.displayName.maxLength')
+                    : undefined
+                }
               >
                 <Input
-                  showCount
                   maxLength={50}
                   placeholder={t('profileSetup.fields.displayName.placeholder')}
+                  suffix={`${displayName?.length ?? 0} / 50`}
                 />
-              </Form.Item>
-              <Form.Item
+              </Form.Field>
+              <Form.Field
                 name="userName"
+                required={t('profileSetup.fields.userName.required')}
                 label={
                   <Flexbox horizontal align="center" gap={4}>
                     {t('profileSetup.fields.userName.label')}
@@ -415,32 +418,23 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                     </Tooltip>
                   </Flexbox>
                 }
-                rules={[
-                  { message: t('profileSetup.fields.userName.required'), required: true },
-                  {
-                    message: t('profileSetup.fields.userName.pattern'),
-                    pattern: /^[\w-]+$/,
-                  },
-                  {
-                    max: 32,
-                    message: t('profileSetup.fields.userName.maxLength'),
-                  },
-                  {
-                    message: t('profileSetup.fields.userName.minLength'),
-                    min: 3,
-                  },
-                ]}
+                validate={(value?: string) => {
+                  if (!value) return;
+                  if (!/^[\w-]+$/.test(value)) return t('profileSetup.fields.userName.pattern');
+                  if (value.length > 32) return t('profileSetup.fields.userName.maxLength');
+                  if (value.length < 3) return t('profileSetup.fields.userName.minLength');
+                }}
               >
                 <Input
-                  showCount
                   maxLength={32}
                   placeholder={t('profileSetup.fields.userName.placeholder')}
                   prefix="@"
+                  suffix={`${userName?.length ?? 0} / 32`}
                 />
-              </Form.Item>
+              </Form.Field>
             </Flexbox>
             {/* Avatar Section */}
-            <Form.Item>
+            <Form.Field>
               <EmojiPicker
                 allowDelete={!!avatarUrl}
                 loading={avatarUploading}
@@ -455,17 +449,16 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 onDelete={handleAvatarDelete}
                 onUpload={handleAvatarUpload}
               />
-            </Form.Item>
+            </Form.Field>
           </Flexbox>
-          <Form.Item
+          <Form.Field
             label={t('profileSetup.fields.description.label')}
             name="description"
-            rules={[
-              {
-                max: 200,
-                message: t('profileSetup.fields.description.maxLength'),
-              },
-            ]}
+            validate={(value?: string) =>
+              value && value.length > 200
+                ? t('profileSetup.fields.description.maxLength')
+                : undefined
+            }
           >
             <TextArea
               showCount
@@ -473,13 +466,13 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
               placeholder={t('profileSetup.fields.description.placeholder')}
               rows={3}
             />
-          </Form.Item>
+          </Form.Field>
 
           {/* Only show banner and social links in edit mode, not first-time setup */}
           {!isFirstTimeSetup && (
             <>
               {/* Banner Upload Section */}
-              <Form.Item
+              <Form.Field
                 label={
                   <Flexbox horizontal align="center" gap={4}>
                     {t('profileSetup.fields.bannerUrl.label')}
@@ -492,10 +485,9 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                 <Flexbox gap={8} width="100%">
                   <Upload
                     accept="image/*"
-                    customRequest={handleBannerUpload}
                     maxCount={1}
-                    showUploadList={false}
                     style={{ display: 'block', width: '100%' }}
+                    onFiles={([file]) => handleBannerUpload(file)}
                   >
                     <div
                       style={{
@@ -566,7 +558,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                     </Flexbox>
                   )}
                 </Flexbox>
-              </Form.Item>
+              </Form.Field>
 
               <Text style={{ display: 'block', marginBottom: 12 }} type="secondary">
                 {t('profileSetup.socialLinks.title')}
@@ -597,14 +589,13 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
               </Flexbox>
 
               {/* Website - Manual Input */}
-              <Form.Item
+              <Form.Field
                 name="website"
-                rules={[
-                  {
-                    message: t('profileSetup.fields.website.invalidUrl'),
-                    type: 'url',
-                  },
-                ]}
+                validate={(value?: string) =>
+                  value && !z.url().safeParse(value).success
+                    ? t('profileSetup.fields.website.invalidUrl')
+                    : undefined
+                }
               >
                 <Input
                   placeholder={t('profileSetup.fields.website.placeholder')}
@@ -616,7 +607,7 @@ const ProfileSetupModal = memo<ProfileSetupModalProps>(
                     />
                   }
                 />
-              </Form.Item>
+              </Form.Field>
             </>
           )}
         </Form>

@@ -83,7 +83,7 @@ const AgentTopicManager = memo(() => {
     reset();
   }, [activeAgentId, reset]);
 
-  const { error, isLoading, mutate } = useFetchAgentTopicsView(true, {
+  const { error, isHydrated, isValidating, revalidate } = useFetchAgentTopicsView(true, {
     agentId: activeAgentId,
     pageSize: PAGE_SIZE,
     // Opt into the heavier card-detail columns (firstUserMessage,
@@ -91,6 +91,9 @@ const AgentTopicManager = memo(() => {
     // omit this so their query stays cheap.
     withDetails: true,
   });
+
+  // Rows come from the store; the hook only reports fetch progress.
+  const isLoading = !isHydrated || isValidating;
 
   const trimmedSearch = search.trim();
   const { data: searchResults } = useSearchTopics(
@@ -244,7 +247,7 @@ const AgentTopicManager = memo(() => {
               error={error}
               variant={'block'}
               onRetry={() => {
-                void mutate();
+                void revalidate();
               }}
             />
           ) : isLoading && baseTopics.length === 0 ? (

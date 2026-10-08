@@ -3,6 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
+import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import { extractUuid } from '@/features/Acceptance/utils';
@@ -11,6 +12,7 @@ import {
   AcceptanceScope,
 } from '@/features/Acceptance/Viewer/AcceptanceScope';
 import AcceptanceCheckInventory from '@/features/Acceptance/Viewer/Checks/AcceptanceCheckInventory';
+import AcceptanceDiscussion from '@/features/Acceptance/Viewer/Comments/AcceptanceDiscussion';
 import AcceptanceGoal from '@/features/Acceptance/Viewer/Header/AcceptanceGoal';
 import AcceptanceIdentity from '@/features/Acceptance/Viewer/Header/AcceptanceIdentity';
 import AcceptanceShare from '@/features/Acceptance/Viewer/Header/AcceptanceShare';
@@ -64,6 +66,7 @@ const Title = () => {
 };
 
 const WorkbenchAcceptanceDetail = () => {
+  const { t } = useTranslation('verify');
   const params = useParams<{ acceptanceId: string }>();
   const acceptanceId = extractUuid(params.acceptanceId);
   if (!acceptanceId) return null;
@@ -87,6 +90,10 @@ const WorkbenchAcceptanceDetail = () => {
               </Flexbox>
               <AcceptanceGoal />
               <AcceptanceCheckInventory />
+              <section aria-label={t('acceptance.comments.title')}>
+                <Text as={'h2'}>{t('acceptance.comments.title')}</Text>
+                <AcceptanceDiscussion />
+              </section>
             </Flexbox>
           </AcceptanceBundleGate>
         </div>

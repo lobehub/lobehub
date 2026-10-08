@@ -138,6 +138,10 @@ const TaskProperties = memo(() => {
         </AssigneeMemberSelector>
       )}
 
+      {/* Where the runs go lives in the detail header's main column, next to the
+          assignee it inherits from — not in this rail. See
+          `TaskExecutionConfig`. */}
+
       <TaskScheduleConfig>
         <Block
           clickable

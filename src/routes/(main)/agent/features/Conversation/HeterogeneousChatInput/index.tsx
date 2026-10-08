@@ -38,6 +38,10 @@ import { shouldShowHeteroModelSelector } from './shouldShowHeteroModelSelector';
 // selector. Both sit in the input's bottom-left corner, where the agent composer
 // puts its `+` and model picker, rather than off in the control-bar strip below.
 const leftActions: ActionKeys[] = [];
+// Voice messages are transcribed before they reach the CLI, so they sit beside Send like on the
+// agent composer. Hidden while the input is blocked: a recording could not be sent anyway.
+const rightActions: ActionKeys[] = ['voiceMessage'];
+const blockedRightActions: ActionKeys[] = [];
 
 /**
  * GuardBanner
@@ -333,6 +337,7 @@ const HeterogeneousChatInput = memo(() => {
         extraActionItems={extraActionItems}
         leftActions={leftActions}
         notices={notices}
+        rightActions={inputDisabled ? blockedRightActions : rightActions}
         sendAreaPrefix={sendAreaPrefix}
         sendButtonProps={{ disabled: inputDisabled, shape: 'round' }}
         onEditorReady={(instance) => {

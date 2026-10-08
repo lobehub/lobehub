@@ -1,8 +1,8 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon, Input } from '@lobehub/ui';
-import { Button, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
+import { Button, Input, Select, Text, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import { type Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
@@ -60,7 +60,6 @@ export interface ApiKeyModalContentProps {
 const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
   const { t } = useTranslation('auth');
   const { close } = useModalContext();
-  const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
   const [fullAccess, setFullAccess] = useState(true);
   const [selectedScopes, setSelectedScopes] = useState<ApiKeyScope[]>([]);
@@ -101,6 +100,8 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
     }
   };
 
+  const form = useForm<FormValues>({ onSubmit: handleFinish });
+
   if (createdKey) {
     return (
       <Flexbox gap={16}>
@@ -122,21 +123,21 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
     );
   }
 
-  const itemStyle = { marginBottom: 0 };
+  const itemStyle = { paddingBlock: 0 };
 
   return (
-    <Form colon={false} form={form} layout={'vertical'} onFinish={handleFinish}>
+    <Form form={form} layout={'vertical'}>
       <Flexbox gap={16}>
-        <Form.Item
+        <Form.Field
+          required
           label={t('apikey.form.fields.name.label')}
           name={'name'}
-          rules={[{ required: true }]}
           style={itemStyle}
         >
           <Input placeholder={t('apikey.form.fields.name.placeholder')} />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item label={t('apikey.form.fields.expiresAt.label')} style={itemStyle}>
+        <Form.Field label={t('apikey.form.fields.expiresAt.label')} style={itemStyle}>
           <Flexbox gap={8}>
             <Select
               value={expiryPreset}
@@ -155,13 +156,18 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
               />
             )}
           </Flexbox>
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
-          help={scopeMissing ? t('apikey.form.fields.scopes.required') : undefined}
+        <Form.Field
           label={t('apikey.form.fields.scopes.label')}
           style={itemStyle}
-          validateStatus={scopeMissing ? 'error' : undefined}
+          extra={
+            scopeMissing ? (
+              <Text style={{ fontSize: 12 }} type={'danger'}>
+                {t('apikey.form.fields.scopes.required')}
+              </Text>
+            ) : undefined
+          }
         >
           <ScopeSelector
             fullAccess={fullAccess}
@@ -169,7 +175,7 @@ const ApiKeyModalContent: FC<ApiKeyModalContentProps> = ({ onSubmit }) => {
             onFullAccessChange={setFullAccess}
             onSelectedChange={setSelectedScopes}
           />
-        </Form.Item>
+        </Form.Field>
 
         <Button
           block

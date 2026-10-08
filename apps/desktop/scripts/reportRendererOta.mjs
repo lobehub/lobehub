@@ -6,35 +6,44 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 
 const exec = promisify(execFile);
-const patchStages = {
-  checkout: 'checkout-failed',
-  server: 'server-config-failed',
-  base: 'base-fetch-failed',
-  setup: 'environment-setup-failed',
-  app_version: 'app-version-failed',
-  gate: 'hash-compute-failed',
-  version: 'patch-version-failed',
-  renderer: 'renderer-build-failed',
-  sign: 'manifest-sign-failed',
-  publish: 'upload-failed',
-};
-const buildStages = {
-  setup: 'environment-setup-failed',
-  app_version: 'app-version-failed',
-  build_macos: 'desktop-build-failed',
-  build_windows: 'desktop-build-failed',
-  build_linux: 'desktop-build-failed',
-  upload: 'artifact-preparation-failed',
+const stageMaps = {
+  'gate': {
+    'checkout': 'checkout-failed',
+    'server': 'server-config-failed',
+    'base': 'base-fetch-failed',
+    'gate': 'abi-compute-failed',
+    'version': 'core-version-failed',
+    'cloud-ref': 'cloud-ref-failed',
+  },
+  'core-build': {
+    setup: 'environment-setup-failed',
+    app_version: 'app-version-failed',
+    build: 'core-build-failed',
+    previous: 'previous-manifest-failed',
+    core: 'core-release-failed',
+    upload: 'artifact-upload-failed',
+  },
+  'core-publish': {
+    collect: 'artifact-download-failed',
+    publish: 'upload-failed',
+  },
+  'build': {
+    setup: 'environment-setup-failed',
+    app_version: 'app-version-failed',
+    build_macos: 'desktop-build-failed',
+    build_windows: 'desktop-build-failed',
+    build_linux: 'desktop-build-failed',
+    upload: 'artifact-preparation-failed',
+  },
+  'release': {
+    setup: 'environment-setup-failed',
+    installers: 'installer-upload-failed',
+    shell: 'shell-json-failed',
+    base: 'core-r0-upload-failed',
+  },
 };
 
-const releaseStages = {
-  setup: 'environment-setup-failed',
-  validate: 'baseline-validation-failed',
-  installers: 'installer-upload-failed',
-  base: 'renderer-base-upload-failed',
-};
-
-export function classifyResult(steps, kind = 'patch', jobStatus = '') {
+export function classifyResult(steps, kind = 'gate', jobStatus = '') {
   const result = (outcome, reason, requiresFullRelease = false) => ({
     outcome,
     reason,
@@ -42,52 +51,57 @@ export function classifyResult(steps, kind = 'patch', jobStatus = '') {
     published: outcome === 'published',
     version: outcome === 'published' ? (steps.version?.outputs?.version ?? '') : '',
   });
-  for (const [id, reason] of Object.entries(
-    kind === 'patch' ? patchStages : kind === 'release' ? releaseStages : buildStages,
-  )) {
+  const stages = stageMaps[kind] ?? stageMaps.gate;
+  for (const [id, reason] of Object.entries(stages)) {
     if (steps[id]?.outcome === 'failure') {
-      if (kind === 'patch' && id === 'base' && steps.base.outputs?.reason === 'base-invalid')
+      if (kind === 'gate' && id === 'base' && steps.base.outputs?.reason === 'base-invalid')
         return result('failed', 'base-invalid');
-      return result(
-        'failed',
-        id === 'gate' && steps.gate.outputs?.main_hash ? 'hash-comparison-failed' : reason,
-      );
+      return result('failed', reason);
     }
   }
-  if (
-    kind === 'release' &&
-    steps.base?.outcome === 'success' &&
-    steps.base.outputs?.published === 'true'
-  )
-    return result('published', 'published');
-  if (kind === 'patch' && steps.publish?.outcome === 'success')
-    return result('published', 'published');
   if (
     jobStatus === 'cancelled' ||
     Object.values(steps).some((step) => step.outcome === 'cancelled')
   ) {
     return result('skipped', 'cancelled');
   }
-  if (kind === 'release')
-    return result('skipped', steps.base?.outputs?.reason || 'release-incomplete');
-  if (kind === 'build') {
-    if (jobStatus === 'failure') return result('failed', 'build-job-failed');
-    return steps.upload?.outcome === 'success'
-      ? result('built', 'artifacts-ready')
-      : result('skipped', 'build-incomplete');
+  switch (kind) {
+    case 'release': {
+      if (steps.base?.outcome === 'success' && steps.base.outputs?.published === 'true')
+        return result('published', 'published');
+      return result('skipped', steps.base?.outputs?.reason || 'release-incomplete');
+    }
+    case 'build': {
+      if (jobStatus === 'failure') return result('failed', 'build-job-failed');
+      return steps.upload?.outcome === 'success'
+        ? result('built', 'artifacts-ready')
+        : result('skipped', 'build-incomplete');
+    }
+    case 'core-build': {
+      if (steps.core?.outputs?.skipped === 'true') return result('skipped', 'core-unchanged');
+      return steps.upload?.outcome === 'success'
+        ? result('built', 'core-ready')
+        : result('failed', 'pipeline-incomplete');
+    }
+    case 'core-publish': {
+      if (steps.publish?.outputs?.published === 'true') return result('published', 'published');
+      if (steps.collect?.outputs?.skipped === 'true') return result('skipped', 'core-unchanged');
+      return result('failed', 'pipeline-incomplete');
+    }
+    default: {
+      const base = steps.base?.outputs ?? {};
+      if (steps.base?.outcome === 'success' && base.found === 'false') {
+        return base.reason === 'base-missing'
+          ? result('skipped', 'base-missing', true)
+          : result('failed', 'base-unavailable');
+      }
+      if (steps.gate?.outcome === 'success' && steps.gate.outputs?.allowed === 'false')
+        return result('skipped', steps.gate.outputs.reason || 'abi-changed', true);
+      if (steps.gate?.outcome === 'success' && steps.version?.outcome === 'success')
+        return result('gated', 'core-allowed');
+      return result('failed', 'pipeline-incomplete');
+    }
   }
-  const base = steps.base?.outputs ?? {};
-  if (steps.base?.outcome === 'success' && base.found === 'false') {
-    if (['base-missing', 'unsupported-base'].includes(base.reason))
-      return result('skipped', base.reason, true);
-    return result('failed', 'base-unavailable');
-  }
-  if (steps.gate?.outcome === 'success' && steps.gate.outputs?.allowed === 'false') {
-    return steps.gate.outputs.reason === 'main-changed'
-      ? result('skipped', 'main-changed', true)
-      : result('failed', 'hash-comparison-failed');
-  }
-  return result('failed', 'pipeline-incomplete');
 }
 
 async function readOptional(file) {
@@ -104,20 +118,6 @@ export async function writeDiagnostics({ root = process.cwd(), env = process.env
   const result = classifyResult(steps, env.DIAGNOSTIC_KIND, env.JOB_STATUS);
   const lock = await readOptional(path.join(root, 'apps/desktop/pnpm-lock.yaml'));
   const packageJson = await readOptional(path.join(root, 'apps/desktop/package.json'));
-  const releaseDir = env.DIAGNOSTIC_KIND === 'release' ? 'release' : 'apps/desktop/release';
-  const inputText = await readOptional(
-    path.join(root, releaseDir, 'renderer-mainhash-inputs.json'),
-  );
-  let inputs;
-  let inputManifestStatus = 'missing';
-  if (inputText) {
-    try {
-      inputs = JSON.parse(inputText);
-      inputManifestStatus = 'available';
-    } catch {
-      inputManifestStatus = 'invalid';
-    }
-  }
   let pnpmVersion = null;
   try {
     pnpmVersion = (await exec('pnpm', ['--version'], { timeout: 5000, cwd: root })).stdout.trim();
@@ -126,11 +126,8 @@ export async function writeDiagnostics({ root = process.cwd(), env = process.env
   }
   const report = {
     ...result,
-    version:
-      result.published && env.DIAGNOSTIC_KIND === 'release'
-        ? env.APP_VERSION || ''
-        : result.version,
-    kind: env.DIAGNOSTIC_KIND || 'patch',
+    version: result.published ? env.APP_VERSION || result.version : result.version,
+    kind: env.DIAGNOSTIC_KIND || 'gate',
     channel: env.CHANNEL || null,
     appVersion:
       env.APP_VERSION ||
@@ -148,20 +145,17 @@ export async function writeDiagnostics({ root = process.cwd(), env = process.env
     lockSha256: lock
       ? createHash('sha256').update(lock.replaceAll('\r\n', '\n')).digest('hex')
       : null,
-    algorithm: inputs?.algorithm || null,
-    mainHash: steps.gate?.outputs?.main_hash || inputs?.mainHash || null,
-    baseMainHash: steps.base?.outputs?.main_hash || null,
-    inputManifestStatus,
-    inputCount: Array.isArray(inputs?.inputs) ? inputs.inputs.length : null,
+    shellAbi: steps.gate?.outputs?.shell_abi || null,
+    baseShellAbi: steps.base?.outputs?.shell_abi || null,
     stages: Object.fromEntries(
       Object.entries(steps).map(([id, step]) => [id, step.outcome ?? 'unknown']),
     ),
   };
-  const dir = path.join(root, 'renderer-ota-diagnostics');
+  const dir = path.join(root, 'desktop-ota-diagnostics');
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, 'result.json'), `${JSON.stringify(report, null, 2)}\n`);
   const summary = [
-    '## Renderer OTA diagnostics',
+    '## Desktop OTA diagnostics',
     '',
     '| Field | Value |',
     '| --- | --- |',

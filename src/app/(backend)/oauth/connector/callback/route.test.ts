@@ -2,10 +2,14 @@ import { runInNewContext } from 'node:vm';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { ConnectorModel } from '@/database/models/connector';
+import { ConnectorToolModel } from '@/database/models/connectorTool';
+
 import { GET } from './route';
 
-const { mockConsume, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
+const { mockConsume, mockExchange, mockFindById, mockSync, mockUpdate } = vi.hoisted(() => ({
   mockConsume: vi.fn(),
+  mockExchange: vi.fn(),
   mockFindById: vi.fn(),
   mockSync: vi.fn(),
   mockUpdate: vi.fn(),
@@ -22,7 +26,11 @@ vi.mock('@modelcontextprotocol/sdk/client/auth.js', () => ({
     .mockResolvedValue({ token_endpoint: 'https://as/token' }),
 }));
 vi.mock('@/server/services/connector/oauth', () => ({
-  exchangeConnectorCode: vi.fn().mockResolvedValue({ access_token: 'tok' }),
+  exchangeConnectorCode: mockExchange,
+  toClientInformation: (oidc: { clientId: string; clientSecret?: string }) => ({
+    client_id: oidc.clientId,
+    client_secret: oidc.clientSecret,
+  }),
 }));
 vi.mock('@/server/services/connector/tokens', () => ({
   tokensToCredentials: vi
@@ -42,8 +50,8 @@ vi.mock('@/database/models/connectorTool', () => ({
 }));
 vi.mock('@/server/services/connector/sync', () => ({ syncConnectorToolsById: mockSync }));
 
-const makeReq = () =>
-  ({ nextUrl: { searchParams: new URLSearchParams('code=abc&state=xyz') } }) as any;
+const makeReq = (query = 'code=abc&state=xyz') =>
+  ({ nextUrl: { searchParams: new URLSearchParams(query) } }) as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -62,6 +70,8 @@ beforeEach(() => {
     },
   });
   mockUpdate.mockResolvedValue(undefined);
+  mockExchange.mockResolvedValue({ tokens: { access_token: 'tok' } });
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 describe('connector OAuth callback', () => {
@@ -113,5 +123,71 @@ describe('connector OAuth callback', () => {
 
     expect(body).toContain('"success":true');
     expect(body).toContain('"synced":true');
+  });
+
+  it('looks the connector up in the workspace it was started from', async () => {
+    mockSync.mockResolvedValue({ toolCount: 5 });
+    mockConsume.mockResolvedValue({
+      authorizationServerUrl: 'https://as',
+      codeVerifier: 'v',
+      connectorId: 'c1',
+      lobeUserId: 'u1',
+      workspaceId: 'ws1',
+    });
+
+    const body = await (await GET(makeReq())).text();
+
+    expect(body).toContain('"success":true');
+    expect(ConnectorModel).toHaveBeenCalledWith({}, 'u1', 'ws1', {});
+    expect(ConnectorToolModel).toHaveBeenCalledWith({}, 'u1', 'ws1');
+  });
+
+  it('keeps the failure page open and shows the escaped reason', async () => {
+    mockFindById.mockResolvedValue(undefined);
+
+    const body = await (await GET(makeReq())).text();
+
+    expect(body).toContain('Authorization failed.');
+    expect(body).toContain('>connector_not_found</p>');
+    expect(body).not.toContain('window.close');
+    expect(console.error).toHaveBeenCalled();
+  });
+
+  it('shows the provider error description without injecting markup', async () => {
+    const body = await (
+      await GET(makeReq('error=access_denied&error_description=%3Cimg%20src%3Dx%3E'))
+    ).text();
+
+    expect(body).toContain('access_denied: &lt;img src=x&gt;');
+    expect(body).not.toContain('<img');
+    expect(mockConsume).not.toHaveBeenCalled();
+  });
+
+  it('remembers the client auth method that the token endpoint accepted', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+    mockExchange.mockResolvedValue({
+      authMethod: 'client_secret_post',
+      tokens: { access_token: 'tok' },
+    });
+
+    await GET(makeReq());
+
+    expect(mockUpdate).toHaveBeenCalledWith(
+      'c1',
+      expect.objectContaining({
+        oidcConfig: expect.objectContaining({
+          clientId: 'cid',
+          tokenEndpointAuthMethod: 'client_secret_post',
+        }),
+      }),
+    );
+  });
+
+  it('leaves the OIDC config alone when the first auth method worked', async () => {
+    mockSync.mockResolvedValue({ toolCount: 1 });
+
+    await GET(makeReq());
+
+    expect(mockUpdate.mock.calls[0][1]).not.toHaveProperty('oidcConfig');
   });
 });

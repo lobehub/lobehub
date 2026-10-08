@@ -12,6 +12,7 @@ import {
   LayoutPanelTopIcon,
   LibraryBigIcon,
   Mic2,
+  Scale,
   Settings,
   ShapesIcon,
   SquarePlay,
@@ -70,6 +71,7 @@ import {
 } from '@/routes/(main)/group/features/routeMeta';
 import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
+import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { NoRouteSkeleton, routeMeta, type RouteSkeletonProps } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
 import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
@@ -145,10 +147,12 @@ export const sharedMainAreaChildren: RouteObject[] = [
                 element: agentChatElement,
                 handle: { meta: agentRouteMeta },
                 index: true,
+                loader: agentChatTopicListLoader,
               },
               {
                 element: agentChatElement,
                 handle: { meta: agentRouteMeta },
+                loader: agentChatTopicListLoader,
                 path: ':topicId',
               },
             ],
@@ -779,6 +783,17 @@ export const sharedMainAreaChildren: RouteObject[] = [
           meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryPreferences' }),
         },
         path: 'preferences',
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/memory/rules'),
+          'Desktop > Memory > Rules',
+        ),
+        handle: {
+          // Same icon the memory sidebar uses, so a desktop tab and the nav item agree.
+          meta: routeMeta({ icon: Scale, titleKey: 'navigation.memoryRules' }),
+        },
+        path: 'rules',
       },
       {
         element: dynamicElement(
@@ -1440,6 +1455,14 @@ const createMainAreaChildrenDefinition = (options: MainAreaRouteOptions = {}): R
                 ),
                 handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
                 path: 'devices',
+              },
+              {
+                element: dynamicElement(
+                  () => import('@/routes/(main)/[workspaceSlug]/settings/environments'),
+                  'Desktop > Workspace > Settings > Environments',
+                ),
+                handle: { meta: routeMeta({ Skeleton: createSurfaceSkeleton('list') }) },
+                path: 'environments',
               },
               // Account-level tabs mirrored inside the workspace so members can
               // adjust user settings without leaving the workspace. Same pages

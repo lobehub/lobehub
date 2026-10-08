@@ -173,10 +173,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     expect(mockResolveRunContext).toHaveBeenCalled();
     expect(chatStore.updateTopicMetadata).not.toHaveBeenCalled();
     // Only the interrupted turn's own rows go; earlier turns and thread rows stay.
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
     // The surviving rows are seeded into the store before the run, so the user
     // turn renders while the topic's own fetch is gated off by the running op.
     expect(chatStore.replaceMessages).toHaveBeenCalledWith(
@@ -414,10 +416,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
   });
 
   it('leaves the topic alone when another device added a newer assistant branch', async () => {
@@ -491,10 +495,12 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
   });
 
   it('does not settle a topic another device took over, even when the probe fails', async () => {
@@ -723,9 +729,11 @@ describe('recoverInterruptedHeteroRuns', () => {
     const results = await recoverInterruptedHeteroRuns();
 
     expect(results).toEqual([{ outcome: 'replayed', topicId: 'topic-1' }]);
-    expect(mockRemoveMessages).toHaveBeenCalledWith(['a1', 't1'], {
-      agentId: 'agent-1',
-      topicId: 'topic-1',
-    });
+    expect(mockRemoveMessages).toHaveBeenCalledWith(
+      ['a1', 't1'],
+      { agentId: 'agent-1', topicId: 'topic-1' },
+      // superseded partial rows must not land in the recycle bin
+      { permanent: true },
+    );
   });
 });

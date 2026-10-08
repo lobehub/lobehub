@@ -122,8 +122,7 @@ const useBedrockCard = (): ProviderItem => {
     ),
     desc: t(`${providerKey}.apiKey.desc`),
     label: t(`${providerKey}.apiKey.title`),
-    name: [KeyVaultsConfigKey, 'apiKey'],
-    preserve: false,
+    name: `${KeyVaultsConfigKey}.apiKey`,
   };
 
   const awsCredentialItems = [
@@ -138,8 +137,7 @@ const useBedrockCard = (): ProviderItem => {
       ),
       desc: t(`${providerKey}.accessKeyId.desc`),
       label: t(`${providerKey}.accessKeyId.title`),
-      name: [KeyVaultsConfigKey, 'accessKeyId'],
-      preserve: false,
+      name: `${KeyVaultsConfigKey}.accessKeyId`,
     },
     {
       children: isLoading ? (
@@ -152,8 +150,7 @@ const useBedrockCard = (): ProviderItem => {
       ),
       desc: t(`${providerKey}.secretAccessKey.desc`),
       label: t(`${providerKey}.secretAccessKey.title`),
-      name: [KeyVaultsConfigKey, 'secretAccessKey'],
-      preserve: false,
+      name: `${KeyVaultsConfigKey}.secretAccessKey`,
     },
     {
       children: isLoading ? (
@@ -166,8 +163,7 @@ const useBedrockCard = (): ProviderItem => {
       ),
       desc: t(`${providerKey}.sessionToken.desc`),
       label: t(`${providerKey}.sessionToken.title`),
-      name: [KeyVaultsConfigKey, 'sessionToken'],
-      preserve: false,
+      name: `${KeyVaultsConfigKey}.sessionToken`,
     },
   ];
 
@@ -207,7 +203,7 @@ const useBedrockCard = (): ProviderItem => {
         ),
         desc: t(`${providerKey}.region.desc`),
         label: t(`${providerKey}.region.title`),
-        name: [KeyVaultsConfigKey, 'region'],
+        name: `${KeyVaultsConfigKey}.region`,
       },
     ],
     normalizeConfigValues: normalizeBedrockConfigValues(authMode),

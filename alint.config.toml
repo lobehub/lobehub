@@ -1,10 +1,16 @@
 # alint: model-backed rules that eslint cannot express.
-# Rules live in packages/alint/rules; each has calibration fixtures under
-# packages/alint/fixtures. Set up a provider with `bun run alint:setup`, then
+# Repo-wide rules live in packages/alint/rules (fixtures in packages/alint/fixtures).
+# Package-level rules live next to their package, in packages/<pkg>/alint/rules
+# (fixtures in packages/<pkg>/alint/fixtures), registered under their own plugin
+# prefix and scoped only to that package. Set up a provider with `bun run alint:setup`, then
 # `bun run check --alint` or `bun run alint --dirty`. See packages/alint/README.md.
 #
 # Scope rules with group `files`; never with `includeFiles` inside a rule
 # (it only filters reports, doubles the jobs, and disables the cache).
+#
+# Severity: `error` is reserved for rules measured at zero false positives on
+# real PRs; an error turns the ALint check red. Everything else stays `warn`.
+# Fixture groups stay `warn` so a rule PR does not fail on its own bad fixtures.
 
 [[config.group]]
 ignores = [
@@ -28,8 +34,8 @@ ignores = [ "**/*.test.ts", "**/__tests__/**", "**/migrations/**" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/pmap-over-promise-all" = "warn"
-"lobehub/no-dynamic-import-in-server" = "warn"
+"lobehub/pmap-over-promise-all" = "error"
+"lobehub/no-dynamic-import-in-server" = "error"
 
 # Database models layer: cross-table write transactions belong in repositories.
 [[config.group]]
@@ -40,7 +46,7 @@ ignores = [ "**/*.test.ts", "**/__tests__/**" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/no-transactions-in-models" = "warn"
+"lobehub/no-transactions-in-models" = "error"
 
 # Web client components.
 [[config.group]]
@@ -51,24 +57,135 @@ ignores = [ "**/*.test.tsx" ]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/no-effect-fetching" = "warn"
+"lobehub/no-effect-fetching" = "error"
 "lobehub/no-mode-flags" = "warn"
+"lobehub/no-unguarded-response-field" = "error"
 
-# Vitest files, wherever they live: the SPA, every app, and every package.
-# Naming only `apps/server` here silently skipped the ~230 tests under
-# `apps/cli` and `apps/desktop`, which is where this rule earns its keep.
+
+# Browser code, everywhere: no third-party package that needs Node may be
+# imported where the SPA (or the Electron renderer) runs it. Node built-ins and
+# server / database aliases are enforced exactly by ESLint (the browser runtime
+# block in eslint.config.mjs); this rule only judges npm packages.
+# `src/app` and `src/libs` are left out on purpose: they mix Next.js shells and
+# server helpers (instrumentation, OIDC, MCP) with web code.
 [[config.group]]
 files = [
-  "src/**/*.test.{ts,tsx}",
-  "apps/*/src/**/*.test.{ts,tsx}",
-  "packages/*/src/**/*.test.{ts,tsx}",
+  "src/business/**/*.ts",
+  "src/business/**/*.tsx",
+  "src/components/**/*.ts",
+  "src/components/**/*.tsx",
+  "src/features/**/*.ts",
+  "src/features/**/*.tsx",
+  "src/helpers/**/*.ts",
+  "src/helpers/**/*.tsx",
+  "src/hooks/**/*.ts",
+  "src/hooks/**/*.tsx",
+  "src/layout/**/*.ts",
+  "src/layout/**/*.tsx",
+  "src/routes/**/*.ts",
+  "src/routes/**/*.tsx",
+  "src/services/**/*.ts",
+  "src/services/**/*.tsx",
+  "src/spa/**/*.ts",
+  "src/spa/**/*.tsx",
+  "src/store/**/*.ts",
+  "src/store/**/*.tsx",
+  "src/utils/**/*.ts",
+  "src/utils/**/*.tsx",
+  "packages/*/src/**/*.tsx",
 ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/*.server.ts" ]
 
 [config.group.plugins]
 lobehub = "./packages/alint/rules"
 
 [config.group.rules]
-"lobehub/test-the-exit-not-the-entry" = "warn"
+"lobehub/no-node-in-browser" = "error"
+
+# Heterogeneous agents: the browser-reachable layer (root, adapters, …) stays
+# pure and I/O lives behind Node-only subpaths. A package-level rule, kept
+# next to the code it describes in packages/heterogeneous-agents/alint/rules.
+# Scoped to the browser-reachable layer plus the spawn pipeline: Node-only
+# files are free to use Node, and sending them only buys "no violation" noise.
+# The import graph itself is guarded deterministically by runtimeBoundary.test.ts and the eslint runtime-boundary pattern.
+[[config.group]]
+files = [
+  "packages/heterogeneous-agents/src/*.ts",
+  "packages/heterogeneous-agents/src/adapters/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.tsx",
+  "packages/heterogeneous-agents/src/errors/**/*.ts",
+  "packages/heterogeneous-agents/src/quota/**/*.ts",
+  "packages/heterogeneous-agents/src/utils/**/*.ts",
+  "packages/heterogeneous-agents/src/mainAgentCoordinator/**/*.ts",
+  "packages/heterogeneous-agents/src/subagentCoordinator/**/*.ts",
+  "packages/heterogeneous-agents/src/providerBinding/**/*.ts",
+  "packages/heterogeneous-agents/src/codex/protocol/**/*.ts",
+  "packages/heterogeneous-agents/src/kimiCode/usage.ts",
+  "packages/heterogeneous-agents/src/spawn/agentStreamPipeline.ts",
+  "packages/heterogeneous-agents/src/spawn/spawnAgent.ts",
+]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts" ]
+
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+
+[config.group.rules]
+"hetero/agent-layering" = "error"
+
+# Heterogeneous agents: a host capability (CLI credentials, process-failure
+# classification, quota sampling, spawn setup) sits behind a Node-only entry
+# even when it is pure; the fix is moving it, never a browser-portable rewrite.
+# Scoped to the files the browser entries own. Per file the model cannot see
+# who imports a symbol, so it reports only what the file itself proves.
+[[config.group]]
+files = [
+  "packages/heterogeneous-agents/src/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.ts",
+  "packages/heterogeneous-agents/src/client/**/*.tsx",
+  "packages/heterogeneous-agents/src/errors/**/*.ts",
+  "packages/heterogeneous-agents/src/quota/**/*.ts",
+  "packages/heterogeneous-agents/src/utils/**/*.ts",
+]
+# Barrels are left out: a re-export's browser consumers are not visible from the barrel.
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated.ts", "**/index.ts" ]
+
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+
+[config.group.rules]
+"hetero/host-capability-placement" = "warn"
+
+# UI review rules: the product owner's recurring acceptance rejections,
+# distilled from 620 review comments over 30 days. Warn-only: they are taste
+# with a rationale, meant to be read in review, not to block a merge. The
+# broad ones (chrome, color, copy, links) are too noisy per PR and live in
+# alint.audit.toml for periodic whole-repo audits instead.
+[[config.group]]
+files = [ "src/**/*.tsx", "packages/*/src/**/*.tsx" ]
+ignores = [ "**/*.test.tsx", "**/__tests__/**", "src/app/**", "**/DevPanel/**", "**/*.stories.tsx" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/ui-button-hierarchy" = "error"
+"lobehub/ui-view-switch-tabs" = "warn"
+"lobehub/ui-edit-in-modal" = "warn"
+"lobehub/ui-lightweight-errors" = "warn"
+
+# Page width: only page bodies, where a missing width container is visible.
+# A per-file model cannot see the layout, so layouts that already cap the
+# width (community, workspace settings) are left out.
+[[config.group]]
+files = [ "src/routes/**/*.tsx", "src/features/Settings/*/index.tsx", "src/features/**/*Page.tsx" ]
+ignores = [ "**/*.test.tsx", "**/_layout/**", "src/routes/(main)/community/**", "**/workspace/settings/**", "**/features/**/components/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/ui-content-width" = "warn"
 
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
 [[config.group]]
@@ -93,6 +210,13 @@ lobehub = "./packages/alint/rules"
 "lobehub/no-effect-fetching" = "warn"
 
 [[config.group]]
+files = [ "packages/alint/fixtures/no-unguarded-response-field/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unguarded-response-field" = "warn"
+
+[[config.group]]
 files = [ "packages/alint/fixtures/no-mode-flags/**" ]
 [config.group.plugins]
 lobehub = "./packages/alint/rules"
@@ -107,8 +231,277 @@ lobehub = "./packages/alint/rules"
 "lobehub/no-transactions-in-models" = "warn"
 
 [[config.group]]
-files = [ "packages/alint/fixtures/test-the-exit-not-the-entry/**" ]
+files = [ "packages/alint/fixtures/no-node-in-browser/**" ]
 [config.group.plugins]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
-"lobehub/test-the-exit-not-the-entry" = "warn"
+"lobehub/no-node-in-browser" = "warn"
+
+[[config.group]]
+files = [ "packages/heterogeneous-agents/alint/fixtures/agent-layering/**" ]
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+[config.group.rules]
+"hetero/agent-layering" = "warn"
+
+[[config.group]]
+files = [ "packages/heterogeneous-agents/alint/fixtures/host-capability-placement/**" ]
+[config.group.plugins]
+hetero = "./packages/heterogeneous-agents/alint/rules"
+[config.group.rules]
+"hetero/host-capability-placement" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-button-hierarchy/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-button-hierarchy" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-restrained-color/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-restrained-color" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-no-decorative-chrome/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-no-decorative-chrome" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-view-switch-tabs/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-view-switch-tabs" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-edit-in-modal/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-edit-in-modal" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-lightweight-errors/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-lightweight-errors" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-user-facing-copy/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-user-facing-copy" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-in-app-links/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-in-app-links" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/ui-content-width/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/ui-content-width" = "warn"
+
+# Security: no-unsafe-user-url-fetch.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-user-url-fetch" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unsafe-user-url-fetch/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-user-url-fetch" = "warn"
+
+# Security: no-unscoped-resource-mutation.
+[[config.group]]
+files = [ "packages/database/src/models/**/*.ts", "packages/database/src/repositories/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unscoped-resource-mutation" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unscoped-resource-mutation/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unscoped-resource-mutation" = "warn"
+
+# Security: no-untrusted-path-io.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/__mocks__/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-path-io" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-untrusted-path-io/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-path-io" = "warn"
+
+# Security: no-shell-command-injection.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts", "apps/cli/src/**/*.ts", "packages/agent-runtime/src/**/*.ts", "packages/local-file-shell/src/**/*.ts", "packages/heterogeneous-agents/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-shell-command-injection" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-shell-command-injection/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-shell-command-injection" = "warn"
+
+# Security: no-untrusted-code-execution.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts", "packages/agent-runtime/src/**/*.ts", "packages/local-file-shell/src/**/*.ts", "packages/heterogeneous-agents/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-code-execution" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-untrusted-code-execution/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-untrusted-code-execution" = "warn"
+
+# Security: no-unsafe-html-execution.
+[[config.group]]
+files = [ "src/**/*.ts", "src/**/*.tsx", "apps/server/src/**/*.ts", "packages/utils/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-html-execution" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unsafe-html-execution/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-html-execution" = "warn"
+
+# Security: no-unsafe-raw-sql.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "packages/database/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-raw-sql" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unsafe-raw-sql/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unsafe-raw-sql" = "warn"
+
+# Security: no-secret-exposure.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "apps/desktop/src/main/**/*.ts", "apps/cli/src/**/*.ts", "src/**/*.ts", "src/**/*.tsx", "packages/env/src/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-secret-exposure" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-secret-exposure/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-secret-exposure" = "warn"
+
+# Security: no-auth-verification-bypass.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "src/app/**/*.ts", "src/libs/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-auth-verification-bypass" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-auth-verification-bypass/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-auth-verification-bypass" = "warn"
+
+# Security: no-unvalidated-redirect.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "src/**/*.ts", "src/**/*.tsx" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unvalidated-redirect" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-unvalidated-redirect/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-unvalidated-redirect" = "warn"
+
+# Security: no-prototype-pollution.
+[[config.group]]
+files = [ "apps/server/src/**/*.ts", "packages/utils/src/**/*.ts", "apps/desktop/src/main/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-prototype-pollution" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-prototype-pollution/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-prototype-pollution" = "warn"
+
+# Security: no-privileged-untrusted-electron.
+[[config.group]]
+files = [ "apps/desktop/src/main/**/*.ts", "apps/desktop/src/preload/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-privileged-untrusted-electron" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-privileged-untrusted-electron/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-privileged-untrusted-electron" = "warn"

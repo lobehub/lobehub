@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Alert, Button, Tag } from '@lobehub/ui/base-ui';
-import { Form as AntdForm, type FormInstance } from 'antd';
+import { type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
@@ -115,9 +115,9 @@ const Footer = memo<FooterProps>(
     const { t } = useTranslation('agent');
     const origin = useAppOrigin();
     const platformId = platformDef.id;
-    const applicationId = AntdForm.useWatch('applicationId', form);
+    const applicationId = useWatch(form, 'applicationId');
 
-    const settingsConnectionMode = AntdForm.useWatch(['settings', 'connectionMode'], form);
+    const settingsConnectionMode = useWatch(form, 'settings.connectionMode');
 
     const showWebhookUrl = platformDef.showWebhookUrl || settingsConnectionMode === 'webhook';
 
@@ -130,8 +130,8 @@ const Footer = memo<FooterProps>(
       const settings = platformDef.schema.find((f) => f.key === 'settings');
       return settings?.properties?.some((f) => f.key === 'userId') ?? false;
     }, [platformDef.schema]);
-    const watchedUserId = AntdForm.useWatch(['settings', 'userId'], form);
-    // `useWatch` returns `undefined` until antd Form hydrates from the
+    const watchedUserId = useWatch(form, 'settings.userId');
+    // `useWatch` returns `undefined` until the form hydrates from the
     // parent's `initialValues`. Fall back to the saved value only during
     // that pre-hydration window so we don't flash the alert for every
     // saved bot. Once the form has reported a value, trust the watched
@@ -160,7 +160,6 @@ const Footer = memo<FooterProps>(
               danger
               disabled={disabled || saving || connecting}
               icon={<Trash2 size={16} />}
-              type="primary"
               onClick={onDelete}
             >
               {t('channel.removeChannel')}

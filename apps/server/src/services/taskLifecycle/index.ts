@@ -27,7 +27,7 @@ import type {
   TaskSchedulerContext,
   TaskTopicHandoff,
 } from '@lobechat/types';
-import { ChatErrorType, DEFAULT_BRIEF_ACTIONS } from '@lobechat/types';
+import { ChatErrorType, DEFAULT_BRIEF_ACTIONS, RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 
 import {
@@ -43,6 +43,8 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 import { translation } from '@/libs/i18n/serverTranslation';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
+import { getLLMGenerationTracingService } from '@/server/services/llmGenerationTracing';
 import { SystemAgentService } from '@/server/services/systemAgent';
 import { TaskResultBridgeService } from '@/server/services/taskResultBridge';
 import { createTaskSchedulerModule } from '@/server/services/taskScheduler';
@@ -337,7 +339,12 @@ export class TaskLifecycleService {
         );
       }
     } else if (reason === 'error') {
-      if (topicId) await this.taskTopicModel.updateStatus(taskId, topicId, 'failed');
+      if (topicId)
+        await this.taskTopicModel.updateStatus(
+          taskId,
+          topicId,
+          resolveFailedRunStatus(errorMessage),
+        );
 
       const errorText = errorMessage || 'Unknown error';
 
@@ -390,19 +397,28 @@ export class TaskLifecycleService {
       // user regardless of what happens to the scheduling state below. The topic
       // id rides the structured `topicId` field (it also powers the card's
       // "View run" shortcut), never the headline.
-      await this.briefModel.create({
-        actions: errorActions,
-        agentId: currentTask?.assigneeAgentId || undefined,
-        // Persist the structured cause for observability / future remedy mapping.
-        metadata: errorCode ? { error: { code: errorCode } } : undefined,
-        priority: 'urgent',
-        summary,
-        taskId,
-        title: tHome('inbox.error.title'),
-        topicId,
-        trigger: 'task',
-        type: 'error',
-      });
+      // A Goal Task's failed run is the coordinator's to recover: it retries,
+      // reroutes or opens a decision gate, and that gate is the brief the
+      // person gets. An urgent error card per failed run asked them to act on
+      // something the goal was already handling — the same reason Goal rounds
+      // never synthesize result briefs above. Only runs the coordinator
+      // dispatched count: a manual rerun of a Task kept under a paused or
+      // finished goal has nobody recovering it, so its failure still surfaces.
+      const coordinatedByGoal = params.runTrigger === 'goal';
+      if (!coordinatedByGoal)
+        await this.briefModel.create({
+          actions: errorActions,
+          agentId: currentTask?.assigneeAgentId || undefined,
+          // Persist the structured cause for observability / future remedy mapping.
+          metadata: errorCode ? { error: { code: errorCode } } : undefined,
+          priority: 'urgent',
+          summary,
+          taskId,
+          title: tHome('inbox.error.title'),
+          topicId,
+          trigger: 'task',
+          type: 'error',
+        });
 
       const runTrigger = params.runTrigger ?? 'manual';
       const isAutomationTick = runTrigger === 'schedule' || runTrigger === 'heartbeat';
@@ -805,7 +821,7 @@ export class TaskLifecycleService {
           schema: { name: TASK_TOPIC_HANDOFF_SCHEMA_NAME, schema: TASK_TOPIC_HANDOFF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_handoff' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: TASK_TOPIC_HANDOFF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskHandoff,
@@ -919,7 +935,7 @@ export class TaskLifecycleService {
             schema: { name: JUDGE_BRIEF_EMIT_SCHEMA_NAME, schema: JUDGE_BRIEF_EMIT_SCHEMA },
           },
           {
-            metadata: { trigger: 'task_brief_judge' },
+            metadata: { trigger: RequestTrigger.Task },
             tracing: {
               promptVersion: JUDGE_BRIEF_EMIT_PROMPT_VERSION,
               scenario: TRACING_SCENARIOS.TaskBriefJudge,
@@ -977,6 +993,16 @@ export class TaskLifecycleService {
         provider,
         this.workspaceId,
       );
+      // Pre-allocate the tracing row id so it can be stamped onto the brief —
+      // the user's later resolve action (approve / feedback / ignore) is then
+      // reported back as implicit feedback against this exact generation.
+      //
+      // Gate on tracing being enabled: with no store configured the hook never
+      // writes a row, so stamping an id would make every resolve's feedback
+      // call resolve to NOT_FOUND.
+      const briefTracingId = getLLMGenerationTracingService().isEnabled()
+        ? randomUUID()
+        : undefined;
       const result = await modelRuntime.generateObject(
         {
           messages: payload.messages as any[],
@@ -984,11 +1010,13 @@ export class TaskLifecycleService {
           schema: { name: GENERATE_BRIEF_SCHEMA_NAME, schema: GENERATE_BRIEF_SCHEMA },
         },
         {
-          metadata: { trigger: 'task_brief' },
+          metadata: { trigger: RequestTrigger.Task },
           tracing: {
             promptVersion: GENERATE_BRIEF_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.TaskBrief,
             schemaName: GENERATE_BRIEF_SCHEMA_NAME,
+            topicId,
+            tracingId: briefTracingId,
           } satisfies TracingOptions,
         },
       );
@@ -1011,6 +1039,7 @@ export class TaskLifecycleService {
         actions,
         agentId: currentTask.assigneeAgentId || undefined,
         artifacts,
+        metadata: briefTracingId ? { tracingId: briefTracingId } : undefined,
         priority,
         summary: generated.summary,
         taskId,

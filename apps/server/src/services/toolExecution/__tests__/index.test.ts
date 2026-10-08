@@ -7,10 +7,12 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 
 import { ToolExecutionService } from '../index';
+import { localSystemRuntime } from '../serverRuntimes/localSystem';
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     executeMcpCall: vi.fn(),
+    executeToolCall: vi.fn(),
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
   },
@@ -25,6 +27,37 @@ vi.mock('@/server/services/deviceGateway/scopedDevices', () => ({
 }));
 
 describe('ToolExecutionService', () => {
+  it('keeps a readable content when a runtime throws a plain budget error object', async () => {
+    // The lobehub provider rejects with a plain object (not an Error) whose
+    // message is nested under `error.message`.
+    const budgetError = {
+      budget: { availableCredits: 0, requiredCredits: 1219, shortfallCredits: 1219 },
+      error: { message: 'Budget exceeded' },
+      errorType: 'InsufficientBudgetForModel',
+      provider: 'lobehub',
+    };
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: { execute: vi.fn().mockRejectedValue(budgetError) } as any,
+      mcpService: {} as any,
+    });
+
+    const result = await service.executeTool(
+      {
+        apiName: 'analyzeMedia',
+        arguments: '{}',
+        id: 'call_budget',
+        identifier: 'lobe-agent',
+        type: 'builtin',
+      },
+      { toolManifestMap: {} },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('Budget exceeded');
+    expect(result.content).toContain('InsufficientBudgetForModel');
+    expect(result.error).toMatchObject({ errorType: 'InsufficientBudgetForModel' });
+  });
+
   it('keeps a failed command HTTP status as command output', async () => {
     const output = 'curl: (22) The requested URL returned error: 403';
     const service = new ToolExecutionService({
@@ -91,6 +124,77 @@ describe('ToolExecutionService', () => {
       expect(call).toHaveBeenCalledTimes(2);
     },
   );
+
+  it.each([
+    {
+      case: 'the device never answered',
+      failure: {
+        content:
+          'This tool call timed out before the device answered. The work may still be running on the device, so do NOT blindly repeat anything that writes or has side effects.',
+        error: 'DEVICE_RESPONSE_TIMEOUT: The operation was aborted due to timeout',
+        success: false,
+      },
+    },
+    {
+      // The executor classifies `errorData ?? error`, so a structured payload
+      // bypasses the string path entirely. Its 503 status alone would classify
+      // as `retry` and replay the call.
+      case: 'the device is offline with structured errorData',
+      failure: {
+        content:
+          'The device is not reachable right now, so this tool call never ran on it (gateway responded HTTP 503). Nothing was executed, so retrying the same call is safe.',
+        error: 'DEVICE_OFFLINE',
+        errorData: {
+          code: 'DEVICE_OFFLINE',
+          message: 'Device is offline',
+          retryable: true,
+          status: 503,
+        },
+        success: false,
+      },
+    },
+  ])('does not replay a device command when $case', async ({ failure }) => {
+    // The device may already be running the first copy: a woken laptop ran a
+    // single `echo >> file` three times after the transport replayed it.
+    vi.mocked(deviceGateway.executeToolCall).mockClear();
+    vi.mocked(deviceGateway.executeToolCall).mockResolvedValue(failure as any);
+    const runtime = localSystemRuntime.factory({
+      activeDeviceId: 'device-1',
+      operationId: 'op-1',
+      toolManifestMap: {},
+      userId: 'user-1',
+    }) as Record<string, (args: unknown) => Promise<any>>;
+    const service = new ToolExecutionService({
+      builtinToolsExecutor: {
+        execute: () => runtime.runCommand({ command: 'echo once >> /tmp/count.txt' }),
+      } as any,
+      mcpService: {} as any,
+    });
+
+    const { attempts, result } = await executeToolWithRetry(
+      () =>
+        service.executeTool(
+          {
+            apiName: 'runCommand',
+            arguments: '{}',
+            id: 'device-call',
+            identifier: 'lobe-local-system',
+            type: 'builtin',
+          },
+          { toolManifestMap: {} },
+        ),
+      { maxRetries: 2 },
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.content).toBe(failure.content);
+    expect(result.error).toMatchObject({ kind: 'stop' });
+    expect(result.errorData).toEqual(
+      'errorData' in failure ? { ...failure.errorData, kind: 'stop' } : undefined,
+    );
+    expect(attempts).toBe(1);
+    expect(deviceGateway.executeToolCall).toHaveBeenCalledTimes(1);
+  });
 
   describe.each(['writeFile', 'runCommand', 'executeCode', 'exportFile'] as const)(
     'non-retryable sandbox %s failures',
@@ -285,7 +389,7 @@ describe('ToolExecutionService', () => {
     );
 
     expect(result.content).toContain('01234');
-    expect(result.content).toContain('Content truncated');
+    expect(result.content).toContain('[Showing lines 1-');
   });
 
   /**
@@ -321,7 +425,7 @@ describe('ToolExecutionService', () => {
     const message = (result.error as { message: string }).message;
     expect(message.length).toBeLessThan(5000);
     expect(message).toContain('Command failed with exit code 1');
-    expect(message).toContain('Content truncated');
+    expect(message).toContain('[Showing lines 1-');
     // The archival opt-out covers the LLM-facing content, never the error.
     expect(result.content).toBe(runawayOutput);
   });
@@ -479,6 +583,76 @@ describe('ToolExecutionService', () => {
         expect.objectContaining({ deviceId: 'newest' }),
         undefined,
       );
+    });
+
+    // `lh connect` answers `mcp` tool calls with `Unknown tool API: <tool>` — an
+    // active device that is CLI-only must not receive the tunnel (Honcho-Memory
+    // vents: calls worked until the agent activated a CLI-only Mac mini).
+    it('skips a CLI-only active device and tunnels to the newest desktop device', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+        { channels: [{ channel: 'desktop' }], deviceId: 'macbook', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(result.success).toBe(true);
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({ deviceId: 'macbook' }),
+        undefined,
+      );
+    });
+
+    it('fails with an actionable error when only CLI devices are online', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli' },
+      ] as any);
+      vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'mac-mini-cli', online: true },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { name: 'Honcho-Memory', type: 'http', url: 'http://localhost:8787/' },
+          { activeDeviceId: 'mac-mini-cli' },
+        ),
+      );
+
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
+      expect(result.content).toContain('lh connect');
+    });
+
+    it('fails closed for a workspace run whose active device is CLI-only', async () => {
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+        { channels: [{ channel: 'cli' }], deviceId: 'ws-cli' },
+      ] as any);
+      const service = makeService();
+
+      const result = await service.executeTool(
+        mcpPayload,
+        contextWith(
+          { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' },
+          { activeDeviceId: 'ws-cli', workspaceId: 'ws-1' },
+        ),
+      );
+
+      expect(deviceGateway.queryDeviceList).toHaveBeenCalledWith('user-1', 'ws-1');
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+      expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
     });
 
     it('addresses the workspace pool for a plan-routed device in a workspace run', async () => {

@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import type {
   BlobStore,
   ContextBuildOutput,
@@ -13,7 +15,11 @@ import type {
   LLMTraceInput,
   LLMTransport,
 } from '@lobechat/agent-runtime';
-import { resolveLLMMaxAttempts, resolveLLMRetryBudget } from '@lobechat/agent-runtime';
+import {
+  resolveLLMMaxAttempts,
+  resolveLLMRetryBudget,
+  shouldRetryLLM,
+} from '@lobechat/agent-runtime';
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
 import {
   type ChatStreamPayload,
@@ -40,6 +46,17 @@ import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import type { RuntimeExecutorContext } from '../context';
 import { log, sleep } from '../executorHelpers';
 import { classifyLLMError } from '../llmErrorClassification';
+import {
+  createClientLlmExecutorUnavailableError,
+  isClientLlmRelayError,
+  resolveLlmRelayRetryBudget,
+} from '../llmRelay/errors';
+import { buildLlmRelayCallId } from '../llmRelay/protocol';
+import { RelayModelRuntime } from '../llmRelay/RelayModelRuntime';
+import type { LlmExecutionSite } from '../llmRelay/resolveLlmExecutionSite';
+import { resolveLlmExecutionSite } from '../llmRelay/resolveLlmExecutionSite';
+import { getAgentRuntimeRedisClient } from '../redis';
+import type { IStreamEventManager } from '../types';
 import { createServerCallLlmAttempt } from './serverCallLlmAttempt';
 
 const getErrorMessage = (error: unknown): string => {
@@ -134,7 +151,9 @@ class ServerLLMRetryPolicy implements LLMRetryPolicy {
 
   resolveRetryBudget(provider: string, error: unknown) {
     if (isRetryableNetworkEmptyCompletion(error)) return NETWORK_EMPTY_COMPLETION_MAX_RETRIES;
-    return resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY);
+    return (
+      resolveLlmRelayRetryBudget(error) ?? resolveLLMRetryBudget(provider, SERVER_LLM_RETRY_POLICY)
+    );
   }
 
   async waitForRetry(delayMs: number): Promise<void> {
@@ -226,16 +245,51 @@ class ServerLLMTrace implements LLMTrace {
 }
 
 /**
+ * The step's stream manager, with every chunk it re-publishes for a relayed
+ * attempt tagged by the attempt's call id, so the executor client can skip
+ * the echo of output it already rendered locally.
+ */
+const tagRelayChunks = (streamManager: IStreamEventManager, callId: string): IStreamEventManager =>
+  new Proxy(streamManager, {
+    get(target, property, receiver) {
+      if (property === 'publishStreamChunk') {
+        const publish: IStreamEventManager['publishStreamChunk'] = (operationId, stepIndex, data) =>
+          target.publishStreamChunk(operationId, stepIndex, { ...data, relayCallId: callId });
+        return publish;
+      }
+      const value = Reflect.get(target, property, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+
+/**
  * Server {@link LLMTransport} adapter — wraps model-runtime streaming and
  * returns the aggregated content/usage that package executors need.
  */
 export class ServerLLMTransport implements LLMTransport {
   readonly retryPolicy: LLMRetryPolicy;
 
+  private readonly executionSitePromises = new Map<string, Promise<LlmExecutionSite>>();
+
   private readonly modelRuntimePromises = new Map<
     string,
     ReturnType<ServerLLMTransport['createModelRuntime']>
   >();
+
+  /**
+   * Output of the latest relayed attempt that failed after producing some,
+   * per assistant message. A re-dispatch that never gets claimed (the tab that
+   * ran the attempt is gone) ends the step with nothing of its own to keep.
+   */
+  private readonly relayPartials = new Map<
+    string,
+    Pick<LLMAttemptExecution['output'], 'content' | 'thinkingContent'>
+  >();
+
+  private relayStreamCount = 0;
+
+  /** Keeps a redriven step's call ids apart from the execution it replaces. */
+  private readonly relayGeneration = randomBytes(6).toString('base64url');
 
   constructor(
     private readonly ctx: RuntimeExecutorContext,
@@ -249,6 +303,35 @@ export class ServerLLMTransport implements LLMTransport {
   }
 
   async runAttempt(input: LLMAttemptInput): Promise<LLMAttemptExecution> {
+    const site = await this.getExecutionSite(input.provider, input.state);
+
+    if (site.site === 'unavailable') {
+      throw createClientLlmExecutorUnavailableError(input.provider, site.reason);
+    }
+
+    if (site.site === 'client') {
+      const callId = buildLlmRelayCallId(
+        this.ctx.operationId,
+        this.ctx.stepIndex,
+        this.relayGeneration,
+        input.attempt,
+      );
+      const relayRuntime = this.createRelayRuntime(input.provider, site, {
+        assistantMessageId: input.assistantMessageId,
+        attempt: input.attempt,
+        callId,
+      });
+      const execution = await this.runAttemptWithRuntime(input, relayRuntime, {
+        ...this.ctx,
+        streamManager: tagRelayChunks(this.ctx.streamManager, callId),
+      });
+      execution.output.executionSite = 'client';
+      if (relayRuntime.result.usageEstimated) execution.output.usageEstimated = true;
+
+      if (!execution.ok) await this.keepRelayPartialOnTerminalError(input, execution);
+      return execution;
+    }
+
     const modelRuntime = await this.getModelRuntime(input.provider);
     return this.runAttemptWithRuntime(input, modelRuntime);
   }
@@ -257,7 +340,7 @@ export class ServerLLMTransport implements LLMTransport {
     payload: LLMStreamPayload,
     handlers?: Parameters<LLMTransport['stream']>[1],
   ): Promise<LLMStreamResult> {
-    const runtime = await this.createModelRuntime(payload.provider);
+    const runtime = await this.createStreamRuntime(payload.provider);
     const { provider: _provider, ...runtimePayload } = payload;
     let content = '';
     let usage: LLMStreamResult['usage'];
@@ -292,6 +375,106 @@ export class ServerLLMTransport implements LLMTransport {
     return result;
   }
 
+  /**
+   * Lightweight calls (context compression) follow the same execution site as
+   * the run's attempts; a relayed one gets its own call id outside the attempt
+   * numbering.
+   */
+  private async createStreamRuntime(provider: string) {
+    const state = (await this.ctx.loadAgentState?.(this.ctx.operationId)) ?? undefined;
+    const site = await this.getExecutionSite(provider, state);
+
+    if (site.site === 'unavailable') {
+      throw createClientLlmExecutorUnavailableError(provider, site.reason);
+    }
+    if (site.site === 'client') {
+      this.relayStreamCount += 1;
+      return this.createRelayRuntime(provider, site, {
+        attempt: 1,
+        callId: `${buildLlmRelayCallId(this.ctx.operationId, this.ctx.stepIndex, this.relayGeneration, 1)}:stream${this.relayStreamCount}`,
+      });
+    }
+
+    return this.createModelRuntime(provider);
+  }
+
+  private createRelayRuntime(
+    provider: string,
+    site: Extract<LlmExecutionSite, { site: 'client' }>,
+    call: { assistantMessageId?: string; attempt: number; callId: string },
+  ) {
+    const redis = getAgentRuntimeRedisClient();
+    if (!redis) throw createClientLlmExecutorUnavailableError(provider, 'relay_unsupported');
+
+    return new RelayModelRuntime({
+      ...call,
+      operationId: this.ctx.operationId,
+      preferredClientId: site.preferredClientId,
+      provider,
+      redis,
+      runtimeProvider: site.runtimeProvider,
+      stepIndex: this.ctx.stepIndex,
+      streamManager: this.ctx.streamManager,
+      userId: this.ctx.userId!,
+    });
+  }
+
+  private getExecutionSite(provider: string, state?: LLMAttemptInput['state']) {
+    let promise = this.executionSitePromises.get(provider);
+    if (!promise) {
+      promise = resolveLlmExecutionSite({
+        db: this.ctx.serverDB,
+        provider,
+        state,
+        userId: this.ctx.userId!,
+        workspaceId: this.ctx.workspaceId,
+      });
+      this.executionSitePromises.set(provider, promise);
+    }
+    return promise;
+  }
+
+  /**
+   * When a relayed attempt fails for good — the executor vanished and the
+   * re-dispatch budget is spent, or the total deadline passed — keep what the
+   * device had already produced on the message, marked as cut short, rather
+   * than dropping it with the error (U4b). Retried attempts start over, so
+   * their partial output is discarded as usual — unless the last re-dispatch
+   * produced nothing, in which case the latest earlier partial is kept.
+   */
+  private async keepRelayPartialOnTerminalError(
+    input: LLMAttemptInput,
+    execution: Extract<LLMAttemptExecution, { ok: false }>,
+  ) {
+    const { error } = execution;
+    const messageId = input.assistantMessageId;
+    if (!messageId || !isClientLlmRelayError(error)) return;
+
+    let output: Pick<LLMAttemptExecution['output'], 'content' | 'thinkingContent'> =
+      execution.output;
+    if (output.content || output.thinkingContent) {
+      this.relayPartials.set(messageId, output);
+    } else {
+      const earlier = this.relayPartials.get(messageId);
+      if (!earlier) return;
+      output = earlier;
+    }
+
+    const classified = this.retryPolicy.classifyError(error);
+    const budget = this.retryPolicy.resolveRetryBudget(input.provider, error);
+    if (shouldRetryLLM(classified.kind, input.attempt, budget)) return;
+
+    try {
+      await this.ctx.messageModel.update(messageId, {
+        content: output.content,
+        metadata: { executionSite: 'client', interruptedMidStream: true } as any,
+        ...(output.thinkingContent && { reasoning: { content: output.thinkingContent } }),
+      });
+    } catch (error) {
+      console.error('[ServerLLMTransport] Failed to keep relayed partial output:', error);
+    }
+  }
+
   private createModelRuntime(provider: string) {
     return initModelRuntimeFromDB(
       this.ctx.serverDB,
@@ -313,6 +496,7 @@ export class ServerLLMTransport implements LLMTransport {
   private async runAttemptWithRuntime(
     input: LLMAttemptInput,
     modelRuntime: Pick<ModelRuntime, 'chat' | 'handleChatStreamError'>,
+    ctx: RuntimeExecutorContext = this.ctx,
   ): Promise<LLMAttemptExecution> {
     const resolved = input.context.resolvedTools;
     if (!resolved) throw new Error('Resolved tools are required for a server LLM attempt');
@@ -333,7 +517,7 @@ export class ServerLLMTransport implements LLMTransport {
       attempt: input.attempt,
       blobStore: this.blobStore,
       chatPayload,
-      ctx: this.ctx,
+      ctx,
       events: input.events,
       maxAttempts: input.maxAttempts,
       messageCount: chatPayload.messages.length,

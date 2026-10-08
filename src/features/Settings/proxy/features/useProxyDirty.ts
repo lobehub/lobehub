@@ -1,5 +1,5 @@
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Form as AntdForm, type FormInstance } from 'antd';
+import { type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
 import { useMemo } from 'react';
 
 const WATCH_FIELDS: readonly (keyof NetworkProxySettings)[] = [
@@ -15,10 +15,10 @@ const WATCH_FIELDS: readonly (keyof NetworkProxySettings)[] = [
 const normalize = (v: unknown) => (v === undefined || v === null ? '' : v);
 
 export const useProxyDirty = (
-  form: FormInstance,
+  form: FormInstance<NetworkProxySettings>,
   saved: NetworkProxySettings | undefined,
 ): { isDirty: boolean } => {
-  const values = AntdForm.useWatch([], form);
+  const values = useWatch(form, (v) => v);
 
   const isDirty = useMemo(() => {
     if (!saved || !values) return false;

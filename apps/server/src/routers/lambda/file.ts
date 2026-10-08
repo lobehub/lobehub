@@ -8,6 +8,7 @@ import {
   RESOURCE_CONTENT_PREVIEW_SOURCE_LENGTH,
   UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE,
 } from '@lobechat/const';
+import { type LobeChatDatabase } from '@lobechat/database';
 import { TRPCError } from '@trpc/server';
 import isEqual from 'fast-deep-equal';
 import pMap from 'p-map';
@@ -464,6 +465,7 @@ export const fileRouter = router({
         fileHash: item.fileHash,
         fileType: item.fileType,
         id: item.id,
+        knowledgeBaseIds: await ctx.fileModel.findKnowledgeBaseIds(item.id),
         metadata: item.metadata,
         name: item.name,
         parentId: item.parentId,
@@ -472,7 +474,29 @@ export const fileRouter = router({
         updatedAt: item.updatedAt,
         url: await ctx.fileService.getFileAccessUrl(item),
         userId: item.userId,
+        visibility: item.visibility,
       };
+    }),
+
+  /**
+   * Direct storage URL for reading a file's bytes in the browser (canvas
+   * export). The `/f/:id` proxy answers with a cross-origin redirect, which
+   * drops the request's Origin so bucket CORS can never allow it; fetching the
+   * storage URL directly keeps the Origin the bucket already allows for uploads.
+   */
+  getReadableUrl: fileProcedure
+    .input(
+      z.object({
+        id: z.string(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const item = await ctx.fileModel.findById(input.id);
+      if (!item) throw new TRPCError({ code: 'NOT_FOUND', message: 'File not found' });
+
+      await assertFileNotInRestrictedKnowledgeBase(ctx, input.id);
+
+      return { url: await ctx.fileService.getFullFileUrl(item.url) };
     }),
 
   getFileItemById: fileProcedure
@@ -1015,7 +1039,21 @@ export const fileRouter = router({
       }
 
       if (Object.keys(updates).length > 0) {
-        await ctx.fileModel.update(id, updates);
+        const wsId = ctx.workspaceId ?? undefined;
+        await ctx.serverDB.transaction(async (tx) => {
+          const trx = tx as unknown as LobeChatDatabase;
+          // The knowledge-base tree reads `documents.parent_id`, so the file's
+          // backing document row(s) must move (and rename) together with it.
+          // Documents are written before the file, matching updateDocument's
+          // lock order so concurrent moves cannot deadlock.
+          if (updates.parentId !== undefined || updates.name !== undefined) {
+            await new DocumentModel(trx, ctx.userId, wsId).syncFromFile(id, {
+              name: updates.name,
+              parentId: updates.parentId,
+            });
+          }
+          await new FileModel(trx, ctx.userId, wsId).update(id, updates);
+        });
       }
 
       return { success: true };

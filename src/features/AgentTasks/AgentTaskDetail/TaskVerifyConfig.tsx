@@ -1,7 +1,7 @@
 'use client';
 
 import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
-import { Block, Flexbox, Icon, TextArea } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -9,8 +9,10 @@ import {
   type DropdownItem,
   DropdownMenu,
   Select,
+  Spin,
   Tag,
   Text,
+  TextArea,
   toast,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -29,7 +31,6 @@ import {
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import {
   CriterionList,
   CriterionRequiredChip,
@@ -40,8 +41,6 @@ import { useRubrics } from '@/features/Acceptance/hooks';
 import { usePermission } from '@/hooks/usePermission';
 import { useSingleton } from '@/hooks/useSingleton';
 import { type VerifyCriterionDraft, verifyService } from '@/services/verify';
-import { useAgentStore } from '@/store/agent';
-import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { useTaskStore } from '@/store/task';
 import { taskDetailSelectors } from '@/store/task/selectors';
 
@@ -138,24 +137,6 @@ const TaskVerifyConfig = memo(() => {
   const taskInstruction = useTaskStore(taskDetailSelectors.activeTaskInstruction);
   const taskName = useTaskStore(taskDetailSelectors.activeTaskName);
   const verify = useTaskStore(taskDetailSelectors.activeTaskVerifyConfig);
-  const taskModel = useTaskStore(taskDetailSelectors.activeTaskModel);
-  const taskProvider = useTaskStore(taskDetailSelectors.activeTaskProvider);
-  const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
-
-  // Resolve model/provider the same way TaskModelConfig does: task override first,
-  // then the assignee agent's model, then the active agent for unassigned tasks.
-  const agentModel = useAgentStore((s) =>
-    assigneeAgentId
-      ? agentByIdSelectors.getAgentModelById(assigneeAgentId)(s)
-      : agentSelectors.currentAgentModel(s),
-  );
-  const agentProvider = useAgentStore((s) =>
-    assigneeAgentId
-      ? agentByIdSelectors.getAgentModelProviderById(assigneeAgentId)(s)
-      : agentSelectors.currentAgentModelProvider(s),
-  );
-  const model = taskModel || agentModel || '';
-  const provider = taskProvider || agentProvider || '';
   const taskAcceptanceGoal = resolveTaskAcceptanceGoal({
     description: taskDescription,
     instruction: taskInstruction,
@@ -362,7 +343,7 @@ const TaskVerifyConfig = memo(() => {
   // ---- actions ----
   const generateCriteria = useCallback(
     async (goal: string) => {
-      if (!goal || generating || !model || !provider) return;
+      if (!goal || generating) return;
       setExpanded(true);
       setRequirement(goal);
       setGenerating(true);
@@ -371,7 +352,6 @@ const TaskVerifyConfig = memo(() => {
           context: taskName?.trim() ? `Task: ${taskName.trim()}` : undefined,
           goal,
           maxCriteria: 8,
-          modelConfig: { model, provider },
         });
         if (generated.length === 0) throw new Error('No acceptance criteria were generated.');
         const items = generated.map((draft) => toDraftItem(draft));
@@ -380,21 +360,21 @@ const TaskVerifyConfig = memo(() => {
         console.error('[TaskVerifyConfig] generate failed:', error);
         toast.error(
           isInvalidProviderApiKeyError(error)
-            ? t('verifyConfig.generateInvalidProviderAPIKey', { model, provider })
+            ? t('verifyConfig.generateInvalidPlanModelKey')
             : t('verifyConfig.generateFailed'),
         );
       } finally {
         setGenerating(false);
       }
     },
-    [commit, generating, model, provider, t, taskName],
+    [commit, generating, t, taskName],
   );
 
   const handleGenerate = useCallback(async () => {
     const goal = requirement.trim();
-    if (!goal || generating || !model || !provider) return;
+    if (!goal || generating) return;
     await generateCriteria(goal);
-  }, [generateCriteria, generating, model, provider, requirement]);
+  }, [generateCriteria, generating, requirement]);
 
   const handleCollapsedClick = useCallback(() => {
     if (savedCount > 0 || requirement.trim()) {
@@ -574,7 +554,7 @@ const TaskVerifyConfig = memo(() => {
     return (
       <Block className={styles.section} variant={'outlined'}>
         <Flexbox horizontal align={'center'} gap={12}>
-          <NeuralNetworkLoading size={20} />
+          <Spin size="middle" variant="network" />
           <Text className={styles.subtitle}>{t('verifyConfig.generating')}</Text>
         </Flexbox>
       </Block>

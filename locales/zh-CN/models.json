@@ -982,6 +982,7 @@
   "minimax-m2.5.description": "MiniMax M2.5 —— 高效代码模型，具备强推理能力。",
   "minimax-m2.7.description": "MiniMax M2.7 —— MiniMax 最新代码模型，推理与工具调用能力进一步增强。",
   "minimax-m3.description": "MiniMax M3——最新的MiniMax模型，支持视觉功能，具有强大的推理能力和改进的工具使用。",
+  "minimax/h3-max.description": "fal 基于 MiniMax H3 后训练的版本，提示词遵循和画面美感更强，支持文生视频、首尾帧图生视频与参考生视频，并原生生成音频。",
   "minimax/minimax-m2.1.description": "MiniMax-M2.1 是一款轻量级、前沿的大语言模型，专为编程、代理工作流和现代应用开发而优化，提供更简洁的输出和更快的响应速度。",
   "minimax/minimax-m2.description": "MiniMax-M2 是一款高性价比模型，擅长编程和智能体任务，适用于多种工程场景。",
   "minimaxai/minimax-m2.7.description": "MiniMax M2.7 是一个拥有 2290 亿参数（约 100 亿激活参数）的 MoE 模型，专为代理工作流和实际软件工程设计。它在多步任务中交替进行思考与行动，并为企业客户提供 Groq 平台支持。",

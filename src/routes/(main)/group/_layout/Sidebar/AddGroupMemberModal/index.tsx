@@ -1,7 +1,7 @@
 'use client';
 
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -102,7 +102,7 @@ const AddGroupMemberModal = memo<AddGroupMemberModalProps>(
           {/* Left Column - Available Agents */}
           <AvailableAgentList agents={availableAgents} isLoading={isLoadingAgents} />
 
-          <Divider orientation={'vertical'} style={{ height: '100%' }} />
+          <Divider orientation={'vertical'} style={{ height: '100%', marginInline: 8 }} />
 
           {/* Right Column - Selected Agents */}
           <SelectedAgentList agents={allAgents} />

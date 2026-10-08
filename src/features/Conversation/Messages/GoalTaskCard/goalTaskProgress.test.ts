@@ -12,10 +12,18 @@ describe('getGoalTaskProgress', () => {
   it('falls back to the drafted criteria count before the graph is seeded', () => {
     expect(getGoalTaskProgress({ criteriaCount: 4, status: 'planning' })).toEqual({
       passed: 0,
-      phase: 'running',
+      phase: 'planning',
       progress: 0,
       total: 4,
     });
+  });
+
+  it('reads a running goal without any Task yet as planning', () => {
+    // `/goal` from a conversation adopts that run as the first planning turn and
+    // marks the goal running before the plan lands its Tasks.
+    expect(getGoalTaskProgress({ criteriaCount: 2, status: 'running', taskTotal: 0 }).phase).toBe(
+      'planning',
+    );
   });
 
   it('lets a waiting decision gate outrank the goal status', () => {

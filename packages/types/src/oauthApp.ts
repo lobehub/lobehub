@@ -28,7 +28,8 @@ export interface CreateOAuthAppParams {
 
 export interface UpdateOAuthAppParams {
   description?: string;
-  logoUri?: string;
+  /** `null` removes the logo. */
+  logoUri?: string | null;
   name?: string;
   redirectUris?: string[];
 }

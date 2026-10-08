@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Text } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
@@ -19,8 +19,10 @@ import {
 import SectionCard from './SectionCard';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
-  // antd's ErrorList only picks up error styling inside a Form.Item that has an
-  // error status; the list-level message sits outside one, so it is colored here.
+  fieldError: css`
+    font-size: 12px;
+    color: ${cssVar.colorError};
+  `,
   listError: css`
     font-size: 14px;
     line-height: 1.5;
@@ -70,6 +72,13 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
     }
   };
 
+  const form = useForm<RedirectUrisValues>({ onSubmit: handleFinish });
+
+  const startEditing = () => {
+    form.reset({ redirectUris: saved.length > 0 ? saved : [''] });
+    setEditing(true);
+  };
+
   return (
     <SectionCard
       title={t('oauthApp.redirectUris.title')}
@@ -79,7 +88,7 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
             disabled={!canEdit}
             icon={<PencilIcon size={14} />}
             size={'small'}
-            onClick={() => setEditing(true)}
+            onClick={startEditing}
           >
             {t(saved.length > 0 ? 'oauthApp.detail.edit' : 'oauthApp.redirectUris.configure')}
           </Button>
@@ -87,58 +96,60 @@ const RedirectUrisCard: FC<RedirectUrisCardProps> = ({ canEdit, detail, onSubmit
       }
     >
       {editing ? (
-        <Form
-          colon={false}
-          initialValues={{ redirectUris: saved.length > 0 ? saved : [''] }}
-          layout={'vertical'}
-          onFinish={handleFinish}
-        >
+        <Form form={form} layout={'vertical'}>
           <Flexbox gap={12}>
             <Text style={{ fontSize: 12 }} type={'secondary'}>
               {t('oauthApp.form.redirectUris.extra')}
             </Text>
 
-            <Form.List
-              name={'redirectUris'}
-              rules={[
-                {
-                  validator: async (_, values?: (string | undefined)[]) => {
-                    const messageKey = redirectUriListMessageKey(values);
-                    if (messageKey)
-                      throw new Error(t(messageKey, { count: MAX_OAUTH_REDIRECT_URIS }));
-                  },
-                },
-              ]}
-            >
-              {(fields, { add, remove }, { errors }) => (
+            <Form.List name={'redirectUris'}>
+              {({ fields, add, remove }) => (
                 <Flexbox gap={8}>
                   {fields.map((field) => (
                     <Flexbox horizontal align={'flex-start'} gap={8} key={field.key}>
-                      <Form.Item
-                        name={field.name}
-                        style={{ flex: 1, marginBottom: 0 }}
-                        rules={[
-                          {
-                            validator: async (_, value?: string) => {
-                              const messageKey = redirectUriMessageKey(value);
-                              if (messageKey) throw new Error(t(messageKey));
-                            },
-                          },
-                        ]}
-                      >
-                        <Input placeholder={t('oauthApp.form.redirectUris.placeholder')} />
-                      </Form.Item>
+                      <Form.Field
+                        bare
+                        name={`redirectUris.${field.index}`}
+                        render={({ error, onBlur, onChange, value }) => (
+                          <Flexbox flex={1} gap={4}>
+                            <Input
+                              aria-invalid={error ? true : undefined}
+                              placeholder={t('oauthApp.form.redirectUris.placeholder')}
+                              value={value}
+                              onBlur={onBlur}
+                              onChange={(e) => onChange(e.target.value)}
+                            />
+                            {error && <div className={styles.fieldError}>{error}</div>}
+                          </Flexbox>
+                        )}
+                        validate={(value?: string) => {
+                          const messageKey = redirectUriMessageKey(value);
+                          return messageKey ? t(messageKey) : undefined;
+                        }}
+                      />
                       <ActionIcon
                         aria-label={t('oauthApp.redirectUris.remove')}
                         icon={Trash2Icon}
                         style={{ marginTop: 4 }}
                         title={t('oauthApp.redirectUris.remove')}
-                        onClick={() => remove(field.name)}
+                        onClick={() => remove(field.index)}
                       />
                     </Flexbox>
                   ))}
 
-                  {errors.length > 0 && <div className={styles.listError}>{errors}</div>}
+                  <Form.Field
+                    bare
+                    name={'redirectUris'}
+                    render={({ error }) =>
+                      error ? <div className={styles.listError}>{error}</div> : null
+                    }
+                    validate={(values?: (string | undefined)[]) => {
+                      const messageKey = redirectUriListMessageKey(values);
+                      return messageKey
+                        ? t(messageKey, { count: MAX_OAUTH_REDIRECT_URIS })
+                        : undefined;
+                    }}
+                  />
 
                   <Button
                     block

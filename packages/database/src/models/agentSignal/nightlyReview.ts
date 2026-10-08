@@ -7,6 +7,7 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
   lte,
   or,
@@ -18,6 +19,7 @@ import { agents, messagePlugins, messages, topics, users, userSettings } from '.
 import type { LobeChatDatabase } from '../../type';
 import { normalizeInboxAgentTitle } from '../../utils/inboxAgent';
 import { notShareVisitorMessage } from '../../utils/shareVisitor';
+import { notTrashed } from '../../utils/softDelete';
 
 /** Restores the cursor timestamp inside PostgreSQL so workflow JSON never truncates its precision. */
 const cursorUsers = alias(users, 'nightly_review_cursor_users');
@@ -169,7 +171,15 @@ export class AgentSignalNightlyReviewModel {
         ? this.db
             .selectDistinct({ userId: messages.userId })
             .from(messages)
-            .where(and(gte(messages.createdAt, options.activeSince), isNull(messages.workspaceId)))
+            .leftJoin(topics, and(eq(topics.id, messages.topicId), notTrashed(topics.isDeleted)))
+            .where(
+              and(
+                gte(messages.createdAt, options.activeSince),
+                isNull(messages.workspaceId),
+                notTrashed(messages.isDeleted),
+                or(isNull(messages.topicId), isNotNull(topics.id)),
+              ),
+            )
             .as('nightly_review_active_users')
         : undefined;
 
@@ -235,11 +245,21 @@ export class AgentSignalNightlyReviewModel {
       .from(messages)
       .leftJoin(
         topics,
-        and(eq(topics.id, messages.topicId), eq(topics.userId, userId), isNull(topics.workspaceId)),
+        and(
+          eq(topics.id, messages.topicId),
+          eq(topics.userId, userId),
+          isNull(topics.workspaceId),
+          notTrashed(topics.isDeleted),
+        ),
       )
       .innerJoin(
         agents,
-        and(eq(agents.id, effectiveAgentId), eq(agents.userId, userId), isNull(agents.workspaceId)),
+        and(
+          eq(agents.id, effectiveAgentId),
+          eq(agents.userId, userId),
+          isNull(agents.workspaceId),
+          notTrashed(agents.isDeleted),
+        ),
       )
       .leftJoin(userSettings, eq(userSettings.id, userId))
       .leftJoin(
@@ -254,6 +274,8 @@ export class AgentSignalNightlyReviewModel {
         and(
           eq(messages.userId, userId),
           isNull(messages.workspaceId),
+          notTrashed(messages.isDeleted),
+          or(isNull(messages.topicId), isNotNull(topics.id)),
           // Share-visitor traffic bills to the creator but is not the
           // creator's own activity — keep it out of the nightly digest.
           notShareVisitorMessage(),

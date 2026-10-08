@@ -45,10 +45,10 @@ const InputArea = ({
 }: InputAreaProps) => {
   const { t } = useTranslation('home');
   const { agentId, contextSelectionKey, loading, send } = useSend(mode);
-  // Subscribe to the SWR key so `internal_refreshAgentConfig`'s `mutate(...)`
-  // has a listener after toggleFile / toggleKnowledgeBase — otherwise the
-  // Library submenu doesn't reflect server-side toggles. Pass `agentId`
-  // explicitly so AgentSelect switches refetch too.
+  // Mount the config sync so `internal_refreshAgentConfig`'s revalidation has
+  // a listener after toggleFile / toggleKnowledgeBase — otherwise the Library
+  // submenu doesn't reflect server-side toggles. Pass `agentId` explicitly so
+  // AgentSelect switches refetch too.
   useInitAgentConfig(agentId);
   // Use the "config absent from agentMap" loading shape (same as Memory /
   // Search / History) instead of SWR's `isLoading`, which would flash on

@@ -40,9 +40,16 @@ export class DeprecatedDataImporterRepos {
     this.db = db;
   }
 
-  /** Helper: scope predicate for workspace-aware tables. */
+  /**
+   * Import identity/mapping probes must include trashed rows: clientId unique
+   * indexes still cover them, so hiding them would turn a retry into a
+   * conflicting insert. This repository exposes no ordinary product reads.
+   */
   private workspaceWhere(table: { userId: any; workspaceId: any }) {
-    return buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, table);
+    return buildWorkspaceWhere(
+      { includeTrashed: true, userId: this.userId, workspaceId: this.workspaceId },
+      table,
+    );
   }
 
   importData = async (data: ImporterEntryData) => {

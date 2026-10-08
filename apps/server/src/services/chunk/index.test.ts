@@ -79,7 +79,7 @@ describe('ChunkService', () => {
       },
     });
     mockEmbeddingChunks.mockResolvedValue(undefined);
-    mockFileModelFindById.mockResolvedValue({ id: 'file-1' });
+    mockFileModelFindById.mockResolvedValue({ id: 'file-1', name: 'file-1.pdf' });
     mockFileModelUpdate.mockResolvedValue(undefined);
     mockParseFileToChunks.mockResolvedValue(undefined);
 
@@ -164,6 +164,7 @@ describe('ChunkService', () => {
     it('should create an error task for files larger than the in-memory parser limit', async () => {
       mockFileModelFindById.mockResolvedValue({
         id: 'large-file',
+        name: 'large-file.pdf',
         size: 64 * 1024 * 1024 + 1,
       });
 
@@ -181,6 +182,21 @@ describe('ChunkService', () => {
         ),
         status: AsyncTaskStatus.Error,
       });
+      expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
+    });
+
+    // https://github.com/lobehub/lobehub/issues/19620
+    it('should not create a chunking task for a format no chunking loader can parse', async () => {
+      mockFileModelFindById.mockResolvedValue({
+        id: 'dwg-file',
+        name: 'floor-plan.dwg',
+        size: 1024,
+      });
+
+      await expect(service.asyncParseFileToChunks('dwg-file')).resolves.toBeUndefined();
+
+      expect(mockAsyncTaskModelCreate).not.toHaveBeenCalled();
+      expect(mockFileModelUpdate).not.toHaveBeenCalled();
       expect(mockCreateAsyncCaller).not.toHaveBeenCalled();
     });
 

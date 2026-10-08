@@ -7,7 +7,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as ContextEngineering from '@/server/modules/Mecha/ContextEngineering';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { HookDispatcher } from '@/server/services/agentRuntime/hooks';
 
+import * as ClientToolDispatch from '../dispatchClientTool';
 import { createRuntimeExecutors, type RuntimeExecutorContext } from '../RuntimeExecutors';
 import type { StreamEvent } from '../StreamEventManager';
 import { VISIBLE_OUTPUT_END_PUBLISHED_STEP_INDEX_METADATA_KEY } from '../visibleOutputEnd';
@@ -6021,9 +6023,338 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('call_tool hooks', () => {
+      it.each(['allow', 'deny'] as const)(
+        'applies env-configured %s before executing the tool',
+        async (permissionDecision) => {
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'http://webhook-service/ingress');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-env-secret');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall, afterToolCall');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+          const fetchSpy = vi.spyOn(globalThis, 'fetch').mockImplementation(
+            async () =>
+              new Response(
+                JSON.stringify({
+                  decision: permissionDecision,
+                  ...(permissionDecision === 'deny' && { reason: 'Denied by env hook' }),
+                }),
+              ),
+          );
+          try {
+            const dispatcher = new HookDispatcher();
+            dispatcher.register('op-123', []);
+            const serialized = JSON.stringify(dispatcher.getSerializedHooks('op-123'));
+            const persisted = JSON.parse(serialized);
+            const result = await createRuntimeExecutors({
+              ...ctx,
+              hookDispatcher: new HookDispatcher(),
+            }).call_tool!(createToolInstruction(), createToolState({ host: { hooks: persisted } }));
+            expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(
+              permissionDecision === 'allow' ? 1 : 0,
+            );
+            if (permissionDecision === 'deny') {
+              expect(result.events).toContainEqual(
+                expect.objectContaining({
+                  type: 'tool_result',
+                  result: expect.objectContaining({
+                    content: 'Denied by env hook',
+                    error: 'hook_denied',
+                  }),
+                }),
+              );
+            }
+            expect(
+              fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).hookType),
+            ).toEqual(['beforeToolCall', 'afterToolCall']);
+            expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+          } finally {
+            fetchSpy.mockRestore();
+            vi.unstubAllEnvs();
+          }
+        },
+      );
+
+      it('invokes each local before handler once across observation and mock dispatch', async () => {
+        const dispatcher = new HookDispatcher();
+        const handler = vi.fn();
+        dispatcher.register('op-123', [{ id: 'observe-once', type: 'beforeToolCall', handler }]);
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: dispatcher }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+        expect(handler).toHaveBeenCalledTimes(1);
+        expect(mockToolExecutionService.executeTool).toHaveBeenCalledTimes(1);
+      });
+      it.each([false, true])(
+        'keeps runtime owner identity in shared-session tool hooks (throws: %s)',
+        async (throws) => {
+          const mockDispatcher = {
+            dispatch: vi.fn().mockResolvedValue(undefined),
+            evaluateToolCall: vi.fn().mockResolvedValue({
+              status: 'allow',
+            }),
+            dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+          };
+          if (throws)
+            mockToolExecutionService.executeTool.mockRejectedValue(new Error('Tool failed'));
+          const state = createToolState({
+            principal: {
+              actor: {
+                shareVisitor: {
+                  agentId: 'shared-agent',
+                  shareId: 'share-1',
+                  visitorUserId: 'visitor-1',
+                },
+              },
+            },
+          });
+
+          await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any })
+            .call_tool!(createToolInstruction(), state);
+
+          expect(mockToolExecutionService.executeTool).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ userId: 'user-123' }),
+          );
+          expect(ctx.userId).toBe('user-123');
+          const identity = expect.objectContaining({ userId: 'user-123' });
+          expect(mockDispatcher.evaluateToolCall).toHaveBeenCalledWith(
+            'op-123',
+            identity,
+            undefined,
+            undefined,
+          );
+          expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+            'op-123',
+            identity,
+            undefined,
+          );
+          expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+            'op-123',
+            throws ? 'onToolCallError' : 'afterToolCall',
+            identity,
+            undefined,
+          );
+        },
+      );
+
+      it('should preserve native identity and structured results across tool notifications', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const toolResult = {
+          content: 'device output',
+          deviceExecutionTime: 17,
+          executionTime: 23,
+          state: { files: ['output.txt'], nested: { count: 1 } },
+          success: true,
+        };
+        mockToolExecutionService.executeTool.mockResolvedValue(toolResult);
+        const state = createToolState({
+          binding: { device: { id: 'device-1' } },
+          origin: {
+            agentId: 'child-agent',
+            documentId: 'document-1',
+            groupId: 'group-1',
+            lineage: { isSubAgent: true, parentOperationId: 'parent-operation' },
+            sessionId: 'session-1',
+            sourceMessageId: 'user-message',
+            taskId: 'task-1',
+            threadId: 'thread-1',
+            topicId: 'child-topic',
+            workspaceId: 'workspace-1',
+          },
+          plan: { execution: { deviceId: 'device-1', kind: 'device', target: 'device' } },
+        });
+        const instruction = createToolInstruction();
+        instruction.payload.toolCalling = { ...instruction.payload.toolCalling, source: 'mcp' };
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          instruction,
+          state,
+        );
+
+        const identity = {
+          activeDeviceId: 'device-1',
+          userId: 'user-123',
+          agentId: 'child-agent',
+          apiName: 'search_tweets',
+          args: { query: 'test' },
+          assistantMessageId: 'parent-msg',
+          documentId: 'document-1',
+          executionTarget: 'device',
+          executor: 'server',
+          groupId: 'group-1',
+          identifier: 'twitter',
+          operationId: 'op-123',
+          parentOperationId: 'parent-operation',
+          sessionId: 'session-1',
+          sourceMessageId: 'user-message',
+          taskId: 'task-1',
+          threadId: 'thread-1',
+          toolCallId: 'tc-1',
+          toolSource: 'mcp',
+          topicId: 'child-topic',
+          workspaceId: 'workspace-1',
+        };
+        expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
+          'op-123',
+          expect.objectContaining(identity),
+          undefined,
+        );
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            ...identity,
+            mocked: false,
+            result: toolResult,
+          }),
+          undefined,
+        );
+        const after = mockDispatcher.dispatch.mock.calls.find(
+          ([, type]) => type === 'afterToolCall',
+        )![2];
+        for (const key of ['content', 'success', 'executionTimeMs']) {
+          expect(after).not.toHaveProperty(key);
+        }
+      });
+
+      it('should report structured blocked results as unsuccessful notifications, not exceptions', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const toolResult = {
+          content: 'Tool unavailable in this scope',
+          executionTime: 0,
+          state: { reason: 'tool_not_allowed', type: 'blocked' },
+          success: false,
+        };
+        mockToolExecutionService.executeTool.mockResolvedValue(toolResult);
+
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any }).call_tool!(
+          createToolInstruction(),
+          createToolState(),
+        );
+
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            mocked: false,
+            result: toolResult,
+            toolCallId: 'tc-1',
+          }),
+          undefined,
+        );
+        expect(
+          mockDispatcher.dispatch.mock.calls.some(([, type]) => type === 'onToolCallError'),
+        ).toBe(false);
+        const before = mockDispatcher.dispatchBeforeToolCall.mock.calls[0][1];
+        expect(before.parentOperationId).toBeUndefined();
+        expect(before.rootOperationId).toBeUndefined();
+      });
+
+      it('should correlate repeated tool names in a batch by native call ids', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const tool = createToolInstruction().payload.toolCalling;
+        await createRuntimeExecutors({ ...ctx, hookDispatcher: mockDispatcher as any })
+          .call_tools_batch!(
+          {
+            payload: {
+              parentMessageId: 'batch-assistant',
+              toolsCalling: [tool, { ...tool, arguments: '{"query":"second"}', id: 'tc-2' }],
+            },
+            type: 'call_tools_batch',
+          },
+          createToolState(),
+        );
+
+        const afterEvents = mockDispatcher.dispatch.mock.calls
+          .filter(([, type]) => type === 'afterToolCall')
+          .map(([, , event]) => event);
+        expect(afterEvents).toHaveLength(2);
+        expect(afterEvents).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              args: { query: 'test' },
+              assistantMessageId: 'batch-assistant',
+              toolCallId: 'tc-1',
+            }),
+            expect.objectContaining({
+              args: { query: 'second' },
+              assistantMessageId: 'batch-assistant',
+              toolCallId: 'tc-2',
+            }),
+          ]),
+        );
+      });
+
+      it('should retain client routing and structured client results in notifications', async () => {
+        const mockDispatcher = {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
+          dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
+        };
+        const result = {
+          content: 'client result',
+          executionTime: 11,
+          state: { path: 'client.txt' },
+          success: true,
+        };
+        const dispatchClient = vi
+          .spyOn(ClientToolDispatch, 'dispatchClientTool')
+          .mockResolvedValue(result);
+        const instruction = createToolInstruction();
+        instruction.payload.toolCalling = {
+          ...instruction.payload.toolCalling,
+          executor: 'client',
+          source: 'mcp',
+        };
+
+        await createRuntimeExecutors({
+          ...ctx,
+          hookDispatcher: mockDispatcher as any,
+          streamManager: { ...ctx.streamManager, sendToolExecute: vi.fn() },
+        }).call_tool!(instruction, createToolState());
+
+        expect(dispatchClient).toHaveBeenCalledOnce();
+        expect(mockToolExecutionService.executeTool).not.toHaveBeenCalled();
+        expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
+          'op-123',
+          'afterToolCall',
+          expect.objectContaining({
+            executor: 'client',
+            result,
+            toolCallId: 'tc-1',
+            toolSource: 'mcp',
+          }),
+          undefined,
+        );
+      });
+
       it('should dispatch beforeToolCall and afterToolCall hooks', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
         };
 
@@ -6039,6 +6370,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             callIndex: 1,
             identifier: 'twitter',
           }),
+          undefined,
         );
 
         // afterToolCall dispatched via dispatch()
@@ -6049,7 +6381,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             apiName: 'search_tweets',
             identifier: 'twitter',
             mocked: false,
-            success: true,
+            result: expect.objectContaining({ success: true }),
           }),
           undefined,
         );
@@ -6063,6 +6395,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         const controller = new AbortController();
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockImplementation(async () => {
             controller.abort();
             return null;
@@ -6092,6 +6427,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         // webhook consumer would see `afterToolCall` after `onComplete`.
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
         };
 
@@ -6123,6 +6461,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should skip real execution when beforeToolCall returns mock', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue({
             isMocked: true,
             result: { content: '{"mocked":true}', success: true },
@@ -6141,7 +6482,10 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'afterToolCall',
-          expect.objectContaining({ mocked: true, success: true }),
+          expect.objectContaining({
+            mocked: true,
+            result: expect.objectContaining({ success: true }),
+          }),
           undefined,
         );
 
@@ -6157,6 +6501,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should preserve failed mock results without executing the real tool', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue({
             isMocked: true,
             result: { content: 'fixture error', error: 'fixture error', success: false },
@@ -6175,7 +6522,16 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatch).toHaveBeenCalledWith(
           'op-123',
           'afterToolCall',
-          expect.objectContaining({ mocked: true, success: false }),
+          expect.objectContaining({
+            mocked: true,
+            result: {
+              content: 'fixture error',
+              error: 'fixture error',
+              executionTime: 0,
+              success: false,
+            },
+            toolCallId: 'tc-1',
+          }),
           undefined,
         );
       });
@@ -6185,6 +6541,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
 
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
         };
 
@@ -6198,8 +6557,11 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
           'onToolCallError',
           expect.objectContaining({
             apiName: 'search_tweets',
+            args: { query: 'test' },
             error: 'Connection refused',
             identifier: 'twitter',
+            assistantMessageId: 'parent-msg',
+            toolCallId: 'tc-1',
           }),
           undefined,
         );
@@ -6208,6 +6570,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should derive callIndex from state.usage.tools.byTool', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
         };
 
@@ -6221,6 +6586,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenCalledWith(
           'op-123',
           expect.objectContaining({ callIndex: 1 }),
+          undefined,
         );
 
         // Second call: state reflects 1 prior call → callIndex = 2
@@ -6239,6 +6605,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         expect(mockDispatcher.dispatchBeforeToolCall).toHaveBeenLastCalledWith(
           'op-123',
           expect.objectContaining({ callIndex: 2 }),
+          undefined,
         );
       });
 
@@ -6255,6 +6622,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should dispatch beforeCompact and afterCompact hooks', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
         };
 
@@ -6293,6 +6663,9 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       it('should dispatch beforeHumanIntervention hook', async () => {
         const mockDispatcher = {
           dispatch: vi.fn().mockResolvedValue(undefined),
+          evaluateToolCall: vi.fn().mockResolvedValue({
+            status: 'allow',
+          }),
           dispatchBeforeToolCall: vi.fn().mockResolvedValue(null),
         };
 
@@ -6379,7 +6752,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something',
-              runAsTask: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',
@@ -6440,7 +6812,6 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something useful',
-              runAsTask: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',

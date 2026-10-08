@@ -1,9 +1,9 @@
 'use client';
 
-import { Flexbox, Icon, Image } from '@lobehub/ui';
+import { Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ArrowUp, ListEnd, Pencil, Trash2 } from 'lucide-react';
+import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -15,6 +15,7 @@ import {
   type QueuedFile,
   type QueuedMessage,
   reconstructUploadFilesFromQueue,
+  SEND_NOW_CANCEL_REASON,
 } from '@/store/chat/slices/operation/types';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useFileStore } from '@/store/file';
@@ -27,9 +28,12 @@ const PREVIEW_SIZE = 28;
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
+    container-type: inline-size;
+
     border: 1px solid ${cssVar.colorFillSecondary};
     border-block-end: none;
     border-radius: 12px 12px 0 0;
+
     background: ${cssVar.colorBgElevated};
   `,
   fileChip: css`
@@ -50,6 +54,41 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   fileChipName: css`
     overflow: hidden;
     text-overflow: ellipsis;
+  `,
+  hint: css`
+    display: inline-flex;
+    flex: none;
+    gap: 4px;
+    align-items: center;
+
+    font-size: 12px;
+    color: ${cssVar.colorTextDescription};
+  `,
+  hintGlyph: css`
+    cursor: help;
+
+    display: none;
+
+    padding: 0;
+    border: none;
+    border-radius: 4px;
+
+    color: inherit;
+
+    background: none;
+
+    /* Too narrow to spare a sentence on the send timing: keep the meaning on the
+       glyph's tooltip instead of squeezing the message text. */
+    @container (max-width: 480px) {
+      display: inline-flex;
+    }
+  `,
+  hintText: css`
+    white-space: nowrap;
+
+    @container (max-width: 480px) {
+      display: none;
+    }
   `,
   icon: css`
     flex-shrink: 0;
@@ -73,7 +112,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     }
   `,
   item: css`
-    padding-block: 6px 4px;
+    padding-block: 6px;
     padding-inline: 12px 8px;
   `,
   itemDivider: css`
@@ -81,6 +120,8 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   text: css`
     overflow: hidden;
+
+    min-width: 0;
 
     font-size: 13px;
     line-height: 1.4;
@@ -205,7 +246,7 @@ const QueueTray = memo(() => {
           const runningOpIds =
             operationSelectors.getRunningQueueBlockingOperationIds(context)(chat);
           const cancellationConfirmed = await Promise.all(
-            runningOpIds.map((id) => chat.cancelOperation(id, 'send_now')),
+            runningOpIds.map((id) => chat.cancelOperation(id, SEND_NOW_CANCEL_REASON)),
           );
           if (cancellationConfirmed.some((confirmed) => !confirmed)) {
             throw new Error('Running agent cancellation was not confirmed');
@@ -238,6 +279,12 @@ const QueueTray = memo(() => {
   // "send now" then.
   if (!canUseResource) return null;
 
+  // The queue drains as one take-all and is merged into a single send, so a
+  // multi-item queue has to say "merges" instead of "sends".
+  const hintText = t(
+    queuedMessages.length > 1 ? 'inputQueue.queuedMergeHint' : 'inputQueue.queuedHint',
+  );
+
   return (
     <Flexbox className={styles.container} gap={0}>
       {queuedMessages.map((msg, index) => {
@@ -251,7 +298,13 @@ const QueueTray = memo(() => {
             key={msg.id}
           >
             <Icon className={styles.icon} icon={ListEnd} size={14} />
-            <Flexbox horizontal align={'center'} flex={1} gap={8} style={{ overflow: 'hidden' }}>
+            <Flexbox
+              horizontal
+              align={'center'}
+              flex={'0 1 auto'}
+              gap={8}
+              style={{ minWidth: 0, overflow: 'hidden' }}
+            >
               {previews.length > 0 && (
                 <Flexbox horizontal flex={'none'} gap={4}>
                   {previews.map((file) => (
@@ -260,24 +313,43 @@ const QueueTray = memo(() => {
                 </Flexbox>
               )}
               {msg.content && (
-                <Flexbox className={styles.text} flex={1}>
+                <Flexbox className={styles.text} flex={'0 1 auto'}>
                   {msg.content}
                 </Flexbox>
               )}
             </Flexbox>
+            {/* The send timing is this message's own caption, so it rides the
+                message row right after the content instead of taking a line.
+                Several queued messages are merged into a single send on drain,
+                so the wording changes with the queue size. */}
+            <span className={styles.hint}>
+              {/* Collapsed form. It is display:none while the sentence fits, so
+                  it adds no tab stop there; when it shows it is a real
+                  focusable control carrying the wording as its name. */}
+              <Tooltip title={hintText}>
+                <button aria-label={hintText} className={styles.hintGlyph} type={'button'}>
+                  <Icon icon={Info} size={13} />
+                </button>
+              </Tooltip>
+              <span className={styles.hintText}>{hintText}</span>
+            </span>
+            <div style={{ flex: 1 }} />
             <ActionIcon
+              aria-label={t('inputQueue.edit')}
               icon={Pencil}
               size="small"
               title={t('inputQueue.edit')}
               onClick={() => handleEdit(msg)}
             />
             <ActionIcon
+              aria-label={t('inputQueue.sendNow')}
               icon={ArrowUp}
               size="small"
               title={t('inputQueue.sendNow')}
               onClick={() => handleSendNow(msg)}
             />
             <ActionIcon
+              aria-label={t('inputQueue.delete')}
               icon={Trash2}
               size="small"
               title={t('inputQueue.delete')}

@@ -1,9 +1,12 @@
 import type { RecentItem } from '@lobechat/types';
-import type { SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { recentKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaEntityAdapter,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
@@ -12,43 +15,76 @@ import type { HomeStore } from '@/store/home/store';
 import type { StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { createRecentQueryKey } from './initialState';
-import { recentProjection } from './projection';
-import type { RecentDispatchAction } from './reducer';
-import { recentReducer } from './reducer';
+import { type RecentEntityRef, toRecentEntityRef } from './initialState';
+import { recentListResource } from './projection';
 
 const n = setNamespace('recent');
-const RECENT_PROJECTION_KEY = 'home-recents-projection';
 
-const matchesScopedRecentKey = (key: unknown, root: string, scope: string) =>
-  Array.isArray(key) && key[0] === root && key.at(-1) === scope;
+/** Rows in the "all recents" drawer. */
+export const ALL_RECENTS_LIMIT = 50;
 
 interface RenameRecentParams {
   id: string;
-  scope: string;
   title: string;
   type: RecentItem['type'];
 }
+
+/** Recents mix entity types, so rows are addressed by `${type}:${id}`. */
+const recentEntity: ReplicaEntityAdapter<RecentItem[], RecentItem> = {
+  has: (items, ref) => items.some((item) => toRecentEntityRef(item) === ref),
+  map: (items, ref, fn) => {
+    let changed = false;
+    const next: RecentItem[] = [];
+    for (const item of items) {
+      if (toRecentEntityRef(item) !== ref) {
+        next.push(item);
+        continue;
+      }
+      const mapped = fn(item);
+      if (mapped !== item) changed = true;
+      if (mapped) next.push(mapped);
+    }
+    return changed ? next : items;
+  },
+};
+
+const withTitle = (item: RecentItem, title: string): RecentItem =>
+  // A task rename carries the slug source with it, so the row's link is built
+  // from the name the user just typed rather than the one the server still has.
+  item.type === 'task' ? { ...item, slugTitle: title, title } : { ...item, title };
 
 type Setter = StoreSetter<HomeStore>;
 export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
   new RecentActionImpl(set, get, _api);
 
 export class RecentActionImpl {
-  readonly #get: () => HomeStore;
-  readonly #hydrationPromises = new Map<string, Promise<void>>();
-  readonly #renameQueues = new Map<string, Promise<void>>();
   readonly #set: Setter;
-  #mutationId = 0;
+  /** Server writes per entity run in order; the newest optimistic title stays on top. */
+  readonly #renameQueues = new Map<RecentEntityRef, Promise<unknown>>();
+  readonly #recentList;
+  readonly #recents;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
     this.#set = set;
-    this.#get = get;
+    this.#recentList = createReplicaSlice(recentListResource, {
+      actionPrefix: n('recentList'),
+      entity: recentEntity,
+      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_SIDEBAR_TYPES),
+      get,
+      set,
+      stateKey: 'recentListReplica',
+      view: recordLens<HomeStore, RecentItem[]>('recentListMap'),
+    });
+    this.#recents = linkReplicaEntity<RecentItem>([this.#recentList]);
   }
 
   closeAllRecentsDrawer = (): void => {
     this.#set({ allRecentsDrawerOpen: false }, false, n('closeAllRecentsDrawer'));
+  };
+
+  openAllRecentsDrawer = (): void => {
+    this.#set({ allRecentsDrawerOpen: true }, false, n('openAllRecentsDrawer'));
   };
 
   #persistRecentTitle = async ({ id, title, type }: RenameRecentParams): Promise<void> => {
@@ -68,183 +104,42 @@ export class RecentActionImpl {
     }
   };
 
-  #persistQuery = (scope: string, queryKey: string): void => {
-    const query = this.#get().recentsByScope[scope]?.queries[queryKey];
-    if (!query) return;
-
-    void recentProjection
-      .set({ queryKey, scope }, { data: query.items, updatedAt: query.updatedAt })
-      .catch((error) => console.error('Failed to persist recent projection', error));
+  /** Revalidate every recents query of the active identity. */
+  refreshRecents = async (): Promise<void> => {
+    await this.#recentList.revalidate();
   };
 
-  #persistScopeQueries = (scope: string): void => {
-    const queries = this.#get().recentsByScope[scope]?.queries;
-    if (!queries) return;
-    for (const queryKey of Object.keys(queries)) this.#persistQuery(scope, queryKey);
-  };
-
-  internal_dispatchRecent = (action: RecentDispatchAction): void => {
-    this.#set((state) => recentReducer(state, action), false, n(action.type));
-  };
-
-  internal_replaceRecentQuery = (scope: string, queryKey: string, items: RecentItem[]): void => {
-    if (getCacheScope() !== scope) return;
-
-    this.internal_dispatchRecent({
-      items,
-      queryKey,
-      scope,
-      type: 'replaceQuery',
-      updatedAt: Date.now(),
-    });
-    this.#persistQuery(scope, queryKey);
-  };
-
-  hydrateRecentQuery = async (scope: string, queryKey: string): Promise<void> => {
-    const hydrationKey = `${scope}:${queryKey}`;
-    const existing = this.#hydrationPromises.get(hydrationKey);
-    if (existing) return existing;
-
-    const hydration = (async () => {
-      this.internal_dispatchRecent({ queryKey, scope, type: 'startHydration' });
-
-      try {
-        const projection = await recentProjection.get({ queryKey, scope });
-        if (getCacheScope() !== scope) return;
-
-        if (projection) {
-          this.internal_dispatchRecent({
-            items: projection.data,
-            queryKey,
-            scope,
-            type: 'hydrateQuery',
-            updatedAt: projection.updatedAt,
-          });
-        } else {
-          this.internal_dispatchRecent({ queryKey, scope, type: 'finishHydration' });
-        }
-      } catch (error) {
-        console.error('Failed to hydrate recent projection', error);
-        this.internal_dispatchRecent({ queryKey, scope, type: 'failHydration' });
-      }
-    })();
-
-    this.#hydrationPromises.set(hydrationKey, hydration);
-    try {
-      await hydration;
-    } finally {
-      this.#hydrationPromises.delete(hydrationKey);
-    }
-  };
-
-  openAllRecentsDrawer = (): void => {
-    this.#set({ allRecentsDrawerOpen: true }, false, n('openAllRecentsDrawer'));
-  };
-
-  refreshRecents = async (scope: string): Promise<void> => {
-    await Promise.all([
-      mutate((key: unknown) => matchesScopedRecentKey(key, recentKeys.list.root, scope)),
-      mutate((key: unknown) => matchesScopedRecentKey(key, recentKeys.allDrawer.root, scope)),
-    ]);
-  };
-
+  /**
+   * Show the new title in every loaded recents query right away, write it to
+   * the owning entity, and roll back on failure. Renames of one entity reach
+   * the server in order.
+   */
   renameRecent = async (params: RenameRecentParams): Promise<void> => {
-    const { id, scope, title, type } = params;
-    const mutationId = ++this.#mutationId;
-    const queueKey = `${scope}:${type}:${id}`;
-    this.internal_dispatchRecent({
-      entityType: type,
-      id,
-      mutationId,
-      scope,
-      title,
-      type: 'setOptimisticTitle',
-    });
-
-    const previous = this.#renameQueues.get(queueKey) ?? Promise.resolve();
-    const operation = previous.catch(() => undefined).then(() => this.#persistRecentTitle(params));
-    this.#renameQueues.set(queueKey, operation);
-
+    const ref = toRecentEntityRef(params);
+    const previous = this.#renameQueues.get(ref) ?? Promise.resolve();
+    const operation = this.#recents.optimistic(
+      ref,
+      (item) => withTitle(item, params.title),
+      () => previous.catch(() => undefined).then(() => this.#persistRecentTitle(params)),
+    );
+    this.#renameQueues.set(ref, operation);
     try {
       await operation;
-      this.internal_dispatchRecent({
-        entityType: type,
-        id,
-        mutationId,
-        scope,
-        title,
-        type: 'commitTitle',
-      });
-      this.#persistScopeQueries(scope);
-    } catch (error) {
-      this.internal_dispatchRecent({
-        entityType: type,
-        id,
-        mutationId,
-        scope,
-        type: 'rollbackTitle',
-      });
-      throw error;
     } finally {
-      if (this.#renameQueues.get(queueKey) === operation) this.#renameQueues.delete(queueKey);
+      if (this.#renameQueues.get(ref) === operation) this.#renameQueues.delete(ref);
     }
   };
 
-  useFetchAllRecents = (open: boolean, scope: string): SWRResponse<number> => {
-    const limit = 50;
-    const queryKey = createRecentQueryKey(limit);
-    useClientDataSWR<number>(open ? [RECENT_PROJECTION_KEY, scope, queryKey] : null, async () => {
-      await this.hydrateRecentQuery(scope, queryKey);
-      return Date.now();
-    });
+  /** "All recents" drawer. Read the rows with `homeRecentSelectors.query`. */
+  useFetchAllRecents = (open: boolean): ReplicaSyncResult =>
+    this.#recentList.useSync({ limit: ALL_RECENTS_LIMIT }, { enabled: open });
 
-    return useClientDataSWR<number>(open ? recentKeys.allDrawer(open, scope) : null, async () => {
-      this.internal_dispatchRecent({ queryKey, scope, type: 'startSync' });
-
-      try {
-        const items = await recentService.getAll(limit, RECENT_SIDEBAR_TYPES);
-        this.internal_replaceRecentQuery(scope, queryKey, items);
-        this.internal_dispatchRecent({ queryKey, scope, type: 'finishSync' });
-        return Date.now();
-      } catch (error) {
-        this.internal_dispatchRecent({ error, queryKey, scope, type: 'failSync' });
-        throw error;
-      }
-    });
-  };
-
-  useFetchRecents = (
-    isLogin: boolean | undefined,
-    scope: string,
-    limit: number = 10,
-  ): SWRResponse<number> => {
-    const requestLimit = limit + 1;
-    const queryKey = createRecentQueryKey(requestLimit);
-    useClientDataSWR<number>(
-      isLogin === true ? [RECENT_PROJECTION_KEY, scope, queryKey] : null,
-      async () => {
-        await this.hydrateRecentQuery(scope, queryKey);
-        return Date.now();
-      },
-    );
-
-    return useClientDataSWR<number>(
-      isLogin === true ? recentKeys.list(isLogin, limit, scope) : null,
-      async () => {
-        this.internal_dispatchRecent({ queryKey, scope, type: 'startSync' });
-
-        try {
-          const items = await recentService.getAll(requestLimit, RECENT_SIDEBAR_TYPES);
-          this.internal_replaceRecentQuery(scope, queryKey, items);
-          this.internal_dispatchRecent({ queryKey, scope, type: 'finishSync' });
-          return Date.now();
-        } catch (error) {
-          this.internal_dispatchRecent({ error, queryKey, scope, type: 'failSync' });
-          throw error;
-        }
-      },
-    );
-  };
+  /**
+   * Sidebar recents. Asks for `limit + 1` rows to know whether "view all" is
+   * needed; read them with `homeRecentSelectors.query`.
+   */
+  useFetchRecents = (isLogin: boolean | undefined, limit: number = 10): ReplicaSyncResult =>
+    this.#recentList.useSync({ limit: limit + 1 }, { enabled: isLogin === true });
 }
 
 export type RecentAction = Pick<RecentActionImpl, keyof RecentActionImpl>;

@@ -92,7 +92,7 @@ export const MemoryManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Retrieve memories using one or more search queries plus optional filters for categories, tags, labels, relationships, and time range.',
+        'Retrieve memories using one or more search queries plus optional filters for categories, tags, labels, relationships, and time range. Context memories (ongoing projects, situations, environments) may be left out of default searches depending on the memory effort setting; to be sure to get them, include "context" in layers or set topK.contexts.',
       name: MemoryApiName.searchUserMemory,
       parameters: {
         additionalProperties: false,
@@ -109,7 +109,7 @@ export const MemoryManifest: BuiltinToolManifest = {
           },
           layers: {
             description:
-              'Optional memory layers to search. Must be an array even for one layer, for example ["preference"].',
+              'Optional memory layers to search. Must be an array even for one layer, for example ["preference"]. Include "context" to make sure context memories are searched (default searches may skip them).',
             items: {
               enum: ['activity', 'context', 'identity', 'preference'],
               type: 'string',
@@ -160,7 +160,8 @@ export const MemoryManifest: BuiltinToolManifest = {
           },
           topK: {
             additionalProperties: false,
-            description: 'Optional limits on number of memories to return per layer.',
+            description:
+              'Optional limits on number of memories to return per layer. Limits are capped by the memory effort level; a positive contexts value opts in to context memories.',
             properties: {
               activities: { minimum: 0, type: 'integer' },
               contexts: { minimum: 0, type: 'integer' },

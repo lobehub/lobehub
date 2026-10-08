@@ -2,6 +2,7 @@ import type { ModelUsage } from '@lobechat/types';
 import { AgentRuntimeErrorType } from '@lobechat/types';
 
 import {
+  extractErrorMessage,
   isEmptyModelCompletion,
   isModelRefusalFinishReason,
   ModelEmptyError,
@@ -29,13 +30,23 @@ export const getChatAttemptObservation = (response: Response): ChatAttemptObserv
 const getReasoningContent = (data: OnFinishData | undefined) =>
   data?.thinking ?? data?.reasoning?.content ?? '';
 
-const createStreamChunkError = (error: unknown, provider: string) =>
-  Object.assign(
-    new Error(error instanceof Error ? error.message : String(error), { cause: error }),
+/**
+ * Stream errors are often plain runtime payloads such as
+ * `{ type: 'ProviderContentPolicyViolation', body: { message } }`; `String()` would turn them
+ * into `[object Object]` and lose the provider reason in error logs.
+ */
+const streamErrorMessage = (error: unknown): string =>
+  (error instanceof Error ? error.message : extractErrorMessage(error)) ?? String(error);
+
+const createStreamChunkError = (error: unknown, provider: string) => {
+  const message = streamErrorMessage(error);
+
+  return Object.assign(
+    new Error(message, { cause: error }),
     AgentRuntimeError.chat({
       error: {
         cause: error,
-        message: error instanceof Error ? error.message : String(error),
+        message,
         name: 'StreamChunkError',
       },
       errorType: AgentRuntimeErrorType.StreamChunkError,
@@ -43,6 +54,7 @@ const createStreamChunkError = (error: unknown, provider: string) =>
     }),
     { name: 'StreamChunkError' },
   );
+};
 
 /**
  * Observe the actual response body lifecycle. Terminal callbacks are delayed until

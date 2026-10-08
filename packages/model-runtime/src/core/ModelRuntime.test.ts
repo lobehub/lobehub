@@ -560,7 +560,12 @@ describe('ModelRuntime', () => {
 
   describe('hooks', () => {
     const createMockRuntime = (hooks?: ModelRuntimeHooks) => {
-      const mockRuntimeAI = { chat: vi.fn(), embeddings: vi.fn(), generateObject: vi.fn() } as any;
+      const mockRuntimeAI = {
+        chat: vi.fn(),
+        embeddings: vi.fn(),
+        generateObject: vi.fn(),
+        transcribe: vi.fn(),
+      } as any;
       return { runtime: new ModelRuntime(mockRuntimeAI, hooks), mockRuntimeAI };
     };
 
@@ -870,6 +875,28 @@ describe('ModelRuntime', () => {
         expect(data.error?.message).toBe('invalid key');
       });
 
+      it('onGenerateObjectComplete keeps the provider body when the payload has no message', async () => {
+        const onGenerateObjectComplete = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
+        // Production shape of a refined upstream rejection: the body is the only description,
+        // and it is the part that names which field the provider refused.
+        const cause = {
+          endpoint: 'https://api.example.com',
+          error: {
+            error: { code: 'invalid_value', param: 'input[1].content[0].type' },
+            status: 400,
+          },
+          errorType: 'UpstreamHttpError',
+          provider: 'azure',
+        };
+        mockRuntimeAI.generateObject.mockRejectedValue(cause);
+
+        await expect(runtime.generateObject(genObjPayload)).rejects.toBe(cause);
+        const [data] = onGenerateObjectComplete.mock.calls[0];
+        expect(data.error?.code).toBe('UpstreamHttpError');
+        expect(data.error?.message).toContain('input[1].content[0].type');
+      });
+
       it('onGenerateObjectComplete falls back to error.name for AI SDK errors', async () => {
         const onGenerateObjectComplete = vi.fn();
         const { runtime, mockRuntimeAI } = createMockRuntime({ onGenerateObjectComplete });
@@ -912,6 +939,68 @@ describe('ModelRuntime', () => {
         expect(onEmbeddingsError).toHaveBeenCalledWith(budgetError, {
           options: undefined,
           payload: embeddingsPayload,
+        });
+      });
+    });
+
+    describe('transcribe hooks', () => {
+      const transcribePayload = {
+        file: new Blob([new Uint8Array([1, 2, 3])]),
+        model: 'gpt-4o-transcribe',
+      };
+
+      it('passes provider usage to onTranscribeFinal after beforeTranscribe', async () => {
+        const usage = { cost: 0.0004, inputAudioTokens: 59, outputTextTokens: 21 };
+        const beforeTranscribe = vi.fn();
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          beforeTranscribe,
+          onTranscribeFinal,
+        });
+        mockRuntimeAI.transcribe.mockImplementation(async (_payload: any, options: any) => {
+          await options.onUsage(usage);
+          return { text: 'hello' };
+        });
+
+        const options = { user: 'u1' };
+        const result = await runtime.transcribe(transcribePayload, options);
+
+        expect(result).toEqual({ text: 'hello' });
+        expect(beforeTranscribe).toHaveBeenCalledWith(transcribePayload, options);
+        expect(onTranscribeFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), usage },
+          { options, payload: transcribePayload },
+        );
+      });
+
+      it('still fires onTranscribeFinal without usage so reservations can be released', async () => {
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({ onTranscribeFinal });
+        mockRuntimeAI.transcribe.mockResolvedValue({ text: 'hello' });
+
+        await runtime.transcribe(transcribePayload);
+
+        expect(onTranscribeFinal).toHaveBeenCalledWith(
+          { latencyMs: expect.any(Number), usage: undefined },
+          { options: undefined, payload: transcribePayload },
+        );
+      });
+
+      it('calls onTranscribeError and re-throws when the provider fails', async () => {
+        const providerError = { errorType: 'ProviderBizError', error: { message: 'boom' } };
+        const onTranscribeError = vi.fn();
+        const onTranscribeFinal = vi.fn();
+        const { runtime, mockRuntimeAI } = createMockRuntime({
+          onTranscribeError,
+          onTranscribeFinal,
+        });
+        mockRuntimeAI.transcribe.mockRejectedValue(providerError);
+
+        await expect(runtime.transcribe(transcribePayload)).rejects.toBe(providerError);
+        expect(onTranscribeFinal).not.toHaveBeenCalled();
+        expect(onTranscribeError).toHaveBeenCalledWith(providerError, {
+          options: undefined,
+          payload: transcribePayload,
         });
       });
     });

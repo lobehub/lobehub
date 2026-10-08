@@ -9,6 +9,7 @@ import { documentService } from '@/services/document';
 import type {
   AcceptanceListFilter,
   AcceptanceListPage,
+  AcceptanceListQuery,
   VerifyReportSummaryPage,
 } from '@/services/verify';
 import { verifyService } from '@/services/verify';
@@ -96,17 +97,20 @@ export const useAcceptanceBySubject = (
  */
 export const useAcceptanceList = (
   enabled: boolean,
-  options?: {
-    filter?: 'active' | 'all' | 'completed';
+  options?: AcceptanceListQuery & {
     limit?: number;
-    projectId?: string;
     q?: string;
     revalidateOnMount?: boolean;
   },
 ) =>
   useClientDataSWR(
     enabled
-      ? verifyKeys.acceptances(options?.limit, options?.q, options?.filter, options?.projectId)
+      ? verifyKeys.acceptances(options?.limit, options?.q, {
+          filter: options?.filter,
+          projectId: options?.projectId,
+          scope: options?.scope,
+          source: options?.source,
+        })
       : null,
     () =>
       verifyService.listAcceptances({
@@ -114,6 +118,8 @@ export const useAcceptanceList = (
         limit: options?.limit,
         projectId: options?.projectId,
         q: options?.q,
+        scope: options?.scope,
+        source: options?.source,
       }),
     {
       ...VERIFY_REPORT_SWR_CONFIG,
@@ -140,9 +146,10 @@ export const useAcceptancePurgePreview = (acceptanceId: string | null) =>
  */
 export const useAcceptanceListInfinite = (
   filter: AcceptanceListFilter | null,
-  projectId?: string,
+  query: Omit<AcceptanceListQuery, 'filter'> = {},
 ) => {
   const workspaceId = useActiveWorkspaceId();
+  const { projectId, scope, source } = query;
 
   const getKey = useCallback(
     (_index: number, previous: AcceptanceListPage | null) => {
@@ -150,29 +157,32 @@ export const useAcceptanceListInfinite = (
       if (!filter) return null;
       return verifyKeys.acceptancePage(
         workspaceId ?? undefined,
-        filter,
-        projectId,
+        { filter, projectId, scope, source },
         previous?.nextCursor ?? undefined,
       );
     },
-    [filter, projectId, workspaceId],
+    [filter, projectId, scope, source, workspaceId],
   );
 
   const { data, error, isLoading, mutate, setSize, size } = useSWRInfinite(
     getKey,
-    ([, , , scopedProjectId, cursor]: readonly [string, string, string, string, string]) =>
+    // Read the narrowing from the closure, not the key: the key spells the
+    // unfiled project as a sentinel string, the server wants `null`.
+    (key: readonly string[]) =>
       verifyService.listAcceptancePage({
-        cursor: cursor || undefined,
+        cursor: key.at(-1) || undefined,
         filter: filter ?? undefined,
         limit: ACCEPTANCE_PAGE_SIZE,
-        projectId: scopedProjectId || undefined,
+        projectId,
+        scope,
+        source,
       }),
     { ...VERIFY_REPORT_SWR_CONFIG, revalidateFirstPage: false },
   );
 
   useEffect(() => {
     setSize(1);
-  }, [filter, projectId, workspaceId, setSize]);
+  }, [filter, projectId, scope, source, workspaceId, setSize]);
 
   const loadMore = useCallback(() => {
     void setSize((s) => s + 1);

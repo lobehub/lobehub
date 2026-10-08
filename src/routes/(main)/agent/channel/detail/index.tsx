@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui';
 import { Alert, Button, confirmModal, toast } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import { ExternalLink } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -51,6 +51,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 const omitUndefinedValues = <T extends Record<string, unknown>>(record: T) =>
   Object.fromEntries(Object.entries(record).filter(([, value]) => value !== undefined)) as T;
 
+const getFormValues = (
+  schema: SerializedPlatformDefinition['schema'],
+  config?: CurrentConfig,
+): ChannelFormValues => {
+  const values = config ? getChannelFormValues(config) : { credentials: {}, settings: {} };
+  return {
+    ...values,
+    settings: mergeSettingsWithDefaults(schema, omitUndefinedValues(values.settings)) as Record<
+      string,
+      {} | undefined
+    >,
+  };
+};
+
 export interface CurrentConfig {
   applicationId: string;
   credentials: Record<string, string>;
@@ -87,7 +101,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const { t } = useTranslation('agent');
     const navigate = useWorkspaceAwareNavigate();
 
-    const [form] = Form.useForm<ChannelFormValues>();
+    const [isDirty, setIsDirty] = useState(false);
+    const form = useForm<ChannelFormValues>({
+      initialValues: getFormValues(platformDef.schema, currentConfig),
+      onValuesChange: () => setIsDirty(true),
+    });
     const { allowed: canEdit } = usePermission('edit_own_content');
     const activeWorkspaceId = useActiveWorkspaceId();
     const readOnly = disabled || !canEdit;
@@ -112,7 +130,6 @@ const PlatformDetail = memo<PlatformDetailProps>(
     const [connectResult, setConnectResult] = useState<TestResult>();
     const [testing, setTesting] = useState(false);
     const [testResult, setTestResult] = useState<TestResult>();
-    const [isDirty, setIsDirty] = useState(false);
     const connectPollingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Platform-specific extras (e.g. iMessage's BlueBubbles bridge) register a
@@ -229,20 +246,17 @@ const PlatformDetail = memo<PlatformDetailProps>(
     // runtimeStatus — otherwise background status refreshes would wipe
     // in-progress form edits and cancel the connect-status polling loop.
     useEffect(() => {
-      form.resetFields();
       setSaveResult(undefined);
       setConnectResult(undefined);
       setTestResult(undefined);
       stopConnectPolling();
-    }, [platformDef.id, form, stopConnectPolling]);
+    }, [platformDef.id, stopConnectPolling]);
 
     // Sync form with saved config
     useEffect(() => {
-      if (currentConfig) {
-        form.setFieldsValue(getChannelFormValues(currentConfig));
-      }
+      form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
-    }, [currentConfig, form]);
+    }, [currentConfig, form, platformDef.schema]);
 
     useEffect(() => {
       if (!currentConfig?.enabled) {
@@ -268,8 +282,9 @@ const PlatformDetail = memo<PlatformDetailProps>(
       if (writeDisabled) return;
 
       try {
-        await form.validateFields();
-        const values = form.getFieldsValue(true) as ChannelFormValues;
+        const { valid } = await form.validate();
+        if (!valid) return;
+        const values = form.getValues();
 
         setSaving(true);
         setSaveResult(undefined);
@@ -280,7 +295,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
           applicationId: formAppId,
           credentials: rawCredentials = {},
           settings: rawSettings = {},
-        } = values as ChannelFormValues;
+        } = values;
 
         // Strip undefined values from credentials (optional fields left empty by antd form)
         const credentials = Object.fromEntries(
@@ -327,7 +342,6 @@ const PlatformDetail = memo<PlatformDetailProps>(
         // Auto-connect bot after save
         await connectCurrentBot(applicationId);
       } catch (e: any) {
-        if (e?.errorFields) return;
         console.error(e);
         setSaveResult({ errorDetail: e?.message || String(e), type: 'error' });
         setSaving(false);
@@ -356,7 +370,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
           const { applicationId, credentials } = params;
           const settings = mergeSettingsWithDefaults(
             platformDef.schema,
-            omitUndefinedValues(form.getFieldValue('settings') || {}),
+            omitUndefinedValues(form.getValue('settings') || {}),
           );
 
           if (currentConfig) {
@@ -411,14 +425,14 @@ const PlatformDetail = memo<PlatformDetailProps>(
           try {
             await deleteBotProvider(currentConfig.id, agentId);
             toast.success(t('channel.removed'));
-            form.resetFields();
+            form.reset(getFormValues(platformDef.schema));
           } catch {
             toast.error(t('channel.removeFailed'));
           }
         },
-        title: t('channel.deleteConfirm'),
+        title: t('channel.removeChannel'),
       });
-    }, [readOnly, currentConfig, agentId, deleteBotProvider, t, form]);
+    }, [readOnly, currentConfig, agentId, deleteBotProvider, t, form, platformDef.schema]);
 
     const handleTestConnection = useCallback(async () => {
       if (writeDisabled) return;
@@ -452,12 +466,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
     }, [writeDisabled, currentConfig, platformDef.id, testConnection, t]);
 
     const handleDiscard = useCallback(() => {
-      form.resetFields();
-      if (currentConfig) form.setFieldsValue(getChannelFormValues(currentConfig));
+      form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
       setSaveResult(undefined);
       setTestResult(undefined);
-    }, [currentConfig, form]);
+    }, [currentConfig, form, platformDef.schema]);
 
     const handleFormValuesChange = useCallback(() => setIsDirty(true), []);
 

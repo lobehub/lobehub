@@ -4,10 +4,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { canManageAcceptance, filterManageableAcceptances } from './acceptanceWriteScope';
 
 const getMember = vi.hoisted(() => vi.fn());
+const getRolesInWorkspaces = vi.hoisted(() => vi.fn());
 
 vi.mock('@/database/models/workspaceMember', () => ({
   WorkspaceMemberModel: class {
     getMember = getMember;
+    getRolesInWorkspaces = getRolesInWorkspaces;
   },
 }));
 
@@ -17,6 +19,7 @@ const row = (userId: string, workspaceId: string | null) =>
 
 beforeEach(() => {
   getMember.mockReset();
+  getRolesInWorkspaces.mockReset();
 });
 
 describe('canManageAcceptance', () => {
@@ -71,8 +74,11 @@ describe('canManageAcceptance', () => {
 
 describe('filterManageableAcceptances', () => {
   it('applies the same rule as the single-row check', async () => {
-    getMember.mockImplementation(async (workspaceId: string) =>
-      workspaceId === 'ws_owned' ? { role: 'owner' } : { role: 'member' },
+    getRolesInWorkspaces.mockResolvedValue(
+      new Map([
+        ['ws_owned', 'owner'],
+        ['ws_member', 'member'],
+      ]),
     );
 
     const rows = [
@@ -87,8 +93,13 @@ describe('filterManageableAcceptances', () => {
     ).resolves.toEqual([row('me', null), row('me', 'ws_member'), row('teammate', 'ws_owned')]);
   });
 
-  it('looks membership up once per distinct workspace, not once per row', async () => {
-    getMember.mockResolvedValue({ role: 'owner' });
+  it('reads roles for every distinct foreign workspace in one query', async () => {
+    getRolesInWorkspaces.mockResolvedValue(
+      new Map([
+        ['ws_a', 'owner'],
+        ['ws_b', 'owner'],
+      ]),
+    );
 
     const rows = [
       row('teammate', 'ws_a'),
@@ -102,13 +113,15 @@ describe('filterManageableAcceptances', () => {
     await expect(
       filterManageableAcceptances({ serverDB: db, userId: 'me' }, rows),
     ).resolves.toHaveLength(5);
-    expect(getMember).toHaveBeenCalledTimes(2);
+    expect(getRolesInWorkspaces).toHaveBeenCalledOnce();
+    expect(getRolesInWorkspaces).toHaveBeenCalledWith(['ws_a', 'ws_b'], 'me');
+    expect(getMember).not.toHaveBeenCalled();
   });
 
   it('returns nothing for an anonymous caller', async () => {
     await expect(filterManageableAcceptances({ serverDB: db }, [row('me', null)])).resolves.toEqual(
       [],
     );
-    expect(getMember).not.toHaveBeenCalled();
+    expect(getRolesInWorkspaces).not.toHaveBeenCalled();
   });
 });

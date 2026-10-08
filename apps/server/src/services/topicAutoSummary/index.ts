@@ -6,6 +6,7 @@ import {
   TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
 } from '@lobechat/prompts';
 import type { SystemAgentItem, UserSystemAgentConfig } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import debug from 'debug';
 import { and, desc, eq } from 'drizzle-orm';
 
@@ -13,6 +14,7 @@ import { topicSummaryEligibleMessage, TopicSummaryModel } from '@/database/model
 import { UserModel } from '@/database/models/user';
 import { messages, topics } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
+import { notTrashed } from '@/database/utils/softDelete';
 import { AiGenerationService } from '@/server/services/aiGeneration';
 import { resolveSystemAgentModelConfig } from '@/server/services/systemAgent/modelConfig';
 
@@ -56,13 +58,20 @@ export class TopicAutoSummaryService {
     const [topic] = await this.db
       .select({ historySummary: topics.historySummary, senderId: topics.senderId })
       .from(topics)
-      .where(and(eq(topics.id, topicId), topicOwnership))
+      .where(and(eq(topics.id, topicId), topicOwnership, notTrashed(topics.isDeleted)))
       .limit(1);
+    // The job may have been queued before the topic was moved to trash. Stop
+    // before loading child messages or resolving a billable model when the
+    // live-topic fence no longer finds it.
+    if (!topic) {
+      log('skipping missing or trashed topic %s', topicId);
+      return { reason: 'stale', summarized: false };
+    }
     // Share-visitor topics are creator-billed only through the share spend
     // gate. Reject them defensively before any LLM call — the dispatch query
     // and TopicSummaryModel.updateSummaryIfCurrent both filter them out, this
     // guard covers replays / direct callers that skip the dispatch path.
-    if (topic?.senderId) {
+    if (topic.senderId) {
       log(
         'skipping share-visitor topic %s: visitor turns are outside the auto-summary scope',
         topicId,
@@ -109,6 +118,7 @@ export class TopicAutoSummaryService {
         schema: TOPIC_AUTO_SUMMARY_JSON_SCHEMA,
       },
       {
+        metadata: { trigger: RequestTrigger.TopicSummary },
         tracing: {
           promptVersion: TOPIC_AUTO_SUMMARY_PROMPT_VERSION,
           scenario: TRACING_SCENARIOS.TopicAutoSummary,

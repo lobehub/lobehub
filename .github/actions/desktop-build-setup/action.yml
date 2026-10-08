@@ -94,6 +94,11 @@ runs:
         }
         NODE
 
+        node "$GITHUB_ACTION_PATH/../../scripts/mergeAllowBuilds.mjs" \
+          "$cloud_root/pnpm-workspace.yaml" \
+          "$GITHUB_WORKSPACE/pnpm-workspace.yaml" \
+          "$GITHUB_WORKSPACE/apps/desktop/pnpm-workspace.yaml"
+
         echo "CLOUD_DESKTOP=1" >> "$GITHUB_ENV"
         echo "✅ Cloud repository $resolved_cloud_ref overlaid at $cloud_root"
 

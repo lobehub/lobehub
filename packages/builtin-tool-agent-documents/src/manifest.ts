@@ -1,7 +1,12 @@
 import type { BuiltinToolManifest } from '@lobechat/types';
 
 import { systemPrompt } from './systemRole';
-import { AgentDocumentsApiName, AgentDocumentsIdentifier } from './types';
+import {
+  AgentDocumentsApiName,
+  AgentDocumentsIdentifier,
+  LIST_DOCUMENTS_DEFAULT_LIMIT,
+  LIST_DOCUMENTS_MAX_LIMIT,
+} from './types';
 
 const AGENT_DOCUMENT_ID_DESCRIPTION =
   'Target agent document ID. Use the "id" field returned by listDocuments, not "documentId".';
@@ -15,7 +20,8 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'Document content in markdown or plain text.',
+            description:
+              'Document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```); outside code, Markdown syntax such as `\\`, `__` or `*` is interpreted.',
             type: 'string',
           },
           hintIsSkill: {
@@ -51,7 +57,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs.',
+        'Read an existing agent document by ID. Prefer XML format before node-level edits because XML includes stable node IDs. Long documents are returned one window at a time; a partial read ends with the offset to continue from.',
       name: AgentDocumentsApiName.readDocument,
       parameters: {
         properties: {
@@ -66,6 +72,16 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
             description: AGENT_DOCUMENT_ID_DESCRIPTION,
             type: 'string',
           },
+          limit: {
+            description:
+              'Maximum number of lines to return. Omit to read as much as fits in one response.',
+            type: 'integer',
+          },
+          offset: {
+            description:
+              '1-based line to start reading from. Use the offset given at the end of a partial read to continue.',
+            type: 'integer',
+          },
         },
         required: ['id'],
         type: 'object',
@@ -78,7 +94,8 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       parameters: {
         properties: {
           content: {
-            description: 'New full document content.',
+            description:
+              'New full document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```).',
             type: 'string',
           },
           id: {
@@ -230,6 +247,15 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
       name: AgentDocumentsApiName.listDocuments,
       parameters: {
         properties: {
+          limit: {
+            description: `Maximum number of documents to return (default ${LIST_DOCUMENTS_DEFAULT_LIMIT}, max ${LIST_DOCUMENTS_MAX_LIMIT}).`,
+            type: 'number',
+          },
+          offset: {
+            description:
+              'Number of documents to skip. Use the offset given at the end of a truncated listing to fetch the next page.',
+            type: 'number',
+          },
           parentId: {
             description:
               'Restrict the listing to the direct children of this folder. Pass the folder id shown on a collapsed 📁 row in the agent_documents_index to expand that folder.',
@@ -244,7 +270,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
           },
           sourceType: {
             default: 'all',
-            description: `Filter by document source within this agent-document system (unrelated to the user's resource library uploads). "file" = documents authored/edited directly as agent documents; "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.`,
+            description: `Filter by document source within this agent-document system (unrelated to the user's resource library uploads). "file" = every non-web agent document (authored or edited as agent documents, plus uploaded originals); "web" = crawled from external URLs; "all" returns both. Web-crawled documents are hidden from the default agent_documents_index — pass sourceType="web" here to see them.`,
             enum: ['all', 'file', 'web'],
             type: 'string',
           },

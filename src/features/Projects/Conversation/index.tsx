@@ -1,13 +1,12 @@
 'use client';
 
 import { Center, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Spin, Text } from '@lobehub/ui/base-ui';
 import { memo, useCallback, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import NavHeader from '@/features/NavHeader';
 import { useInitAgentConfig } from '@/hooks/useInitAgentConfig';
 import ChatConversation from '@/routes/(main)/agent/features/Conversation';
@@ -56,13 +55,13 @@ const ProjectConversation = memo(() => {
     [projectSlug],
   );
 
-  if (detailSWR.error) {
-    return <AsyncError error={detailSWR.error} variant="page" onRetry={detailSWR.mutate} />;
+  if (detailSWR.error && !detail) {
+    return <AsyncError error={detailSWR.error} variant="page" onRetry={detailSWR.revalidate} />;
   }
-  if (detailSWR.isLoading || !coordinatorAgentId) {
+  if (!detail || !coordinatorAgentId) {
     return (
       <Center height="100%" width="100%">
-        <NeuralNetworkLoading />
+        <Spin size="small" />
       </Center>
     );
   }

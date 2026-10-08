@@ -13,7 +13,7 @@ import type {
   BrowserGatewayToolResultParams,
   BrowserToolCallResult,
 } from '@lobechat/electron-client-ipc';
-import type { WebContents } from 'electron';
+import type { NativeImage, WebContents } from 'electron';
 
 import {
   OVERLAY_REMOVE_SCRIPT,
@@ -38,23 +38,94 @@ const READ_PAGE_MAX_CHARS = 12_000;
 // renderer executor generous headroom before giving up.
 const GATEWAY_CALL_TIMEOUT_MS = 60_000;
 
+/**
+ * A guest that was just shown or just navigated has no compositor frame yet, and
+ * Chromium rejects the copy with `UnknownVizError` until one is drawn. Retry a
+ * few frames; past that the surface is genuinely unavailable.
+ */
+const CAPTURE_RETRY_DELAYS_MS = [100, 250, 500];
+/** `capturePage` never settles for a guest Chromium is not drawing at all. */
+const CAPTURE_TIMEOUT_MS = 15_000;
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const captureOnce = (guest: WebContents) =>
+  new Promise<NativeImage>((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`capturePage did not settle within ${CAPTURE_TIMEOUT_MS}ms`)),
+      CAPTURE_TIMEOUT_MS,
+    );
+    guest.capturePage().then(
+      (image) => {
+        clearTimeout(timer);
+        resolve(image);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+
+export const captureGuest = async (guest: WebContents): Promise<NativeImage> => {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      const image = await captureOnce(guest);
+      if (!image.isEmpty()) return image;
+      if (attempt >= CAPTURE_RETRY_DELAYS_MS.length) {
+        throw new Error('The page has not been drawn yet (empty capture)');
+      }
+    } catch (error) {
+      const retryable = (error as Error).message === 'UnknownVizError';
+      if (!retryable || attempt >= CAPTURE_RETRY_DELAYS_MS.length) {
+        throw new Error(
+          `Screenshot failed: the browser page could not be captured (${(error as Error).message}). ` +
+            'snapshot/readPage still work on this page; retrying the screenshot right away will not help.',
+          { cause: error },
+        );
+      }
+    }
+    await sleep(CAPTURE_RETRY_DELAYS_MS[attempt]);
+  }
+};
+
+/**
+ * `WebContents.executeJavaScript` defers the script until the main frame stops
+ * loading, so on a page that never finishes (a pending image, long-poll, dev
+ * proxy) every snapshot/readPage/click hung until the caller timed out. The
+ * main frame's own `executeJavaScript` runs against the current document now.
+ */
+const evaluate = (guest: WebContents, code: string): Promise<any> =>
+  guest.mainFrame.executeJavaScript(code);
 
 /**
  * Runs inside the guest page. Builds a compact interactive-element snapshot and
  * caches the elements on `window.__lobeBrowserRefs` so later actions can
  * resolve `ref` ids without re-querying.
  */
-const SNAPSHOT_SCRIPT = `(() => {
+export const SNAPSHOT_SCRIPT = `(() => {
   const MAX = 250;
   const refs = {};
   let counter = 0;
   const lines = [];
+  // Closed modals are commonly kept in the DOM under a wrapper faded to
+  // opacity 0, or marked aria-hidden / inert. Their own box still has a size,
+  // so checking only the element listed every closed dialog as if it were open.
+  // The element's own opacity is not checked: styled checkboxes and file
+  // inputs are often a transparent native control over a visible label.
+  const hiddenByAncestor = (el) => {
+    for (let node = el; node && node !== document.documentElement; node = node.parentElement) {
+      if (node.getAttribute('aria-hidden') === 'true' || node.hasAttribute('inert')) return true;
+      if (node !== el && getComputedStyle(node).opacity === '0') return true;
+    }
+    return false;
+  };
   const isVisible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return false;
     const s = getComputedStyle(el);
-    return s.visibility !== 'hidden' && s.display !== 'none';
+    if (s.visibility === 'hidden' || s.display === 'none') return false;
+    return !hiddenByAncestor(el);
   };
   const tagRoles = { A: 'link', BUTTON: 'button', H1: 'heading', H2: 'heading', H3: 'heading', SELECT: 'combobox', SUMMARY: 'button', TEXTAREA: 'textbox' };
   const roleOf = (el) => {
@@ -114,11 +185,31 @@ const resolveRefScript = (ref: string) => `((ref) => {
   return JSON.stringify({ x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2) });
 })(${JSON.stringify(ref)})`;
 
-const fillScript = (ref: string, text: string) => `((ref, text) => {
+export const fillScript = (ref: string, text: string) => `((ref, text) => {
   const el = window.__lobeBrowserRefs && window.__lobeBrowserRefs[ref];
   if (!el || !el.isConnected) return JSON.stringify({ error: 'ref not found — take a new snapshot first' });
   el.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'center' });
   el.focus();
+  // A native <select> has no text to type into, and calling the input value
+  // setter on it throws. Pick the option by value, then by visible label.
+  if (el.tagName === 'SELECT') {
+    const options = Array.from(el.options);
+    // The rendered label is the non-empty label attribute, else the text.
+    const shown = (option) => (option.getAttribute('label') || option.text).trim();
+    const label = (option) => shown(option).replaceAll(/\\s+/g, ' ').toLowerCase();
+    const wanted = String(text).trim().replaceAll(/\\s+/g, ' ').toLowerCase();
+    const option = options.find((o) => o.value === text) || options.find((o) => label(o) === wanted);
+    if (!option) {
+      const names = options.map(shown).slice(0, 30).join(', ');
+      return JSON.stringify({ error: 'no option matches "' + text + '"; options: ' + names });
+    }
+    // Assign by index: option values need not be unique (an empty placeholder
+    // and an empty "None"), and el.value would pick the first match.
+    el.selectedIndex = options.indexOf(option);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+    return JSON.stringify({ ok: true });
+  }
   if (el.isContentEditable) {
     el.textContent = text;
     el.dispatchEvent(new InputEvent('input', { bubbles: true }));
@@ -222,7 +313,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async snapshot(params: BrowserControlParams): Promise<BrowserControlSnapshotResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      const raw = await guest.executeJavaScript(SNAPSHOT_SCRIPT);
+      const raw = await evaluate(guest, SNAPSHOT_SCRIPT);
       const parsed = JSON.parse(raw);
       return { success: true, ...parsed };
     });
@@ -234,7 +325,7 @@ export default class BrowserControlCtr extends ControllerModule {
       let { x, y } = params;
 
       if (params.ref) {
-        const raw = await guest.executeJavaScript(resolveRefScript(params.ref));
+        const raw = await evaluate(guest, resolveRefScript(params.ref));
         const resolved = JSON.parse(raw);
         if (resolved.error) return { error: resolved.error, success: false };
         x = resolved.x;
@@ -264,7 +355,7 @@ export default class BrowserControlCtr extends ControllerModule {
   async fill(params: BrowserControlFillParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
-      const raw = await guest.executeJavaScript(fillScript(params.ref, params.text));
+      const raw = await evaluate(guest, fillScript(params.ref, params.text));
       const result = JSON.parse(raw);
       if (result.error) return { error: result.error, success: false };
 
@@ -290,7 +381,8 @@ export default class BrowserControlCtr extends ControllerModule {
   async scroll(params: BrowserControlScrollParams): Promise<BrowserControlResult> {
     return this.withGuest(params.sessionId, async (guest) => {
       this.markControlling(params.sessionId, guest);
-      await guest.executeJavaScript(
+      await evaluate(
+        guest,
         `window.scrollBy({ behavior: 'smooth', left: ${Number(params.dx) || 0}, top: ${Number(params.dy) || 0} })`,
       );
       await sleep(350);
@@ -303,9 +395,9 @@ export default class BrowserControlCtr extends ControllerModule {
     return this.withGuest(params.sessionId, async (guest) => {
       // Strip the agent cursor/chip first — otherwise the model sees its own
       // overlay in the frame it just asked for.
-      await guest.executeJavaScript(OVERLAY_REMOVE_SCRIPT).catch(() => {});
+      await evaluate(guest, OVERLAY_REMOVE_SCRIPT).catch(() => {});
 
-      let image = await guest.capturePage();
+      let image = await captureGuest(guest);
       const size = image.getSize();
       if (size.width > SCREENSHOT_MAX_WIDTH) image = image.resize({ width: SCREENSHOT_MAX_WIDTH });
       const resized = image.getSize();
@@ -317,7 +409,7 @@ export default class BrowserControlCtr extends ControllerModule {
   @IpcMethod()
   async readPage(params: BrowserControlParams): Promise<BrowserControlReadPageResult> {
     return this.withGuest(params.sessionId, async (guest) => {
-      const raw = await guest.executeJavaScript(READ_PAGE_SCRIPT);
+      const raw = await evaluate(guest, READ_PAGE_SCRIPT);
       return { success: true, ...JSON.parse(raw) };
     });
   }
@@ -334,7 +426,7 @@ export default class BrowserControlCtr extends ControllerModule {
 
       while (Date.now() < deadline) {
         if (guest.isDestroyed()) return { error: 'Browser page was closed', success: false };
-        const found = await guest.executeJavaScript(containsTextScript(params.text));
+        const found = await evaluate(guest, containsTextScript(params.text));
         if (found) return { success: true };
         await sleep(250);
       }
@@ -378,7 +470,7 @@ export default class BrowserControlCtr extends ControllerModule {
    * The overlay is injected into the guest so it follows page scrolling and zoom.
    */
   private inject(guest: WebContents, script: string) {
-    guest.executeJavaScript(script).catch((error: Error) => {
+    evaluate(guest, script).catch((error: Error) => {
       logger.debug(`Agent overlay injection failed: ${error.message}`);
     });
   }

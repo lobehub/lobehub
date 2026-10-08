@@ -1,5 +1,5 @@
 import { toast } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { useForm } from '@lobehub/ui/base-ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -18,7 +18,6 @@ interface UseResetPasswordParams {
 
 export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPasswordParams) => {
   const { t } = useTranslation('auth');
-  const [form] = Form.useForm<ResetPasswordFormValues>();
   const [loading, setLoading] = useState(false);
 
   const handleResetPassword = async (values: ResetPasswordFormValues) => {
@@ -45,9 +44,13 @@ export const useResetPassword = ({ email, token, onSuccessRedirect }: UseResetPa
     }
   };
 
+  const form = useForm<ResetPasswordFormValues>({
+    initialValues: { confirmPassword: '', newPassword: '' },
+    onSubmit: handleResetPassword,
+  });
+
   return {
     form,
-    handleResetPassword,
     loading,
   };
 };

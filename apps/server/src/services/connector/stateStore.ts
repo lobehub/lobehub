@@ -25,6 +25,11 @@ export interface ConnectorOAuthStatePayload {
   returnTo?: string;
   /** Issuance timestamp (ms epoch) for diagnostics. */
   ts: number;
+  /**
+   * Workspace the connector belongs to. The callback has no request context of
+   * its own, so it must reuse this to find workspace-scoped connectors.
+   */
+  workspaceId?: string;
 }
 
 /** Generate an opaque, single-use state value to embed in the authorize URL. */

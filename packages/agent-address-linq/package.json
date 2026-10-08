@@ -1,0 +1,24 @@
+{
+  "name": "@lobechat/agent-address-linq",
+  "version": "0.1.0",
+  "description": "Linq (iMessage / SMS) transport for the shared messenger number pool",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "clean": "rm -rf dist",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "standardwebhooks": "^1.0.0",
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}

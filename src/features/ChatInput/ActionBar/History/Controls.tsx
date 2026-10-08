@@ -1,7 +1,5 @@
-import { type FormItemProps } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
 import { SliderWithInput, Switch } from '@lobehub/ui/base-ui';
-import { Form as AntdForm } from 'antd';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
 import { debounce } from 'es-toolkit/compat';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,9 +10,13 @@ import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useAgentId } from '../../hooks/useAgentId';
 import { useUpdateAgentConfig } from '../../hooks/useUpdateAgentConfig';
 
+interface HistoryValues {
+  enableHistoryCount?: boolean;
+  historyCount?: number;
+}
+
 const Controls = () => {
   const { t } = useTranslation('setting');
-  const [form] = AntdForm.useForm();
   const [updating, setUpdating] = useState(false);
   const agentId = useAgentId();
   const { updateAgentChatConfig } = useUpdateAgentConfig();
@@ -23,14 +25,6 @@ const Controls = () => {
     chatConfigByIdSelectors.getHistoryCountById(agentId)(s),
     chatConfigByIdSelectors.getEnableHistoryCountById(agentId)(s),
   ]);
-
-  // Sync external store updates to the form without remounting to keep Switch animation
-  useEffect(() => {
-    form?.setFieldsValue({
-      enableHistoryCount,
-      historyCount,
-    });
-  }, [enableHistoryCount, historyCount, form]);
 
   const handleValuesChange = useMemo(
     () =>
@@ -47,14 +41,23 @@ const Controls = () => {
 
   useEffect(() => () => handleValuesChange.cancel(), [handleValuesChange]);
 
-  const items: FormItemProps[] = [
+  const form = useForm<HistoryValues>({
+    initialValues: { enableHistoryCount, historyCount },
+    onValuesChange: handleValuesChange,
+  });
+
+  // Sync external store updates to the form without remounting to keep Switch animation
+  useEffect(() => {
+    form.setValues({ enableHistoryCount, historyCount });
+  }, [enableHistoryCount, historyCount, form]);
+
+  const items: FormFieldProps<HistoryValues>[] = [
     {
       children: <Switch loading={updating} size={'small'} />,
       label: t('settingChat.enableHistoryCount.title'),
       layout: 'horizontal',
       minWidth: undefined,
       name: 'enableHistoryCount',
-      valuePropName: 'checked',
     },
     {
       children: (
@@ -73,8 +76,8 @@ const Controls = () => {
           }}
         />
       ),
+      bare: true,
       name: 'historyCount',
-      noStyle: true,
     },
   ];
 
@@ -83,16 +86,11 @@ const Controls = () => {
       form={form}
       items={items}
       itemsType={'flat'}
-      initialValues={{
-        enableHistoryCount,
-        historyCount,
-      }}
       styles={{
         group: {
           background: 'transparent',
         },
       }}
-      onValuesChange={handleValuesChange}
     />
   );
 };

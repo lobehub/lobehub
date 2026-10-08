@@ -5,15 +5,29 @@ import { memo } from 'react';
 
 import { EXECUTION_STATUS_VISUALS, type ExecutionStatusVisual } from '@/components/ExecutionStatus';
 
-type TopicRunStatus = 'canceled' | 'completed' | 'failed' | 'pending' | 'running' | 'timeout';
+type TopicRunStatus =
+  | 'canceled'
+  | 'completed'
+  | 'device_offline'
+  | 'failed'
+  | 'pending'
+  | 'quota_limited'
+  | 'running'
+  | 'timeout'
+  | 'transient_failed';
 
 const STATIC_META: Record<Exclude<TopicRunStatus, 'running'>, ExecutionStatusVisual> = {
   canceled: EXECUTION_STATUS_VISUALS.canceled,
   completed: EXECUTION_STATUS_VISUALS.completed,
+  // The run's device was unavailable; it is retried, not failed.
+  device_offline: { color: cssVar.colorWarning, icon: CircleAlert },
   failed: EXECUTION_STATUS_VISUALS.failed,
   // Not-yet-started run: same glyph as a backlog task.
   pending: EXECUTION_STATUS_VISUALS.backlog,
+  // A usage limit or a transport fault: retried on a schedule, not failed.
+  quota_limited: { color: cssVar.colorWarning, icon: CircleAlert },
   timeout: { color: cssVar.colorWarning, icon: CircleAlert },
+  transient_failed: { color: cssVar.colorWarning, icon: CircleAlert },
 };
 
 const RunningIcon = memo<{ size: number }>(({ size }) => {

@@ -5,6 +5,7 @@ import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway
 
 import { resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 export const auvRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
@@ -45,7 +46,7 @@ export const auvRuntime: ServerRuntimeRegistration = {
             'The selected device does not support Computer Use. Update the desktop app and reconnect.',
           );
         }
-        return executeAuthorizedDeviceToolCall(
+        const result = await executeAuthorizedDeviceToolCall(
           context.serverDB,
           {
             deviceId: context.activeDeviceId!,
@@ -60,6 +61,8 @@ export const auvRuntime: ServerRuntimeRegistration = {
           },
           context.executionTimeoutMs,
         );
+
+        return withoutDeviceReplay(result);
       },
     };
   },

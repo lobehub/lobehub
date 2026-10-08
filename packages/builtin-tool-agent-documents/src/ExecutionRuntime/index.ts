@@ -7,6 +7,7 @@ import {
   formatReplaceDocumentResult,
   formatUpdateLoadRuleResult,
 } from '@lobechat/prompts';
+import { appendTextWindowNotice, sliceTextWindow } from '@lobechat/prompts/textWindow';
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
 import type {
@@ -14,12 +15,24 @@ import type {
   CreateDocumentArgs,
   ListDocumentsArgs,
   ModifyDocumentNodesArgs,
+  ModifyDocumentOperation,
   ReadDocumentArgs,
   RemoveDocumentArgs,
   RenameDocumentArgs,
   ReplaceDocumentContentArgs,
   UpdateLoadRuleArgs,
 } from '../types';
+import {
+  LIST_DOCUMENTS_DEFAULT_LIMIT,
+  LIST_DOCUMENTS_MAX_LIMIT,
+  MAX_READ_DOCUMENT_CONTENT_CHARS,
+} from '../types';
+
+const clampListLimit = (limit: unknown): number => {
+  const value = Math.floor(Number(limit));
+  if (!Number.isFinite(value) || value <= 0) return LIST_DOCUMENTS_DEFAULT_LIMIT;
+  return Math.min(value, LIST_DOCUMENTS_MAX_LIMIT);
+};
 
 interface AgentDocumentRecord {
   content?: string;
@@ -84,18 +97,6 @@ interface AgentDocumentToolTriggerInput {
 
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_CODE = 'CURRENT_PAGE_DOCUMENT_WRITE_FORBIDDEN';
 const CURRENT_PAGE_DOCUMENT_WRITE_ERROR_TYPE = 'CurrentPageDocumentWriteForbidden';
-
-/**
- * Upper bound on the characters a single readDocument result feeds back into the
- * model context. Agent documents can hold whole email/newsletter archives that
- * run into the millions of characters; returning one whole once pushed a task
- * past the model's context window — a lone tool result reached ~591k tokens and
- * the next completion 400'd with ExceededContextWindow. The client Inspector
- * still renders the full document from `state`, so only the LLM-facing `content`
- * is capped. ~200k chars is roughly 50k tokens per field — generous for a real
- * document read while leaving ample room in the window.
- */
-const MAX_READ_DOCUMENT_CONTENT_CHARS = 200_000;
 
 type MaybePromise<T> = T | Promise<T>;
 
@@ -182,6 +183,107 @@ export interface AgentDocumentsRuntimeOptions {
   onDocumentsMutated?: (params: { documentId?: string }) => MaybePromise<void>;
 }
 
+/**
+ * Models regularly echo the `documentId` field from listDocuments/createDocument
+ * back instead of `id`, or drop the id entirely. Accept `documentId` as an alias
+ * (reads resolve either identifier) and fail with an actionable message when
+ * neither is present, instead of looking up and reporting `undefined`.
+ */
+const UUID_PATTERN = /^[\da-f]{8}(?:-[\da-f]{4}){3}-[\da-f]{12}$/i;
+
+const resolveTargetId = <T extends { id: string }>(
+  args: T,
+  apiName: string,
+): { args: T } | { error: BuiltinServerRuntimeOutput } => {
+  const { documentId: alias, ...rest } = args as T & { documentId?: unknown };
+  const id = typeof args.id === 'string' && args.id.trim() ? args.id : alias;
+  if (typeof id === 'string' && id.trim()) return { args: { ...rest, id } as T };
+
+  return {
+    error: {
+      content: `${apiName} requires \`id\`: pass the \`id\` field returned by listDocuments or createDocument (e.g. "3f2c…-uuid").`,
+      success: false,
+    },
+  };
+};
+
+const MODIFY_OPERATION_SHAPES =
+  '{"action":"insert","afterId"|"beforeId":"<node id>","litexml":"…"}, {"action":"modify","litexml":"<tag id=\\"<node id>\\">…</tag>"} or {"action":"remove","id":"<node id>"}';
+
+const nonEmptyString = (value: unknown): value is string =>
+  typeof value === 'string' && value.trim().length > 0;
+
+/**
+ * Models send modifyNodes operations in several near-miss shapes: the array as a
+ * JSON string, `type` instead of `action`, `content` instead of `litexml`, or no
+ * `action` at all. Accept the unambiguous ones and reject the rest with the
+ * position and the expected shapes, instead of crashing on a missing `action`.
+ */
+const normalizeModifyOperations = (
+  raw: unknown,
+): { operations: ModifyDocumentOperation[] } | { error: string } => {
+  let list = raw;
+  if (typeof list === 'string') {
+    try {
+      list = JSON.parse(list);
+    } catch {
+      return {
+        error: `\`operations\` must be an array of operations: ${MODIFY_OPERATION_SHAPES}.`,
+      };
+    }
+  }
+  if (!Array.isArray(list) || list.length === 0) return { error: 'No operations provided.' };
+
+  const operations: ModifyDocumentOperation[] = [];
+  for (const [index, item] of list.entries()) {
+    const op = (item ?? {}) as Record<string, unknown>;
+    const litexml = op.litexml ?? op.content;
+    const declared = op.action ?? op.type;
+    const action =
+      declared ??
+      (nonEmptyString(op.afterId) || nonEmptyString(op.beforeId)
+        ? 'insert'
+        : litexml !== undefined
+          ? 'modify'
+          : nonEmptyString(op.id)
+            ? 'remove'
+            : undefined);
+    const invalid = `Operation ${index + 1} of ${list.length} is not a valid operation; nothing was saved. Use ${MODIFY_OPERATION_SHAPES}.`;
+
+    switch (action) {
+      case 'insert': {
+        if (!nonEmptyString(litexml)) return { error: invalid };
+        if (nonEmptyString(op.beforeId)) {
+          operations.push({ action: 'insert', beforeId: op.beforeId, litexml });
+        } else if (nonEmptyString(op.afterId)) {
+          operations.push({ action: 'insert', afterId: op.afterId, litexml });
+        } else {
+          return { error: invalid };
+        }
+        break;
+      }
+      case 'modify': {
+        const valid =
+          nonEmptyString(litexml) ||
+          (Array.isArray(litexml) && litexml.length > 0 && litexml.every(nonEmptyString));
+        if (!valid) return { error: invalid };
+        operations.push({ action: 'modify', litexml: litexml as string | string[] });
+        break;
+      }
+      case 'remove': {
+        if (!nonEmptyString(op.id)) return { error: invalid };
+        operations.push({ action: 'remove', id: op.id });
+        break;
+      }
+      default: {
+        return { error: invalid };
+      }
+    }
+  }
+
+  return { operations };
+};
+
 export class AgentDocumentsExecutionRuntime {
   constructor(
     private service: AgentDocumentsRuntimeService,
@@ -197,6 +299,17 @@ export class AgentDocumentsExecutionRuntime {
    */
   notifyMutated(params: { documentId?: string } = {}): Promise<void> {
     return Promise.resolve(this.options.onDocumentsMutated?.(params));
+  }
+
+  /**
+   * Mutations without a pre-read (copy, load rule) key off the binding id, so a
+   * backing `docs_` id received through the `documentId` alias is resolved first.
+   */
+  private async resolveBindingId(agentId: string, id: string): Promise<string | undefined> {
+    if (UUID_PATTERN.test(id)) return id;
+
+    const existing = await this.service.readDocument({ agentId, id });
+    return existing?.id;
   }
 
   private resolveAgentId(context?: AgentDocumentOperationContext) {
@@ -277,45 +390,35 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   /**
-   * Cap a single field so one oversized document can't blow the model's context
-   * window. Truncation is byte-cheap `slice` on characters (not tokens), so the
-   * cap is deliberately conservative; the trailing marker tells the model the
-   * document was cut and to work with a smaller/targeted read instead of
-   * assuming it saw the whole thing.
+   * Returns one window of a field using the shared text-window contract. A field within the cap
+   * and read without `offset`/`limit` is returned whole, exactly as before; otherwise the window
+   * ends with the range, total size and the exact readDocument call for the next window.
    */
-  private capReadContent(content: string) {
-    if (content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
+  private windowReadContent(content: string, args: ReadDocumentArgs, format: string) {
+    const paged = args.offset !== undefined || args.limit !== undefined;
+    if (!paged && content.length <= MAX_READ_DOCUMENT_CONTENT_CHARS) return content;
 
-    // Avoid splitting a UTF-16 surrogate pair: if the cutoff lands right after a
-    // high surrogate (e.g. half of an emoji), step back one code unit. Otherwise
-    // JSON.stringify emits a lone `\uD83D`-style escape, which some upstream
-    // providers (DeepSeek, Anthropic) reject — which would re-break the exact
-    // large-document requests this cap is meant to protect.
-    let cutoff = MAX_READ_DOCUMENT_CONTENT_CHARS;
-    const lastCharCode = content.charCodeAt(cutoff - 1);
-    if (lastCharCode >= 0xd8_00 && lastCharCode <= 0xdb_ff) cutoff -= 1;
+    const window = sliceTextWindow(content, {
+      maxChars: MAX_READ_DOCUMENT_CONTENT_CHARS,
+      maxLines: args.limit,
+      offset: args.offset,
+    });
 
-    const omitted = content.length - cutoff;
-    return (
-      content.slice(0, cutoff) +
-      `\n\n[... document truncated to fit the context window: ${omitted} of ${content.length} ` +
-      `characters omitted. This is only the beginning of the document — do not assume it is ` +
-      `complete. Read a smaller/specific document, or list and target sections instead of ` +
-      `loading the whole file.]`
-    );
+    return appendTextWindowNotice(window, {
+      continueFrom: (line) =>
+        `call readDocument again with id="${args.id}", format="${format}" and offset=${line}`,
+    });
   }
 
-  private formatDocumentReadContent(
-    doc: AgentDocumentRecord,
-    format: 'xml' | 'markdown' | 'both' = 'xml',
-  ) {
-    const markdown = this.capReadContent(doc.content || '');
-    const xml = this.capReadContent(doc.litexml || '');
+  private formatDocumentReadContent(doc: AgentDocumentRecord, args: ReadDocumentArgs) {
+    const format = args.format ?? 'xml';
+    const markdown = () => this.windowReadContent(doc.content || '', args, format);
+    const xml = () => this.windowReadContent(doc.litexml || '', args, format);
 
-    if (format === 'markdown') return markdown;
-    if (format === 'both') return JSON.stringify({ markdown, xml });
+    if (format === 'markdown') return markdown();
+    if (format === 'both') return JSON.stringify({ markdown: markdown(), xml: xml() });
 
-    return xml || markdown;
+    return doc.litexml ? xml() : markdown();
   }
 
   async listDocuments(
@@ -351,8 +454,11 @@ export class AgentDocumentsExecutionRuntime {
             topicId: topicId!,
           })
         : await this.service.listDocuments({ agentId, parentId, scope, sourceType });
+    const limit = clampListLimit(args.limit);
+    const offset = Math.max(0, Math.floor(Number(args.offset) || 0));
+    const page = docs.slice(offset, offset + limit);
     const list = await Promise.all(
-      docs.map(async (d) => {
+      page.map(async (d) => {
         const url = await this.buildDocumentUrl(agentId, d.documentId);
         return {
           ...(d.documentId ? { documentId: d.documentId } : {}),
@@ -366,8 +472,23 @@ export class AgentDocumentsExecutionRuntime {
       }),
     );
 
+    const nextOffset = offset + page.length;
+    // Page two must read the same filtered set, so the continuation repeats
+    // every active filter instead of just the offset.
+    const nextArgs = JSON.stringify({
+      limit,
+      offset: nextOffset,
+      ...(parentId ? { parentId } : {}),
+      scope,
+      sourceType,
+    });
+    const pagingNote =
+      nextOffset < docs.length
+        ? `\n\nShowing documents ${offset + 1}-${nextOffset} of ${docs.length}. For the next page call listDocuments with ${nextArgs}.`
+        : '';
+
     return {
-      content: JSON.stringify(list),
+      content: JSON.stringify(list) + pagingNote,
       state: { documents: list },
       success: true,
     };
@@ -384,6 +505,16 @@ export class AgentDocumentsExecutionRuntime {
         success: false,
       };
     }
+
+    if (typeof args.content !== 'string') {
+      return {
+        content:
+          'createDocument requires `content` (the document body as markdown or plain text) and a `title`. Nothing was created.',
+        success: false,
+      };
+    }
+    // An omitted title falls back to the body's leading H1, then a default name.
+    if (typeof args.title !== 'string') args = { ...args, title: '' };
 
     const scope = args.scope ?? 'agent';
     const topicId = this.resolveTopicId(context);
@@ -425,9 +556,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async readDocument(
-    args: ReadDocumentArgs,
+    rawArgs: ReadDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'readDocument');
+    if ('error' in target) return target.error;
+    const args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -436,22 +571,25 @@ export class AgentDocumentsExecutionRuntime {
       };
     }
 
-    const doc = await this.service.readDocument({ ...args, agentId });
+    const { limit: _limit, offset: _offset, ...readArgs } = args;
+    const doc = await this.service.readDocument({ ...readArgs, agentId });
     if (!doc) return { content: `Document not found: ${args.id}`, success: false };
 
-    const format = args.format ?? 'xml';
-
     return {
-      content: this.formatDocumentReadContent(doc, format),
+      content: this.formatDocumentReadContent(doc, args),
       state: { content: doc.content, id: doc.id, title: doc.title, xml: doc.litexml },
       success: true,
     };
   }
 
   async replaceDocumentContent(
-    args: ReplaceDocumentContentArgs,
+    rawArgs: ReplaceDocumentContentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'replaceDocumentContent');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -462,6 +600,8 @@ export class AgentDocumentsExecutionRuntime {
 
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     if (this.isCurrentPageDocument(existing, context)) {
       return this.buildCurrentPageDocumentWriteBlockedResult('replaceDocumentContent');
@@ -494,9 +634,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async modifyNodes(
-    args: ModifyDocumentNodesArgs,
+    rawArgs: ModifyDocumentNodesArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'modifyNodes');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -507,15 +651,16 @@ export class AgentDocumentsExecutionRuntime {
 
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     if (this.isCurrentPageDocument(existing, context)) {
       return this.buildCurrentPageDocumentWriteBlockedResult('modifyNodes');
     }
 
-    const operations = Array.isArray(args.operations) ? args.operations : [];
-    if (operations.length === 0) {
-      return { content: 'No operations provided.', success: false };
-    }
+    const normalized = normalizeModifyOperations(args.operations);
+    if ('error' in normalized) return { content: normalized.error, success: false };
+    const { operations } = normalized;
 
     const updated = await this.service.modifyNodes({
       agentId,
@@ -525,6 +670,9 @@ export class AgentDocumentsExecutionRuntime {
     });
     if (!updated) return { content: `Failed to modify document ${args.id}.`, success: false };
 
+    // The service applies the batch atomically: an unknown id or an operation the
+    // editor rejects throws with that operation's position, and nothing is saved.
+    // Reaching this point therefore means every operation was applied.
     const results = operations.map((operation) => ({
       action: operation.action,
       success: true,
@@ -553,9 +701,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async removeDocument(
-    args: RemoveDocumentArgs,
+    rawArgs: RemoveDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'removeDocument');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -570,6 +722,8 @@ export class AgentDocumentsExecutionRuntime {
     // impl previously ran this lookup imperatively for the delete registration).
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     const deleted = await this.service.removeDocument({
       ...args,
@@ -592,9 +746,13 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async renameDocument(
-    args: RenameDocumentArgs,
+    rawArgs: RenameDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'renameDocument');
+    if ('error' in target) return target.error;
+    let args = target.args;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -605,6 +763,8 @@ export class AgentDocumentsExecutionRuntime {
 
     const existing = await this.service.readDocument({ agentId, id: args.id });
     if (!existing) return { content: `Document not found: ${args.id}`, success: false };
+    // A backing `docs_` id resolves on read; mutations key off the binding id.
+    args = { ...args, id: existing.id || args.id };
 
     if (this.isCurrentPageDocument(existing, context)) {
       return this.buildCurrentPageDocumentWriteBlockedResult('renameDocument');
@@ -634,9 +794,12 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async copyDocument(
-    args: CopyDocumentArgs,
+    rawArgs: CopyDocumentArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'copyDocument');
+    if ('error' in target) return target.error;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -644,6 +807,10 @@ export class AgentDocumentsExecutionRuntime {
         success: false,
       };
     }
+
+    const bindingId = await this.resolveBindingId(agentId, target.args.id);
+    if (!bindingId) return { content: `Document not found: ${target.args.id}`, success: false };
+    const args = { ...target.args, id: bindingId };
 
     const copied = await this.service.copyDocument({
       ...args,
@@ -673,9 +840,12 @@ export class AgentDocumentsExecutionRuntime {
   }
 
   async updateLoadRule(
-    args: UpdateLoadRuleArgs,
+    rawArgs: UpdateLoadRuleArgs,
     context?: AgentDocumentOperationContext,
   ): Promise<BuiltinServerRuntimeOutput> {
+    const target = resolveTargetId(rawArgs, 'updateLoadRule');
+    if ('error' in target) return target.error;
+
     const agentId = this.resolveAgentId(context);
     if (!agentId) {
       return {
@@ -683,6 +853,10 @@ export class AgentDocumentsExecutionRuntime {
         success: false,
       };
     }
+
+    const bindingId = await this.resolveBindingId(agentId, target.args.id);
+    if (!bindingId) return { content: `Document not found: ${target.args.id}`, success: false };
+    const args = { ...target.args, id: bindingId };
 
     const updated = await this.service.updateLoadRule({ ...args, agentId });
     if (!updated) return { content: `Document not found: ${args.id}`, success: false };

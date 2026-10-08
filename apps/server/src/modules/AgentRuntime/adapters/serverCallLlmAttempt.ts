@@ -332,6 +332,7 @@ export class ServerCallLlmAttempt {
       },
       diagnostics: this.runtimeDiagnostics,
       metadata: this.runtimeMetadata,
+      signal: this.ctx.abortSignal,
       user: this.ctx.userId,
     };
     const response = await this.modelRuntime.chat(this.chatPayload, chatOptions);

@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
-import { Checkbox, Select, Text } from '@lobehub/ui/base-ui';
-import { Table } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Checkbox, Input, Select, Table, type TableColumn, Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -192,7 +191,7 @@ const MappingStep = memo<MappingStepProps>(
       onMappingChange(newMapping);
     };
 
-    const columns = useMemo(
+    const columns = useMemo<TableColumn<Record<string, any>>[]>(
       () =>
         visibleHeaders.map((h) => {
           const role = mapping[h];

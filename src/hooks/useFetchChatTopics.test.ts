@@ -39,6 +39,7 @@ vi.mock('@/store/chat', () => ({
       activeAgentId: mocks.activeAgentId,
       activeGroupId: mocks.activeGroupId,
       useFetchTopics: mocks.storeFetchTopics,
+      topicDataMap: {},
     }),
 }));
 

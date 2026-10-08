@@ -1,8 +1,9 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
+import { Block, Flexbox, Icon } from '@lobehub/ui';
 import { Avatar, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Target } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -60,6 +61,15 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
   const isError = brief.type === 'error';
 
   const hasTaskMeta = Boolean(brief.taskStatus || brief.taskIdentifier || brief.taskName);
+  // A goal brief has no task of its own; the goal it speaks for takes the
+  // meta row, and a click there lands on the goal.
+  const goal = brief.metadata?.goal;
+  const openGoal = () => {
+    if (!goal) return;
+    navigate(
+      brief.agentId ? `/agent/${brief.agentId}/goal/${goal.goalId}` : `/goal/${goal.goalId}`,
+    );
+  };
 
   const openTask = () => {
     if (!brief.taskId) return;
@@ -71,6 +81,14 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
       {/* A brief raised outside a task has no status / ref / name to show, which
           left the meta row as an empty band with a lone timestamp. Drop the row
           entirely in that case and let the title line carry the time. */}
+      {!hasTaskMeta && goal && (
+        <Flexbox horizontal align={'center'} className={styles.meta} gap={7} onClick={openGoal}>
+          <Icon color={cssVar.colorTextTertiary} icon={Target} size={14} />
+          <span className={cx(homeType.meta, styles.taskName)}>{goal.goalTitle}</span>
+          <Flexbox flex={1} />
+          <Time date={brief.createdAt} />
+        </Flexbox>
+      )}
       {hasTaskMeta && (
         <Flexbox
           horizontal
@@ -119,7 +137,7 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
             <Text ellipsis className={homeType.itemTitle} style={{ flex: 1, minWidth: 0 }}>
               {brief.title}
             </Text>
-            {!hasTaskMeta && <Time date={brief.createdAt} />}
+            {!hasTaskMeta && !goal && <Time date={brief.createdAt} />}
           </Flexbox>
           <BriefCardSummary summary={brief.summary} />
           <BriefCardArtifacts artifacts={brief.artifacts} />
@@ -131,6 +149,8 @@ const InboxBriefCard = memo<InboxBriefCardProps>(({ bare, brief }) => {
         agentId={brief.agentId ?? brief.agent?.id}
         briefId={brief.id}
         briefType={brief.type}
+        labelsLocalized={!!goal}
+        recommendedActionKey={goal?.recommendedAction}
         resolvedAction={brief.resolvedAction}
         taskId={brief.taskId}
         taskStatus={brief.taskStatus}

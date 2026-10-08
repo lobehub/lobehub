@@ -29,7 +29,7 @@ import { fileChatSelectors, useFileStore } from '@/store/file';
 
 import { buildMessageContextSelections } from '../../ChatInput/utils/contextSelections';
 import WideScreenContainer from '../../WideScreenContainer';
-import { useUnexpiredInterventions } from '../hooks/useDeadlineClock';
+import { usePendingInterventions } from '../hooks/usePendingInterventions';
 import InterventionBar from '../InterventionBar';
 import {
   dataSelectors,
@@ -37,23 +37,24 @@ import {
   useConversationStore,
   useConversationStoreApi,
 } from '../store';
-import { isSamePendingInterventionList } from '../store/slices/data/pendingInterventions';
 import TodoProgress from '../TodoProgress';
 import InputCompletionErrorAlert from './InputCompletionErrorAlert';
 import LinkedGoalTray from './LinkedGoalTray';
 import OpStatusTray from './OpStatusTray';
 import QueueTray from './QueueTray';
 import { sendVoiceMessage } from './sendVoiceMessage';
+import { transcribeVoiceMessage } from './transcribeVoiceMessage';
 import {
   getContextWindowMessages,
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   toChatInputMessages,
 } from './utils';
-import GoalArmedChip from './VerifyTray/GoalArmedChip';
-import { useGoalArmStore } from './VerifyTray/goalArmStore';
-import GoalTray from './VerifyTray/GoalTray';
-import { canSendVoiceMessage, useCanSendVoiceMessage } from './voiceMessageCapability';
+import {
+  canSendVoiceMessage,
+  isVoiceMessageTranscribed,
+  useCanSendVoiceMessage,
+} from './voiceMessageCapability';
 
 /** Max recent messages to feed into auto-complete context (≈10 conversation turns) */
 const MAX_CONTEXT_MESSAGES = 25;
@@ -262,16 +263,7 @@ const ChatInput = memo<ChatInputProps>(
       operationSelectors.isInputLoadingByContext(context)(s),
     );
 
-    // Pending interventions — use custom equality to prevent infinite re-render loop.
-    // The selector creates new array/object refs each call; without equality check,
-    // any store update → new ref → re-render → Intervention's store writes → loop.
-    const selectedInterventions = useConversationStore(
-      dataSelectors.pendingInterventions,
-      isSamePendingInterventionList,
-    );
-    // The selector only re-runs on store changes; drop a card the moment its
-    // producer stops waiting even when nothing in the store moves.
-    const pendingInterventions = useUnexpiredInterventions(selectedInterventions);
+    const pendingInterventions = usePendingInterventions();
     const hasPendingInterventions = pendingInterventions.length > 0;
 
     // Send message error from ConversationStore
@@ -293,18 +285,11 @@ const ChatInput = memo<ChatInputProps>(
     const hasTodos = (selectCurrentTurnTodosFromMessages(dbMessages)?.items.length ?? 0) > 0;
 
     // Detect whether OpStatusTray will render (mirrors its own `!startTime`
-    // gate) so GoalTray — which sits flush below it — can square its top corners
+    // gate) so LinkedGoalTray — which sits flush below it — can square its top corners
     // and merge with the status strip instead of showing a seam.
     const hasOpStatus = useChatStore(
       (s) => operationSelectors.getVisibleAgentRuntimeStartTimeByContext(context)(s) !== undefined,
     );
-
-    // Pre-topic "armed goal" state (topic Goal lab). `armedAt` is only ever set
-    // by the lab-gated "+" → Goal entry, so its presence already implies the
-    // lab is on. While armed the goal chip rides the action bar and the composer
-    // placeholder prompts for the goal (the next message becomes it).
-    const goalArmedAt = useGoalArmStore((s) => (agentId ? s.armedAt[agentId] : undefined));
-    const goalArmed = !!agentId && !context.topicId && goalArmedAt !== undefined;
 
     // Computed state
     const isInputEmpty = !inputMessage.trim() && fileList.length === 0 && contextList.length === 0;
@@ -446,6 +431,12 @@ const ChatInput = memo<ChatInputProps>(
                 context: targetContext,
                 optimisticUserMessageId: messageId,
                 signal,
+                ...(isVoiceMessageTranscribed(targetContext)
+                  ? {
+                      transcribe: (uploaded, transcribeSignal) =>
+                        transcribeVoiceMessage(uploaded.id, transcribeSignal),
+                    }
+                  : {}),
               }),
           }),
         );
@@ -491,34 +482,23 @@ const ChatInput = memo<ChatInputProps>(
             {!disableQueue && hasQueuedMessages && <QueueTray />}
             <TodoProgress topAttached={!disableQueue && hasQueuedMessages} />
             <OpStatusTray topAttached={(!disableQueue && hasQueuedMessages) || hasTodos} />
-            <GoalTray
-              topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
-            />
             {/* Goals this conversation planned; sits last so it rides flush on the input. */}
             <LinkedGoalTray
               topAttached={(!disableQueue && hasQueuedMessages) || hasTodos || hasOpStatus}
             />
           </Flexbox>
-          {/* Append the armed-goal chip to every composer's action bar. While armed,
-              the next message becomes the goal and the placeholder explains that state. */}
           <DesktopChatInput
             actionBarStyle={actionBarStyle}
             borderRadius={12}
             compact={compact}
             controlBarSlot={controlBarSlot}
+            extraActionItems={extraActionItems}
             hidden={hasPendingInterventions}
             isConfigLoading={isConfigLoading}
             leftContent={leftContent}
             placeholderVariant={placeholderVariant}
             sendAreaPrefix={businessSendAreaPrefix}
             showControlBar={showControlBar}
-            extraActionItems={[
-              ...(extraActionItems ?? []),
-              { children: <GoalArmedChip />, key: 'goal-armed-chip' },
-            ]}
-            placeholder={
-              goalArmed ? t('acceptance.tray.goalArmedPlaceholder', { ns: 'verify' }) : undefined
-            }
           />
         </div>
       </WideScreenContainer>

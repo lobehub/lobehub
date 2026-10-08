@@ -43,10 +43,14 @@ interface VideoReferenceFramesProps {
 
 const VideoReferenceFrames = memo<VideoReferenceFramesProps>(
   ({ imageUrl, imageUrls, endImageUrl }) => {
-    const allImages: string[] = [];
-    if (imageUrl) allImages.push(imageUrl);
-    if (imageUrls && imageUrls.length > 0) allImages.push(...imageUrls);
-    if (endImageUrl) allImages.push(endImageUrl);
+    // Providers treat every image as a reference once `imageUrls` is set, so label them as such.
+    const isReference = !!imageUrls?.length;
+    const allImages: { alt: string; url: string }[] = [];
+    if (imageUrl)
+      allImages.push({ alt: isReference ? 'Reference image' : 'Start frame', url: imageUrl });
+    if (isReference) allImages.push(...imageUrls.map((url) => ({ alt: 'Reference image', url })));
+    if (endImageUrl)
+      allImages.push({ alt: isReference ? 'Reference image' : 'End frame', url: endImageUrl });
 
     if (allImages.length === 0) return null;
 
@@ -60,10 +64,10 @@ const VideoReferenceFrames = memo<VideoReferenceFramesProps>(
             size={'small'}
             variant={'filled'}
           />
-          {allImages.map((url, index) => (
+          {allImages.map(({ alt, url }, index) => (
             <div className={styles.container} key={`${url}-${index}`}>
               <Image
-                alt={index === 0 ? 'Start frame' : 'End frame'}
+                alt={alt}
                 className={styles.image}
                 height={'100%'}
                 src={url}

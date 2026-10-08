@@ -1,3 +1,5 @@
+import { parseXmlAttributes } from '../remarkPlugins/createRemarkXmlBlockPlugin';
+
 export type ScmEventKind = 'ci_failed' | 'review_changes_requested' | 'review_commented';
 
 export interface ScmEventCheck {
@@ -52,21 +54,29 @@ export const safeScmUrl = (value: string | undefined): string | undefined => {
   }
 };
 
-const unescapeAttribute = (value: string) =>
-  value
-    .replaceAll('&quot;', '"')
-    .replaceAll('&lt;', '<')
-    .replaceAll('&gt;', '>')
-    .replaceAll('&amp;', '&');
-
 /** `key="value"` pairs of an open tag, values unescaped. */
-export const parseAttributes = (raw: string): Record<string, string> => {
-  const result: Record<string, string> = {};
-  for (const match of raw.matchAll(/([\w:-]+)="([^"]*)"/g)) {
-    result[match[1]] = unescapeAttribute(match[2]);
-  }
-  return result;
+export const parseAttributes = parseXmlAttributes;
+
+/**
+ * The attributes of a wake-up message's `<scmEvent>` block, or undefined for
+ * any other message. The user message uses them to show the pull request as
+ * the message's sender instead of a header inside the card. The server sends
+ * the block as the whole message, so only a message that opens with it
+ * counts — a user quoting the tag mid-message keeps their own identity.
+ */
+export const getScmEventSource = (
+  content: string | null | undefined,
+): ScmEventAttributes | undefined => {
+  if (!content) return undefined;
+  const open = /^\s*<scmEvent\b([^>]*)>/.exec(content);
+  if (!open) return undefined;
+  const attrs = parseAttributes(open[1] ?? '');
+  return { ...attrs, kind: attrs.kind ?? '', provider: attrs.provider ?? '' };
 };
+
+/** `owner/repo #number`, falling back to the url when the repo is unknown. */
+export const scmEventTitle = (attrs: Pick<ScmEventAttributes, 'number' | 'repo' | 'url'>) =>
+  attrs.repo ? `${attrs.repo}${attrs.number ? ` #${attrs.number}` : ''}` : (attrs.url ?? '');
 
 /** The text of every CDATA section in `raw`, joined; plain text when there is none. */
 const cdataText = (raw: string) => {

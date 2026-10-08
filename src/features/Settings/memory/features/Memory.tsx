@@ -1,10 +1,11 @@
 'use client';
 
-import { type UserMemoryEffort } from '@lobechat/types';
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, Tooltip } from '@lobehub/ui';
+import { type UserMemoryEffort, type UserMemorySettings } from '@lobechat/types';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Skeleton, Switch } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import isEqual from 'fast-deep-equal';
+import { CircleHelpIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,25 +22,41 @@ const MEMORY_EFFORT_LEVELS: readonly UserMemoryEffort[] = ['low', 'medium', 'hig
 const MemorySetting = memo(() => {
   const { t } = useTranslation('setting');
   const { allowed: canManageMemory, reason } = usePermission('manage_settings');
-  const [form] = Form.useForm();
   const memory = useUserStore(settingsSelectors.currentMemorySettings, isEqual);
   const memoryEnabled = useUserStore(settingsSelectors.memoryEnabled);
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const memoryValues: UserMemorySettings = { ...memory, enabled: memoryEnabled };
+  const form = useForm({
+    initialValues: memoryValues,
+    values: memoryValues,
+    onValuesChange: (values) => {
+      if (!canManageMemory) return;
+
+      save(() => setSettings({ memory: values }));
+    },
+  });
 
   if (!isUserStateInit) return <Skeleton.Text rows={3} />;
 
-  const memorySettings: FormGroupItemType = {
+  const memorySettings: FormGroupItem<UserMemorySettings> = {
     children: [
       {
         children: <Switch disabled={!canManageMemory} />,
         desc: t('memory.enabled.desc'),
-        label: t('memory.enabled.title'),
+        label: (
+          <Flexbox horizontal align={'center'} gap={4}>
+            {t('memory.enabled.title')}
+            {reason && (
+              <Tooltip title={reason}>
+                <Icon icon={CircleHelpIcon} size={14} style={{ cursor: 'help' }} />
+              </Tooltip>
+            )}
+          </Flexbox>
+        ),
         layout: 'horizontal',
         minWidth: undefined,
         name: 'enabled',
-        tooltip: reason,
-        valuePropName: 'checked',
       },
       {
         children: (
@@ -77,15 +94,9 @@ const MemorySetting = memo(() => {
     <Form
       collapsible={false}
       form={form}
-      initialValues={{ ...memory, enabled: memoryEnabled }}
       items={[memorySettings]}
       itemsType={'group'}
       variant={'filled'}
-      onValuesChange={(values) => {
-        if (!canManageMemory) return;
-
-        save(() => setSettings({ memory: values }));
-      }}
       {...FORM_STYLE}
     />
   );

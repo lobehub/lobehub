@@ -25,8 +25,8 @@ Key docs to read based on task:
 - `docs/cards.mdx` — JSX interactive cards
 - `docs/actions.mdx` — button/dropdown handlers
 - `docs/modals.mdx` — form dialogs (Slack only)
-- `docs/adapters/*.mdx` — platform-specific adapter setup
-- `docs/state/*.mdx` — state adapter config (Redis, ioredis, memory)
+- `docs/adapters.mdx`, `docs/platform-adapters.mdx` — adapter overview and platform-specific setup
+- `docs/state-adapters.mdx` — state adapter config (Redis, ioredis, memory)
 
 Also read the TypeScript types from `node_modules/chat/dist/` to understand the full API surface.
 
@@ -86,7 +86,7 @@ Pass any `AsyncIterable<string>` to `thread.post()`. Works with AI SDK's `textSt
 
 ```typescript
 import { ToolLoopAgent } from 'ai';
-const agent = new ToolLoopAgent({ model: 'anthropic/claude-4.5-sonnet' });
+const agent = new ToolLoopAgent({ model: 'anthropic/claude-sonnet-5' });
 
 bot.onNewMention(async (thread, message) => {
   const result = await agent.stream({ prompt: message.text });

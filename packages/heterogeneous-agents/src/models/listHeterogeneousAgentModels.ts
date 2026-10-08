@@ -15,6 +15,7 @@ import { resolveCliSpawnPlan } from '../spawn/cliSpawn';
 import { listDroidAcpModels } from '../spawn/droidAcpSession';
 import { resolveHeteroSpawnCommand } from '../spawn/resolveCliCommand';
 import { listTraeAcpModels } from '../spawn/traeAcpSession';
+import { listCodexModels } from './codex';
 
 const execFilePromise = promisify(execFile);
 // Large catalogs (including Devin's model variants and metadata) exceed 256 KiB.
@@ -261,8 +262,12 @@ const getErrorRecord = (error: unknown) =>
   };
 
 const classifyCatalogError = (error: unknown): HeterogeneousAgentModelCatalogErrorCode => {
+  // The app-server client wraps spawn errors with their original cause.
+  if (error instanceof Error && error.cause) return classifyCatalogError(error.cause);
   const { code, killed, signal } = getErrorRecord(error);
   if (code === 'ENOENT') return 'cli_not_found';
+  if (code === 'unsupported_client') return 'unsupported_client';
+  if (code === 'unsupported_configuration') return 'unsupported_configuration';
   if (code === 'ETIMEDOUT' || killed || signal === 'SIGTERM') return 'timeout';
   return 'command_failed';
 };
@@ -305,6 +310,17 @@ export const listHeterogeneousAgentModels = async (
   };
 
   try {
+    if (params.type === 'codex') {
+      const models = await listCodexModels({
+        args: params.args,
+        commandPath: resolved.command,
+        cwd: params.cwd ?? process.cwd(),
+        env: env as NodeJS.ProcessEnv,
+        timeoutMs: MODEL_CATALOG_TIMEOUT_MS,
+      });
+      return { models, status: 'success', updatedAt };
+    }
+
     if (params.type === 'droid') {
       const models = await listDroidAcpModels({
         args: params.args,

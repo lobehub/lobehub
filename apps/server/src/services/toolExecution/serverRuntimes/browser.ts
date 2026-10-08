@@ -1,12 +1,15 @@
 import { BrowserIdentifier, BrowserManifest } from '@lobechat/builtin-tool-browser';
+import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import debug from 'debug';
 
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
+import { resolveDeviceClientKind } from '@/server/services/deviceGateway/deviceChannels';
 import { FileService } from '@/server/services/file';
 
 import { buildNoActiveDeviceResult, REMOTE_DEVICE_TOOL_IDENTIFIER } from './noActiveDevice';
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
+import { withoutDeviceReplay } from './withoutDeviceReplay';
 
 /**
  * Browser tool server runtime.
@@ -102,6 +105,30 @@ const storeScreenshot = async (
   }
 };
 
+export const BROWSER_DEVICE_UNSUPPORTED_ERROR_CODE = 'BROWSER_DEVICE_UNSUPPORTED';
+
+const buildCliOnlyDeviceBrowserResult = (
+  deviceId: string,
+  { webBrowsingAvailable }: { webBrowsingAvailable: boolean },
+) => {
+  // Only point at lobe-web-browsing when this run can actually call it —
+  // custom / exclusive-tool / share runs may enable the browser without it.
+  const publicPageHint = webBrowsingAvailable
+    ? `For public pages use ${WebBrowsingManifest.identifier} (search / crawl) instead. `
+    : '';
+  const message =
+    `The active device (${deviceId}) is connected only through the \`lh connect\` CLI, ` +
+    `which has no built-in browser, so lobe-browser cannot run there. ` +
+    publicPageHint +
+    `If a signed-in browser session is required, ask the user to open the LobeHub desktop app ` +
+    `on a machine and activate that device, then retry.`;
+  return {
+    content: message,
+    error: { code: BROWSER_DEVICE_UNSUPPORTED_ERROR_CODE, message },
+    success: false,
+  };
+};
+
 export const browserRuntime: ServerRuntimeRegistration = {
   factory: (context) => {
     if (!context.userId) {
@@ -137,10 +164,26 @@ export const browserRuntime: ServerRuntimeRegistration = {
     let workspaceIdPromise: Promise<string | undefined> | undefined;
     const getDeviceWorkspaceId = () => (workspaceIdPromise ??= resolveRunWorkspaceId(context));
 
+    // Only the desktop app hosts the browser panel. A device whose only live
+    // connection is `lh connect` answers every browser api with
+    // `Unknown tool API: <api>`, which tells the model nothing — check the
+    // client kind once per runtime and explain the dead end instead.
+    let clientKindPromise: Promise<string> | undefined;
+    const getClientKind = async () =>
+      (clientKindPromise ??= getDeviceWorkspaceId().then((workspaceId) =>
+        resolveDeviceClientKind(context.userId!, context.activeDeviceId!, workspaceId),
+      ));
+
     const proxy: Record<string, (args: any) => Promise<any>> = {};
 
     for (const api of BrowserManifest.api) {
       proxy[api.name] = async (args: any) => {
+        if ((await getClientKind()) === 'cli-only') {
+          return buildCliOnlyDeviceBrowserResult(context.activeDeviceId!, {
+            webBrowsingAvailable: WebBrowsingManifest.identifier in (context.toolManifestMap ?? {}),
+          });
+        }
+
         // Carry the run identity so the device resolves the right browser
         // session (`topic:<topicId>`); the agentId rides along so the device can
         // decide whether revealing the panel would yank the user's view. Both
@@ -163,7 +206,9 @@ export const browserRuntime: ServerRuntimeRegistration = {
           context.executionTimeoutMs,
         );
 
-        return api.name === 'screenshot' ? storeScreenshot(result, context) : result;
+        return withoutDeviceReplay(
+          api.name === 'screenshot' ? await storeScreenshot(result, context) : result,
+        );
       };
     }
 

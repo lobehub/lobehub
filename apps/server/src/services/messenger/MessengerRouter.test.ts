@@ -260,6 +260,18 @@ vi.mock('./platforms/wechat/binder', () => ({
   }),
 }));
 
+vi.mock('./platforms/linq/binder', () => ({
+  MessengerLinqBinder: vi.fn(function () {
+    return { createClient: vi.fn(), handleUnlinkedMessage: vi.fn(), sendDmText: vi.fn() };
+  }),
+}));
+
+const mockLinqGate = vi.hoisted(() => ({
+  preprocess: vi.fn(async (): Promise<Response | null> => null),
+  settle: vi.fn(async () => {}),
+}));
+vi.mock('./platforms/linq/webhook', () => ({ linqWebhookGate: mockLinqGate }));
+
 const buildSlackRequest = (body: string, headers: Record<string, string> = {}): Request =>
   new Request('https://app.example.com/api/agent/messenger/webhooks/slack', {
     body,
@@ -356,6 +368,26 @@ afterEach(() => {
 });
 
 describe('MessengerRouter.getWebhookHandler', () => {
+  it('lets the gate settle a delivery whose handling failed', async () => {
+    mockResolveByPayload.mockResolvedValueOnce(null);
+    const router = new MessengerRouter();
+    const req = new Request('https://e.com/x', { body: '{}', method: 'POST' });
+
+    const res = await router.getWebhookHandler('linq')(req);
+
+    expect(res.status).toBe(404);
+    expect(mockLinqGate.settle).toHaveBeenCalledWith(req, res);
+  });
+
+  it('lets the gate settle a delivery whose handling threw', async () => {
+    mockResolveByPayload.mockRejectedValueOnce(new Error('db down'));
+    const router = new MessengerRouter();
+    const req = new Request('https://e.com/x', { body: '{}', method: 'POST' });
+
+    await expect(router.getWebhookHandler('linq')(req)).rejects.toThrow('db down');
+    expect(mockLinqGate.settle).toHaveBeenCalledWith(req, undefined);
+  });
+
   it('rejects unknown platforms with 404', async () => {
     const router = new MessengerRouter();
     const handler = router.getWebhookHandler('discord');
@@ -1026,6 +1058,24 @@ describe('MessengerRouter DM dispatch (regression)', () => {
     expect(mockHandleMention).not.toHaveBeenCalled();
   });
 
+  it('replies with an error instead of dropping the message when the link lookup fails', async () => {
+    // Handlers run after the webhook was acknowledged, so the platform never
+    // redelivers; a failure here has to reach the sender as a reply.
+    await loadSlackBot();
+    mockFindLink.mockRejectedValueOnce(new Error('db down'));
+
+    const handler = mockChatBot.onNewMention.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    const thread = fakeDmThread();
+    await expect(handler(thread, fakeMessage({ isMention: true }))).resolves.toBeUndefined();
+
+    expect(thread.post).toHaveBeenCalledTimes(1);
+    expect(mockSlackBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
+    expect(mockHandleMention).not.toHaveBeenCalled();
+  });
+
   it('routes an unlinked first-touch DM through handleUnlinkedMessage WITHOUT channelMentionThreadId', async () => {
     await loadSlackBot();
     mockFindLink.mockResolvedValue(null);
@@ -1691,6 +1741,41 @@ describe('MessengerRouter onSubscribedMessage gating', () => {
       expect.any(Number),
     );
     expect(thread.post).toHaveBeenCalledWith(expect.stringContaining('@mention me'));
+  });
+
+  it('does not announce mention-only mode in a Feishu group main chat', async () => {
+    // Same skip path as Slack multi-human, but Feishu group mains already
+    // require @mention — do not post the English notice.
+    await loadSlackBot();
+    mockGetList.mockResolvedValue(['U_ALICE']);
+    const thread = {
+      id: 'feishu:group:oc_citic_sentry',
+      isDM: false,
+      post: vi.fn(),
+      subscribe: vi.fn(),
+    };
+
+    const handler = mockChatBot.onSubscribedMessage.mock.calls[0][0] as (
+      thread: any,
+      msg: any,
+    ) => Promise<void>;
+    await handler(
+      thread,
+      fakeMessage({
+        author: { isBot: false, userId: 'U_BOB', userName: 'bob' },
+        isMention: false,
+        text: 'taking over',
+      }),
+    );
+
+    expect(mockHandleSubscribed).not.toHaveBeenCalled();
+    expect(mockHandleMention).not.toHaveBeenCalled();
+    expect(thread.post).not.toHaveBeenCalled();
+    expect(mockSetIfNotExists).not.toHaveBeenCalledWith(
+      expect.stringContaining('mention-required-announced'),
+      expect.anything(),
+      expect.anything(),
+    );
   });
 
   it('only announces mention-only mode once per channel thread ()', async () => {

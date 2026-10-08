@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useChatInputNotice } from './useChatInputNotice';
+import { useChatInputNotice, useChatInputNotices } from './useChatInputNotice';
 
 const { toastError } = vi.hoisted(() => ({ toastError: vi.fn() }));
 
@@ -236,6 +236,27 @@ describe('useChatInputNotice', () => {
     const { result } = renderHook(() => useChatInputNotice());
 
     expect(result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
+  });
+
+  it('collects simultaneous input notices without changing the legacy priority result', () => {
+    testState.resourceAccess = {
+      canConfigureResource: false,
+      isAccessLoading: false,
+      isAccessResolved: true,
+      canUseResource: false,
+      isGroupContext: true,
+      isResourceGated: true,
+    };
+    testState.aiInfra.isInitAiProviderRuntimeState = true;
+
+    const notices = renderHook(() => useChatInputNotices());
+    const notice = renderHook(() => useChatInputNotice());
+
+    expect(notices.result.current).toEqual([
+      { key: 'input.viewOnlyGroup', type: 'warning' },
+      { key: 'input.modelUnavailable', type: 'warning' },
+    ]);
+    expect(notice.result.current).toEqual({ key: 'input.viewOnlyGroup', type: 'warning' });
   });
 
   it('stays silent for a gated member who can use but not edit the agent', () => {

@@ -3,6 +3,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import type { NewUserMemoryContext, UserMemoryContext } from '../../schemas';
 import { userMemories, userMemoriesContexts } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
+import { buildUserMemoryWhere } from './where';
 
 export class UserMemoryContextModel {
   private userId: string;
@@ -13,8 +14,8 @@ export class UserMemoryContextModel {
     this.db = db;
   }
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   create = async (params: Omit<NewUserMemoryContext, 'userId'>) => {
@@ -41,6 +42,11 @@ export class UserMemoryContextModel {
         ? (context.userMemoryIds as string[])
         : [];
 
+      // Delete the authorized child while its live-parent guard still matches.
+      await tx
+        .delete(userMemoriesContexts)
+        .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
+
       if (memoryIds.length > 0) {
         for (const memoryId of memoryIds) {
           await tx
@@ -48,11 +54,6 @@ export class UserMemoryContextModel {
             .where(and(eq(userMemories.id, memoryId), this.memoryWhere(userMemories)));
         }
       }
-
-      // Delete the context entry
-      await tx
-        .delete(userMemoriesContexts)
-        .where(and(eq(userMemoriesContexts.id, id), this.memoryWhere(userMemoriesContexts)));
 
       return { success: true };
     });

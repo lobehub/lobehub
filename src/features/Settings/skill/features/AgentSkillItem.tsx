@@ -87,7 +87,9 @@ const AgentSkillItem = memo<AgentSkillItemProps>(({ skill, isSelected, onSelect 
           }
         }
       },
-      title: tp('store.actions.confirmUninstall'),
+      content: tp('store.actions.confirmUninstall'),
+      okText: tp('store.actions.uninstall'),
+      title: tp('store.actions.uninstall'),
     });
   };
 

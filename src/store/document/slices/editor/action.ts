@@ -263,7 +263,7 @@ export class EditorActionImpl {
     if (doc.contentFormat === 'skillMarkdown') {
       if (hasValidEditorData) {
         try {
-          editor.setDocument('json', JSON.stringify(doc.editorData));
+          editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
           return;
         } catch {
           console.warn(
@@ -285,7 +285,7 @@ export class EditorActionImpl {
     // Set content from document state
     if (hasValidEditorData) {
       try {
-        editor.setDocument('json', JSON.stringify(doc.editorData));
+        editor.setDocument('json', JSON.stringify(doc.editorData), { keepId: true });
         return;
       } catch {
         // Fallback to markdown if JSON fails

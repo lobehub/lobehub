@@ -105,6 +105,36 @@ describe('UserMemoryContextModel', () => {
       const otherContext = result.find((c) => c.id === 'other-context');
       expect(otherContext).toBeUndefined();
     });
+
+    it('hides contexts with only trashed parents but keeps one with a live parent', async () => {
+      await serverDB.insert(userMemories).values([
+        {
+          deletedAt: new Date(),
+          id: 'trashed-context-parent',
+          isDeleted: true,
+          lastAccessedAt: new Date(),
+          userId,
+        },
+        { id: 'live-context-parent', lastAccessedAt: new Date(), userId },
+      ]);
+      await serverDB.insert(userMemoriesContexts).values([
+        {
+          id: 'context-with-only-trashed-parent',
+          userId,
+          userMemoryIds: ['trashed-context-parent'],
+        },
+        {
+          id: 'context-with-live-parent',
+          userId,
+          userMemoryIds: ['trashed-context-parent', 'live-context-parent'],
+        },
+      ]);
+
+      const result = await contextModel.query();
+
+      expect(result.some(({ id }) => id === 'context-with-only-trashed-parent')).toBe(false);
+      expect(result.some(({ id }) => id === 'context-with-live-parent')).toBe(true);
+    });
   });
 
   describe('findById', () => {

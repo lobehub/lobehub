@@ -438,16 +438,26 @@ export const buildRunLifecycle = (
       //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
       //    run, so a nested sub-agent completion must never drain it (it would
       //    re-trigger the user's queued message mid-parent-run). See RunScope.
-      if (disposition === 'success' && adapter.runScope !== 'sub_agent') {
-        const remainingQueued = get().drainQueuedMessages(contextKey);
-        if (remainingQueued.length > 0) {
+      if (
+        disposition === 'success' &&
+        adapter.runScope !== 'sub_agent' &&
+        (get().queuedMessages?.[contextKey]?.length ?? 0) > 0
+      ) {
+        completeSuccess();
+        emitComplete(operationId, runtimeStatus);
+
+        const execContext = { ...context };
+
+        // Drain only when the send takes the queue: until then the tray and
+        // the composer's busy state keep covering the hand-off window.
+        setTimeout(() => {
+          const remainingQueued = get().drainQueuedMessages(contextKey);
+          if (remainingQueued.length === 0) {
+            resetActiveTopicRunningStatus();
+            return;
+          }
+
           const merged = mergeQueuedMessages(remainingQueued);
-
-          completeSuccess();
-          emitComplete(operationId, runtimeStatus);
-
-          const execContext = { ...context };
-          const mergedContent = merged.content;
           const mergedFiles =
             merged.filesPreview.length > 0
               ? reconstructUploadFilesFromQueue(merged.filesPreview)
@@ -455,28 +465,26 @@ export const buildRunLifecycle = (
                 ? (merged.files.map((id) => ({ id })) as any)
                 : undefined;
 
-          setTimeout(() => {
-            // Use the passed `get` (the live chat-store getter) rather than a
-            // direct `useChatStore` import: in prod they resolve to the same
-            // singleton sendMessage, and avoiding the value import keeps the chat
-            // store out of this module's graph — so gateway.ts can statically
-            // import buildRunLifecycle without re-entering the store mid-eval.
-            get()
-              .sendMessage({
-                context: execContext,
-                editorData: merged.editorData,
-                files: mergedFiles,
-                ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
-                message: mergedContent,
-                metadata: { ...merged.metadata, steer: true },
-              })
-              .catch((e: unknown) => {
-                console.error('[executeClientAgent] sendMessage for queued content failed:', e);
-              });
-          }, 100);
+          // Use the passed `get` (the live chat-store getter) rather than a
+          // direct `useChatStore` import: in prod they resolve to the same
+          // singleton sendMessage, and avoiding the value import keeps the chat
+          // store out of this module's graph — so gateway.ts can statically
+          // import buildRunLifecycle without re-entering the store mid-eval.
+          get()
+            .sendMessage({
+              context: execContext,
+              editorData: merged.editorData,
+              files: mergedFiles,
+              ...(merged.forceRuntime ? { forceRuntime: merged.forceRuntime } : {}),
+              message: merged.content,
+              metadata: { ...merged.metadata, steer: true },
+            })
+            .catch((e: unknown) => {
+              console.error('[executeClientAgent] sendMessage for queued content failed:', e);
+            });
+        }, 100);
 
-          return { requeued: true };
-        }
+        return { requeued: true };
       }
 
       // 3. Complete the operation based on the terminal disposition.

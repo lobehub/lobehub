@@ -1,5 +1,5 @@
 import { toast } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { useForm } from '@lobehub/ui/base-ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';
@@ -8,6 +8,7 @@ import type { BusinessSignupFomData } from '@/business/client/hooks/useBusinessS
 import { useBusinessSignup } from '@/business/client/hooks/useBusinessSignup';
 import type { AuthFetchOptions } from '@/features/Auth/utils/authFetchOptions';
 import { withCaptchaToken } from '@/features/Auth/utils/authFetchOptions';
+import { useAuthAgreement } from '@/features/AuthShell/AuthAgreement';
 import { useAuthServerConfigStore } from '@/features/AuthShell/AuthServerConfigProvider';
 import { trackLoginOrSignupClicked } from '@/features/User/UserLoginOrSignup/trackLoginOrSignupClicked';
 import { signUp } from '@/libs/better-auth/auth-client';
@@ -31,7 +32,14 @@ export const useSignUp = () => {
   const { t } = useTranslation(['auth', 'authError']);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [form] = Form.useForm<SignUpFormValues>();
+  const { agreementChecked, continueWithAgreement, setAgreementChecked } = useAuthAgreement();
+  const form = useForm<SignUpFormValues>({
+    initialValues: { confirmPassword: '', email: '', password: '' },
+    onSubmit: (values) =>
+      continueWithAgreement(() => {
+        void handleSignUp(values);
+      }),
+  });
   const [loading, setLoading] = useState(false);
   const { getCaptchaTokenOnError, getFetchOptions, preSocialSignupCheck, businessElement } =
     useBusinessSignup(form);
@@ -116,5 +124,12 @@ export const useSignUp = () => {
     }
   };
 
-  return { businessElement, form, loading, onSubmit: handleSignUp };
+  return {
+    agreementChecked,
+    businessElement,
+    form,
+    loading,
+    onSubmit: handleSignUp,
+    setAgreementChecked,
+  };
 };

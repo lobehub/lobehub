@@ -1,16 +1,13 @@
 'use client';
 
-import { InfoCircleOutlined } from '@ant-design/icons';
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Button, Text, toast } from '@lobehub/ui/base-ui';
-import { QRCode } from 'antd';
+import { Alert, Button, QRCode, Spin, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { ExternalLinkIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
+import { ExternalLinkIcon, InfoIcon, QrCodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
 import { messengerService } from '@/services/messenger';
@@ -179,7 +176,7 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
               {t('messenger.wechat.connectCta')}
             </Button>
           )}
-          {state.stage === 'loading' && <NeuralNetworkLoading size={48} />}
+          {state.stage === 'loading' && <Spin size="large" />}
           {state.stage === 'ready' && (
             <QRCode
               aria-label={t('messenger.wechat.setupTitle')}
@@ -212,7 +209,7 @@ const WechatQrSetup = memo<WechatQrSetupProps>(({ autoStart, disabled, onCancel,
         )}
 
         <Text className={styles.tips} type="secondary">
-          <InfoCircleOutlined style={{ marginInlineEnd: 4 }} />
+          <Icon icon={InfoIcon} style={{ marginInlineEnd: 4 }} />
           {t('messenger.wechat.qr.tip')}
         </Text>
 

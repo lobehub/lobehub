@@ -64,7 +64,7 @@ const renderPreviewableImage = (
 /**
  * `LexicalRenderer` overrides that make rendered images zoomable. The stock
  * `image` / `block-image` renderers emit a bare `<img>` with no click handler,
- * so an image inside a published comment could not be enlarged (LOBE-14115).
+ * so an image inside a published comment could not be enlarged.
  * Rendering through `Image` opens the shared viewer on click; wrap the renderer
  * in a `PreviewGroup` so several images in one message become a gallery.
  */

@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Icon, TextArea } from '@lobehub/ui';
-import { Segmented, Select, Text, toast } from '@lobehub/ui/base-ui';
-import { Divider, Form } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Divider, Segmented, Select, Text, TextArea, toast } from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronRight } from 'lucide-react';
 import { type FC, useEffect, useState } from 'react';
@@ -11,7 +11,11 @@ import { useTranslation } from 'react-i18next';
 import { agentEvalService } from '@/services/agentEval';
 
 import { type CaptureDraft } from './buildCaptureDraft';
-import { buildCapturePayload, type CapturedOutputKind } from './buildCapturePayload';
+import {
+  buildCapturePayload,
+  type CapturedOutputKind,
+  type CaptureFormValues,
+} from './buildCapturePayload';
 
 const styles = createStaticStyles(({ css }) => ({
   body: css`
@@ -126,7 +130,7 @@ const ROLE_KEYS: Record<string, string> = {
 const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChange, onSaved }) => {
   const { t } = useTranslation('eval');
   const roleLabel = (role: string) => (ROLE_KEYS[role] ? t(ROLE_KEYS[role] as never) : role);
-  const [form] = Form.useForm();
+  const form = useForm<CaptureFormValues>({ onSubmit: (values) => handleFinish(values) });
   const [datasets, setDatasets] = useState<Array<{ id: string; name: string }>>([]);
   const [contextOpen, setContextOpen] = useState(false);
   // A capture is usually a complaint, so the counter-example is the default —
@@ -138,9 +142,9 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
   // it is still that same text — never something typed since.
   const handleKindChange = (next: CapturedOutputKind) => {
     setKind(next);
-    const current = form.getFieldValue('expected');
-    if (next === 'positive' && !current?.trim()) form.setFieldValue('expected', draft.actualOutput);
-    if (next === 'negative' && current === draft.actualOutput) form.setFieldValue('expected', '');
+    const current = form.getValue('expected');
+    if (next === 'positive' && !current?.trim()) form.setValue('expected', draft.actualOutput);
+    if (next === 'negative' && current === draft.actualOutput) form.setValue('expected', '');
   };
 
   useEffect(() => {
@@ -152,7 +156,7 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
       .catch(() => setDatasets([]));
   }, []);
 
-  const handleFinish = async (values: any) => {
+  const handleFinish = async (values: CaptureFormValues) => {
     onLoadingChange?.(true);
     try {
       const created = await agentEvalService.createTestCase(
@@ -225,40 +229,40 @@ const CaptureContent: FC<CaptureContentProps> = ({ draft, formId, onLoadingChang
 
       {/* Right: how it will be judged, and where it lands. */}
       <Flexbox className={styles.right} gap={12}>
-        <Form form={form} id={formId} layout="vertical" onFinish={handleFinish}>
-          <Form.Item
+        <Form form={form} gap={0} id={formId} layout="vertical">
+          <Form.Field
             label={t('capture.criteria')}
             name="criteria"
-            rules={[{ message: t('capture.criteriaRequired'), required: true }]}
+            required={t('capture.criteriaRequired')}
           >
             <TextArea
               autoSize={{ maxRows: 10, minRows: 5 }}
               placeholder={t('capture.criteriaPlaceholder')}
             />
-          </Form.Item>
+          </Form.Field>
           <Text style={{ fontSize: 12 }} type="secondary">
             {t('capture.criteriaHint')}
           </Text>
 
           <Divider style={{ marginBlock: 12 }} />
 
-          <Form.Item label={t('capture.expected')} name="expected">
+          <Form.Field label={t('capture.expected')} name="expected">
             <TextArea
               autoSize={{ maxRows: 5, minRows: 3 }}
               placeholder={t('capture.expectedPlaceholder')}
             />
-          </Form.Item>
+          </Form.Field>
 
-          <Form.Item
+          <Form.Field
             label={t('capture.dataset')}
             name="datasetId"
-            rules={[{ message: t('capture.datasetRequired'), required: true }]}
+            required={t('capture.datasetRequired')}
           >
             <Select
               options={datasets.map((d) => ({ label: d.name, value: d.id }))}
               placeholder={t('capture.datasetPlaceholder')}
             />
-          </Form.Item>
+          </Form.Field>
         </Form>
       </Flexbox>
     </Flexbox>

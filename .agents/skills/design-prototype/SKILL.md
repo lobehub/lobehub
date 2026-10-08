@@ -83,9 +83,9 @@ See [`assets/entry.mjs`](assets/entry.mjs) — the single source of truth. Curre
 - `@lobehub/icons`: Amp, ClaudeCode, Codex, HermesAgent, OpenClaw, OpenCode
 - `@lobehub/ui`: ActionIcon, Alert, Avatar, Block, Button, Center, Collapse,
   ConfigProvider, DraggablePanel, Drawer, DropdownMenu, Empty, Flexbox, Highlighter, Hotkey, Icon,
-  Image, Input, InputNumber, Markdown, Modal, MotionProvider, NeuralNetworkLoading, Popover,
-  ScrollShadow, SearchBar, Segmented, Select, Skeleton, SortableList, Tabs, Tag,
-  Text, TextArea, ThemeProvider, Tooltip
+  Image, Input, InputNumber, Markdown, Modal, MotionProvider, Popover, ScrollShadow,
+  SearchBar, Segmented, Select, Skeleton, SortableList, Tabs, Tag, Text, TextArea,
+  ThemeProvider, Tooltip
 - `@lobehub/ui/base-ui`: full namespace (Select, Modal, DropdownMenu, Switch, Toast,
   FloatingSheet, …)
 - `antd`: App, Badge, Checkbox, Divider, Dropdown, Progress, Radio, Slider, Space,
@@ -120,8 +120,8 @@ _demonstrates_:
   ideally behind a state-toggle strip like the template's. A happy-path-only
   prototype under-specifies the design and silently blesses missing states.
 - Reuse the app's **surface contracts**: side panels are `DraggablePanel`
-  (collapse + drag-resize come free), loading is skeleton/`NeuralNetworkLoading`
-  (never antd `Spin`), modals via `createModal`-style flows.
+  (collapse + drag-resize come free), loading follows the ux skill's feedback §4.1
+  scenario table (skeleton / base-ui `Spin`, `variant="network"` only for AI work), modals via `createModal`-style flows.
 - Don't paint affordances you don't wire (`cursor: zoom-in` with no zoom, keycap
   chips with no keys) — in an _interactive_ prototype a dead affordance is a spec bug.
 - Walk the ux Quick review against the prototype before delivering; annotate

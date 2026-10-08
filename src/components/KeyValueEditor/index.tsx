@@ -159,10 +159,11 @@ const KeyValueEditor = memo<KeyValueEditorProps>(
               >
                 <Flexbox flex={1} style={{ position: 'relative' }}>
                   <FormInput
+                    aria-invalid={isDuplicate || undefined}
                     className={styles.input}
+                    data-invalid={isDuplicate || undefined}
                     disabled={disabled}
                     placeholder={keyPlaceholder || t('KeyValueEditor.keyPlaceholder')}
-                    status={isDuplicate ? 'error' : undefined}
                     value={item.key}
                     variant={'filled'}
                     onChange={(e) => handleKeyChange(item.id, e)}

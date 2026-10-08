@@ -181,6 +181,30 @@ describe('kanbanBoardModel', () => {
     expect(canDropTaskIntoKanbanColumn(privateTask, 'member', otherMemberColumn)).toBe(false);
   });
 
+  it('accepts drops into the running column only from runnable statuses', () => {
+    const running = buildKanbanColumns([], 'status').find((column) => column.key === 'running')!;
+
+    for (const status of ['backlog', 'completed', 'failed', 'paused'] as const) {
+      expect(
+        canDropTaskIntoKanbanColumn(task('1', null, null, { status }), 'status', running),
+      ).toBe(true);
+    }
+    for (const status of ['running', 'scheduled', 'canceled'] as const) {
+      expect(
+        canDropTaskIntoKanbanColumn(task('1', null, null, { status }), 'status', running),
+      ).toBe(false);
+    }
+    expect(getKanbanTaskPatch('status', running)).toEqual({ status: 'running' });
+  });
+
+  it('keeps the needs-input column closed to drops', () => {
+    const needsInput = buildKanbanColumns([], 'status').find(
+      (column) => column.key === 'needsInput',
+    )!;
+
+    expect(canDropTaskIntoKanbanColumn(task('1'), 'status', needsInput)).toBe(false);
+  });
+
   it('preserves paginated group totals during an optimistic move', () => {
     const assignedTask = task('1', 'agent-1');
     const groups = [

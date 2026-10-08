@@ -85,8 +85,9 @@ async function generateByImageMode(
   const isGptImage1Family = /^gpt-image-1(?:$|[-.])/.test(routingModel);
   const supportsInputFidelity = isImageEdit && isGptImage1Family && !routingModel.includes('mini');
 
+  // Leave `n` to the API default (1): each generation is its own request, and
+  // strict-schema OpenAI-compatible gateways reject properties the model does not declare.
   const defaultInput = {
-    n: 1,
     ...(routingModel.includes('dall-e') ? { response_format: 'b64_json' } : {}),
     // https://platform.openai.com/docs/api-reference/images/createEdit#images_createedit-input_fidelity
     ...(supportsInputFidelity ? { input_fidelity: 'high' } : {}),

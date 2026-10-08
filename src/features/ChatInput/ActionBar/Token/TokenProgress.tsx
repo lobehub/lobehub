@@ -1,6 +1,6 @@
 import { formatUsageValue } from '@lobechat/utils';
 import { Flexbox } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Divider } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { memo } from 'react';
 

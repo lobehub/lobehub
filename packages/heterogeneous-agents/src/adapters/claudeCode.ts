@@ -700,6 +700,17 @@ const isAbortedResult = (raw: any): boolean =>
   !getCliResultMessage(raw?.result) &&
   !getCliResultErrors(raw);
 
+/**
+ * A `result` that closes CC's own task-notification pass without running a
+ * single turn. A notification pass that DID run a turn (`num_turns > 0`) carries
+ * real output and stays a normal result.
+ */
+const isEmptyTaskNotificationResult = (raw: any): boolean =>
+  raw?.origin?.kind === 'task-notification' &&
+  raw.num_turns === 0 &&
+  !raw.is_error &&
+  !getCliResultMessage(raw.result);
+
 const buildAbortedRuntimeEndData = (raw: any): Record<string, unknown> => ({
   kind: 'aborted' satisfies HeteroErrorKind,
   reason: 'interrupted',
@@ -1218,6 +1229,37 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
    */
   private pendingTaskCompletion: { sourceToolCallId: string; sourceToolName: string } | undefined;
 
+  /**
+   * Map a raw per-turn usage object (from `message_delta.usage` in partial
+   * mode, or `assistant.message.usage` in batch mode) into the normalized
+   * `UsageData` shape. Subclasses override to surface provider-specific
+   * consumption signals the token-only base mapping drops — e.g. Qoder zeroes
+   * the token fields and bills in `credits`, so the base mapping alone would
+   * return undefined and emit no usage event at all.
+   */
+  protected extractUsage(
+    raw:
+      | {
+          cache_creation_input_tokens?: number;
+          cache_read_input_tokens?: number;
+          input_tokens?: number;
+          output_tokens?: number;
+        }
+      | null
+      | undefined,
+  ): UsageData | undefined {
+    return toUsageData(raw);
+  }
+
+  /**
+   * Map the terminal `result` event into its session-total `UsageData`.
+   * Takes the whole raw event because session-level consumption is not
+   * always nested under `usage` (Qoder puts credits on `total_credits`).
+   */
+  protected extractResultUsage(raw: any): UsageData | undefined {
+    return toUsageData(raw?.usage);
+  }
+
   constructor(
     options: ClaudeCodeAdapterOptions = {},
     profile: ClaudeCompatibleAdapterProfile = CLAUDE_CODE_ADAPTER_PROFILE,
@@ -1527,7 +1569,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
     // partial mode (`sawStreamEvent`) `message_delta` owns this — skip here to
     // avoid double-counting the stale snapshot.
     if (!this.sawStreamEvent) {
-      const usage = toUsageData(raw.message?.usage);
+      const usage = this.extractUsage(raw.message?.usage);
       if (usage) {
         events.push(
           this.makeEvent('step_complete', {
@@ -1711,7 +1753,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
       ),
     );
 
-    const usage = toUsageData(raw.message?.usage);
+    const usage = this.extractUsage(raw.message?.usage);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
@@ -2050,12 +2092,19 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
   }
 
   private handleResult(raw: any): HeterogeneousAgentEvent[] {
+    // Resuming a session whose previous run left background tasks behind makes
+    // CC first report them as orphaned (`task_notification` ×N), then close that
+    // bookkeeping pass with an empty zero-turn `result` BEFORE the user's turn
+    // even starts. Treating it as terminal ends the operation with no content
+    // and drops the real turn that follows — the reply stays a `...` shell.
+    if (isEmptyTaskNotificationResult(raw)) return [];
+
     // Emit authoritative grand-total usage from CC's result event. The
     // executor currently ignores this phase (it persists per-turn via
     // turn_metadata), but we still emit it so other consumers — cost
     // displays, logs — can read the normalized total.
     const events: HeterogeneousAgentEvent[] = [];
-    const usage = toUsageData(raw.usage);
+    const usage = this.extractResultUsage(raw);
     if (usage) {
       events.push(
         this.makeEvent('step_complete', {
@@ -2185,7 +2234,7 @@ export class ClaudeCompatibleStreamAdapter implements AgentEventAdapter {
         // every `assistant` event, so `handleAssistant` deliberately skips the
         // emission and lets this branch own it. `message_delta.usage` carries
         // the full final usage (input + cache + final output_tokens).
-        const usage = toUsageData(event.usage);
+        const usage = this.extractUsage(event.usage);
         if (!usage) return [];
         return [
           this.makeEvent('step_complete', {

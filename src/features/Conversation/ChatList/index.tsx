@@ -3,15 +3,19 @@
 import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
-import { memo, useCallback, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo } from 'react';
 
 import AsyncError from '@/components/AsyncError';
 import { useFetchTopicMemories } from '@/hooks/useFetchMemoryForTopic';
 import { useFetchNotebookDocuments } from '@/hooks/useFetchNotebookDocuments';
-import { getMessageListCacheIdentity } from '@/services/message/cache';
+import { getMessageListCacheIdentity, isMessageListServerVerified } from '@/services/message/cache';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
+import {
+  hasPendingInterventions,
+  INTERVENTION_REFRESH_INTERVAL,
+} from '@/store/chat/utils/interventionSync';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { authSelectors, settingsSelectors } from '@/store/user/selectors';
@@ -22,16 +26,23 @@ import MessageItem from '../Messages';
 import type { WorkflowExpandLevelDefault } from '../Messages/AssistantGroup/components/WorkflowCollapse';
 import { BackgroundRunHintContext } from '../Messages/Contexts/BackgroundRunHintContext';
 import { MessageActionProvider } from '../Messages/Contexts/MessageActionProvider';
-import { dataSelectors, inputSelectors, useConversationStore } from '../store';
+import {
+  dataSelectors,
+  inputSelectors,
+  useConversationStore,
+  useConversationStoreApi,
+} from '../store';
 import AgentSignalReceiptList from './components/AgentSignalReceiptList';
 import { RefreshError } from './components/RefreshError';
 import VirtualizedList from './components/VirtualizedList';
 import { useAgentSignalReceipts } from './hooks/useAgentSignalReceipts';
+import { useInitialRevalidation } from './hooks/useInitialRevalidation';
 import { useMessageRefreshError } from './hooks/useMessageRefreshError';
 import { resolveMessageListFeedback } from './resolveMessageListFeedback';
 import { buildChatRows } from './utils/chatRows';
 import type { MessageDeepLink } from './utils/messageDeepLink';
 import { resolveMessageDeepLink } from './utils/messageDeepLink';
+import { resolveRefreshingRowId } from './utils/refreshingRow';
 
 const MessageAuthorConfigLoader = memo<{ agentId: string; isLogin: boolean | undefined }>(
   ({ agentId, isLogin }) => {
@@ -123,12 +134,10 @@ const ChatList = memo<ChatListProps>(
       s.useFetchMessages,
     ]);
     const activeAgentId = useChatStore((s) => s.activeAgentId);
-    // Suppress SWR focus revalidate while the current topic is streaming —
-    // the server-pushed UIChatMessage[] snapshot at step boundaries is the
-    // source of truth during that window. A focus refetch could hit DB
-    // mid-fan-out and clobber the in-memory streamed state with a stale
-    // assistant placeholder.
+    // Pending cards still refresh during streaming; the data slice merges only
+    // intervention changes so lagging DB snapshots cannot replace live text.
     const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
+    const hasPendingApproval = useConversationStore((s) => hasPendingInterventions(s.dbMessages));
     // A client-minted topic whose server row does not exist yet (first-send
     // window) must not be fetched: the query would legitimately return an empty
     // list and `onData` would wipe the optimistic messages already on screen.
@@ -139,14 +148,23 @@ const ChatList = memo<ChatListProps>(
     );
     const { enableAgentSelfIteration } = useServerConfigStore(featureFlagsSelectors);
     const messagesSWR = useFetchMessages(context, {
-      revalidateOnFocus: !isStreaming,
+      refreshInterval: hasPendingApproval ? INTERVENTION_REFRESH_INTERVAL : 0,
+      revalidateOnFocus: hasPendingApproval || !isStreaming,
       skipFetch: skipFetch || isCreatingTopic,
+      syncInterventions: true,
     });
+    const messageListIdentity = getMessageListCacheIdentity(context);
     const refreshError = useMessageRefreshError({
       error: messagesSWR.error,
-      identity: getMessageListCacheIdentity(context),
+      identity: messageListIdentity,
       isValidating: messagesSWR.isValidating,
       mutate: messagesSWR.mutate,
+    });
+    const isServerVerified = useCallback(() => isMessageListServerVerified(context), [context]);
+    const isInitialRevalidation = useInitialRevalidation({
+      identity: messageListIdentity,
+      isServerVerified,
+      isValidating: messagesSWR.isValidating,
     });
     const allDisplayMessages = useConversationStore(dataSelectors.displayMessages);
     const displayMessages = useMemo(
@@ -249,10 +267,25 @@ const ChatList = memo<ChatListProps>(
     const isNewConversation = !context.topicId;
     const feedback = resolveMessageListFeedback({
       error: refreshError.error,
+      isInitialRevalidation,
       isNewConversation,
       isStreaming,
       messagesInit,
     });
+
+    // The hint renders inside the latest assistant row, which subscribes to the
+    // store itself (virtua would not repaint a cached row from a prop change).
+    // Resolved against the rows actually rendered: folded steer chains in the
+    // default list, flat (and possibly filtered) messages for custom renderers.
+    const refreshingRowId = useMemo(
+      () =>
+        feedback.showRefreshing ? resolveRefreshingRowId(displayMessages, !itemContent) : undefined,
+      [displayMessages, feedback.showRefreshing, itemContent],
+    );
+    const storeApi = useConversationStoreApi();
+    useEffect(() => {
+      storeApi.setState({ refreshingRowId });
+    }, [refreshingRowId, storeApi]);
 
     // `messagesInit` is the settled-data signal: [] is a valid loaded result.
     // A first-load failure owns the whole surface, while a background failure

@@ -131,7 +131,7 @@ export class ServerMessageTransport implements MessageTransport {
 
     if (!options?.flatten) return messages;
 
-    const { flatList } = parse(messages);
+    const { flatList } = parse(messages, undefined, { threadId: params?.threadId });
     return flatList;
   }
 

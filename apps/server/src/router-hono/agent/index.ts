@@ -9,10 +9,12 @@ import { gatewayCron } from './handlers/gatewayCron';
 import { gatewayDesiredConnections } from './handlers/gatewayDesiredConnections';
 import { gatewayStart } from './handlers/gatewayStart';
 import { groupMemberCallback } from './handlers/groupMemberCallback';
+import { llmRelayChunks, llmRelayPayload } from './handlers/llmRelay';
 import { messengerInstall } from './handlers/messengerInstall';
 import { messengerOAuthCallback } from './handlers/messengerOAuthCallback';
 import { messengerWebhook } from './handlers/messengerWebhook';
 import { platformWebhook } from './handlers/platformWebhook';
+import { reapOperations } from './handlers/reapOperations';
 import { runStep, runStepHealth } from './handlers/runStep';
 import { subAgentCallback } from './handlers/subAgentCallback';
 import { toolResult } from './handlers/toolResult';
@@ -41,6 +43,13 @@ app.get('/run', runStepHealth);
 // POST /api/agent/tool-result — gateway-side tool result LPUSH'd to Redis
 app.post('/tool-result', serviceTokenAuth(), toolResult);
 
+// LLM relay: the user's device runs one LLM attempt for a device-only model
+// provider. Auth is the per-call lease token carried by `llm_execute`.
+// GET  /api/agent/llm-relay/:callId/payload — request body of the attempt
+app.get('/llm-relay/:callId/payload', llmRelayPayload);
+// POST /api/agent/llm-relay/:callId/chunks — one batch of protocol chunks
+app.post('/llm-relay/:callId/chunks', llmRelayChunks);
+
 // POST /api/agent/finalize-abandoned — watchdog reverse-trigger finalize
 app.post('/finalize-abandoned', serviceTokenAuth(), finalizeAbandoned);
 app.get('/finalize-abandoned', (c) =>
@@ -56,6 +65,13 @@ app.get(
   '/gateway',
   bearerSecretAuth(() => process.env.CRON_SECRET),
   gatewayCron,
+);
+
+// GET /api/agent/reap-operations — Vercel cron entry point (Bearer CRON_SECRET)
+app.get(
+  '/reap-operations',
+  bearerSecretAuth(() => process.env.CRON_SECRET),
+  reapOperations,
 );
 
 // POST /api/agent/gateway/start — non-Vercel ensureRunning (Bearer KEY_VAULTS_SECRET)

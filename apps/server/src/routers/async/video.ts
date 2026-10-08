@@ -22,6 +22,7 @@ import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
+import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
 import { FileSource } from '@/types/files';
 
 const log = debug('lobe-video:async');
@@ -226,6 +227,7 @@ export const videoRouter = router({
           try {
             await chargeAfterGenerate({
               computePriceParams: {
+                duration: (batch?.config as any)?.duration,
                 generateAudio: (batch?.config as any)?.generateAudio,
                 resolution: (batch?.config as any)?.resolution,
               },
@@ -244,7 +246,7 @@ export const videoRouter = router({
               model: resolvedModelId,
               prechargeResult,
               provider,
-              usage: undefined,
+              usage: measureVideoOutputUsage(resolvedModelId, processResult),
               userId: ctx.userId,
               workspaceId,
             });

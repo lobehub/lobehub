@@ -50,10 +50,16 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       // Let the page settle before reporting where we landed.
       await this.waitForLoad(sessionId);
       const next = await electronBrowserSidebarService.getState({ sessionId });
-      return this.success(`Opened ${next.url}${next.title ? ` — "${next.title}"` : ''}`, {
-        title: next.title,
-        url: next.url,
-      });
+      const loading = next.isLoading
+        ? ' The page is still loading (some requests have not finished); its content may be incomplete, but snapshot/readPage work now.'
+        : '';
+      return this.success(
+        `Opened ${next.url}${next.title ? ` — "${next.title}"` : ''}.${loading}`,
+        {
+          title: next.title,
+          url: next.url,
+        },
+      );
     } catch (error) {
       return this.errorResult(error);
     }
@@ -65,10 +71,19 @@ class BrowserExecutor extends BaseExecutor<typeof BrowserApiEnum> {
       const result = await electronBrowserControlService.snapshot({
         sessionId: this.sessionIdOf(ctx),
       });
-      if (!result.success || !result.snapshot)
-        return this.failure(result.error ?? 'Snapshot failed');
+      if (!result.success) return this.failure(result.error ?? 'Snapshot failed');
 
       const header = `Page: ${result.title ?? ''} (${result.url ?? ''})`;
+      // A page with nothing interactive in view (an image, a JSON response, a
+      // plain-text document) yields an empty snapshot. That is an answer, not a
+      // failure — reporting it as one sent agents into retry loops.
+      if (!result.snapshot) {
+        return this.success(
+          `${header}\nNo interactive elements (links, buttons, form fields, headings) are visible on this page. Use readPage to read its text, or screenshot to see it.`,
+          { snapshot: '', title: result.title, url: result.url },
+        );
+      }
+
       return this.success(`${header}\n${result.snapshot}`, {
         snapshot: result.snapshot,
         title: result.title,

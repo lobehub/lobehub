@@ -1,9 +1,8 @@
 'use client';
 
-import { Flexbox, Input } from '@lobehub/ui';
+import { Flexbox } from '@lobehub/ui';
 import type { ModalInstance } from '@lobehub/ui/base-ui';
-import { Button, createModal, Text, useModalContext } from '@lobehub/ui/base-ui';
-import type { InputRef } from 'antd';
+import { Button, createModal, Input, Text, useModalContext } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
 import { t } from 'i18next';
 import { useEffect, useRef, useState } from 'react';
@@ -36,7 +35,7 @@ const AddWorkingDirContent = ({
   const [value, setValue] = useState(defaultPath ?? '');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
-  const inputRef = useRef<InputRef>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     queueMicrotask(() => inputRef.current?.focus());

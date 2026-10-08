@@ -169,8 +169,27 @@ export interface AcceptanceMetadata {
   [key: string]: unknown;
   /** Current checklist organization; frozen plans, results and reviews keep their original IDs. */
   checkGrouping?: { groups: AcceptanceCheckGroup[]; version: number };
+  /**
+   * Pull requests linked by hand (`lh acceptance link-pr`, or ingest finding
+   * one). Display-only claims: nothing is verified against the provider, so
+   * they never drive merge → accepted. That stays with provider-verified
+   * `scm_change_requests` rows, which take precedence when both name a PR.
+   */
+  pullRequests?: AcceptancePullRequestLink[];
   /** User-set display-title override for the acceptance (sidebar rename). */
   title?: string;
+}
+
+/** A hand-linked pull request on an acceptance. */
+export interface AcceptancePullRequestLink {
+  /** When it was linked (ISO 8601). */
+  linkedAt: string;
+  number: number;
+  provider: 'github';
+  /** `owner/name` as pasted; compare case-insensitively. */
+  repoFullName: string;
+  title?: string;
+  url: string;
 }
 
 /**
@@ -253,15 +272,56 @@ export interface ReviewProposalOutcome {
 }
 
 /**
+ * Where on a video evidence an annotation sits, in seconds from the start.
+ * `start` alone pins one frame; `start` + `end` marks a span.
+ */
+export interface AcceptanceReviewAnnotationTime {
+  end?: number;
+  start: number;
+}
+
+/**
  * A user-drawn region on one evidence image, in coordinates normalized to the
- * image box (0–1) so the overlay renders at any display size.
+ * image box (0–1) so the overlay renders at any display size. On video evidence
+ * the region is drawn on the frame at `time.start`; a note that marks a moment
+ * or a span without circling an area carries the whole frame
+ * (`FULL_FRAME_RECT` in `@lobechat/const/verify`).
  */
 export interface AcceptanceReviewAnnotation {
   /** The note attached to this region. */
   comment?: string;
+  /**
+   * The agent chapter this note disputes, quoted so the objection still reads
+   * correctly after the evidence is re-uploaded.
+   */
+  disputes?: Pick<VerifyEvidenceChapter, 'kind' | 'note' | 't'>;
   /** The evidence row (`verify_evidence.id`) the region was drawn on. */
   evidenceId: string;
   rect: { height: number; width: number; x: number; y: number };
+  /** Video evidence only: the frame or span the note is about. */
+  time?: AcceptanceReviewAnnotationTime;
+}
+
+/**
+ * How an agent marker on a video reads (runtime set: `verifyEvidenceChapterKinds`).
+ *
+ * - `step`: an action the agent performed, logged while driving the recording.
+ * - `check`: something the agent verified on this frame — a claim for the reviewer
+ *   to audit, never a pass.
+ * - `flag`: an anomaly the agent noticed and judged harmless, disclosed so the
+ *   reviewer can disagree.
+ */
+export type VerifyEvidenceChapterKind = 'check' | 'flag' | 'step';
+
+/** An agent-authored marker on a video evidence (`verify_evidence.metadata.chapters`). */
+export interface VerifyEvidenceChapter {
+  kind: VerifyEvidenceChapterKind;
+  /** Short name shown on the timeline; required for `step`. */
+  label?: string;
+  /** What the agent claims or noticed; required for `check` and `flag`. */
+  note?: string;
+  /** Seconds from the start of the video. */
+  t: number;
 }
 
 /**
@@ -735,6 +795,25 @@ export interface VerifyCheckResultMetadata {
 }
 
 /**
+ * How one round's checks came out, counted — what a surface shows as
+ * "3 passed · 1 undecided" without reading the checks themselves.
+ *
+ * Deliberately the same three-way split the acceptance's criteria list uses
+ * (`CriterionOutcomeState`): a check with no verdict falls back to its status,
+ * and everything else is undecided. Two surfaces reading the same round must
+ * not be able to disagree about it.
+ */
+export interface VerifyCheckTally {
+  /** Judged failed — a failed verdict, or a failed status where no verdict landed. */
+  failed: number;
+  /** Judged passed — a passed verdict, or a passed status where no verdict landed. */
+  passed: number;
+  total: number;
+  /** Planned but never judged: neither passed nor failed. */
+  unjudged: number;
+}
+
+/**
  * Immutable snapshot of one check item, frozen into `agent_operations.verify_plan`
  * when the plan is confirmed. The resolved content (title / verifierConfig) is
  * copied in — not just a criterion FK — so editing the source criterion / rubric
@@ -834,7 +913,7 @@ export interface ToulminVerdict {
 /**
  * Declares that a criterion is evidence-driven: it cannot pass on the
  * deliverable text alone — the run must capture and upload an artifact of each
- * listed `type` (via `lh verify upload-evidence`). Stored under the plan item's
+ * listed `type` (via `lh acceptance run result submit`). Stored under the plan item's
  * `verifierConfig.requiredEvidence`, so adding it needs no schema change. The
  * structural gate marks a required item `uncertain` when any listed type is
  * missing, independent of the LLM judge.

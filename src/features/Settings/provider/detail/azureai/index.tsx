@@ -33,7 +33,7 @@ const useProviderCard = (): ProviderItem => {
         ),
         desc: t('azureai.token.desc'),
         label: t('azureai.token.title'),
-        name: [KeyVaultsConfigKey, LLMProviderApiTokenKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`,
       },
       {
         children: isLoading ? (
@@ -43,7 +43,7 @@ const useProviderCard = (): ProviderItem => {
         ),
         desc: t('azureai.endpoint.desc'),
         label: t('azureai.endpoint.title'),
-        name: [KeyVaultsConfigKey, LLMProviderBaseUrlKey],
+        name: `${KeyVaultsConfigKey}.${LLMProviderBaseUrlKey}`,
       },
     ],
   };

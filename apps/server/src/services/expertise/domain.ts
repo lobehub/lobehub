@@ -4,6 +4,7 @@ import {
   EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
   EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,
 } from '@lobechat/prompts';
+import { RequestTrigger } from '@lobechat/types';
 import { z } from 'zod';
 
 import { ExpertiseModel } from '@/database/models/expertise';
@@ -97,7 +98,7 @@ export class ExpertiseDomainService {
           schema: EXPERTISE_DOMAIN_DRAFT_JSON_SCHEMA,
         },
         {
-          metadata: { trigger: 'expertise_domain_draft' },
+          metadata: { trigger: RequestTrigger.Expertise },
           tracing: {
             agentId: input.agentId,
             promptVersion: EXPERTISE_DOMAIN_DRAFT_PROMPT_VERSION,

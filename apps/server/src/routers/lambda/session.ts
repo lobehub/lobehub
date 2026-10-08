@@ -6,6 +6,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentModel } from '@/database/models/agent';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { ResourceTransferRequestModel } from '@/database/models/resourceTransferRequest';
 import { SessionModel } from '@/database/models/session';
 import { SessionGroupModel } from '@/database/models/sessionGroup';
 import { insertAgentSchema, insertSessionSchema } from '@/database/schemas';
@@ -14,6 +15,7 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { createFtsSearchRepo } from '@/server/services/ftsSearch';
 import { assertCanEditResource } from '@/server/services/resourcePermission';
+import { TrashService } from '@/server/services/trash';
 import { AgentChatConfigSchema } from '@/types/agent';
 import { LobeMetaDataSchema } from '@/types/meta';
 import { type BatchTaskResult } from '@/types/service';
@@ -239,10 +241,37 @@ export const sessionRouter = router({
         }
       }
 
-      const { orphanedAgentIds, result } = await ctx.sessionModel.delete(input.id);
+      // A session is normally the legacy 1:1 shell of an agent: removing it
+      // means removing the agent, so route through the agent's recycle-bin
+      // cascade (agent + session + topics all stamped, restorable as one unit).
+      // When the agent has other shells (or this shell holds other agents),
+      // only this session goes — the agent must stay with its other sessions.
+      if (
+        session?.agent &&
+        (await ctx.sessionModel.isSoleShellOfAgent(session.id, session.agent.id))
+      ) {
+        const trashService = new TrashService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        const trashed = await trashService.trashAgent(session.agent.id);
+        // Same as `agent.removeAgent`: the trashed agent is invisible to a
+        // pending handover's recipient too, so an acceptance would move
+        // ownership of recycle-bin content — void it now.
+        if (ctx.workspaceId) {
+          await new ResourceTransferRequestModel(
+            ctx.serverDB,
+            ctx.workspaceId,
+          ).invalidateForResources('agent', [session.agent.id]);
+        }
+        return trashed;
+      }
 
-      // Mirror `agent.removeAgent`: orphan-deleted shared agents must not
-      // leave dangling resource_permissions rows behind.
+      // No linked agent (a stray legacy row) or a shell the agent does not
+      // depend on: hard delete this session only, as before. An agent left
+      // without any shell is orphan-deleted by the model.
+      const { orphanedAgentIds, result } = await ctx.sessionModel.delete(input.id);
       if (ctx.workspaceId && orphanedAgentIds.length > 0) {
         const permissionModel = new ResourcePermissionModel(ctx.serverDB, ctx.workspaceId);
         await Promise.all(orphanedAgentIds.map((id) => permissionModel.removeAll('agent', id)));

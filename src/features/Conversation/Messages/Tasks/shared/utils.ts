@@ -71,8 +71,12 @@ export const accumulateUsage = (blocks: AssistantContentBlock[]): ModelUsage => 
   return blocks.reduce((acc, block) => {
     const usage = block.usage;
     if (!usage) return acc;
+    // Credit-billed CLIs (e.g. Qoder) report every token field as 0 — without
+    // credits the task footer would show no consumption at all.
+    const credits = (acc.credits || 0) + (usage.credits || 0);
     return {
       cost: (acc.cost || 0) + (usage.cost || 0),
+      ...(credits ? { credits } : {}),
       totalInputTokens: (acc.totalInputTokens || 0) + (usage.totalInputTokens || 0),
       totalOutputTokens: (acc.totalOutputTokens || 0) + (usage.totalOutputTokens || 0),
       totalTokens: (acc.totalTokens || 0) + (usage.totalTokens || 0),

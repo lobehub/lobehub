@@ -14,6 +14,8 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { FtsSearchKnowledgeBaseDocumentHit } from '@/database/repositories/ftsSearch';
 import { knowledgeBaseFiles } from '@/database/schemas';
+import { isFileBackedPlaceholder } from '@/database/utils/fileBackedPlaceholder';
+import { readOriginalCharCount } from '@/database/utils/parsedDocument';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { getServerDefaultFilesConfig } from '@/server/globalConfig';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -26,6 +28,8 @@ export interface FileContentResult {
   fileId: string;
   filename: string;
   metadata?: Record<string, any> | null;
+  /** Original character count when the stored text was cut at parse time. */
+  originalCharCount?: number;
   preview?: string;
   totalCharCount?: number;
   totalLineCount?: number;
@@ -241,6 +245,14 @@ export class KnowledgeBaseSearchService {
               filename: `Unknown document ${id}`,
             };
           }
+          // A file uploaded into an agent's Documents panel is an empty row pointing at the
+          // original file; its text only exists once the file is parsed.
+          if (isFileBackedPlaceholder(doc)) {
+            return this.readFileContent(doc.fileId!, {
+              filename: doc.title || doc.filename || undefined,
+              resultId: id,
+            });
+          }
           const content = doc.content ?? '';
           const lines = content.split('\n');
           return {
@@ -248,6 +260,7 @@ export class KnowledgeBaseSearchService {
             fileId: id,
             filename: doc.title || doc.filename || 'Untitled',
             metadata: doc.metadata,
+            originalCharCount: readOriginalCharCount(doc.metadata),
             preview: lines.slice(0, 5).join('\n'),
             totalCharCount: content.length,
             totalLineCount: lines.length,
@@ -255,45 +268,59 @@ export class KnowledgeBaseSearchService {
         }
 
         // ---- Branch B: file_* — original file/parse path ----
-        const file = await this.fileModel.findById(id);
-        if (!file) {
-          return {
-            content: '',
-            error: 'File not found',
-            fileId: id,
-            filename: `Unknown file ${id}`,
-          };
-        }
-
-        let document: { content: string | null; metadata: Record<string, any> | null } | undefined =
-          await this.documentModel.findByFileId(id);
-
-        if (!document) {
-          try {
-            document = await this.documentService.parseFile(id);
-          } catch (error) {
-            return {
-              content: '',
-              error: `Failed to parse file: ${(error as Error).message}`,
-              fileId: id,
-              filename: file.name,
-            };
-          }
-        }
-
-        const content = document.content || '';
-        const lines = content.split('\n');
-        return {
-          content,
-          fileId: id,
-          filename: file.name,
-          metadata: document.metadata,
-          preview: lines.slice(0, 5).join('\n'),
-          totalCharCount: content.length,
-          totalLineCount: lines.length,
-        };
+        return this.readFileContent(id, { resultId: id });
       },
       { concurrency: 3 },
     );
+  }
+
+  /**
+   * Read a file's parsed text, parsing it on first read.
+   *
+   * `resultId` is echoed back as `fileId` so callers can match results to the ids they asked for.
+   */
+  private async readFileContent(
+    fileId: string,
+    { filename, resultId }: { filename?: string; resultId: string },
+  ): Promise<FileContentResult> {
+    const file = await this.fileModel.findById(fileId);
+    if (!file) {
+      return {
+        content: '',
+        error: 'File not found',
+        fileId: resultId,
+        filename: filename ?? `Unknown file ${resultId}`,
+      };
+    }
+
+    // `findByFileId` skips agent-document placeholders, so a hit is always parsed text.
+    let document: { content: string | null; metadata: Record<string, any> | null } | undefined =
+      await this.documentModel.findByFileId(fileId);
+
+    if (!document) {
+      try {
+        document = await this.documentService.parseFile(fileId);
+      } catch (error) {
+        return {
+          content: '',
+          error: `Failed to parse file: ${(error as Error).message}`,
+          fileId: resultId,
+          filename: filename ?? file.name,
+        };
+      }
+    }
+
+    const content = document.content || '';
+    const lines = content.split('\n');
+    return {
+      content,
+      fileId: resultId,
+      filename: filename ?? file.name,
+      metadata: document.metadata,
+      originalCharCount: readOriginalCharCount(document.metadata),
+      preview: lines.slice(0, 5).join('\n'),
+      totalCharCount: content.length,
+      totalLineCount: lines.length,
+    };
   }
 }

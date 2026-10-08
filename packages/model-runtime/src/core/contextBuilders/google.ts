@@ -80,7 +80,6 @@ const supportsFunctionCallId = (model?: string) => {
  * `.m4a` voice note (`ftypmp42`) is detected as `video/mp4`. Vertex AI
  * intermittently rejects such audio-only payloads with 400 INVALID_ARGUMENT,
  * while `audio/mp4` succeeds consistently.
- * @see https://linear.app/lobehub/issue/LOBE-13855
  */
 const AUDIO_CONTAINER_MIME_TYPES: Record<string, string> = {
   'video/mp4': 'audio/mp4',

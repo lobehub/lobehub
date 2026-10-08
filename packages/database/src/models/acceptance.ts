@@ -1,15 +1,45 @@
 import type {
   AcceptanceCheckGroup,
+  AcceptanceMetadata,
   AcceptanceStatus,
   AcceptanceSubjectType,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, lt, or, sql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { and, desc, eq, exists, inArray, isNull, lt, not, or, sql } from 'drizzle-orm';
 
+import { acceptanceComments } from '../schemas/acceptanceComment';
+import { goalNodes } from '../schemas/goalGraph';
 import type { AcceptanceItem, NewAcceptance } from '../schemas/verify';
 import { acceptances } from '../schemas/verify';
+import { workspaceMembers } from '../schemas/workspace';
 import type { LobeChatDatabase } from '../type';
 import { isUuid } from '../utils/uuid';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
+
+/**
+ * Whose acceptances the list shows.
+ *
+ * `all` / `created` stay inside the active scope (personal or workspace);
+ * `participated` follows the caller across scopes — taking part in a review
+ * is about the person, not the workspace they happen to have open.
+ */
+export type AcceptanceListScope = 'all' | 'created' | 'participated';
+
+/**
+ * Where an acceptance came from. `goal` is a task acceptance whose task is a
+ * step of a goal graph; `standalone` also covers the rare document subject.
+ */
+export type AcceptanceListSource = 'all' | 'goal' | 'standalone' | 'task' | 'topic';
+
+/** `null` = only acceptances filed under no project. */
+export type AcceptanceListProject = string | null;
+
+export interface AcceptanceListQuery {
+  projectId?: AcceptanceListProject;
+  scope?: AcceptanceListScope;
+  source?: AcceptanceListSource;
+  statuses?: AcceptanceStatus[];
+}
 
 /** Statuses a user's decision produced — sticky until explicitly re-opened. */
 const TERMINAL_ACCEPTANCE_STATUSES = new Set<AcceptanceStatus>(['accepted', 'closed', 'rejected']);
@@ -55,6 +85,93 @@ export class AcceptanceModel {
 
   private ownership = () =>
     buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, acceptances);
+
+  /**
+   * Acceptances the caller has spoken on — a remark or an approval, replies
+   * included; a bare emoji reaction is not taking part. Rows the caller can no
+   * longer read (made private, or they left its workspace) drop out: the link
+   * would 404 and the title is no longer theirs to see. Mirrors the read rule
+   * of `resolveAcceptanceCommentAccess`.
+   */
+  private participation = (): SQL =>
+    and(
+      exists(
+        this.db
+          .select({ one: sql`1` })
+          .from(acceptanceComments)
+          .where(
+            and(
+              eq(acceptanceComments.acceptanceId, acceptances.id),
+              eq(acceptanceComments.authorUserId, this.userId),
+              inArray(acceptanceComments.kind, ['comment', 'approval']),
+              isNull(acceptanceComments.deletedAt),
+            ),
+          ),
+      ),
+      or(
+        eq(acceptances.userId, this.userId),
+        eq(acceptances.visibility, 'public'),
+        exists(
+          this.db
+            .select({ one: sql`1` })
+            .from(workspaceMembers)
+            .where(
+              and(
+                eq(workspaceMembers.workspaceId, acceptances.workspaceId),
+                eq(workspaceMembers.userId, this.userId),
+                isNull(workspaceMembers.deletedAt),
+              ),
+            ),
+        ),
+      ),
+    )!;
+
+  private sourceCondition = (source: AcceptanceListSource): SQL | undefined => {
+    const goalStep = exists(
+      this.db
+        .select({ one: sql`1` })
+        .from(goalNodes)
+        .where(eq(goalNodes.taskId, acceptances.subjectId)),
+    );
+    switch (source) {
+      case 'topic': {
+        return eq(acceptances.subjectType, 'topic');
+      }
+      case 'task': {
+        return and(eq(acceptances.subjectType, 'task'), not(goalStep));
+      }
+      case 'goal': {
+        return and(eq(acceptances.subjectType, 'task'), goalStep);
+      }
+      case 'standalone': {
+        return inArray(acceptances.subjectType, ['standalone', 'document']);
+      }
+      default: {
+        return undefined;
+      }
+    }
+  };
+
+  /** The shared WHERE of {@link query} and {@link queryPage}. */
+  private listConditions = ({
+    projectId,
+    scope = 'all',
+    source = 'all',
+    statuses,
+  }: AcceptanceListQuery) => {
+    const conditions: SQL[] = [];
+    if (scope === 'participated') conditions.push(this.participation());
+    else {
+      conditions.push(this.ownership());
+      if (scope === 'created') conditions.push(eq(acceptances.userId, this.userId));
+    }
+    if (projectId === null) conditions.push(isNull(acceptances.projectId));
+    else if (projectId) conditions.push(eq(acceptances.projectId, projectId));
+    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const sourceCondition = this.sourceCondition(source);
+    if (sourceCondition) conditions.push(sourceCondition);
+    return conditions;
+  };
 
   /** Presentation-only write: never starts a round or rewrites evidence-bearing snapshots. */
   setCheckGroups = async (id: string, groups: AcceptanceCheckGroup[], expectedVersion: number) => {
@@ -223,7 +340,12 @@ export class AcceptanceModel {
         await this.db
           .update(acceptances)
           .set({
-            metadata,
+            // Only the title key: `existing` was read without a lock.
+            ...(nextTitle
+              ? {
+                  metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify({ title: nextTitle })}::jsonb`,
+                }
+              : {}),
             projectId: nextProjectId ?? existing.projectId,
             requirement: nextRequirement ?? existing.requirement,
           })
@@ -255,18 +377,14 @@ export class AcceptanceModel {
 
   /** Acceptances for the current user/workspace, newest first. */
   query = async (
-    options: {
+    options: AcceptanceListQuery & {
       limit?: number;
-      projectId?: string;
-      statuses?: AcceptanceStatus[];
       unbounded?: boolean;
     } = {},
   ) => {
-    const { projectId, statuses, unbounded } = options;
+    const { unbounded, ...filters } = options;
     const limit = unbounded ? undefined : (options.limit ?? 50);
-    const conditions = [this.ownership()];
-    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
-    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const conditions = this.listConditions(filters);
 
     return this.db.query.acceptances.findMany({
       limit,
@@ -285,20 +403,15 @@ export class AcceptanceModel {
   queryPage = async ({
     cursor,
     limit = 30,
-    projectId,
-    statuses,
-  }: {
+    ...filters
+  }: AcceptanceListQuery & {
     cursor?: string;
     limit?: number;
-    projectId?: string;
-    statuses?: AcceptanceStatus[];
   } = {}): Promise<{
     items: AcceptanceItem[];
     nextCursor: string | null;
   }> => {
-    const conditions = [this.ownership()];
-    if (projectId) conditions.push(eq(acceptances.projectId, projectId));
-    if (statuses && statuses.length > 0) conditions.push(inArray(acceptances.status, statuses));
+    const conditions = this.listConditions(filters);
 
     // Millisecond-truncated createdAt — the precision the cursor round-trips
     // at. Comparing the raw timestamptz (microseconds) against a cursor read
@@ -344,6 +457,27 @@ export class AcceptanceModel {
     const [row] = await this.db
       .update(acceptances)
       .set(value)
+      .where(and(eq(acceptances.id, id), this.ownership()))
+      .returning();
+    return row;
+  };
+
+  /**
+   * Set some metadata keys atomically, leaving every other key as stored.
+   * Metadata holds independent slots (title, check grouping, linked pull
+   * requests) written by different paths; spreading a previously read
+   * snapshot back would drop or revert whatever another writer committed in
+   * between.
+   */
+  patchMetadata = async (
+    id: string,
+    patch: Partial<AcceptanceMetadata>,
+  ): Promise<AcceptanceItem | undefined> => {
+    const [row] = await this.db
+      .update(acceptances)
+      .set({
+        metadata: sql`COALESCE(${acceptances.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+      })
       .where(and(eq(acceptances.id, id), this.ownership()))
       .returning();
     return row;

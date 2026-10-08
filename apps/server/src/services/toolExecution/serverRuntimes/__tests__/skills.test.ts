@@ -217,6 +217,81 @@ describe('skillsRuntime', () => {
     30_000,
   );
 
+  it.each(
+    (['runCommand', 'execScript', 'exportFile'] as const).flatMap((api) =>
+      (['returned', 'thrown', 'stderr'] as const)
+        .filter((mode) => api !== 'exportFile' || mode !== 'stderr')
+        .map((mode) => ({ api, mode })),
+    ),
+  )(
+    'does not replay the side-effecting $api after a $mode timeout',
+    async ({ api, mode }) => {
+      const { executeToolWithRetry } = await import('@lobechat/agent-runtime');
+      const { skillsRuntime } = await import('../skills');
+      const { ToolExecutionService } = await import('../../index');
+      // A timeout at the gateway says nothing about whether the command ran:
+      // the sandbox may already have launched it, so replaying it re-runs any
+      // non-idempotent side effect (a background script started three times).
+      const error = { message: 'Gateway Timeout', name: 'MarketAPIError' };
+      const call =
+        mode === 'returned'
+          ? vi
+              .fn()
+              .mockResolvedValue({ error, filename: 'page.html', result: null, success: false })
+          : mode === 'thrown'
+            ? vi
+                .fn()
+                .mockRejectedValue(Object.assign(new Error('Gateway Timeout'), { status: 504 }))
+            : vi.fn().mockResolvedValue({
+                result: {
+                  exitCode: 28,
+                  stderr: 'curl: (28) Connection timed out after 30001 milliseconds',
+                  stdout: '',
+                  success: false,
+                },
+                success: true,
+              });
+      mocks.sandboxService.callTool.mockImplementation(call);
+      mocks.sandboxService.exportAndUploadFile.mockImplementation(call);
+      const runtime = await skillsRuntime.factory({
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+      const execute = () =>
+        api === 'exportFile'
+          ? runtime.exportFile({ path: '/page.html', filename: 'page.html' })
+          : runtime[api]({ command: 'nohup python extract.py &', description: 'Extract' });
+      const service = new ToolExecutionService({
+        builtinToolsExecutor: { execute } as never,
+        mcpService: {} as never,
+      });
+
+      const { attempts, result } = await executeToolWithRetry(
+        () =>
+          service.executeTool(
+            {
+              apiName: api,
+              arguments: '{}',
+              id: 'side-effect',
+              identifier: 'lobe-skills',
+              type: 'builtin',
+            },
+            { toolManifestMap: {} },
+          ),
+        // Same budget as the server tool transport (TOOL_MAX_RETRIES).
+        { maxRetries: 2 },
+      );
+
+      expect(call).toHaveBeenCalledTimes(1);
+      expect(attempts).toBe(1);
+      expect(result.success).toBe(false);
+      expect(result.error).toMatchObject({ kind: 'stop' });
+    },
+    60_000,
+  );
+
   beforeEach(() => {
     vi.clearAllMocks();
 
@@ -248,7 +323,12 @@ describe('skillsRuntime', () => {
     }));
     mocks.isLhCommand.mockReturnValue(false);
     mocks.buildDeviceLhEnv.mockReturnValue(undefined);
-    mocks.resolveContentWorkspaceId.mockResolvedValue(undefined);
+    // Mirrors the real helper: the context's own id when it has one, the
+    // agent's workspace when the dispatch path dropped it. Tests that exercise
+    // the recovery override this with a value of their own.
+    mocks.resolveContentWorkspaceId.mockImplementation(
+      async (ctx?: { workspaceId?: string }) => ctx?.workspaceId,
+    );
     mocks.resolveRunWorkspaceId.mockResolvedValue(undefined);
     mocks.sandboxService.callTool.mockResolvedValue({
       result: {
@@ -793,6 +873,67 @@ describe('skillsRuntime', () => {
       );
     });
 
+    // A multi-MB skill on a slow link outlasts the prepare deadline while the
+    // device keeps downloading; the next call reuses that work. Telling the
+    // model the app may be outdated made it give up and blame the user's app.
+    it.each([
+      '{"error":"TIMEOUT","success":false}',
+      'DEVICE_RESPONSE_TIMEOUT (HTTP 504)',
+      'The operation was aborted due to timeout',
+    ])(
+      'asks for a later retry, not an app update, when the prepare times out (%s)',
+      async (error) => {
+        mocks.prepareSkillDirectory.mockResolvedValue({ error, success: false });
+
+        const { skillsRuntime } = await import('../skills');
+        const runtime = await skillsRuntime.factory({
+          activeDeviceId: 'device-1',
+          serverDB: {} as never,
+          toolManifestMap: {},
+          topicId: 'topic-1',
+          userId: 'user-1',
+        });
+
+        const result = await runtime.execScript({
+          activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+          command: 'python scripts/run.py',
+          description: 'Run skill script',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.content).toContain('did not finish in time');
+        expect(result.content).toContain('run the same execScript again');
+        expect(result.content).not.toContain('may need an update');
+        expect(mocks.executeToolCall).not.toHaveBeenCalled();
+      },
+    );
+
+    it('keeps reporting a finished download failure that merely mentions a timeout', async () => {
+      mocks.prepareSkillDirectory.mockResolvedValue({
+        error: 'Failed to download skill package: 504 Gateway Timeout',
+        success: false,
+      });
+
+      const { skillsRuntime } = await import('../skills');
+      const runtime = await skillsRuntime.factory({
+        activeDeviceId: 'device-1',
+        serverDB: {} as never,
+        toolManifestMap: {},
+        topicId: 'topic-1',
+        userId: 'user-1',
+      });
+
+      const result = await runtime.execScript({
+        activatedSkills: [{ id: 'user-skill-id', name: 'user-skill' }],
+        command: 'python scripts/run.py',
+        description: 'Run skill script',
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('Failed to download skill package: 504 Gateway Timeout');
+      expect(result.content).not.toContain('did not finish in time');
+    });
+
     it('runs without a skill dir (workingDirectory cwd) when no archive exists', async () => {
       mocks.executeToolCall.mockResolvedValue({
         content: 'ok',
@@ -1240,6 +1381,11 @@ describe('skillsRuntime', () => {
     const { MarketService } = await import('@/server/services/market');
     const { skillsRuntime } = await import('../skills');
 
+    // The id now comes from the recovery helper, which answers with the
+    // context's own value when it has one and with the agent's workspace when
+    // the dispatch path dropped it.
+    mocks.resolveContentWorkspaceId.mockResolvedValueOnce('workspace-1');
+
     await skillsRuntime.factory({
       serverDB: {} as never,
       toolManifestMap: {},
@@ -1250,7 +1396,7 @@ describe('skillsRuntime', () => {
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
       }),
     );
 
@@ -1263,7 +1409,37 @@ describe('skillsRuntime', () => {
 
     expect(MarketService).toHaveBeenLastCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: undefined },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
+      }),
+    );
+  });
+
+  // The dispatch and resume paths reach this runtime without `workspaceId`, and
+  // a workspace topic resolved in the personal scope came back as "no such
+  // topic" — the run went ephemeral, `pwd` answered `/workspace`, and whatever
+  // the conversation wrote was thrown away with the session.
+  it('recovers the workspace from the agent when the context lost it', async () => {
+    const { MarketService } = await import('@/server/services/market');
+    const { skillsRuntime } = await import('../skills');
+
+    mocks.resolveContentWorkspaceId.mockImplementation(async () => 'workspace-1');
+
+    await skillsRuntime.factory({
+      agentId: 'agt-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+
+    // The same id the session is keyed by, so the sandbox this runtime reaches
+    // is the workspace's and not the member's personal one.
+    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agt-1' }),
+    );
+    expect(MarketService).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({ workspaceId: 'workspace-1' }),
       }),
     );
   });

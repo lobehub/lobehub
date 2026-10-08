@@ -47,9 +47,7 @@ const AssistantGroupActionsRenderer: FC<SingletonPortalProps> = ({ id }) => {
     (s) => s.actionsBar?.assistantGroup ?? s.actionsBar?.assistant,
   );
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
-  const lastAssistantMsg = useConversationStore(
-    dataSelectors.getGroupLatestMessageWithoutTools(id),
-  );
+  const lastAssistantMsg = useConversationStore(dataSelectors.getRowLatestMessageWithoutTools(id));
   const contentId = lastAssistantMsg?.id;
 
   if (!item) return null;

@@ -65,14 +65,31 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
 };
 
 /** Bump when the goal decomposition planning prompt meaningfully changes. */
-export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v5';
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v6';
 
 export const GOAL_DECOMPOSE_JSON_SCHEMA = {
   name: 'goal_decomposition',
   schema: {
     additionalProperties: false,
     properties: {
+      assumptions: { items: { maxLength: 280, type: 'string' }, maxItems: 5, type: 'array' },
       problemStatement: { maxLength: 280, minLength: 1, type: 'string' },
+      questions: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            assumption: { maxLength: 280, minLength: 1, type: 'string' },
+            blocking: { type: 'boolean' },
+            impact: { maxLength: 280, type: 'string' },
+            options: { items: { maxLength: 80, type: 'string' }, maxItems: 4, type: 'array' },
+            question: { maxLength: 280, minLength: 1, type: 'string' },
+          },
+          required: ['question', 'impact', 'options', 'assumption', 'blocking'],
+          type: 'object',
+        },
+        maxItems: 3,
+        type: 'array',
+      },
       tasks: {
         items: {
           additionalProperties: false,
@@ -90,13 +107,20 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
         type: 'array',
       },
     },
-    required: ['problemStatement', 'tasks'],
+    required: ['problemStatement', 'questions', 'assumptions', 'tasks'],
     type: 'object' as const,
   },
   strict: true,
 };
 
+export interface GoalClarificationAnswer {
+  answer: string;
+  question: string;
+}
+
 interface GoalDecomposeInput {
+  /** Questions the user already answered for this goal; present on the re-plan after a clarification. */
+  clarifications?: GoalClarificationAnswer[];
   requirement: string;
 }
 
@@ -105,6 +129,7 @@ interface GoalDecomposeInput {
  * answers plus the independent task directions to pursue, before anything runs.
  */
 export const chainGoalDecompose = ({
+  clarifications,
   requirement,
 }: GoalDecomposeInput): {
   messages: OpenAIChatMessage[];
@@ -129,11 +154,27 @@ export const chainGoalDecompose = ({
         '- Order tasks so that earlier ones produce what later ones consume.',
         '- For each task, set dependsOn to the 0-based indices of the earlier tasks whose outputs it consumes; use [] for a task that can start immediately. A pipeline-shaped goal (gather → analyze → synthesize) must express those edges — do not mark every task independent — but never invent a dependency the task does not actually need.',
         '- hypothesis marks a task as a candidate answer under test: one sentence stating what the direction bets on, which its result may confirm or refute, and from which later branches may be derived. Set it only for genuinely uncertain approaches that compete with or may replace an alternative. Certain delivery steps — gathering material, implementing a requested change, verifying a deliverable, writing a report — take null. Most goals have no hypothesis at all; never invent one to decorate an ordinary step.',
+        '- questions lists what you cannot determine from the goal yet whose answer would change the deliverable itself — its scope, audience, format, target, or a choice between incompatible directions. Never ask about anything the goal (or an answered clarification) already states, about details you can discover by working, or about preferences with a sensible default. Each carries impact (what changes with the answer), up to 4 short options when the answer is a choice, and assumption: what you will do if nobody answers.',
+        '- Set blocking when the goal leaves open something that defines the deliverable itself and no default is safe: who it is for, what exactly is to be analyzed or changed, what outcome a change must achieve, or which of incompatible directions to take. A guess there produces a different deliverable, not merely a weaker one. Formats, details, and preferences with a sensible default are never blocking.',
+        '- The user is asked once, before any work starts, and every blocking question goes into that single round — there is no later chance to ask, so list them all now rather than holding one back. Keep to what truly decides the deliverable. A goal that already states these things returns no blocking question.',
+        '- assumptions lists the non-obvious readings the plan relies on that the user may want to correct; skip the obvious. Write every assumption and every answered clarification into the instructions of the tasks it affects.',
         '- Write all fields in the language used by the goal.',
       ].join('\n'),
       role: 'system',
     },
-    { content: `## Goal\n${requirement}`, role: 'user' },
+    {
+      content: [
+        `## Goal\n${requirement}`,
+        clarifications?.length
+          ? `## Answered clarifications (authoritative; do not ask again)\n${clarifications
+              .map((item) => `- Q: ${item.question}\n  A: ${item.answer}`)
+              .join('\n')}`
+          : undefined,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+      role: 'user',
+    },
   ],
 });
 

@@ -6,9 +6,11 @@ import { SWRConfig, unstable_serialize } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as activeWorkspaceModule from '@/business/client/hooks/useActiveWorkspaceId';
+import { cacheScope, createReplicaState, replicaKeys } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr';
-import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
+import { builtinAgentKeys } from '@/libs/swr/keys';
 import * as cacheScopeModule from '@/libs/swr/useCacheScope';
+import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { agentService } from '@/services/agent';
 import { agentDocumentService } from '@/services/agentDocument';
 import { useGlobalStore } from '@/store/global';
@@ -17,6 +19,7 @@ import { type LobeAgentConfig } from '@/types/agent';
 import { withSWR } from '~test-utils';
 
 import { useAgentStore } from '../../store';
+import { agentConfigResource } from './projection';
 
 // Mock agentService
 vi.mock('@/services/agent', () => ({
@@ -74,7 +77,10 @@ beforeEach(() => {
   setScopedMutate(vi.fn() as any);
   useAgentStore.setState({
     activeAgentId: undefined,
+    agentConfigErrorMap: {},
+    agentConfigReplica: createReplicaState(),
     agentMap: {},
+    agentNotFoundMap: {},
     builtinAgentIdMap: {},
     availableAgents: undefined,
     updateAgentConfigSignal: undefined,
@@ -150,9 +156,7 @@ describe('AgentSlice Actions', () => {
         .optimisticUpdateAgentMeta('inbox-1', { name: 'Renamed chief' });
 
       expect(agentService.getBuiltinAgent).not.toHaveBeenCalled();
-      expect(scopedMutate).toHaveBeenCalledWith(agentConfigKeys.config('inbox-1'), updatedAgent, {
-        revalidate: false,
-      });
+      expect(useAgentStore.getState().agentMap['inbox-1']).toMatchObject({ name: 'Renamed chief' });
       expect(scopedMutate).toHaveBeenCalledWith(
         builtinAgentKeys.init('inbox', cacheScopeModule.getCacheScope()),
         updatedAgent,
@@ -197,9 +201,8 @@ describe('AgentSlice Actions', () => {
       expect(
         scopedMutate.mock.calls.some(
           ([key]) =>
-            JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('inbox-1')) ||
             JSON.stringify(key) ===
-              JSON.stringify(builtinAgentKeys.init('inbox', 'user-b:personal')),
+            JSON.stringify(builtinAgentKeys.init('inbox', 'user-b:personal')),
         ),
       ).toBe(false);
     });
@@ -888,7 +891,7 @@ describe('AgentSlice Actions', () => {
 
       expect(toast.error).toHaveBeenCalled();
       // Optimistic value must not survive a rejected write — refetch server truth.
-      expect(refreshSpy).toHaveBeenCalledWith('agent-1');
+      expect(refreshSpy).toHaveBeenCalledWith('agent-1', undefined, getCacheScope());
       expect(result.current.saveStatus).toBe('idle');
     });
 
@@ -1139,7 +1142,7 @@ describe('AgentSlice Actions', () => {
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
 
-    it('should refresh agent config SWR cache after a confirmed config update', async () => {
+    it('confirms the saved response in the replica without another request', async () => {
       const { result } = renderHook(() => useAgentStore());
       const scopedMutate = vi.fn().mockResolvedValue(undefined);
       setScopedMutate(scopedMutate as any);
@@ -1162,10 +1165,14 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
-      );
-      expect(configCacheCalls).toEqual([[agentConfigKeys.config('agent-1')]]);
+      expect(agentService.getAgentConfigById).not.toHaveBeenCalled();
+      expect(useAgentStore.getState().agentMap['agent-1']).toEqual({
+        id: 'agent-1',
+        model: 'model-b',
+        provider: 'lobehub',
+      });
+      // Confirmed (and persisted) as a server value, not left as a local edit.
+      expect(useAgentStore.getState().agentConfigReplica.entries['agent-1'].source).toBe('server');
     });
 
     it('should not refresh agent config SWR cache when save fails', async () => {
@@ -1189,10 +1196,16 @@ describe('AgentSlice Actions', () => {
         });
       });
 
-      const configCacheCalls = scopedMutate.mock.calls.filter(
-        ([key]) => JSON.stringify(key) === JSON.stringify(agentConfigKeys.config('agent-1')),
-      );
-      expect(configCacheCalls).toHaveLength(0);
+      const configCacheMatchers = scopedMutate.mock.calls
+        .map(([key]) => key)
+        .filter((key): key is (candidate: unknown) => boolean => typeof key === 'function');
+      expect(
+        configCacheMatchers.some((matcher) =>
+          matcher(
+            replicaKeys.sync('agentConfig', 1, getCacheScope(), 'agent-1', { agentId: 'agent-1' }),
+          ),
+        ),
+      ).toBe(false);
       expect(result.current.agentMap['agent-1']).toMatchObject({ model: 'model-b' });
     });
   });
@@ -1234,6 +1247,22 @@ describe('AgentSlice Actions', () => {
       expect(result.current.availableAgents).toBeUndefined();
     });
 
+    it('rolls back and rethrows when an optimistic projection owns the failure UI', async () => {
+      const { result } = renderHook(() => useAgentStore());
+      vi.mocked(agentService.updateAgentMeta).mockRejectedValue(new Error('save failed'));
+      act(() => {
+        useAgentStore.setState({ agentMap: { 'agent-1': { title: 'Original' } as any } });
+      });
+
+      await expect(
+        result.current.optimisticUpdateAgentMeta('agent-1', { title: 'Renamed' }, undefined, {
+          rethrow: true,
+        }),
+      ).rejects.toThrow('save failed');
+
+      expect(result.current.agentMap['agent-1']?.title).toBe('Original');
+    });
+
     // Note: refreshSessions is no longer called after optimistic update
     // as the implementation now uses API returned data directly
   });
@@ -1245,7 +1274,8 @@ describe('AgentSlice Actions', () => {
       });
 
       expect(agentService.getAgentConfigById).not.toHaveBeenCalled();
-      expect(result.current.data).toBeUndefined();
+      expect(result.current.isLoading).toBe(false);
+      expect(useAgentStore.getState().agentMap['agent-1']).toBeUndefined();
     });
 
     it('should not fetch when isLogin is undefined', async () => {
@@ -1255,7 +1285,7 @@ describe('AgentSlice Actions', () => {
       );
 
       expect(agentService.getAgentConfigById).not.toHaveBeenCalled();
-      expect(result.current.data).toBeUndefined();
+      expect(result.current.isLoading).toBe(false);
     });
 
     it('should not fetch when agentId is a chat-group session id', async () => {
@@ -1266,7 +1296,7 @@ describe('AgentSlice Actions', () => {
       );
 
       expect(agentService.getAgentConfigById).not.toHaveBeenCalled();
-      expect(result.current.data).toBeUndefined();
+      expect(result.current.isLoading).toBe(false);
     });
 
     it('should fetch agent config when logged in with valid agentId', async () => {
@@ -1282,7 +1312,10 @@ describe('AgentSlice Actions', () => {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
+      expect(result.current.isLoading).toBe(false);
 
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-1');
@@ -1318,7 +1351,10 @@ describe('AgentSlice Actions', () => {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
+      expect(result.current.isLoading).toBe(false);
 
       expect(useAgentStore.getState().agentConfigErrorMap['agent-1']).toBeUndefined();
     });
@@ -1367,9 +1403,107 @@ describe('AgentSlice Actions', () => {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
+      expect(result.current.isLoading).toBe(false);
 
       expect(useAgentStore.getState().agentNotFoundMap['agent-1']).toBeUndefined();
+    });
+  });
+
+  describe('agent config replica', () => {
+    const scopeOf = (id: string) => `agent-config-${id}:personal`;
+    /** The replica reads its own scope binding; keep the app's getter in step. */
+    const useScope = (get: () => string) => {
+      vi.spyOn(cacheScopeModule, 'getCacheScope').mockImplementation(get);
+      vi.spyOn(cacheScope, 'get').mockImplementation(get);
+      vi.spyOn(cacheScope, 'use').mockImplementation(get);
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+    };
+
+    it('paints the persisted config before the network answers', async () => {
+      const scope = scopeOf(crypto.randomUUID());
+      useScope(() => scope);
+      await agentConfigResource.storage!.set(
+        { queryKey: 'agent-1', scope },
+        { data: { id: 'agent-1', title: 'Cached' }, updatedAt: 1 },
+      );
+      let resolveFetch!: (value: any) => void;
+      vi.mocked(agentService.getAgentConfigById).mockImplementation(
+        () => new Promise((resolve) => (resolveFetch = resolve)),
+      );
+
+      renderHook(() => useAgentStore().useFetchAgentConfig(true, 'agent-1'), { wrapper: withSWR });
+
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toMatchObject({ title: 'Cached' }),
+      );
+      expect(useAgentStore.getState().agentConfigReplica.entries['agent-1'].source).toBe('storage');
+
+      await act(async () => resolveFetch({ id: 'agent-1', title: 'Server' }));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual({
+          id: 'agent-1',
+          title: 'Server',
+        }),
+      );
+    });
+
+    it('keeps optimistic edits out of the persisted row', async () => {
+      const scope = scopeOf(crypto.randomUUID());
+      useScope(() => scope);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(agentService.updateAgentConfig).mockRejectedValue(new Error('offline'));
+      act(() => {
+        useAgentStore.getState().internal_dispatchAgentMap('agent-1', { model: 'model-a' });
+      });
+
+      await act(async () => {
+        await useAgentStore
+          .getState()
+          .updateAgentConfigById('agent-1', { model: 'model-b' }, { showErrorMessage: false });
+      });
+
+      // The failed edit stays on screen (#16337) but never becomes the cached truth.
+      expect(useAgentStore.getState().agentMap['agent-1']).toMatchObject({ model: 'model-b' });
+      expect(
+        await agentConfigResource.storage!.get({ queryKey: 'agent-1', scope }),
+      ).toBeUndefined();
+    });
+
+    it('drops the previous identity configs on a scope switch', () => {
+      let scope = scopeOf('a');
+      useScope(() => scope);
+      act(() => {
+        useAgentStore.getState().internal_dispatchAgentMap('agent-a', { title: 'From A' });
+      });
+      expect(useAgentStore.getState().agentMap['agent-a']).toBeDefined();
+
+      scope = scopeOf('b');
+      act(() => {
+        useAgentStore.getState().internal_dispatchAgentMap('agent-b', { title: 'From B' });
+      });
+
+      expect(useAgentStore.getState().agentMap).toEqual({ 'agent-b': { title: 'From B' } });
+      expect(useAgentStore.getState().agentConfigReplica.scope).toBe(scopeOf('b'));
+    });
+
+    it('prefetches a config into agentMap, skipping agents already loaded', async () => {
+      vi.mocked(agentService.getAgentConfigById).mockResolvedValue({
+        id: 'agent-1',
+        title: 'Prefetched',
+      } as any);
+
+      await act(async () => {
+        await useAgentStore.getState().prefetchAgentConfig('agent-1');
+      });
+      expect(useAgentStore.getState().agentMap['agent-1']).toMatchObject({ title: 'Prefetched' });
+
+      await act(async () => {
+        await useAgentStore.getState().prefetchAgentConfig('agent-1');
+      });
+      expect(agentService.getAgentConfigById).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -1388,7 +1522,10 @@ describe('AgentSlice Actions', () => {
         wrapper: withSWR,
       });
 
-      await waitFor(() => expect(result.current.data).toEqual(mockAgentConfig));
+      await waitFor(() =>
+        expect(useAgentStore.getState().agentMap['agent-1']).toEqual(mockAgentConfig),
+      );
+      expect(result.current.isLoading).toBe(false);
 
       expect(agentService.getAgentConfigById).toHaveBeenCalledWith('agent-1');
       expect(useAgentStore.getState().activeAgentId).toBe('agent-current');

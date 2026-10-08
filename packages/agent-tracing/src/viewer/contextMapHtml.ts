@@ -112,7 +112,7 @@ const STYLE = `
   .lanetext .sep { color: var(--divider); padding: 0 6px; }
 
   .legend { border-top: 1px solid var(--divider); margin-top: 34px; padding-top: 20px; }
-  .legend h2 { font-size: 13px; letter-spacing: 0.04em; margin: 0 0 14px; text-transform: uppercase; }
+  .legend h2 { font-size: 13px; margin: 0 0 14px; }
   .family { align-items: baseline; display: flex; gap: 14px; margin-bottom: 9px; }
   .family .fname { color: var(--text-dim); flex: 0 0 110px; font-size: 12px; text-align: right; }
   .family .items { display: flex; flex-wrap: wrap; gap: 18px; }

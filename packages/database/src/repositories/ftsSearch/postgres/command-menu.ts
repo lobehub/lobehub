@@ -1,5 +1,5 @@
 import type { SQLWrapper } from 'drizzle-orm';
-import { and, desc, eq, inArray, ne, notInArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, ne, notInArray, or, sql } from 'drizzle-orm';
 
 import {
   agents,
@@ -328,6 +328,10 @@ export async function searchMessages(
     })
     .from(hits)
     .leftJoin(agents, eq(hits.agentId, agents.id))
+    // Keep parent visibility outside the isolated BM25 scan so ParadeDB can
+    // still use TopN. A topic-less message is valid; a topic-backed message is
+    // visible only when its ownership-scoped parent remains live.
+    .leftJoin(topics, and(eq(hits.topicId, topics.id), buildWorkspaceWhere(context.scope, topics)))
     .where(
       and(
         context.liftedScopeWhere(hits.workspaceId),
@@ -335,6 +339,7 @@ export async function searchMessages(
         // ParadeDB rejects regex predicates inside the scored BM25 scan. Blank content cannot
         // match content @@@, so filtering after the candidate pool preserves eligible hits.
         searchableMessageText(hits.content, hits.summary),
+        or(isNull(hits.topicId), isNotNull(topics.id)),
       ),
     )
     .orderBy(desc(hits.score))

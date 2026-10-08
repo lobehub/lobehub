@@ -16,6 +16,7 @@ import Deliverables from './Deliverables';
 import Findings from './Findings';
 import Frontier from './Frontier';
 import { buildGoalGraphView } from './goalGraphViewModel';
+import GoalResultTabs from './GoalResultTabs';
 import Graph from './Graph';
 import {
   isGoalClosed,
@@ -27,8 +28,10 @@ import {
 /**
  * The process-control band of the goal detail page: what can move now
  * (frontier), the map of how the goal got here, what it believes, and what it
- * has been doing. Renders only for goals that actually carry a Goal Graph —
- * a plain task-carried goal has no nodes and keeps the page it always had.
+ * has been doing. Once the goal finishes, this becomes the 执行过程 tab behind
+ * its 结果交付 (see `GoalResultTabs`). Renders only for goals that actually
+ * carry a Goal Graph — a plain task-carried goal has no nodes and keeps the
+ * page it always had.
  */
 
 interface ProcessControlProps {
@@ -36,11 +39,13 @@ interface ProcessControlProps {
   goalId: string;
   /** Owned by the page so it can swap its portal panel for the overlay's. */
   graphFullscreen: boolean;
+  /** Sends a question about the delivered result into the goal's conversation. */
+  onFollowUp?: (message: string) => void;
   onGraphFullscreenChange: (fullscreen: boolean) => void;
 }
 
 const ProcessControl = memo<ProcessControlProps>(
-  ({ goalId, graphFullscreen, onGraphFullscreenChange }) => {
+  ({ goalId, graphFullscreen, onFollowUp, onGraphFullscreenChange }) => {
     const { t } = useTranslation('chat');
     const { allowed: canEdit } = usePermission('create_content');
     const [lastSelectedId, setSelectedId] = useState<string>();
@@ -97,7 +102,7 @@ const ProcessControl = memo<ProcessControlProps>(
       />
     );
 
-    return (
+    const process = (
       <Flexbox gap={20}>
         {hasExperiments && map}
         <Flexbox gap={12}>
@@ -116,7 +121,7 @@ const ProcessControl = memo<ProcessControlProps>(
           defaultValue={['deliverables', 'findings', 'activity']}
           gap={0}
           indicatorPlacement="inline"
-          styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
+          styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
           items={
             [
               // The structured acceptance standard the terminal goal acceptance is
@@ -181,6 +186,16 @@ const ProcessControl = memo<ProcessControlProps>(
           }
         />
       </Flexbox>
+    );
+
+    return (
+      <GoalResultTabs
+        graph={graph}
+        key={goalId}
+        process={process}
+        onFollowUp={onFollowUp}
+        onSelect={select}
+      />
     );
   },
 );

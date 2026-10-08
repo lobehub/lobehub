@@ -48,7 +48,8 @@
     ".temp",
     "e2e/**",
     "knip.ts",
-    "packages/alint/fixtures/**"
+    "packages/alint/fixtures/**",
+    "packages/*/alint/fixtures/**"
   ],
   "include": [
     "src/**/*.d.ts",

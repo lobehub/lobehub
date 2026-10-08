@@ -1,0 +1,140 @@
+import { AGENT_CHAT_URL } from '@lobechat/const';
+import { toast } from '@lobehub/ui/base-ui';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import {
+  draftToMainComposer,
+  queueDraftForMainComposer,
+  useComposerDraftBus,
+} from '@/features/Conversation/composerDraftBus';
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
+import { useChatStore } from '@/store/chat';
+import { useFileStore } from '@/store/file';
+
+import { useImageStage } from '../context';
+import { buildDerivedFileName } from '../geometry';
+import { loadStageImage } from './AIEdit/deps';
+import { ImagePixelsUnavailableError, renderImageToBlob } from './exportImage';
+import { buildMarkupMessage, type ImageMarkup, isMarkupEmpty } from './markup';
+
+/**
+ * Hand the marked-up image to chat: the image with its drawings and numbered
+ * comment markers becomes an attachment, and the comments become text in the
+ * chat input. Nothing is sent; the user reviews the input and sends it.
+ *
+ * Next to a conversation (the chat file preview) both land in its input. From
+ * a surface without one (the resource library), they wait for the inbox
+ * agent's input and the viewer navigates there.
+ */
+export const useSendMarkupToChat = () => {
+  const { t } = useTranslation('file');
+  const { name, setBusy, url } = useImageStage();
+  const navigate = useWorkspaceAwareNavigate();
+  const hasComposer = useComposerDraftBus((s) => s.attached);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
+  const [sending, setSending] = useState(false);
+  // The handoff must not land after the viewer that started it is gone.
+  const aliveRef = useRef(true);
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  const send = useCallback(
+    async (markup: ImageMarkup): Promise<boolean> => {
+      if (isMarkupEmpty(markup)) return false;
+      const attached = useComposerDraftBus.getState().attached;
+      const { activeAgentId, activeTopicId } = useChatStore.getState();
+      const agentId = attached ? activeAgentId : inboxAgentId;
+      if (!agentId) {
+        toast.error(t('imageViewer.markup.noConversation'));
+        return false;
+      }
+
+      setSending(true);
+      // Keeps the viewer's Close disabled while the image is on its way.
+      setBusy(true);
+      try {
+        const img = await loadStageImage(url);
+        const blob = await renderImageToBlob(img, {
+          comments: markup.comments,
+          shapes: markup.shapes,
+        });
+        const file = new File([blob], buildDerivedFileName(name, 'annotated'), {
+          type: blob.type || 'image/png',
+        });
+        const text = buildMarkupMessage(markup, { name, t });
+
+        // Wait for the attachment to be in the input (compressed, read and
+        // uploaded) before adding the text and dropping the marks, so Send can
+        // never go out with the text alone.
+        // Another annotation of the same image may already be in the input
+        // under the same name; only the item this upload adds counts.
+        // The export and upload take a while; if the user moved to another
+        // conversation meanwhile, the marks must not land there.
+        const isStillTarget = () => {
+          const chat = useChatStore.getState();
+          return (
+            aliveRef.current &&
+            useComposerDraftBus.getState().attached === attached &&
+            (!attached ||
+              (chat.activeAgentId === activeAgentId && chat.activeTopicId === activeTopicId))
+          );
+        };
+        if (!isStillTarget())
+          throw new Error('The conversation changed before the image was ready');
+
+        const before = new Set(useFileStore.getState().chatUploadFileList.map((item) => item.id));
+        await useFileStore.getState().uploadChatFiles([file], agentId);
+        const staged = useFileStore
+          .getState()
+          .chatUploadFileList.find((item) => !before.has(item.id) && item.file?.name === file.name);
+        // Only a finished upload counts: a failed upload can also leave the
+        // chip pending without throwing.
+        if (!staged || staged.status !== 'success') {
+          // Keep the marks for another try instead of a broken chip in the input.
+          if (staged)
+            useFileStore
+              .getState()
+              .dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
+          throw new Error(staged?.error ?? 'The annotated image did not reach the input');
+        }
+        if (!isStillTarget()) {
+          useFileStore.getState().dispatchChatUploadFileList({ id: staged.id, type: 'removeFile' });
+          throw new Error('The conversation changed while the image was uploading');
+        }
+
+        if (attached) {
+          if (!draftToMainComposer(text, { append: true }))
+            throw new Error('The chat input is no longer open');
+          toast.success(t('imageViewer.markup.added'));
+        } else {
+          queueDraftForMainComposer(text, { agentId });
+          navigate(AGENT_CHAT_URL(agentId));
+        }
+        return true;
+      } catch (error) {
+        // Closed meanwhile: the user discarded this handoff, nothing to report.
+        if (!aliveRef.current) return false;
+        console.error('[ImageViewer] send markup to chat failed', error);
+        toast.error(
+          error instanceof ImagePixelsUnavailableError
+            ? t('imageViewer.pixelsUnavailable')
+            : t('imageViewer.markup.failed'),
+        );
+        return false;
+      } finally {
+        setBusy(false);
+        if (aliveRef.current) setSending(false);
+      }
+    },
+    [inboxAgentId, name, navigate, setBusy, t, url],
+  );
+
+  return { hasComposer, send, sending };
+};

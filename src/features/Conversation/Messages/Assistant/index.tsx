@@ -20,6 +20,7 @@ import { useAgentMeta, useDoubleClickEdit } from '../../hooks';
 import { dataSelectors, messageStateSelectors, useConversationStore } from '../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../utils/markdown';
 import MessageBranch from '../components/MessageBranch';
+import RefreshingIndicator from '../components/RefreshingIndicator';
 import {
   useSetMessageItemActionElementPortialContext,
   useSetMessageItemActionTypeContext,
@@ -142,6 +143,7 @@ const AssistantMessage = memo<AssistantMessageProps>(
         message={message}
         placement={'left'}
         time={createdAt}
+        titleAddon={<RefreshingIndicator messageId={id} />}
         actionAddon={
           reactions.length > 0 || (commentCount > 0 && commentTopicId) ? (
             <>

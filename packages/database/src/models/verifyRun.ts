@@ -288,6 +288,25 @@ export class VerifyRunModel {
     );
   };
 
+  /**
+   * Every round of several acceptances at once, in round order — the batched
+   * form of `listByAcceptance`.
+   *
+   * Feeds a surface that summarises many acceptances on a poll: one statement
+   * regardless of how many it covers. A caller wanting each acceptance's
+   * standing counts it from the check union (`AcceptanceService`), so the
+   * summary and the list it expands to read the same rows.
+   */
+  listByAcceptances = async (acceptanceIds: string[]): Promise<VerifyRunItem[]> => {
+    const ids = [...new Set(acceptanceIds.filter(Boolean))];
+    if (ids.length === 0) return [];
+
+    return this.db.query.verifyRuns.findMany({
+      orderBy: [asc(verifyRuns.roundIndex)],
+      where: and(inArray(verifyRuns.acceptanceId, ids), this.ownership()),
+    });
+  };
+
   /** Every round chained onto an acceptance aggregate, in round order. */
   listByAcceptance = async (acceptanceId: string): Promise<VerifyRunItem[]> => {
     return this.db.query.verifyRuns.findMany({
@@ -364,13 +383,21 @@ export class VerifyRunModel {
           context: target.context ?? source.context,
           goal: target.goal ?? source.goal,
           metadata: { ...target.metadata, ...source.metadata },
-          operationId: target.operationId ?? source.operationId,
+          // The incoming run is the live work, and its operation is what the
+          // lifecycle keys on (`findByOperation`). Keeping a stale draft's
+          // operation instead would orphan the attempt that is actually running.
+          operationId: source.operationId ?? target.operationId,
           plan,
           planConfirmedAt: new Date(),
           scenario: target.scenario ?? source.scenario,
           source: source.source ?? target.source,
-          // Ingested rounds carry no rollup status: the report settles them.
-          status: null,
+          // The survivor takes over the source's identity, so it takes over its
+          // pipeline status too. An ingested round carries none and the report
+          // settles it, which is what nulls the draft's own `planned` here. A LIVE
+          // round folded mid-flight keeps its status instead: `claimEvidenceCollection`
+          // and `claimVerifying` only move a run that still has one, so clearing it
+          // would strand the run — and its Task — with nothing able to judge it.
+          status: source.status,
         })
         .where(eq(verifyRuns.id, targetRunId))
         .returning();
@@ -621,7 +648,8 @@ export class VerifyRunModel {
   };
 
   /**
-   * One page of runs stranded in `verifying` since before `olderThan`, across
+   * One page of runs stranded in `verifying`, or confirmed `planned` rounds
+   * whose child operation aborted, since before `olderThan`, across
    * all owners — the sweep's input (see `sweepStuckVerifyRuns`).
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
@@ -656,7 +684,17 @@ export class VerifyRunModel {
     const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
 
     const conditions = [
-      eq(verifyRuns.status, 'verifying'),
+      or(
+        eq(verifyRuns.status, 'verifying'),
+        and(
+          eq(verifyRuns.status, 'planned'),
+          isNotNull(verifyRuns.planConfirmedAt),
+          sql`exists (select 1 from ${agentOperations}
+            where ${agentOperations.id} = ${verifyRuns.operationId}
+              and ${agentOperations.parentOperationId} is not null
+              and ${agentOperations.completionReason} in ('error', 'interrupted'))`,
+        ),
+      )!,
       lt(verifyRuns.updatedAt, olderThan),
       isNotNull(verifyRuns.operationId),
     ];

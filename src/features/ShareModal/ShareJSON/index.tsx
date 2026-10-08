@@ -1,9 +1,9 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { type TopicExportMode } from '@lobechat/types';
 import { exportFile } from '@lobechat/utils/client';
-import { type FormItemProps } from '@lobehub/ui';
-import { copyToClipboard, Flexbox, Form } from '@lobehub/ui';
+import { copyToClipboard, Flexbox } from '@lobehub/ui';
 import { Button, Switch, Tabs, toast } from '@lobehub/ui/base-ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
 import { CopyIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,10 @@ const DEFAULT_FIELD_VALUE: FieldType = {
 
 const ShareJSON = memo(() => {
   const [fieldValue, setFieldValue] = useState(DEFAULT_FIELD_VALUE);
+  const form = useForm({
+    initialValues: DEFAULT_FIELD_VALUE,
+    onValuesChange: (_, v) => setFieldValue(v),
+  });
   const { t } = useTranslation(['chat', 'common']);
 
   const exportModeOptions = useMemo(
@@ -36,7 +40,7 @@ const ShareJSON = memo(() => {
     [t],
   );
 
-  const settings: FormItemProps[] = [
+  const settings: FormFieldProps<FieldType>[] = [
     {
       children: (
         <Tabs
@@ -62,7 +66,6 @@ const ShareJSON = memo(() => {
       layout: 'horizontal',
       minWidth: undefined,
       name: 'withSystemRole',
-      valuePropName: 'checked',
     },
   ];
 
@@ -128,13 +131,7 @@ const ShareJSON = memo(() => {
       <Flexbox className={styles.body} gap={16} horizontal={!isMobile}>
         <Preview content={content} />
         <Flexbox className={styles.sidebar} gap={12}>
-          <Form
-            initialValues={DEFAULT_FIELD_VALUE}
-            items={settings}
-            itemsType={'flat'}
-            onValuesChange={(_, v) => setFieldValue(v)}
-            {...FORM_STYLE}
-          />
+          <Form form={form} items={settings} itemsType={'flat'} {...FORM_STYLE} />
           {!isMobile && button}
         </Flexbox>
       </Flexbox>

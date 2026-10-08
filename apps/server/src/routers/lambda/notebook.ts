@@ -7,6 +7,7 @@ import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceA
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DocumentModel } from '@/database/models/document';
 import { ResourcePermissionModel } from '@/database/models/resourcePermission';
+import { TopicModel } from '@/database/models/topic';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
 import { WorkModel } from '@/database/models/work';
 import { router } from '@/libs/trpc/lambda';
@@ -35,11 +36,34 @@ const notebookProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
         workspaceId: wsId,
       }),
       topicDocumentModel: new TopicDocumentModel(ctx.serverDB, ctx.userId, wsId),
+      topicModel: new TopicModel(ctx.serverDB, ctx.userId, wsId),
     },
   });
 });
 
 export const notebookRouter = router({
+  /**
+   * Attach an existing document to a topic without copying it.
+   *
+   * `createDocument` always writes a new row, so linking through it duplicated
+   * the document (and, inside an agent run, registered the copy as a second
+   * produced Work). This only writes the `(documentId, topicId)` pair, which is
+   * idempotent.
+   */
+  associateDocument: notebookProcedure
+    .use(withScopedPermission('document:update'))
+    .input(z.object({ documentId: z.string(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const [document, topic] = await Promise.all([
+        ctx.documentModel.findById(input.documentId),
+        ctx.topicModel.findById(input.topicId),
+      ]);
+      if (!document) throw new TRPCError({ code: 'NOT_FOUND', message: 'Document not found' });
+      if (!topic) throw new TRPCError({ code: 'NOT_FOUND', message: 'Topic not found' });
+
+      return ctx.topicDocumentModel.associate(input);
+    }),
+
   createDocument: notebookProcedure
     .use(withScopedPermission('document:create'))
     .input(
@@ -73,6 +97,24 @@ export const notebookRouter = router({
       const rootOperation = operation
         ? await resolveRootOperation((id) => ctx.operationModel.findOwnOperationById(id), operation)
         : null;
+
+      // One report written twice — through the agent documents tool and through
+      // this one — used to land as two documents: two entries in the topic's
+      // document list, two Works, and two deliverable cards on the goal graph,
+      // all for one piece of work. A byte-identical document of the same kind
+      // already in this topic is that second write, so it reuses the row
+      // instead of forking the document. Nothing changed, so nothing is
+      // registered either. The kind travels with the search, because a document
+      // is found by its type: `agent/plan` and the labelled kinds (`article` /
+      // `note` / `report`) stay distinct, so a plan is never answered with a
+      // markdown note and a note is never answered with a markdown row.
+      const twin = await ctx.topicDocumentModel.findVerbatimTwin({
+        content: input.content,
+        fileType: input.type,
+        title: input.title,
+        topicId: input.topicId,
+      });
+      if (twin) return twin;
 
       // Create the document
       const document = await ctx.documentModel.create({

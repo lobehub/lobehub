@@ -1,8 +1,8 @@
 'use client';
 
-import { type FormItemProps } from '@lobehub/ui';
-import { Flexbox, Form, Icon, Popover } from '@lobehub/ui';
+import { Flexbox, Icon, Popover } from '@lobehub/ui';
 import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import {
   ArrowDownWideNarrow,
@@ -32,7 +32,8 @@ interface ListConfigProps {
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {
     form: css`
-      label {
+      label,
+      label * {
         font-size: 13px !important;
         color: ${cssVar.colorTextSecondary} !important;
       }
@@ -43,6 +44,7 @@ const styles = createStaticStyles(({ css, cssVar }) => {
 const ListConfig = memo<ListConfigProps>(
   ({ options, setOptions, setViewMode, showAuthor, viewMode }) => {
     const [open, setOpen] = useState(false);
+    const form = useForm();
     const { t } = useTranslation('common');
 
     const groupingOptions = useMemo<Array<{ label: string; value: AgentGroupBy }>>(
@@ -66,7 +68,7 @@ const ListConfig = memo<ListConfigProps>(
       [showAuthor, t],
     );
 
-    const formItems: FormItemProps[] = [
+    const formItems: FormFieldProps[] = [
       {
         children: (
           <Select
@@ -138,12 +140,12 @@ const ListConfig = memo<ListConfigProps>(
         />
         <Form
           className={styles.form}
+          form={form}
           items={formItems}
           itemsType={'flat'}
-          size={'small'}
           variant={'borderless'}
           styles={{
-            item: { padding: 0 },
+            item: { paddingBlock: 4, paddingInline: 0 },
           }}
         />
       </Flexbox>

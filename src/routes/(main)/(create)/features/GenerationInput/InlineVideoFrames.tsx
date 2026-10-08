@@ -39,12 +39,19 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 interface InlineVideoFramesProps {
+  /** Label of the empty add card; defaults to the reference image label. */
+  addLabel?: string;
   endImageUrl?: string | null;
   imageUrl?: string | null;
   imageUrls?: string[] | null;
   isSupportEndImage?: boolean;
   maxCount?: number;
   maxFileSize?: number;
+  /**
+   * Label images as "Image 1", "Image 2"… so prompts can refer to them, and show the used
+   * count on the add card. Used when every image is a reference.
+   */
+  numberReferences?: boolean;
   onEndImageChange: (data: UploadData | null) => void;
   onImageChange: (data: UploadData | null) => void;
   onImageUrlsChange?: (data: UploadData) => void;
@@ -57,6 +64,7 @@ interface InlineVideoFramesProps {
 
 const InlineVideoFrames = memo<InlineVideoFramesProps>(
   ({
+    addLabel,
     imageUrl,
     imageUrls,
     endImageUrl,
@@ -68,6 +76,7 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
     isSupportEndImage = true,
     maxCount = 5,
     maxFileSize,
+    numberReferences = false,
     uploadingPreviews = [],
   }) => {
     const { t } = useTranslation('video');
@@ -114,6 +123,11 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
                 key={url}
                 label={label}
                 maxFileSize={maxFileSize}
+                badge={
+                  numberReferences
+                    ? t('config.referenceImage.indexedLabel', { index: String(index + 1) })
+                    : undefined
+                }
                 style={{
                   marginInlineStart:
                     index > 0 ? (shouldCollapse ? STACK_OFFSET : EXPAND_OFFSET) : 0,
@@ -177,9 +191,13 @@ const InlineVideoFrames = memo<InlineVideoFramesProps>(
             ) : (
               <UploadCard
                 imageUrl={null}
-                label={t('config.referenceImage.label')}
                 maxFileSize={maxFileSize}
                 multiple={!!onUploadFiles}
+                label={
+                  numberReferences && hasItems
+                    ? t('config.referenceImage.count', { count: totalCount, max: String(maxCount) })
+                    : (addLabel ?? t('config.referenceImage.label'))
+                }
                 style={{
                   marginInlineStart: hasItems ? EXPAND_OFFSET : 0,
                   zIndex: totalCount + 1,

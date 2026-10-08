@@ -1,6 +1,7 @@
 import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
+import { refreshDeviceList } from '@/features/DeviceManager/const';
 import { mutate, useClientDataSWR } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
@@ -10,6 +11,13 @@ import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd
 import { type DeviceStore } from './store';
 
 type Setter = StoreSetter<DeviceStore>;
+
+/**
+ * Revalidate both device-list caches: this store's own key and the canonical
+ * workspace-scoped `useDeviceList` entry, which task controls read.
+ */
+const revalidateDeviceLists = () =>
+  Promise.all([mutate(deviceKeys.listDevices()), refreshDeviceList()]);
 
 export const deviceSlice = (set: Setter, get: () => DeviceStore, _api?: unknown) =>
   new DeviceActionImpl(set, get, _api);
@@ -64,7 +72,7 @@ export class DeviceActionImpl {
       });
     } finally {
       // Re-fetch the truth (self-corrects a failed optimistic write).
-      await mutate(deviceKeys.listDevices());
+      await revalidateDeviceLists();
     }
   };
 
@@ -100,7 +108,7 @@ export class DeviceActionImpl {
       );
       throw error;
     } finally {
-      await mutate(deviceKeys.listDevices());
+      await revalidateDeviceLists();
     }
   };
 
@@ -137,7 +145,7 @@ export class DeviceActionImpl {
     try {
       await deviceService.updateDevice({ deviceId, workingDirs: merged });
     } finally {
-      await mutate(deviceKeys.listDevices());
+      await revalidateDeviceLists();
     }
   };
 
@@ -160,7 +168,7 @@ export class DeviceActionImpl {
     try {
       await deviceService.updateDevice({ deviceId, workingDirs: updated });
     } finally {
-      await mutate(deviceKeys.listDevices());
+      await revalidateDeviceLists();
     }
   };
 

@@ -692,6 +692,7 @@ describe('GenerationModel', () => {
       const result = await generationModel.transformGeneration(generationWithTask);
 
       expect(result).toMatchObject({
+        fileId: 'file-id',
         id: 'test-gen-id',
         asset: {
           url: 'https://example.com/f/file-id',
@@ -745,6 +746,7 @@ describe('GenerationModel', () => {
 
       const result = await generationModel.transformGeneration(generationWithoutAsset as any);
 
+      expect(result).not.toHaveProperty('fileId');
       expect(result).toMatchObject({
         id: 'test-gen-id',
         asset: null,

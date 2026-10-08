@@ -179,8 +179,10 @@ export const useSettingsSearch = (
     // IM notification channels (Telegram / Slack / …) live on the notification
     // page with per-platform anchors. Index them from the same catalog the page
     // renders so a search for the platform name deep-links to that row.
+    // Those rows come from the business notification section, so they only
+    // exist with business features on.
     const notificationTab = visibleTabs.get(SettingsTabs.Notification);
-    if (notificationTab)
+    if (notificationTab && enableBusinessFeatures)
       for (const platform of SUPPORTED_MESSENGER_PLATFORMS) {
         entries.push({
           anchor: `notification-${platform.id}`,

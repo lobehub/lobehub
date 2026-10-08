@@ -192,6 +192,40 @@ describe('videoBackgroundPolling', () => {
       );
     });
 
+    it('bills output tokens from the downloaded video when the provider reports no usage', async () => {
+      // Resolved once to poll and once to charge
+      vi.mocked(resolveBusinessModelMapping)
+        .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any)
+        .mockResolvedValueOnce({ resolvedModelId: 'bytedance/seedance-2.5' } as any);
+      mockModelRuntime.handlePollVideoStatus.mockResolvedValue({
+        status: 'success',
+        videoUrl: 'https://example.com/video.mp4',
+      });
+      mockVideoService.processVideoForGeneration.mockResolvedValue({
+        coverKey: 'cover-key',
+        duration: 4.04,
+        fileHash: 'hash',
+        fileSize: 1024,
+        frames: 97,
+        height: 592,
+        mimeType: 'video/mp4',
+        thumbnailKey: 'thumb-key',
+        videoKey: 'video-key',
+        width: 710,
+      });
+
+      await processBackgroundVideoPolling(mockDb, mockParams);
+
+      // fal billed 39.815K tokens for this image-to-video output
+      const tokens = 39_815;
+      expect(chargeAfterGenerate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          model: 'bytedance/seedance-2.5',
+          usage: { completionTokens: tokens, totalTokens: tokens },
+        }),
+      );
+    });
+
     it('should poll the pinned route with the mapped model id instead of the alias', async () => {
       vi.mocked(resolveBusinessModelMapping).mockResolvedValueOnce({
         resolvedModelId: 'mapped-model',

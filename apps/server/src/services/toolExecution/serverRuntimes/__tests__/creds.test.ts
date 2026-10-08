@@ -38,7 +38,7 @@ describe('credsRuntime', () => {
 
     expect(getMember).toHaveBeenCalledWith('workspace-1', 'user-1');
     expect(MarketService).toHaveBeenCalledWith({
-      userInfo: { userId: 'user-1', workspaceId: 'workspace-1' },
+      userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'workspace-1' }),
     });
   });
 
@@ -77,7 +77,7 @@ describe('credsRuntime', () => {
 
     expect(getMember).not.toHaveBeenCalled();
     expect(MarketService).toHaveBeenCalledWith({
-      userInfo: { userId: 'user-1', workspaceId: undefined },
+      userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: undefined }),
     });
   });
 

@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     createSandboxService: vi.fn(),
+    resolveSandboxSessionConfig: vi.fn(),
     FakeSandboxService,
     MarketService: vi.fn(function () {
       return {};
@@ -31,10 +32,14 @@ vi.mock('@/server/services/market', () => ({
 
 vi.mock('@/server/services/sandbox', () => ({
   createSandboxService: mocks.createSandboxService,
+  resolveSandboxSessionConfig: mocks.resolveSandboxSessionConfig,
 }));
 
 vi.mock('@/server/services/toolExecution/preprocessLhCommand', () => ({
-  isLhCommand: (command: string) => command.startsWith('lh'),
+  // Mirrors the real split: the shim predicate matches any mention, the refusal
+  // predicate only an `lh` in command position.
+  isDirectLhInvocation: (command: string) => command.startsWith('lh'),
+  isLhCommand: (command: string) => /\blh\b/.test(command),
   preprocessLhCommand: mocks.preprocessLhCommand,
   SHARE_VISITOR_LH_BLOCKED_MESSAGE: 'The LobeHub CLI is unavailable in shared conversations.',
 }));
@@ -52,6 +57,7 @@ describe('cloudSandboxRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.createSandboxService.mockReturnValue(mocks.sandboxService);
+    mocks.resolveSandboxSessionConfig.mockResolvedValue({ claim: null, mode: 'ephemeral' });
     mocks.sandboxService.callTool.mockResolvedValue({
       result: { exitCode: 0, output: 'ok', stdout: 'ok', success: true },
       success: true,
@@ -106,7 +112,7 @@ describe('cloudSandboxRuntime', () => {
 
     expect(mocks.MarketService).toHaveBeenCalledWith(
       expect.objectContaining({
-        userInfo: { userId: 'user-1', workspaceId: 'ws-42' },
+        userInfo: expect.objectContaining({ userId: 'user-1', workspaceId: 'ws-42' }),
       }),
     );
   });
@@ -159,6 +165,24 @@ describe('cloudSandboxRuntime', () => {
     expect(result.state).toMatchObject({ success: false });
   });
 
+  // Regression: the refusal used the shim's permissive predicate, so a
+  // visitor's harmless command that merely mentions `lh` was rejected outright.
+  it('does not refuse a share-visitor command that only mentions lh', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    const runtime = await cloudSandboxRuntime.factory(
+      buildContext({ agentShareVisitor: { agentId: 'agent-1' } }),
+    );
+
+    const command = "echo 'the lh CLI is unavailable here'";
+    await runtime.runCommand({ command, description: 'echo' });
+
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith(command, 'user-1', undefined, true);
+    expect(mocks.sandboxService.callTool).toHaveBeenCalledWith(
+      'runCommand',
+      expect.objectContaining({ command }),
+    );
+  });
+
   // Belt-and-braces: even though the short-circuit above already stops an
   // `lh` command before this call, every OTHER shell command in a
   // share-visitor run still threads `shareVisitorBlocked: true` through to
@@ -195,6 +219,51 @@ describe('cloudSandboxRuntime', () => {
       './out/result.csv',
       'result.csv',
       undefined,
+    );
+  });
+
+  // ---- Persistence: entitlement on the token, preferences on the request ----
+
+  it('signs the entitlement onto the market token and passes the topic preferences down', async () => {
+    mocks.resolveSandboxSessionConfig.mockResolvedValue({
+      claim: { key: 'ws-user-1', quotaBytes: 2048 },
+      cwd: 'projects/atlas',
+      mode: 'persistent',
+    });
+
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+
+    expect(mocks.MarketService).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userInfo: expect.objectContaining({
+          sandboxStorage: { key: 'ws-user-1', quotaBytes: 2048 },
+        }),
+      }),
+    );
+    expect(mocks.createSandboxService).toHaveBeenCalledWith(
+      expect.objectContaining({ sandboxCwd: 'projects/atlas', sandboxMode: 'persistent' }),
+    );
+  });
+
+  // The claim must be keyed on the SAME workspace the token carries; signing an
+  // organization key onto a token market reads as personal would mount that
+  // organization's directory inside a personal session.
+  it('keys the entitlement on the workspace the token carries', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ workspaceId: 'ws-42' }));
+
+    expect(mocks.resolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', workspaceId: 'ws-42' }),
+    );
+  });
+
+  it('marks a share-visitor run so no entitlement is resolved for the creator', async () => {
+    const { cloudSandboxRuntime } = await import('../cloudSandbox');
+    await cloudSandboxRuntime.factory(buildContext({ agentShareVisitor: { agentId: 'agent-1' } }));
+
+    expect(mocks.resolveSandboxSessionConfig).toHaveBeenCalledWith(
+      expect.objectContaining({ isShareVisitorRun: true }),
     );
   });
 });

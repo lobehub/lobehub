@@ -2,6 +2,7 @@ import { getWorkingDirSourcePath } from '@lobechat/types';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 
 import { EnvironmentModel, normalizeProjectRepository } from '../../models/environment';
+import { EnvironmentInstanceModel } from '../../models/environmentInstance';
 import { ProjectModel } from '../../models/project';
 import {
   normalizeProjectDirectory,
@@ -55,6 +56,7 @@ export class ProjectDirectoryRepository {
     return this.db.transaction(async (tx) => {
       const db = tx as LobeChatDatabase;
       const environmentModel = new EnvironmentModel(db, this.userId, this.workspaceId);
+      const instanceModel = new EnvironmentInstanceModel(db, this.userId, this.workspaceId);
       const projectModel = new ProjectModel(db, this.userId, this.workspaceId);
       const directoryModel = new ProjectWorkingDirectoryModel(db, this.userId, this.workspaceId);
       // Serialize bindings of the same device, including bindings from different projects.
@@ -70,12 +72,24 @@ export class ProjectDirectoryRepository {
       const repositoryUrl = input.repositoryUrl
         ? normalizeProjectRepository(input.repositoryUrl)
         : undefined;
-      const existing = await environmentModel.findDeviceInstance(device.id, path);
+      const existing = await instanceModel.findByDeviceAndDirectory(device.id, path);
       let instance = existing;
       let environment;
-      const environmentId = existing?.environmentId ?? input.environmentId;
+      // An environment is the definition; an instance is one materialization of
+      // it. So the same project bound on a second device reuses the definition
+      // the first binding made and adds its own instance, rather than minting a
+      // second environment under the same name — which is both what the
+      // (user, scope, name) unique indexes require and what the two concepts
+      // already meant.
+      const knownId = existing?.environmentId ?? input.environmentId;
+      const named = knownId ? undefined : await environmentModel.findByName(input.name);
+      const environmentId = knownId ?? named?.id;
       if (environmentId) {
         environment = await environmentModel.findEnabledById(environmentId);
+        // The name lookup deliberately sees disabled rows, because the unique
+        // indexes do: a disabled environment of this name still owns the name,
+        // so minting a replacement would only hit the constraint.
+        if (!environment && named) throw new Error('Environment is disabled');
         if (!environment || (input.environmentId && input.environmentId !== environment.id))
           throw new Error('This directory belongs to another environment');
         if (
@@ -92,7 +106,7 @@ export class ProjectDirectoryRepository {
         });
       }
       if (!instance) {
-        instance = await environmentModel.createDeviceInstance({
+        instance = await instanceModel.createForDeviceBinding({
           configurationSnapshot: environment.configuration,
           deviceId: device.id,
           environmentId: environment.id,

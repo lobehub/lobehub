@@ -6,23 +6,13 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import DragUploadZone, { useUploadFiles } from '@/components/DragUploadZone';
-import {
-  COMPACT_ACTION_BAR_STYLE,
-  COMPACT_SEND_BUTTON_PROPS,
-} from '@/features/ChatInput/compactPreset';
-import {
-  ChatInput,
-  ChatList,
-  conversationSelectors,
-  useConversationStore,
-} from '@/features/Conversation';
+import { ChatList, conversationSelectors, useConversationStore } from '@/features/Conversation';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
 
 import { GoalChatProvider } from './GoalChatProvider';
+import GoalConversationInput from './GoalConversationInput';
 import Toolbar from './Toolbar';
-
-const EMPTY_LEFT_ACTIONS: [] = [];
 
 const Welcome = memo(() => {
   const { t } = useTranslation('chat');
@@ -37,44 +27,52 @@ const Welcome = memo(() => {
 
 Welcome.displayName = 'GoalChatWelcome';
 
-const Conversation = memo<{ onCollapse: () => void }>(({ onCollapse }) => {
-  const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
-  const currentAgentId = useConversationStore(conversationSelectors.agentId);
+interface ConversationProps {
+  initialMessage?: string;
+  onCollapse: () => void;
+  onInitialMessageConsumed?: () => void;
+}
 
-  useFetchAgentConfig(true, currentAgentId);
+const Conversation = memo<ConversationProps>(
+  ({ initialMessage, onCollapse, onInitialMessageConsumed }) => {
+    const useFetchAgentConfig = useAgentStore((s) => s.useFetchAgentConfig);
+    const currentAgentId = useConversationStore(conversationSelectors.agentId);
 
-  const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
-  const provider = useAgentStore((s) =>
-    agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
-  );
-  const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+    useFetchAgentConfig(true, currentAgentId);
 
-  return (
-    <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
-      <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
-        <Toolbar onCollapse={onCollapse} />
-        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
-          <ChatList welcome={<Welcome />} />
+    const model = useAgentStore((s) => agentByIdSelectors.getAgentModelById(currentAgentId)(s));
+    const provider = useAgentStore((s) =>
+      agentByIdSelectors.getAgentModelProviderById(currentAgentId)(s),
+    );
+    const { handleUploadFiles } = useUploadFiles({ agentId: currentAgentId, model, provider });
+
+    return (
+      <DragUploadZone style={{ flex: 1, height: '100%' }} onUploadFiles={handleUploadFiles}>
+        <Flexbox flex={1} height={'100%'} style={{ overflow: 'hidden' }}>
+          <Toolbar onCollapse={onCollapse} />
+          <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+            <ChatList welcome={<Welcome />} />
+          </Flexbox>
+          <GoalConversationInput
+            initialMessage={initialMessage}
+            onInitialMessageConsumed={onInitialMessageConsumed}
+          />
         </Flexbox>
-        <ChatInput
-          actionBarStyle={COMPACT_ACTION_BAR_STYLE}
-          allowExpand={false}
-          leftActions={EMPTY_LEFT_ACTIONS}
-          sendButtonProps={COMPACT_SEND_BUTTON_PROPS}
-          showControlBar={false}
-        />
-      </Flexbox>
-    </DragUploadZone>
-  );
-});
+      </DragUploadZone>
+    );
+  },
+);
 
 Conversation.displayName = 'GoalChatConversation';
 
 interface GoalChatProps {
   agentId: string;
   goalId: string;
+  /** Sent on mount — the result page's composer hands its text over this way. */
+  initialMessage?: string;
   initialTopicId?: string;
   onCollapse: () => void;
+  onInitialMessageConsumed?: () => void;
 }
 
 /**
@@ -82,11 +80,17 @@ interface GoalChatProps {
  * provider tags the context with `viewedGoal`, so every question is answered
  * with the current goal overview injected — "how is this going?" just works.
  */
-const GoalChat = memo<GoalChatProps>(({ agentId, goalId, initialTopicId, onCollapse }) => (
-  <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
-    <Conversation onCollapse={onCollapse} />
-  </GoalChatProvider>
-));
+const GoalChat = memo<GoalChatProps>(
+  ({ agentId, goalId, initialMessage, initialTopicId, onCollapse, onInitialMessageConsumed }) => (
+    <GoalChatProvider agentId={agentId} goalId={goalId} initialTopicId={initialTopicId}>
+      <Conversation
+        initialMessage={initialMessage}
+        onCollapse={onCollapse}
+        onInitialMessageConsumed={onInitialMessageConsumed}
+      />
+    </GoalChatProvider>
+  ),
+);
 
 GoalChat.displayName = 'GoalChat';
 

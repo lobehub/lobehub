@@ -37,7 +37,12 @@ import {
 } from './heteroSelectorCapabilities';
 
 export type HeterogeneousAgentModelCatalogErrorCode =
-  'cli_not_found' | 'command_failed' | 'device_unavailable' | 'timeout' | 'unsupported_client';
+  | 'cli_not_found'
+  | 'command_failed'
+  | 'device_unavailable'
+  | 'timeout'
+  | 'unsupported_client'
+  | 'unsupported_configuration';
 
 /** One model reported by a heterogeneous CLI's device-local model catalog. */
 export interface HeterogeneousAgentModel {
@@ -58,6 +63,7 @@ export interface ListHeterogeneousAgentModelsParams {
   env?: Record<string, string>;
   type:
     | 'codebuddy'
+    | 'codex'
     | 'cursor'
     | 'devin'
     | 'droid'

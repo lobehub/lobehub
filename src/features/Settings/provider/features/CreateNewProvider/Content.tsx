@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Input, InputPassword, TextArea } from '@lobehub/ui';
-import { Button, Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import {
+  Button,
+  Input,
+  InputPassword,
+  Select,
+  Text,
+  TextArea,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { AiProviderBaseURLSchema } from 'model-bank/aiProvider';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,7 +33,6 @@ const SectionTitle = memo<{ children: React.ReactNode }>(({ children }) => (
 
 const CreateNewProviderContent = memo(() => {
   const { t } = useTranslation('modelProvider');
-  const [form] = Form.useForm<CreateAiProviderParams>();
   const [loading, setLoading] = useState(false);
   const createNewAiProvider = useAiInfraStore((s) => s.createNewAiProvider);
 
@@ -54,54 +62,40 @@ const CreateNewProviderContent = memo(() => {
     }
   };
 
-  const itemStyle = { marginBottom: 0 };
+  const form = useForm<CreateAiProviderParams>({ onSubmit: onFinish });
+
+  const itemStyle = { paddingBlock: 0 };
 
   return (
-    <Form
-      colon={false}
-      form={form}
-      layout={'vertical'}
-      scrollToFirstError={{ behavior: 'instant', block: 'end', focus: true }}
-      onFinish={onFinish}
-    >
+    <Form form={form} layout={'vertical'}>
       <Flexbox gap={16}>
         <SectionTitle>{t('createNewAiProvider.basicTitle')}</SectionTitle>
 
-        <Form.Item
+        <Form.Field
           extra={t('createNewAiProvider.id.desc')}
           label={t('createNewAiProvider.id.title')}
           name={'id'}
+          required={t('createNewAiProvider.id.required')}
           style={itemStyle}
-          rules={[
-            { message: t('createNewAiProvider.id.required'), required: true },
-            {
-              message: t('createNewAiProvider.id.format'),
-              pattern: /^[\d_a-z-]+$/,
-            },
-            {
-              message: t('createNewAiProvider.id.duplicate'),
-              validator: (_, value: string) => {
-                const list = useAiInfraStore.getState().aiProviderList;
-                if (value && list.some((p) => p.id === value)) {
-                  return Promise.reject();
-                }
-                return Promise.resolve();
-              },
-            },
-          ]}
+          validate={(value?: string) => {
+            if (!value) return;
+            if (!/^[\d_a-z-]+$/.test(value)) return t('createNewAiProvider.id.format');
+            const list = useAiInfraStore.getState().aiProviderList;
+            if (list.some((p) => p.id === value)) return t('createNewAiProvider.id.duplicate');
+          }}
         >
           <Input
             autoFocus
             placeholder={t('createNewAiProvider.id.placeholder')}
             variant={'filled'}
           />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item label={t('createNewAiProvider.name.title')} name={'name'} style={itemStyle}>
+        <Form.Field label={t('createNewAiProvider.name.title')} name={'name'} style={itemStyle}>
           <Input placeholder={t('createNewAiProvider.name.placeholder')} variant={'filled'} />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('createNewAiProvider.description.title')}
           name={'description'}
           style={itemStyle}
@@ -111,24 +105,24 @@ const CreateNewProviderContent = memo(() => {
             style={{ minHeight: 72 }}
             variant={'filled'}
           />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item label={t('createNewAiProvider.logo.title')} name={'logo'} style={itemStyle}>
+        <Form.Field label={t('createNewAiProvider.logo.title')} name={'logo'} style={itemStyle}>
           <Input
             allowClear
             placeholder={t('createNewAiProvider.logo.placeholder')}
             variant={'filled'}
           />
-        </Form.Item>
+        </Form.Field>
 
         <div style={{ marginBlockStart: 8 }}>
           <SectionTitle>{t('createNewAiProvider.configTitle')}</SectionTitle>
         </div>
 
-        <Form.Item
+        <Form.Field
           label={t('createNewAiProvider.sdkType.title')}
-          name={['settings', 'sdkType']}
-          rules={[{ message: t('createNewAiProvider.sdkType.required'), required: true }]}
+          name={'settings.sdkType'}
+          required={t('createNewAiProvider.sdkType.required')}
           style={itemStyle}
         >
           <Select
@@ -145,32 +139,29 @@ const CreateNewProviderContent = memo(() => {
               );
             }}
           />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('createNewAiProvider.proxyUrl.title')}
-          name={[KeyVaultsConfigKey, LLMProviderBaseUrlKey]}
+          name={`${KeyVaultsConfigKey}.${LLMProviderBaseUrlKey}`}
+          required={t('createNewAiProvider.proxyUrl.required')}
           style={itemStyle}
-          rules={[
-            { message: t('createNewAiProvider.proxyUrl.required'), required: true },
-            {
-              validator: (_, value: string) =>
-                !value || AiProviderBaseURLSchema.safeParse(value).success
-                  ? Promise.resolve()
-                  : Promise.reject(t('providerModels.config.baseURL.invalid')),
-            },
-          ]}
+          validate={(value?: string) =>
+            !value || AiProviderBaseURLSchema.safeParse(value).success
+              ? undefined
+              : t('providerModels.config.baseURL.invalid')
+          }
         >
           <Input
             allowClear
             placeholder={t('createNewAiProvider.proxyUrl.placeholder')}
             variant={'filled'}
           />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('createNewAiProvider.apiKey.title')}
-          name={[KeyVaultsConfigKey, LLMProviderApiTokenKey]}
+          name={`${KeyVaultsConfigKey}.${LLMProviderApiTokenKey}`}
           style={itemStyle}
         >
           <InputPassword
@@ -178,7 +169,7 @@ const CreateNewProviderContent = memo(() => {
             placeholder={t('createNewAiProvider.apiKey.placeholder')}
             variant={'filled'}
           />
-        </Form.Item>
+        </Form.Field>
 
         <Button block htmlType={'submit'} loading={loading} type={'primary'}>
           {t('createNewAiProvider.confirm')}

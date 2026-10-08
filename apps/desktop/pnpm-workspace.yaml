@@ -22,7 +22,7 @@ packages:
   - '../../packages/tool-runtime'
   - '../../packages/prompts'
   - '../../packages/ssrf-safe-fetch'
-  - 'stubs/business-const'
+  - '../../packages/business/const'
   - '../../packages/types'
   - '../../packages/model-bank'
   - '../../packages/utils'
@@ -50,6 +50,7 @@ allowBuilds:
   '@sentry/cli': true
   electron: true
   electron-builder: true
+  electron-sparkle-updater: false
   electron-winstaller: false
   esbuild: false
   get-windows: false
@@ -60,14 +61,18 @@ overrides:
   node-gyp: ^12.4.0
   react: 19.2.7
   react-dom: 19.2.7
-  vitest: 5.0.0
-  'zod@^4': 4.5.4
+  vitest: 5.0.3
+  'zod@^4': 4.6.5
 minimumReleaseAgeExclude:
-  - '@auv-js/api-client@0.0.16'
-  - '@auv-js/cli-darwin-arm64@0.0.16'
-  - '@auv-js/cli-darwin-x64@0.0.16'
-  - '@auv-js/cli-linux-arm64-gnu@0.0.16'
-  - '@auv-js/cli-linux-x64-gnu@0.0.16'
-  - '@auv-js/cli-win32-x64-msvc@0.0.16'
-  - '@auv-js/cli@0.0.16'
-  - '@auv-js/sdk@0.0.16'
+  - '@auv-js/api-client@0.0.28'
+  - '@auv-js/cli-darwin-arm64@0.0.28'
+  - '@auv-js/cli-darwin-x64@0.0.28'
+  - '@auv-js/cli-linux-arm64-gnu@0.0.28'
+  - '@auv-js/cli-linux-x64-gnu@0.0.28'
+  - '@auv-js/cli-win32-arm64-msvc@0.0.28'
+  - '@auv-js/cli-win32-x64-msvc@0.0.28'
+  - '@auv-js/cli@0.0.28'
+  - '@auv-js/sdk@0.0.28'
+  - electron-sparkle-updater@0.5.2
+patchedDependencies:
+  electron-sparkle-updater@0.5.2: patches/electron-sparkle-updater@0.5.2.patch

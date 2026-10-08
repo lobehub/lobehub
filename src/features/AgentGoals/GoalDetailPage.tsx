@@ -3,7 +3,7 @@
 import { Flexbox } from '@lobehub/ui';
 import { Button, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
-import { EyeIcon, PauseIcon, PlayIcon } from 'lucide-react';
+import { PauseIcon, PlayIcon } from 'lucide-react';
 import { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router';
@@ -17,7 +17,7 @@ import NavHeader from '@/features/NavHeader';
 import { PortalContent } from '@/features/Portal/router';
 import { usePortalPanelWidth } from '@/features/Portal/usePortalPanelWidth';
 import RightPanel from '@/features/RightPanel';
-import ToggleRightPanelButton from '@/features/RightPanel/ToggleRightPanelButton';
+import { useWorkspaceSidePanel } from '@/features/RightPanel/WorkspaceSidePanel';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
@@ -32,6 +32,7 @@ import GoalHeaderMetrics from './GoalHeaderMetrics';
 import { goalManagerConversation } from './goalPresentation';
 import GoalRequirement from './GoalRequirement';
 import { GoalSupervision } from './GoalSupervision';
+import GoalSupervisorToggle from './GoalSupervisorToggle';
 import NorthStarMetrics from './NorthStarMetrics';
 import ProcessControl from './ProcessControl';
 import { useGoalChatPanel } from './useGoalChatPanel';
@@ -71,6 +72,9 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
 
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
+  // On the agent-less `/goal/:goalId` route an ancestor layout already owns the
+  // side panel; mounting ours as well would give the surface two portal hosts.
+  const hasWorkspaceSidePanel = useWorkspaceSidePanel();
   const chat = useGoalChatPanel(goalId, agentId);
   const clearPortalStack = useChatStore((s) => s.clearPortalStack);
 
@@ -141,10 +145,38 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
   const { goal, nodes } = snapshot;
   const managerConversation = goalManagerConversation(goal);
 
-  // The panel hosts the goal conversation only when the goal has a
-  // responsible agent; without one it is drill-down-only.
-  const panelExpandable = !!chat.agentId;
+  // Who supervises this page: the agent the route names, the agent behind the
+  // supervision record, or the goal's own agent. That last fallback is what keeps
+  // the agent-less `/goal/:goalId` route working — there the route names no agent
+  // and an unmanaged goal has no record, but the goal still knows whose
+  // conversation this is.
+  const supervisingAgentId =
+    chat.agentId ?? managerConversation?.agentId ?? goal.agentId ?? undefined;
+  const panelExpandable = !!supervisingAgentId;
   const chatVisible = chat.open && panelExpandable;
+
+  /**
+   * One entry, one destination. A goal with a supervision conversation opens that
+   * record; one without opens the side conversation, rather than an empty panel.
+   * Re-targeting only when the destination is not already the open one keeps a
+   * reopen from bumping the request and remounting the panel.
+   */
+  const panelTarget = managerConversation
+    ? { agentId: managerConversation.agentId, topicId: managerConversation.topicId }
+    : supervisingAgentId
+      ? { agentId: supervisingAgentId, topicId: undefined }
+      : undefined;
+
+  const openPanel = () => {
+    const target = panelTarget;
+    if (!target) return;
+    if (chat.topicId !== target.topicId) {
+      clearPortalStack();
+      chat.openConversation(target);
+      return;
+    }
+    chat.setOpen(true);
+  };
 
   const paused = goal.status === 'paused';
   // Pace control exists only while the coordinator loop is actually moving (or
@@ -180,29 +212,19 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
             </Flexbox>
           }
           right={
-            graphFullscreen ? undefined : (
-              <Flexbox horizontal align={'center'} gap={8}>
-                {managerConversation && (
-                  <Button
-                    icon={EyeIcon}
-                    size={'small'}
-                    onClick={() => {
-                      clearPortalStack();
-                      chat.openSupervision(managerConversation);
-                    }}
-                  >
-                    {t('goalProcess.manager.viewTrace')}
-                  </Button>
-                )}
-                {panelExpandable && (
-                  <ToggleRightPanelButton
+            graphFullscreen
+              ? undefined
+              : supervisingAgentId && (
+                  <GoalSupervisorToggle
                     hideWhenExpanded
+                    agentId={supervisingAgentId}
                     expand={showPortal || chatVisible}
-                    onToggle={() => chat.setOpen(true)}
+                    label={
+                      managerConversation ? t('goalProcess.manager.viewTrace') : t('goalChat.title')
+                    }
+                    onToggle={openPanel}
                   />
-                )}
-              </Flexbox>
-            )
+                )
           }
         />
         <Flexbox flex={1} style={{ overflowY: 'auto' }}>
@@ -231,20 +253,33 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   )}
                 </Flexbox>
               )}
+              {/* North-star strip reads with the requirement document — the
+                  measured clauses ARE half of the acceptance contract — and
+                  leads it rather than trailing it (review feedback, r3). It
+                  stays below the execution metrics, so it is never squeezed
+                  between the title and those numbers. */}
+              <NorthStarMetrics canEdit={canEdit} goalId={goalId} />
               {goal.requirement && (
                 <GoalRequirement goalId={goal.id} requirement={goal.requirement} />
               )}
-              {/* North-star strip beside the requirement document: the measured
-                  clauses ARE half of the acceptance contract, so they read
-                  with it — not squeezed between the title and the execution
-                  metrics (review feedback, r1). */}
-              <NorthStarMetrics canEdit={canEdit} goalId={goalId} />
             </Flexbox>
 
             <ProcessControl
               goalId={goal.id}
               graphFullscreen={graphFullscreen}
               onGraphFullscreenChange={setGraphFullscreen}
+              onFollowUp={
+                // Viewers can read the result but not talk to its agent; the
+                // backend would reject the turn, so they get no composer.
+                canEdit && panelTarget
+                  ? (message) => {
+                      // Same destination as the header entry — the supervision record
+                      // when there is one — and it replaces any open drill-down.
+                      clearPortalStack();
+                      chat.openConversation({ ...panelTarget, initialMessage: message });
+                    }
+                  : undefined
+              }
             />
           </WideScreenContainer>
         </Flexbox>
@@ -253,10 +288,16 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
       {/* Same Portal the conversation surface uses — the drill-down chain
           (metric / node → task detail → topic) rides its view stack, and the
           header's back arrow and close come for free. When no drill-down is
-          open, the panel hosts the conversation with the goal's responsible
-          agent so a user can just ask about progress. */}
+          open, the panel hosts the goal agent's supervision record, or its side
+          conversation when the goal has no record yet.
+
+          On the agent-less route the task workspace already mounts the portal
+          host, so a drill-down renders there and this panel stays out of the
+          way: a second host would render the same detail twice while squeezing
+          the goal column to nothing beside it. The goal conversation and the
+          supervision trace have no other home, so those still mount here. */}
       <RightPanel
-        expand={(showPortal || chatVisible) && !graphFullscreen}
+        expand={(showPortal ? !hasWorkspaceSidePanel : chatVisible) && !graphFullscreen}
         maxWidth={maxWidth}
         minWidth={minWidth}
         width={width}
@@ -267,22 +308,30 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
         }}
       >
         {graphFullscreen ? null : showPortal ? (
-          <PortalContent />
-        ) : chat.agentId && chat.topicId ? (
+          hasWorkspaceSidePanel ? null : (
+            <PortalContent />
+          )
+        ) : supervisingAgentId && chat.topicId ? (
           <GoalSupervision
-            agentId={chat.agentId}
+            agentId={supervisingAgentId}
             goalId={goalId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            initialMessage={chat.initialMessage}
+            key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             topicId={chat.topicId}
             onCollapse={() => chat.setOpen(false)}
+            onInitialMessageConsumed={chat.consumeInitialMessage}
+            // A question that should not land in the manager's own record.
+            onOpenChat={() => chat.openConversation({ agentId: supervisingAgentId })}
           />
-        ) : chat.agentId ? (
+        ) : supervisingAgentId ? (
           <GoalChat
-            agentId={chat.agentId}
+            agentId={supervisingAgentId}
             goalId={goalId}
+            initialMessage={chat.initialMessage}
             initialTopicId={chat.topicId}
-            key={`${goalId}:${chat.agentId}:${chat.request}`}
+            key={`${goalId}:${supervisingAgentId}:${chat.request}`}
             onCollapse={() => chat.setOpen(false)}
+            onInitialMessageConsumed={chat.consumeInitialMessage}
           />
         ) : null}
       </RightPanel>

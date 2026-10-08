@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
@@ -13,8 +13,6 @@ import CodeEditorPane from '@/components/CodeEditorPane';
 import Loading from '@/components/Loading/CircleLoading';
 import FileNotFound from '@/features/FileNotFound';
 import { FileDocumentPreview } from '@/features/FileViewer/FileDocumentPreview';
-import FloatingChatPanel from '@/features/FloatingChatPanel';
-import { useDocumentChatTopic } from '@/features/FloatingChatPanel/useDocumentChatTopic';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useClientDataSWR } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
@@ -34,6 +32,7 @@ import {
   useResolvedDocumentId,
 } from './documentViewContext';
 import EditorCanvas from './EditorCanvas';
+import FooterActions from './FooterActions';
 import TodoList from './TodoList';
 import { useHighlightSave } from './useHighlightSave';
 
@@ -230,6 +229,26 @@ const HighlightEditor = memo<HighlightEditorProps>(
       updatedAt,
     });
 
+    // Mirror the live buffer into the document store so consumers outside this
+    // component (the portal footer's Export) read the text currently on screen,
+    // not the last persisted SWR copy. `addDocument` upserts: the highlight
+    // editor path never goes through `useFetchDocument`, so the record may not
+    // exist yet. `lastSavedContent` stays at the persisted value so this mirror
+    // never marks the document dirty or triggers a save on its own.
+    const dispatchDocument = useDocumentStore((s) => s.internal_dispatchDocument);
+    const docExists = useDocumentStore((s) => !!s.documents[documentId]);
+    useEffect(() => {
+      dispatchDocument(
+        docExists
+          ? { id: documentId, type: 'updateDocument', value: { content: editingValue } }
+          : {
+              id: documentId,
+              type: 'addDocument',
+              value: { content: editingValue, lastSavedContent: content, sourceType: 'notebook' },
+            },
+      );
+    }, [content, dispatchDocument, docExists, documentId, editingValue]);
+
     return (
       <CodeEditorPane
         showStatusBar
@@ -251,13 +270,9 @@ const DocumentBody = memo(() => {
   const activeAgentId = useAgentStore((s) => s.activeAgentId);
   // `agentDocumentId` is what marks this as an *agent* document: only the agent-doc
   // openers pass it. The notebook opens plain topic documents with the id alone, and
-  // `getOrCreateChatTopic` throws NOT_FOUND on those (no `agent_documents` row), so
-  // the panel — and its topic lookup — must stay out of the way there.
-  const panelEligible = !fullPage && !!activeAgentId && !!documentId && !!agentDocumentId;
-  const { topicId: docChatTopicId } = useDocumentChatTopic({
-    agentId: panelEligible ? activeAgentId : undefined,
-    documentId: panelEligible ? documentId : undefined,
-  });
+  // the footer's chat entry (which resolves a doc-anchored topic) must stay out of
+  // the way there — `getOrCreateChatTopic` throws NOT_FOUND without the binding row.
+  const footerEligible = !fullPage && !!activeAgentId && !!documentId && !!agentDocumentId;
   const [skillFrontmatter, contentFormat] = useDocumentStore((s) =>
     documentId
       ? [s.documents[documentId]?.skillFrontmatter ?? '', s.documents[documentId]?.contentFormat]
@@ -333,17 +348,18 @@ const DocumentBody = memo(() => {
         )}
       </div>
       {renderMode.mode !== 'file' && <TodoList />}
-      {/* The full-page route hosts its own panel through `AgentDocumentPage`, so
-          the in-portal panel only renders for the compact view. Both call sites
-          drive a doc-anchored chat topic via `useDocumentChatTopic`, so the panel
-          renders once that topic id resolves. */}
-      {panelEligible && docChatTopicId && (
-        <FloatingChatPanel
-          agentDocumentId={agentDocumentId}
+      {/* The compact portal closes with two entry buttons instead of an inline
+          conversation: "chat to edit" opens the doc-anchored chat on the right
+          panel, "export" downloads the markdown. The full-page route keeps its
+          own layout (the working sidebar already provides chat), and plain
+          notebook documents have no `agent_documents` row to anchor a chat
+          topic, so the footer only renders for agent documents. */}
+      {footerEligible && (
+        <FooterActions
           agentId={activeAgentId}
-          documentId={documentId ?? undefined}
-          key={`${activeAgentId}:${docChatTopicId}:${documentId ?? 'none'}`}
-          topicId={docChatTopicId}
+          documentId={documentId}
+          fileBacked={renderMode.mode === 'file'}
+          title={documentMeta?.title ?? documentMeta?.filename ?? undefined}
         />
       )}
     </Flexbox>

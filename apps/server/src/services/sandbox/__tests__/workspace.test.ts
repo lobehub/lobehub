@@ -1,0 +1,218 @@
+import {
+  DEFAULT_SANDBOX_MODE,
+  deriveSandboxStorageKey,
+  formatSandboxStoragePrompt,
+  formatSandboxStoragePromptVariables,
+  isSafeSandboxCwd,
+  isSafeSandboxEnvironmentId,
+  type SandboxStoragePromptVariables,
+  systemPrompt,
+} from '@lobechat/builtin-tool-cloud-sandbox';
+import { describe, expect, it } from 'vitest';
+
+describe('deriveSandboxStorageKey', () => {
+  it('uses the personal key when no workspace is scoped', () => {
+    expect(deriveSandboxStorageKey({ userId: 'user_abc' })).toBe('ws-user_abc');
+    expect(deriveSandboxStorageKey({ userId: 'user_abc', workspaceId: null })).toBe('ws-user_abc');
+  });
+
+  it('shares one key across an organization workspace', () => {
+    expect(deriveSandboxStorageKey({ userId: 'user_abc', workspaceId: 'wsp_42' })).toBe(
+      'ws-org-wsp_42',
+    );
+  });
+
+  // The key names a directory on a shared volume and is signed into the claim.
+  // Refusing beats sanitizing: `user_a/b` and `user_a-b` would both reduce to
+  // `ws-user_a-b`, and a length cap aliases every id sharing a prefix — either
+  // way two principals land in ONE directory and read each other's files.
+  it('refuses an id that is not already a safe path segment', () => {
+    expect(deriveSandboxStorageKey({ userId: '../etc/passwd' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: '$(rm -rf /)' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'user a' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'évil' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: '' })).toBeUndefined();
+    expect(deriveSandboxStorageKey({ userId: 'u', workspaceId: 'wsp/42' })).toBeUndefined();
+    // Over the 128-char ceiling the receiving end enforces.
+    expect(deriveSandboxStorageKey({ userId: 'x'.repeat(200) })).toBeUndefined();
+  });
+
+  // Two ids that differ at all must never produce the same key.
+  it('is injective for the id shapes the platform issues', () => {
+    const keys = ['user_a_b', 'user_a-b', 'user_ab', 'user_A_B'].map((userId) =>
+      deriveSandboxStorageKey({ userId }),
+    );
+
+    expect(keys.every(Boolean)).toBe(true);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  // Both shapes share one namespace, so `ws-<userId>` with a userId of
+  // `org-wsp_42` would address the very directory the workspace `wsp_42` uses.
+  it('keeps personal and organization namespaces apart', () => {
+    expect(deriveSandboxStorageKey({ userId: 'u', workspaceId: 'wsp_42' })).toBe('ws-org-wsp_42');
+    expect(deriveSandboxStorageKey({ userId: 'org-wsp_42' })).toBeUndefined();
+  });
+});
+
+describe('formatSandboxStoragePromptVariables', () => {
+  const placeholders = ['{{sandbox_workspace}}', '{{sandbox_session_files}}'];
+  const render = (vars: SandboxStoragePromptVariables) =>
+    placeholders.reduce(
+      (acc, key) => acc.replaceAll(key, vars[key.slice(2, -2) as keyof typeof vars]),
+      systemPrompt,
+    );
+
+  it('defaults to ephemeral', () => {
+    expect(DEFAULT_SANDBOX_MODE).toBe('ephemeral');
+    expect(formatSandboxStoragePromptVariables()).toEqual(
+      formatSandboxStoragePromptVariables({ mode: 'ephemeral' }),
+    );
+    expect(formatSandboxStoragePrompt()).toBe(
+      formatSandboxStoragePromptVariables().sandbox_workspace,
+    );
+  });
+
+  // Persistence is not enabled yet: until an entitlement claim is issued every
+  // run renders this branch, so it has to reproduce the pre-placeholder prompt
+  // exactly — including the lines surrounding the two spliced sections.
+  it('renders the original ephemeral wording, byte for byte', () => {
+    const vars = formatSandboxStoragePromptVariables();
+    const rendered = render(vars);
+
+    for (const key of placeholders) expect(rendered).not.toContain(key);
+    expect(rendered).toContain(
+      '- Files created here are temporary and session-specific\n- Each conversation topic has its own isolated session\n- Sessions may expire after inactivity; files will be recreated if needed\n- The sandbox has its own isolated file system starting at the root directory\n- Commands will time out',
+    );
+    expect(rendered).toContain(
+      '- If a session expires, it will be automatically recreated\n- Files from previous sessions may not persist\n- The sessionExpiredAndRecreated flag',
+    );
+  });
+
+  it('describes a persistent workspace without naming a directory', () => {
+    const vars = formatSandboxStoragePromptVariables({ mode: 'persistent' });
+    const rendered = render(vars);
+
+    for (const key of placeholders) expect(rendered).not.toContain(key);
+    expect(vars.sandbox_workspace).toContain('persistent workspace');
+    // Steers heavy work away from the workspace without naming a scratch
+    // directory: where installs land is the platform's business, and a path
+    // written here would outlive whatever it decides to do with them.
+    expect(vars.sandbox_workspace).toContain('network storage');
+    // The copy does name `/tmp` and `/root`, on purpose: as the places whose
+    // contents are lost, never as somewhere to work. What has to hold is that
+    // they are always paired with that loss, so naming one cannot read as an
+    // invitation. The mount path itself is covered by its own case below.
+    expect(vars.sandbox_workspace).toContain('lost with the session');
+    expect(rendered).not.toContain('temporary and session-specific');
+    expect(rendered).not.toContain('Files from previous sessions may not persist');
+  });
+
+  it('names the chosen subdirectory and places it under the workspace root', () => {
+    const vars = formatSandboxStoragePromptVariables({
+      cwd: 'projects/atlas',
+      mode: 'persistent',
+    });
+
+    expect(vars.sandbox_workspace).toContain('`projects/atlas`');
+    expect(vars.sandbox_workspace).toContain('workspace root is above you');
+    // The generic "pick your own subdirectory" advice is wrong once one is
+    // chosen — the model is already in it.
+    expect(vars.sandbox_workspace).not.toContain('its own subdirectory');
+  });
+
+  it('ignores a subdirectory on an ephemeral run', () => {
+    expect(
+      formatSandboxStoragePromptVariables({ cwd: 'projects/atlas', mode: 'ephemeral' }),
+    ).toEqual(formatSandboxStoragePromptVariables());
+  });
+
+  // The mount root belongs to the execution plane. Spelling an absolute path
+  // out here would be a second source of truth that can only drift, and a
+  // model that wrote one down would keep using it after the root moved.
+  it('never hardcodes a mount path', () => {
+    for (const input of [
+      { mode: 'persistent' } as const,
+      { cwd: 'a/b', mode: 'persistent' } as const,
+    ]) {
+      const vars = formatSandboxStoragePromptVariables(input);
+      expect(vars.sandbox_workspace).not.toContain('/mnt/');
+      expect(vars.sandbox_workspace).not.toContain('ws-');
+      expect(vars.sandbox_session_files).not.toContain('/mnt/');
+    }
+  });
+});
+
+describe('isSafeSandboxCwd', () => {
+  it('accepts a relative subdirectory', () => {
+    expect(isSafeSandboxCwd('projects/atlas')).toBe(true);
+    expect(isSafeSandboxCwd('a')).toBe(true);
+    // A space is a legal directory name, not something to tidy away.
+    expect(isSafeSandboxCwd('my notes/draft 1')).toBe(true);
+    // Only the TOP-level `.sandbox` is reserved — one the user made deeper in
+    // their own tree is an ordinary directory.
+    expect(isSafeSandboxCwd('projects/.sandbox')).toBe(true);
+    // Interior whitespace is an ordinary directory name, not a hazard.
+    expect(isSafeSandboxCwd('a b/c d')).toBe(true);
+  });
+
+  // Rejecting, never repairing: collapsing `..` lexically disagrees with the
+  // filesystem across a symlink, so a "cleaned" path can resolve somewhere
+  // other than where it was judged safe.
+  it('rejects traversal, absolute and shell-expanded paths', () => {
+    for (const value of [
+      '',
+      '..',
+      '../other-user',
+      'projects/../../etc',
+      './projects',
+      '/mnt/workspace/ws-other',
+      '~/secrets',
+      'projects//atlas',
+      'projects/atlas/',
+      '/',
+      // The runtime strips the directory string while the shell `cd` keeps
+      // its quotes, so these would leave the session disagreeing with itself
+      // about where it is.
+      'drafts ',
+      ' drafts',
+      'projects/atlas ',
+      // The platform's own state lives here; a working directory pointed at it
+      // would let an agent trample the store its environment is restored from.
+      '.sandbox',
+      '.sandbox/envs',
+      'x'.repeat(1025),
+    ]) {
+      expect(isSafeSandboxCwd(value)).toBe(false);
+    }
+  });
+});
+
+describe('isSafeSandboxEnvironmentId', () => {
+  it('accepts the identifiers this platform issues', () => {
+    expect(isSafeSandboxEnvironmentId('env_9aB3xQ')).toBe(true);
+    expect(isSafeSandboxEnvironmentId('default')).toBe(true);
+    // A uuid, in case environments are ever keyed by one.
+    expect(isSafeSandboxEnvironmentId('0f8c1e2a-4b6d-4c9e-8a1f-2d3e4f5a6b7c')).toBe(true);
+  });
+
+  // Checked on this side as well as the far one because of WHERE the far one
+  // fails: the session runs to completion and the snapshot is refused at the
+  // end, so the work is done and there is nowhere to put it.
+  it('refuses what the execution plane would reject at snapshot time', () => {
+    for (const value of [
+      '',
+      // A leading underscore is fine in a workspace key and not here — the two
+      // rules are deliberately different.
+      '_leading',
+      '.hidden',
+      '-dash',
+      'has/slash',
+      'has space',
+      'évil',
+      'x'.repeat(65),
+    ]) {
+      expect(isSafeSandboxEnvironmentId(value)).toBe(false);
+    }
+  });
+});

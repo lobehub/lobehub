@@ -43,6 +43,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { normalizeBm25MatchQuery, SAFE_BM25_QUERY_OPTIONS } from '../../utils/bm25';
 import { inJsonStringArray } from '../../utils/inJsonStringArray';
+import { buildUserMemoryWhere } from './where';
 
 const DEFAULT_HYBRID_SEARCH_LIMIT = 5;
 const HYBRID_SEARCH_OVERFETCH_MULTIPLIER = 3;
@@ -680,8 +681,8 @@ export class UserMemoryQueryModel {
     private readonly ftsSearchCandidateSource?: FtsSearchCandidateSource,
   ) {}
 
-  private memoryWhere(table: { userId: any }) {
-    return eq(table.userId, this.userId);
+  private memoryWhere(table: Parameters<typeof buildUserMemoryWhere>[2]) {
+    return buildUserMemoryWhere(this.db, this.userId, table);
   }
 
   private buildCandidateFilters(

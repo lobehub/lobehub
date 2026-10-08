@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, TextArea } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { memo } from 'react';
 
@@ -15,8 +15,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   customRow: css`
     margin-block-start: 2px;
 
-    /* Align the chip under the option number chips (OptionCard padding-inline). */
-    padding-inline: 12px;
+    /* Align the chip under the option number chips (OptionCard padding-inline);
+       the input itself runs to the option cards' right edge, flush with the
+       submit button below. */
+    padding-inline-start: 12px;
   `,
   // Mirrors OptionCard's `optionIndex` chip so the free-text row's number reads
   // identically to the numbered options above it.
@@ -105,7 +107,14 @@ export const QuestionPanel = memo<QuestionPanelProps>(
             </Text>
           )}
         </Flexbox>
-        <Text strong>{question.question}</Text>
+        <Flexbox gap={2}>
+          <Text strong>{question.question}</Text>
+          {question.description && (
+            <Text fontSize={12} type="secondary">
+              {question.description}
+            </Text>
+          )}
+        </Flexbox>
 
         <Flexbox gap={4} role="listbox">
           {question.options.map((opt, optIdx) => {

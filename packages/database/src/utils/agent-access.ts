@@ -35,6 +35,7 @@ export async function assertAgentUsableBy(
       and(
         eq(agents.id, agentId),
         buildWorkspaceWhere(ctx, {
+          isDeleted: agents.isDeleted,
           userId: agents.userId,
           workspaceId: agents.workspaceId,
           visibility: agents.visibility,

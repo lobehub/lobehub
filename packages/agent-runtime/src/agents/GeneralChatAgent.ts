@@ -1,6 +1,7 @@
 import { ToolNameResolver } from '@lobechat/context-engine';
 import {
   type ChatToolPayload,
+  describeLockedDevicePicker,
   type ExtendedHumanInterventionConfig,
   type HumanInterventionConfig,
   type HumanInterventionPolicy,
@@ -39,6 +40,8 @@ const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
  */
 const unresolvedToolContent = (names: string) =>
   `Tool call rejected: no available tool is named ${names}. Copy a name exactly as declared in the tools schema and call it again.`;
+/** The remote-device picker; walled off on device-locked runs. */
+const REMOTE_DEVICE_IDENTIFIER = 'lobe-remote-device';
 const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
 /**
  * How many times one operation may answer unresolvable tool calls with a
@@ -586,6 +589,10 @@ export class GeneralChatAgent implements Agent {
   ): AgentInstruction {
     const payloadWithAllowedToolNames = {
       ...payload,
+      // A resume-seeded placeholder (tool-first resume, client-wait resume) is
+      // filled by the first LLM turn whichever phase plans it.
+      ...(!payload.assistantMessageId &&
+        state.pendingAssistantMessageId && { assistantMessageId: state.pendingAssistantMessageId }),
       ...this.getAllowedToolNamesPayload(),
     };
     const compressionEnabled = this.config.compressionConfig?.enabled ?? true;
@@ -820,9 +827,29 @@ export class GeneralChatAgent implements Agent {
             );
           }
 
+          // A picker call on a locked run is not a typo: the tool was withheld on
+          // purpose, and "copy the name exactly" sends the model into a retry
+          // loop that ends the operation. Say why and who can switch instead;
+          // any other unresolved name in the batch keeps the typo feedback.
+          const lockedPickerNote = state.plan?.execution
+            ? describeLockedDevicePicker(state.plan.execution)
+            : undefined;
+          const isPickerCall = (name: string) =>
+            name.split(PLUGIN_SCHEMA_SEPARATOR)[0] === REMOTE_DEVICE_IDENTIFIER;
+          const allNames = namedToolCalls.map((toolCall) => toolCall.function.name);
+          const pickerNames = lockedPickerNote ? allNames.filter(isPickerCall) : [];
+          const otherNames = allNames.filter((name) => !pickerNames.includes(name));
+          const blockedContent = [
+            pickerNames.length > 0 &&
+              `Tool call rejected: ${pickerNames.join(', ')} is not available in this run. ${lockedPickerNote}`,
+            otherNames.length > 0 && unresolvedToolContent(otherNames.join(', ')),
+          ]
+            .filter(Boolean)
+            .join('\n\n');
+
           return {
             payload: {
-              blockedContent: unresolvedToolContent(unresolvedNames),
+              blockedContent,
               blockedReason: UNRESOLVED_TOOL_REASON,
               parentMessageId,
               unresolvedToolNames: true,
@@ -858,39 +885,7 @@ export class GeneralChatAgent implements Agent {
       }
 
       case 'tool_result': {
-        const { data, parentMessageId, stop } =
-          context.payload as GeneralAgentCallToolResultPayload;
-
-        // Legacy async agent invocation path. `callAgent({ runAsTask: true })`
-        // emits state.type=execSubAgent* with stop=true so the runtime can fork
-        // a background agent run after the tool call is persisted.
-        if (stop && data?.state) {
-          const stateType = data.state.type;
-
-          // Server-side legacy agent invocation (single)
-          if (stateType === 'execSubAgent') {
-            const { parentMessageId: execParentId, task } = data.state as {
-              parentMessageId: string;
-              task: any;
-            };
-            return {
-              payload: { parentMessageId: execParentId, task },
-              type: 'exec_sub_agent',
-            };
-          }
-
-          // Server-side legacy agent invocations (multiple)
-          if (stateType === 'execSubAgents') {
-            const { parentMessageId: execParentId, tasks } = data.state as {
-              parentMessageId: string;
-              tasks: any[];
-            };
-            return {
-              payload: { parentMessageId: execParentId, tasks },
-              type: 'exec_sub_agents',
-            };
-          }
-        }
+        const { parentMessageId } = context.payload as GeneralAgentCallToolResultPayload;
 
         // Scope pending check to the current assistant turn so stale
         // `pending` rows from prior turns can never block the loop.

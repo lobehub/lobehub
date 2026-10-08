@@ -2,7 +2,7 @@ import { describe, expect, expectTypeOf, it } from 'vitest';
 import type { z } from 'zod';
 
 import type { DeviceActivityOrder, WorkingDirConfig } from './device';
-import { sortDevicesByActivity, workingDirConfigSchema } from './device';
+import { deriveWorktreePath, sortDevicesByActivity, workingDirConfigSchema } from './device';
 
 describe('sortDevicesByActivity', () => {
   const device = (
@@ -162,5 +162,22 @@ describe('workingDirConfigSchema', () => {
     };
 
     expect(workingDirConfigSchema.parse(value)).toEqual(value);
+  });
+});
+
+describe('deriveWorktreePath', () => {
+  // The folder the worktree modal previews for a generated branch
+  // (`wt/<timestamp>-<adjective>-<noun>`): the `/` folds to `-`, so the checkout
+  // lands next to the repo as `<repo>-wt-<timestamp>-<adjective>-<noun>`.
+  it('folds a generated branch name into a sibling folder', () => {
+    expect(deriveWorktreePath('/code/lobehub', 'wt/202610020308-quiet-hill')).toBe(
+      '/code/lobehub-wt-202610020308-quiet-hill',
+    );
+  });
+
+  it('keeps the source path separator on Windows', () => {
+    expect(deriveWorktreePath('C:\\code\\lobehub', 'wt/202610020308-quiet-hill')).toBe(
+      'C:\\code\\lobehub-wt-202610020308-quiet-hill',
+    );
   });
 });

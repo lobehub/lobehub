@@ -1087,7 +1087,7 @@ export const MessageManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Proactively push a message to the CURRENT USER\'s own DM with the LobeHub System Bot — THE api for "send me a message on <platform>", "DM me", "notify me when done". Unlike `sendDirectMessage` it needs no bot discovery, channel id, or platform user id: the server resolves the user\'s own account link. Availability comes from that account link, NOT from `listBots` / `listMessengers` — a platform missing there can still be pushable, so never refuse based on those lists. Call `listMessengerLinks` when unsure which platforms are linked; when the user named one, just push and let an `unlinked` status tell you. Telegram / Discord deliver immediately. Slack with several linked workspaces returns `needs_workspace_selection` — ask the user to pick, then retry with that `tenantId`. WeChat can only deliver inside the send window opened by the user\'s last inbound message; outside it the push is `queued` and you must tell the user to message the LobeHub WeChat bot first so the queued push gets delivered.',
+        'Proactively push a message to the CURRENT USER\'s own DM with the LobeHub System Bot — THE api for "send me a message on <platform>", "DM me", "notify me when done". Unlike `sendDirectMessage` it needs no bot discovery, channel id, or platform user id: the server resolves the user\'s own account link. Availability comes from that account link, NOT from `listBots` / `listMessengers` — a platform missing there can still be pushable, so never refuse based on those lists. Call `listMessengerLinks` when unsure which platforms are linked; when the user named one, just push and let an `unlinked` status tell you. Telegram / Discord / iMessage-SMS (`linq`) deliver immediately. Slack with several linked workspaces returns `needs_workspace_selection` — ask the user to pick, then retry with that `tenantId`. WeChat can only deliver inside the send window opened by the user\'s last inbound message; outside it the push is `queued` and you must tell the user to message the LobeHub WeChat bot first so the queued push gets delivered.',
       name: MessageApiName.sendMessengerPush,
       ordered: true,
       parameters: {
@@ -1101,8 +1101,9 @@ export const MessageManifest: BuiltinToolManifest = {
             type: 'string',
           },
           platform: {
-            description: 'Platform to push to — must be one the user has linked.',
-            enum: ['telegram', 'slack', 'discord', 'wechat'],
+            description:
+              "Platform to push to — must be one the user has linked. `linq` is iMessage / SMS to the user's linked phone number.",
+            enum: ['telegram', 'slack', 'discord', 'wechat', 'linq'],
             type: 'string',
           },
           tenantId: {

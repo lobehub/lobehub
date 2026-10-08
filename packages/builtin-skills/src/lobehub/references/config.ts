@@ -1,15 +1,16 @@
-const content = `# lh config - User Info and Usage
+const content = `# lh whoami / lh usage - User Info and Usage
 
-View account information and usage statistics.
+View account information and usage statistics. These are **top-level** commands —
+there is no \`config\` module.
 
-## Subcommands
+## Commands
 
-- \`lh config whoami\` - Display current user information
-- \`lh config usage [--month <YYYY-MM>] [--daily]\` - View token usage statistics
+- \`lh whoami [--json]\` - Display current user information and the workspace scope
+- \`lh usage [--month <YYYY-MM>] [--agent-id <id>] [--daily] [--json]\` - View token usage statistics
 
 ## Tips
 
-- \`whoami\` shows user ID, email, and account details
+- \`whoami\` shows user ID, email, account details and whether commands run in a workspace
 - \`usage --daily\` shows a daily breakdown with heatmap
 `;
 

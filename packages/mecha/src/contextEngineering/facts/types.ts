@@ -98,6 +98,11 @@ export interface ContextFactRequest {
   executionTarget?: string;
   /** Which connector families this deployment offers. */
   features: { composio: boolean; lobehubSkill: boolean };
+  /**
+   * The run is a sub-agent (`origin.lineage.isSubAgent`). Nested agent
+   * dispatch is rejected there, so no fact may invite delegation.
+   */
+  isSubAgent?: boolean;
   /** Agents the user @-mentioned in the turn. */
   mentionedAgents?: RuntimeMentionedAgent[];
   /** Conversation as the engine will see it (history hints already applied). */
@@ -157,6 +162,15 @@ export interface ContextFactProviders {
   ) => Promise<{ content: string; role: string }[] | undefined>;
   /** Builtin tool identifiers the user uninstalled in the current scope. */
   listUninstalledBuiltinIds?: () => Promise<Iterable<string> | undefined>;
+  /**
+   * Whether this run's cloud sandbox keeps its working directory, and which
+   * subdirectory it works in. Resolved by the host because it depends on a
+   * signed entitlement the browser cannot see; absent means the sandbox is
+   * ephemeral, which is what every run without one gets.
+   */
+  resolveSandboxPersistence?: () => Promise<
+    { cwd?: string; mode: 'ephemeral' | 'persistent'; workingDir?: string } | undefined
+  >;
 }
 
 export interface GatheredContextFacts {

@@ -535,3 +535,34 @@ describe('useAskUserForm producer deadline', () => {
     vi.useRealTimers();
   });
 });
+
+describe('useAskUserForm requireAllAnswered', () => {
+  it('waits for every question by default', () => {
+    const { hook } = setup(twoQuestionArgs);
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+  });
+
+  it('submits a partial answer when every question is optional', async () => {
+    const onInteractionAction = vi.fn().mockResolvedValue(undefined);
+    const hook = renderHook(() =>
+      useAskUserForm({
+        args: twoQuestionArgs,
+        onInteractionAction,
+        persistedDraft: undefined,
+        requireAllAnswered: false,
+        writeDraft: vi.fn(),
+      }),
+    );
+    expect(hook.result.current.isSubmitDisabled).toBe(true);
+
+    act(() => hook.result.current.handleToggle(twoQuestionArgs.questions[0], 'Narrow'));
+    expect(hook.result.current.isSubmitDisabled).toBe(false);
+
+    await act(async () => hook.result.current.handleSubmit());
+    expect(onInteractionAction).toHaveBeenCalledWith({
+      payload: { 'How broad?': 'Narrow' },
+      type: 'submit',
+    });
+  });
+});

@@ -163,6 +163,8 @@ const pendingInterventions = (s: State) => getPendingInterventions(s.displayMess
 const workSummariesByRootOperationId = (rootOperationId?: string | null) => (s: State) =>
   getWorkSummariesByRootOperationId(s.dbMessages, rootOperationId);
 
+const isRefreshingAt = (id: string) => (s: State) => s.refreshingRowId === id;
+
 const isSecondLastMessageFromUser = (s: State) => s.displayMessages.at(-2)?.role === 'user';
 
 const rowMemberIds = (id: string) => (s: State) =>
@@ -210,6 +212,16 @@ const toAssistantContentBlock = (message: UIChatMessage): AssistantContentBlock 
   tools: message.tools as ChatToolPayloadWithResult[],
   usage: message.usage,
 });
+
+const getRowLatestMessageWithoutTools = (id: string) => (s: State) => {
+  const tailId = rowMemberIds(id)(s).at(-1) ?? id;
+  const tail = getDisplayMessageById(tailId)(s);
+
+  if (tail?.role !== 'assistant') return getGroupLatestMessageWithoutTools(tailId)(s);
+  if (tail.tools?.length || !tail.content) return;
+
+  return toAssistantContentBlock(tail);
+};
 
 /**
  * Walk displayMessages (including compressed groups and agentCouncil members)
@@ -305,6 +317,7 @@ const getVerifyOrdinal = (id: string) => (s: State) => {
 };
 
 export const dataSelectors = {
+  isRefreshingAt,
   currentTopicSummary,
   dbMessages,
   deletableRowMessageIds,
@@ -318,6 +331,7 @@ export const dataSelectors = {
   getBlockHasTools,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,
+  getRowLatestMessageWithoutTools,
   getToolInBlock,
   getToolMessageCreatedAt,
   getToolsInBlock,

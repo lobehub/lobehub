@@ -101,8 +101,8 @@ describe('ProxyForm', () => {
 
     await waitFor(() => {
       expect(setProxySettingsMock).not.toHaveBeenCalled();
-      expect(screen.getByText('proxy.validation.serverRequired')).toBeInTheDocument();
-      expect(screen.getByText('proxy.validation.portRequired')).toBeInTheDocument();
+      expect(screen.getAllByText('proxy.validation.serverRequired')).toHaveLength(2);
+      expect(screen.getAllByText('proxy.validation.portRequired')).toHaveLength(2);
     });
   });
 
@@ -116,8 +116,8 @@ describe('ProxyForm', () => {
 
     await waitFor(() => {
       expect(testProxyConfigMock).not.toHaveBeenCalled();
-      expect(screen.getByText('proxy.validation.serverRequired')).toBeInTheDocument();
-      expect(screen.getByText('proxy.validation.portRequired')).toBeInTheDocument();
+      expect(screen.getAllByText('proxy.validation.serverRequired')).toHaveLength(2);
+      expect(screen.getAllByText('proxy.validation.portRequired')).toHaveLength(2);
     });
 
     expect(toastErrorMock).not.toHaveBeenCalled();

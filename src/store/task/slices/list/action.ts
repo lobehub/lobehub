@@ -1,51 +1,34 @@
 import type { TaskStatus } from '@lobechat/types';
-import { useEffect } from 'react';
 
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { mutate, useClientDataSWR } from '@/libs/swr';
-import { isMyTaskListKey, isScheduledTaskListKey, isTaskListKey, taskKeys } from '@/libs/swr/keys';
+import { isMyTaskListKey, isScheduledTaskListKey, taskKeys } from '@/libs/swr/keys';
 import { taskService } from '@/services/task';
 import type { StoreSetter } from '@/store/types';
 
 import type { TaskStore } from '../../store';
-import type {
-  TaskGroupItem,
-  TaskKanbanGroupBy,
-  TaskListItem,
-  TaskListVisibilityFilter,
-} from './initialState';
+import { useTaskStore } from '../../store';
+import type { TaskKanbanGroupBy, TaskListVisibilityFilter } from './initialState';
+import {
+  type CollectionTask,
+  taskGroupListEntity,
+  type TaskGroupListQuery,
+  taskGroupListQueryKey,
+  taskGroupListResource,
+  type TaskGroupListValue,
+  taskListEntity,
+  type TaskListQuery,
+  taskListQueryKey,
+  taskListResource,
+  type TaskListValue,
+} from './projection';
 
 /**
- * Sentinel used as `listAgentId` when the task list is showing tasks across all agents
- * (e.g. the `/tasks` page). Keeps the SWR cache key distinct from per-agent lists so
- * the two don't collide and `refreshTaskList()` can invalidate the correct entry.
+ * Scope keys of the scheduled roll-up's SWR key: all agents, or one project.
+ * Kept distinct from per-agent ids so the entries never collide.
  */
-export const ALL_AGENTS_LIST_KEY = '__all__';
+const ALL_AGENTS_LIST_KEY = '__all__';
 const PROJECT_LIST_KEY_PREFIX = '__project__:';
-/**
- * Scope key of the Tasks page's "My tasks" board. Shaped like the project
- * prefix so one `listAgentId` slot keeps every board scope apart: the SWR key,
- * the scope-change reset and the refresh helpers all derive from it, and the
- * `assigned` / `created` sub-views can never serve each other's groups.
- */
-const MINE_LIST_KEY_PREFIX = '__mine__:';
-
-const projectIdFromListKey = (key?: string) =>
-  key?.startsWith(PROJECT_LIST_KEY_PREFIX) ? key.slice(PROJECT_LIST_KEY_PREFIX.length) : undefined;
-
-const isMineListKey = (key?: string) => !!key?.startsWith(MINE_LIST_KEY_PREFIX);
-
-/**
- * Visibility the grouped query actually runs with. "My tasks" is not offered
- * the visibility chip and its list view (`useFetchMyTaskList`) sends no
- * visibility at all, so its board has to ignore the chip too — otherwise a
- * value left over from the ordinary tab would silently change the row set on
- * the list ↔ board switch. Shared with the refresh helpers so the key they
- * rebuild is the key the fetch registered.
- */
-const effectiveGroupVisibility = (
-  listKey: string | undefined,
-  visibility: TaskListVisibilityFilter,
-): TaskListVisibilityFilter => (isMineListKey(listKey) ? 'all' : visibility);
 
 // Default kanban groups: 5 columns
 // 'scheduled' shares the 'running' column — both represent "automation in
@@ -83,19 +66,15 @@ const filterToServerVisibility = (
 export const COMPLETE_TASK_LIST_PAGE_SIZE = 100;
 export const COMPLETE_TASK_LIST_MAX_ITEMS = 1000;
 
-/**
- * Cleared whenever the list scope changes (all-agents <-> a specific agent).
- * The list and group datasets are shared store fields, so without this reset
- * the previous scope's tasks would render until the new fetch resolves — e.g.
- * the `/tasks` page briefly showing only the last-visited agent's tasks.
- */
-const scopeChangeResetState = {
-  isTaskGroupListInit: false,
-  isTaskListInit: false,
-  taskGroups: [] as TaskGroupItem[],
-  tasks: [] as TaskListItem[],
-  tasksTotal: 0,
-};
+/** Sync result of a task list / board fetch: replica flags plus the SWR-era aliases. */
+export interface TaskCollectionSyncResult extends ReplicaSyncResult {
+  /** A request is in flight and there is nothing to show for this query yet. */
+  isLoading: boolean;
+  /** Alias of `revalidate`. */
+  mutate: () => Promise<unknown>;
+  /** Read the collection with `taskListSelectors.*(queryKey)`; undefined while disabled. */
+  queryKey?: string;
+}
 
 type Setter = StoreSetter<TaskStore>;
 
@@ -105,31 +84,136 @@ export const createTaskListSlice = (set: Setter, get: () => TaskStore, _api?: un
 export class TaskListSliceActionImpl {
   readonly #get: () => TaskStore;
   readonly #set: Setter;
+  readonly #taskList;
+  readonly #taskGroupList;
 
   constructor(set: Setter, get: () => TaskStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#taskList = createReplicaSlice(taskListResource, {
+      actionPrefix: 'taskList',
+      entity: taskListEntity,
+      fetcher: (query) => this.#fetchList(query),
+      get,
+      merge: (incoming, _confirmed, query) => ({
+        items: incoming.data,
+        ...(query.statuses && { statuses: query.statuses }),
+        total: incoming.total,
+      }),
+      set,
+      stateKey: 'taskListReplica',
+      view: recordLens<TaskStore, TaskListValue>('taskListMap'),
+    });
+    this.#taskGroupList = createReplicaSlice(taskGroupListResource, {
+      actionPrefix: 'taskGroupList',
+      entity: taskGroupListEntity,
+      fetcher: (query) => this.#fetchGroups(query),
+      get,
+      merge: (incoming, _confirmed, query) => ({
+        ...(query.excludeStatuses && { excludeStatuses: query.excludeStatuses }),
+        groupBy: query.groupBy,
+        groups: incoming.data,
+      }),
+      set,
+      stateKey: 'taskGroupListReplica',
+      view: recordLens<TaskStore, TaskGroupListValue>('taskGroupListMap'),
+    });
   }
 
+  #fetchList = (query: TaskListQuery) => {
+    const params = {
+      ...(query.agentId ? { assigneeAgentId: query.agentId } : {}),
+      automated: query.automated,
+      orderBy: query.orderBy,
+      projectId: query.projectId,
+      statuses: query.statuses,
+      visibility: filterToServerVisibility(query.visibility),
+    };
+    return query.complete ? this.fetchCompleteTaskList(params) : this.fetchTaskList(params);
+  };
+
+  #fetchGroups = (query: TaskGroupListQuery) =>
+    taskService.groupList({
+      assigneeAgentId: query.agentId,
+      ...(query.automated === undefined ? {} : { automated: query.automated }),
+      excludeStatuses: query.excludeStatuses,
+      ...(query.groupBy === 'status'
+        ? { groups: DEFAULT_KANBAN_GROUPS }
+        : { groupBy: query.groupBy }),
+      projectId: query.projectId,
+      scope: query.scope,
+      visibility: filterToServerVisibility(query.visibility),
+    });
+
+  #toSyncResult = (
+    sync: ReplicaSyncResult,
+    queryKey: string | undefined,
+    hasValue: boolean,
+  ): TaskCollectionSyncResult => ({
+    ...sync,
+    isLoading: sync.isValidating && !hasValue,
+    mutate: sync.revalidate,
+    queryKey,
+  });
+
+  /** The task (by identifier) as any loaded list or board holds it. */
+  internal_findCollectionTask = (identifier: string): CollectionTask | undefined => {
+    const { taskGroupListMap, taskListMap } = this.#get();
+    for (const value of Object.values(taskListMap)) {
+      const task = value.items.find((item) => item.identifier === identifier);
+      if (task) return task;
+    }
+    for (const value of Object.values(taskGroupListMap)) {
+      for (const group of value.groups) {
+        const task = group.tasks.find((item) => item.identifier === identifier);
+        if (task) return task;
+      }
+    }
+    return undefined;
+  };
+
+  /**
+   * Optimistic patch of a task in every loaded list and board (a status board
+   * moves the card). `commit` keeps it as confirmed until the refresh lands and
+   * applies the change to persisted lists and boards that are not loaded, so
+   * reopening one later does not paint the old status; `rollback` restores
+   * every loaded collection exactly, card order included.
+   */
+  internal_beginCollectionTaskOptimistic = (
+    identifier: string,
+    fn: <T extends CollectionTask>(task: T) => T,
+  ) => {
+    const tokens = [
+      ...this.#taskList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+      ...this.#taskGroupList.beginEntityOptimistic<CollectionTask>(identifier, fn),
+    ];
+    return {
+      commit: () => {
+        tokens.forEach((token) => token.commit());
+        void this.#taskList.patchStoredEntity<CollectionTask>(identifier, fn);
+        void this.#taskGroupList.patchStoredEntity<CollectionTask>(identifier, fn);
+      },
+      rollback: () => tokens.forEach((token) => token.rollback()),
+    };
+  };
+
+  /**
+   * Optimistic overlay on one board (a drag between columns): shows now,
+   * `commit` keeps it until the refresh lands, `rollback` restores the board.
+   */
+  internal_beginTaskGroupOptimistic = (
+    queryKey: string,
+    apply: (value: TaskGroupListValue) => TaskGroupListValue,
+  ) => this.#taskGroupList.beginOptimistic(queryKey, apply);
+
+  setActiveTaskListKey = (queryKey?: string): void => {
+    if (this.#get().activeTaskListKey === queryKey) return;
+    this.#set({ activeTaskListKey: queryKey }, false, 'setActiveTaskListKey');
+  };
+
   refreshTaskGroupList = async (): Promise<void> => {
-    const {
-      groupListQueryAutomated,
-      listAgentId,
-      listGroupBy,
-      listGroupExcludeStatuses,
-      listVisibility,
-    } = this.#get();
-    await mutate(
-      taskKeys.groupList(
-        listAgentId,
-        effectiveGroupVisibility(listAgentId, listVisibility),
-        listGroupBy,
-        listGroupExcludeStatuses,
-        projectIdFromListKey(listAgentId),
-        groupListQueryAutomated,
-      ),
-    );
+    await this.#taskGroupList.revalidate();
   };
 
   fetchTaskList = async (params: Parameters<typeof taskService.list>[0]) =>
@@ -166,30 +250,12 @@ export class TaskListSliceActionImpl {
   };
 
   refreshTaskList = async (): Promise<void> => {
-    const {
-      groupListQueryAutomated,
-      listAgentId,
-      listGroupBy,
-      listGroupExcludeStatuses,
-      listVisibility,
-    } = this.#get();
-    const projectId = projectIdFromListKey(listAgentId);
     await Promise.all([
-      // Every cached variant of the list — both orderings, any visibility chip
-      // or automation filter — an edit can move a task across each of those
-      // boundaries (touching reorders `updatedAt`, scheduling flips the
-      // automation filter), so they are invalidated by root, not enumerated.
-      mutate(isTaskListKey),
-      mutate(
-        taskKeys.groupList(
-          listAgentId,
-          effectiveGroupVisibility(listAgentId, listVisibility),
-          listGroupBy,
-          listGroupExcludeStatuses,
-          projectId,
-          groupListQueryAutomated,
-        ),
-      ),
+      // Every loaded list and board of the active scope — an edit can move a
+      // task across any query boundary (touching reorders `updatedAt`,
+      // scheduling flips the automation filter), so none are singled out.
+      this.#taskList.revalidate(),
+      this.#taskGroupList.revalidate(),
       // A schedule can be attached, changed or removed from any task edit, so
       // the automated roll-up has to be revalidated alongside the main list.
       mutate(isScheduledTaskListKey),
@@ -198,23 +264,10 @@ export class TaskListSliceActionImpl {
     ]);
   };
 
-  setListAgentId = (agentId?: string): void => {
-    this.#set({ listAgentId: agentId }, false, 'setListAgentId');
-  };
-
   setListVisibility = (visibility: TaskListVisibilityFilter): void => {
     if (this.#get().listVisibility === visibility) return;
-    // Clear the cached list so the chip flip doesn't render stale entries
-    // from the previous filter while the new fetch is in flight.
-    this.#set(
-      {
-        ...scopeChangeResetState,
-        listQueryVisibility: visibility,
-        listVisibility: visibility,
-      },
-      false,
-      'setListVisibility',
-    );
+    // Each visibility is its own list entry, so nothing needs clearing here.
+    this.#set({ listVisibility: visibility }, false, 'setListVisibility');
   };
 
   useFetchTaskGroupList = (
@@ -232,7 +285,7 @@ export class TaskListSliceActionImpl {
        */
       scope?: 'assigned' | 'created';
     } = {},
-  ) => {
+  ): TaskCollectionSyncResult => {
     const {
       agentId,
       allAgents = false,
@@ -243,109 +296,32 @@ export class TaskListSliceActionImpl {
       projectId,
       scope,
     } = options;
-    const effectiveKey = scope
-      ? `${MINE_LIST_KEY_PREFIX}${scope}`
-      : projectId
-        ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
-        : allAgents
-          ? ALL_AGENTS_LIST_KEY
-          : agentId;
-    const excludeStatusesSignature = excludeStatuses?.length
-      ? [...excludeStatuses].sort().join(',')
-      : undefined;
-    const { groupListQueryAutomated, listAgentId, listGroupBy, listGroupExcludeStatuses } =
-      this.#get();
-    const isQueryScopeCurrent =
-      !effectiveKey ||
-      (listAgentId === effectiveKey &&
-        groupListQueryAutomated === automated &&
-        listGroupBy === groupBy &&
-        listGroupExcludeStatuses === excludeStatusesSignature);
-
-    // Reset after render so changing the board dimension never notifies React
-    // subscribers while another component is rendering. The caller gates old
-    // groups with `isQueryScopeCurrent` until this effect commits the new scope.
-    useEffect(() => {
-      if (!effectiveKey) return;
-
-      const current = this.#get();
-      if (
-        current.listAgentId === effectiveKey &&
-        current.groupListQueryAutomated === automated &&
-        current.listGroupBy === groupBy &&
-        current.listGroupExcludeStatuses === excludeStatusesSignature
-      ) {
-        return;
-      }
-
-      this.#set(
-        current.listAgentId !== effectiveKey
-          ? {
-              ...scopeChangeResetState,
-              groupListQueryAutomated: automated,
-              listAgentId: effectiveKey,
-              listGroupBy: groupBy,
-              listGroupExcludeStatuses: excludeStatusesSignature,
-            }
-          : {
-              isTaskGroupListInit: false,
-              groupListQueryAutomated: automated,
-              listGroupBy: groupBy,
-              listGroupExcludeStatuses: excludeStatusesSignature,
-              taskGroups: [],
-            },
-        false,
-        'useFetchTaskGroupList/syncQueryScope',
-      );
-    }, [automated, effectiveKey, excludeStatusesSignature, groupBy]);
-    const listVisibility = effectiveGroupVisibility(effectiveKey, this.#get().listVisibility);
-
-    const swr = useClientDataSWR(
-      enabled && effectiveKey
-        ? taskKeys.groupList(
-            effectiveKey,
-            listVisibility,
-            groupBy,
-            excludeStatusesSignature,
-            projectId,
-            automated,
-          )
-        : null,
-      async () => {
-        return taskService.groupList({
-          assigneeAgentId: allAgents || scope ? undefined : agentId,
-          ...(automated === undefined ? {} : { automated }),
-          excludeStatuses: excludeStatuses?.length ? [...excludeStatuses] : undefined,
-          ...(groupBy === 'status' ? { groups: DEFAULT_KANBAN_GROUPS } : { groupBy }),
+    // Subscribed, so flipping the visibility chip re-keys the board query.
+    const listVisibility = useTaskStore((s) => s.listVisibility);
+    const hasScope = !!(scope || projectId || allAgents || agentId);
+    const query: TaskGroupListQuery | undefined = hasScope
+      ? {
+          agentId: allAgents || scope ? undefined : agentId,
+          automated,
+          excludeStatuses: excludeStatuses?.length ? [...excludeStatuses].sort() : undefined,
+          groupBy,
           projectId,
           scope,
-          visibility: filterToServerVisibility(listVisibility),
-        });
-      },
-      {
-        onSuccess: (data: { data: TaskGroupItem[] }) => {
-          const current = this.#get();
-          if (
-            current.listAgentId !== effectiveKey ||
-            current.groupListQueryAutomated !== automated ||
-            current.listGroupBy !== groupBy ||
-            current.listGroupExcludeStatuses !== excludeStatusesSignature ||
-            effectiveGroupVisibility(effectiveKey, current.listVisibility) !== listVisibility
-          ) {
-            return;
-          }
-
-          this.#set(
-            { isTaskGroupListInit: true, taskGroups: data.data },
-            false,
-            'useFetchTaskGroupList/onSuccess',
-          );
-        },
-        revalidateOnFocus: false,
-      },
+          // "My tasks" is not offered the visibility chip and its list view
+          // (`useFetchMyTaskList`) sends no visibility at all, so its board
+          // ignores the chip too — otherwise a value left over from the
+          // ordinary tab would change the row set on the list ↔ board switch.
+          visibility: scope ? 'all' : listVisibility,
+        }
+      : undefined;
+    const queryKey = query ? taskGroupListQueryKey(query) : undefined;
+    // A board is a deliberate view, not a live feed: no refetch on focus.
+    const sync = this.#taskGroupList.useSync(query, { enabled, revalidateOnFocus: false });
+    return this.#toSyncResult(
+      sync,
+      enabled ? queryKey : undefined,
+      !!queryKey && !!this.#get().taskGroupListMap[queryKey],
     );
-
-    return { ...swr, isQueryScopeCurrent };
   };
 
   /**
@@ -449,7 +425,7 @@ export class TaskListSliceActionImpl {
       /** Override the Task page's persisted filter for embedded consumers. */
       visibility?: TaskListVisibilityFilter;
     } = {},
-  ) => {
+  ): TaskCollectionSyncResult => {
     const {
       agentId,
       allAgents = false,
@@ -461,89 +437,27 @@ export class TaskListSliceActionImpl {
       statuses,
       visibility,
     } = options;
-    const effectiveKey = projectId
-      ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
-      : allAgents
-        ? ALL_AGENTS_LIST_KEY
-        : agentId;
-    const listVisibility = visibility ?? this.#get().listVisibility;
-    // Order-insensitive signature, only for change detection in the scope guard.
-    const statusesSignature = statuses?.length ? [...statuses].sort().join(',') : undefined;
-    const {
-      listAgentId,
-      listQueryAutomated,
-      listQueryComplete,
-      listQueryStatuses,
-      listQueryVisibility,
-    } = this.#get();
-
-    // `tasks` is shared by the full Tasks page and embedded overviews. Reset it
-    // when any part of the effective query changes so an `all` override does
-    // not temporarily inherit a previously initialized private/workspace list,
-    // nor the Tasks page a list narrowed by Home's automation/status filters,
-    // nor the list view a single kanban page posing as the complete list.
-    //
-    // Only an ENABLED query claims the scope. `listAgentId` is one shared slot
-    // and `useFetchTaskGroupList` writes it too, so a disabled list query that
-    // still claimed it would fight the board that is actually fetching: on the
-    // "My tasks" board this page keeps its (disabled) all-agents list mounted,
-    // and the two hooks alternately reset `taskGroups` to [] every render.
-    if (
-      enabled &&
-      effectiveKey &&
-      (listAgentId !== effectiveKey ||
-        listQueryVisibility !== listVisibility ||
-        listQueryAutomated !== automated ||
-        listQueryComplete !== complete ||
-        listQueryStatuses !== statusesSignature)
-    ) {
-      this.#set(
-        {
-          ...scopeChangeResetState,
-          listAgentId: effectiveKey,
-          listQueryAutomated: automated,
-          listQueryComplete: complete,
-          listQueryStatuses: statusesSignature,
-          listQueryVisibility: listVisibility,
-        },
-        false,
-        'useFetchTaskList/syncQueryScope',
-      );
-    }
-
-    return useClientDataSWR(
-      enabled && effectiveKey
-        ? taskKeys.list(effectiveKey, listVisibility, orderBy, projectId, {
-            automated,
-            complete,
-            statuses,
-          })
-        : null,
-      async ([, id]: [string, string]) => {
-        const params = {
-          ...(allAgents || projectId ? {} : { assigneeAgentId: id }),
+    // Subscribed, so flipping the visibility chip re-keys the list query.
+    const listVisibility = useTaskStore((s) => s.listVisibility);
+    const hasScope = !!(projectId || allAgents || agentId);
+    const query: TaskListQuery | undefined = hasScope
+      ? {
+          agentId: allAgents || projectId ? undefined : agentId,
           automated,
+          complete: complete || undefined,
           orderBy,
           projectId,
-          statuses: statuses?.length ? [...statuses] : undefined,
-          visibility: filterToServerVisibility(listVisibility),
-        };
-        return complete ? this.fetchCompleteTaskList(params) : this.fetchTaskList(params);
-      },
-      {
-        onSuccess: (data: { data: TaskListItem[]; total: number }) => {
-          this.#set(
-            {
-              isTaskListInit: true,
-              tasks: data.data,
-              tasksTotal: data.total,
-            },
-            false,
-            'useFetchTaskList/onSuccess',
-          );
-        },
-        revalidateOnFocus: false,
-      },
+          statuses: statuses?.length ? [...statuses].sort() : undefined,
+          visibility: visibility ?? listVisibility,
+        }
+      : undefined;
+    const queryKey = query ? taskListQueryKey(query) : undefined;
+    // No refetch on focus: a `complete` list walks up to ten pages per sync.
+    const sync = this.#taskList.useSync(query, { enabled, revalidateOnFocus: false });
+    return this.#toSyncResult(
+      sync,
+      enabled ? queryKey : undefined,
+      !!queryKey && !!this.#get().taskListMap[queryKey],
     );
   };
 }

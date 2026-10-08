@@ -159,6 +159,19 @@ const MessageItem = memo<MessageItemProps>(
         }
 
         case 'assistant': {
+          if (continuations?.length)
+            return (
+              <AssistantGroupMessage
+                continuations={continuations}
+                defaultWorkflowExpandLevel={defaultWorkflowExpandLevel}
+                disableEditing={effectiveDisableEditing}
+                footerRender={footerRender}
+                id={id}
+                index={index}
+                isLatestItem={isLatestItem}
+              />
+            );
+
           return (
             <AssistantMessage
               disableEditing={effectiveDisableEditing}

@@ -113,7 +113,177 @@ export const chainExpertiseDomainDraft = ({
       ],
 });
 
-export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v2';
+export const EXPERTISE_RULE_DRAFT_PROMPT_VERSION = 'v3';
+
+/**
+ * One rule drafted from whatever the reviewer typed or pasted: a sentence, a paragraph, or a
+ * whole document. The schema mirrors the editable fields of a lesson row so the review step can
+ * show every field and let the reviewer change any of them before it is written.
+ */
+export const EXPERTISE_RULE_DRAFT_JSON_SCHEMA = {
+  name: 'expertise_rule_draft',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      compilability: { enum: ['compilable', 'not-compilable'], type: 'string' },
+      direction: { enum: ['positive', 'negative'], type: 'string' },
+      enforcement: { enum: ['block', 'remind'], type: 'string' },
+      groupId: { type: ['string', 'null'] },
+      how: { type: ['string', 'null'] },
+      limits: { type: ['string', 'null'] },
+      newGroup: {
+        additionalProperties: false,
+        properties: {
+          gate: { type: 'string' },
+          title: { maxLength: 40, type: 'string' },
+        },
+        required: ['gate', 'title'],
+        type: ['object', 'null'],
+      },
+      title: { maxLength: 120, type: 'string' },
+      why: { type: ['string', 'null'] },
+    },
+    required: [
+      'compilability',
+      'direction',
+      'enforcement',
+      'groupId',
+      'how',
+      'limits',
+      'newGroup',
+      'title',
+      'why',
+    ],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_DRAFT_SYSTEM_PROMPT = `You turn what a reviewer wrote — one sentence, a paragraph, or a pasted document — into ONE delivery rule they will hold every future delivery to.
+
+Return:
+- title: the rule as one imperative sentence in the reviewer's own voice, general enough to apply to any future delivery (strip page names, component names and the name of this particular task), specific enough that a delivery can be judged against it;
+- why: one or two sentences on what goes wrong when it is broken, or null when the reviewer gave no reason and none is obvious;
+- how: what counts as breaking it, as a concrete example a checker could look for, or null;
+- limits: when it does NOT apply, or null when the reviewer set no boundary;
+- direction: "positive" when the rule steers toward a quality to reach (what good looks like), "negative" when it names a thing that gets a delivery sent back (what must not appear). Judge what the rule asks for, not how the sentence is worded or where it came from;
+- enforcement: "block" only when the reviewer clearly wants deliveries held until fixed (words like must, never, reject, block, 必须, 不许, 打回); otherwise "remind";
+- compilability: "compilable" when a program could check it or gather the evidence for it from the delivery (a diff, a file, a count), "not-compilable" when only a person or a model can judge it;
+- groupId: the id of the existing group whose gate question this rule passes, or null when none fits;
+- newGroup: when groupId is null, a proposed group — a short title and the gate question a rule must pass to be filed there; otherwise null.
+
+If the input is a long document, extract the single most important rule it states; do not summarise the document. Never invent requirements the reviewer did not express. Write every human-facing field in the language the reviewer used.`;
+
+interface ExpertiseRuleDraftChainInput {
+  brief: string;
+  groups: { gate: string; id: string; title: string }[];
+}
+
+export const chainExpertiseRuleDraft = ({
+  brief,
+  groups,
+}: ExpertiseRuleDraftChainInput): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_DRAFT_SYSTEM_PROMPT, role: 'system' },
+    {
+      content: [
+        groups.length > 0
+          ? `Existing groups (id · title · gate question):\n${groups
+              .map((group) => `- ${group.id} · ${group.title} · ${group.gate}`)
+              .join('\n')}`
+          : 'There are no groups yet; propose one in newGroup.',
+        `What the reviewer wrote:\n${brief.trim()}`,
+      ].join('\n\n'),
+      role: 'user',
+    },
+  ],
+});
+
+export const EXPERTISE_RULE_DIRECTION_PROMPT_VERSION = 'v1';
+
+/**
+ * Judges which way each of a batch of existing rules pushes the work. Rules written before the
+ * direction existed, and rules distilled from runs, reach the page without one; this settles
+ * them in one call per batch instead of one per rule.
+ */
+export const EXPERTISE_RULE_DIRECTION_JSON_SCHEMA = {
+  name: 'expertise_rule_direction',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      rules: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            direction: { enum: ['positive', 'negative'], type: 'string' },
+            id: { type: 'string' },
+          },
+          required: ['direction', 'id'],
+          type: 'object',
+        },
+        type: 'array',
+      },
+    },
+    required: ['rules'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_DIRECTION_SYSTEM_PROMPT = `Each line below is one delivery rule. For every rule decide which way it pushes the work:
+
+- "positive" — it steers toward a quality to reach: what a good delivery has or does ("give empty states a clear purpose", "keep the source view when opening a detail");
+- "negative" — it names a thing that gets a delivery sent back: what must not appear or must not happen ("no blue link styling on controls that are not links", "do not show raw fraction scores").
+
+Judge what the rule asks for, not the grammar: "X instead of Y" is positive when the point is reaching X, negative when the point is ruling out Y. A rule that says both leans the way its first clause does.
+
+Return one entry per rule, with its id copied exactly. Do not skip a rule and do not invent ids.`;
+
+export const chainExpertiseRuleDirection = ({
+  rules,
+}: {
+  rules: { id: string; title: string }[];
+}): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_DIRECTION_SYSTEM_PROMPT, role: 'system' },
+    { content: rules.map((rule) => `- ${rule.id} · ${rule.title}`).join('\n'), role: 'user' },
+  ],
+});
+
+export const EXPERTISE_RULE_GROUP_DRAFT_PROMPT_VERSION = 'v1';
+
+/** A group is a name and the gate question a rule must pass to be filed under it. */
+export const EXPERTISE_RULE_GROUP_DRAFT_JSON_SCHEMA = {
+  name: 'expertise_rule_group_draft',
+  schema: {
+    additionalProperties: false,
+    properties: {
+      gate: { type: 'string' },
+      outOfScope: { type: ['string', 'null'] },
+      title: { maxLength: 40, type: 'string' },
+    },
+    required: ['gate', 'outOfScope', 'title'],
+    type: 'object',
+  },
+} as const satisfies ExpertiseGenerateObjectSchema;
+
+const EXPERTISE_RULE_GROUP_DRAFT_SYSTEM_PROMPT = `A reviewer is opening a group to file their delivery rules under. From what they wrote, return:
+- title: a short name for the group, 2 to 6 words, in the reviewer's language;
+- gate: the one question to ask of a rule before filing it here, phrased so a yes means it belongs (for example: "Strip the page and task names — does this still hold for any delivery?");
+- outOfScope: one sentence on what does not belong here, or null.
+
+Keep the reviewer's intent; do not widen the group beyond what they described.`;
+
+export const chainExpertiseRuleGroupDraft = ({
+  brief,
+}: {
+  brief: string;
+}): { messages: OpenAIChatMessage[] } => ({
+  messages: [
+    { content: EXPERTISE_RULE_GROUP_DRAFT_SYSTEM_PROMPT, role: 'system' },
+    { content: brief.trim(), role: 'user' },
+  ],
+});
+
+export const EXPERTISE_TOPIC_INGESTION_PROMPT_VERSION = 'v3';
 
 export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
   name: 'expertise_topic_ingestion',
@@ -134,6 +304,10 @@ export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
                   example: { type: 'string' },
                   layer: { type: ['string', 'null'] },
                   outcome: { enum: ['pass', 'violation'], type: 'string' },
+                  // A verbatim excerpt of the one message the observation rests on. The service
+                  // looks it up in the topic to link the hit to that message, so the reader can
+                  // jump from a rule to the turn that taught it; "" when no single message does.
+                  quote: { type: 'string' },
                   reasoning: { type: 'string' },
                   title: { type: 'string' },
                 },
@@ -142,6 +316,7 @@ export const EXPERTISE_TOPIC_INGESTION_JSON_SCHEMA = {
                   'existingLessonCode',
                   'layer',
                   'outcome',
+                  'quote',
                   'reasoning',
                   'title',
                 ],
@@ -173,6 +348,8 @@ For a match, turn concrete evidence into observations. Attaching to an existing 
 - Only when no listed lesson carries the judgment, set existingLessonCode to null and propose one reusable lesson. Before doing so, state to yourself what it adds that every listed lesson misses; if you cannot, attach instead. Rewording a listed lesson is not a new lesson.
 - Do not turn implementation trivia or a one-off fact into a lesson.
 
+For each observation, put in \`quote\` one short excerpt (a sentence or less) copied character for character from the single message the observation rests on — usually the user's correction or the reply that showed the judgment. Do not paraphrase, translate or join text from two messages; answer "" when no single message carries it.
+
 Use only declared layer keys. Keep evidence short and grounded in the supplied conversation, and write human-facing text in the language of the conversation.`;
 
 export const chainExpertiseTopicIngestion = (input: {
@@ -188,7 +365,7 @@ export const chainExpertiseTopicIngestion = (input: {
   ],
 });
 
-export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v3';
+export const EXPERTISE_REJECTION_INGESTION_PROMPT_VERSION = 'v4';
 
 export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
   name: 'expertise_rejection_ingestion',
@@ -222,7 +399,14 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   // makes a standard transferable — but an explanation it invented must never read
                   // as something the reviewer stated.
                   reasonSource: { enum: ['reviewer', 'inferred'], type: 'string' },
+                  // The reviewer's own sentence stating the cause, copied verbatim, or "". The
+                  // service checks it against what they actually wrote, so a claimed quote that is
+                  // not in the rejection cannot make an inferred reason read as theirs.
+                  reviewerWords: { type: 'string' },
                   sourceRefs: { items: { type: 'string' }, minItems: 1, type: 'array' },
+                  // Whether this is a standard at all or an instruction about one delivery. Only
+                  // decided for a new lesson; attaching to a listed one is itself proof it recurs.
+                  specificity: { enum: ['general', 'one-off'], type: 'string' },
                   // Naming the abstracted subject is what forces the climb: a model that cannot
                   // say what the concrete thing is an example of has not generalized at all.
                   subject: { type: 'string' },
@@ -236,7 +420,9 @@ export const EXPERTISE_REJECTION_INGESTION_JSON_SCHEMA = {
                   'reasonKind',
                   'reasonSource',
                   'reasoning',
+                  'reviewerWords',
                   'sourceRefs',
+                  'specificity',
                   'subject',
                   'title',
                 ],
@@ -290,11 +476,15 @@ For each observation return:
 
   For "taste", do not dress the verdict up. State the preference plainly and in a form the next delivery can act on: "the owner does not accept dividers that were not asked for; regions are separated by spacing and container edges alone" is a complete and honest reason. A fabricated mechanism is worse than an admitted preference, because it reads as objective and gets enforced as if it were;
 - reasonSource — where that reason came from, decided by one test you can actually run: does the reviewer's own text state a consequence or a cause, not just an instruction? "the cyan is too light, I can't see it" states a consequence → "reviewer". "put it in one row, annotations left, actions right" and "there's an extra line here" are instructions with no cause → "inferred", however obvious the cause seems. So is "this is ugly" / "this is wrong" / "this doesn't work". When in doubt answer "inferred": over-claiming the reviewer said something is the one failure this field exists to prevent, and under-claiming costs nothing;
+- reviewerWords — when reasonSource is "reviewer", the reviewer's own sentence that states the consequence or cause, copied character for character from what they said or wrote on a circled region. Do not translate, trim into a paraphrase, or merge two remarks. The reader trusts a standard far more when its reason is in their own words, so this is shown first and your mechanism after it. Answer "" when reasonSource is "inferred";
 - example — how it showed up this time, concretely enough to recognise again;
-- limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer exactly "边界未由评审者说明" (or the same sentence in their language). An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
+- limits — the boundary THE REVIEWER drew. Fill it only when they said where the standard stops, or when another rejection in this same round contradicts it. Otherwise answer "". Never write a sentence saying that no boundary was given — an empty field already says that. An invented exemption is worse than an empty one: it silently narrows a standard the reviewer stated without limit;
+- specificity — only matters when you propose a new lesson. Ask: would anyone check this on a delivery that does not contain this very element? If not, answer "one-off". Typical one-offs: a version number, a padding or size on one particular header, the wording of one label, removing one specific button, a fact about this project's release state. They stay one-offs even after you phrase them generally — "keep the top padding of section headers compact" is still that one header. Answer "general" only when the standard would plausibly be broken again on an unrelated screen. A one-off kept and labelled is useful; a one-off dressed as a standard dilutes every real one;
 - sourceRefs — the reference labels (for example "R2") of every rejection supporting it. Never invent a label that is not listed.
 
-Leave existingLessonCode and layer as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys. Write human-facing text in the language the reviewer used.`;
+Leave existingLessonCode and layer as an empty string rather than null when they do not apply — never as an object. Use only declared layer keys.
+
+Write every human-facing field — title, subject, reasoning, example, limits — in the language the reviewer wrote their rejections in, even when the domains, these instructions or the promised checks are in another language. A Chinese reviewer gets Chinese standards.`;
 
 export const chainExpertiseRejectionIngestion = (input: {
   domains: readonly unknown[];
@@ -417,7 +607,7 @@ Return \`limits\` as the exemptions you are ADDING. Each entry:
 - \`text\` — where the standard stops, in the reviewer's language.
 - \`shippedRefs\` — the labels of the SHIPPED deliveries it was read from (for example ["S2"]). Every entry must name at least one. An entry that names none, or names an instance, is discarded — and so is any label that is not listed.
 
-Do not repeat the limits the standard already carries; they are kept for you, word for word, and nothing you write can remove one. Set \`currentLimitsArePlaceholder\` to true only when the standard's current \`limits\` is ingestion's "边界未由评审者说明" placeholder (in any language) rather than a boundary the reviewer drew — that is the one case where the existing text is dropped, and only if you supply a real exemption to replace it.
+Do not repeat the limits the standard already carries; they are kept for you, word for word, and nothing you write can remove one. Set \`currentLimitsArePlaceholder\` to true only when the standard's current \`limits\` is the "边界未由评审者说明" placeholder older ingestion wrote (in any language) rather than a boundary the reviewer drew — that is the one case where the existing text is dropped, and only if you supply a real exemption to replace it.
 
 Rules on this, in order:
 - Only a shipped delivery whose frame you have actually read can justify a new exemption. Never infer one from the instances, from the standard's own wording, or from what a reasonable person "would obviously" exempt — an invented exemption silently narrows a standard the reviewer stated without limit.

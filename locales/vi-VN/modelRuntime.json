@@ -14,6 +14,7 @@
   "ConversationParentMissing": "Không thể tìm thấy ngữ cảnh cuộc trò chuyện cho tin nhắn này. Mở lại cuộc trò chuyện hoặc bắt đầu một chủ đề mới, sau đó gửi yêu cầu lại.",
   "DatabasePersistError": "Một thao tác cơ sở dữ liệu đã thất bại khi lưu hoặc tải hội thoại này. Vui lòng thử lại; nếu vấn đề vẫn tiếp diễn, hãy liên hệ với bộ phận hỗ trợ.",
   "ExceededContextWindow": "Nội dung yêu cầu hiện tại vượt quá độ dài mà mô hình có thể xử lý. Vui lòng giảm bớt nội dung và thử lại.",
+  "ExceededImageLimit": "Cuộc trò chuyện này chứa nhiều hình ảnh hơn mức nhà cung cấp mô hình cho phép trong một yêu cầu. Bắt đầu một chủ đề mới hoặc xóa bớt một số hình ảnh, sau đó thử lại.",
   "ExceededToolLimit": "Lần chạy này đã đạt đến giới hạn gọi công cụ. Hãy chia nhỏ nhiệm vụ thành các bước nhỏ hơn hoặc yêu cầu chủ sở hữu agent điều chỉnh giới hạn gọi công cụ.",
   "HarnessJsonParseError": "Một tải trọng nội bộ không thể được đọc lại, vì vậy hoạt động này đã dừng. Thử lại yêu cầu tương tự sẽ gặp cùng lỗi — vui lòng bắt đầu một tin nhắn mới; nếu vấn đề vẫn tiếp diễn, hãy liên hệ với bộ phận hỗ trợ.",
   "InsufficientQuota": "Rất tiếc, hạn mức cho khóa này đã đạt đến giới hạn. Vui lòng kiểm tra số dư tài khoản của bạn hoặc thử lại sau khi tăng hạn mức của khóa.",

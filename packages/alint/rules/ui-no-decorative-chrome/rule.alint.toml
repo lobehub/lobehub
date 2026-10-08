@@ -1,0 +1,30 @@
+name = "ui-no-decorative-chrome"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one React component file from LobeHub's web client (styles through antd-style `createStaticStyles` with `cssVar.*` tokens, layout with `Flexbox` / `Block` from @lobehub/ui).
+
+Team rule, distilled from the product owner's review rejections: structure comes from spacing and alignment, not from boxes. Quotes: "不需要有底色", "这个不应该有 border 吧？", "默认不用把底色加亮，就用透明底", "不要画框", "顶上加标题也不好看", "这些 title 感觉没有必要加粗", "不要这根线", "现在的问题是这块抱着 border 的没有任何必要", "我想把这个 header 头做轻量一些，不要加这个底色和 divider 线分割", "这个容器外面的 border 有点粗了，喧宾夺主", "去掉包裹容器", "为什么这里内部有一段无意义的 padding".
+
+Report, anchoring on the line of the style rule or element:
+1. a wrapper that only groups content and adds a border, a background fill (`cssVar.colorFillTertiary`, `cssVar.colorBgContainer` on a same-colored page, …) or a shadow around it — especially a card inside a card, or a bordered box around a single list or a single section;
+2. a section title / heading added above content whose meaning is already clear from the surrounding page, tab or panel title (a heading restating the tab name, a "Details" header on a details panel);
+3. a title or label that is bold (`fontWeight: 600|bold`, `strong`) when it is a plain field or list label, not the page or panel title;
+4. a divider line or border between header and body, or between two sections that are already separated by spacing;
+5. a border heavier than 1px (or a dark border color) on a container, or padding inside a wrapper that has no visual boundary of its own.
+
+In the message, name the element and the chrome it adds. In the suggestion, say what to remove and what (spacing, alignment, a lighter token) carries the structure instead.
+
+Do not report:
+- interactive surfaces that need a boundary: inputs, dropdowns, popovers, modals, drawers, menus, tooltips, focus / selection / hover states;
+- list items or cards in a grid of many peers, where a light border or fill separates items the user compares;
+- code blocks, quotes, file previews, images and other embedded content;
+- the page's or panel's own title;
+- a divider inside one bordered code / debug box, or between side-by-side columns that scroll independently;
+- fills on quoted or model-generated text (reasoning, excerpts) — that is embedded content;
+- bold group / section headings in a grouped list (only bold FIELD labels count);
+- loading skeletons that mirror the shape of the component they stand in for;
+- settings or theme preview mocks, media thumbnails, embedded resource cards, icon tiles in a row of metric chips;
+- a fill or border that shows the granted / selected / active state of a clickable row.
+
+If an exclusion applies, return no finding. If uncertain, use low confidence.
+"""

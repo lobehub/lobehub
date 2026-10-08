@@ -141,12 +141,13 @@ export const isAdaptiveThinkingDefaultOnModel = (model: string): boolean => {
 };
 
 /**
- * Claude Opus 5.5 and later carry the Fable 5.1 contract: thinking is always on and forced
- * tool use is rejected. Opus 5 still accepts both.
+ * Claude Opus 5.5 / Sonnet 5.5 and later carry the Fable 5.1 contract: thinking is always on
+ * and forced tool use is rejected. Opus 5 / Sonnet 5 still accept both.
  * @see https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5#breaking-changes
+ * @see https://claude.dev/blog/building-with-claude-sonnet-5-5/#migrating-from-sonnet-5
  */
-const isOpus55OrLater = (parsed: ParsedClaudeModelId): boolean =>
-  parsed.family === 'opus' &&
+const isClaude55OrLater = (parsed: ParsedClaudeModelId): boolean =>
+  isClaudeFamily(parsed, ['opus', 'sonnet']) &&
   (parsed.majorVersion > 5 || (parsed.majorVersion === 5 && hasMinorVersionAtLeast(parsed, 5)));
 
 /**
@@ -161,7 +162,7 @@ export const isAlwaysThinkingClaudeModel = (model: string): boolean => {
   // Claude Fable 5 and Claude Mythos 5 (and Claude Mythos Preview) always think.
   if (isClaudeFamily(parsed, ['fable', 'mythos']) && parsed.majorVersion >= 5) return true;
 
-  return isOpus55OrLater(parsed);
+  return isClaude55OrLater(parsed);
 };
 
 /**
@@ -229,16 +230,16 @@ export const supportsClaudeEffortLevel = (
 };
 
 /**
- * Claude Fable 5.1 / Mythos 5.1 / Opus 5.5 reject forced tool use. `tool_choice` of type
- * `any` or `tool` returns a 400; keep `auto` (or `none`) and use `strict: true` for schema
- * enforcement instead. Fable 5 / Mythos 5 / Opus 5 still accept forced choice.
+ * Claude Fable 5.1 / Mythos 5.1 / Opus 5.5 / Sonnet 5.5 reject forced tool use. `tool_choice` of
+ * type `any` or `tool` returns a 400; keep `auto` (or `none`) and use `strict: true` for schema
+ * enforcement instead. Fable 5 / Mythos 5 / Opus 5 / Sonnet 5 still accept forced choice.
  * @see https://platform.claude.com/docs/en/models/fable-5-1/whats-new-fable-5-1#forced-tool-use-is-not-supported
  * @see https://platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5#forced-tool-use-is-not-supported
  */
 export const rejectsForcedToolChoice = (model: string): boolean => {
   const parsed = parseClaudeModelId(model);
   if (!parsed) return false;
-  if (isOpus55OrLater(parsed)) return true;
+  if (isClaude55OrLater(parsed)) return true;
   if (!isClaudeFamily(parsed, ['fable', 'mythos'])) return false;
   if (parsed.majorVersion > 5) return true;
 

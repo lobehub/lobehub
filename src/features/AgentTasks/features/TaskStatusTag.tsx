@@ -1,7 +1,7 @@
 import type { TaskStatus } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Icon, type MenuInfo, Tooltip } from '@lobehub/ui';
+import { Spin } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Loader2Icon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -117,7 +117,7 @@ const TaskStatusTag = memo<TaskStatusTagProps>(
     const triggerNode =
       children ||
       (loading ? (
-        <Icon spin color={cssVar.colorTextDescription} icon={Loader2Icon} size={size} />
+        <Spin size={size} style={{ color: cssVar.colorTextDescription }} />
       ) : (
         <Tooltip title={t(`taskDetail.${meta.labelKey}`, { defaultValue: meta.label })}>
           <span className={styles.trigger} onClick={(e) => e.stopPropagation()}>

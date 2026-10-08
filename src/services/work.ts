@@ -1,5 +1,6 @@
 import { TaskApiName, TaskIdentifier } from '@lobechat/builtin-tool-task';
 import type {
+  ListedWorkType,
   RegisterDocumentWorkParams,
   RegisterSkillToolResultWorkParams,
   RegisterTaskWorkParams,
@@ -7,7 +8,6 @@ import type {
   WorkListItem,
   WorkSkillProvider,
   WorkSummaryItem,
-  WorkType,
   WorkVersionEventItem,
   WorkVersionEventMap,
   WorkVersionItem,
@@ -76,7 +76,7 @@ class WorkService {
     limit?: number;
     originAgentId?: string | null;
     provider?: WorkSkillProvider;
-    type?: WorkType | null;
+    type?: ListedWorkType | null;
     visibility?: WorkVisibility;
   }): Promise<WorkSummaryPage> =>
     lambdaClient.work.listByWorkspace.query({ ...params, includeFileWorks: true });

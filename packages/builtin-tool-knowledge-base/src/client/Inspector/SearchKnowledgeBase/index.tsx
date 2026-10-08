@@ -22,6 +22,8 @@ export const SearchKnowledgeBaseInspector = memo<
   const resultCount = pluginState?.resultCount ?? pluginState?.fileResults?.length ?? 0;
   const hasSettled = !!pluginState?.fileResults || typeof pluginState?.resultCount === 'number';
   const hasResults = resultCount > 0;
+  // No library was in scope, so nothing was searched — not the same as 0 hits.
+  const isUnscoped = pluginState?.scope === 'none';
 
   // During argument streaming
   if (isArgumentsStreaming) {
@@ -62,7 +64,13 @@ export const SearchKnowledgeBaseInspector = memo<
               fontSize={12}
               style={{ marginInlineStart: 4 }}
             >
-              ({t('builtins.lobe-knowledge-base.inspector.noResults')})
+              (
+              {t(
+                isUnscoped
+                  ? 'builtins.lobe-knowledge-base.inspector.noScope'
+                  : 'builtins.lobe-knowledge-base.inspector.noResults',
+              )}
+              )
             </Text>
           ))}
       </span>

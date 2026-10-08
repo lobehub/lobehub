@@ -3,7 +3,7 @@
 import { imageUrl } from '@lobechat/const';
 import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
 import { AGENT_ARTWORK_STYLES } from '@lobechat/prompts';
-import { Center, Flexbox, Icon, Input } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -14,6 +14,8 @@ import {
   Alert,
   Avatar,
   Button,
+  Input,
+  Spin,
   Text,
   useModalContext,
 } from '@lobehub/ui/base-ui';
@@ -31,7 +33,6 @@ import {
 import { memo, type MouseEvent, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import NeuralNetworkLoading from '@/components/NeuralNetworkLoading';
 import { avatarRemountKey, openFilePicker } from '@/features/AgentProfileArtwork/utils';
 import { CHIEF_AGENT_ARTWORKS, DEFAULT_CHIEF_AGENT_ARTWORK } from '@/features/ChiefAgent/artwork';
 import { HOME_PORTRAIT_VISIBLE_RATIO } from '@/features/Home/portraitFraming';
@@ -502,7 +503,7 @@ const ArtworkStudioContent = memo<ArtworkStudioContentProps>(
     const renderGenerationOverlay = (composition: AgentArtworkComposition) =>
       isGenerating(composition) ? (
         <Center className={styles.generationOverlay} gap={8}>
-          <NeuralNetworkLoading size={28} />
+          <Spin size="middle" variant="network" />
           <Text className={styles.generationOverlayTitle}>{generatingTitle}</Text>
           <Button size={'small'} type={'fill'} onClick={onCancel}>
             {t('artworkStudio.cancel')}

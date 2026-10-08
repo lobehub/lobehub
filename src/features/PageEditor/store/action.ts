@@ -57,7 +57,7 @@ export interface Action {
    * rename, realtime sync) — but only while the local meta is clean and idle.
    * While the user is typing, or a save is in flight, the local value wins;
    * otherwise a list refresh echoing the *previous* save would clobber the
-   * characters typed since (LOBE-14152).
+   * characters typed since the last save.
    */
   syncMeta: (title?: string, emoji?: string) => void;
   triggerDebouncedMetaSave: () => void;

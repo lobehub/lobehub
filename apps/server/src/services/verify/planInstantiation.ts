@@ -6,9 +6,8 @@ import { VerifyRunModel } from '@/database/models/verifyRun';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService, buildAcceptanceCheckUnion } from './acceptanceService';
-import { resolveVerifyModelConfig } from './modelConfig';
 import { VerifyPlanGeneratorService } from './planGenerator';
-import { resolveTaskAcceptance } from './taskAcceptance';
+import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-plan-instantiation');
 
@@ -70,7 +69,24 @@ export const instantiateVerifyPlanOnStart = async (
     const runModel = new VerifyRunModel(db, userId, workspaceId);
     const existing = await runModel.findByOperation(params.operationId);
     // Idempotent: a plan already exists for this run (re-fire, or agent/UI-built).
-    if (existing?.plan?.length) return;
+    if (existing?.plan?.length) {
+      // An agent/UI-built plan never passed through the attach at the end of this
+      // function, so the round would stay orphaned from the Task's Acceptance —
+      // invisible to the task surface and unreadable by the Goal review.
+      //
+      // Only once it is confirmed, though. An unconfirmed plan is not a round yet,
+      // and binding it would leave a draft the next attempt folds into. The
+      // completion lifecycle binds the round anyway once the plan is confirmed.
+      if (existing.planConfirmedAt) {
+        await attachTaskRunToAcceptance(
+          db,
+          userId,
+          { acceptanceId: acceptance.id, run: existing },
+          workspaceId,
+        );
+      }
+      return;
+    }
 
     const goal = task?.instruction ?? task?.name ?? '';
 
@@ -102,15 +118,8 @@ export const instantiateVerifyPlanOnStart = async (
     // Undecomposed acceptance (goal-dispatched Task, one-sentence requirement):
     // spend one generation call splitting the requirement into named criteria,
     // so the checklist reads as distinguishable items instead of one generic
-    // "Task delivery acceptance" row.
-    const modelConfig = holistic
-      ? await resolveVerifyModelConfig(
-          db,
-          userId,
-          { verifierAgentId: verifyConfig.verifierAgentId },
-          workspaceId,
-        )
-      : undefined;
+    // "Task delivery acceptance" row. The split runs on the pinned plan model
+    // (VERIFY_PLAN_MODEL_CONFIG), not the verifier agent's chat model.
     await planGenerator.generateDraftPlan({
       // Ground the generated criteria in the acceptance text, not just the title.
       context: requirement,
@@ -120,7 +129,6 @@ export const instantiateVerifyPlanOnStart = async (
       // Still fall back to the single agent-type holistic check when the
       // generation fails or returns nothing, so verify runs either way.
       holisticFallback: holistic,
-      modelConfig,
       operationId: params.operationId,
       requirement,
       verifyCriteriaIds: verifyConfig.verifyCriteriaIds,

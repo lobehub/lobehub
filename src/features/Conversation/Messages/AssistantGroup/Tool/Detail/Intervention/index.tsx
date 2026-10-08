@@ -15,10 +15,12 @@ import Arguments from '../Arguments';
 import ApprovalActions from './ApprovalActions';
 import {
   isAgentMarketplaceCall,
+  isApprovalBackedInteraction,
   isCustomInteractionIdentifier,
   isHeteroInteractionIdentifier,
   prepareCustomInteractionSubmit,
   recordCustomInteractionResolution,
+  toApprovalDecision,
 } from './customInteractionHandlers';
 import Fallback from './Fallback';
 import KeyValueEditor from './KeyValueEditor';
@@ -132,6 +134,8 @@ const Intervention = memo<InterventionProps>(
     // writes and topic-status flip fall back to the global `activeTopicId` and
     // land on whichever topic the user is currently viewing.
     const submitHeteroIntervention = useConversationStore((s) => s.submitHeteroIntervention);
+    const approveToolCall = useConversationStore((s) => s.approveToolCall);
+    const rejectAndContinueToolCall = useConversationStore((s) => s.rejectAndContinueToolCall);
 
     const executeInteractionAction = useCallback(
       async (
@@ -143,6 +147,14 @@ const Intervention = memo<InterventionProps>(
         if (!canUseResource || interventionResolving) return;
         if (isHeteroInteractionIdentifier(identifier)) {
           await submitHeteroIntervention(id, action.type, action.payload);
+          return;
+        }
+        // These forms already applied their input (e.g. a secret) outside the
+        // run, so only the decision goes on; the payload is dropped.
+        if (isApprovalBackedInteraction(identifier, apiName)) {
+          const decision = toApprovalDecision(action);
+          if (decision.type === 'approve') await approveToolCall(id, assistantGroupId ?? '');
+          else await rejectAndContinueToolCall(id, decision.reason);
           return;
         }
         switch (action.type) {
@@ -218,12 +230,15 @@ const Intervention = memo<InterventionProps>(
       },
       [
         apiName,
+        approveToolCall,
+        assistantGroupId,
         canUseResource,
         cancelToolInteraction,
         id,
         identifier,
         interventionResolving,
         parsedArgs,
+        rejectAndContinueToolCall,
         skipToolInteraction,
         submitHeteroIntervention,
         submitToolInteraction,

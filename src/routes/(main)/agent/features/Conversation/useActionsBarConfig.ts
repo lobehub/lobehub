@@ -9,7 +9,9 @@ import { agentSelectors } from '@/store/agent/selectors';
 /**
  * Hetero-agent (Claude Code / Codex) sessions keep the menu minimal — copy +
  * delete — because the external runtime owns the assistant message lifecycle
- * (edit / regenerate / branching / translate / share don't apply).
+ * (edit / branching / translate / share don't apply).
+ * Regenerate was previously excluded too; Codex now uses the existing
+ * heterogeneous rerun path, which preserves the user prompt and attachments.
  * `select` remains available because forwarding / batch deletion is handled by
  * the local conversation UI and does not depend on the external runtime.
  *
@@ -28,18 +30,38 @@ const HETERO_ASSISTANT: { bar: MessageActionSlot[]; menu: MessageActionSlot[] } 
   menu: ['copy', 'divider', 'select', 'divider', 'del'],
 };
 
+/** Codex replies can reuse the existing heterogeneous regeneration path. */
+const CODEX_ASSISTANT: typeof HETERO_ASSISTANT = {
+  bar: ['copy', 'regenerate'],
+  menu: ['regenerate', ...HETERO_ASSISTANT.menu],
+};
+
+/**
+ * Selects message actions supported by the current agent runtime.
+ *
+ * Use when:
+ * - Configuring the main conversation's message action bars.
+ *
+ * Expects:
+ * - The active agent's configuration is available in the agent store.
+ *
+ * Returns:
+ * - Runtime-specific overrides, or native message defaults via an empty object.
+ */
 export const useActionsBarConfig = (): ActionsBarConfig => {
   const isHeteroAgent = useAgentStore(agentSelectors.isCurrentAgentHeterogeneous);
+
+  const providerType = useAgentStore(agentSelectors.currentAgentHeterogeneousProviderType);
 
   return useMemo<ActionsBarConfig>(() => {
     if (isHeteroAgent) {
       return {
-        assistant: HETERO_ASSISTANT,
-        assistantGroup: HETERO_ASSISTANT,
+        assistant: providerType === 'codex' ? CODEX_ASSISTANT : HETERO_ASSISTANT,
+        assistantGroup: providerType === 'codex' ? CODEX_ASSISTANT : HETERO_ASSISTANT,
         user: HETERO_USER,
       };
     }
 
     return {};
-  }, [isHeteroAgent]);
+  }, [isHeteroAgent, providerType]);
 };

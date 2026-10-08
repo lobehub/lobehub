@@ -1,3 +1,5 @@
+import type { DeviceMetricSample } from '@lobechat/types';
+
 // ─── Device Info ───
 
 /** A single live gateway WebSocket connection belonging to a device. */
@@ -91,7 +93,20 @@ export interface MessageApiResponseMessage {
   type: 'message_api_response';
 }
 
+/** A batch of machine health samples; the gateway stores them for two days. */
+export interface DeviceMetricsMessage {
+  batchId: string;
+  samples: DeviceMetricSample[];
+  type: 'device_metrics';
+}
+
 // Server → Client
+export interface DeviceMetricsAckMessage {
+  accepted: number;
+  batchId: string;
+  type: 'device_metrics_ack';
+}
+
 export interface HeartbeatAckMessage {
   type: 'heartbeat_ack';
 }
@@ -230,6 +245,7 @@ export interface RpcResponseMessage {
 
 /** Server → Client: request the desktop to spawn `lh hetero exec`. */
 export interface AgentRunRequestMessage {
+  agentId?: string;
   agentType: string;
   /**
    * Resolved `lh hetero exec` wrapper args, e.g. `--model` / `--effort`.
@@ -464,6 +480,7 @@ export interface AgentRunAckMessage {
 export type ClientMessage =
   | AgentRunAckMessage
   | AuthMessage
+  | DeviceMetricsMessage
   | HeartbeatMessage
   | MessageApiResponseMessage
   | RpcResponseMessage
@@ -475,6 +492,7 @@ export type ServerMessage =
   | AuthExpiredMessage
   | AuthFailedMessage
   | AuthSuccessMessage
+  | DeviceMetricsAckMessage
   | HeartbeatAckMessage
   | MessageApiRequestMessage
   | RpcRequestMessage
@@ -497,6 +515,11 @@ export interface GatewayClientEvents {
   heartbeat_ack: () => void;
   message_api_request: (request: MessageApiRequestMessage) => void;
   reconnecting: (delay: number) => void;
+  /**
+   * The gateway closed this connection because another client with the same
+   * `connectionId` connected. The client does not reconnect after this.
+   */
+  replaced: () => void;
   rpc_request: (request: RpcRequestMessage) => void;
   status_changed: (status: ConnectionStatus) => void;
   system_info_request: (request: SystemInfoRequestMessage) => void;

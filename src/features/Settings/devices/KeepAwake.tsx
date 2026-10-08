@@ -1,8 +1,7 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form } from '@lobehub/ui';
 import { Switch } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,8 +15,9 @@ import { useGatewayKeepAwake } from '@/features/Electron/connection/useGatewayKe
 const KeepAwake = memo(() => {
   const { t } = useTranslation('setting');
   const { enabled, isLoading, setKeepAwake } = useGatewayKeepAwake();
+  const form = useForm();
 
-  const items: FormGroupItemType = {
+  const items: FormGroupItem = {
     children: [
       {
         children: (
@@ -30,7 +30,6 @@ const KeepAwake = memo(() => {
         desc: t('devices.keepAwake.desc'),
         label: t('devices.keepAwake.title'),
         minWidth: undefined,
-        valuePropName: 'checked',
       },
     ],
     title: t('devices.thisComputer'),
@@ -39,6 +38,7 @@ const KeepAwake = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={[items]}
       itemsType={'group'}
       variant={'filled'}

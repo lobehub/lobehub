@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Input, TextArea } from '@lobehub/ui';
-import { Accordion, Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import {
+  Accordion,
+  Input,
+  Select,
+  Text,
+  TextArea,
+  toast,
+  useModalContext,
+} from '@lobehub/ui/base-ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -34,9 +42,6 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
 
-  const [form] = Form.useForm();
-  const evalModeValue = Form.useWatch('evalMode', form);
-
   const handleFinish = async (values: any) => {
     onLoadingChange?.(true);
     try {
@@ -53,7 +58,10 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
           input: values.input,
         },
         datasetId,
-        evalConfig: values.evalConfig?.judgePrompt ? values.evalConfig : undefined,
+        evalConfig:
+          values.evalMode === 'llm-rubric' && values.evalConfig?.judgePrompt
+            ? values.evalConfig
+            : undefined,
         evalMode: values.evalMode || undefined,
         metadata: {
           ...(values.difficulty ? { difficulty: values.difficulty } : {}),
@@ -75,29 +83,32 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
     }
   };
 
+  const form = useForm({ onSubmit: handleFinish });
+  const evalModeValue = useWatch(form, 'evalMode');
+
   return (
-    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
+    <Form form={form} id={formId} layout="vertical">
       <div className={styles.sectionLabel}>{t('caseDetail.section.testCase')}</div>
-      <Form.Item label={t('testCase.create.input.label')} name="input" rules={[{ required: true }]}>
+      <Form.Field required label={t('testCase.create.input.label')} name="input">
         <TextArea
           autoSize={{ maxRows: 6, minRows: 3 }}
           placeholder={t('testCase.create.input.placeholder')}
         />
-      </Form.Item>
-      <Form.Item
+      </Form.Field>
+      <Form.Field
         label={t('testCase.create.expected.label')}
         name="expected"
-        rules={[{ message: t('testCase.create.expected.required'), required: true }]}
+        required={t('testCase.create.expected.required')}
       >
         <TextArea
           autoSize={{ maxRows: 6, minRows: 2 }}
           placeholder={t('testCase.create.expected.placeholder')}
         />
-      </Form.Item>
+      </Form.Field>
       <div className={styles.sectionLabel} style={{ marginBlockStart: 4 }}>
         {t('caseDetail.section.scoring')}
       </div>
-      <Form.Item label={t('evalMode.label')} name="evalMode">
+      <Form.Field label={t('evalMode.label')} name="evalMode">
         <Select
           allowClear
           placeholder={t('evalMode.placeholder')}
@@ -115,14 +126,14 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
             { label: t('evalMode.llm-rubric'), value: 'llm-rubric' },
           ]}
         />
-      </Form.Item>
+      </Form.Field>
       {evalModeValue === 'llm-rubric' && (
-        <Form.Item label={t('evalMode.prompt.label')} name={['evalConfig', 'judgePrompt']}>
+        <Form.Field label={t('evalMode.prompt.label')} name="evalConfig.judgePrompt">
           <TextArea
             autoSize={{ maxRows: 8, minRows: 3 }}
             placeholder={t('evalMode.prompt.placeholder')}
           />
-        </Form.Item>
+        </Form.Field>
       )}
       <Accordion
         keepMounted
@@ -132,10 +143,10 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
           {
             children: (
               <Flexbox gap={16} style={{ paddingBlockStart: 8 }}>
-                <Form.Item
+                <Form.Field
                   label={t('testCase.create.difficulty.label')}
                   name="difficulty"
-                  style={{ marginBottom: 0 }}
+                  style={{ paddingBlock: 0 }}
                 >
                   <Select
                     allowClear
@@ -146,14 +157,14 @@ const TestCaseCreateContent: FC<TestCaseCreateContentProps> = ({
                       { label: t('difficulty.hard'), value: 'hard' },
                     ]}
                   />
-                </Form.Item>
-                <Form.Item
+                </Form.Field>
+                <Form.Field
                   label={t('testCase.create.tags.label')}
                   name="tags"
-                  style={{ marginBottom: 0 }}
+                  style={{ paddingBlock: 0 }}
                 >
                   <Input placeholder={t('testCase.create.tags.placeholder')} />
-                </Form.Item>
+                </Form.Field>
               </Flexbox>
             ),
             key: 'advanced',

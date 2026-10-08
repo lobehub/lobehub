@@ -1,9 +1,9 @@
 'use client';
 
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
-import type { HeterogeneousAgentModel, ListHeterogeneousAgentModelsParams } from '@lobechat/types';
+import type { ListHeterogeneousAgentModelsParams } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
-import { Icon, Input, Tooltip } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -25,6 +25,7 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
+  Input,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
@@ -35,7 +36,7 @@ import {
   RefreshCwIcon,
   SearchIcon,
 } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { isDesktop } from '@/const/version';
@@ -50,6 +51,7 @@ import { authSelectors } from '@/store/user/selectors';
 
 import { useMenuContentLifecycle } from '../useMenuContentLifecycle';
 import { useModelCatalog } from './useModelCatalog';
+import { useModelCatalogView } from './useModelCatalogView';
 
 const styles = createStaticStyles(({ css }) => ({
   check: css`
@@ -149,6 +151,9 @@ const getCatalogErrorKey = (name: string) => {
     case 'unsupported_client': {
       return 'heteroAgent.cliModel.unsupportedClient';
     }
+    case 'unsupported_configuration': {
+      return 'heteroAgent.cliModel.unsupportedConfiguration';
+    }
     default: {
       return 'heteroAgent.cliModel.error';
     }
@@ -212,41 +217,12 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
       type,
     });
 
-    const catalogModels = useMemo(() => data?.models ?? [], [data]);
-    const selectedIsStale =
-      currentModel !== HETEROGENEOUS_AGENT_DEFAULT_SELECTION &&
-      !!data &&
-      !catalogModels.some((item) => item.id === currentModel);
-    const rows = useMemo(() => {
-      const all: HeterogeneousAgentModel[] = selectedIsStale
-        ? [
-            {
-              id: currentModel,
-              modelId: currentModel.includes('/')
-                ? currentModel.slice(currentModel.indexOf('/') + 1)
-                : currentModel,
-              providerId: t('heteroAgent.cliModel.saved'),
-            },
-            ...catalogModels,
-          ]
-        : catalogModels;
-      const query = search.trim().toLowerCase();
-      return query
-        ? all.filter((item) =>
-            [item.id, item.label, item.providerId, item.modelId].some(
-              (value) => value && value.toLowerCase().includes(query),
-            ),
-          )
-        : all;
-    }, [catalogModels, currentModel, search, selectedIsStale, t]);
-    const groups = useMemo(
-      () =>
-        rows.reduce<Record<string, HeterogeneousAgentModel[]>>((result, item) => {
-          (result[item.providerId] ||= []).push(item);
-          return result;
-        }, {}),
-      [rows],
-    );
+    const { groups, rows, selectedIsStale } = useModelCatalogView({
+      currentModel,
+      data,
+      savedLabel: t('heteroAgent.cliModel.saved'),
+      search,
+    });
 
     const handleOpenChangeComplete = useCallback(
       (nextOpen: boolean) => {
@@ -349,7 +325,7 @@ export const ModelCatalogSelector = memo<ModelCatalogSelectorProps>(
               </Button>
             </div>
           )}
-          {data && rows.length === 0 && (
+          {data && !error && rows.length === 0 && (
             <div className={styles.empty}>
               {search.trim()
                 ? t('heteroAgent.cliModel.noMatch')

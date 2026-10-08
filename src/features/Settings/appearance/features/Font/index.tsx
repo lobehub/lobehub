@@ -1,9 +1,9 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form } from '@lobehub/ui';
-import { Select, Skeleton } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Select, Skeleton, Switch } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -19,13 +19,6 @@ import FallbackFontList from './FallbackFontList';
 import { FontSizeControl } from './FontSize';
 import { joinFontStack, parseFontStack } from './fontStack';
 
-const wrapperCol = {
-  style: {
-    maxWidth: '100%',
-    width: '100%',
-  },
-};
-
 const loadingTextStyle = { marginBlock: 1.5 };
 
 const FontSettings = memo(() => {
@@ -35,10 +28,12 @@ const FontSettings = memo(() => {
     preferenceSelectors.terminalFontFamily(s),
   ]);
   const fontSize = useUserStore(userGeneralSettingsSelectors.fontSize);
+  const fontAntialiasing = useUserStore(userGeneralSettingsSelectors.fontAntialiasing);
   const updatePreference = useUserStore((s) => s.updatePreference);
   const setSettings = useUserStore((s) => s.setSettings);
   const isUserStateInit = useUserStore((s) => s.isUserStateInit);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
+  const form = useForm();
 
   const interfaceStack = useMemo(() => parseFontStack(fontFamily), [fontFamily]);
   const monospaceStack = useMemo(() => parseFontStack(monospaceFontFamily), [monospaceFontFamily]);
@@ -63,7 +58,7 @@ const FontSettings = memo(() => {
     save(() => updatePreference({ terminalFontFamily: joinFontStack(stack) }));
 
   if (!isUserStateInit) {
-    const loadingFont: FormGroupItemType = {
+    const loadingFont: FormGroupItem = {
       children: [
         ...(isDesktop
           ? [
@@ -101,7 +96,6 @@ const FontSettings = memo(() => {
           label: <Skeleton height={16} style={loadingTextStyle} width={72} />,
           layout: 'vertical',
           minWidth: '100%',
-          wrapperCol,
         },
       ],
       extra: <Skeleton height={16} width={136} />,
@@ -112,6 +106,7 @@ const FontSettings = memo(() => {
       <Form
         aria-busy
         collapsible={false}
+        form={form}
         items={[loadingFont]}
         itemsType={'group'}
         variant={'filled'}
@@ -120,7 +115,7 @@ const FontSettings = memo(() => {
     );
   }
 
-  const font: FormGroupItemType = {
+  const font: FormGroupItem = {
     children: [
       ...(isDesktop
         ? [
@@ -218,6 +213,23 @@ const FontSettings = memo(() => {
         : []),
       {
         children: (
+          <Switch
+            checked={fontAntialiasing}
+            onChange={(checked) =>
+              save(() => setSettings({ general: { fontAntialiasing: checked } }))
+            }
+          />
+        ),
+        desc: t('settingAppearance.font.antialiasing.desc'),
+        label: (
+          <SettingsSearchAnchor id={'appearance-font-antialiasing'}>
+            {t('settingAppearance.font.antialiasing.title')}
+          </SettingsSearchAnchor>
+        ),
+        minWidth: undefined,
+      },
+      {
+        children: (
           <FontSizeControl
             value={fontSize}
             onChange={(value) => save(() => setSettings({ general: { fontSize: value } }))}
@@ -231,7 +243,6 @@ const FontSettings = memo(() => {
         ),
         layout: 'vertical',
         minWidth: '100%',
-        wrapperCol,
       },
     ],
     extra: <AutoSaveHint lastUpdatedTime={lastSavedAt} saveStatus={saveStatus} onRetry={retry} />,
@@ -241,6 +252,7 @@ const FontSettings = memo(() => {
   return (
     <Form
       collapsible={false}
+      form={form}
       items={[font]}
       itemsType={'group'}
       variant={'filled'}

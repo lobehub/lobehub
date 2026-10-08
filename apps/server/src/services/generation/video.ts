@@ -39,6 +39,8 @@ export interface VideoProcessResult {
   duration: number;
   fileHash: string;
   fileSize: number;
+  /** Frames in the video stream; `undefined` when ffmpeg could not count them */
+  frames?: number;
   height: number;
   mimeType: string;
   thumbnailKey: string;
@@ -73,8 +75,9 @@ export class VideoGenerationService {
     try {
       tempVideoPath = await this.downloadVideo(videoUrl, options);
 
-      const [metadata, videoBuffer] = await Promise.all([
+      const [metadata, frames, videoBuffer] = await Promise.all([
         this.getVideoMetadata(tempVideoPath),
+        this.countVideoFrames(tempVideoPath),
         fs.readFile(String(tempVideoPath)),
       ]);
 
@@ -142,6 +145,7 @@ export class VideoGenerationService {
         duration: metadata.duration,
         fileHash,
         fileSize,
+        frames,
         height: metadata.height,
         mimeType,
         thumbnailKey,
@@ -285,6 +289,34 @@ export class VideoGenerationService {
       height: Number.parseInt(streamMatch[2]),
       width: Number.parseInt(streamMatch[1]),
     };
+  }
+
+  /**
+   * Count the video stream's frames by remuxing it to a null sink (no decoding). Models billed by
+   * output tokens bill every frame, and the container duration cannot recover the count once an
+   * audio track is longer than the video.
+   */
+  private async countVideoFrames(videoPath: string): Promise<number | undefined> {
+    try {
+      const { stderr } = await execFileAsync(getFfmpegPath(), [
+        '-hide_banner',
+        '-i',
+        videoPath,
+        '-map',
+        '0:v:0',
+        '-c',
+        'copy',
+        '-f',
+        'null',
+        '-',
+      ]);
+      const counts = [...stderr.matchAll(/frame=\s*(\d+)/g)];
+      const frames = Number(counts.at(-1)?.[1]);
+      return frames > 0 ? frames : undefined;
+    } catch (error) {
+      log('Failed to count video frames: %O', error);
+      return undefined;
+    }
   }
 
   /**

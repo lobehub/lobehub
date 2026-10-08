@@ -27,6 +27,7 @@ import {
   type MCPPluginListParams,
 } from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
+import { getPlatform } from '@/utils/platform';
 import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
@@ -212,7 +213,6 @@ export class PluginMCPStoreActionImpl {
     if (!plugin) return;
 
     // Extract haveCloudEndpoint after plugin is loaded
-    // @ts-expect-error
     const { haveCloudEndpoint } = plugin || {};
 
     const { updateInstallLoadingState, refreshPlugins, updateMCPInstallProgress } = this.#get();
@@ -598,7 +598,7 @@ export class PluginMCPStoreActionImpl {
           resources: (manifest as any).resources,
           tools: (manifest as any).tools,
         },
-        platform: result?.platform || process.platform,
+        platform: result?.platform || getPlatform(),
         success: true,
         userAgent,
         version: manifest.version || data.version,
@@ -686,7 +686,7 @@ export class PluginMCPStoreActionImpl {
         installDurationMs,
         installParams: connection,
         metadata: errorInfo.metadata,
-        platform: result?.platform || process.platform,
+        platform: result?.platform || getPlatform(),
         success: false,
         userAgent,
         version: data?.version,

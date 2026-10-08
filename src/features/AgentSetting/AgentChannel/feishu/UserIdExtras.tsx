@@ -2,7 +2,7 @@
 
 import { isMaskedBotCredential } from '@lobechat/const';
 import { Button, toast } from '@lobehub/ui/base-ui';
-import { Form as AntdForm } from 'antd';
+import { useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
 import { Download } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -43,9 +43,9 @@ export const FeishuUserIdExtras = ({
   const { t: _t } = useTranslation('agent');
   const t = _t as (key: string) => string;
 
-  const form = AntdForm.useFormInstance();
-  const applicationId = AntdForm.useWatch('applicationId', form) as string | undefined;
-  const appSecret = AntdForm.useWatch(['credentials', 'appSecret'], form) as string | undefined;
+  const form = useFormInstance();
+  const applicationId = useWatch(form, 'applicationId') as string | undefined;
+  const appSecret = useWatch(form, 'credentials.appSecret') as string | undefined;
   const [loading, setLoading] = useState(false);
   const requestRef = useRef(0);
 
@@ -78,13 +78,17 @@ export const FeishuUserIdExtras = ({
             platform: platformId === 'lark' ? 'lark' : 'feishu',
           },
           fetchOwner: feishuFetchOwnerId,
-          form,
+          form: {
+            getFieldValue: (name) => form.getValue(Array.isArray(name) ? name.join('.') : name),
+            isFieldTouched: (name) => form.isTouched(name.join('.')),
+            setFieldValue: (name, value) => form.setValue(name.join('.'), value),
+          },
           isCurrent: () => request === requestRef.current,
         });
         if (!owner) return;
         // Mirror the field's own validation/dirty handling: `setFieldValue`
         // neither validates nor notifies, so do both explicitly.
-        form.validateFields([['settings', 'userId']]).catch(() => undefined);
+        void form.validate(['settings.userId']);
         onFilled?.();
         const base = t(
           mode === 'auto'
@@ -107,11 +111,11 @@ export const FeishuUserIdExtras = ({
   );
 
   // Whether the field currently holds a value, which decides whether the
-  // retry button is worth showing at all. antd hydrates the form after mount,
+  // retry button is worth showing at all. The form may hydrate after mount,
   // so an `undefined` watch means "not loaded yet" rather than "empty" — fall
   // back to the saved value during that window so an already-configured bot
   // never flashes a button it doesn't need.
-  const watchedUserId = AntdForm.useWatch(['settings', 'userId'], form) as string | undefined;
+  const watchedUserId = useWatch(form, 'settings.userId') as string | undefined;
   const [formHydrated, setFormHydrated] = useState(false);
   useEffect(() => {
     if (watchedUserId !== undefined) setFormHydrated(true);

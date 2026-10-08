@@ -1,7 +1,8 @@
 'use client';
 
-import { Flexbox, Form, FormGroup, highlighterThemes, mermaidThemes } from '@lobehub/ui';
+import { Flexbox, highlighterThemes, mermaidThemes } from '@lobehub/ui';
 import { Select, Switch, Tabs } from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -24,6 +25,7 @@ const ChatAppearance = memo(() => {
   const [setSettings, isUserStateInit] = useUserStore((s) => [s.setSettings, s.isUserStateInit]);
   const { status: saveStatus, lastSavedAt, save, retry } = useSaveState();
   const [savingKey, setSavingKey] = useState<string>();
+  const form = useForm();
 
   if (!isUserStateInit) return <SettingsSectionSkeleton />;
 
@@ -40,9 +42,8 @@ const ChatAppearance = memo(() => {
 
   return (
     <>
-      <FormGroup
+      <Form.Group
         collapsible={false}
-        gap={16}
         title={t('settingChatAppearance.transitionMode.title')}
         variant={'filled'}
         extra={
@@ -70,10 +71,11 @@ const ChatAppearance = memo(() => {
         }
       >
         <ChatTransitionPreview key={general.transitionMode} mode={general.transitionMode} />
-      </FormGroup>
+      </Form.Group>
 
       <Form
         collapsible={false}
+        form={form}
         itemsType={'group'}
         variant={'filled'}
         items={[
@@ -126,9 +128,8 @@ const ChatAppearance = memo(() => {
         {...FORM_STYLE}
       />
 
-      <FormGroup
+      <Form.Group
         collapsible={false}
-        gap={16}
         title={t('settingChatAppearance.highlighterTheme.title')}
         variant={'filled'}
         extra={
@@ -149,10 +150,9 @@ const ChatAppearance = memo(() => {
         }
       >
         <HighlighterPreview key={general.highlighterTheme} theme={general.highlighterTheme} />
-      </FormGroup>
+      </Form.Group>
 
-      <FormGroup
-        gap={16}
+      <Form.Group
         title={t('settingChatAppearance.mermaidTheme.title')}
         variant={'filled'}
         extra={
@@ -173,7 +173,7 @@ const ChatAppearance = memo(() => {
         }
       >
         <MermaidPreview key={general.mermaidTheme} theme={general.mermaidTheme} />
-      </FormGroup>
+      </Form.Group>
     </>
   );
 });

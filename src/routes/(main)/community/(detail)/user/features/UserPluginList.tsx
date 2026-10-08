@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox, Grid } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { Input, Pagination } from 'antd';
+import { Flexbox, Grid, Icon } from '@lobehub/ui';
+import { Input, Pagination, Tag, Text } from '@lobehub/ui/base-ui';
+import { SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -60,9 +60,10 @@ const UserPluginList = memo<UserPluginListProps>(({ rows = 4, pageSize = 8 }) =>
           {plugins.length > 0 && <Tag>{filteredPlugins.length}</Tag>}
         </Flexbox>
         {isOwner && plugins.length > 0 && (
-          <Input.Search
+          <Input
             allowClear
             placeholder={t('user.searchPlaceholder')}
+            prefix={<Icon icon={SearchIcon} size={14} />}
             style={{ width: 200 }}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

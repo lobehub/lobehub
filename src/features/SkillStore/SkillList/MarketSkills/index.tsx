@@ -119,9 +119,7 @@ const MarketSkillList = memo<MarketSkillListProps>(({ keywords }) => {
       <Center gap={12} padding={40}>
         <Icon icon={ServerCrash} size={80} />
         <Text type={'secondary'}>{errorMessage}</Text>
-        <Button size={'small'} onClick={retry}>
-          {t('retry', { ns: 'common' })}
-        </Button>
+        <Button onClick={retry}>{t('retry', { ns: 'common' })}</Button>
       </Center>
     );
   }

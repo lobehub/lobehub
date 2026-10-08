@@ -60,14 +60,14 @@ export const BROWSER_MCP_TOOLS: BrowserMcpToolSpec[] = [
   {
     apiName: 'fill',
     description:
-      'Fill a text input, textarea, or contenteditable in the in-app browser identified by a snapshot ref. Set submit=true to press Enter afterwards.',
+      'Fill a text input, textarea, or contenteditable in the in-app browser identified by a snapshot ref, or choose an option of a native select (combobox) by its value or visible label. Set submit=true to press Enter afterwards.',
     inputSchema: {
       ref: z.string().describe('Element ref from the latest snapshot.'),
       submit: z
         .boolean()
         .optional()
         .describe('Press Enter after filling (submit search/login forms).'),
-      text: z.string().describe('Text to fill.'),
+      text: z.string().describe('Text to fill; for a select, the option value or visible label.'),
     },
     name: 'browser_fill',
     title: 'Fill input in in-app browser',

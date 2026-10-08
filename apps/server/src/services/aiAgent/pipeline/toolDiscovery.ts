@@ -24,7 +24,9 @@ import {
   resolveDiscoveryPool,
   resolveInvocationToolIds,
 } from '@lobechat/mecha';
+import { FILE_INLINE_MAX_CHARS, isOversizedFileContent } from '@lobechat/prompts';
 import type {
+  BuiltinToolResolveContext,
   ChatTopicBotContext,
   FrozenCredentialFacts,
   FrozenModelFacts,
@@ -45,6 +47,7 @@ import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
+import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { MessageModel } from '@/database/models/message';
 import type { PluginModel } from '@/database/models/plugin';
@@ -506,6 +509,31 @@ export const discoverTools = async (
     return fileRecords.map((file) => file.fileType || '');
   }
 
+  /**
+   * Whether this turn sends any file as a truncated preview (see `previewLongFileContent`):
+   * an enabled agent file, or a parsed attachment of this turn or topic, over the inline limit.
+   * Enables the attachments tool in the modes whose rules include it (agent / chat). The preview
+   * only names `readAttachment` when the final tool set carries it (see `MessagesEngine`), so
+   * custom / exclusive tool turns and share visitors fall back to a plain preview.
+   */
+  async function readHasOversizedFiles(): Promise<boolean> {
+    const hasOversizedAgentFile = agentConfig.files?.some(
+      (file: { content?: string | null; enabled?: boolean | null; originalCharCount?: number }) =>
+        file.enabled === true &&
+        isOversizedFileContent(file.content?.length ?? 0, file.originalCharCount),
+    );
+    if (hasOversizedAgentFile) return true;
+    if (!topicId && !attachedFileIds?.length) return false;
+
+    return traceDiscoveryStage('oversized_files', () =>
+      new DocumentModel(deps.db, deps.userId, deps.workspaceId).hasFileDocumentsOverChars({
+        fileIds: attachedFileIds,
+        minChars: FILE_INLINE_MAX_CHARS,
+        topicId,
+      }),
+    );
+  }
+
   // Every other read this send needs, started together. They hit different
   // backends — Postgres rows, the Market's live skill discovery, the device
   // gateway — and none of them feeds another, so the user waits for the slowest
@@ -524,6 +552,7 @@ export const discoverTools = async (
           ).catch(() => false), // non-critical
         ),
         attachedFileTypes: started(readAttachedFileTypes()),
+        oversizedFiles: started(readHasOversizedFiles().catch(() => false)), // non-critical
         composioManifests: started(
           traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(resolvedAgentId),
@@ -686,8 +715,14 @@ export const discoverTools = async (
     // Filter out plugin entries that are now handled by real MCP connectors.
     // `let` because community-MCP plugins may be patched with connector
     // permissions below (their connector row has no endpoint, so they stay here).
+    // Composio connections also leave a plugin row behind (customParams.composio),
+    // but they are executable only through `getComposioManifests`, which gates
+    // on an ACTIVE connection and tags the tool source as `composio`. Letting a
+    // PENDING/EXPIRED row through here exposes the full tool schema with no
+    // Composio source, so every call falls to the builtin executor and fails
+    // as "not implemented".
     let pluginsWithoutConnectors = installedPlugins.filter(
-      (p) => !connectorIdentifierSet.has(p.identifier),
+      (p) => !connectorIdentifierSet.has(p.identifier) && !p.customParams?.composio,
     );
     log('execAgent: got %d connector manifests', connectorManifests.length);
 
@@ -777,6 +812,7 @@ export const discoverTools = async (
       false;
 
     hasAgentDocuments = await toolReads.agentDocuments;
+    const hasOversizedFiles = await toolReads.oversizedFiles;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
@@ -1023,6 +1059,38 @@ export const discoverTools = async (
     const activeComposioManifests = dropDisabledManifests(composioManifests);
     const activeConnectorManifests = dropDisabledManifests(connectorManifests);
 
+    // Context-aware builtin manifests: inside a sub-agent (or group) run,
+    // lobe-agent drops `callSubAgent` so the model can't recurse into nested
+    // sub-agents (which the runtime rejects, looping until the inactivity
+    // watchdog kills the op). Mirrors the frontend `createAgentToolsEngine`.
+    // `executionEnv` mirrors the resolved plan, while preserving the local
+    // target for a routed desktop because its readFile implementation can
+    // return images. It also keeps the `device-unrouted` degradation, where
+    // the user picked a local device that is offline and exec silently lands
+    // in the sandbox.
+    // For bot conversations we also pass the IM platform so `lobe-message`
+    // can drop APIs the platform can't fulfil (e.g. WeChat has no
+    // `readMessages`). Telegram Guest Mode uses a stricter overlay —
+    // the bot is not a chat member and has no regular channel tools.
+    // The discovery pool below resolves with the same context, so a tool
+    // activated mid-run carries the trimmed manifest too.
+    const manifestContext: BuiltinToolResolveContext = {
+      ...(botContext?.platform && {
+        botPlatform: {
+          id: botContext.platform,
+          unsupportedMessageApis: resolveUnsupportedMessageApis(
+            botContext.platform,
+            botContext.platformThreadId,
+          ),
+        },
+      }),
+      executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),
+      executionEnvUnroutedReason:
+        executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
+      isSubAgent: appContext?.isSubAgent,
+      scope: appContext?.scope ?? undefined,
+    };
+
     toolsEngine = createServerAgentToolsEngine(toolsContext, {
       additionalManifests: [
         ...activeLobehubSkillManifests,
@@ -1050,38 +1118,11 @@ export const discoverTools = async (
       executionPlan,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
+      hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,
       modelAbilities,
-      // Context-aware builtin manifests: inside a sub-agent (or group) run,
-      // lobe-agent drops `callSubAgent` so the model can't recurse into nested
-      // sub-agents (which the runtime rejects, looping until the inactivity
-      // watchdog kills the op). Mirrors the frontend `createAgentToolsEngine`.
-      // `executionEnv` mirrors the resolved plan, while preserving the local
-      // target for a routed desktop because its readFile implementation can
-      // return images. It also keeps the `device-unrouted` degradation, where
-      // the user picked a local device that is offline and exec silently lands
-      // in the sandbox.
-      // For bot conversations we also pass the IM platform so `lobe-message`
-      // can drop APIs the platform can't fulfil (e.g. WeChat has no
-      // `readMessages`). Telegram Guest Mode uses a stricter overlay —
-      // the bot is not a chat member and has no regular channel tools.
-      manifestContext: {
-        ...(botContext?.platform && {
-          botPlatform: {
-            id: botContext.platform,
-            unsupportedMessageApis: resolveUnsupportedMessageApis(
-              botContext.platform,
-              botContext.platformThreadId,
-            ),
-          },
-        }),
-        executionEnv: executionPlanToManifestExecutionEnv(executionPlan, localDeviceId),
-        executionEnvUnroutedReason:
-          executionPlan.kind === 'device-unrouted' ? executionPlan.reason : undefined,
-        isSubAgent: appContext?.isSubAgent,
-        scope: appContext?.scope ?? undefined,
-      },
+      manifestContext,
       model,
       provider,
       useApplicationBuiltinSearchTool: searchDecision.useApplicationBuiltinSearchTool,
@@ -1141,6 +1182,7 @@ export const discoverTools = async (
       exclusivePluginIds,
       executionTarget: executionPlan.target,
       lobehubSkills: activeLobehubSkillManifests,
+      manifestContext,
     });
     Object.assign(toolManifestMap, discovery.manifestMap);
     Object.assign(toolSourceMap, discovery.sourceMap);

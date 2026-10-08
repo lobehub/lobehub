@@ -13,6 +13,7 @@ import Deliverables from '@/features/AgentGoals/ProcessControl/Deliverables';
 import Findings from '@/features/AgentGoals/ProcessControl/Findings';
 import Frontier from '@/features/AgentGoals/ProcessControl/Frontier';
 import { buildGoalGraphView } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
+import GoalResultTabs from '@/features/AgentGoals/ProcessControl/GoalResultTabs';
 import Graph from '@/features/AgentGoals/ProcessControl/Graph';
 import {
   isGoalClosed,
@@ -30,6 +31,7 @@ import { useOpenGoalPage } from './useOpenGoalPage';
 /**
  * The whole goal beside the conversation that planned it: header metrics, what
  * can move now, the exploration map, then what it produced, concluded and did.
+ * A finished goal leads with its 结果交付 tab and keeps all of that as 执行过程.
  * Fetches the graph itself (polling while the server advances it), so it works
  * on any surface that hosts the Portal. Every click drills further down the same
  * view stack — node → task → topic — and Back returns here.
@@ -84,87 +86,96 @@ const Body = memo(() => {
     <Flexbox flex={1} gap={20} padding={16} style={{ minHeight: 0, overflowY: 'auto' }}>
       <GoalHeaderMetrics goalId={goalId} />
       {hasGraph && (
-        <>
-          <Frontier
-            actions={actions}
-            canEdit={canEdit && !isGoalClosed(graph)}
-            graph={graph}
-            planning={planning}
-            onSelect={select}
-          />
-          <Graph
-            graph={graph}
-            key={goalId}
-            planning={planning}
-            extra={
-              openGoalPage && (
-                <ActionIcon
-                  aria-label={t('goalProcess.portal.openPage')}
-                  icon={Maximize2}
-                  size={'small'}
-                  title={t('goalProcess.portal.openPage')}
-                  onClick={openGoalPage}
-                />
-              )
-            }
-            onSelect={select}
-          />
-          <Accordion
-            defaultValue={['deliverables', 'findings', 'activity']}
-            gap={0}
-            indicatorPlacement="inline"
-            styles={{ header: { paddingBlock: 6, paddingInline: 0 } }}
-            items={[
-              {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <Deliverables graph={graph} />
-                  </Flexbox>
-                ),
-                key: 'deliverables',
-                title: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text fontSize={14} weight={600}>
-                      {t('goalProcess.deliverables.title')}
-                    </Text>
-                    {graph.artifacts.length > 0 && (
-                      <Tag size={'small'}>{graph.artifacts.length}</Tag>
-                    )}
-                  </Flexbox>
-                ),
-              },
-              {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <Findings graph={graph} onSelect={select} />
-                  </Flexbox>
-                ),
-                key: 'findings',
-                title: (
-                  <Flexbox horizontal align={'center'} gap={8}>
-                    <Text fontSize={14} weight={600}>
-                      {t('goalProcess.findings.title')}
-                    </Text>
-                    {graph.findings.length > 0 && <Tag size={'small'}>{graph.findings.length}</Tag>}
-                  </Flexbox>
-                ),
-              },
-              {
-                children: (
-                  <Flexbox className={styles.section}>
-                    <Activity graph={graph} onSelect={select} />
-                  </Flexbox>
-                ),
-                key: 'activity',
-                title: (
-                  <Text fontSize={14} weight={600}>
-                    {t('goalProcess.activity.title')}
-                  </Text>
-                ),
-              },
-            ]}
-          />
-        </>
+        <GoalResultTabs
+          graph={graph}
+          key={goalId}
+          process={
+            <Flexbox gap={20}>
+              <Frontier
+                actions={actions}
+                canEdit={canEdit && !isGoalClosed(graph)}
+                graph={graph}
+                planning={planning}
+                onSelect={select}
+              />
+              <Graph
+                graph={graph}
+                key={goalId}
+                planning={planning}
+                extra={
+                  openGoalPage && (
+                    <ActionIcon
+                      aria-label={t('goalProcess.portal.openPage')}
+                      icon={Maximize2}
+                      size={'small'}
+                      title={t('goalProcess.portal.openPage')}
+                      onClick={openGoalPage}
+                    />
+                  )
+                }
+                onSelect={select}
+              />
+              <Accordion
+                defaultValue={['deliverables', 'findings', 'activity']}
+                gap={0}
+                indicatorPlacement="inline"
+                styles={{ trigger: { paddingBlock: 6, paddingInline: 0 } }}
+                items={[
+                  {
+                    children: (
+                      <Flexbox className={styles.section}>
+                        <Deliverables graph={graph} />
+                      </Flexbox>
+                    ),
+                    key: 'deliverables',
+                    title: (
+                      <Flexbox horizontal align={'center'} gap={8}>
+                        <Text fontSize={14} weight={600}>
+                          {t('goalProcess.deliverables.title')}
+                        </Text>
+                        {graph.artifacts.length > 0 && (
+                          <Tag size={'small'}>{graph.artifacts.length}</Tag>
+                        )}
+                      </Flexbox>
+                    ),
+                  },
+                  {
+                    children: (
+                      <Flexbox className={styles.section}>
+                        <Findings graph={graph} onSelect={select} />
+                      </Flexbox>
+                    ),
+                    key: 'findings',
+                    title: (
+                      <Flexbox horizontal align={'center'} gap={8}>
+                        <Text fontSize={14} weight={600}>
+                          {t('goalProcess.findings.title')}
+                        </Text>
+                        {graph.findings.length > 0 && (
+                          <Tag size={'small'}>{graph.findings.length}</Tag>
+                        )}
+                      </Flexbox>
+                    ),
+                  },
+                  {
+                    children: (
+                      <Flexbox className={styles.section}>
+                        <Activity graph={graph} onSelect={select} />
+                      </Flexbox>
+                    ),
+                    key: 'activity',
+                    title: (
+                      <Text fontSize={14} weight={600}>
+                        {t('goalProcess.activity.title')}
+                      </Text>
+                    ),
+                  },
+                ]}
+              />
+            </Flexbox>
+          }
+          onSelect={select}
+        />
       )}
     </Flexbox>
   );

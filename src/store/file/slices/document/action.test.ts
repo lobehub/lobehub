@@ -302,7 +302,7 @@ describe('DocumentAction', () => {
     });
   });
 
-  it('keeps a list row whose library/parent are unknown when its title is saved (LOBE-14152)', async () => {
+  it('keeps a list row whose library/parent are unknown when its title is saved', async () => {
     const { result } = renderHook(() => useStore());
     const existingDocument = createDocumentFixture();
     // `file.getKnowledgeItems` rows carry neither `knowledgeBaseId` nor `parentId`,
@@ -337,7 +337,7 @@ describe('DocumentAction', () => {
     expect(useStore.getState().resourceMap.get('doc-1')).toMatchObject({ name: 'Typed title' });
   });
 
-  it('keeps a folder list row with unknown parentId when its title is saved (LOBE-14152)', async () => {
+  it('keeps a folder list row with unknown parentId when its title is saved', async () => {
     const { result } = renderHook(() => useStore());
     const existingDocument = createDocumentFixture();
     const existingResource = createResourceFixture();

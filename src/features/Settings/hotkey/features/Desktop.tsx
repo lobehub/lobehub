@@ -1,10 +1,9 @@
 'use client';
 
-import { type FormGroupItemType } from '@lobehub/ui';
-import { Form, HotkeyInput, Icon } from '@lobehub/ui';
-import { Skeleton, toast } from '@lobehub/ui/base-ui';
+import { HotkeyInput } from '@lobehub/ui';
+import { Skeleton, Spin, toast } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import isEqual from 'fast-deep-equal';
-import { Loader2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -13,15 +12,12 @@ import { FORM_STYLE } from '@/const/layoutTokens';
 import { SettingsSearchAnchor } from '@/features/SettingsSearch/anchor';
 import { useElectronStore } from '@/store/electron';
 import { desktopHotkeysSelectors } from '@/store/electron/selectors';
-import { type DesktopHotkeyItem } from '@/types/hotkey';
-
-import { hotkeyFormStyles } from './styles';
+import { type DesktopHotkeyConfig, type DesktopHotkeyItem } from '@/types/hotkey';
 
 const HotkeySetting = memo(() => {
   const { t } = useTranslation(['setting', 'hotkey']);
-  const [form] = Form.useForm();
-
   const hotkeys = useElectronStore(desktopHotkeysSelectors.hotkeys, isEqual);
+  const form = useForm({ initialValues: hotkeys, values: hotkeys });
 
   const [isHotkeysInit, updateDesktopHotkey, useFetchDesktopHotkeys] = useElectronStore((s) => [
     desktopHotkeysSelectors.isHotkeysInit(s),
@@ -69,9 +65,9 @@ const HotkeySetting = memo(() => {
     name: item.id,
   });
 
-  const desktop: FormGroupItemType = {
+  const desktop: FormGroupItem<DesktopHotkeyConfig> = {
     children: DESKTOP_HOTKEYS_REGISTRATION.map((item) => mapHotkeyItem(item)),
-    extra: loading && <Icon spin icon={Loader2Icon} size={16} style={{ opacity: 0.5 }} />,
+    extra: loading && <Spin size="small" style={{ opacity: 0.5 }} />,
     title: (
       <SettingsSearchAnchor id={'hotkey-desktop'}>{t('hotkey.group.desktop')}</SettingsSearchAnchor>
     ),
@@ -79,10 +75,8 @@ const HotkeySetting = memo(() => {
 
   return (
     <Form
-      classNames={{ item: hotkeyFormStyles.item }}
       collapsible={false}
       form={form}
-      initialValues={hotkeys}
       items={[desktop]}
       itemsType={'group'}
       variant={'filled'}

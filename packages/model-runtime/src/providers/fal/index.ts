@@ -1,4 +1,4 @@
-import { fal } from '@fal-ai/client';
+import { createFalClient, fal, type FalClient } from '@fal-ai/client';
 import debug from 'debug';
 import { pick } from 'es-toolkit/compat';
 import type { RuntimeImageGenParamsValue } from 'model-bank';
@@ -7,17 +7,108 @@ import type { ClientOptions } from 'openai';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
 import { AgentRuntimeErrorType } from '../../types/error';
 import type { CreateImagePayload, CreateImageResponse } from '../../types/image';
+import type {
+  CreateVideoPayload,
+  CreateVideoResult,
+  PollVideoStatusResult,
+  VideoGenerationCapabilities,
+} from '../../types/video';
 import { AgentRuntimeError } from '../../utils/createError';
 import type { ModelIdMappingOptions } from '../../utils/modelIdMapping';
 import { resolveMappedModelId } from '../../utils/modelIdMapping';
+import { createFalVideo, isFalVideoModel, pollFalVideoStatus } from './createVideo';
 
 // Create debug logger
 const log = debug('lobe-image:fal');
 
 type FluxDevOutput = Awaited<ReturnType<typeof fal.subscribe<'fal-ai/flux/dev'>>>['data'];
 
+/**
+ * fal hosts models under several namespaces (e.g. `alibaba/qwen-image-3`); only bare
+ * model ids without a known namespace get the default `fal-ai/` prefix.
+ */
+const FAL_NAMESPACES = ['fal-ai/', 'alibaba/', 'minimax/'];
+
+/**
+ * Model families exposed as one card but served by separate fal endpoints: requests
+ * with reference images go to `/edit`, others to `/text-to-image`.
+ */
+const EDIT_OR_TEXT_TO_IMAGE_ENDPOINT_PREFIXES = [
+  'fal-ai/bytedance/seedream/v',
+  'fal-ai/hunyuan-image/v',
+  'alibaba/qwen-image-3',
+];
+
+/**
+ * Long edge of a square image for each `resolution` preset. fal bills some models
+ * (e.g. Qwen Image 3) by output resolution tier, so the requested pixel count must
+ * stay within the tier the user picked.
+ */
+const RESOLUTION_BASE_EDGE: Record<string, number> = { '1K': 1024, '2K': 2048 };
+
+/**
+ * fal clamps each side to this length (a 2720x1536 request came back as 2048x1536),
+ * so wide 2K sizes must be scaled down to keep the requested aspect ratio.
+ */
+const MAX_IMAGE_SIDE = 2048;
+
+/**
+ * Convert `aspectRatio` + `resolution` presets into a fal `image_size` whose pixel
+ * count does not exceed the square of the preset edge and whose sides stay within
+ * `MAX_IMAGE_SIDE`, with both sides multiples of 16.
+ */
+export const resolveFalImageSize = (
+  aspectRatio: string | undefined,
+  resolution: string,
+): { height: number; width: number } | undefined => {
+  const baseEdge = RESOLUTION_BASE_EDGE[resolution];
+  if (!baseEdge) return;
+
+  const [ratioWidth, ratioHeight] = (aspectRatio ?? '1:1').split(':').map(Number);
+  if (!ratioWidth || !ratioHeight) return;
+
+  const scale = Math.min(
+    Math.sqrt((baseEdge * baseEdge) / (ratioWidth * ratioHeight)),
+    MAX_IMAGE_SIDE / Math.max(ratioWidth, ratioHeight),
+  );
+  const roundDown = (value: number) => Math.floor(value / 16) * 16;
+
+  return { height: roundDown(ratioHeight * scale), width: roundDown(ratioWidth * scale) };
+};
+
+// https://docs.fal.ai/model-apis/errors/
+const toFalRuntimeError = (error: unknown) => {
+  if (error instanceof Error && 'status' in error && error.status === 401) {
+    return AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey, { error });
+  }
+
+  // 422 ValidationError with content_policy_violation — show a clean message
+  if (error instanceof Error && 'status' in error && error.status === 422) {
+    const body = 'body' in error ? (error as any).body : undefined;
+    const hasContentPolicyViolation =
+      Array.isArray(body?.detail) &&
+      body.detail.some((d: any) => d.type === 'content_policy_violation');
+
+    if (hasContentPolicyViolation) {
+      return AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+        error,
+        message:
+          'The request content violates content policy. Please modify your prompt and try again.',
+      });
+    }
+  }
+
+  return AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, { error });
+};
+
 export class LobeFalAI implements LobeRuntimeAI {
   private readonly modelIdMappingOptions: ModelIdMappingOptions;
+  /**
+   * Video requests use a client scoped to this instance: the global `fal.config` is shared by
+   * every instance, so concurrent router channels with different keys would overwrite it between
+   * submitting a request and polling it.
+   */
+  private readonly client: FalClient;
 
   // OpenAI SDK v6 widened `apiKey` to `string | ApiKeySetter`; lobehub only uses the string form.
   constructor({
@@ -29,8 +120,32 @@ export class LobeFalAI implements LobeRuntimeAI {
     fal.config({
       credentials: apiKey,
     });
+    this.client = createFalClient({ credentials: apiKey });
     this.modelIdMappingOptions = { modelIdMapping };
     log('FalAI initialized with apiKey: %s', apiKey ? '*****' : 'Not set');
+  }
+
+  getVideoGenerationCapabilities(): VideoGenerationCapabilities {
+    return { completionModes: ['polling'] };
+  }
+
+  async createVideo(payload: CreateVideoPayload): Promise<CreateVideoResult> {
+    const requestModel = resolveMappedModelId(payload.model, this.modelIdMappingOptions);
+    if (!isFalVideoModel(requestModel)) {
+      throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
+        message: `Video generation is not supported for fal model: ${requestModel}`,
+      });
+    }
+
+    try {
+      return await createFalVideo(this.client, requestModel, payload.params);
+    } catch (error) {
+      throw toFalRuntimeError(error);
+    }
+  }
+
+  async handlePollVideoStatus(inferenceId: string): Promise<PollVideoStatusResult> {
+    return pollFalVideoStatus(this.client, inferenceId);
   }
 
   async createImage(payload: CreateImagePayload): Promise<CreateImageResponse> {
@@ -60,6 +175,16 @@ export class LobeFalAI implements LobeRuntimeAI {
         .map(([key, value]) => [paramsMap.get(key) ?? key, value]),
     );
 
+    if (typeof userInput.resolution === 'string' && RESOLUTION_BASE_EDGE[userInput.resolution]) {
+      const imageSize = resolveFalImageSize(
+        userInput.aspectRatio as string | undefined,
+        userInput.resolution,
+      );
+      if (imageSize) userInput.image_size = imageSize;
+      delete userInput.aspectRatio;
+      delete userInput.resolution;
+    }
+
     if ('width' in userInput && 'height' in userInput) {
       if (userInput.size) {
         throw new Error('width/height and size are not supported at the same time');
@@ -78,12 +203,11 @@ export class LobeFalAI implements LobeRuntimeAI {
       defaultInput['acceleration'] = 'high';
     }
 
-    // Ensure model has fal-ai/ prefix
-    let endpoint = requestModel.startsWith('fal-ai/') ? requestModel : `fal-ai/${requestModel}`;
+    let endpoint = FAL_NAMESPACES.some((namespace) => requestModel.startsWith(namespace))
+      ? requestModel
+      : `fal-ai/${requestModel}`;
     const hasImageUrls = (params.imageUrls?.length ?? 0) > 0;
-    if (
-      ['fal-ai/bytedance/seedream/v', 'fal-ai/hunyuan-image/v'].some((m) => endpoint.startsWith(m))
-    ) {
+    if (EDIT_OR_TEXT_TO_IMAGE_ENDPOINT_PREFIXES.some((m) => endpoint.startsWith(m))) {
       endpoint += hasImageUrls ? '/edit' : '/text-to-image';
     } else if (endpoint === 'fal-ai/nano-banana' && hasImageUrls) {
       endpoint += '/edit';
@@ -106,30 +230,7 @@ export class LobeFalAI implements LobeRuntimeAI {
         ...pick(image, ['width', 'height']),
       };
     } catch (error) {
-      // https://docs.fal.ai/model-apis/errors/
-      if (error instanceof Error && 'status' in error && error.status === 401) {
-        throw AgentRuntimeError.createError(AgentRuntimeErrorType.InvalidProviderAPIKey, {
-          error,
-        });
-      }
-
-      // 422 ValidationError with content_policy_violation — show a clean message
-      if (error instanceof Error && 'status' in error && error.status === 422) {
-        const body = 'body' in error ? (error as any).body : undefined;
-        const hasContentPolicyViolation =
-          Array.isArray(body?.detail) &&
-          body.detail.some((d: any) => d.type === 'content_policy_violation');
-
-        if (hasContentPolicyViolation) {
-          throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, {
-            error,
-            message:
-              'The request content violates content policy. Please modify your prompt and try again.',
-          });
-        }
-      }
-
-      throw AgentRuntimeError.createError(AgentRuntimeErrorType.ProviderBizError, { error });
+      throw toFalRuntimeError(error);
     }
   }
 }

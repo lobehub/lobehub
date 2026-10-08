@@ -1,12 +1,14 @@
 import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@lobechat/business-const';
 import { TOPIC_TITLE_JSON_SCHEMA } from '@lobechat/prompts';
 import type { LobeUser, UIChatMessage } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { type Mock } from 'vitest';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { LOADING_FLAT } from '@/const/message';
+import { cacheScope, REPLICA_INDEX_KEY, replicaKeys } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
@@ -23,6 +25,13 @@ import { useUserStore } from '@/store/user';
 import { type ChatTopic } from '@/types/topic';
 
 import { useChatStore } from '../../store';
+import { topicListResource } from './projection';
+
+// Revalidation is narrowed to the active identity scope.
+const topicListSyncKey = (containerKey: string, scope = cacheScope.get()) =>
+  replicaKeys.sync(topicListResource.name, topicListResource.version, scope, containerKey, {
+    pageSize: 20,
+  });
 
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
   const actual = await importOriginal<{ toast: Record<string, unknown> }>();
@@ -272,17 +281,18 @@ describe('topic action', () => {
       // Check if mutate has been called with a matcher function
       expect(mutate).toHaveBeenCalledWith(expect.any(Function));
 
-      // Verify the matcher function works correctly
-      // Key format: [SWR_USE_FETCH_TOPIC, containerKey, { isInbox, pageSize }]
+      // Verify the matcher function works correctly (local-first sync keys)
       const matcherFn = (mutate as Mock).mock.calls[0][0];
       const containerKey = `agent_${activeAgentId}`;
 
       // Should match key with correct containerKey
-      expect(matcherFn(['topic:list', containerKey, { isInbox: false, pageSize: 20 }])).toBe(true);
+      expect(matcherFn(topicListSyncKey(containerKey))).toBe(true);
       // Should not match key with different containerKey
-      expect(matcherFn(['topic:list', 'agent_other-id', { isInbox: false, pageSize: 20 }])).toBe(
-        false,
-      );
+      expect(matcherFn(topicListSyncKey('agent_other-id'))).toBe(false);
+      // Should not match another identity's sync key
+      expect(matcherFn(topicListSyncKey(containerKey, 'other-user:personal'))).toBe(false);
+      // The legacy SWR-persisted key is gone
+      expect(matcherFn(['topic:list', containerKey, { isInbox: false, pageSize: 20 }])).toBe(false);
       // Should not match non-array keys
       expect(matcherFn('some-string')).toBe(false);
       // Should not match keys with wrong prefix
@@ -375,8 +385,8 @@ describe('topic action', () => {
       });
 
       const matcherFn = (mutate as Mock).mock.calls[0][0];
-      expect(matcherFn(['topic:list', BUILDER_KEY, { pageSize: 20 }])).toBe(true);
-      expect(matcherFn(['topic:list', topicMapKey({ agentId: 'edited-agent' }), {}])).toBe(false);
+      expect(matcherFn(topicListSyncKey(BUILDER_KEY))).toBe(true);
+      expect(matcherFn(topicListSyncKey(topicMapKey({ agentId: 'edited-agent' })))).toBe(false);
     });
 
     it('writes model and the re-pinned reasoning config in one request', async () => {
@@ -1028,12 +1038,11 @@ describe('topic action', () => {
       const archived = { id: 'archived-topic', status: 'completed', title: 'Archived Topic' };
       (topicService.getTopicDetail as Mock).mockResolvedValue(archived);
 
-      const { result } = renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
+      renderHook(() => useChatStore().useFetchTopicDetail('archived-topic'));
 
       await waitFor(() => {
-        expect(result.current.data).toEqual(archived);
+        expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
       });
-      expect(useChatStore.getState().topicDetailMap['archived-topic']).toEqual(archived);
     });
 
     it('does not fetch when no topic id is given', () => {
@@ -1055,14 +1064,13 @@ describe('topic action', () => {
         useChatStore().useFetchTopics(true, { agentId: sessionId }),
       );
 
-      // Wait for the hook to resolve and update the state
+      // Data is read from the store, never from the fetch hook.
       await waitFor(() => {
-        expect(result.current.data).toEqual({ items: topics, total: topics.length });
+        expect(
+          useChatStore.getState().topicDataMap[topicMapKey({ agentId: sessionId })]?.items,
+        ).toEqual(topics);
       });
-      // Verify topics are stored in topicDataMap with correct key
-      expect(
-        useChatStore.getState().topicDataMap[topicMapKey({ agentId: sessionId })]?.items,
-      ).toEqual(topics);
+      expect(result.current).not.toHaveProperty('data');
     });
 
     describe('unread message prefetch', () => {
@@ -1237,16 +1245,9 @@ describe('topic action', () => {
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
 
-      const swrResponse = renderHook(() =>
+      renderHook(() =>
         useFetchTopics(true, { agentId, excludeTriggers: ['cron', 'eval'], pageSize }),
       );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({
-          items: refreshedFirstPage,
-          total: 59,
-        });
-      });
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -1304,16 +1305,9 @@ describe('topic action', () => {
       });
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
-      const swrResponse = renderHook(() =>
+      renderHook(() =>
         useFetchTopics(true, { agentId, excludeTriggers: ['cron', 'eval'], pageSize }),
       );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({
-          items: refreshedFirstPage,
-          total: 60,
-        });
-      });
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -1364,13 +1358,7 @@ describe('topic action', () => {
       });
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
-      const swrResponse = renderHook(() =>
-        useFetchTopics(true, { agentId, excludeTriggers: ['cron'], pageSize }),
-      );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({ items: refreshedTopics, total: 20 });
-      });
+      renderHook(() => useFetchTopics(true, { agentId, excludeTriggers: ['cron'], pageSize }));
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -1420,13 +1408,7 @@ describe('topic action', () => {
       });
 
       const useFetchTopics = useChatStore.getState().useFetchTopics;
-      const swrResponse = renderHook(() =>
-        useFetchTopics(true, { agentId, excludeStatuses: ['completed'], pageSize }),
-      );
-
-      await waitFor(() => {
-        expect(swrResponse.result.current.data).toEqual({ items: refreshedTopics, total: 20 });
-      });
+      renderHook(() => useFetchTopics(true, { agentId, excludeStatuses: ['completed'], pageSize }));
 
       await waitFor(() => {
         const topicData = useChatStore.getState().topicDataMap[topicMapKey({ agentId })];
@@ -2244,7 +2226,7 @@ describe('topic action', () => {
       expect(topicData.hasMore).toBe(false);
     });
   });
-  describe('persisted topic-list cache write-through', () => {
+  describe('persisted topic-list projection', () => {
     const setupBucket = (agentId: string) => {
       const containerKey = topicMapKey({ agentId });
       const { result } = renderHook(() => useChatStore());
@@ -2264,13 +2246,16 @@ describe('topic action', () => {
           },
         });
       });
-      vi.mocked(mutate).mockClear();
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const set = vi.spyOn(topicListResource.storage!, 'set').mockResolvedValue();
+      // Data rows only: the per-scope index of persisted rows is bookkeeping.
+      const persisted = () => set.mock.calls.filter(([key]) => key.queryKey !== REPLICA_INDEX_KEY);
 
-      return { containerKey, result };
+      return { containerKey, persisted, result };
     };
 
-    it('mirrors a run-end status patch into the cached topic list', () => {
-      const { containerKey, result } = setupBucket('agent-write-through');
+    it('persists a run-end status patch so a reload does not repaint the spinner', async () => {
+      const { containerKey, persisted, result } = setupBucket('agent-write-through');
 
       act(() => {
         result.current.internal_dispatchTopic({
@@ -2280,38 +2265,16 @@ describe('topic action', () => {
         });
       });
 
-      expect(mutate).toHaveBeenCalledTimes(1);
-      const [matcher, updater, options] = vi.mocked(mutate).mock.calls[0] as [
-        (key: unknown) => boolean,
-        (cached?: { items: ChatTopic[]; total: number }) => unknown,
-        unknown,
-      ];
-
-      expect(options).toEqual({ revalidate: false });
-      // Only this container's list keys — the agent-view key and other
-      // containers keep their own cached pages.
-      expect(matcher(['topic:list', containerKey, { pageSize: 20 }])).toBe(true);
-      expect(matcher(['topic:list', topicMapKey({ agentId: 'other-agent' }), {}])).toBe(false);
-      expect(matcher(['topic:agentView', containerKey, {}])).toBe(false);
-
-      const cached = {
-        items: [{ id: 'topic-1', status: 'running', title: 'Topic 1' }] as ChatTopic[],
-        total: 1,
-      };
-      expect(updater(cached)).toMatchObject({
-        items: [{ id: 'topic-1', status: 'unread' }],
-        total: 1,
-      });
-
-      // A cached page without the patched row (or no entry at all) stays as-is,
-      // so the mutate cannot create a bogus entry.
-      const otherPage = { items: [{ id: 'topic-2', status: 'active' }] as ChatTopic[], total: 1 };
-      expect(updater(otherPage)).toBe(otherPage);
-      expect(updater(undefined)).toBeUndefined();
+      await waitFor(() => expect(persisted()).toHaveLength(1));
+      const [key, projection] = persisted()[0];
+      expect(key.queryKey).toBe(containerKey);
+      expect(projection.data.items).toMatchObject([{ id: 'topic-1', status: 'unread' }]);
+      // Transient paging flags never reach storage.
+      expect(projection.data).not.toHaveProperty('isLoadingMore');
     });
 
-    it('does not mirror client-only optimistic rows', () => {
-      const { result } = setupBucket('agent-write-through-add');
+    it('does not persist client-only optimistic rows', async () => {
+      const { persisted, result } = setupBucket('agent-write-through-add');
 
       act(() => {
         result.current.internal_dispatchTopic({
@@ -2320,10 +2283,126 @@ describe('topic action', () => {
           value: { id: 'topic-optimistic', title: 'New' },
         });
       });
+      expect(persisted()).toHaveLength(0);
 
-      expect(mutate).not.toHaveBeenCalled();
+      // A later confirmed patch persists the bucket without the placeholder.
+      act(() => {
+        result.current.internal_dispatchTopic({
+          id: 'topic-1',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+      await waitFor(() => expect(persisted()).toHaveLength(1));
+      expect(persisted()[0][1].data.items.map((item: ChatTopic) => item.id)).toEqual(['topic-1']);
+    });
+
+    it('does not create a bucket when patching an unloaded container', () => {
+      const { result } = setupBucket('agent-loaded');
+
+      act(() => {
+        result.current.internal_dispatchTopic({
+          agentId: 'agent-not-loaded',
+          id: 'topic-x',
+          type: 'updateTopic',
+          value: { status: 'unread' },
+        });
+      });
+
+      expect(
+        useChatStore.getState().topicDataMap[topicMapKey({ agentId: 'agent-not-loaded' })],
+      ).toBeUndefined();
     });
   });
+
+  describe('optimistic topic updates', () => {
+    const seed = (agentId: string) => {
+      const containerKey = topicMapKey({ agentId });
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          topicDataMap: {
+            [containerKey]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [{ favorite: false, id: 'topic-1', title: 'Old' }] as ChatTopic[],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+      return containerKey;
+    };
+
+    it('shows a rename immediately and keeps it after the server confirms', async () => {
+      const containerKey = seed('agent-rename');
+      let resolveUpdate!: () => void;
+      vi.mocked(topicService.updateTopic).mockImplementation(
+        () => new Promise((resolve) => (resolveUpdate = () => resolve(undefined as any))),
+      );
+
+      let pending!: Promise<void>;
+      act(() => {
+        pending = useChatStore.getState().updateTopicTitle('topic-1', 'New');
+      });
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].title).toBe('New');
+
+      await act(async () => {
+        resolveUpdate();
+        await pending;
+      });
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].title).toBe('New');
+      expect(useChatStore.getState().topicListReplica.entries[containerKey].pending).toEqual([]);
+    });
+
+    it('rolls a failed favorite back instead of leaving the optimistic value', async () => {
+      const containerKey = seed('agent-favorite-fail');
+      vi.mocked(topicService.updateTopic).mockRejectedValue(new Error('offline'));
+
+      await act(async () => {
+        await expect(useChatStore.getState().favoriteTopic('topic-1', true)).rejects.toThrow(
+          'offline',
+        );
+      });
+
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].favorite).toBe(false);
+    });
+
+    it('keeps an in-flight rename when a background revalidation lands', async () => {
+      const agentId = 'agent-rename-revalidate';
+      const containerKey = seed(agentId);
+      let resolveUpdate!: () => void;
+      vi.mocked(topicService.updateTopic).mockImplementation(
+        () => new Promise((resolve) => (resolveUpdate = () => resolve(undefined as any))),
+      );
+      (topicService.getTopics as Mock).mockResolvedValue({
+        items: [{ favorite: false, id: 'topic-1', title: 'Old' }],
+        total: 1,
+      });
+
+      let pending!: Promise<void>;
+      act(() => {
+        pending = useChatStore.getState().updateTopicTitle('topic-1', 'New');
+      });
+
+      renderHook(() => useChatStore().useFetchTopics(true, { agentId, pageSize: 20 }));
+      await waitFor(() => expect(topicService.getTopics).toHaveBeenCalled());
+      await waitFor(() =>
+        expect(useChatStore.getState().topicListReplica.entries[containerKey].source).toBe(
+          'server',
+        ),
+      );
+      // The stale server row is rebased under the pending rename.
+      expect(useChatStore.getState().topicDataMap[containerKey].items[0].title).toBe('New');
+
+      await act(async () => {
+        resolveUpdate();
+        await pending;
+      });
+    });
+  });
+
   describe('loadMoreAgentTopicsView', () => {
     it('records a pagination error without clearing existing topics or hasMore', async () => {
       const { result } = renderHook(() => useChatStore());
@@ -2514,6 +2593,56 @@ describe('topic action', () => {
           result.current.internal_updateTopic(topicId, { title: 'New' }),
         ).rejects.toThrow('rename failed');
       });
+    });
+
+    it('propagates a topic change to the sidebar, management page and detail resources', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'agent-entity';
+      const key = topicMapKey({ agentId });
+      const topic = { favorite: false, id: 'topic-entity', title: 'Topic' } as ChatTopic;
+      const bucket = { currentPage: 0, hasMore: false, items: [topic], pageSize: 20, total: 1 };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          agentTopicsViewMap: { [key]: { ...bucket, withDetails: true } },
+          topicDataMap: { [key]: bucket },
+          topicDetailMap: { [topic.id]: topic },
+        });
+      });
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+      const server = vi.spyOn(topicService, 'updateTopic');
+
+      // A failed write rolls back in every resource.
+      server.mockRejectedValueOnce(new Error('rename failed'));
+      await act(async () => {
+        await expect(
+          result.current.internal_updateTopic(topic.id, { title: 'Renamed' }),
+        ).rejects.toThrow('rename failed');
+      });
+      let state = useChatStore.getState();
+      expect(state.topicDataMap[key].items[0].title).toBe('Topic');
+      expect(state.agentTopicsViewMap[key].items[0].title).toBe('Topic');
+      expect(state.topicDetailMap[topic.id].title).toBe('Topic');
+
+      // A confirmed write lands in all three.
+      server.mockResolvedValueOnce(undefined as any);
+      await act(async () => {
+        await result.current.internal_updateTopic(topic.id, { favorite: true });
+      });
+      state = useChatStore.getState();
+      expect(state.topicDataMap[key].items[0].favorite).toBe(true);
+      expect(state.agentTopicsViewMap[key].items[0].favorite).toBe(true);
+      expect(state.topicDetailMap[topic.id].favorite).toBe(true);
+
+      // A delete reaches all three, with list totals adjusted.
+      act(() => {
+        result.current.internal_dispatchTopic({ id: topic.id, type: 'deleteTopic' });
+      });
+      state = useChatStore.getState();
+      expect(state.topicDataMap[key]).toMatchObject({ items: [], total: 0 });
+      expect(state.agentTopicsViewMap[key]).toMatchObject({ items: [], total: 0 });
+      expect(state.topicDetailMap[topic.id]).toBeUndefined();
     });
   });
   describe('cleanupStaleRunningTopics', () => {
@@ -3343,7 +3472,10 @@ describe('topic action', () => {
 
       expect(updateTitleSpy).toHaveBeenCalledWith(topicId, LOADING_FLAT);
       expect(generateSpy).toHaveBeenCalledOnce();
-      expect(generateSpy.mock.calls[0][0].metadata).toEqual({ topicId });
+      expect(generateSpy.mock.calls[0][0].metadata).toEqual({
+        topicId,
+        trigger: RequestTrigger.TopicTitle,
+      });
     });
 
     it('should summarize the final answer inside an assistant group for an audio-only conversation', async () => {

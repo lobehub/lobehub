@@ -172,6 +172,45 @@ describe('VerifyExecutorService', () => {
     );
   });
 
+  it('points a missing run-evidence item at a submit command it can run as-is', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan: [
+        {
+          id: 'shot-check',
+          index: 0,
+          onFail: 'auto_repair',
+          required: true,
+          title: 'Screenshot',
+          verifierConfig: {
+            requiredEvidence: [{ modality: 'image', scope: 'run_evidence', type: 'screenshot' }],
+          },
+          verifierType: 'llm',
+        },
+      ],
+      planConfirmedAt: new Date(),
+    });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'ui change',
+      goal: 'verify ui',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'builder-op-shot',
+      runVerifierAgent: vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op-shot' }),
+    });
+
+    expect(mocks.resultUpdateByCheckItem).toHaveBeenCalledWith(
+      'run-1',
+      'shot-check',
+      expect.objectContaining({
+        suggestion: expect.stringContaining(
+          'lh acceptance run result submit --run run-1 --item shot-check',
+        ),
+        verdict: 'uncertain',
+      }),
+    );
+  });
+
   it('routes file-backed text evidence to an agent that can inspect the stored artifact', async () => {
     mocks.runEnsureForOperation.mockResolvedValue({
       id: 'run-1',

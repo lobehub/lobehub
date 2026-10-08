@@ -159,6 +159,7 @@
   "localFiles.open": "Öffnen",
   "localFiles.openFile": "Datei öffnen",
   "localFiles.openFolder": "Ordner öffnen",
+  "localFiles.openInPanel": "Im Seitenbereich öffnen",
   "localFiles.outOfScope.requestedPaths": "Angeforderte Pfade",
   "localFiles.outOfScope.warning": "Warnung: Die folgenden Pfade liegen außerhalb des konfigurierten Arbeitsverzeichnisses. Bitte bestätigen Sie, dass Sie den Zugriff erlauben möchten.",
   "localFiles.outOfScope.workingDirectory": "Arbeitsverzeichnis",

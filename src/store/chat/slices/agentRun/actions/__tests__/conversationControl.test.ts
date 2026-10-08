@@ -16,7 +16,7 @@ import * as agentDispatcher from '../dispatch/agentDispatcher';
 import { createMockMessage, createMockResolvedAgentConfig, TEST_IDS } from './fixtures';
 import { resetTestEnvironment } from './helpers';
 
-// Mock the tRPC client & agentRuntimeService so the import chain doesn't pull
+// Mock the tRPC client so the import chain doesn't pull
 // server-only code (cloud business packages, redis envs) into the test env.
 vi.mock('@/libs/trpc/client', () => ({
   lambdaClient: {
@@ -31,12 +31,16 @@ vi.mock('@/libs/trpc/client', () => ({
       },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
-  },
-}));
-
-vi.mock('@/services/agentRuntime', () => ({
-  agentRuntimeService: {
-    handleHumanIntervention: vi.fn().mockResolvedValue({ success: true }),
+    shareChat: {
+      resolveInterventionBySource: {
+        mutate: vi.fn().mockResolvedValue({
+          contractVersion: 2,
+          status: 'unavailable',
+          success: false,
+        }),
+      },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
+    },
   },
 }));
 
@@ -67,6 +71,16 @@ beforeEach(() => {
       status: 'unavailable',
       success: false,
     });
+  vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate)
+    .mockReset()
+    .mockResolvedValue({
+      contractVersion: 2,
+      status: 'unavailable',
+      success: false,
+    });
+  vi.mocked(lambdaClient.shareChat.stopPendingApproval.mutate)
+    .mockReset()
+    .mockResolvedValue({ operationId: 'operation-share', success: true } as any);
   useChatStore.setState({
     updateTopicStatus: vi.fn().mockResolvedValue(undefined),
     questionSubmissions: {},
@@ -980,6 +994,75 @@ describe('ConversationControl actions', () => {
         executeGatewayAgentSpy.mockRestore();
       });
 
+      it("keeps a group supervisor's live run when approving its member's tool (G-05)", async () => {
+        // The supervisor is not paused: it waits on the member whose tool is being
+        // approved, and streams the continuation plus its own closing on its open
+        // gateway channel. Retiring it dropped the closing from the screen.
+        const { result } = renderHook(() => useChatStore());
+
+        const agentId = 'agt_supervisor';
+        const groupId = 'cg_launch';
+        const topicId = 'tpc_group';
+        const context = { agentId, groupId, scope: 'group', threadId: null, topicId } as any;
+        const chatKey = messageMapKey(context);
+
+        const userMessage = createMockMessage({ id: 'group-user-msg', role: 'user' });
+        const memberAssistant = createMockMessage({
+          agentId: 'agt_carol',
+          id: 'carol-msg',
+          parentId: userMessage.id,
+          role: 'assistant',
+        } as any);
+        const memberTool = createMockMessage({
+          agentId: 'agt_carol',
+          id: 'carol-tool',
+          parentId: memberAssistant.id,
+          plugin: {
+            apiName: 'execScript',
+            arguments: '{"command":"echo hi"}',
+            identifier: 'lobe-skills',
+            type: 'builtin',
+          },
+          role: 'tool',
+          tool_call_id: 'call_carol',
+        } as any);
+
+        let supervisorOpId!: string;
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [userMessage, memberAssistant, memberTool] },
+            gatewayConnections: { 'server-supervisor-op': { status: 'connected' } } as any,
+            messagesMap: { [chatKey]: [userMessage, memberAssistant, memberTool] },
+          });
+          supervisorOpId = result.current.startOperation({
+            context,
+            metadata: { serverOperationId: 'server-supervisor-op' },
+            type: 'execServerAgentRuntime',
+          }).operationId;
+        });
+
+        vi.spyOn(result.current, 'isGatewayModeEnabled').mockReturnValue(true);
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        const executeGatewayAgentSpy = vi
+          .spyOn(result.current, 'executeGatewayAgent')
+          .mockResolvedValue({} as any);
+
+        await act(async () => {
+          await result.current.approveToolCalling('carol-tool', 'group-1', context);
+        });
+
+        expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+          expect.objectContaining({
+            resumeApproval: expect.objectContaining({ parentMessageId: 'carol-tool' }),
+          }),
+        );
+        expect(result.current.operations[supervisorOpId].status).toBe('running');
+
+        executeGatewayAgentSpy.mockRestore();
+      });
+
       it('uses the generic source claim for a durable edited approval and adopts its precreated op', async () => {
         const { result } = renderHook(() => useChatStore());
         const agentId = 'server-agent';
@@ -1045,6 +1128,7 @@ describe('ConversationControl actions', () => {
           batchId: 'batch-durable',
           operationId: 'operation-durable',
           resolutionRequestId: expect.any(String),
+          streamFeatures: ['member_runtime_end'],
           targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
         });
         expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
@@ -1529,6 +1613,116 @@ describe('ConversationControl actions', () => {
     });
   });
 
+  describe('share visitor', () => {
+    const agentId = 'shared-agent';
+    const topicId = 'visitor-topic';
+    const context: ConversationContext = {
+      agentId,
+      agentShareId: 'share-1',
+      scope: 'main',
+      topicId,
+    };
+    const chatKey = messageMapKey(context);
+
+    const seedShareCard = () => {
+      const toolMessage = createMockMessage({
+        id: 'tool-msg-share',
+        pluginIntervention: {
+          batchId: 'batch-share',
+          operationId: 'operation-share',
+          status: 'pending',
+        },
+        role: 'tool',
+        tool_call_id: 'call-share',
+      } as any);
+      act(() => {
+        useChatStore.setState({
+          dbMessagesMap: { [chatKey]: [toolMessage] },
+          messagesMap: { [chatKey]: [toolMessage] },
+        });
+      });
+    };
+
+    it('answers through the share mirror and resumes on the share gateway', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedShareCard();
+      const executeGatewayAgentSpy = vi
+        .spyOn(result.current, 'executeGatewayAgent')
+        .mockResolvedValue({} as any);
+      const updateTopicStatusSpy = vi.mocked(result.current.updateTopicStatus);
+      updateTopicStatusSpy.mockClear();
+
+      await act(async () => {
+        await result.current.approveToolCalling('tool-msg-share', '', context);
+      });
+
+      expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: { scope: 'once', type: 'approve_tool' },
+          shareId: 'share-1',
+          targets: [{ toolCallId: 'call-share', toolMessageId: 'tool-msg-share' }],
+          topicId,
+        }),
+      );
+      expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).not.toHaveBeenCalled();
+      // No durable store: the legacy resume goes out on the share gateway.
+      expect(executeGatewayAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          context,
+          resumeApproval: expect.objectContaining({ decision: 'approved' }),
+        }),
+      );
+      // The visitor's topic belongs to the creator: no owner-scoped write.
+      expect(updateTopicStatusSpy).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['durable store', { contractVersion: 2, state: 'claimed', success: true }],
+      ['legacy resume', { contractVersion: 2, status: 'unavailable', success: false }],
+    ])(
+      'keeps a visitor\'s "don\'t ask again" in their own allow list (%s)',
+      async (_label, resolution) => {
+        const { result } = renderHook(() => useChatStore());
+        seedShareCard();
+        vi.mocked(lambdaClient.shareChat.resolveInterventionBySource.mutate).mockResolvedValue(
+          resolution as any,
+        );
+        vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+        const addToolToAllowList = vi.fn().mockResolvedValue(undefined);
+        useUserStore.setState({ addToolToAllowList });
+
+        await act(async () => {
+          await result.current.approveToolCalling('tool-msg-share', '', context, {
+            rememberToolKey: 'lobe-cloud-sandbox/runCommand',
+          });
+        });
+
+        // A server-side `remember` would write the creator's allow list.
+        expect(lambdaClient.shareChat.resolveInterventionBySource.mutate).toHaveBeenCalledWith(
+          expect.objectContaining({ action: { scope: 'once', type: 'approve_tool' } }),
+        );
+        expect(addToolToAllowList).toHaveBeenCalledWith('lobe-cloud-sandbox/runCommand');
+      },
+    );
+
+    it('stops a parked share run through the share mirror', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedShareCard();
+
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-share'], context);
+      });
+
+      expect(lambdaClient.shareChat.stopPendingApproval.mutate).toHaveBeenCalledWith({
+        batchId: 'batch-share',
+        operationId: 'operation-share',
+        shareId: 'share-1',
+        toolMessageIds: ['tool-msg-share'],
+        topicId,
+      });
+    });
+  });
+
   describe('durable terminal source lifecycle', () => {
     const agentId = 'server-agent';
     const topicId = 'server-topic';
@@ -1624,6 +1818,31 @@ describe('ConversationControl actions', () => {
       expect(updateTopicStatusSpy).not.toHaveBeenCalledWith(
         expect.objectContaining({ status: 'active' }),
       );
+    });
+
+    // A stopped group member's card stayed on screen until a reload: its stop
+    // ends no stream this client listens on, so no refetch lands the aborted row.
+    it('settles the stopped card locally', async () => {
+      const { result } = renderHook(() => useChatStore());
+      seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'executeGatewayAgent').mockResolvedValue({} as any);
+      vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).mockResolvedValueOnce(
+        {
+          contractVersion: 2,
+          state: 'claimed',
+          status: 'stopped',
+          success: true,
+        },
+      );
+
+      await act(async () => {
+        await result.current.stopPendingApproval(['tool-msg-terminal-source']);
+      });
+
+      const row = result.current.dbMessagesMap[chatKey].find(
+        (message) => message.id === 'tool-msg-terminal-source',
+      );
+      expect(row?.pluginIntervention?.status).toBe('aborted');
     });
 
     it('completes only the local action when custom cancel wins the durable claim', async () => {
@@ -3044,6 +3263,7 @@ describe('ConversationControl actions', () => {
           batchId: `batch-${interactionKind}`,
           operationId: `server-operation-${interactionKind}`,
           resolutionRequestId: expect.any(String),
+          streamFeatures: ['member_runtime_end'],
           targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
         });
         const resolvingIntervention = {

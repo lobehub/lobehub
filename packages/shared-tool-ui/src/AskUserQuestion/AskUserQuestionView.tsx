@@ -1,7 +1,7 @@
 'use client';
 
-import { Flexbox, Hotkey, Icon, KeyMapEnum, TextArea } from '@lobehub/ui';
-import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Hotkey, Icon, KeyMapEnum } from '@lobehub/ui';
+import { Button, Tabs, Text, TextArea } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { Check, PenLine, Replace, Send, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -260,7 +260,7 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         event.preventDefault();
         handleSubmit();
       } else if (event.key === 'Escape') {
-        if (submitting) return;
+        if (submitting || !labels.skip) return;
         event.preventDefault();
         handleSkip();
       }
@@ -299,10 +299,14 @@ export const AskUserQuestionView = memo<AskUserQuestionViewProps>((props) => {
         </Text>
       )}
       <Flexbox horizontal gap={8}>
-        <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
-          {labels.skip}
-          <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
-        </Button>
+        {/* A host whose question has no "not now" answer (a decision gate)
+            passes no skip label, and the form offers no way around it. */}
+        {labels.skip && (
+          <Button disabled={submitting} icon={<Icon icon={X} />} onClick={handleSkip}>
+            {labels.skip}
+            <Hotkey compact keys={KeyMapEnum.Esc} variant="borderless" />
+          </Button>
+        )}
         <Button
           disabled={isSubmitDisabled}
           icon={<Icon icon={Send} />}

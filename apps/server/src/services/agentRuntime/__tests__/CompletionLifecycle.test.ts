@@ -688,6 +688,44 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     });
   });
 
+  it("writes the error onto the run's own assistant row when a server run carries no assistantMessageId", async () => {
+    // A server `execAgent` turn leaves `metadata.assistantMessageId` unset; with
+    // no client online (a closed tab, a bot, a schedule) nothing else writes
+    // the error, so the reply row would stay an empty bubble.
+    const lifecycle = buildLifecycle();
+    const updateMessage = vi.fn().mockResolvedValue({ success: true });
+    const findLatestAssistantByOperationId = vi.fn().mockResolvedValue({ id: 'msg-run' });
+
+    (lifecycle as any).messageModel = { findLatestAssistantByOperationId, update: updateMessage };
+    vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+    await lifecycle.dispatchHooks(
+      'op-1',
+      {
+        error: {
+          error: { reason: 'claim_timeout', recoverable: true },
+          errorType: 'ClientLlmExecutorUnavailable',
+          provider: 'lmstudio',
+        },
+        host: { hooks: [] },
+        metadata: {},
+        origin: { topicId: 'tpc-1' },
+        status: 'error',
+      },
+      'error',
+    );
+
+    expect(findLatestAssistantByOperationId).toHaveBeenCalledWith({
+      operationId: 'op-1',
+      topicId: 'tpc-1',
+    });
+    expect(updateMessage).toHaveBeenCalledWith('msg-run', {
+      error: expect.objectContaining({ type: 'ClientLlmExecutorUnavailable' }),
+    });
+  });
+
   it('rethrows critical webhook failures after terminal persistence', async () => {
     const lifecycle = buildLifecycle();
     const persistCompletion = vi
@@ -720,6 +758,50 @@ describe('CompletionLifecycle.dispatchHooks — error persistence', () => {
     await lifecycle.dispatchHooks('op-reclaimed', { host: { hooks: [] }, status: 'done' }, 'done');
 
     expect(dispatch).not.toHaveBeenCalled();
+  });
+
+  describe('a row the caller already retired as abandoned', () => {
+    // Mirrors `recordCompletion`'s guard: a row the stale-lease CAS moved to
+    // `abandoned` only accepts a write that keeps that status.
+    const retiredRowModel = () => ({
+      findById: vi.fn(async () => ({ id: 'op-stale', status: 'abandoned' })),
+      recordCompletion: vi.fn(async (_id: string, params: { status: string }) => {
+        return params.status === 'abandoned';
+      }),
+      sumChildUsage: vi.fn(async () => undefined),
+    });
+
+    it('persists onto the abandoned status and still fires the hooks', async () => {
+      const lifecycle = buildLifecycle();
+      const model = retiredRowModel();
+      (lifecycle as any).agentOperationModel = model;
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+      await lifecycle.dispatchHooks('op-stale', { host: { hooks: [] }, status: 'error' }, 'error', {
+        settledAsAbandoned: true,
+        skipErrorMessageWrite: true,
+      });
+
+      expect(model.recordCompletion).toHaveBeenCalledWith(
+        'op-stale',
+        expect.objectContaining({ completionReason: 'lease_expired', status: 'abandoned' }),
+      );
+      expect(dispatch).toHaveBeenCalled();
+    });
+
+    it('is refused as a conflicting owner without the flag, so no hooks fire', async () => {
+      const lifecycle = buildLifecycle();
+      (lifecycle as any).agentOperationModel = retiredRowModel();
+      const dispatch = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+      vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+
+      await lifecycle.dispatchHooks('op-stale', { host: { hooks: [] }, status: 'error' }, 'error', {
+        skipErrorMessageWrite: true,
+      });
+
+      expect(dispatch).not.toHaveBeenCalled();
+    });
   });
 });
 
@@ -800,7 +882,26 @@ describe('CompletionLifecycle.dispatchHooks — async-tool park', () => {
 
     await lifecycle.dispatchHooks('op-1', parkedState, 'waiting_for_async_tool');
 
-    expect(persistSpy).toHaveBeenCalledWith('op-1', parkedState, 'waiting_for_async_tool');
+    expect(persistSpy).toHaveBeenCalledWith(
+      'op-1',
+      parkedState,
+      'waiting_for_async_tool',
+      undefined,
+    );
+    expect(dispatchSpy).not.toHaveBeenCalled();
+    expect(unregisterSpy).not.toHaveBeenCalled();
+  });
+
+  it('treats a waiting_for_client park the same way: persisted, no onComplete, hooks kept', async () => {
+    const lifecycle = buildLifecycle();
+    const persistSpy = vi.spyOn(lifecycle as any, 'persistCompletion').mockResolvedValue(undefined);
+    const dispatchSpy = vi.spyOn(hookDispatcher, 'dispatch').mockResolvedValue(undefined as any);
+    const unregisterSpy = vi.spyOn(hookDispatcher, 'unregister').mockImplementation(function () {});
+    const clientPark = { ...parkedState, status: 'waiting_for_client' };
+
+    await lifecycle.dispatchHooks('op-1', clientPark, 'waiting_for_client');
+
+    expect(persistSpy).toHaveBeenCalledWith('op-1', clientPark, 'waiting_for_client', undefined);
     expect(dispatchSpy).not.toHaveBeenCalled();
     expect(unregisterSpy).not.toHaveBeenCalled();
   });

@@ -8,7 +8,7 @@ import {
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon } from '@lobehub/ui/base-ui';
 import { ArrowLeft, X } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import { type CSSProperties, Fragment, type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useParams } from 'react-router';
@@ -18,12 +18,16 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
+import { PortalMoreMenuSlot } from './PortalMoreMenu/context';
+
 const Header = memo<{
   onClose?: () => void;
   paddingInline?: number;
   rightExtra?: ReactNode;
+  /** Overrides the default block/inline padding, e.g. for a full-height tab strip. */
+  style?: CSSProperties;
   title: ReactNode;
-}>(({ onClose, paddingInline = 8, rightExtra, title }) => {
+}>(({ onClose, paddingInline = 8, rightExtra, style, title }) => {
   const { t } = useTranslation('common');
   const location = useLocation();
   const navigate = useWorkspaceAwareNavigate();
@@ -41,7 +45,7 @@ const Header = memo<{
   return (
     <NavHeader
       showTogglePanelButton={false}
-      style={{ paddingBlock: 8, paddingInline, width: '100%' }}
+      style={{ paddingBlock: 8, paddingInline, width: '100%', ...style }}
       left={
         <Flexbox horizontal align="center" flex={1} gap={4} style={{ minWidth: 0 }}>
           {canGoBack && (
@@ -54,6 +58,9 @@ const Header = memo<{
             />
           )}
           {title}
+          {/* The `…` belongs to the thing the title names, not to the panel
+              chrome on the far edge, so it rides right behind the title. */}
+          <PortalMoreMenuSlot />
         </Flexbox>
       }
       right={

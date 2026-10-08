@@ -155,6 +155,13 @@ const actionsFor = (
     ];
   }
 
+  if (interactionKind === 'tool_approval') {
+    // A form resolved by approval (the secure credential form): the card
+    // approves after its own write, so there are no arguments to edit and no
+    // allow-list entry to remember.
+    return ['approve_tool', 'reject_continue', 'stop'];
+  }
+
   if (interactionKind === 'question') {
     // Standard runtime AskUser has Submit / Skip semantics. Cancel is a
     // provider/custom terminal action and has no runtime handler here.
@@ -318,6 +325,7 @@ export const buildRuntimeInterventionNotification = async ({
     items.push(item);
   }
 
+  const shareVisitorUserId = boundedString(state?.principal?.actor?.shareVisitor?.visitorUserId);
   const allBinary = items.every((item) => item.surface === 'binary');
   const hasSecurityRisk = items.some((item) => item.risk?.level !== undefined);
   const allApisAuthoritative = pendingTools.every((tool) =>
@@ -399,11 +407,18 @@ export const buildRuntimeInterventionNotification = async ({
       items.length === 1
         ? `${items[0].summary} requires review`
         : `${items.length} actions require review`,
+    // A share run is approved by the visitor on the share page, never through
+    // the owner's signed direct actions.
     systemActionEligibility:
-      items.length === 1 && allBinary && !hasSecurityRisk && allApisAuthoritative
+      !shareVisitorUserId &&
+      items.length === 1 &&
+      allBinary &&
+      !hasSecurityRisk &&
+      allApisAuthoritative
         ? 'safe_single_binary'
         : 'review_only',
     ...(supersedes && { supersedes }),
+    ...(shareVisitorUserId && { shareVisitorUserId }),
     userId,
     workspaceId,
   };

@@ -19,6 +19,11 @@ export interface ExecutionSnapshot {
   steps: StepSnapshot[];
   topicId?: string;
   totalCost: number;
+  /**
+   * Provider-native subscription credits consumed by the whole operation
+   * (e.g. Qoder), for runs whose CLI bills in credits instead of tokens.
+   */
+  totalCredits?: number;
   totalSteps: number;
   totalTokens: number;
   traceId: string;
@@ -56,6 +61,11 @@ export interface StepSnapshot {
     metadata?: unknown;
     output?: unknown;
   };
+  /**
+   * Provider-native subscription credits consumed by this step (e.g. Qoder),
+   * when the CLI bills in credits instead of reporting token counts.
+   */
+  credits?: number;
   events?: Array<{ type: string; [key: string]: unknown }>;
 
   executionTimeMs: number;

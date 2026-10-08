@@ -1,4 +1,5 @@
-import type { ActionIconProps, FormProps } from '@lobehub/ui';
+import type { ActionIconProps } from '@lobehub/ui';
+import type { FormProps } from '@lobehub/ui/base-ui/form';
 
 export const HEADER_HEIGHT = 64;
 export const MOBILE_NABBAR_HEIGHT = 44;
@@ -31,7 +32,7 @@ export const CONVERSATION_KEEP_WIDTH = 420;
 export const MARKET_SIDEBAR_WIDTH = 400;
 export const FOLDER_WIDTH = 270;
 export const MAX_WIDTH = 1024;
-export const FORM_STYLE: FormProps = {
+export const FORM_STYLE: Pick<FormProps, 'itemMinWidth' | 'style'> = {
   itemMinWidth: 'max(34%, 240px)',
   style: { maxWidth: MAX_WIDTH, width: '100%' },
 };

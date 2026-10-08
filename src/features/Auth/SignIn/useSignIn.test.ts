@@ -81,31 +81,17 @@ vi.mock('@/features/AuthShell/AuthServerConfigProvider', () => ({
     }),
 }));
 
-const mockSetFieldValue = vi.fn();
-const mockGetFieldValue = vi.fn();
-const mockValidateFields = vi.fn();
-const mockSetFields = vi.fn();
-const mockResetFields = vi.fn();
-const mockSubmit = vi.fn();
-vi.mock('antd', async () => {
-  const actual: any = await vi.importActual('antd');
-  return {
-    ...actual,
-    Form: {
-      ...actual.Form,
-      useForm: () => [
-        {
-          getFieldValue: mockGetFieldValue,
-          resetFields: mockResetFields,
-          setFields: mockSetFields,
-          setFieldValue: mockSetFieldValue,
-          submit: mockSubmit,
-          validateFields: mockValidateFields,
-        },
-      ],
-    },
-  };
-});
+const mockForm = vi.hoisted(() => ({
+  getValue: vi.fn(),
+  getValues: vi.fn(() => ({ email: 'user@example.com', password: 'stale' })),
+  reset: vi.fn(),
+  setErrors: vi.fn(),
+  setValue: vi.fn(),
+  validate: vi.fn(),
+}));
+vi.mock('@lobehub/ui/base-ui/form', () => ({
+  useForm: () => mockForm,
+}));
 
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
@@ -322,9 +308,7 @@ describe('useSignIn', () => {
       });
 
       // Error is pinned inline on the password field, not shown as a toast
-      expect(mockSetFields).toHaveBeenCalledWith([
-        { errors: ['Invalid credentials'], name: 'password' },
-      ]);
+      expect(mockForm.setErrors).toHaveBeenCalledWith({ password: 'Invalid credentials' });
       expect(mockMessageError).not.toHaveBeenCalled();
     });
 
@@ -532,7 +516,7 @@ describe('useSignIn', () => {
       expect(result.current.isSocialOnly).toBe(false);
       // The shared form's password (+ any inline error) must be cleared so the
       // next email doesn't remount pre-filled with the previous account's value.
-      expect(mockResetFields).toHaveBeenCalledWith(['password']);
+      expect(mockForm.reset).toHaveBeenCalledWith({ email: 'user@example.com', password: '' });
     });
   });
 
@@ -718,7 +702,7 @@ describe('useSignIn', () => {
       expect(result.current.step).toBe('email');
       expect(result.current.email).toBe('');
       expect(result.current.sentInfo).toBeNull();
-      expect(mockResetFields).toHaveBeenCalledWith(['password']);
+      expect(mockForm.reset).toHaveBeenCalledWith({ email: 'user@example.com', password: '' });
     });
   });
 

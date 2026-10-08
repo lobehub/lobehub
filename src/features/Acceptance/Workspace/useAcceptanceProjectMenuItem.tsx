@@ -54,6 +54,15 @@ interface AcceptanceProjectMenu {
  * The caller owns the write (and its toast); this hook only decides what the
  * menu offers.
  */
+/**
+ * The caller's projects for acceptance menus, read only once `requested` — the
+ * filing submenu and the list's project filter share one cache entry.
+ */
+export const useAcceptanceProjectOptions = (requested: boolean) =>
+  useClientDataSWR(requested ? PROJECT_OPTIONS_KEY : null, () => projectService.listAll(), {
+    revalidateOnFocus: false,
+  });
+
 export const useAcceptanceProjectMenu = ({
   currentProjectId,
   onSelect,
@@ -62,11 +71,7 @@ export const useAcceptanceProjectMenu = ({
   const { t } = useTranslation('verify');
   const [requested, setRequested] = useState(false);
 
-  const { data, error } = useClientDataSWR(
-    requested ? PROJECT_OPTIONS_KEY : null,
-    () => projectService.listAll(),
-    { revalidateOnFocus: false },
-  );
+  const { data, error } = useAcceptanceProjectOptions(requested);
 
   const state = buildAcceptanceProjectMenuState({
     currentProjectId,

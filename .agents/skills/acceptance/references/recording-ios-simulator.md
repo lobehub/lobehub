@@ -1,8 +1,9 @@
 # iOS Simulator framebuffer recording
 
 Use this reference only for an iOS Simulator criterion that requires temporal
-evidence. Record device pixels directly with `simctl`; this excludes Simulator
-window chrome and is stronger evidence than a host-screen crop. Use an explicit
+evidence. Record device pixels directly with `simctl`; this excludes the host
+app's window chrome (Simulator, or DeviceHub on Xcode 27+) and is stronger
+evidence than a host-screen crop. Use an explicit
 UDID when more than one device is booted.
 
 ## Record and finalize
@@ -13,8 +14,10 @@ UDID when more than one device is booted.
 xcrun simctl io "$UDID" recordVideo --codec=h264 ./proof/ios-flow.mp4 \
   2> ./proof/ios-recording.log
 
-# Drive the scenario with AXe or the repository's existing native CLI/UI tests in
-# parallel. Stop the recorder with SIGINT (Ctrl-C), then wait for finalization.
+# Log `mark step "Recording started"` at that moment: it is the zero point
+# for the video's chapters (video-chapters.md). Mark each step and check as you go.
+# Drive the scenario with the selected driver (sim-use, AXe, or the repository's
+# native CLI/UI tests) in parallel. Stop the recorder with SIGINT (Ctrl-C), then wait for finalization.
 ```
 
 Do not use SIGKILL: `simctl` must flush in-flight frames and finalize the movie.
@@ -22,10 +25,9 @@ An interrupted recorder command may return a non-zero shell status after a
 successful SIGINT finalization; judge the artifact with `ffprobe`, not that status
 alone.
 
-AXe also exposes `record-video --fps <1-30> --quality <1-100>`, but terminal
-wrappers can intercept SIGINT before AXe writes MP4 metadata. Use it only after a
-short probe file passes `ffprobe`; otherwise retain AXe for input/Accessibility
-and use `simctl` for recording.
+sim-use and AXe also ship `record-video`, but terminal wrappers can swallow
+SIGINT before the MP4 is finalized. Trust a driver recorder only after a short
+probe file passes `ffprobe`; see [sim-use.md](./sim-use.md) or [axe.md](./axe.md).
 
 ## Verify the movie
 

@@ -579,6 +579,9 @@ export default {
   'plans.workspace.freeMembers': 'Up to 3 members (including you)',
   'plans.target': 'Target Plan',
   'plans.unlimited': 'Unlimited',
+  'plansModal.persistentSandbox.desc':
+    'Files your agent writes in the cloud sandbox are discarded when the session ends. Upgrade to keep a persistent working directory that survives sessions and is shared across your topics.',
+  'plansModal.persistentSandbox.title': 'Keep your sandbox files',
   'plansModal.artifactDeploymentLimit.desc':
     'Your Artifact hosting capacity has been reached. Upgrade to increase active deployments and per-site size limits.',
   'plansModal.artifactDeploymentLimit.title': 'Increase Artifact hosting capacity',
@@ -740,9 +743,17 @@ export default {
   'switchToMonthly.desc':
     'After switching, monthly billing will take effect after the current yearly plan expires.',
   'switchToMonthly.title': 'Switch to Monthly Billing',
+  'switchToYearly.after': 'After switching',
+  'switchToYearly.billedYearly': '{{price}} billed yearly',
+  'switchToYearly.credit': 'Credit for this month',
   'switchToYearly.desc':
     'After switching, yearly billing will take effect immediately after paying the difference. Start date inherits from previous plan.',
+  'switchToYearly.dueToday': 'Due today',
+  'switchToYearly.now': 'Now',
+  'switchToYearly.period': 'Billing Period',
+  'switchToYearly.price': 'Price',
   'switchToYearly.title': 'Switch to Yearly Billing',
+  'switchToYearly.yearlyPlan': 'Yearly plan',
   'tab.billing': 'Billing',
   'tab.budget': 'Budget',
   'tab.credits': 'Credits',
@@ -776,5 +787,6 @@ export default {
   'usage.overview.title': 'Overview',
   'usage.storage.embeddings.used': 'Vector Storage',
   'usage.storage.file.used': 'File Usage',
+  'usage.storage.sandboxStorage.used': 'Sandbox Storage',
   'usage.remaining': 'Remaining',
 };

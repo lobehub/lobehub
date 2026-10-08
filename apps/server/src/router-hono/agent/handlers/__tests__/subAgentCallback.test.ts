@@ -6,6 +6,12 @@ import { subAgentCallback } from '../subAgentCallback';
 const mockCompleteSubAgentBridge = vi.fn();
 const mockGetOperationMetadata = vi.fn();
 const mockAiAgentService = vi.fn();
+const mockOperationRows = vi.hoisted(() => ({ rows: [] as any[] }));
+const mockServerDB = vi.hoisted(() => ({
+  select: () => ({
+    from: () => ({ where: () => ({ limit: async () => mockOperationRows.rows }) }),
+  }),
+}));
 
 vi.mock('@/server/services/aiAgent', () => ({
   AiAgentService: vi.fn().mockImplementation(function (...args: any[]) {
@@ -23,7 +29,7 @@ vi.mock('@/server/modules/AgentRuntime', () => ({
 }));
 
 vi.mock('@/database/core/db-adaptor', () => ({
-  getServerDB: vi.fn().mockResolvedValue({} as any),
+  getServerDB: vi.fn().mockResolvedValue(mockServerDB),
 }));
 
 function buildContext(opts: { body?: unknown; jsonThrows?: boolean }) {
@@ -58,6 +64,7 @@ describe('subAgentCallback handler', () => {
     mockGetOperationMetadata.mockReset();
     mockAiAgentService.mockReset();
     mockGetOperationMetadata.mockResolvedValue({ userId: 'user-1', workspaceId: 'ws-1' });
+    mockOperationRows.rows = [];
   });
 
   afterEach(() => {
@@ -81,6 +88,25 @@ describe('subAgentCallback handler', () => {
     expect(res.status).toBe(400);
     expect(getCaptures()[0].body.error).toMatch(/Missing required fields/);
     expect(mockCompleteSubAgentBridge).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the durable operation row when the child metadata is gone', async () => {
+    // Regression: runStep's orphan recovery resumes the parent
+    // precisely because the child's coordinator metadata expired, so a
+    // metadata-only lookup 401'd every redelivery and stranded the parent.
+    mockGetOperationMetadata.mockResolvedValue(null);
+    mockOperationRows.rows = [{ userId: 'user-row', workspaceId: 'ws-row' }];
+    mockCompleteSubAgentBridge.mockResolvedValue(true);
+    const { ctx } = buildContext({ body: { ...validBody, streamOwnerUserId: 'visitor-1' } });
+
+    const res = await subAgentCallback(ctx);
+
+    expect(res.status).toBe(200);
+    expect(mockAiAgentService).toHaveBeenCalledWith(mockServerDB, 'user-row', {
+      includeShareVisitor: true,
+      workspaceId: 'ws-row',
+    });
+    expect(mockCompleteSubAgentBridge).toHaveBeenCalledTimes(1);
   });
 
   it('returns 401 when the child operation has no userId', async () => {
@@ -119,6 +145,26 @@ describe('subAgentCallback handler', () => {
       expect.anything(),
       'user-1',
       expect.objectContaining({ includeShareVisitor: false, workspaceId: 'ws-1' }),
+    );
+  });
+
+  it('forwards the abandon reason so the parent sees why the sub-agent failed', async () => {
+    mockCompleteSubAgentBridge.mockResolvedValue(true);
+    const { ctx } = buildContext({
+      body: {
+        ...validBody,
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        reason: 'error',
+      },
+    });
+
+    await subAgentCallback(ctx);
+
+    expect(mockCompleteSubAgentBridge).toHaveBeenCalledWith(
+      expect.objectContaining({
+        errorMessage: 'Operation abandoned: inactivity_watchdog',
+        reason: 'error',
+      }),
     );
   });
 

@@ -2,8 +2,7 @@
 
 import type { TaskTemplateConnectorReference } from '@lobechat/const';
 import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Alert, Avatar, Button, Text, toast } from '@lobehub/ui/base-ui';
-import { Divider } from 'antd';
+import { ActionIcon, Alert, Avatar, Button, Divider, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon, XIcon } from 'lucide-react';

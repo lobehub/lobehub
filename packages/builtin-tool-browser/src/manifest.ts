@@ -53,7 +53,7 @@ export const BrowserManifest: BuiltinToolManifest = {
     },
     {
       description:
-        'Fill a text input, textarea, or contenteditable identified by a snapshot ref. Set submit=true to press Enter afterwards.',
+        'Fill a text input, textarea, or contenteditable identified by a snapshot ref, or choose an option of a native select (combobox) by its value or visible label. Set submit=true to press Enter afterwards.',
       name: BrowserApiName.fill,
       parameters: {
         properties: {
@@ -66,7 +66,7 @@ export const BrowserManifest: BuiltinToolManifest = {
             type: 'boolean',
           },
           text: {
-            description: 'Text to fill.',
+            description: 'Text to fill; for a select, the option value or visible label.',
             type: 'string',
           },
         },

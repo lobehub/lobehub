@@ -175,7 +175,9 @@ const Header = memo(() => {
         toast.success(t('confirmRemoveSessionSuccess', { ns: 'chat' }));
         navigate('/');
       },
-      title: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
+      content: t('confirmRemoveSessionItemAlert', { ns: 'chat' }),
+      okText: t('delete', { ns: 'common' }),
+      title: t('delete', { ns: 'common' }),
     });
   }, [activeAgentId, canManage, navigate, removeAgent, t]);
 

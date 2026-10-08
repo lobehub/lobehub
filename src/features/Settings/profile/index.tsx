@@ -1,8 +1,9 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, FormGroup } from '@lobehub/ui';
-import { Divider } from 'antd';
+import { Flexbox } from '@lobehub/ui';
+import { Divider } from '@lobehub/ui/base-ui';
+import { Form } from '@lobehub/ui/base-ui/form';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -66,7 +67,7 @@ const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
   return (
     <>
       {showSettingHeader && <SettingHeader title={t('profile.title')} />}
-      <FormGroup collapsible={false} gap={16} title={t('profile.account')} variant={'filled'}>
+      <Form.Group collapsible={false} title={t('profile.account')} variant={'filled'}>
         <Flexbox style={{ display: isLoading ? 'flex' : 'none' }}>
           <SettingsProfileRowSkeleton />
           <Divider style={{ margin: 0 }} />
@@ -126,7 +127,7 @@ const ProfileSetting = ({ showSettingHeader = true }: ProfileSettingProps) => {
             </>
           )}
         </Flexbox>
-      </FormGroup>
+      </Form.Group>
     </>
   );
 };

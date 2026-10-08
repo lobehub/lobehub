@@ -207,7 +207,9 @@ export const UserLabSchema = z.object({
    */
   enableProjects: z.boolean().optional(),
   /**
-   * show the per-agent self-learning (expertise) page and its sidebar entry
+   * self-evolving: inject what was learned (the user's rules and each agent's own lessons) into
+   * runs, and show it under memory and on each agent's self-learning page. The former separate
+   * "my rules" switch (`enableMemoryRules`) is folded into this one.
    */
   enableSelfLearning: z.boolean().optional(),
   /**
@@ -217,13 +219,13 @@ export const UserLabSchema = z.object({
   /** Capture a conversation turn as an eval test case (developer-facing). */
   enableEvalCapture: z.boolean().optional(),
   /**
-   * route every agent run in this tab over one shared gateway WebSocket
-   * (protocol v2 mux) instead of one socket per run
+   * enable Goals: hand the agent a goal it plans into tasks, tracks and delivers
    */
-  enableGatewayMux: z.boolean().optional(),
+  enableGoals: z.boolean().optional(),
   /**
-   * enable the per-topic acceptance tray above the composer (author a topic's
-   * delivery checklist inline)
+   * @deprecated Renamed to `enableGoals`. Written alongside it, and read first,
+   * while older clients that only know this key are still around: their writes
+   * touch only this key, so it carries the latest choice.
    */
   enableTopicAcceptance: z.boolean().optional(),
   /**
@@ -231,6 +233,12 @@ export const UserLabSchema = z.object({
    * running there can be opened from this UI
    */
   enableDeviceTunnel: z.boolean().optional(),
+  /**
+   * opt this user's cloud-sandbox runs into a persistent workspace: the working
+   * directory survives session recycling and is shared across their topics,
+   * instead of being thrown away with the sandbox
+   */
+  enablePersistentSandbox: z.boolean().optional(),
 });
 
 export type UserLab = z.infer<typeof UserLabSchema>;

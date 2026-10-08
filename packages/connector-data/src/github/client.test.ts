@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { createGitHubConnectorClient } from './client';
+import { createGitHubConnectorClient, MAX_REPOSITORY_BRANCHES } from './client';
 import { createGitHubOAuthConnectorClient } from './client-oauth';
 import type { GitHubConnectorTransport } from './graphql/client';
 
@@ -55,6 +55,8 @@ const createTransport = () => {
   ]);
   const transport: GitHubConnectorTransport = {
     getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+    listAccessibleRepositories: async () => [],
+    listRepositoryBranches: async () => [],
     listRepositoryContributors,
     listUserOrganizations,
     request: async ({ operation, variables }) => {
@@ -435,6 +437,8 @@ describe('createGitHubConnectorClient', () => {
     });
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
+      listRepositoryBranches: async () => [],
       listRepositoryContributors: async () => [],
       listUserOrganizations: async () => [],
       request,
@@ -449,6 +453,38 @@ describe('createGitHubConnectorClient', () => {
 
     await expect(client.getUserProfile()).resolves.toMatchObject({ login: 'octocat' });
     expect(request).toHaveBeenCalledTimes(4);
+  });
+
+  // GitHub pages branches at 100. A repository with more used to lose every
+  // branch past the first page, with no way to pick them.
+  it('walks branch pages until a short one, up to the ceiling', async () => {
+    const page = (count: number, prefix: string) =>
+      Array.from({ length: count }, (_, index) => ({ name: `${prefix}-${index}` }));
+    const listRepositoryBranches = vi.fn(async ({ page: n }: { page?: number }) =>
+      n === 1 ? page(100, 'a') : page(30, 'b'),
+    );
+    const { transport } = createTransport();
+    const client = createGitHubConnectorClient({
+      transport: { ...transport, listRepositoryBranches },
+    });
+
+    await expect(client.listRepositoryBranches('acme', 'atlas')).resolves.toHaveLength(130);
+    expect(listRepositoryBranches).toHaveBeenCalledTimes(2);
+    expect(listRepositoryBranches).toHaveBeenLastCalledWith({
+      owner: 'acme',
+      page: 2,
+      perPage: 100,
+      repository: 'atlas',
+    });
+
+    const endless = vi.fn(async () => page(100, 'c'));
+    const bounded = createGitHubConnectorClient({
+      transport: { ...transport, listRepositoryBranches: endless },
+    });
+    await expect(bounded.listRepositoryBranches('acme', 'atlas')).resolves.toHaveLength(
+      MAX_REPOSITORY_BRANCHES,
+    );
+    expect(endless).toHaveBeenCalledTimes(MAX_REPOSITORY_BRANCHES / 100);
   });
 
   it('normalizes and bounds repository contributors in the loader', async () => {
@@ -477,6 +513,8 @@ describe('createGitHubConnectorClient', () => {
     const sensitiveRepository = 'token-sensitive-owner/private-repository';
     const transport: GitHubConnectorTransport = {
       getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
+      listRepositoryBranches: async () => [],
       listRepositoryContributors: vi.fn().mockRejectedValue({ status: 401 }),
       listUserOrganizations: async () => [],
       request: vi.fn(),
@@ -588,6 +626,26 @@ describe('createGitHubConnectorClient', () => {
       'https://api.github.com/user/orgs?per_page=20',
       'https://api.github.com/user',
       'https://api.github.com/users/octocat/orgs?per_page=20',
+    ]);
+  });
+
+  it('lists branch names and drops entries the API returned without one', async () => {
+    const transport: GitHubConnectorTransport = {
+      getAuthenticatedUser: async () => ({ id: 98_765, login: 'octocat' }),
+      listAccessibleRepositories: async () => [],
+      listRepositoryBranches: async ({ owner, repository }) =>
+        owner === 'lobehub' && repository === 'lobehub'
+          ? [{ name: 'canary' }, { name: null }, { name: 'main' }]
+          : [],
+      listRepositoryContributors: async () => [],
+      listUserOrganizations: async () => [],
+      request: async () => ({}),
+    };
+    const client = createGitHubConnectorClient({ transport });
+
+    await expect(client.listRepositoryBranches('lobehub', 'lobehub')).resolves.toEqual([
+      'canary',
+      'main',
     ]);
   });
 });

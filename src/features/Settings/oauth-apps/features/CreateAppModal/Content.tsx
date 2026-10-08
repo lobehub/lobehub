@@ -1,9 +1,9 @@
 'use client';
 
 import { type OAuthAppType } from '@lobechat/types';
-import { Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { Button, Text, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Button, Input, Text, TextArea, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cx } from 'antd-style';
 import { CheckIcon, GlobeIcon, type LucideIcon, TerminalIcon } from 'lucide-react';
 import { type FC, useState } from 'react';
@@ -11,6 +11,8 @@ import { useTranslation } from 'react-i18next';
 
 import AvatarUpload from '@/components/AvatarUpload';
 import { type CreateOAuthAppParams } from '@/types/oauthApp';
+
+import { useLogoUpload } from '../../useLogoUpload';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   typeCard: css`
@@ -132,8 +134,6 @@ export interface CreateAppModalContentProps {
 const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => {
   const { t } = useTranslation('auth');
   const { close, setCanDismissByClickOutside } = useModalContext();
-  const [form] = Form.useForm<CreateAppFormValues>();
-  const type = Form.useWatch('type', form);
   const [loading, setLoading] = useState(false);
   const [logoUri, setLogoUri] = useState<string>();
 
@@ -141,13 +141,20 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
   // silently drop the user's input); the explicit ✕/ESC close still works.
   const markDirty = () => setCanDismissByClickOutside(false);
 
-  const handleUpload = (file: File) => {
-    const reader = new FileReader();
-    reader.addEventListener('load', () => {
-      setLogoUri(reader.result as string);
-      markDirty();
-    });
-    reader.readAsDataURL(file);
+  const form = useForm<CreateAppFormValues>({
+    initialValues: { type: 'device' } as CreateAppFormValues,
+    onSubmit: (values) => handleFinish(values),
+    onValuesChange: markDirty,
+  });
+  const type = useWatch(form, 'type');
+
+  const { upload: uploadLogo, uploading: logoUploading } = useLogoUpload();
+
+  const handleUpload = async (file: File) => {
+    const url = await uploadLogo(file);
+    if (!url) return;
+    setLogoUri(url);
+    markDirty();
   };
 
   // Only what defines the app is asked for up front. Redirect URIs are
@@ -168,36 +175,32 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
     }
   };
 
-  const itemStyle = { marginBottom: 0 };
+  const itemStyle = { paddingBlock: 0 };
 
   return (
-    <Form
-      colon={false}
-      form={form}
-      initialValues={{ type: 'device' }}
-      layout={'vertical'}
-      onFinish={handleFinish}
-      onValuesChange={markDirty}
-    >
+    <Form form={form} layout={'vertical'}>
       <Flexbox gap={16}>
-        <Form.Item label={t('oauthApp.form.logo.label')} style={itemStyle}>
+        <Form.Field label={t('oauthApp.form.logo.label')} style={itemStyle}>
           <AvatarUpload
+            allowDelete={!!logoUri}
+            loading={logoUploading}
             title={t('oauthApp.form.name.label')}
             value={logoUri}
+            onDelete={() => setLogoUri(undefined)}
             onUpload={handleUpload}
           />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('oauthApp.form.name.label')}
           name={'name'}
-          rules={[{ message: t('oauthApp.validation.nameRequired'), required: true }]}
+          required={t('oauthApp.validation.nameRequired')}
           style={itemStyle}
         >
           <Input placeholder={t('oauthApp.form.name.placeholder')} />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('oauthApp.form.type.label')}
           name={'type'}
           style={itemStyle}
@@ -224,17 +227,23 @@ const CreateAppModalContent: FC<CreateAppModalContentProps> = ({ onSubmit }) => 
               },
             ]}
           />
-        </Form.Item>
+        </Form.Field>
 
-        <Form.Item
+        <Form.Field
           label={t('oauthApp.form.description.label')}
           name={'description'}
           style={itemStyle}
         >
           <TextArea placeholder={t('oauthApp.form.description.placeholder')} rows={3} />
-        </Form.Item>
+        </Form.Field>
 
-        <Button block htmlType={'submit'} loading={loading} type={'primary'}>
+        <Button
+          block
+          disabled={logoUploading}
+          htmlType={'submit'}
+          loading={loading}
+          type={'primary'}
+        >
           {t('oauthApp.form.submit')}
         </Button>
       </Flexbox>

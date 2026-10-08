@@ -1,6 +1,5 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
-import type { ContextMenuItem, showContextMenu as showWebContextMenu } from '@lobehub/ui';
-import type { ItemType } from 'antd/es/menu/interface';
+import type { ContextMenuItem, ItemType, showContextMenu as showWebContextMenu } from '@lobehub/ui';
 
 type NativeMenuIcon = {
   sfSymbol?: SFSymbol;

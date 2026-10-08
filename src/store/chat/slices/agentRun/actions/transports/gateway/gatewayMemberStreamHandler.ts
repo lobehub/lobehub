@@ -27,6 +27,13 @@ export interface GatewayMemberStreamHandlerParams {
    */
   ensureGroupHydrated: () => Promise<void>;
   /**
+   * Assistant rows currently being streamed by this run's member handlers,
+   * shared across them. A group re-read keeps these rows' in-memory copies:
+   * chunk persistence lags the socket, so the database snapshot would roll a
+   * sibling's live column back.
+   */
+  liveMessageIds: Set<string>;
+  /**
    * The member's server-side operationId (the op whose events are forwarded
    * onto the supervisor's WebSocket).
    */
@@ -36,6 +43,13 @@ export interface GatewayMemberStreamHandlerParams {
    * recorded as its child for lineage.
    */
   parentOperationId?: string;
+  /**
+   * Re-read the group tree unconditionally (not memoized; rejects on failure so
+   * the caller can retry). Used when a member parks on a human approval: the
+   * supervisor keeps waiting on it, so no terminal refetch comes, and the
+   * pending tool row (the approval card) only lands with a read of its own.
+   */
+  refreshGroup: () => Promise<void>;
 }
 
 /**
@@ -59,11 +73,55 @@ export interface GatewayMemberStreamHandlerParams {
  * dispatch the full accumulated content (not deltas), any chunk that lands
  * before hydration completes is repainted once the row exists — self-healing.
  */
+/**
+ * Merge a group re-read into the bucket without rolling back live member
+ * streams: rows in `liveMessageIds` keep their in-memory copy when one exists;
+ * every other row takes the fetched snapshot.
+ */
+export const mergeGroupSnapshot = (
+  fetched: UIChatMessage[],
+  current: UIChatMessage[],
+  liveMessageIds: ReadonlySet<string>,
+): UIChatMessage[] => {
+  if (liveMessageIds.size === 0) return fetched;
+  const currentById = new Map(current.map((message) => [message.id, message]));
+  return fetched.map((message) =>
+    liveMessageIds.has(message.id) ? (currentById.get(message.id) ?? message) : message,
+  );
+};
+
+const APPROVAL_REFRESH_ATTEMPTS = 3;
+const APPROVAL_REFRESH_BASE_DELAY_MS = 500;
+
 export const createGatewayMemberStreamHandler = (
   get: () => ChatStore,
   params: GatewayMemberStreamHandlerParams,
 ): ((event: AgentStreamEvent) => void) => {
-  const { context, ensureGroupHydrated, memberOperationId, parentOperationId } = params;
+  const {
+    context,
+    ensureGroupHydrated,
+    liveMessageIds,
+    memberOperationId,
+    parentOperationId,
+    refreshGroup,
+  } = params;
+
+  // A failed read would leave the parked turn without its approval card and
+  // nothing else to fetch it until a focus or reload, so retry with backoff.
+  const refreshApprovalWithRetry = async () => {
+    for (let attempt = 0; attempt < APPROVAL_REFRESH_ATTEMPTS; attempt += 1) {
+      try {
+        await refreshGroup();
+        return;
+      } catch {
+        if (attempt < APPROVAL_REFRESH_ATTEMPTS - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, APPROVAL_REFRESH_BASE_DELAY_MS * 2 ** attempt),
+          );
+        }
+      }
+    }
+  };
 
   const bucketKey = messageMapKey({
     agentId: context.agentId ?? '',
@@ -115,7 +173,9 @@ export const createGatewayMemberStreamHandler = (
         if (!id) break;
 
         ensureLocalOp();
+        if (currentAssistantMessageId) liveMessageIds.delete(currentAssistantMessageId);
         currentAssistantMessageId = id;
+        liveMessageIds.add(id);
         if (localOperationId) get().associateMessageWithOperation(id, localOperationId);
         accumulatedContent = '';
         accumulatedReasoning = '';
@@ -170,12 +230,27 @@ export const createGatewayMemberStreamHandler = (
         break;
       }
 
+      // `member_runtime_end` is how the server mirrors a member's terminal onto
+      // the supervisor's channel; `agent_runtime_end` is the pre-rename shape
+      // older servers still send.
+      case 'member_runtime_end':
       case 'agent_runtime_end':
       case 'error': {
         ended = true;
+        if (currentAssistantMessageId) liveMessageIds.delete(currentAssistantMessageId);
         // The member row's final structure (tools, content, metadata) is
         // reconciled by the supervisor op's terminal refetch / council barrier.
         // This handler owns only the live text, so just retire the loading op.
+        // A member parked on a human approval is the exception (see `refreshGroup`).
+        if (
+          event.type !== 'error' &&
+          (event.data as { reason?: string } | undefined)?.reason === 'waiting_for_human'
+        ) {
+          // Chained after the stream_start hydration: both reads replace the
+          // whole bucket, so an older in-flight snapshot landing last would
+          // drop the pending row again.
+          void ensureGroupHydrated().then(refreshApprovalWithRetry);
+        }
         if (localOperationId) get().completeOperation(localOperationId);
         break;
       }

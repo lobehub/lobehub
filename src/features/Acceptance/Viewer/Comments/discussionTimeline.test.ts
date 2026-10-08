@@ -92,7 +92,7 @@ describe('round notes', () => {
 });
 
 describe('discussion split', () => {
-  it('keeps delivery-wide remarks and leaves circled regions to the checks', () => {
+  it('splits delivery-wide remarks from circled regions', () => {
     const message = thread(item());
     const region = thread(item({ anchorType: 'evidence', checkItemId: 'c2', evidenceId: 'ev1' }));
 
@@ -134,18 +134,47 @@ describe('discussion count', () => {
     expect(count([old, latest, deleted, orphan])).toBe(1);
   });
 
-  it('excludes bare round events, approvals, empty notes and evidence threads', () => {
-    const region = item({ anchorType: 'evidence', evidenceId: 'ev1' });
-
+  it('excludes bare round events, approvals and empty notes', () => {
     expect(count([])).toBe(0);
     expect(
       count([
         item({ content: '  ', contextRunId: 'run', kind: 'proposal' }),
         item({ kind: 'approval' }),
-        region,
-        item({ parentCommentId: region.id }),
       ]),
     ).toBe(0);
+  });
+
+  it('counts a circled note and each of its replies', () => {
+    const region = item({ anchorType: 'evidence', evidenceId: 'ev1' });
+
+    expect(count([region, item({ parentCommentId: region.id })])).toBe(2);
+  });
+
+  it('counts send-backs that say why, and skips bare ones', () => {
+    const base = { approvals: [], rounds: [], threads: [] };
+    const review = (overrides: object) => ({
+      action: 'reject' as const,
+      createdAt: '2026-09-01T11:00:00Z',
+      roundIndex: 1,
+      ...overrides,
+    });
+
+    expect(
+      countDiscussionMessages({
+        ...base,
+        checks: [
+          {
+            id: 'c1',
+            reviews: [
+              review({ comment: 'still red' }),
+              review({ annotations: [{}] }),
+              review({}),
+              review({ action: 'accept', comment: 'fine' }),
+            ],
+          },
+        ],
+      }),
+    ).toBe(2);
   });
 
   it('excludes deleted messages while keeping their surviving replies', () => {
@@ -265,15 +294,64 @@ describe('buildDiscussionTimeline', () => {
     ]);
   });
 
-  it('leaves the answers to a circled region out of the chat', () => {
+  it('keeps the answers to a circled region inside its region entry', () => {
     const root = item({ anchorType: 'evidence', evidenceId: 'ev1' });
     const reply = item({ parentCommentId: root.id });
+    const region = thread(root, [reply]);
+    const timeline = buildDiscussionTimeline({ approvals: [], rounds: [], threads: [region] });
+
+    expect(timeline).toEqual([{ at: new Date(root.createdAt), kind: 'region', thread: region }]);
+  });
+
+  it('drops a withdrawn region note nobody answered', () => {
+    const root = item({ anchorType: 'evidence', deletedAt: new Date(), evidenceId: 'ev1' });
     const timeline = buildDiscussionTimeline({
       approvals: [],
       rounds: [],
-      threads: [thread(root, [reply])],
+      threads: [thread(root)],
     });
+
     expect(timeline).toEqual([]);
+  });
+
+  it('lists check and round send-backs with their reasons, in order', () => {
+    const timeline = buildDiscussionTimeline({
+      approvals: [],
+      checks: [
+        {
+          id: 'c2',
+          reviews: [
+            { action: 'accept', createdAt: '2026-09-01T10:30:00Z', roundIndex: 1 },
+            {
+              action: 'reject',
+              annotations: [{}, {}],
+              comment: ' not like web ',
+              createdAt: '2026-09-01T11:00:00Z',
+              roundIndex: 1,
+            },
+          ],
+        },
+      ],
+      rounds: [
+        {
+          createdAt: '2026-09-01T10:00:00Z',
+          decisionDetail: { comment: 'redo grouping', decidedAt: '2026-09-01T11:05:00Z' },
+          id: 'run-1',
+          roundIndex: 1,
+          userDecision: 'reject',
+        },
+      ],
+      threads: [],
+    });
+
+    expect(timeline.map((entry) => entry.kind)).toEqual(['round', 'checkReject', 'roundReject']);
+    expect(timeline[1]).toMatchObject({
+      annotationCount: 2,
+      checkItemId: 'c2',
+      comment: 'not like web',
+      roundIndex: 1,
+    });
+    expect(timeline[2]).toMatchObject({ comment: 'redo grouping', roundIndex: 1 });
   });
 
   it('drops rounds with no index and withdrawn approvals', () => {
@@ -289,9 +367,9 @@ describe('buildDiscussionTimeline', () => {
     expect(timeline).toEqual([]);
   });
 
-  it('never lists a circled region as a message', () => {
+  it('never lists a circled region as a flat message', () => {
     const region = thread(item({ anchorType: 'evidence', evidenceId: 'ev1' }));
     const timeline = buildDiscussionTimeline({ approvals: [], rounds: [], threads: [region] });
-    expect(timeline).toEqual([]);
+    expect(timeline.map((entry) => entry.kind)).toEqual(['region']);
   });
 });

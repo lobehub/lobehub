@@ -1,9 +1,8 @@
 'use client';
 
-import type { FormGroupItemType } from '@lobehub/ui';
-import { Flexbox, Form, Icon } from '@lobehub/ui';
-import { Alert, Text, toast } from '@lobehub/ui/base-ui';
-import { Breadcrumb as AntBreadcrumb } from 'antd';
+import { Flexbox, Icon } from '@lobehub/ui';
+import { Alert, Breadcrumb, Text, toast } from '@lobehub/ui/base-ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles } from 'antd-style';
 import { ChevronRight, InfoIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
@@ -33,13 +32,7 @@ const styles = createStaticStyles(({ css }) => ({
     display: flex;
   `,
   breadcrumb: css`
-    ol {
-      align-items: center;
-    }
-
-    li,
-    .ant-breadcrumb-link,
-    .ant-breadcrumb-link > a {
+    a {
       display: flex;
       align-items: center;
     }
@@ -112,6 +105,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       isPrivate,
       resourceType,
     });
+    const form = useForm();
 
     // Managing member access is a manager-only surface, like Agent's page: a
     // non-manager (or a private resource that is not the caller's) gets a
@@ -124,7 +118,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       navigate(redirectPath, { replace: true });
     }, [isDenied, navigate, redirectPath, t]);
 
-    const accessGroup: FormGroupItemType = {
+    const accessGroup: FormGroupItem = {
       children: [
         {
           avatar: (
@@ -147,7 +141,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
       title: t('permission.page.memberGroup'),
     };
 
-    const formGroups: FormGroupItemType[] = [accessGroup];
+    const formGroups: FormGroupItem[] = [accessGroup];
     if (showCollaborators) {
       formGroups.push({
         children: <CollaboratorList resourceId={resourceId} resourceType={resourceType} />,
@@ -162,7 +156,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
         <NavHeader
           styles={{ left: { paddingInlineStart: 24 } }}
           left={
-            <AntBreadcrumb
+            <Breadcrumb
               className={styles.breadcrumb}
               separator={<Icon icon={ChevronRight} size={14} />}
               items={[
@@ -213,7 +207,7 @@ const ResourceAccessPage = memo<ResourceAccessPageProps>(
                       type={'info'}
                     />
                   ) : null}
-                  <Form items={formGroups} itemsType={'group'} {...FORM_STYLE} />
+                  <Form form={form} items={formGroups} itemsType={'group'} {...FORM_STYLE} />
                 </>
               )}
             </Flexbox>

@@ -323,6 +323,76 @@ describe('StreamingExecutor actions', () => {
       },
     );
 
+    it('restores projected tool payloads before the first client LLM call', async () => {
+      act(() => {
+        useChatStore.setState({ executeClientAgent: realExecAgentRuntime });
+      });
+      const { result } = renderHook(() => useChatStore());
+      const context = { agentId: TEST_IDS.SESSION_ID, topicId: TEST_IDS.TOPIC_ID };
+      const toolCall = {
+        apiName: 'search',
+        arguments: '{}',
+        id: 'call-1',
+        identifier: 'web',
+        type: 'default',
+      } as const;
+
+      // The store holds a list read while Gateway mode projected tool payloads.
+      seedDbMessages(context, [
+        { content: 'find it', id: 'user-1', role: 'user' } as UIChatMessage,
+        { content: '', id: 'assistant-1', role: 'assistant', tools: [toolCall] } as UIChatMessage,
+        {
+          content: 'view-model summary',
+          id: 'tool-1',
+          payloadOmitted: 'detail',
+          role: 'tool',
+          tool_call_id: 'call-1',
+        } as UIChatMessage,
+        { content: 'and now?', id: TEST_IDS.USER_MESSAGE_ID, role: 'user' } as UIChatMessage,
+      ]);
+      const payloadSpy = vi
+        .spyOn(messageService, 'getToolResultPayloads')
+        .mockResolvedValue({ 'tool-1': { content: 'FULL STORED TOOL BODY' } });
+      const streamSpy = spyOnClientLLMStream();
+
+      // The send path hands over FOLDED display messages: the tool result sits
+      // inside the assistant group and carries no `payloadOmitted` marker.
+      await act(async () => {
+        await result.current.executeClientAgent({
+          context,
+          messages: [
+            { content: 'find it', id: 'user-1', role: 'user' } as UIChatMessage,
+            {
+              children: [
+                {
+                  content: '',
+                  id: 'assistant-1',
+                  tools: [
+                    {
+                      ...toolCall,
+                      result: { content: 'view-model summary', id: 'tool-1' },
+                      result_msg_id: 'tool-1',
+                    },
+                  ],
+                },
+              ],
+              content: '',
+              id: 'assistant-1',
+              role: 'assistantGroup',
+            } as UIChatMessage,
+            { content: 'and now?', id: TEST_IDS.USER_MESSAGE_ID, role: 'user' } as UIChatMessage,
+          ],
+          parentMessageId: TEST_IDS.USER_MESSAGE_ID,
+          parentMessageType: 'user',
+        });
+      });
+
+      expect(payloadSpy).toHaveBeenCalledWith(['tool-1']);
+      const firstPayload = JSON.stringify(streamSpy.mock.calls[0][0].messages);
+      expect(firstPayload).toContain('FULL STORED TOOL BODY');
+      expect(firstPayload).not.toContain('view-model summary');
+    });
+
     it('writes topics.status=running at run start so off-conversation surfaces see it', async () => {
       act(() => {
         useChatStore.setState({ executeClientAgent: realExecAgentRuntime });

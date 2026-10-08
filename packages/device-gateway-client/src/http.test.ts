@@ -383,7 +383,11 @@ describe('GatewayHttpClient', () => {
     });
 
     it('describes an unreachable gateway host', async () => {
-      vi.mocked(fetch).mockRejectedValue(new TypeError('fetch failed'));
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED 10.0.0.1:443' },
+        }),
+      );
 
       const result = await client.executeToolCall(
         { userId: 'user-1' },
@@ -393,6 +397,24 @@ describe('GatewayHttpClient', () => {
       expect(result.success).toBe(false);
       expect(result.content).toContain('Could not reach the device gateway');
       expect(result.error).toContain('DEVICE_GATEWAY_UNREACHABLE');
+    });
+
+    it('does not tell the model a call never ran when the connection dropped after sending', async () => {
+      vi.mocked(fetch).mockRejectedValue(
+        Object.assign(new TypeError('fetch failed'), {
+          cause: { code: 'UND_ERR_SOCKET', message: 'other side closed' },
+        }),
+      );
+
+      const result = await client.executeToolCall(
+        { userId: 'user-1' },
+        { apiName: 'writeFile', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).not.toContain('never ran');
+      expect(result.content).toContain('unclear whether the device ran it');
+      expect(result.error).toContain('DEVICE_GATEWAY_ERROR');
     });
 
     it('should pass optional deviceId and timeout', async () => {
@@ -408,7 +430,7 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(timeoutSpy).toHaveBeenCalledWith(35_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(65_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({
@@ -420,6 +442,40 @@ describe('GatewayHttpClient', () => {
       const init = vi.mocked(fetch).mock.calls[0][1];
       const body = JSON.parse((init as RequestInit).body as string);
       expect(body.toolCall.type).toBe('tool');
+    });
+
+    it("waits out the gateway's reconnect window so an offline device reads as offline", async () => {
+      // The gateway holds an undelivered call for `timeout + 45s` before it
+      // answers 503 DEVICE_OFFLINE. Aborting earlier turned every offline
+      // device into "timed out, the work may still be running".
+      const GATEWAY_RECOVERY_WINDOW_MS = 45_000;
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+
+      await client.executeToolCall(
+        { deviceId: 'device-1', timeout: 10_000, userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy.mock.calls[0][0]).toBeGreaterThan(10_000 + GATEWAY_RECOVERY_WINDOW_MS);
+    });
+
+    it('never pads a call past the agent function window', async () => {
+      mockFetch({
+        json: vi.fn().mockResolvedValue({ content: 'ok', success: true }),
+        ok: true,
+      });
+      const timeoutSpy = vi.spyOn(AbortSignal, 'timeout').mockReturnValue(AbortSignal.abort());
+
+      await client.executeToolCall(
+        { deviceId: 'device-1', timeout: 760_000, userId: 'user-1' },
+        { apiName: 'runCommand', arguments: '{}', identifier: 'test' },
+      );
+
+      expect(timeoutSpy).toHaveBeenCalledWith(800_000);
     });
 
     it('should pass optional operationId', async () => {
@@ -451,7 +507,7 @@ describe('GatewayHttpClient', () => {
         { apiName: 'readFile', arguments: '{}', identifier: 'test' },
       );
 
-      expect(timeoutSpy).toHaveBeenCalledWith(60_000);
+      expect(timeoutSpy).toHaveBeenCalledWith(90_000);
       expect(fetch).toHaveBeenCalledWith(
         'https://gateway.test.com/api/device/tool-call',
         expect.objectContaining({ signal }),
@@ -814,6 +870,21 @@ describe('GatewayHttpClient', () => {
         method: 'initWorkspace',
         params: { scope: '/proj' },
         userId: 'user-1',
+      });
+    });
+
+    it('forwards the preferred channel when one is given', async () => {
+      mockFetch({ json: vi.fn().mockResolvedValue({ data: {}, success: true }), ok: true });
+
+      await client.invokeRpc(
+        { channel: 'desktop', deviceId: 'device-1', userId: 'user-1' },
+        { method: 'getAppUpdateState' },
+      );
+
+      const [, init] = vi.mocked(fetch).mock.calls[0];
+      expect(JSON.parse((init as any).body)).toMatchObject({
+        channel: 'desktop',
+        method: 'getAppUpdateState',
       });
     });
 

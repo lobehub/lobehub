@@ -13,17 +13,25 @@ import { resolveServerUrl } from '../settings';
 import { log } from '../utils/logger';
 import { uploadLocalFile } from '../utils/uploadLocalFile';
 import { attachAcceptanceRunCommands } from './acceptanceRun';
+import type * as VerifyHelpers from './verifyHelpers';
+import { pullRequestFromBranch } from './verifyHelpers';
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn() }));
 vi.mock('../api/workspace', () => ({ resolveWorkspaceId: vi.fn() }));
 vi.mock('../settings', () => ({ resolveServerUrl: vi.fn() }));
 vi.mock('../utils/uploadLocalFile', () => ({ uploadLocalFile: vi.fn() }));
+vi.mock('./verifyHelpers', async (importOriginal) => ({
+  ...(await importOriginal<typeof VerifyHelpers>()),
+  pullRequestFromBranch: vi.fn(),
+}));
 
 describe('acceptance publication with missing evidence', () => {
   const client = {
     acceptance: {
       attachRun: { mutate: vi.fn() },
       ensure: { mutate: vi.fn() },
+      getBundle: { query: vi.fn() },
+      linkPullRequest: { mutate: vi.fn() },
     },
     verify: {
       createRun: { mutate: vi.fn() },
@@ -50,6 +58,7 @@ describe('acceptance publication with missing evidence', () => {
     );
     vi.mocked(uploadLocalFile).mockResolvedValue({ id: 'file-1', url: 'https://files.test/1' });
     client.acceptance.ensure.mutate.mockResolvedValue({ id: 'acceptance-1' });
+    client.acceptance.getBundle.query.mockResolvedValue({});
     client.acceptance.attachRun.mutate.mockResolvedValue({ id: 'run-1', roundIndex: 2 });
     client.verify.createRun.mutate.mockResolvedValue({ id: 'run-1' });
     client.verify.ingestResult.mutate.mockImplementation(async (input) => ({
@@ -58,6 +67,7 @@ describe('acceptance publication with missing evidence', () => {
     client.verify.uploadEvidence.mutate.mockResolvedValue({ id: 'evidence-1' });
     dir = await mkdtemp(path.join(tmpdir(), 'lh-evidence-'));
     await writeFile(path.join(dir, "screen's shot.png"), 'image fixture');
+    await writeFile(path.join(dir, 'scroll.mp4'), 'video fixture');
     await writeFile(path.join(dir, 'output.txt'), 'Observed the expected response.');
   });
 
@@ -126,6 +136,60 @@ describe('acceptance publication with missing evidence', () => {
       verdict: 'uncertain',
     });
     expect(await readFile(path.join(dir, 'result.json'), 'utf8')).toBe(original);
+  });
+
+  it('links the reported pull request to the acceptance, and survives a failed link', async () => {
+    const pullRequest = {
+      number: 20171,
+      title: 'Durable waits',
+      url: 'https://github.com/lobehub/lobehub/pull/20171',
+    };
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          { evidence: ['output.txt'], id: 'screen', name: '用户能看到处理结果', status: 'passed' },
+        ],
+        plan: [{ id: 'screen', requiredEvidence: ['text'], title: '用户能看到处理结果' }],
+        pullRequest,
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+        title: '处理结果展示',
+      }),
+    );
+    client.acceptance.linkPullRequest.mutate.mockRejectedValue(new Error('CONFLICT'));
+
+    await run('ingest', dir, '--json');
+
+    expect(client.acceptance.linkPullRequest.mutate).toHaveBeenCalledExactlyOnceWith({
+      id: 'acceptance-1',
+      title: 'Durable waits',
+      url: pullRequest.url,
+    });
+    expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('not linked'));
+    expect(result()).toMatchObject({ publicationStatus: 'complete', pullRequest });
+  });
+
+  it('keeps a branch-inferred PR as round provenance without linking it to the acceptance', async () => {
+    const inferred = { number: 7, url: 'https://github.com/lobehub/lobehub/pull/7' };
+    vi.mocked(pullRequestFromBranch).mockReturnValue(inferred);
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        branch: 'canary',
+        cases: [
+          { evidence: ['output.txt'], id: 'screen', name: '用户能看到处理结果', status: 'passed' },
+        ],
+        plan: [{ id: 'screen', requiredEvidence: ['text'], title: '用户能看到处理结果' }],
+        summary: { passed: 1, total: 1, verdict: 'passed' },
+        title: '处理结果展示',
+      }),
+    );
+
+    await run('ingest', dir, '--json');
+
+    expect(pullRequestFromBranch).toHaveBeenCalledWith('canary');
+    expect(result()).toMatchObject({ pullRequest: inferred });
+    expect(client.acceptance.linkPullRequest.mutate).not.toHaveBeenCalled();
   });
 
   it('does not downgrade a pass when only an optional medium failed', async () => {
@@ -623,6 +687,34 @@ describe('acceptance publication with missing evidence', () => {
     });
     expect(finalCheck().verdict).toBe('passed');
     expect(process.exitCode).toBeUndefined();
+  });
+
+  it('uploads a video with its chapters so the reviewer can seek to each claim', async () => {
+    const chapters = [
+      { kind: 'step', label: 'Scroll #3', t: 6 },
+      { kind: 'check', note: 'no skeleton after scroll #3', t: 7.9 },
+    ];
+    await writeFile(
+      path.join(dir, 'result.json'),
+      JSON.stringify({
+        cases: [
+          {
+            evidence: [{ chapters, description: 'five scrolls at the top', path: 'scroll.mp4' }],
+            id: 'scroll',
+            name: '滑到顶部后继续上滑不出现骨架',
+            status: 'passed',
+          },
+        ],
+        plan: [
+          { id: 'scroll', requiredEvidence: ['video'], title: '滑到顶部后继续上滑不出现骨架' },
+        ],
+      }),
+    );
+    await run('ingest', dir, '--json');
+
+    expect(client.verify.uploadEvidence.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { chapters }, type: 'video' }),
+    );
   });
 
   it('retries only the failed attachment, reusing its file and preserving its caption and comparison', async () => {

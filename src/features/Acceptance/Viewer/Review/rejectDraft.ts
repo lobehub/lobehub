@@ -1,20 +1,26 @@
-import type { AcceptanceReviewAnnotation } from '@lobechat/types';
+import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
 
 import type { PendingAttachment } from '../Evidence/attachments';
 
-/** One annotatable evidence image (already filtered to visual, file-backed). */
+/** One annotatable evidence image or video (already filtered to visual, file-backed). */
 export interface RejectableEvidence {
+  /** Video only: the agent's markers, so the reviewer can dispute a claim in place. */
+  chapters?: VerifyEvidenceChapter[];
   fileUrl: string;
   id: string;
+  /** `video` switches the stage to the player; anything else is an image. */
+  type?: string;
 }
 
 export interface DraftAnnotationEntry {
   comment: string;
+  disputes?: AcceptanceReviewAnnotation['disputes'];
   evidenceId: string;
   /** Stable identity — rapid move/resize updates must never key off object
       identity, which a stale render closure invalidates mid-gesture. */
   key: number;
   rect: AcceptanceReviewAnnotation['rect'];
+  time?: AcceptanceReviewAnnotation['time'];
 }
 
 /** What survives a refresh — typed feedback is too costly to lose to one F5. */
@@ -31,10 +37,12 @@ export const nextAnnotationKey = () => ++draftAnnotationSeq;
 export const serializeReviewAnnotations = (
   annotations: DraftAnnotationEntry[],
 ): AcceptanceReviewAnnotation[] =>
-  annotations.map(({ comment, evidenceId, rect }) => ({
+  annotations.map(({ comment, disputes, evidenceId, rect, time }) => ({
     comment: comment.trim() || undefined,
+    ...(disputes ? { disputes } : {}),
     evidenceId,
     rect,
+    ...(time ? { time } : {}),
   }));
 
 /**
@@ -52,9 +60,11 @@ export const restoreDraftAnnotations = (
     .filter((entry) => evidence.some((item) => item.id === entry.evidenceId))
     .map((entry) => ({
       comment: entry.comment ?? '',
+      disputes: entry.disputes,
       evidenceId: entry.evidenceId,
       key: nextAnnotationKey(),
       rect: entry.rect,
+      time: entry.time,
     }));
 
 const draftStorageKey = (key: string) => `acceptance-reject-draft:${key}`;

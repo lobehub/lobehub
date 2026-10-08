@@ -48,6 +48,7 @@ const makeStore = (afterCompletionCallbacks?: Array<() => void>) => {
     completeOperation: vi.fn(),
     dbMessagesMap: {},
     drainQueuedMessages: vi.fn<ChatStore['drainQueuedMessages']>(() => []),
+    queuedMessages: {} as Record<string, unknown[]>,
     failOperation: vi.fn(),
     internal_updateTopic: vi.fn(),
     markTopicUnread: vi.fn(),
@@ -130,6 +131,7 @@ describe('buildRunLifecycle.completeRun — transport-driven disposition', () =>
       { content: 'The recording asks how to list files.', id: 'a1', role: 'assistant' },
     ];
     store.drainQueuedMessages = vi.fn(() => [{ content: 'follow up', id: 'q1' } as any]);
+    store.queuedMessages = { [messageMapKey(CONTEXT)]: [{ content: 'follow up', id: 'q1' }] };
     store.messagesMap = { [messageMapKey(CONTEXT)]: messages } as any;
     store.topicDataMap = {
       [topicMapKey({ agentId: 'a1' })]: {
@@ -313,39 +315,44 @@ describe('buildRunLifecycle — sub-agent runs skip top-level effects', () => {
     expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('a top_level success DOES drain the queue (contrast probe)', async () => {
+  it('a top_level success with an empty queue completes without requeueing (contrast probe)', async () => {
     const { get, store } = makeStore();
-    store.drainQueuedMessages = vi.fn(() => []);
 
-    await lifecycle('gateway', get, 'top_level').completeRun(
+    const { requeued } = await lifecycle('gateway', get, 'top_level').completeRun(
       completeEvent('gateway', { status: 'completed' }),
     );
 
-    expect(store.drainQueuedMessages).toHaveBeenCalled();
+    expect(requeued).toBe(false);
+    expect(store.completeOperation).toHaveBeenCalledWith(OP);
   });
 
-  it('a drained queued follow-up is sent as a steer turn', async () => {
+  it('keeps the queue in place until the steered send takes it', async () => {
     vi.useFakeTimers();
     try {
       const { get, store } = makeStore();
       const sendMessage = vi.fn(async () => {});
       (store as any).sendMessage = sendMessage;
-      store.drainQueuedMessages = vi.fn(() => [
-        {
-          content: 'queued',
-          createdAt: 1,
-          id: 'q1',
-          interruptMode: 'soft',
-          metadata: { scope: 'x' },
-        } as any,
-      ]);
+      const queued = {
+        content: 'queued',
+        createdAt: 1,
+        id: 'q1',
+        interruptMode: 'soft',
+        metadata: { scope: 'x' },
+      } as any;
+      store.queuedMessages = { [messageMapKey(CONTEXT)]: [queued] };
+      store.drainQueuedMessages = vi.fn(() => [queued]);
 
       const { requeued } = await lifecycle('gateway', get, 'top_level').completeRun(
         completeEvent('gateway', { status: 'completed' }),
       );
-      await vi.runAllTimersAsync();
 
       expect(requeued).toBe(true);
+      expect(store.completeOperation).toHaveBeenCalledWith(OP);
+      expect(store.drainQueuedMessages).not.toHaveBeenCalled();
+
+      await vi.runAllTimersAsync();
+
+      expect(store.drainQueuedMessages).toHaveBeenCalledTimes(1);
       expect(sendMessage).toHaveBeenCalledWith(
         expect.objectContaining({
           message: 'queued',

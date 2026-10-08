@@ -15,7 +15,9 @@ import {
   DEFAULT_MANAGER_MAX_TURNS,
   managerTurnsSpent,
 } from '@/server/services/goal/recoveryPolicy';
+import { GoalReportStore, type SubmitGoalReportInput } from '@/server/services/goal/reportStore';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+import { GoalWaitService, goalWakeEventSchema } from '@/server/services/goal/wait';
 import {
   HeteroOperationPrincipalError,
   resolveActiveHeteroOperationPrincipal,
@@ -41,6 +43,18 @@ const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
 );
 const goalWriteProcedure = goalProcedure.use(withScopedPermission('agent:update'));
 const idInput = z.object({ id: z.string() });
+/**
+ * A wrap-up report submitted from a run. The metadata passes through as a
+ * record: `GoalReportStore.submit` parses it with the report schema and checks
+ * every reference against the Goal graph.
+ */
+const reportInput = idInput.extend({
+  operationId: z.string().min(1),
+  report: z.object({
+    content: z.string(),
+    metadata: z.record(z.string(), z.unknown()),
+  }),
+});
 
 /** Everything a goal is created from except who owns it. */
 const conversationGoalInput = z.object({
@@ -133,6 +147,35 @@ const createGoalInput = conversationGoalInput.extend({
   createdByAgentId: z.string().optional(),
 });
 
+const bindTopicInput = idInput.extend({
+  /** Move a goal already bound to another topic or task. */
+  force: z.boolean().optional(),
+  /** Keep unfinished Tasks with their current agent when the goal agent changes. */
+  goalOnly: z.boolean().optional(),
+  /** The topic run doing the binding; its agent and topic are used. */
+  operationId: z.string().min(1),
+});
+
+const bindTopicResponse = ({
+  graph,
+  previousSubject,
+  reassignedTaskIds,
+  topicId,
+  turnToken,
+}: Awaited<ReturnType<GoalService['bindTopic']>>) => ({
+  data: graph,
+  message:
+    `Goal bound to topic ${topicId}` +
+    (previousSubject.id && previousSubject.id !== topicId
+      ? ` (moved from ${previousSubject.type} ${previousSubject.id})`
+      : '') +
+    (reassignedTaskIds.length ? `; ${reassignedTaskIds.length} task(s) reassigned` : ''),
+  previousSubject,
+  reassignedTaskIds,
+  success: true,
+  turnToken,
+});
+
 function mapGoalError(error: unknown, operation: string): never {
   if (error instanceof TRPCError) throw error;
   console.error(`[goal:${operation}]`, error);
@@ -144,6 +187,20 @@ function mapGoalError(error: unknown, operation: string): never {
 }
 
 export const goalRouter = router({
+  wake: goalWriteProcedure
+    .input(goalWakeEventSchema.extend({ id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      const { id, ...event } = input;
+      const goal = await ctx.goalModel.findById(id);
+      if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+      assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+      const data = await new GoalWaitService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).deliver(id, event);
+      return { data, success: true };
+    }),
   // A plan is an operation result; the turn token further restricts ingestion to its Goal.
   submitOperationPlan: heteroAuthedProcedure
     .use(serverDatabase)
@@ -190,6 +247,50 @@ export const goalRouter = router({
       });
       return { data, success: true };
     }),
+  // The wrap-up report of a heterogeneous agent's run: server tools never reach
+  // a device run, so its report arrives through the CLI instead of the tool.
+  submitOperationReport: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(reportInput)
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'hetero:ingest',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId: input.operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      const data = await new GoalReportStore(
+        ctx.serverDB,
+        principal.userId,
+        principal.workspaceId,
+      ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
+      return { data, success: true };
+    }),
+  submitReport: goalWriteProcedure.input(reportInput).mutation(async ({ ctx, input }) => {
+    const data = await new GoalReportStore(
+      ctx.serverDB,
+      ctx.userId,
+      ctx.workspaceId ?? undefined,
+    ).submitFromOperation(input.id, input.report as SubmitGoalReportInput, input.operationId);
+    return { data, success: true };
+  }),
   submitPlan: goalWriteProcedure
     .input(
       idInput.extend({
@@ -318,6 +419,99 @@ export const goalRouter = router({
       }
     }),
 
+  /**
+   * Attach an existing goal to the topic of a run authenticated by its
+   * operation token (device and gateway runs), as if the goal had been created
+   * there with `/goal`. Takes the same `goal:manage` capability as creating one.
+   */
+  bindOperationTopic: heteroAuthedProcedure
+    .use(serverDatabase)
+    .input(bindTopicInput)
+    .mutation(async ({ ctx, input: { id, operationId, force, goalOnly } }) => {
+      if (ctx.heteroAuthKind !== 'operation' || !ctx.heteroOperation) {
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          message: 'An operation-bound token is required',
+        });
+      }
+      let principal;
+      try {
+        principal = await resolveActiveHeteroOperationPrincipal({
+          capability: 'goal:manage',
+          claims: ctx.heteroOperation,
+          db: ctx.serverDB,
+          operationId,
+        });
+      } catch (error) {
+        if (!(error instanceof HeteroOperationPrincipalError)) throw error;
+        throw new TRPCError({
+          cause: error,
+          code:
+            error.status === 401 ? 'UNAUTHORIZED' : error.status === 409 ? 'CONFLICT' : 'FORBIDDEN',
+          message: error.message,
+        });
+      }
+      try {
+        const goal = await new GoalModel(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        // A token carries no workspace role, so only the goal's creator may
+        // move it — the strict side of the rule `setAgent` applies.
+        assertWorkspaceRowManageable(principal, goal.userId, 'goal');
+        const result = await new GoalService(
+          ctx.serverDB,
+          principal.userId,
+          principal.workspaceId,
+        ).bindTopic(id, operationId, { force, goalOnly });
+        await scheduleGoalAdvance({
+          goalId: id,
+          trigger: 'manual',
+          userId: principal.userId,
+          workspaceId: principal.workspaceId,
+        });
+        return bindTopicResponse(result);
+      } catch (error) {
+        mapGoalError(error, 'bindTopic');
+      }
+    }),
+
+  /**
+   * Attach an existing goal to the topic run with this id (a desktop
+   * run signed in as the user). Agent and topic come from the operation;
+   * a local run without a server row also names them, checked like `create`.
+   */
+  bindTopic: goalWriteProcedure
+    .input(
+      bindTopicInput.extend({
+        agentId: z.string().min(1).optional(),
+        topicId: z.string().min(1).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input: { id, operationId, agentId, topicId, force, goalOnly } }) => {
+      try {
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+        const result = await ctx.goalService.bindTopic(id, operationId, {
+          force,
+          goalOnly,
+          localRun: agentId && topicId ? { agentId, topicId } : undefined,
+        });
+        await scheduleGoalAdvance({
+          goalId: id,
+          trigger: 'manual',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return bindTopicResponse(result);
+      } catch (error) {
+        mapGoalError(error, 'bindTopic');
+      }
+    }),
+
   create: goalWriteProcedure
     .input(
       createGoalInput.extend({
@@ -371,6 +565,39 @@ export const goalRouter = router({
       },
     ),
 
+  /**
+   * Answer a goal's clarification round at once. One advance follows all the
+   * answers, so the re-plan never starts with half of them.
+   */
+  answerClarifications: goalWriteProcedure
+    .input(
+      idInput.extend({
+        answers: z
+          .array(
+            z.object({
+              decisionId: z.string().uuid(),
+              optionId: z.string(),
+              resolution: z.string().optional(),
+            }),
+          )
+          .min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        await ctx.goalService.answerClarifications(input.id, input.answers);
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'decide',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { message: 'Clarifications answered', success: true };
+      } catch (error) {
+        mapGoalError(error, 'answer clarifications for');
+      }
+    }),
+
   decide: goalWriteProcedure
     .input(
       idInput.extend({
@@ -397,6 +624,38 @@ export const goalRouter = router({
         return { data, message: 'Decision resolved', success: true };
       } catch (error) {
         mapGoalError(error, 'decide');
+      }
+    }),
+
+  retireNodes: goalWriteProcedure
+    .input(
+      idInput.extend({
+        nodeIds: z.array(z.string().uuid()).min(1),
+        reason: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        // Same ownership rule as restart/delete: retiring cancels the nodes'
+        // Tasks and recovery gates, so visibility is not manageability.
+        const goal = await ctx.goalModel.findById(input.id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.retireNodes(input.id, input.nodeIds, input.reason);
+        // Retiring can unpark the goal or clear the last unfinished task. Advance
+        // as the goal's owner: a workspace owner retiring a colleague's nodes
+        // cannot see that colleague's private Tasks, so an advance under the
+        // caller would read their bound nodes as `missing_task`.
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'manual',
+          userId: goal.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        return { data, message: `Retired ${data.retiredNodeIds.length} node(s)`, success: true };
+      } catch (error) {
+        mapGoalError(error, 'retireNodes');
       }
     }),
 
@@ -521,6 +780,23 @@ export const goalRouter = router({
     }
   }),
 
+  /** Clarifications still waiting on the user, grouped by goal. */
+  pendingForIsland: goalProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.goalService.pendingForIsland(), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list pending decisions for');
+    }
+  }),
+
+  pendingClarifications: goalProcedure.query(async ({ ctx }) => {
+    try {
+      return { data: await ctx.goalService.pendingClarifications(), success: true };
+    } catch (error) {
+      mapGoalError(error, 'list clarifications for');
+    }
+  }),
+
   graph: goalProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
       return { data: await ctx.goalService.graph(input.id), success: true };
@@ -555,26 +831,62 @@ export const goalRouter = router({
     }
   }),
 
-  resume: goalWriteProcedure.input(idInput).mutation(async ({ ctx, input }) => {
-    try {
-      const data = await ctx.goalService.resume(input.id);
-      await scheduleGoalAdvance({
-        goalId: input.id,
-        trigger: 'resume',
-        userId: ctx.userId,
-        workspaceId: ctx.workspaceId ?? undefined,
-      });
-      // Resuming does not give the main Agent more turns, so a goal it paused
-      // for running out would stop again on the next tick. Say how to continue
-      // it instead of leaving the caller to replace it with a new goal.
-      const message = managerTurnsSpent(data.config)
-        ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
-        : 'Goal resumed';
-      return { data, message, success: true };
-    } catch (error) {
-      mapGoalError(error, 'resume');
-    }
-  }),
+  resume: goalWriteProcedure
+    .input(
+      idInput.extend({
+        /**
+         * The owner confirms the planning turn the Goal paused on has ended, so
+         * it is settled before resuming instead of pausing the Goal again.
+         */
+        confirmExit: z.boolean().optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      try {
+        if (input.confirmExit)
+          await new GoalManagerService(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          ).confirmTurnExit(input.id);
+        const data = await ctx.goalService.resume(input.id);
+        await scheduleGoalAdvance({
+          goalId: input.id,
+          trigger: 'resume',
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+        // Resuming does not give the main Agent more turns, so a goal it paused
+        // for running out would stop again on the next tick. Say how to continue
+        // it instead of leaving the caller to replace it with a new goal.
+        const message = managerTurnsSpent(data.config)
+          ? `Goal resumed, but its main Agent has used all ${data.config?.manager?.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS} turns and it will pause again. Raise the cap with: lh goal set-budget ${input.id} --max-manager-turns <n>`
+          : 'Goal resumed';
+        return { data, message, success: true };
+      } catch (error) {
+        mapGoalError(error, 'resume');
+      }
+    }),
+
+  /**
+   * End the goal by hand — achieved or canceled — and interrupt its live runs.
+   * Reopening a closed goal is `resume`.
+   */
+  close: goalWriteProcedure
+    .input(idInput.extend({ status: z.enum(['achieved', 'canceled']) }))
+    .mutation(async ({ ctx, input: { id, status } }) => {
+      try {
+        // Closing cancels live runs, so it carries the same ownership check as restart.
+        const goal = await ctx.goalModel.findById(id);
+        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
+
+        const data = await ctx.goalService.close(id, status);
+        return { data, message: `Goal ${status}`, success: true };
+      } catch (error) {
+        mapGoalError(error, 'close');
+      }
+    }),
 
   /**
    * Start every unfinished Task node over (cancel stale runs, back to

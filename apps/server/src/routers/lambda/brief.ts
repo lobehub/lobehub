@@ -11,6 +11,8 @@ import { AgentSignalSelfReviewBriefService } from '@/server/services/agentSignal
 import { NIGHTLY_REVIEW_BRIEF_TRIGGER } from '@/server/services/agentSignal/services/selfIteration/review/brief';
 import { BriefService } from '@/server/services/brief';
 
+import { applyGoalBriefAction } from './_helpers/goalBriefAction';
+
 const briefProcedure = wsCompatProcedure.use(serverDatabase);
 
 /**
@@ -219,6 +221,14 @@ export const briefRouter = router({
         const model = new BriefModel(ctx.serverDB, ctx.userId, ctx.workspaceId ?? undefined);
         const currentBrief = await model.findById(input.id);
         if (!currentBrief) throw new TRPCError({ code: 'NOT_FOUND', message: 'Brief not found' });
+
+        // A goal brief carries a question the goal owns: answering it here
+        // answers the goal, and that write settles the brief.
+        if (await applyGoalBriefAction(ctx, currentBrief, input.action, input.comment)) {
+          const settled = await model.findById(input.id);
+          if (!settled) throw new TRPCError({ code: 'NOT_FOUND', message: 'Brief not found' });
+          return { data: settled, message: 'Brief resolved', success: true };
+        }
 
         const resolveOptions = {
           action: input.action,

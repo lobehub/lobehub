@@ -1,8 +1,8 @@
 /**
  * @vitest-environment happy-dom
  */
+import { useForm } from '@lobehub/ui/base-ui/form';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { Form } from 'antd';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -11,7 +11,7 @@ import type { SerializedPlatformDefinition } from '@/server/services/bot/platfor
 import Header from '../Header';
 import Body from './Body';
 import Footer from './Footer';
-import PlatformDetail from './index';
+import PlatformDetail, { type ChannelFormValues } from './index';
 
 const mocks = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
@@ -232,7 +232,7 @@ const currentConfig = {
 };
 
 const BodyHarness = ({ disabled }: { disabled?: boolean }) => {
-  const [form] = Form.useForm();
+  const form = useForm<ChannelFormValues>();
 
   return (
     <Body
@@ -246,7 +246,7 @@ const BodyHarness = ({ disabled }: { disabled?: boolean }) => {
 };
 
 const FooterHarness = ({ disabled }: { disabled?: boolean }) => {
-  const [form] = Form.useForm();
+  const form = useForm<ChannelFormValues>();
 
   return (
     <Footer
@@ -281,27 +281,25 @@ describe('Agent channel permission gates', () => {
     expect(screen.getByRole('textbox', { name: 'channel.applicationId' })).toBeDisabled();
     expect(screen.queryByTestId('info-tooltip')).not.toBeInTheDocument();
     expect(screen.getByLabelText('channel.botToken')).toBeDisabled();
-    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeDisabled();
+    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'channel.settingsResetDefault' })).toBeDisabled();
   });
 
-  it('toggles advanced settings from the full header row', () => {
+  it('toggles advanced settings from the full header row', async () => {
     render(<BodyHarness />);
 
-    const header = document.querySelector('.ant-collapse-header') as HTMLElement;
-    expect(header).not.toBeNull();
-    expect(screen.getByRole('spinbutton', { name: 'channel.charLimit' })).toBeInTheDocument();
-
-    const panel = () =>
-      screen
-        .getByRole('spinbutton', { hidden: true, name: 'channel.charLimit' })
-        .closest('.ant-collapse-panel');
+    expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument();
+    const header = screen.getByRole('button', { name: 'channel.settings' });
 
     fireEvent.click(header);
-    expect(panel()).toHaveClass('ant-collapse-panel-inactive');
+    await waitFor(() =>
+      expect(screen.queryByRole('textbox', { name: 'channel.charLimit' })).not.toBeInTheDocument(),
+    );
 
     fireEvent.click(header);
-    expect(panel()).not.toHaveClass('ant-collapse-panel-inactive');
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'channel.charLimit' })).toBeInTheDocument(),
+    );
   });
 
   it('disables mutating channel actions when editing is denied', () => {

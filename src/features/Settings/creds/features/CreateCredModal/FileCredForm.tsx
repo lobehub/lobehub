@@ -1,9 +1,8 @@
 'use client';
 
-import { InboxOutlined } from '@ant-design/icons';
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Button, Input, TextArea, toast, Upload } from '@lobehub/ui/base-ui';
+import { Form, useForm } from '@lobehub/ui/base-ui/form';
 import { useMutation } from '@tanstack/react-query';
-import { Form, Input, Upload } from 'antd';
 import { createStaticStyles } from 'antd-style';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,8 +32,8 @@ interface FormValues {
 }
 
 const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuccess }) => {
-  const { t } = useTranslation('setting');
-  const [form] = Form.useForm<FormValues>();
+  const { t } = useTranslation(['setting', 'common']);
+  const form = useForm<FormValues>({ onSubmit: (values) => handleSubmit(values) });
   const [fileHashId, setFileHashId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string>('');
   const [isUploading, setIsUploading] = useState(false);
@@ -61,7 +60,7 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
   });
 
   const handleUpload = async (file: File) => {
-    if (disabled) return false;
+    if (disabled) return;
 
     setIsUploading(true);
 
@@ -91,8 +90,6 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
     } finally {
       setIsUploading(false);
     }
-
-    return false; // Prevent default upload
   };
 
   const handleSubmit = (values: FormValues) => {
@@ -106,59 +103,57 @@ const FileCredForm: FC<FileCredFormProps> = ({ credsApi, disabled, onBack, onSuc
   };
 
   return (
-    <Form<FormValues> form={form} layout="vertical" onFinish={handleSubmit}>
-      <Form.Item required label={t('creds.form.file')}>
-        <Upload.Dragger
-          beforeUpload={handleUpload}
+    <Form form={form} layout="vertical">
+      <Form.Field required label={t('creds.form.file')}>
+        <Upload
+          dragger
+          description={t('creds.form.uploadDesc')}
           disabled={isUploading || disabled}
           maxCount={1}
-          showUploadList={fileName ? { showRemoveIcon: true } : false}
-          onRemove={() => {
-            setFileHashId(null);
-            setFileName('');
-          }}
-        >
-          <p className="ant-upload-drag-icon">
-            <InboxOutlined />
-          </p>
-          <p className="ant-upload-text">
-            {isUploading ? t('creds.file.uploading') : t('creds.form.uploadHint')}
-          </p>
-          <p className="ant-upload-hint">{t('creds.form.uploadDesc')}</p>
-        </Upload.Dragger>
+          title={isUploading ? t('creds.file.uploading') : t('creds.form.uploadHint')}
+          onFiles={([file]) => handleUpload(file)}
+        />
         {fileName && (
-          <div style={{ marginTop: 8 }}>
-            {t('creds.form.selectedFile')}: {fileName}
+          <div style={{ alignItems: 'center', display: 'flex', gap: 8, marginTop: 8 }}>
+            <span>
+              {t('creds.form.selectedFile')}: {fileName}
+            </span>
+            <Button
+              size="small"
+              type="text"
+              onClick={() => {
+                setFileHashId(null);
+                setFileName('');
+              }}
+            >
+              {t('delete', { ns: 'common' })}
+            </Button>
           </div>
         )}
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
+      <Form.Field
         label={t('creds.form.key')}
         name="key"
-        rules={[
-          { required: true, message: t('creds.form.keyRequired') },
-          { pattern: /^[\w-]+$/, message: t('creds.form.keyPattern') },
-        ]}
+        required={t('creds.form.keyRequired')}
+        validate={(value?: string) =>
+          value && !/^[\w-]+$/.test(value) ? t('creds.form.keyPattern') : undefined
+        }
       >
         <Input disabled={disabled} placeholder="e.g., gcp-service-account" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item
-        label={t('creds.form.name')}
-        name="name"
-        rules={[{ required: true, message: t('creds.form.nameRequired') }]}
-      >
+      <Form.Field label={t('creds.form.name')} name="name" required={t('creds.form.nameRequired')}>
         <Input disabled={disabled} placeholder="e.g., GCP Service Account" />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('creds.form.description')} name="description">
-        <Input.TextArea
+      <Form.Field label={t('creds.form.description')} name="description">
+        <TextArea
           disabled={disabled}
           placeholder={t('creds.form.descriptionPlaceholder')}
           rows={2}
         />
-      </Form.Item>
+      </Form.Field>
 
       <div className={styles.footer}>
         <Button onClick={onBack}>{t('creds.form.back')}</Button>

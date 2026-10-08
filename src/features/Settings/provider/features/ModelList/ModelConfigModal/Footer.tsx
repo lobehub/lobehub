@@ -1,7 +1,7 @@
 'use client';
 
 import { Button, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
-import { type FormInstance } from 'antd';
+import { type FormInstance } from '@lobehub/ui/base-ui/form';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -30,7 +30,7 @@ const ModelConfigFooter = memo<ModelConfigFooterProps>(({ formRef, id }) => {
         onClick={async () => {
           const form = formRef.current;
           if (!editingProvider || !id || !form) return;
-          const data = form.getFieldsValue();
+          const data = form.getValues();
 
           setLoading(true);
           await updateAiModelsConfig(id, editingProvider, data);

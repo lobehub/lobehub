@@ -468,6 +468,12 @@ class DiscordGatewayClient implements PlatformClient {
     return isSubscribableThread(threadId);
   }
 
+  shouldExpireIdleTopic(threadId: string): boolean {
+    // Only DMs are an unbounded stream; a guild thread is one conversation.
+    const [, guildId, , discordThreadId] = threadId.split(':');
+    return guildId === '@me' || !discordThreadId;
+  }
+
   /**
    * Spawn a Discord thread off the triggering message when the bot wakes
    * in a top-level guild channel via a watch-keyword match. The chat-sdk

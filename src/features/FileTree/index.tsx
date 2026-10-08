@@ -3,7 +3,7 @@
 import type { SkillResourceTreeNode } from '@lobechat/types';
 import type { MenuProps } from '@lobehub/ui';
 import { ContextMenuTrigger, Icon } from '@lobehub/ui';
-import { Input, type InputRef } from 'antd';
+import { Input } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
 import { ChevronDown, ChevronRight, File, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -51,9 +51,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     outline: none !important;
     box-shadow: none !important;
   `,
-  // Reset wrapper-level styles too; Ant applies some padding/radius on the semantic root.
+  // Reset wrapper-level styles too; the input root carries its own height/padding/radius.
   // If only `input` is reset, the row can still shift by a few pixels.
   editingInputRoot: css`
+    height: auto !important;
     margin: 0 !important;
     padding: 0 !important;
     border: none !important;
@@ -113,7 +114,7 @@ const TreeNode = memo<{
     const isSelected = !isDir && selectedFile === node.path;
     const isEditing = !isDir && editableFilePath === node.path && !!onCommitRenameFile;
     const [editingName, setEditingName] = useState(node.name);
-    const inputRef = useRef<InputRef>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
     const isSubmittingRef = useRef(false);
 
     useEffect(() => {
@@ -184,7 +185,8 @@ const TreeNode = memo<{
         <Icon icon={isDir ? (isExpanded ? FolderOpenIcon : FolderIcon) : File} size={16} />
         {isEditing ? (
           <Input
-            classNames={{ input: styles.editingInput, root: styles.editingInputRoot }}
+            className={styles.editingInputRoot}
+            classNames={{ input: styles.editingInput }}
             ref={inputRef}
             value={editingName}
             variant={'borderless'}

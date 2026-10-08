@@ -34,6 +34,20 @@ describe('DiscordGatewayClient', () => {
     });
   });
 
+  describe('shouldExpireIdleTopic', () => {
+    it('keeps the topic of a Discord guild thread regardless of idle time', () => {
+      const client = createClient();
+
+      expect(client.shouldExpireIdleTopic?.('discord:guild-1:channel-1:thread-1')).toBe(false);
+    });
+
+    it('expires idle topics in DMs', () => {
+      const client = createClient();
+
+      expect(client.shouldExpireIdleTopic?.('discord:@me:dm-channel-1')).toBe(true);
+    });
+  });
+
   describe('isSoloBotConversation', () => {
     const installFakeApi = (client: any) => {
       const listThreadMembers = vi.fn().mockResolvedValue([]);

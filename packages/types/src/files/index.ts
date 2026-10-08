@@ -69,6 +69,8 @@ export interface FileItem {
   enabled?: boolean;
   id: string;
   name: string;
+  /** Original character count when the parsed `content` was cut at parse time. */
+  originalCharCount?: number;
   size: number;
   source?: FileSource | null;
   type: string;

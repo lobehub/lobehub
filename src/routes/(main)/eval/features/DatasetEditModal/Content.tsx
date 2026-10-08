@@ -1,11 +1,11 @@
 'use client';
 
-import { Center, Flexbox, Icon, Input, TextArea } from '@lobehub/ui';
-import { Select, Text, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form } from 'antd';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
+import { Input, Select, Text, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
 import { createStaticStyles, cssVar } from 'antd-style';
 import { CheckIcon } from 'lucide-react';
-import { type FC, useEffect, useState } from 'react';
+import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
@@ -111,21 +111,9 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
   const { t } = useTranslation('eval');
   const { close } = useModalContext();
 
-  const [form] = Form.useForm();
-  const [selectedPreset, setSelectedPreset] = useState<string>('custom');
-  const evalModeValue = Form.useWatch('evalMode', form);
-
-  useEffect(() => {
-    if (dataset) {
-      form.setFieldsValue({
-        description: dataset.description || '',
-        evalConfig: (dataset as any).evalConfig,
-        evalMode: dataset.evalMode || undefined,
-        name: dataset.name,
-      });
-      setSelectedPreset((dataset.metadata?.preset as string) || 'custom');
-    }
-  }, [dataset, form]);
+  const [selectedPreset, setSelectedPreset] = useState<string>(
+    () => (dataset.metadata?.preset as string) || 'custom',
+  );
 
   const presetsByCategory = getPresetsByCategory();
   const orderedCategories = Object.entries(presetsByCategory).filter(
@@ -137,7 +125,11 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
     try {
       await agentEvalService.updateDataset({
         description: values.description?.trim() || undefined,
-        evalConfig: values.evalConfig?.judgePrompt ? values.evalConfig : null,
+        evalConfig:
+          (values.evalMode === 'llm-rubric' || values.evalMode === 'answer-relevance') &&
+          values.evalConfig?.judgePrompt
+            ? values.evalConfig
+            : null,
         evalMode: values.evalMode || null,
         id: dataset.id,
         metadata: {
@@ -156,21 +148,39 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
     }
   };
 
+  const evalConfig = (dataset as any).evalConfig;
+  const form = useForm({
+    initialValues: {
+      description: dataset.description || '',
+      evalConfig: {
+        criteria: evalConfig?.criteria,
+        judgePrompt: evalConfig?.judgePrompt,
+        model: evalConfig?.model ?? 'gpt-5-nano',
+        provider: evalConfig?.provider ?? 'aihubmix',
+        systemRole: evalConfig?.systemRole,
+      },
+      evalMode: dataset.evalMode || undefined,
+      name: dataset.name,
+    },
+    onSubmit: handleFinish,
+  });
+  const evalModeValue = useWatch(form, 'evalMode');
+
   return (
-    <Form form={form} layout="vertical" name={formId} onFinish={handleFinish}>
-      <Form.Item
+    <Form form={form} id={formId} layout="vertical">
+      <Form.Field
         label={t('dataset.create.name.label')}
         name="name"
-        rules={[{ message: t('dataset.create.nameRequired'), required: true }]}
+        required={t('dataset.create.nameRequired')}
       >
         <Input autoFocus placeholder={t('dataset.create.name.placeholder')} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item label={t('dataset.create.description.label')} name="description">
+      <Form.Field label={t('dataset.create.description.label')} name="description">
         <TextArea placeholder={t('dataset.create.description.placeholder')} rows={3} />
-      </Form.Item>
+      </Form.Field>
 
-      <Form.Item extra={t('dataset.evalMode.hint')} label={t('evalMode.label')} name="evalMode">
+      <Form.Field extra={t('dataset.evalMode.hint')} label={t('evalMode.label')} name="evalMode">
         <Select
           allowClear
           placeholder={t('evalMode.placeholder')}
@@ -190,25 +200,25 @@ const DatasetEditContent: FC<DatasetEditContentProps> = ({
             { label: t('evalMode.external'), value: 'external' },
           ]}
         />
-      </Form.Item>
+      </Form.Field>
 
       {(evalModeValue === 'llm-rubric' || evalModeValue === 'answer-relevance') && (
         <>
-          <Form.Item initialValue="aihubmix" label={'Provider'} name={['evalConfig', 'provider']}>
+          <Form.Field label={'Provider'} name="evalConfig.provider">
             <TextArea placeholder={'LLM provider (e.g. openai, azure)'} rows={1} />
-          </Form.Item>
-          <Form.Item initialValue="gpt-5-nano" label={'Model'} name={['evalConfig', 'model']}>
+          </Form.Field>
+          <Form.Field label={'Model'} name="evalConfig.model">
             <TextArea placeholder={'LLM model to use for evaluation (e.g. gpt-4)'} rows={1} />
-          </Form.Item>
-          <Form.Item label={'System Prompt'} name={['evalConfig', 'systemRole']}>
+          </Form.Field>
+          <Form.Field label={'System Prompt'} name="evalConfig.systemRole">
             <TextArea placeholder={'Optional system prompt for the LLM judge'} rows={3} />
-          </Form.Item>
-          <Form.Item label={'Eval Prompt'} name={['evalConfig', 'criteria']}>
+          </Form.Field>
+          <Form.Field label={'Eval Prompt'} name="evalConfig.criteria">
             <TextArea placeholder={'Prompt template for the LLM judge'} rows={3} />
-          </Form.Item>
-          <Form.Item label={t('evalMode.prompt.label')} name={['evalConfig', 'judgePrompt']}>
+          </Form.Field>
+          <Form.Field label={t('evalMode.prompt.label')} name="evalConfig.judgePrompt">
             <TextArea placeholder={t('evalMode.prompt.placeholder')} rows={3} />
-          </Form.Item>
+          </Form.Field>
         </>
       )}
 

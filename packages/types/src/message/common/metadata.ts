@@ -144,6 +144,9 @@ export const ModelUsageSchema = z.object({
 
   // Cost
   cost: z.number().optional(),
+
+  // Provider-native subscription credits (e.g. Qoder), separate from USD cost
+  credits: z.number().optional(),
 });
 
 export const ModelPerformanceSchema = z.object({
@@ -307,6 +310,12 @@ export interface ModelUsage extends ModelTokensUsage {
    * dollar
    */
   cost?: number;
+  /**
+   * Provider-native subscription credits consumed (e.g. Qoder), for runs whose
+   * CLI reports credits instead of token counts. Not USD — separate from
+   * `cost` so spend math never mixes units.
+   */
+  credits?: number;
 }
 
 export interface ModelPerformance {
@@ -378,6 +387,12 @@ export interface MessageMetadata {
   cost?: number;
   /** @deprecated use `metadata.performance` instead */
   duration?: number;
+  /**
+   * Where the model request behind this message ran. `client`: the server
+   * relayed it to the user's device (a local model only that device can
+   * reach), so the platform neither paid for nor billed it. Absent: the server.
+   */
+  executionSite?: 'client';
   /**
    * The provider event that produced this server-injected user turn
    * (GitHub CI failure, review feedback, …). See {@link ExternalOriginMetadata}.
@@ -571,6 +586,11 @@ export interface MessageMetadata {
    * but new writers should target the top-level `usage` instead.
    */
   usage?: ModelUsage;
+  /**
+   * The model reported no usage, so the server estimated the token counts from
+   * the request and the output text. Only set alongside `executionSite: 'client'`.
+   */
+  usageEstimated?: boolean;
   /**
    * Agent Run operation id this verify card belongs to (for role='verify' messages).
    * References `agent_operations.id`; the card reads the verify plan + results off it.

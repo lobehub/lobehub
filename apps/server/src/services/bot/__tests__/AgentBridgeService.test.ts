@@ -499,6 +499,51 @@ describe('AgentBridgeService', () => {
       expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBe('topic-1');
     });
 
+    it('resets the cached topicId when the topic has been idle past the threshold', async () => {
+      mockTopicFindById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-1',
+        updatedAt: new Date(Date.now() - 5 * 60 * 60 * 1000),
+      });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client: createClient(),
+      });
+
+      expect(thread.setState).toHaveBeenCalledWith(expect.objectContaining({ topicId: undefined }));
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBeUndefined();
+    });
+
+    it('continues an idle topic when the platform thread never expires (Discord guild thread)', async () => {
+      // A reply in a Discord thread 8h after the last turn used to fork a
+      // new topic with no working directory, losing the whole conversation.
+      mockTopicFindById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-1',
+        updatedAt: new Date(Date.now() - 8 * 60 * 60 * 1000),
+      });
+      const service = new AgentBridgeService(FAKE_DB, USER_ID);
+      const thread = createThread({ topicId: 'topic-1' });
+      const client = { ...createClient(), shouldExpireIdleTopic: vi.fn().mockReturnValue(false) };
+
+      await service.handleSubscribedMessage(thread, createMessage(), {
+        agentId: 'agent-1',
+        botContext: { platformThreadId: THREAD_ID } as any,
+        client,
+      });
+
+      expect(client.shouldExpireIdleTopic).toHaveBeenCalledWith(thread.id);
+      expect(thread.setState).not.toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: undefined }),
+      );
+      expect(mockExecAgent).toHaveBeenCalledTimes(1);
+      expect(mockExecAgent.mock.calls[0][0].appContext?.topicId).toBe('topic-1');
+    });
+
     it('retries as a fresh mention when queue-mode execAgent reports Topic not found (delete race)', async () => {
       // Pre-flight sees the topic, but it vanishes before the topic-start
       // reservation — execAgent throws a plain "Topic not found" error.

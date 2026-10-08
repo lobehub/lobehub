@@ -21,6 +21,8 @@ import pMap from 'p-map';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { abortableRequest } from '../utils/abortableRequest';
+import type { MessageListPage, MessageRoundCursor } from './cache';
+import { supportsRoundCursor } from './cache';
 
 /**
  * Query context for message operations
@@ -34,11 +36,17 @@ export interface MessageQueryContext {
   topicShareId?: string;
 }
 
-interface MessageReadQueryContext {
+export interface MessageReadQueryContext {
   agentId?: string | null;
   /** Agent-share visitor surface — routes the read through `shareChat.getMessages`. */
   agentShareId?: string;
   groupId?: string | null;
+  /**
+   * Ask the server for render-facing tool view models instead of the stored
+   * payloads. Only set it for a read whose result is never turned into an LLM
+   * context in the browser — see `readConversationMessages`.
+   */
+  projectToolPayloads?: boolean;
   /**
    * Skip the Work-summary assembly on the server — set by mid-stream
    * refetches (tool_end / step_complete) so each tool round doesn't re-run
@@ -49,6 +57,12 @@ interface MessageReadQueryContext {
   topicId?: string | null;
   topicShareId?: string;
 }
+
+/**
+ * Rows walked per round-cursor page: whole rounds up to this many mainline rows,
+ * matching the newest-first window `getMessages` serves.
+ */
+const MESSAGE_PAGE_ROW_BUDGET = 1000;
 
 export type MessageBatchOperation =
   | {
@@ -216,6 +230,71 @@ export class MessageService {
     >;
   };
 
+  /**
+   * The newest window of a conversation for the message-list cache. Topic
+   * conversations read it by round cursor so the page also says whether any
+   * older history exists (`olderCursor: null` → the topic start is loaded, and
+   * scrolling up must not fetch). Other contexts return the plain list, whose
+   * older history is unknown.
+   */
+  getMessageListPage = async (
+    params: MessageReadQueryContext,
+  ): Promise<MessageListPage | UIChatMessage[]> => {
+    if (!supportsRoundCursor(params)) return this.getMessages(params);
+
+    return this.getMessagesByRoundCursor(params, null);
+  };
+
+  /**
+   * Load one round-aligned page of history strictly OLDER than `cursor` (the
+   * start of the oldest loaded round). Intentionally outside the
+   * `runMessageListQuery` client-cache policy: older pages are additive and
+   * merged by the earlier-history layer in `services/message/cache`.
+   */
+  getEarlierMessages = async (
+    params: MessageReadQueryContext,
+    cursor: MessageRoundCursor,
+  ): Promise<MessageListPage> => {
+    // Agent-share pages read through `shareChat.getMessages`, which has no
+    // round cursor: report the start as reached so the shared view keeps its
+    // current window instead of hitting the authed endpoint.
+    if (params.agentShareId) return { messages: [], olderCursor: null };
+
+    if (supportsRoundCursor(params)) return this.getMessagesByRoundCursor(params, cursor);
+
+    const data = await lambdaClient.message.getMessages.query({
+      ...params,
+      before: { createdAt: new Date(cursor.createdAt), id: cursor.id },
+      includeFileWorks: true,
+    });
+
+    return { messages: data as unknown as UIChatMessage[] };
+  };
+
+  private getMessagesByRoundCursor = async (
+    params: MessageReadQueryContext,
+    cursor: MessageRoundCursor | null,
+  ): Promise<MessageListPage> => {
+    const page = await lambdaClient.message.getMessagesByCursor.query({
+      agentId: params.agentId,
+      countBudget: MESSAGE_PAGE_ROW_BUDGET,
+      cursor,
+      groupId: params.groupId,
+      includeFileWorks: true,
+      projectToolPayloads: params.projectToolPayloads,
+      // The row budget is the real bound; ask for as many whole rounds as it holds.
+      roundLimit: MESSAGE_PAGE_ROW_BUDGET,
+      skipWorks: params.skipWorks,
+      topicId: params.topicId,
+      topicShareId: params.topicShareId,
+    });
+
+    return {
+      messages: page.messages as unknown as UIChatMessage[],
+      olderCursor: page.nextCursor,
+    };
+  };
+
   diagnoseTopic = async (params: { agentId?: string | null; topicId: string }) => {
     return lambdaClient.message.diagnoseTopic.query(params);
   };
@@ -367,11 +446,20 @@ export class MessageService {
     return lambdaClient.message.removeMessage.mutate({ ...ctx, id });
   };
 
+  /**
+   * Moves the messages to the recycle bin. `permanent` hard-deletes instead —
+   * only for internal cleanup whose rows must never be restorable.
+   */
   removeMessages = async (
     ids: string[],
     ctx?: MessageQueryContext,
+    options?: { permanent?: boolean },
   ): Promise<UpdateMessageResult> => {
-    return lambdaClient.message.removeMessages.mutate({ ...ctx, ids });
+    return lambdaClient.message.removeMessages.mutate({
+      ...ctx,
+      ids,
+      ...(options?.permanent ? { permanent: true } : {}),
+    });
   };
 
   removeMessagesByAssistant = async (sessionId: string, topicId?: string) => {

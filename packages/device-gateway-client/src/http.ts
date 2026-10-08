@@ -1,3 +1,5 @@
+import type { DeviceMetricSample } from '@lobechat/types';
+
 import {
   describeGatewayRequestFailure,
   describeGatewayResponseFailure,
@@ -20,6 +22,20 @@ const DEFAULT_GATEWAY_TOOL_CALL_TIMEOUT_MS = 30_000;
  */
 const DEVICE_QUERY_TIMEOUT_MS = 10_000;
 const HTTP_CALL_TIMEOUT_PADDING_MS = 30_000;
+/**
+ * The gateway holds an undelivered tool call for `timeout` plus a recovery
+ * window (45s) waiting for the device to reconnect, then answers 503
+ * `DEVICE_OFFLINE` — "never ran, safe to retry". A client deadline shorter than
+ * that window aborts first, so an offline device always read as "timed out, the
+ * work may still be running". Keep this above the gateway's window.
+ */
+const TOOL_CALL_HTTP_TIMEOUT_PADDING_MS = 60_000;
+/**
+ * The padding must not stretch a call past the agent function window (800s,
+ * the server's tool-timeout ceiling): an invocation killed mid-wait normalizes
+ * nothing at all. Near the ceiling the offline answer is given up instead.
+ */
+const TOOL_CALL_HTTP_DEADLINE_CAP_MS = 800_000;
 
 export interface DeviceStatusResult {
   deviceCount: number;
@@ -183,7 +199,12 @@ export class GatewayHttpClient {
           userId: params.userId,
           workspaceId: params.workspaceId,
         },
-        { timeout: timeout + HTTP_CALL_TIMEOUT_PADDING_MS },
+        {
+          timeout: Math.min(
+            timeout + TOOL_CALL_HTTP_TIMEOUT_PADDING_MS,
+            Math.max(timeout, TOOL_CALL_HTTP_DEADLINE_CAP_MS),
+          ),
+        },
       );
     } catch (error) {
       // A client-side deadline or an unreachable gateway host used to escape as
@@ -262,6 +283,7 @@ export class GatewayHttpClient {
   }
 
   async dispatchAgentRun(params: {
+    agentId?: string;
     agentType: string;
     assistantMessageId: string;
     /** Resolved `lh hetero exec` wrapper args. */
@@ -315,9 +337,20 @@ export class GatewayHttpClient {
    * dispatcher and correlates the response by `requestId`, so new methods need
    * no per-method gateway route. Distinct from {@link executeToolCall}, which is
    * the LLM-facing tool channel.
+   *
+   * `channel` names the connection to prefer when one device holds several
+   * (e.g. `desktop` alongside `cli`). A gateway that predates the hint ignores
+   * it and picks by its own channel priority, so callers must still handle an
+   * answer from another channel.
    */
   async invokeRpc<T = unknown>(
-    params: { deviceId?: string; timeout?: number; userId: string; workspaceId?: string },
+    params: {
+      channel?: string;
+      deviceId?: string;
+      timeout?: number;
+      userId: string;
+      workspaceId?: string;
+    },
     rpc: { method: string; params?: unknown },
   ): Promise<DeviceRpcResult<T>> {
     const timeout =
@@ -327,6 +360,7 @@ export class GatewayHttpClient {
     const res = await this.post(
       '/api/device/rpc',
       {
+        channel: params.channel,
         deviceId: params.deviceId,
         method: rpc.method,
         params: rpc.params,
@@ -370,6 +404,26 @@ export class GatewayHttpClient {
       success: data.success ?? false,
       systemInfo: data.systemInfo,
     };
+  }
+
+  /**
+   * Health samples the gateway holds for a device (it keeps two days), observed
+   * at or after `since`. Served from gateway storage, so an offline device
+   * still has its history.
+   */
+  async getDeviceMetrics(
+    userId: string,
+    deviceId: string,
+    options: { since?: number; workspaceId?: string } = {},
+  ): Promise<DeviceMetricSample[]> {
+    const res = await this.post(
+      '/api/device/metrics',
+      { deviceId, since: options.since, userId, workspaceId: options.workspaceId },
+      { timeout: DEVICE_QUERY_TIMEOUT_MS },
+    );
+    if (!res.ok) throw new Error(`device metrics read failed: HTTP ${res.status}`);
+    const data = (await res.json()) as { samples?: DeviceMetricSample[] };
+    return data.samples ?? [];
   }
 
   // ─── Tunnel registry (gateway admin API) ───

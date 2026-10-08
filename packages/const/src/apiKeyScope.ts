@@ -212,7 +212,11 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   composio: 'blocked',
   config: 'open',
   connector: 'blocked',
+  // boards only lay out widgets; reads mirror `widget`, writes stay key-less
+  // so a restricted key cannot reshape what a widget run is attached to
+  dashboard: rw('agent:read', null),
   device: 'blocked',
+  deviceMetric: 'blocked',
   document: rw('knowledge:read', 'knowledge:write'),
   documentComment: rw('knowledge:read', 'knowledge:write'),
   documentLike: rw('knowledge:read', 'knowledge:write'),
@@ -260,6 +264,12 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   // Member-to-member ownership handover: accepting/declining is an interactive
   // human decision, not something a restricted key should automate.
   resourceTransferRequest: 'blocked',
+  // Reads and DELETES files in the caller's persistent sandbox working
+  // directory. No existing scope honestly describes that store: granting it
+  // under `file:*` would let a key given knowledge-base write access delete
+  // working files too, which is not what that grant means. Blocked until the
+  // feature ships with a scope of its own (full-access keys still reach it).
+  sandboxStorage: 'blocked',
   search: rw('chat:read', null),
   // source-control integration wiring (installations, linked identities,
   // tracked pull requests) is configured from Settings, not from keys
@@ -280,6 +290,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   topUp: 'blocked',
   topic: rw('chat:read', 'chat:write'),
   topicComment: rw('chat:read', 'chat:write'),
+  // The recycle bin spans every content kind (chats, agents, files, tasks …) —
+  // restore / purge is a destructive cross-cutting surface, so restricted keys
+  // never reach it; only full-access keys can.
+  trash: 'blocked',
   upload: rw('file:read', 'file:write'),
   usage: rw('usage:read', null),
   user: rw('user:read', 'user:write'),
@@ -289,6 +303,10 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   video: { any: 'model:invoke' },
   waitlist: 'blocked',
   webBrowsing: { any: 'model:invoke' },
+  // widget runs execute user scripts in the sandbox with the owner's connector
+  // credentials, so restricted keys may read widgets and runs but not change
+  // or trigger them
+  widget: rw('agent:read', null),
   work: rw('agent:read', 'agent:write'),
   workspace: rw('workspace:read', 'workspace:write'),
   workspaceAuditLog: rw('workspace:read', null),

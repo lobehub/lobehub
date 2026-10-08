@@ -11,13 +11,32 @@ import {
 } from './utils/errorType';
 import { getNonDocumentExtension, normalizeCrawlUrl } from './utils/urlPreflight';
 
-const defaultImpls = ['jina', 'naive', 'search1api', 'browserless'] as CrawlImplType[];
+/**
+ * Built-in crawler impl order used when no impls are provided. Re-exported from
+ * the package entry (`@lobechat/web-crawler`) so callers resolving a
+ * user-preferred order can intersect against the same default set the Crawler
+ * falls back to.
+ */
+export const DEFAULT_CRAWL_IMPLS = [
+  'jina',
+  'naive',
+  'search1api',
+  'browserless',
+] as CrawlImplType[];
 
 /** Pseudo crawler name for failures raised before any provider was contacted. */
 const PREFLIGHT_CRAWLER = 'preflight';
 
 interface CrawlOptions {
   impls?: string[];
+  /**
+   * Impls that URL rules may pick from. Defaults to `impls`.
+   *
+   * Lets a caller narrow the general fallback order (e.g. to a user's preferred
+   * channels) while site-specific rules (PDF, YouTube, ...) can still use any
+   * server-enabled impl, so their crawl quality does not regress.
+   */
+  urlRuleImpls?: string[];
 }
 
 /**
@@ -50,13 +69,18 @@ const buildErrorData = (error: Error | undefined): CrawlErrorResult => {
   };
 };
 
+const toKnownImpls = (impls: string[] | undefined): CrawlImplType[] =>
+  impls?.length
+    ? (impls.filter((impl) => Object.keys(crawlImpls).includes(impl)) as CrawlImplType[])
+    : DEFAULT_CRAWL_IMPLS;
+
 export class Crawler {
   impls: CrawlImplType[];
+  urlRuleImpls: CrawlImplType[];
 
   constructor(options: CrawlOptions = {}) {
-    this.impls = !!options.impls?.length
-      ? (options.impls.filter((impl) => Object.keys(crawlImpls).includes(impl)) as CrawlImplType[])
-      : defaultImpls;
+    this.impls = toKnownImpls(options.impls);
+    this.urlRuleImpls = options.urlRuleImpls ? toKnownImpls(options.urlRuleImpls) : this.impls;
   }
 
   /**
@@ -110,7 +134,9 @@ export class Crawler {
     let finalError: Error | undefined;
 
     const filteredRuleImpls = ruleImpls
-      ? (ruleImpls.filter((impl) => this.impls.includes(impl as CrawlImplType)) as CrawlImplType[])
+      ? (ruleImpls.filter((impl) =>
+          this.urlRuleImpls.includes(impl as CrawlImplType),
+        ) as CrawlImplType[])
       : undefined;
     const systemImpls = (
       filteredRuleImpls?.length ? filteredRuleImpls : this.impls

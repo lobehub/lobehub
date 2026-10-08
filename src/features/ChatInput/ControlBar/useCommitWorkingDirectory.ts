@@ -31,6 +31,18 @@ export interface CommitWorkingDirectoryOptions {
   localTarget?: boolean;
 }
 
+export interface CommitAgentDefaultOptions {
+  /**
+   * Reject when persisting the shared agent config fails. The store otherwise
+   * swallows the error (and rolls the optimistic value back), so a caller that
+   * acts on the saved directory right after — e.g. switching to a fresh topic —
+   * must opt in to learn the write never landed.
+   */
+  rethrow?: boolean;
+  /** Keep the store's generic save-failure toast. @default true */
+  showErrorMessage?: boolean;
+}
+
 const normalizeWorkingDirEntry = (entry: WorkingDirEntry): WorkingDirEntry | undefined => {
   const path = entry.path.trim();
   if (!path) return undefined;
@@ -91,8 +103,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
   // The EFFECTIVE config (override merged) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
   // the picker/GitStatus/`useEffectiveWorkingDirectory` operate on.
-  const { agencyConfig: effectiveAgencyConfig, workspaceScoped } =
-    useEffectiveAgencyConfig(agentId);
+  const {
+    agencyConfig: effectiveAgencyConfig,
+    isPreferenceLoading,
+    workspaceScoped,
+  } = useEffectiveAgencyConfig(agentId, { topicId: routeTopicId });
   // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
   // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
   // different activeWorktree) must NOT change the session cwd or reset the
@@ -171,6 +186,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           priorSessionCwd !== sessionCwd &&
           (!!activeTopic?.metadata?.heteroSessionId || !!scopedHeteroSessionId);
         await updateTopicMetadata(activeTopicId, {
+          // The pin is a bare path that only holds on the machine it was picked
+          // for, and the server skips a topic pin whose `boundDeviceId` names a
+          // different device. Re-stamp it with every write so a conversation
+          // moved to another device keeps the directory just chosen there.
+          boundDeviceId: entry ? writeDeviceId : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
           workingDirectory: sessionCwd,
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
@@ -221,6 +241,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       agencyConfig,
       activeTopic,
       activeTopicId,
+      currentDeviceId,
       isHetero,
       isPersonalDeviceTarget,
       targetDeviceId,
@@ -239,6 +260,8 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     // we fall back to the agent default rather than nuking everything.
     if (activeTopicId && activeTopic?.metadata?.workingDirectory) {
       await updateTopicMetadata(activeTopicId, {
+        // No pin left, so no device it belongs to — the next run stamps its own.
+        boundDeviceId: undefined,
         ...(activeTopic.metadata.heteroSessionId ? { heteroSessionId: undefined } : {}),
         workingDirectory: undefined,
         workingDirectoryConfig: undefined,
@@ -320,17 +343,21 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
    * bakes this value into its own `metadata.workingDirectory` on first send.
    */
   const commitAgentDefault = useCallback(
-    async (newPath: string) => {
+    async (newPath: string, options?: CommitAgentDefaultOptions) => {
       const path = newPath.trim();
       if (!path) return;
       if (targetDeviceId && !isPersonalDeviceTarget) {
         const prev = agencyConfig?.workingDirByDevice ?? {};
-        await updateAgentConfigById(agentId, {
-          agencyConfig: {
-            ...agencyConfig,
-            workingDirByDevice: { ...prev, [targetDeviceId]: path },
+        await updateAgentConfigById(
+          agentId,
+          {
+            agencyConfig: {
+              ...agencyConfig,
+              workingDirByDevice: { ...prev, [targetDeviceId]: path },
+            },
           },
-        });
+          options,
+        );
       } else {
         // No resolvable device (e.g. gateway id unavailable), or a workspace
         // agent targeting this member's own machine (`isPersonalDeviceTarget`,
@@ -368,5 +395,15 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     await run();
   }, [activeTopic, t, clearCwd]);
 
-  return { clear, commit, commitAgentDefault };
+  return {
+    clear,
+    commit,
+    commitAgentDefault,
+    /**
+     * A workspace agent's device routing (shared row vs. this member's personal
+     * slot) is still resolving. Writers should wait: acting now can file a local
+     * path under the shared device instead of the member's own slot.
+     */
+    isPreferenceLoading,
+  };
 };

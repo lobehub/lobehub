@@ -1,6 +1,7 @@
 import type { AssistantContentBlock, ChatToolPayloadWithResult } from '@lobechat/types';
 
-import type { Message, MessageGroupMetadata } from '../types';
+import { isInThreadScope } from '../indexing';
+import type { Message, MessageGroupMetadata, ThreadScope } from '../types';
 import type { BranchResolver } from './BranchResolver';
 import type { MessageCollector } from './MessageCollector';
 import type { MessageTransformer } from './MessageTransformer';
@@ -15,10 +16,43 @@ const isSupervisorMessage = (message: Message | undefined): boolean =>
   message?.metadata?.orchestrationRole === 'supervisor' || !!message?.metadata?.isSupervisor;
 
 /**
+ * One step of the flat-list walk. The walk follows parent chains that are
+ * thousands of messages deep on long topics, so instead of recursing, each
+ * step yields the sub-walk it would have called and `runFlatListWork` resumes
+ * it on an explicit stack. Statement order is unchanged: a yielded sub-walk
+ * finishes before the step that yielded it continues.
+ */
+interface FlatListWork extends Generator<FlatListWork, void, undefined> {}
+
+const runFlatListWork = (root: FlatListWork): void => {
+  const stack: FlatListWork[] = [root];
+  let pendingError: { error: unknown } | undefined;
+
+  while (stack.length > 0) {
+    const current = stack.at(-1)!;
+    let step: IteratorResult<FlatListWork, void>;
+    try {
+      // Rethrow a finished sub-walk's error inside its caller so the caller's
+      // `finally` blocks run exactly as they would around a direct call.
+      step = pendingError ? current.throw(pendingError.error) : current.next();
+      pendingError = undefined;
+    } catch (error) {
+      stack.pop();
+      if (stack.length === 0) throw error;
+      pendingError = { error };
+      continue;
+    }
+
+    if (step.done) stack.pop();
+    else stack.push(step.value);
+  }
+};
+
+/**
  * FlatListBuilder - Builds flat message list following the active path
  *
  * Handles:
- * 1. Recursive traversal following active branches
+ * 1. Traversal following active branches (explicit stack, see runFlatListWork)
  * 2. Creating virtual messages for Compare and AssistantGroup
  * 3. Processing different message types with priority
  */
@@ -30,7 +64,28 @@ export class FlatListBuilder {
     private branchResolver: BranchResolver,
     private messageCollector: MessageCollector,
     private messageTransformer: MessageTransformer,
+    /** See `ThreadScope`. Defaults to every message in scope. */
+    private threadScope: ThreadScope = undefined,
   ) {}
+
+  /**
+   * Children of `parentId` that belong to the flat list's thread scope.
+   *
+   * Threaded messages live outside the main chain, and `buildIdTree` already drops them from
+   * the context tree. The flat list has to apply the same rule: a thread head is parented to
+   * nothing (`parentId: null`) or to the main-chain assistant/tool that spawned it, so an
+   * unfiltered walk reaches it and renders a background run — an isolated memory or sub-agent
+   * turn — as an ordinary bubble in the middle of the user's transcript. A thread view keeps
+   * its own thread in scope, since its input is the ancestors plus that thread's replies.
+   */
+  private childIdsInScope(parentId: string | null): string[] {
+    const childIds = this.childrenMap.get(parentId) ?? [];
+    if (this.threadScope === undefined) return childIds;
+
+    return childIds.filter((childId) =>
+      isInThreadScope(this.messageMap.get(childId), this.threadScope),
+    );
+  }
 
   /**
    * Generate flatList from messages array
@@ -40,20 +95,27 @@ export class FlatListBuilder {
     const flatList: Message[] = [];
     const processedIds = new Set<string>();
 
+    const scopedMessages =
+      this.threadScope === undefined
+        ? messages
+        : messages.filter((message) => isInThreadScope(message, this.threadScope));
+
     // Determine the root parentId
     // Normal case: start from null (messages with no parentId)
     // Orphan case: if all messages have parentId (thread mode), use first message as root
     let rootParentId: string | null = null;
 
-    const hasRootMessages = this.childrenMap.has(null) && this.childrenMap.get(null)!.length > 0;
-    if (!hasRootMessages && messages.length > 0) {
+    const hasRootMessages = this.childIdsInScope(null).length > 0;
+    if (!hasRootMessages && scopedMessages.length > 0) {
       // All messages have parentId - this is orphan/thread mode
       // Use the first message's parentId as the virtual root
-      rootParentId = messages[0].parentId ?? null;
+      rootParentId = scopedMessages[0].parentId ?? null;
     }
 
     // Build the active path by traversing from root
-    this.buildFlatListRecursive(rootParentId, flatList, processedIds, messages);
+    runFlatListWork(
+      this.buildFlatListRecursive(rootParentId, flatList, processedIds, scopedMessages),
+    );
 
     // Assistant groups must be assembled before ordering because their members
     // are discovered through recursive tool-result chains. That traversal is
@@ -70,13 +132,13 @@ export class FlatListBuilder {
   /**
    * Recursively build flatList following the active path
    */
-  private buildFlatListRecursive(
+  private *buildFlatListRecursive(
     parentId: string | null,
     flatList: Message[],
     processedIds: Set<string>,
     allMessages: Message[],
-  ): void {
-    const children = this.childrenMap.get(parentId) ?? [];
+  ): FlatListWork {
+    const children = this.childIdsInScope(parentId);
 
     // Broadcast councils now render in-bubble (a `council` block inside the
     // supervisor's assistant group), so there is no separate agentCouncil message
@@ -123,11 +185,21 @@ export class FlatListBuilder {
                   nonTaskChild.tools &&
                   nonTaskChild.tools.length > 0
                 ) {
-                  this.processAssistantGroup(nonTaskChild, flatList, processedIds, allMessages);
+                  yield this.processAssistantGroup(
+                    nonTaskChild,
+                    flatList,
+                    processedIds,
+                    allMessages,
+                  );
                 } else {
                   flatList.push(nonTaskChild);
                   processedIds.add(nonTaskChildId);
-                  this.buildFlatListRecursive(nonTaskChildId, flatList, processedIds, allMessages);
+                  yield this.buildFlatListRecursive(
+                    nonTaskChildId,
+                    flatList,
+                    processedIds,
+                    allMessages,
+                  );
                 }
               }
             }
@@ -146,7 +218,12 @@ export class FlatListBuilder {
                     taskGrandchild.tools &&
                     taskGrandchild.tools.length > 0
                   ) {
-                    this.processAssistantGroup(taskGrandchild, flatList, processedIds, allMessages);
+                    yield this.processAssistantGroup(
+                      taskGrandchild,
+                      flatList,
+                      processedIds,
+                      allMessages,
+                    );
                   } else if (
                     // Check if it's a supervisor message without tools (content-only)
                     taskGrandchild.role === 'assistant' &&
@@ -156,7 +233,7 @@ export class FlatListBuilder {
                     const supervisorMessage = this.createSupervisorContentMessage(taskGrandchild);
                     flatList.push(supervisorMessage);
                     processedIds.add(taskGrandchildId);
-                    this.buildFlatListRecursive(
+                    yield this.buildFlatListRecursive(
                       taskGrandchildId,
                       flatList,
                       processedIds,
@@ -165,7 +242,7 @@ export class FlatListBuilder {
                   } else {
                     flatList.push(taskGrandchild);
                     processedIds.add(taskGrandchildId);
-                    this.buildFlatListRecursive(
+                    yield this.buildFlatListRecursive(
                       taskGrandchildId,
                       flatList,
                       processedIds,
@@ -192,7 +269,7 @@ export class FlatListBuilder {
       // and therefore do not render as standalone bubbles.
       if (message.metadata?.agentDispatch?.visibility === 'internal') {
         processedIds.add(message.id);
-        this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+        yield this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
         continue;
       }
 
@@ -211,7 +288,7 @@ export class FlatListBuilder {
 
         // Continue with active column's children (if any)
         if ((compareMessage as any).activeColumnId) {
-          this.buildFlatListRecursive(
+          yield this.buildFlatListRecursive(
             (compareMessage as any).activeColumnId,
             flatList,
             processedIds,
@@ -288,11 +365,11 @@ export class FlatListBuilder {
         // Surface the supervisor's post-council reply (attached to one member).
         if (council) {
           for (const memberId of council.memberIds) {
-            this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
+            yield this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
           }
         }
 
-        this.continueAfterAssistantGroup(
+        yield this.continueAfterAssistantGroup(
           assistantChain,
           allToolMessages,
           flatList,
@@ -314,12 +391,12 @@ export class FlatListBuilder {
         processedIds.add(message.id);
 
         // Continue with children
-        this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+        yield this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
         continue;
       }
 
       // Priority 3a: Compare mode from user message metadata
-      const childMessages = this.childrenMap.get(message.id) ?? [];
+      const childMessages = this.childIdsInScope(message.id);
       // Non-tool children only are branch candidates (dual-form reader invariant: tool children are inline, not branches):
       // a tool child is inline data of its assistant, never a sibling branch.
       const nonToolChildMessages = this.branchResolver.getMetadataBranchIds(childMessages);
@@ -339,7 +416,7 @@ export class FlatListBuilder {
 
         // Continue with active column's children (if any)
         if ((compareMessage as any).activeColumnId) {
-          this.buildFlatListRecursive(
+          yield this.buildFlatListRecursive(
             (compareMessage as any).activeColumnId,
             flatList,
             processedIds,
@@ -410,7 +487,7 @@ export class FlatListBuilder {
             assistantChain.forEach((m) => processedIds.add(m.id));
             allToolMessages.forEach((m) => processedIds.add(m.id));
 
-            this.continueAfterAssistantGroup(
+            yield this.continueAfterAssistantGroup(
               assistantChain,
               allToolMessages,
               flatList,
@@ -428,7 +505,7 @@ export class FlatListBuilder {
             processedIds.add(activeBranchId);
 
             // Continue with active branch's children
-            this.buildFlatListRecursive(activeBranchId, flatList, processedIds, allMessages);
+            yield this.buildFlatListRecursive(activeBranchId, flatList, processedIds, allMessages);
           }
         }
         continue;
@@ -470,7 +547,7 @@ export class FlatListBuilder {
           processedIds.add(activeBranchId);
 
           // Continue with active branch's children
-          this.buildFlatListRecursive(activeBranchId, flatList, processedIds, allMessages);
+          yield this.buildFlatListRecursive(activeBranchId, flatList, processedIds, allMessages);
         }
         continue;
       }
@@ -480,7 +557,7 @@ export class FlatListBuilder {
       processedIds.add(message.id);
 
       // Continue with children
-      this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
+      yield this.buildFlatListRecursive(message.id, flatList, processedIds, allMessages);
     }
   }
 
@@ -488,12 +565,12 @@ export class FlatListBuilder {
    * Process an assistant message with tools into an AssistantGroup
    * Extracted to avoid code duplication in task children handling
    */
-  private processAssistantGroup(
+  private *processAssistantGroup(
     message: Message,
     flatList: Message[],
     processedIds: Set<string>,
     allMessages: Message[],
-  ): void {
+  ): FlatListWork {
     // Collect the entire assistant group chain
     const assistantChain: Message[] = [];
     const allToolMessages: Message[] = [];
@@ -525,11 +602,11 @@ export class FlatListBuilder {
 
     if (council) {
       for (const memberId of council.memberIds) {
-        this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
+        yield this.buildFlatListRecursive(memberId, flatList, processedIds, allMessages);
       }
     }
 
-    this.continueAfterAssistantGroup(
+    yield this.continueAfterAssistantGroup(
       assistantChain,
       allToolMessages,
       flatList,
@@ -538,17 +615,19 @@ export class FlatListBuilder {
     );
   }
 
-  private continueAfterAssistantGroup(
+  private *continueAfterAssistantGroup(
     assistantChain: Message[],
     allToolMessages: Message[],
     flatList: Message[],
     processedIds: Set<string>,
     allMessages: Message[],
-  ): void {
+  ): FlatListWork {
     const lastAssistant = assistantChain.at(-1);
     if (lastAssistant) {
       this.suppressInactiveExplicitContinuations(lastAssistant, allToolMessages, processedIds);
     }
+
+    yield this.continueGroupMemberReplies(assistantChain, flatList, processedIds, allMessages);
 
     const parentIds = [
       ...(lastAssistant ? [lastAssistant.id] : []),
@@ -560,11 +639,16 @@ export class FlatListBuilder {
       if (!nextContinuation) break;
 
       if (this.shouldDrainParentContinuations(nextContinuation.parentId, processedIds)) {
-        this.buildFlatListRecursive(nextContinuation.parentId, flatList, processedIds, allMessages);
+        yield this.buildFlatListRecursive(
+          nextContinuation.parentId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
         continue;
       }
 
-      this.buildFlatListRecursiveForChild(
+      yield this.buildFlatListRecursiveForChild(
         nextContinuation.parentId,
         nextContinuation.child.id,
         flatList,
@@ -573,7 +657,52 @@ export class FlatListBuilder {
       );
     }
 
-    this.continueInterruptedAssistantGroup(assistantChain, flatList, processedIds, allMessages);
+    yield this.continueInterruptedAssistantGroup(
+      assistantChain,
+      flatList,
+      processedIds,
+      allMessages,
+    );
+  }
+
+  /**
+   * Server-side `speak` parents the in-group member's reply to the supervisor
+   * assistant that issued the call — a sibling of the tool result — while the
+   * supervisor resumes through the tool result. Once it resumes, the collector
+   * folds the speak turn into the group as an intermediate step, so the member
+   * reply hangs off a consumed assistant that no continuation walk visits.
+   * Render it (and the member's own follow-up steps) right after the group.
+   * Only `orchestrationRole: 'member'` children qualify: regenerated supervisor
+   * branches under the same shell stay hidden. Isolated members live in their
+   * own thread and stay out of the main transcript.
+   */
+  private *continueGroupMemberReplies(
+    assistantChain: Message[],
+    flatList: Message[],
+    processedIds: Set<string>,
+    allMessages: Message[],
+  ): FlatListWork {
+    for (const assistant of assistantChain.slice(0, -1)) {
+      const memberIds = this.childIdsInScope(assistant.id).filter((id) => {
+        const message = this.messageMap.get(id);
+        return (
+          message?.role === 'assistant' &&
+          message.metadata?.orchestrationRole === 'member' &&
+          (!message.threadId || message.threadId === this.threadScope) &&
+          !processedIds.has(id)
+        );
+      });
+
+      for (const memberId of memberIds) {
+        yield this.buildFlatListRecursiveForChild(
+          assistant.id,
+          memberId,
+          flatList,
+          processedIds,
+          allMessages,
+        );
+      }
+    }
   }
 
   /**
@@ -583,12 +712,12 @@ export class FlatListBuilder {
    * Recover that user continuation without exposing regenerated assistant
    * branches or overriding an explicit branch selection.
    */
-  private continueInterruptedAssistantGroup(
+  private *continueInterruptedAssistantGroup(
     assistantChain: Message[],
     flatList: Message[],
     processedIds: Set<string>,
     allMessages: Message[],
-  ): void {
+  ): FlatListWork {
     const tail = assistantChain.at(-1);
     if (!tail) return;
 
@@ -614,7 +743,7 @@ export class FlatListBuilder {
       );
       // Explicit indices use all non-tool siblings, not only interruptions.
       if (activeId && interruptions.includes(activeId)) {
-        this.buildFlatListRecursiveForChild(
+        yield this.buildFlatListRecursiveForChild(
           assistant.id,
           activeId,
           flatList,
@@ -721,18 +850,18 @@ export class FlatListBuilder {
     return { memberIds, members: (councilVirtual as { members?: Message[] }).members ?? [] };
   }
 
-  private buildFlatListRecursiveForChild(
+  private *buildFlatListRecursiveForChild(
     parentId: string,
     childId: string,
     flatList: Message[],
     processedIds: Set<string>,
     allMessages: Message[],
-  ): void {
+  ): FlatListWork {
     const childIds = this.childrenMap.get(parentId) ?? [];
     this.childrenMap.set(parentId, [childId]);
 
     try {
-      this.buildFlatListRecursive(parentId, flatList, processedIds, allMessages);
+      yield this.buildFlatListRecursive(parentId, flatList, processedIds, allMessages);
     } finally {
       this.childrenMap.set(parentId, childIds);
     }
@@ -744,7 +873,7 @@ export class FlatListBuilder {
   ): { child: Message; parentId: string } | undefined {
     return parentIds
       .flatMap((parentId) =>
-        (this.childrenMap.get(parentId) ?? [])
+        this.childIdsInScope(parentId)
           .map((childId) => this.messageMap.get(childId))
           .filter((child): child is Message => !!child && !processedIds.has(child.id))
           .map((child) => ({ child, parentId })),
@@ -754,9 +883,7 @@ export class FlatListBuilder {
 
   private shouldDrainParentContinuations(parentId: string, processedIds: Set<string>): boolean {
     const parentMessage = this.messageMap.get(parentId);
-    const children = (this.childrenMap.get(parentId) ?? []).filter(
-      (childId) => !processedIds.has(childId),
-    );
+    const children = this.childIdsInScope(parentId).filter((childId) => !processedIds.has(childId));
     if (!parentMessage || children.length <= 1) return false;
 
     if (this.isAgentCouncilMode(parentMessage)) return true;
@@ -1025,18 +1152,43 @@ export class FlatListBuilder {
 
     // Create tool map for lookup
     const toolMap = new Map<string, Message>();
+    const toolMessagesById = new Map<string, Message>();
+    // `${parentId}:${tool_call_id}` → first result that assistant received
+    const toolMapByCaller = new Map<string, Message>();
     allToolMessages.forEach((tm) => {
+      toolMessagesById.set(tm.id, tm);
       if (tm.tool_call_id) {
         toolMap.set(tm.tool_call_id, tm);
+
+        const callerKey = `${tm.parentId}:${tm.tool_call_id}`;
+        if (tm.parentId && !toolMapByCaller.has(callerKey)) toolMapByCaller.set(callerKey, tm);
       }
     });
+    const chainAssistantIds = new Set(assistantChain.map((assistant) => assistant.id));
+
+    // `tool_call_id` is provider-supplied and not unique across a chain: Kimi
+    // (via zeabur / nvidia / moonshot) stores `<tool>:0` on every step. Pair a
+    // call with the result its own assistant produced first; the id-only map
+    // is a fallback that must never hand one step another step's result.
+    const findToolResult = (assistant: Message, toolCallId: string, resultMsgId?: string) => {
+      const explicit = resultMsgId ? toolMessagesById.get(resultMsgId) : undefined;
+      if (explicit) return explicit;
+
+      const own = toolMapByCaller.get(`${assistant.id}:${toolCallId}`);
+      if (own) return own;
+
+      const fallback = toolMap.get(toolCallId);
+      if (fallback?.parentId && chainAssistantIds.has(fallback.parentId)) return undefined;
+
+      return fallback;
+    };
 
     // Process each assistant in the chain
     for (const assistant of assistantChain) {
       // Build toolsWithResults for this assistant
       const toolsWithResults: ChatToolPayloadWithResult[] =
         assistant.tools?.map((tool) => {
-          const toolMsg = toolMap.get(tool.id);
+          const toolMsg = findToolResult(assistant, tool.id, tool.result_msg_id);
           if (toolMsg) {
             const result: any = {
               content: toolMsg.content || '',
@@ -1178,6 +1330,18 @@ export class FlatListBuilder {
       content: '',
       role: role as any,
     };
+
+    // Heterogeneous agents (e.g. kimi-code) may only learn model/provider at
+    // run end, stamped on the LAST step's assistant row — the group spreads
+    // the FIRST row, so backfill from the last chain assistant carrying one.
+    if (!result.model) {
+      const withModel = assistantChain.findLast((assistant) => !!assistant.model);
+      if (withModel) result.model = withModel.model;
+    }
+    if (!result.provider) {
+      const withProvider = assistantChain.findLast((assistant) => !!assistant.provider);
+      if (withProvider) result.provider = withProvider.provider;
+    }
 
     // Remove fields that should not be in assistantGroup/supervisor
     delete result.imageList;
