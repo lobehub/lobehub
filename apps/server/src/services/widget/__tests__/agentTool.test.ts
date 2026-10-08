@@ -312,6 +312,69 @@ describe('createDashboardToolService', () => {
     expect(batch).toHaveBeenCalledTimes(1);
   });
 
+  it('refuses placement on boards outside the conversation’s project or level', async () => {
+    const service = createDashboardToolService(db, {
+      ...scope,
+      projectId,
+      topicId: projectTopicId,
+    });
+    const { widgetId } = await service.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Project metric',
+    });
+
+    // Another project's board: readable and creator-owned, but this
+    // conversation was never offered it.
+    const otherProjectId = 'dashboard-tool-other-project';
+    await db.insert(agents).values({ id: `${otherProjectId}-coordinator`, userId });
+    await db.insert(projects).values({
+      coordinatorAgentId: `${otherProjectId}-coordinator`,
+      id: otherProjectId,
+      identifier: 'DTO',
+      name: 'Other project',
+      userId,
+    });
+    const otherBoard = await new DashboardModel(db, userId).create({
+      projectId: otherProjectId,
+      title: 'Other project board',
+    });
+    // An agent-level board is not a home board either.
+    const agentBoard = await new DashboardModel(db, userId).create({
+      agentId,
+      title: 'Agent board',
+    });
+
+    await expect(service.addToDashboard(otherBoard.id, widgetId)).rejects.toThrow(/not found/i);
+    await expect(service.addToDashboard(agentBoard.id, widgetId)).rejects.toThrow(/not found/i);
+    expect(await new DashboardModel(db, userId).listItems(otherBoard.id)).toEqual([]);
+    expect(await new DashboardModel(db, userId).listItems(agentBoard.id)).toEqual([]);
+
+    // Its own project's board and home boards still take the placement.
+    const ownBoard = await service.createDashboardWithWidget('Own project board', widgetId);
+    const homeBoard = await new DashboardModel(db, userId).create({ title: 'Home board' });
+    await expect(service.addToDashboard(ownBoard.id, widgetId)).resolves.toEqual({
+      projectId,
+      title: 'Own project board',
+    });
+    await expect(service.addToDashboard(homeBoard.id, widgetId)).resolves.toEqual({
+      projectId: null,
+      title: 'Home board',
+    });
+
+    // A home conversation is the mirror image: project boards are out of reach.
+    const homeService = createDashboardToolService(db, scope);
+    const homeWidget = await homeService.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Home metric',
+    });
+    await expect(homeService.addToDashboard(ownBoard.id, homeWidget.widgetId)).rejects.toThrow(
+      /not found/i,
+    );
+    expect(await new DashboardModel(db, userId).listItems(ownBoard.id)).toHaveLength(1);
+  });
+
   it('creates no board when the widget cannot be placed on it', async () => {
     const service = createDashboardToolService(db, scope);
     const runtime = new DashboardExecutionRuntime(service);

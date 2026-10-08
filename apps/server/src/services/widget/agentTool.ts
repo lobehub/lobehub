@@ -116,7 +116,14 @@ export const createDashboardToolService = (
     addToDashboard: async (dashboardId, widgetId) => {
       await requireScopedWidget(widgetId);
       const board = await dashboards.findById(dashboardId);
-      const item = board ? await dashboards.addItem(dashboardId, widgetId) : undefined;
+      // Only what listDashboards offers may take the placement: the home
+      // level's boards, or boards of the conversation's own project. A
+      // readable board of another project or of an agent-only level is out
+      // of reach even when the caller owns it.
+      const offered =
+        !!board &&
+        (board.projectId === projectId || (board.projectId === null && board.agentId === null));
+      const item = offered ? await dashboards.addItem(dashboardId, widgetId) : undefined;
       if (!board || !item) throw new Error('Dashboard or widget not found');
       return { projectId: board.projectId, title: board.title };
     },
