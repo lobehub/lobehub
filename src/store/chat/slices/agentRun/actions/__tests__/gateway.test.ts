@@ -477,10 +477,12 @@ describe('GatewayActionImpl', () => {
       it('reconciles on the `reconnecting` signal an unintentional socket loss emits', async () => {
         const { action, mockClient, state } = createTestAction();
         const onComplete = vi.fn();
+        const onEvent = vi.fn();
         const onSilentEnd = vi.fn(() => true);
 
         action.connectToGateway({
           gatewayUrl: 'https://gateway.test.com',
+          onEvent,
           onSessionComplete: onComplete,
           onSilentEnd,
           operationId: 'op-1',
@@ -495,6 +497,14 @@ describe('GatewayActionImpl', () => {
           expect(onComplete).toHaveBeenCalledWith(
             expect.objectContaining({ succeeded: false, terminalReceived: false }),
           ),
+        );
+
+        // The missed terminal is the path that applies the run's final state, so
+        // the retire must ask the handler to re-read the DB — otherwise the last
+        // text/tool state stays stale, and the teardown below cancels the reconnect
+        // that could have replayed it.
+        expect(onEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { reason: 'silent_end' }, type: 'notify_update' }),
         );
 
         // A retired run must not leave its transport running: dropping the store

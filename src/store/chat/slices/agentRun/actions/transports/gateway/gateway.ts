@@ -715,6 +715,21 @@ export class GatewayActionImpl {
         .then(() => onSilentEnd())
         .then((runOver) => {
           if (!runOver) return;
+          // The terminal event is the path that applies the run's canonical final
+          // state — its `uiMessages` snapshot, or a refetch — while the
+          // terminal-missing completion only closes the op and settles the topic.
+          // Retiring without it leaves the last text/tool state stale or absent,
+          // and tearing the transport down cancels the reconnect that could have
+          // replayed it. Ride the `notify_update` path the gapped resume already
+          // uses: the DB is the complete record, and the synthetic event lands in
+          // the handler's sequential queue under its snapshot-generation guard.
+          eventBuffer.push({
+            data: { reason: 'silent_end' },
+            operationId,
+            stepIndex: 0,
+            timestamp: Date.now(),
+            type: 'notify_update',
+          });
           fireSessionComplete();
           client.disconnect();
           this.internal_cleanupGatewayConnection(operationId);
