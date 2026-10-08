@@ -1478,6 +1478,7 @@ describe('buildGoogleToolsWithSearch', () => {
       messages: [{ content: 'Draw an apple', role: 'user' }],
       model: 'gemini-nano-banana-2.1',
       temperature: 1,
+      top_p: 0.9,
     });
 
     const config = (instance['client'].models.generateContentStream as any).mock.calls[0][0].config;
@@ -1487,6 +1488,9 @@ describe('buildGoogleToolsWithSearch', () => {
     expect(config.tools).toEqual([
       { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
     ]);
+    // Nano Banana 2.1 rejects sampling params with an API error.
+    expect(config).not.toHaveProperty('temperature');
+    expect(config).not.toHaveProperty('topP');
   });
 
   it('should keep image resolution in imageConfig when aspect ratio is auto', async () => {

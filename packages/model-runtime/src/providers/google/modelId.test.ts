@@ -11,6 +11,7 @@ import {
   shouldDisableGoogleSystemInstruction,
   shouldDisableGoogleThinkingConfig,
   shouldOmitDeprecatedGoogleGenerationParams,
+  shouldOmitGoogleSamplingParams,
   shouldUseGoogleImageSearchTypes,
   supportsGoogleSearchOnImageResponseModel,
 } from './modelId';
@@ -94,6 +95,16 @@ describe('modelId', () => {
       ['google/gemini-4-flash', true],
     ])('detects modern generation config requirements for %s', (model, expected) => {
       expect(shouldOmitDeprecatedGoogleGenerationParams(model)).toBe(expected);
+    });
+    it.each([
+      ['gemini-nano-banana-2.1', true],
+      ['google/gemini-nano-banana-2.1', true],
+      ['nano-banana-pro-preview', false],
+      ['gemini-2.5-flash-image', false],
+      ['gemini-3.1-flash-image', false],
+      ['gemini-3.5-flash', false],
+    ])('omits unsupported sampling params for %s: %s', (model, expected) => {
+      expect(shouldOmitGoogleSamplingParams(model)).toBe(expected);
     });
   });
 

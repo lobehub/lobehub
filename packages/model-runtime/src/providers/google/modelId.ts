@@ -284,6 +284,17 @@ export const isGoogleNanoBananaModel = (model: string | undefined): boolean => {
 const isVersionedNanoBananaModel = (parsed: ParsedGoogleModelId | undefined): boolean =>
   parsed?.family === 'nanoBanana' && hasVersionAtLeast(parsed, 2);
 
+/**
+ * Nano Banana 2.1+ rejects `temperature` / `topP` (and `topK`, `seed`, `logprobs`) with an API error.
+ * Kept separate from {@link shouldOmitDeprecatedGoogleGenerationParams}, which also drops
+ * `thinkingBudget` and assistant prefills for models that do not need it.
+ * @see https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/nano-banana-2-1
+ */
+export const shouldOmitGoogleSamplingParams = (model: string): boolean => {
+  const parsed = parseGoogleModelId(model);
+  return parsed?.family === 'nanoBanana' && hasVersionAtLeast(parsed, 2, 1);
+};
+
 export const shouldUseGoogleImageSearchTypes = (model: string): boolean => {
   const normalizedModelId = normalizeGoogleModelId(model);
   if (!normalizedModelId) return false;
