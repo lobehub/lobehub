@@ -12,7 +12,8 @@ import ImageEditTools from '@/features/FileViewer/ImageEditTools';
 import { normalizeAsyncError } from '@/libs/swr/normalizeError';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
-import { useFileStore } from '@/store/file';
+
+import { usePreviewFileItem } from '../usePreviewFileItem';
 
 enum FilePreviewTab {
   Chunk = 'chunk',
@@ -28,13 +29,12 @@ const FilePreview = () => {
   const previewFileId = useChatStore(chatPortalSelectors.previewFileId);
   const chunkText = useChatStore(chatPortalSelectors.chunkText);
   const activeTopicId = useChatStore((s) => s.activeTopicId);
-  const useFetchFileItem = useFileStore((s) => s.useFetchKnowledgeItem);
   const { t } = useTranslation('portal');
 
   const topicKey = activeTopicId ?? NO_TOPIC_KEY;
   const [tabByTopic, setTabByTopic] = useState<Record<string, FilePreviewTab>>({});
   const tab = tabByTopic[topicKey] ?? getDefaultTab(chunkText);
-  const { data, error, isLoading, mutate } = useFetchFileItem(previewFileId);
+  const { data, error, fromSource, isLoading, mutate } = usePreviewFileItem();
 
   useEffect(() => {
     setTabByTopic((prev) => ({ ...prev, [topicKey]: getDefaultTab(chunkText) }));
@@ -47,7 +47,7 @@ const FilePreview = () => {
   if (error && normalizeAsyncError(error).status !== 404) {
     return (
       <Flexbox flex={1} padding={16}>
-        <AsyncError error={error} variant={'block'} onRetry={() => void mutate()} />
+        <AsyncError error={error} variant={'block'} onRetry={() => void mutate?.()} />
       </Flexbox>
     );
   }
@@ -90,7 +90,8 @@ const FilePreview = () => {
         <Markdown style={{ overflow: 'scroll', paddingInline: 8 }}>{chunkText}</Markdown>
       ) : (
         <Flexbox flex={1} paddingBlock={8} style={{ overflow: 'scroll' }}>
-          <FileViewer {...data} imageTools={<ImageEditTools />} />
+          {/* Image editing writes back to the viewer's own library file. */}
+          <FileViewer {...data} imageTools={fromSource ? undefined : <ImageEditTools />} />
         </Flexbox>
       )}
     </Flexbox>

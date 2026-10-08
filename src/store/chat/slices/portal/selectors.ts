@@ -159,6 +159,7 @@ const currentFile = (s: ChatStoreState): PortalFile | undefined => {
 
 const previewFileId = (s: ChatStoreState) => currentFile(s)?.fileId;
 const chunkText = (s: ChatStoreState) => currentFile(s)?.chunkText;
+const previewFileSource = (s: ChatStoreState) => currentFile(s)?.source;
 
 // Local File selectors
 const currentLocalFileScopeWorkingDirectory = (s: ChatStoreState): string | undefined =>
@@ -349,6 +350,7 @@ export const chatPortalSelectors = {
   // File preview data
   currentFile,
   previewFileId,
+  previewFileSource,
   chunkText,
 
   // Goal drill-down data

@@ -37,10 +37,27 @@ export enum PortalViewType {
   VerifyResult = 'verifyResult',
 }
 
+/**
+ * A file preview the opener has already resolved, for surfaces that cannot read
+ * the file through the owner-scoped file store.
+ */
+export interface PortalFileSource {
+  /** Display name; its extension also selects the renderer. */
+  name: string;
+  /** Publicly readable file URL. */
+  url: string;
+}
+
 export interface PortalFile {
   chunkId?: string;
   chunkText?: string;
   fileId: string;
+  /**
+   * Render from this source instead of fetching the file item. An agent-share
+   * visitor previews files the creator's run produced, which the visitor's
+   * own file store cannot read.
+   */
+  source?: PortalFileSource;
 }
 
 export interface OpenLocalFileParams {

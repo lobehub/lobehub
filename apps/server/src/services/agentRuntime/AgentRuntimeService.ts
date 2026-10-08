@@ -95,7 +95,10 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
-import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
+import {
+  resolveRunWorkAccessScope,
+  stateHasEntityFileEdits,
+} from '@/server/services/workRegistration';
 
 import { resolveMessageFileUrls } from '../message/resolveMessageFileUrls';
 import { isAbortError, throwIfAborted } from './abort';
@@ -1625,11 +1628,24 @@ export class AgentRuntimeService {
     const threadId: string | undefined = agentState?.origin?.threadId ?? undefined;
     if (!agentId || !topicId) return undefined;
 
+    // A share visitor's Works are registered under the visitor's share scope
+    // (`registerFileWorks`), which the ordinary scope never resolves — without
+    // it the terminal snapshot carries no Work card and the visitor only sees
+    // it after a reload through `shareChat.getMessages`. The visitor surface
+    // always opts in to file Works on that read path, and visitor runs never
+    // use message patches, so this snapshot only ever reaches that client.
+    const workAccessScope = resolveRunWorkAccessScope({
+      shareVisitor: agentState?.principal?.actor?.shareVisitor,
+      topicId,
+    });
+    const isShareVisitorRun = !!workAccessScope;
+
     try {
       return await this.messageService.queryMessages(
         {
           agentId,
           groupId,
+          ...(isShareVisitorRun && { includeFileWorks: true }),
           skipWorks: options?.skipWorks,
           threadId,
           topicId,
@@ -1641,7 +1657,7 @@ export class AgentRuntimeService {
         // terminal Source of Truth — wiping the conversation the run just
         // produced. Visitor-facing redaction of the pushed snapshot happens in
         // `GatewayStreamNotifier`.
-        { allowShareVisitor: true },
+        { allowShareVisitor: true, ...(workAccessScope && { workAccessScope }) },
       );
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back

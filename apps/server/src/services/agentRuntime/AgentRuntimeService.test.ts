@@ -2873,6 +2873,45 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
+    it('assembles a share visitor run snapshot under the visitor share Work scope', async () => {
+      // Regression: the visitor's Works are registered under their share scope,
+      // which the ordinary scope never resolves. Without it the terminal
+      // snapshot carried no Work card, so a sandbox-exported pptx only showed
+      // its card after the visitor reloaded the page.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+        principal: {
+          actor: { shareVisitor: { shareId: 'share_1', visitorUserId: 'visitor_1' } },
+        },
+      } as any);
+
+      expect(queryMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ includeFileWorks: true, topicId: 'tpc_1' }),
+        {
+          allowShareVisitor: true,
+          workAccessScope: {
+            shareId: 'share_1',
+            topicId: 'tpc_1',
+            type: 'agentShare',
+            visitorUserId: 'visitor_1',
+          },
+        },
+      );
+    });
+
+    it('keeps the ordinary Work scope and file-Work gate for a non-share run', async () => {
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({ origin: { agentId: 'agt_1', topicId: 'tpc_1' } } as any);
+
+      expect(queryMessages.mock.calls[0][0].includeFileWorks).toBeUndefined();
+      expect(queryMessages.mock.calls[0][1]).toEqual({ allowShareVisitor: true });
+    });
+
     it.each([undefined, 'visitor_1'])(
       'includes visitor rows (visitor=%s)',
       async (visitorUserId) => {
@@ -2892,7 +2931,10 @@ describe('AgentRuntimeService', () => {
         // The pushed snapshot always carries whole tool payloads now: it only
         // reaches a client that did not ask for protocol 2, which has no way to
         // fetch an omitted payload back.
-        expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
+        expect(queryMessages).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ allowShareVisitor: true }),
+        );
       },
     );
 
