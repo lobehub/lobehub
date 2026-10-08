@@ -25,7 +25,7 @@ jobs:
         startsWith(github.event.pull_request.title, '🚀 release:')
       )
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
