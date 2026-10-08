@@ -82,6 +82,12 @@ export default {
   'identity.roleCloud.expand': 'Show More',
   'identity.view.list': 'List',
   'identity.view.timeline': 'Timeline',
+  'persona.delete.action': 'Delete persona',
+  'persona.delete.title': 'Delete persona?',
+  'persona.delete.confirm':
+    'This deletes your persona and its version history. Your memory entries will be kept. Future memory analysis may create a new persona.',
+  'persona.delete.success': 'Persona deleted. Your memories have been kept.',
+  'persona.delete.error': 'Failed to delete persona. Please try again.',
   'preference.actions.delete': 'Delete',
   'preference.actions.edit': 'Edit',
   'preference.conclusionDirectives': 'Conclusion Directives',
