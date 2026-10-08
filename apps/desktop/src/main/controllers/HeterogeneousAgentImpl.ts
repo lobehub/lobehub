@@ -4321,12 +4321,26 @@ export default class HeterogeneousAgentCtr {
       });
     }
 
+    // Never inherit the launcher's conversation identity for a dispatched run.
+    const childEnv = { ...process.env };
+    for (const key of [
+      'LOBEHUB_AGENT_ID',
+      'LOBEHUB_ASSISTANT_MESSAGE_ID',
+      'LOBEHUB_TASK_ID',
+      'LOBEHUB_WORKSPACE_ID',
+    ]) {
+      delete childEnv[key];
+    }
+
     const env = {
-      ...process.env,
+      ...childEnv,
       ...buildProxyEnv(this.app.storeManager.get('networkProxy')),
       ELECTRON_RUN_AS_NODE: '1',
       [HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV]: '1',
+      ...(params.agentId ? { LOBEHUB_AGENT_ID: params.agentId } : {}),
       LOBEHUB_JWT: jwt,
+      LOBEHUB_OPERATION_ID: operationId,
+      LOBEHUB_TOPIC_ID: topicId,
       ...(assistantMessageId ? { LOBEHUB_ASSISTANT_MESSAGE_ID: assistantMessageId } : {}),
       LOBEHUB_SERVER: serverUrl,
       // Same reason `runHeteroTask` injects this for notify: without it the

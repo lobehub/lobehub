@@ -969,6 +969,7 @@ function bindGatewayClientHandlers(
     try {
       const ack = await spawnHeteroAgentRun(
         {
+          agentId: request.agentId,
           agentType: request.agentType,
           assistantMessageId: request.assistantMessageId,
           args: request.args,

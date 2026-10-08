@@ -4881,6 +4881,44 @@ describe('HeterogeneousAgentCtr', () => {
       expect(proc.stdin.end).toHaveBeenCalledOnce();
     });
 
+    it.each([undefined, 'agt_dispatched'])(
+      'replaces launcher identity with dispatched agent %s',
+      async (agentId) => {
+        for (const key of [
+          'AGENT',
+          'TASK',
+          'OPERATION',
+          'TOPIC',
+          'WORKSPACE',
+          'ASSISTANT_MESSAGE',
+        ]) {
+          vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
+        }
+        try {
+          const proc = createGatewayCliProc();
+          nextFakeProc = proc;
+          const ctr = new HeterogeneousAgentCtr({
+            appStoragePath,
+            storeManager: { get: vi.fn() },
+          } as any);
+
+          const ack = ctr.spawnLhHeteroExec({ ...params, agentId, assistantMessageId: undefined });
+          proc.emit('spawn');
+          await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+          const env = spawnCalls[0].options.env;
+          expect(env.LOBEHUB_AGENT_ID).toBe(agentId);
+          expect(env.LOBEHUB_OPERATION_ID).toBe(params.operationId);
+          expect(env.LOBEHUB_TOPIC_ID).toBe(params.topicId);
+          for (const key of ['TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+            expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
+          }
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
+
     it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;

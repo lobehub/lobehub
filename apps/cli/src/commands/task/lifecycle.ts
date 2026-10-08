@@ -197,7 +197,23 @@ export function registerLifecycleCommands(task: Command) {
     .requiredOption('-m, --message <text>', 'Comment content')
     .action(async (id: string, options: { message: string }) => {
       const client = await getTrpcClient();
-      await client.task.addComment.mutate({ content: options.message, id });
+      const topicId = process.env.LOBEHUB_TOPIC_ID?.trim() || undefined;
+      const authorAgentId = process.env.LOBEHUB_AGENT_ID?.trim() || undefined;
+
+      // The executing agent can differ from the topic owner or task assignee.
+      // Use only the identity injected by the run launcher, even after JWT fallback.
+      if (!authorAgentId && (topicId || process.env.LOBEHUB_OPERATION_ID)) {
+        throw new Error(
+          'Cannot determine the agent author for this run. Refusing to post a task comment as the user. Update and restart the connector or desktop app, then start a new run.',
+        );
+      }
+
+      await client.task.addComment.mutate({
+        authorAgentId,
+        content: options.message,
+        id,
+        topicId,
+      });
       log.info('Comment added.');
     });
 

@@ -6,12 +6,14 @@ import { registerLifecycleCommands } from './lifecycle';
 const { client, streamAgentEvents } = vi.hoisted(() => ({
   client: {
     task: {
+      addComment: { mutate: vi.fn() },
       find: { query: vi.fn() },
       heartbeat: { mutate: vi.fn() },
       run: { mutate: vi.fn() },
       update: { mutate: vi.fn() },
       updateStatus: { mutate: vi.fn() },
     },
+    topic: { getTopicDetail: { query: vi.fn() } },
   },
   streamAgentEvents: vi.fn(),
 }));
@@ -31,6 +33,85 @@ const createProgram = () => {
   registerLifecycleCommands(program.command('task'));
   return program;
 };
+
+describe('task comment attribution', () => {
+  const comment = () =>
+    createProgram().parseAsync(['node', 'test', 'task', 'comment', 'T-1', '-m', 'Sync finished']);
+
+  beforeEach(() => {
+    vi.stubEnv('LOBEHUB_AGENT_ID', '');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', '');
+    vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+    vi.stubEnv('LOBEHUB_JWT', '');
+    client.task.addComment.mutate.mockReset();
+    client.topic.getTopicDetail.query.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('keeps ordinary terminal comments user-authored', async () => {
+    await comment();
+
+    expect(client.task.addComment.mutate).toHaveBeenCalledWith({
+      content: 'Sync finished',
+      id: 'T-1',
+    });
+    expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
+  });
+
+  it('uses the executing agent, not the task assignee', async () => {
+    vi.stubEnv('LOBEHUB_AGENT_ID', 'agt_writer');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_current');
+
+    await comment();
+
+    expect(client.task.addComment.mutate).toHaveBeenCalledWith({
+      authorAgentId: 'agt_writer',
+      content: 'Sync finished',
+      id: 'T-1',
+      topicId: 'tpc_current',
+    });
+    expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
+  });
+
+  it('preserves the dispatched author after JWT is cleared even when the topic belongs to another agent', async () => {
+    vi.stubEnv('LOBEHUB_AGENT_ID', 'agt_device');
+    vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_device');
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op_device');
+    client.topic.getTopicDetail.query.mockResolvedValue({ agentId: 'agt_topic_owner' });
+
+    await comment();
+
+    expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
+    expect(client.task.addComment.mutate).toHaveBeenCalledWith({
+      authorAgentId: 'agt_device',
+      content: 'Sync finished',
+      id: 'T-1',
+      topicId: 'tpc_device',
+    });
+  });
+
+  it.each([null, { agentId: 'agt_topic_owner' }])(
+    'does not infer the author from a topic (%j)',
+    async (topic) => {
+      vi.stubEnv('LOBEHUB_TOPIC_ID', 'tpc_missing');
+      client.topic.getTopicDetail.query.mockResolvedValue(topic);
+
+      await expect(comment()).rejects.toThrow('Cannot determine the agent author');
+      expect(client.topic.getTopicDetail.query).not.toHaveBeenCalled();
+      expect(client.task.addComment.mutate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses an agent run missing both agent and topic context', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op_incomplete');
+
+    await expect(comment()).rejects.toThrow('Cannot determine the agent author');
+    expect(client.task.addComment.mutate).not.toHaveBeenCalled();
+  });
+});
 
 describe('task lifecycle — following the agent stream', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
