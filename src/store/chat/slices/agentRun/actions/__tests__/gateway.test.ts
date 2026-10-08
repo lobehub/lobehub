@@ -475,7 +475,7 @@ describe('GatewayActionImpl', () => {
       // `disconnected` alone left the reconcile unreachable for every case the
       // fix targets: the local op stayed `running` forever.
       it('reconciles on the `reconnecting` signal an unintentional socket loss emits', async () => {
-        const { action, mockClient } = createTestAction();
+        const { action, mockClient, state } = createTestAction();
         const onComplete = vi.fn();
         const onSilentEnd = vi.fn(() => true);
 
@@ -496,6 +496,12 @@ describe('GatewayActionImpl', () => {
             expect.objectContaining({ succeeded: false, terminalReceived: false }),
           ),
         );
+
+        // A retired run must not leave its transport running: dropping the store
+        // handle alone leaves a v1 reconnect timer opening sockets and a mux
+        // operation subscribed for a run nobody will ever read.
+        await vi.waitFor(() => expect(mockClient.disconnect).toHaveBeenCalled());
+        expect(state.gatewayConnections['op-1']).toBeUndefined();
       });
 
       it('reconciles when the mux broadcasts a per-op status_changed(disconnected)', async () => {
@@ -514,9 +520,12 @@ describe('GatewayActionImpl', () => {
         // A redial in progress is not yet the end.
         mockClient.emitEvent('status_changed', 'reconnecting');
         expect(onSilentEnd).not.toHaveBeenCalled();
+        expect(mockClient.disconnect).not.toHaveBeenCalled();
 
         mockClient.emitEvent('status_changed', 'disconnected');
         await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+        // The caller answered "still running", so the transport stays up.
+        expect(mockClient.disconnect).not.toHaveBeenCalled();
       });
 
       it('stops reconciling once the run has been retired', async () => {

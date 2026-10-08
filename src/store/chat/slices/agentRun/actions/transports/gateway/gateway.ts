@@ -699,9 +699,14 @@ export class GatewayActionImpl {
     // topic and retires the run only once the server proves it ended, through the
     // terminal-missing `onSessionComplete`.
     //
-    // Retiring also drops the store's connection entry: leaving it behind would
-    // keep a finished run reading as `connecting`/`reconnecting`, and
-    // `reconnectToGatewayOperation` skips any status other than `disconnected`.
+    // Retiring also tears the transport down, in the same order
+    // `disconnectFromGateway` uses: `internal_cleanupGatewayConnection` only drops
+    // store state, so without the `disconnect()` the discarded handle left a v1
+    // reconnect timer opening sockets and a mux operation still subscribed for a
+    // run nobody will ever read. It also keeps a finished run from reading as
+    // `connecting`/`reconnecting` — `reconnectToGatewayOperation` skips any status
+    // other than `disconnected`. Completion is fired first so the `disconnected`
+    // the teardown provokes is a no-op.
     const reconcileSilentEnd = (): void => {
       if (receivedTerminalEvent || sessionCompleted) return;
       if (!onSilentEnd || silentEndReconciling) return;
@@ -710,8 +715,9 @@ export class GatewayActionImpl {
         .then(() => onSilentEnd())
         .then((runOver) => {
           if (!runOver) return;
-          this.internal_cleanupGatewayConnection(operationId);
           fireSessionComplete();
+          client.disconnect();
+          this.internal_cleanupGatewayConnection(operationId);
         })
         .catch((error) => {
           console.error('[Gateway] Silent-end reconcile failed:', error);
