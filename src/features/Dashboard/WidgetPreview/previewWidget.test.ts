@@ -4,6 +4,7 @@ import {
   defaultDiffPair,
   findSucceededPreviewRun,
   getPreviewPublishState,
+  resolvePublishSchedule,
   toPreviewWidget,
 } from './previewWidget';
 
@@ -83,6 +84,41 @@ describe('getPreviewPublishState', () => {
         { status: 'succeeded', versionId: 'v1' },
       ),
     ).toBe('publishable');
+  });
+});
+
+describe('resolvePublishSchedule', () => {
+  const manifest = { schedule: { pattern: '0 6 * * *', timezone: 'Asia/Shanghai' } };
+
+  it('keeps the widget’s own schedule when the version suggests another', () => {
+    // What makeLive persists: the persisted cadence wins, never the suggestion.
+    expect(
+      resolvePublishSchedule({ schedulePattern: '0 * * * *', scheduleTimezone: 'UTC' }, manifest),
+    ).toEqual({ pattern: '0 * * * *', timezone: 'UTC' });
+  });
+
+  it('adopts a valid manifest suggestion only when the widget has no schedule', () => {
+    expect(
+      resolvePublishSchedule({ schedulePattern: null, scheduleTimezone: null }, manifest),
+    ).toEqual({ pattern: '0 6 * * *', timezone: 'Asia/Shanghai' });
+    expect(
+      resolvePublishSchedule({ schedulePattern: '', scheduleTimezone: null }, manifest),
+    ).toEqual({ pattern: '0 6 * * *', timezone: 'Asia/Shanghai' });
+  });
+
+  it('resolves to no schedule without a persisted one and without a valid suggestion', () => {
+    expect(
+      resolvePublishSchedule(
+        { schedulePattern: null, scheduleTimezone: null },
+        { schedule: { pattern: 'not a cron' } },
+      ),
+    ).toEqual({});
+    expect(resolvePublishSchedule({ schedulePattern: null, scheduleTimezone: null }, null)).toEqual(
+      {},
+    );
+    expect(resolvePublishSchedule({ schedulePattern: null, scheduleTimezone: null }, {})).toEqual(
+      {},
+    );
   });
 });
 

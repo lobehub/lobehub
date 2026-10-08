@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import WidgetCard from '../WidgetCard';
 import { ScriptDiff } from '../WidgetDetail/VersionDiff';
-import { findSucceededPreviewRun, toPreviewWidget } from './previewWidget';
+import { findSucceededPreviewRun, resolvePublishSchedule, toPreviewWidget } from './previewWidget';
 import { AccessFacts, Fact, reviewStyles, ReviewUnavailable } from './ReviewFacts';
 import { useWidgetReview } from './useWidgetReview';
 
@@ -58,7 +58,9 @@ const PublishReview = memo<PublishReviewProps>(
 
     const run = findSucceededPreviewRun(runs, target.id);
     const manifest = target.manifest;
-    const schedule = manifest?.schedule?.pattern ?? widget.schedulePattern;
+    // The cadence publishing will actually retain, not the manifest's raw
+    // suggestion: an already-scheduled widget keeps its own schedule.
+    const schedule = resolvePublishSchedule(widget, manifest);
 
     return (
       <Flexbox data-widget-publish-review={widgetId} gap={12}>
@@ -89,10 +91,8 @@ const PublishReview = memo<PublishReviewProps>(
           </Fact>
           <Fact label={t('publish.schedule')}>
             <Text fontSize={12}>
-              {schedule
-                ? [schedule, manifest?.schedule?.timezone ?? widget.scheduleTimezone]
-                    .filter(Boolean)
-                    .join(' · ')
+              {schedule.pattern
+                ? [schedule.pattern, schedule.timezone].filter(Boolean).join(' · ')
                 : t('publish.scheduleNone')}
             </Text>
           </Fact>

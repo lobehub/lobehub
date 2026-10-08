@@ -1,3 +1,6 @@
+import type { WidgetManifest } from '@lobechat/types';
+import { validateCronPattern } from '@lobechat/utils/cronEval';
+
 import type {
   DashboardWidgetDetail,
   DashboardWidgetRunItem,
@@ -74,4 +77,29 @@ export const defaultDiffPair = (
     versions.find((v) => v.id === target.parentVersionId) ??
     versions[versions.indexOf(target) + 1];
   return { baseId: base?.id, targetId: target.id };
+};
+
+/**
+ * The schedule that will actually be on the widget after the version under
+ * review goes live — exactly what `WidgetService.makeLive` persists: the
+ * widget's own schedule wins, and only a widget without one adopts the
+ * manifest's suggestion (when the pattern is valid). The review must show
+ * this, not the raw manifest suggestion, or the approver signs off a cadence
+ * the publish does not retain.
+ */
+export const resolvePublishSchedule = (
+  widget: Pick<DashboardWidgetDetail, 'schedulePattern' | 'scheduleTimezone'>,
+  manifest?: Pick<WidgetManifest, 'schedule'> | null,
+): { pattern?: string; timezone?: string | null } => {
+  if (widget.schedulePattern) {
+    return { pattern: widget.schedulePattern, timezone: widget.scheduleTimezone };
+  }
+  const suggested = manifest?.schedule;
+  if (
+    suggested?.pattern &&
+    validateCronPattern(suggested.pattern, suggested.timezone ?? null).valid
+  ) {
+    return { pattern: suggested.pattern, timezone: suggested.timezone ?? null };
+  }
+  return {};
 };
