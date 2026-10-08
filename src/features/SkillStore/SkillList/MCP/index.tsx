@@ -19,27 +19,14 @@ import WantMoreSkills from '../WantMoreSkills';
 export const MCPList = memo(() => {
   const { t } = useTranslation('setting');
 
-  const [
-    keywords,
-    isMcpListInit,
-    allItems,
-    currentPage,
-    totalPages,
-    searchLoading,
-    useFetchMCPPluginList,
-    loadMoreMCPPlugins,
-    resetMCPPluginList,
-  ] = useToolStore((s) => [
-    s.mcpSearchKeywords,
-    s.isMcpListInit,
-    s.mcpPluginItems,
-    s.currentPage,
-    s.totalPages,
-    s.searchLoading,
-    s.useFetchMCPPluginList,
-    s.loadMoreMCPPlugins,
-    s.resetMCPPluginList,
-  ]);
+  const [keywords, list, useFetchMCPPluginList, loadMoreMCPPlugins, resetMCPPluginList] =
+    useToolStore((s) => [
+      s.mcpSearchKeywords,
+      s.mcpPluginList,
+      s.useFetchMCPPluginList,
+      s.loadMoreMCPPlugins,
+      s.resetMCPPluginList,
+    ]);
 
   const prevKeywordsRef = useRef(keywords);
 
@@ -50,17 +37,14 @@ export const MCPList = memo(() => {
     }
   }, [keywords, resetMCPPluginList]);
 
-  const { isLoading, error } = useFetchMCPPluginList({
-    page: currentPage,
-    pageSize: 20,
-    q: keywords,
-  });
+  const { error, isValidating } = useFetchMCPPluginList({ pageSize: 20, q: keywords });
 
+  const allItems = list?.items ?? [];
   const hasSearchKeywords = Boolean(keywords && keywords.trim());
+  // A view painted for another search term is not the answer on screen yet.
+  const isStaleQuery = !!list && (list.q ?? undefined) !== (keywords || undefined);
 
-  if (searchLoading || !isMcpListInit || (isLoading && allItems.length === 0)) return <Loading />;
-
-  if (error) {
+  if (error && !list) {
     return (
       <Center gap={12} padding={40}>
         <Icon icon={ServerCrash} size={80} />
@@ -69,13 +53,13 @@ export const MCPList = memo(() => {
     );
   }
 
+  if (!list || isStaleQuery || (isValidating && allItems.length === 0)) return <Loading />;
+
   if (allItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
-  const hasReachedEnd = totalPages !== undefined && currentPage >= totalPages;
-
   const renderFooter = () => {
-    if (isLoading) return <VirtuosoLoading />;
-    if (hasReachedEnd) return <WantMoreSkills />;
+    if (list.isLoadingMore) return <VirtuosoLoading />;
+    if (!list.hasMore) return <WantMoreSkills />;
     return <div style={{ height: 16 }} />;
   };
 

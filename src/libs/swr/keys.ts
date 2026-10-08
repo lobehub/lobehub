@@ -907,11 +907,6 @@ export const toolKeys = {
     'tool:lobehubSkillTools',
     provider,
   ]),
-  mcpPluginList: def('tool:mcpPluginList', (locale: string, params: unknown) => [
-    'tool:mcpPluginList',
-    locale,
-    params,
-  ]),
   uninstalledBuiltins: def('tool:uninstalledBuiltins', (workspaceId: string | null | undefined) => [
     'tool:uninstalledBuiltins',
     workspaceId,
