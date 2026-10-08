@@ -25,6 +25,7 @@ describe('toAppMenuDropdownItems', () => {
       type: 'submenu',
     },
     { checked: true, enabled: true, id: 'trace', label: 'Trace', type: 'checkbox' },
+    { enabled: true, id: 'paste', label: 'Paste', role: 'paste', type: 'normal' },
   ];
 
   it('builds nested menu rows and invokes the clicked id', () => {
@@ -53,5 +54,10 @@ describe('toAppMenuDropdownItems', () => {
 
     trace.onCheckedChange(false);
     expect(invoke).toHaveBeenCalledWith('trace');
+
+    const paste = items[2];
+    if (!paste || !('onClick' in paste) || !paste.onClick) throw new Error('expected paste');
+    paste.onClick({} as never);
+    expect(invoke).toHaveBeenCalledWith('paste', 'paste');
   });
 });

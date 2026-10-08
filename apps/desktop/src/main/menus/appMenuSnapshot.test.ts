@@ -69,6 +69,7 @@ describe('serializeAppMenu', () => {
         type: 'submenu',
       }),
       source({ checked: true, id: 'trace', label: 'Trace', type: 'checkbox' }),
+      source({ id: 'paste', label: 'Paste', role: 'paste' }),
     ]);
 
     expect(nodes).toEqual([
@@ -99,6 +100,7 @@ describe('serializeAppMenu', () => {
         type: 'submenu',
       },
       { checked: true, enabled: true, id: 'trace', label: 'Trace', type: 'checkbox' },
+      { enabled: true, id: 'paste', label: 'Paste', role: 'paste', type: 'normal' },
     ]);
   });
 

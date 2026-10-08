@@ -12,7 +12,7 @@ export const formatMenuAccelerator = (accelerator?: string): string | undefined 
 
 export const toAppMenuDropdownItems = (
   nodes: AppMenuNode[],
-  invoke: (id: string) => void,
+  invoke: (id: string, role?: string) => void,
 ): DropdownItem[] =>
   nodes.map((node, index) => {
     if (node.type === 'separator') return { key: `separator-${index}`, type: 'divider' };
@@ -29,6 +29,10 @@ export const toAppMenuDropdownItems = (
     }
 
     const extra = formatMenuAccelerator(node.accelerator);
+    const activate = () => {
+      if (node.role) invoke(node.id, node.role);
+      else invoke(node.id);
+    };
 
     if (node.type === 'checkbox' || node.type === 'radio') {
       return {
@@ -38,7 +42,7 @@ export const toAppMenuDropdownItems = (
         extra,
         key: node.id,
         label: node.label,
-        onCheckedChange: () => invoke(node.id),
+        onCheckedChange: activate,
         type: 'checkbox',
       };
     }
@@ -48,6 +52,6 @@ export const toAppMenuDropdownItems = (
       extra,
       key: node.id,
       label: node.label,
-      onClick: () => invoke(node.id),
+      onClick: activate,
     };
   });

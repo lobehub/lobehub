@@ -7,6 +7,7 @@ export interface AppMenuItemSource {
   enabled: boolean;
   id: string;
   label: string;
+  role?: string | null;
   submenu?: { items: AppMenuItemSource[] };
   type: AppMenuNode['type'] | 'header' | 'palette';
   visible: boolean;
@@ -72,6 +73,7 @@ export const serializeAppMenu = (items: AppMenuItemSource[]): AppMenuNode[] => {
     };
 
     if (item.accelerator) node.accelerator = item.accelerator;
+    if (item.role) node.role = item.role;
     if (item.type === 'checkbox' || item.type === 'radio') node.checked = item.checked;
 
     nodes.push(node);
