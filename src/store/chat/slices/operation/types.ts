@@ -171,6 +171,9 @@ export interface OperationMetadata {
    */
   streamRetry?: StreamRetryMetadata;
 
+  /** A persisted server terminal snapshot already retired this local operation. */
+  terminalReconciled?: boolean;
+
   /**
    * Start of the turn a steered run continues. Elapsed timers count from here so
    * a queued follow-up reads as one continuous turn; inherited by child operations.

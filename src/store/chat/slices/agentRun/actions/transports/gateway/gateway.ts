@@ -1778,6 +1778,10 @@ export class GatewayActionImpl {
       throw error;
     }
 
+    // A task-detail refresh may have confirmed this run ended during token IO.
+    // Do not attach a fresh stream after its local operation was reconciled.
+    if (this.#get().operations?.[gatewayOpId]?.metadata.terminalReconciled) return;
+
     // Re-check after the async token refresh: a newer executeGatewayAgent call may have
     // taken over for this topic while we were waiting. If so, bail to avoid a duplicate stream.
     // (disconnectFromGateway on the stale op is a no-op here because we haven't connected yet.)
