@@ -5,6 +5,7 @@ import { RefreshCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import type { DashboardWidgetItem } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
@@ -12,14 +13,17 @@ import { isUsableRunStatus } from './utils/widgetHealth';
 
 /**
  * Run the widget's published version now. Hidden until a version is published —
- * there is nothing to run before that.
+ * there is nothing to run before that, and hidden entirely without the
+ * create_content permission — refreshing is a write the server refuses for
+ * workspace viewers.
  */
 const WidgetRefreshButton = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
   const { t } = useTranslation('dashboard');
   const runWidget = useDashboardStore((s) => s.runWidget);
   const running = useDashboardStore(dashboardSelectors.isWidgetRunning(widget.id));
+  const { allowed } = usePermission('create_content');
 
-  if (!widget.publishedVersionId) return null;
+  if (!widget.publishedVersionId || !allowed) return null;
 
   const handleRefresh = async () => {
     try {

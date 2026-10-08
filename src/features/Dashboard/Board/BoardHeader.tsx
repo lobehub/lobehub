@@ -8,6 +8,7 @@ import { LayoutGridIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import type { DashboardWidgetItem } from '@/services/dashboard';
 
 import { dashboardPageStyles as pageStyles } from '../pageStyles';
@@ -52,6 +53,9 @@ interface BoardHeaderProps {
 const BoardHeader = memo<BoardHeaderProps>(
   ({ title, description, widgets, runnableCount, refreshingAll, onRefreshAll, onEditLayout }) => {
     const { t } = useTranslation('dashboard');
+    // Refreshing spends sandbox time on the user's behalf — the same
+    // create_content permission the server enforces on widget.run.
+    const { allowed: canRefresh } = usePermission('create_content');
 
     const { counts, lastUpdatedAt } = useMemo(() => {
       const counts: Partial<Record<WidgetHealthTone, number>> = {};
@@ -99,14 +103,16 @@ const BoardHeader = memo<BoardHeaderProps>(
           </Flexbox>
         </Flexbox>
         <Flexbox horizontal gap={8} style={{ flex: 'none' }}>
-          <Button
-            disabled={runnableCount === 0}
-            icon={RefreshCwIcon}
-            loading={refreshingAll}
-            onClick={onRefreshAll}
-          >
-            {t('board.refreshAll')}
-          </Button>
+          {canRefresh && (
+            <Button
+              disabled={runnableCount === 0}
+              icon={RefreshCwIcon}
+              loading={refreshingAll}
+              onClick={onRefreshAll}
+            >
+              {t('board.refreshAll')}
+            </Button>
+          )}
           {onEditLayout && (
             <Button icon={LayoutGridIcon} onClick={onEditLayout}>
               {t('layout.edit')}
