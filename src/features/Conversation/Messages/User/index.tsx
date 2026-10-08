@@ -127,20 +127,28 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       showAvatar={showSender}
       showTitle={showSender && !scmSource}
       time={createdAt}
-      titleAddon={dmIndicator}
       actionAddon={
         commentCount > 0 && commentTopicId ? (
           <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
         ) : undefined
       }
       headerAddon={
-        scmSource || metadata?.steer || agentSender?.topicId ? (
+        scmSource || metadata?.steer ? (
           <>
             {scmSource && <ScmEventSenderTitle source={scmSource} />}
             {metadata?.steer && <Tag>{t('steer.tag')}</Tag>}
-            {/* Sits in the header rather than `titleAddon` so the reversed
-                (right-aligned) row reads name → source link → avatar, keeping
-                the author first and its origin a trailing affordance. */}
+          </>
+        ) : undefined
+      }
+      titleAddon={
+        // The row is `row-reverse` (right-aligned), so `headerAddon` renders on
+        // the far side of the author name. The source link belongs on the near
+        // side instead: the author name stays next to its own avatar, and the
+        // topic it came from reads as a leading qualifier rather than splitting
+        // the name from its avatar.
+        dmIndicator || agentSender?.topicId ? (
+          <>
+            {dmIndicator}
             {agentSender?.topicId && (
               <AgentSenderSourceLink
                 agentId={agentSender.agentId}
