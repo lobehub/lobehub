@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
 import { LobeOpenRouterAI, params } from './index';
@@ -316,32 +316,6 @@ describe('LobeOpenRouterAI - custom features', () => {
         expect.objectContaining({ reasoning: { effort: 'medium' } }),
         expect.anything(),
       );
-    });
-
-    it('should map the Claude effort param to reasoning effort instead of forwarding it', async () => {
-      await instance.chat({
-        effort: 'xhigh',
-        messages: [{ content: 'Think hard', role: 'user' }],
-        model: 'anthropic/claude-haiku-5.5',
-        thinking: { type: 'adaptive' },
-      });
-
-      const payload = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-      expect(payload.reasoning).toEqual({ effort: 'xhigh' });
-      expect(payload).not.toHaveProperty('effort');
-    });
-
-    it('should keep reasoning disabled over the Claude effort param', async () => {
-      await instance.chat({
-        effort: 'max',
-        messages: [{ content: 'Quick answer', role: 'user' }],
-        model: 'anthropic/claude-haiku-5.5',
-        thinking: { type: 'disabled' },
-      });
-
-      const payload = (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
-      expect(payload.reasoning).toEqual({ enabled: false });
-      expect(payload).not.toHaveProperty('effort');
     });
 
     describe('image model handling', () => {

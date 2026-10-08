@@ -15,7 +15,6 @@ export const params = {
   chatCompletion: {
     handlePayload: (payload) => {
       const {
-        effort,
         reasoning_effort,
         thinking,
         reasoning: _reasoning,
@@ -28,14 +27,10 @@ export const params = {
 
       let reasoning: OpenRouterReasoning | undefined;
 
-      // Claude effort (`opus47Effort`) has no top-level field on OpenRouter; it travels as
-      // `reasoning.effort`, which OpenRouter maps to Anthropic's `output_config.effort`.
-      const resolvedEffort = reasoning_effort || effort;
-
       if (
         thinking?.type ||
         thinking?.budget_tokens !== undefined ||
-        resolvedEffort ||
+        reasoning_effort ||
         thinkingLevel
       ) {
         if (thinking?.type === 'disabled') {
@@ -44,8 +39,8 @@ export const params = {
           reasoning = {
             max_tokens: thinking?.budget_tokens,
           };
-        } else if (resolvedEffort) {
-          reasoning = { effort: resolvedEffort };
+        } else if (reasoning_effort) {
+          reasoning = { effort: reasoning_effort };
         } else if (thinkingLevel) {
           reasoning = { effort: thinkingLevel };
         }
