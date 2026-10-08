@@ -162,8 +162,8 @@ export const createAgentMailProvider = (
       // `sendMessage` would open a second conversation carrying the same subject
       // and drop the human's thread. `threadKey` is the RFC root key, which is
       // not a message id, so it cannot address the reply.
-      const detail = message.replyToMessageId
-        ? await client.replyToMessage(message.replyToMessageId, { text: message.text })
+      const detail = message.replyToProviderMessageId
+        ? await client.replyToMessage(message.replyToProviderMessageId, { text: message.text })
         : await client.sendMessage(inboxIdOf(ref), {
             subject: message.subject ?? '',
             text: message.text,

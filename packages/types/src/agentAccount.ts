@@ -93,7 +93,7 @@ export interface AgentAccountOutboundMessage {
    * `replyToMessage`) answers inside that message's thread; one that threads by
    * key ignores it and uses {@link threadKey} instead.
    */
-  replyToMessageId?: string;
+  replyToProviderMessageId?: string;
   subject?: string;
   text: string;
   /** Reply within this thread when the provider supports it. */

@@ -385,7 +385,7 @@ describe('agent-mail provider — outbound', () => {
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
     const result = await provider.send(ref(), {
-      replyToMessageId: 'msg_in_1',
+      replyToProviderMessageId: 'msg_in_1',
       text: 'hi back',
       to: 'human@example.com',
     });
