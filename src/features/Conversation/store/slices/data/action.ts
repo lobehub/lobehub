@@ -14,6 +14,15 @@ import {
   runMessageListQuery,
   supportsRoundCursor,
 } from '@/services/message/cache';
+import {
+  type ConversationMessageFetch,
+  type ConversationMessagePage,
+  type ConversationMessageParams,
+  conversationMessagesKey,
+  conversationMessagesResource,
+  toPersistedTranscript,
+  transcriptOf,
+} from '@/services/message/replica';
 import { topicService } from '@/services/topic';
 import { getChatStoreState, useChatStore } from '@/store/chat';
 import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
@@ -32,15 +41,6 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import { type Store as ConversationStore } from '../../action';
 import { isSameConversationContext } from '../../utils/contextGuard';
-import {
-  type ConversationMessageFetch,
-  type ConversationMessagePage,
-  type ConversationMessageParams,
-  conversationMessagesKey,
-  conversationMessagesResource,
-  toPersistedTranscript,
-  transcriptOf,
-} from './messageReplica';
 import { type MessageDispatch } from './reducer';
 import { messagesReducer } from './reducer';
 import { dataSelectors } from './selectors';
@@ -384,10 +384,16 @@ export const dataSlice: StateCreator<
   });
 
   /** Write rows to the shown transcript (memory only; see `settleTranscript`). */
-  const writeTranscript = (messages: UIChatMessage[]) =>
+  const writeTranscript = (messages: UIChatMessage[], preservePaging = false) =>
     transcript.update(
       conversationMessagesKey(get().context),
-      (current) => transcriptOf(messages, current),
+      (current) =>
+        current &&
+        (preservePaging ||
+          (current.items.length === messages.length &&
+            current.items.every((item, index) => item.id === messages[index].id)))
+          ? { ...current, items: messages }
+          : transcriptOf(messages),
       { persist: false },
     );
 
@@ -450,7 +456,7 @@ export const dataSlice: StateCreator<
         newDbMessages.length,
       );
 
-      writeTranscript(newDbMessages);
+      writeTranscript(newDbMessages, true);
       settleTranscript();
 
       // Sync changes to external store (ChatStore)
@@ -640,7 +646,7 @@ export const dataSlice: StateCreator<
             // Use the callback and context captured when this fetch was
             // registered. `source: 'fetch'` marks this as a server-snapshot
             // echo: handlers must NOT write it through the SWR cache.
-            onMessagesChange?.(mergedMessages, context, { source: 'fetch' });
+            onMessagesChange?.(get().dbMessages, context, { source: 'fetch' });
           },
           refreshInterval: pollInterval,
           refreshWhenHidden: false,
@@ -652,11 +658,17 @@ export const dataSlice: StateCreator<
       // Streamed chunks stay in memory; the transcript is persisted once the
       // run settles, so a reload restores the finished reply.
       const isStreaming = useChatStore(operationSelectors.isAgentRuntimeRunningByContext(context));
-      const wasStreamingRef = useRef(isStreaming);
+      const streamingKey = conversationMessagesKey(context);
+      const wasStreamingRef = useRef({ key: streamingKey, running: isStreaming });
       useEffect(() => {
-        if (wasStreamingRef.current && !isStreaming) settleTranscript();
-        wasStreamingRef.current = isStreaming;
-      }, [isStreaming]);
+        if (
+          wasStreamingRef.current.key === streamingKey &&
+          wasStreamingRef.current.running &&
+          !isStreaming
+        )
+          settleTranscript();
+        wasStreamingRef.current = { key: streamingKey, running: isStreaming };
+      }, [isStreaming, streamingKey]);
 
       // A transcript painted from storage before the network answers is
       // handed to the host too, so its views (and runs) see the same rows.

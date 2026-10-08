@@ -15,6 +15,7 @@ import {
   messageListKey,
   runMessageListQuery,
 } from '@/services/message/cache';
+import { persistSettledTranscript } from '@/services/message/replica';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import { type ChatStore } from '@/store/chat/store';
 import {
@@ -331,6 +332,14 @@ export class MessageQueryActionImpl {
     // A concrete canonical key creates the cache entry even when no subscriber
     // has mounted yet, which lets a later conversation switch render locally.
     void mutate(messageListKey(ctx), messages, { revalidate: false });
+    const active = this.#get();
+    if (
+      ctx.agentId !== active.activeAgentId ||
+      ctx.topicId !== active.activeTopicId ||
+      (ctx.threadId ?? null) !== (active.activeThreadId ?? null)
+    ) {
+      persistSettledTranscript({ ...ctx, agentId: ctx.agentId, topicId: ctx.topicId }, messages);
+    }
   };
 
   useFetchMessages = (

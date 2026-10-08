@@ -41,7 +41,7 @@ vi.mock('@/store/chat', () => ({
   },
 }));
 
-vi.mock('@/features/Conversation/store/slices/data/messageReplica', () => ({
+vi.mock('@/services/message/replica', () => ({
   readPersistedTranscript: readPersistedTranscriptMock,
 }));
 

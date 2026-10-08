@@ -10,13 +10,13 @@ import {
   MESSAGE_LIST_VERIFICATION_INTERVAL,
   runMessageListQuery,
 } from '@/services/message/cache';
+import { conversationMessagesResource } from '@/services/message/replica';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
 
 import { createStore } from '../../index';
 import { createEphemeralResetState } from '../../initialState';
-import { conversationMessagesResource } from './messageReplica';
 import { dataSelectors } from './selectors';
 
 // Mock conversation-flow parse function
@@ -558,6 +558,58 @@ describe('DataSlice', () => {
 
       expect(messageService.getEarlierMessages).not.toHaveBeenCalled();
     });
+  });
+
+  it('echoes the committed extended transcript after head revalidation', async () => {
+    clearMessageListClientCacheState();
+    const context = { agentId: 'review-agent', topicId: 'review-topic', threadId: null };
+    const old = { id: 'old', role: 'user', content: 'older', createdAt: 1 } as UIChatMessage;
+    const head = { id: 'head', role: 'user', content: 'newest', createdAt: 2 } as UIChatMessage;
+    const cursor = { id: 'head', createdAt: '1970-01-01T00:00:00.002Z' };
+    await runMessageListQuery(context, async () => ({ messages: [head], olderCursor: cursor }));
+    const onMessagesChange = vi.fn();
+    const store = createStore({ context });
+    store.setState({ onMessagesChange });
+    store.getState().replaceMessages([head]);
+    vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({
+      messages: [old],
+      olderCursor: null,
+    });
+    await store.getState().loadEarlierMessages();
+    onMessagesChange.mockClear();
+    vi.mocked(messageService.getMessageListPage).mockResolvedValueOnce({
+      messages: [head],
+      olderCursor: cursor,
+    });
+    fetchMessagesOf(store)(context);
+    await waitFor(() =>
+      expect(onMessagesChange).toHaveBeenCalledWith([old, head], context, { source: 'fetch' }),
+    );
+    expect(store.getState().dbMessages).toEqual([old, head]);
+  });
+
+  it('resets paging after an unpaged replacement but keeps it for an unchanged host echo', () => {
+    const context = { agentId: 'replace-agent', topicId: 'replace-topic', threadId: null };
+    const store = createStore({ context });
+    const rows = ['older', 'head'].map((id, i) => ({
+      id,
+      role: 'user',
+      content: id,
+      createdAt: i,
+    })) as UIChatMessage[];
+    const paging = {
+      currentPage: 2,
+      pageSize: 1,
+      hasMore: true,
+      anchorId: 'head',
+      nextCursor: { id: 'older', createdAt: 'old' },
+      pages: [{ count: 1 }, { count: 1 }],
+    };
+    store.setState({ dbMessages: rows, messagePaging: paging });
+    store.getState().replaceMessages([...rows], { skipOnMessagesChange: true });
+    expect(store.getState().messagePaging).toEqual(paging);
+    store.getState().replaceMessages([rows[1]]);
+    expect(store.getState().messagePaging).toEqual({ currentPage: 0, pageSize: 1, hasMore: true });
   });
 
   describe('transcript persistence', () => {

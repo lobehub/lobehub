@@ -5,9 +5,14 @@ import {
   type ReplicaPagedData,
   type ReplicaPageResult,
   type ReplicaPagingConfig,
+  ReplicaWriteQueue,
 } from '@/libs/replica';
 import { normalizeMessageListQueryContext } from '@/libs/swr/keys';
-import { messageListKey, type MessageRoundCursor } from '@/services/message/cache';
+import {
+  getMessageListWindowOlderCursor,
+  messageListKey,
+  type MessageRoundCursor,
+} from '@/services/message/cache';
 import { isLocalOnlyMessage } from '@/store/chat/utils/localMessages';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
@@ -105,13 +110,12 @@ export const toPersistedTranscript = (data: ConversationMessagePage): Conversati
  * older history exists is unknown, so it is assumed until an empty page says
  * otherwise.
  */
-export const transcriptOf = (
-  items: UIChatMessage[],
-  current?: ConversationMessagePage,
-): ConversationMessagePage =>
-  current
-    ? { ...current, items }
-    : { currentPage: 0, hasMore: items.length > 0, items, pageSize: items.length };
+export const transcriptOf = (items: UIChatMessage[]): ConversationMessagePage => ({
+  currentPage: 0,
+  hasMore: items.length > 0,
+  items,
+  pageSize: items.length,
+});
 
 /**
  * The transcript persisted for a conversation, read without a store — for the
@@ -125,4 +129,48 @@ export const readPersistedTranscript = async (
   if (!storage || !persistKey(conversationMessagesKey(context))) return undefined;
   const row = await storage.get({ queryKey: storageKey(context), scope: scope.get() });
   return row?.data;
+};
+
+// Terminal host updates also arrive for conversations whose component has unmounted.
+const settledTranscriptWrites = new ReplicaWriteQueue(conversationMessagesResource.storage!);
+
+export const persistSettledTranscript = (
+  context: ConversationContext,
+  messages: UIChatMessage[],
+) => {
+  const resource = conversationMessagesResource;
+  const scope = resource.scope.get();
+  if (!resource.scope.canPersist() || !resource.persistKey(resource.key(context))) return;
+  const cursor = getMessageListWindowOlderCursor(context);
+  settledTranscriptWrites.update({ queryKey: resource.storageKey(context), scope }, (current) => {
+    const previous = current?.data;
+    const cursorBoundary = cursor ? messages.findIndex((message) => message.id === cursor.id) : -1;
+    // Threads have no round cursor. The persisted projection still identifies
+    // their head window, including synthetic nodes sorted before its first row.
+    const previousIds = new Set(
+      previous?.items.filter((item) => !isSyntheticGroupNode(item)).map((item) => item.id),
+    );
+    const boundary =
+      cursorBoundary >= 0 ? cursorBoundary : messages.findIndex((item) => previousIds.has(item.id));
+    const syntheticIds = new Set(
+      previous?.items.filter(isSyntheticGroupNode).map((item) => item.id),
+    );
+    const head =
+      cursor === null
+        ? messages
+        : boundary >= 0
+          ? messages.filter((item, index) => index >= boundary || syntheticIds.has(item.id))
+          : previous
+            ? messages.slice(-previous.items.length)
+            : messages;
+    const data = transcriptOf(head);
+    if (cursor === null || cursorBoundary >= 0) {
+      data.nextCursor = cursor;
+      data.hasMore = cursor !== null;
+    } else if (boundary >= 0 && previous?.items[0]?.id === messages[boundary]?.id) {
+      data.nextCursor = previous.nextCursor;
+      data.hasMore = previous.hasMore;
+    }
+    return { data: toPersistedTranscript(data), updatedAt: Date.now() };
+  });
 };

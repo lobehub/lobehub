@@ -2,6 +2,7 @@ import { nanoid } from '@lobechat/utils';
 import debug from 'debug';
 import { produce } from 'immer';
 
+import { persistSettledTranscript } from '@/services/message/replica';
 import { type ChatStore } from '@/store/chat/store';
 import { type MessageMapKeyInput } from '@/store/chat/utils/messageMapKey';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -10,6 +11,7 @@ import { getHomeStoreState } from '@/store/home';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { operationSelectors } from './selectors';
 import {
   type AfterCompletionCallback,
   AI_RUNTIME_OPERATION_TYPES,
@@ -318,6 +320,27 @@ export class OperationActionsImpl {
       false,
       n(`completeOperation/${operationId}`),
     );
+
+    if (
+      operation &&
+      AI_RUNTIME_OPERATION_TYPES.includes(operation.type) &&
+      operation.status !== 'completed'
+    ) {
+      const state = this.#get();
+      const context = operation.context;
+      if (
+        !context.agentId ||
+        !context.topicId ||
+        operationSelectors.isAgentRuntimeRunningByContext(context)(state)
+      )
+        return;
+      const messages = state.dbMessagesMap[messageMapKey(context)];
+      if (messages)
+        persistSettledTranscript(
+          { ...context, agentId: context.agentId, topicId: context.topicId },
+          messages,
+        );
+    }
   };
 
   getOperationAbortSignal = (operationId: string): AbortSignal => {

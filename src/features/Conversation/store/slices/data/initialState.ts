@@ -1,8 +1,7 @@
 import { type UIChatMessage } from '@lobechat/types';
 
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
-
-import { type ConversationMessagePage } from './messageReplica';
+import { type ConversationMessagePage } from '@/services/message/replica';
 
 export interface DataState {
   /**
