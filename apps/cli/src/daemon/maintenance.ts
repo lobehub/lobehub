@@ -79,12 +79,28 @@ export class CliMaintenance {
     } catch {
       supported = false;
     }
+    let operation = await this.readOperation();
+    // A replacement process on a different version cannot complete this receipt.
+    // Surface failure so a historical request does not permanently lock the UI.
+    if (
+      operation &&
+      operation.stage !== 'failed' &&
+      operation.fromInstanceId !== this.instanceId &&
+      operation.targetVersion !== cliVersion
+    ) {
+      operation = {
+        ...operation,
+        error:
+          'The device reconnected on a different CLI version. Check for updates before retrying.',
+        stage: 'failed',
+      };
+    }
     return {
       activeTasks: this.activeRequests + this.options.activeTasks(),
       currentVersion: cliVersion,
       instanceId: this.instanceId,
       latestVersion: this.latestVersion,
-      operation: await this.readOperation(),
+      operation,
       supported,
       unsupportedReason: supported
         ? undefined

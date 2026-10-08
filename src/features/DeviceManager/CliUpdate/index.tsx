@@ -1,5 +1,5 @@
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, confirmModal, Popover, Text } from '@lobehub/ui/base-ui';
 import { CloudDownloadIcon, RotateCwIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -27,12 +27,12 @@ export const CliUpdate = ({
       },
       title: t(install ? 'devices.cliUpdate.update' : 'devices.cliUpdate.restart'),
     });
-  const reason =
+  const operationError =
+    view === 'failed' ? (state?.operation?.error ?? update.operation?.error) : undefined;
+  const errorDetails =
     view === 'unsupported'
-      ? t('devices.cliUpdate.bootstrap')
-      : view === 'failed'
-        ? (state?.operation?.error ?? update.operation?.error)
-        : undefined;
+      ? undefined
+      : [operationError, update.error].filter(Boolean).join('\n\n');
   if (!canEdit) return null;
   return (
     <Flexbox gap={4} style={{ paddingInlineStart: 16 }}>
@@ -103,7 +103,7 @@ export const CliUpdate = ({
           </>
         )}
       </Flexbox>
-      {view !== 'ready' && (
+      {view !== 'ready' && !(view === 'loading' && update.error) && (
         <Text
           fontSize={12}
           type={
@@ -113,7 +113,7 @@ export const CliUpdate = ({
           }
         >
           {t(`devices.cliUpdate.${view}`)}
-          {reason && ` · ${reason}`}
+          {view === 'unsupported' && ` · ${t('devices.cliUpdate.bootstrap')}`}
         </Text>
       )}
       {state && state.activeTasks > 0 && (
@@ -133,8 +133,32 @@ export const CliUpdate = ({
       )}
       {update.error && view !== 'unsupported' && (
         <Text fontSize={12} type={'danger'}>
-          {update.error}
+          {t('devices.cliUpdate.requestFailed')}
         </Text>
+      )}
+      {errorDetails && (
+        <Popover
+          placement={'bottomLeft'}
+          styles={{ content: { maxWidth: 'min(400px, 80vw)' } }}
+          trigger={'click'}
+          content={
+            <Text
+              fontSize={12}
+              style={{
+                maxHeight: 200,
+                overflow: 'auto',
+                whiteSpace: 'pre-wrap',
+                wordBreak: 'break-word',
+              }}
+            >
+              {errorDetails}
+            </Text>
+          }
+        >
+          <Button size={'small'} style={{ alignSelf: 'flex-start' }} type={'text'}>
+            {t('devices.cliUpdate.showDetails')}
+          </Button>
+        </Popover>
       )}
       {update.ambiguous && view !== 'success' && (
         <Text fontSize={12} type={'danger'}>

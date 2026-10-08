@@ -17,6 +17,8 @@ export default {
     'Maintenance is blocked by {{count}} active tasks. Wait for them to finish.',
   'devices.cliUpdate.available': 'CLI {{version}} is available.',
   'devices.cliUpdate.retryRead': 'Refresh status',
+  'devices.cliUpdate.requestFailed': 'The CLI request failed. Refresh status before trying again.',
+  'devices.cliUpdate.showDetails': 'Show details',
   'devices.cliUpdate.retryCommand': 'Retry same request',
   'devices.cliUpdate.ambiguous':
     'The request may have been accepted. Refresh status or retry the same request; do not start another operation.',

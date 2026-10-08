@@ -58,6 +58,26 @@ const create = (activeTasks = () => 0, daemon = true) =>
   });
 
 describe('CLI maintenance admission', () => {
+  it('makes historical operations recoverable after a manual version change', async () => {
+    const maintenance = create();
+    const state = await maintenance.restart({ requestId: id, update: false });
+    const operation = { ...state.operation!, targetVersion: '0.0.0' };
+    await writeFile(
+      path.join(home, '.lobehub/cli-maintenance/state.json'),
+      JSON.stringify(operation),
+    );
+
+    // An update in the originating process is still in flight, not a failure.
+    expect((await maintenance.getState()).operation?.stage).toBe('restarting');
+    const reconnected = await create().getState();
+    expect(reconnected.operation).toMatchObject({
+      id,
+      stage: 'failed',
+      error: expect.stringContaining('different CLI version'),
+    });
+    expect(reconnected.supported).toBe(true);
+  });
+
   it('rejects background tasks and releases the gate after refusal', async () => {
     const maintenance = create(() => 2);
     await expect(maintenance.restart({ requestId: id, update: false })).rejects.toThrow(
