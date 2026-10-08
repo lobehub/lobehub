@@ -126,7 +126,7 @@ const Body = memo(() => {
             icon={LayoutDashboardIcon}
             size={'small'}
             type={'text'}
-            onClick={() => openDashboard()}
+            onClick={() => openDashboard(undefined, widget.projectId)}
           >
             {t('portal.goToDashboards')}
           </Button>

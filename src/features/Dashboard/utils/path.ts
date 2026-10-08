@@ -10,6 +10,15 @@ export const getDashboardPath = (dashboard: { id: string; projectId?: string | n
     : `/dashboard/${dashboard.id}`;
 
 /**
+ * Where a widget's board list opens: the project's dashboards when the widget
+ * lives in one, else the home dashboard list. Opening the home list for a
+ * project widget would land somewhere unrelated (personal mode) or on routes
+ * disabled inside workspaces.
+ */
+export const getDashboardListPath = (projectId?: string | null) =>
+  projectId ? getProjectDashboardPath(projectId) : '/dashboard';
+
+/**
  * Where the home board route sends a board that actually lives in a project:
  * into its project path, so it renders with the project shell and back path
  * instead of the home chrome. Home boards stay on this route (`undefined`),
