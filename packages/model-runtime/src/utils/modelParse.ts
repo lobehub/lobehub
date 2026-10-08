@@ -48,11 +48,13 @@ export const MODEL_LIST_CONFIGS = {
   google: {
     excludeKeywords: ['tts'],
     // Nano Banana ids (`gemini-nano-banana-2.1`, `nano-banana-pro-preview`) lack `-image-` but are
-    // native image-output models with thinking and Search grounding, and no function calling.
+    // native image-output models with thinking and no function calling. Search is limited to the
+    // versioned `gemini-nano-banana-*` ids, the only aliases the runtime sends Google Search for
+    // (`supportsGoogleSearchOnImageResponseModel`).
     functionCallKeywords: ['gemini', '!-image-', '!nano-banana', 'gemma-4'],
     imageOutputKeywords: ['-image-', 'nano-banana'],
     reasoningKeywords: ['thinking', '-2.5-', '!-image-', '-3-', 'gemma-4', 'nano-banana'],
-    searchKeywords: ['-search', '!-image-', 'gemma-4', 'nano-banana'],
+    searchKeywords: ['-search', '!-image-', 'gemma-4', 'gemini-nano-banana'],
     videoKeywords: ['-2.5-', '!-image-', '-3-'],
     visionKeywords: ['gemini', 'learnlm', 'gemma-4'],
   },
