@@ -157,11 +157,18 @@ export const createAgentMailProvider = (
       ref: AgentAccountRef,
       message: AgentAccountOutboundMessage,
     ): Promise<{ providerMessageId: string }> => {
-      const detail = await client.sendMessage(inboxIdOf(ref), {
-        subject: message.subject ?? '',
-        text: message.text,
-        to: message.to,
-      });
+      // Answering a specific message goes through the reply route: the mail API
+      // threads it (`In-Reply-To`/`References`, recipients inherited), while
+      // `sendMessage` would open a second conversation carrying the same subject
+      // and drop the human's thread. `threadKey` is the RFC root key, which is
+      // not a message id, so it cannot address the reply.
+      const detail = message.replyToMessageId
+        ? await client.replyToMessage(message.replyToMessageId, { text: message.text })
+        : await client.sendMessage(inboxIdOf(ref), {
+            subject: message.subject ?? '',
+            text: message.text,
+            to: message.to,
+          });
 
       return { providerMessageId: messageIdOf(detail) };
     },

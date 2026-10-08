@@ -71,6 +71,9 @@ const createMailFetch = (options: { raw?: null | string } = {}) => {
     if (method === 'POST' && pathname === '/v1/inboxes/inb_1/messages') {
       return json(mailDetail({ direction: 'outbound', id: 'msg_out_1' }));
     }
+    if (method === 'POST' && pathname === '/v1/messages/msg_in_1/reply') {
+      return json(mailDetail({ direction: 'outbound', id: 'msg_out_reply_1' }));
+    }
     if (method === 'GET' && pathname === '/v1/messages/msg_in_1') {
       return json(mailDetail());
     }
@@ -277,7 +280,11 @@ describe('agent-mail provider — inbound', () => {
   });
 
   it('falls back to the shared secret when the account carries none', async () => {
-    const provider = createAgentMailProvider({ ...isolated(), apiKey: 'am_test', webhookSecret: SECRET });
+    const provider = createAgentMailProvider({
+      ...isolated(),
+      apiKey: 'am_test',
+      webhookSecret: SECRET,
+    });
     const body = inboundBody();
     const timestamp = Math.floor(Date.now() / 1000);
 
@@ -371,5 +378,24 @@ describe('agent-mail provider — outbound', () => {
     });
 
     expect(result).toEqual({ providerMessageId: 'msg_out_1' });
+  });
+
+  it('answers within the thread when the caller names the message it replies to', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    const result = await provider.send(ref(), {
+      replyToMessageId: 'msg_in_1',
+      text: 'hi back',
+      to: 'human@example.com',
+    });
+
+    // The reply route inherits the recipients and threads the message; going
+    // through `sendMessage` would start a second conversation with the same
+    // subject instead of answering the human in theirs.
+    expect(calls.filter((call) => call.method === 'POST')).toEqual([
+      { body: { text: 'hi back' }, method: 'POST', path: '/v1/messages/msg_in_1/reply' },
+    ]);
+    expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
   });
 });

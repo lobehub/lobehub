@@ -87,6 +87,13 @@ export interface AgentAccountInboundMessage {
 /** A message the agent sends from one of its accounts. */
 export interface AgentAccountOutboundMessage {
   attachments?: AgentAccountAttachment[];
+  /**
+   * Provider-side message id this send answers — the `providerMessageId` of the
+   * inbound message being replied to. A transport that threads by id (mail's
+   * `replyToMessage`) answers inside that message's thread; one that threads by
+   * key ignores it and uses {@link threadKey} instead.
+   */
+  replyToMessageId?: string;
   subject?: string;
   text: string;
   /** Reply within this thread when the provider supports it. */
