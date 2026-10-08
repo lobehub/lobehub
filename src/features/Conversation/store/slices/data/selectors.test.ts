@@ -126,5 +126,26 @@ describe('getBlockMetadata', () => {
 
   it('returns undefined for an unknown block', () => {
     expect(dataSelectors.getBlockMetadata('missing')(stateWith([]))).toBeUndefined();
+describe('rowTailId', () => {
+  // A steered row keeps its host id (`g1`) while rendering the continuation (`g2`)
+  // underneath it — the row tail is what the user is actually looking at.
+  const steeredRow = stateWith([
+    { id: 'u1', role: 'user' },
+    { id: 'g1', role: 'assistantGroup' },
+    { id: 's1', metadata: { steer: true }, role: 'user' },
+    { id: 'g2', role: 'assistantGroup' },
+    { id: 'u2', role: 'user' },
+    { id: 'g3', role: 'assistantGroup' },
+  ]);
+
+  it('resolves the host and a steer message to the last continuation of that row', () => {
+    expect(dataSelectors.rowTailId('g1')(steeredRow)).toBe('g2');
+    expect(dataSelectors.rowTailId('s1')(steeredRow)).toBe('g2');
+  });
+
+  it('resolves the row tail and a plain row to themselves', () => {
+    expect(dataSelectors.rowTailId('g2')(steeredRow)).toBe('g2');
+    expect(dataSelectors.rowTailId('u2')(steeredRow)).toBe('u2');
+    expect(dataSelectors.rowTailId('g3')(steeredRow)).toBe('g3');
   });
 });

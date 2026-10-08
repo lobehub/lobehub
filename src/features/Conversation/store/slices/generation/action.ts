@@ -56,6 +56,7 @@ import { getUserStoreState } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { type Store as ConversationStore } from '../../action';
+import { dataSelectors } from '../data/selectors';
 import { MAX_HETERO_AUTO_RETRIES } from './heteroRetryConfig';
 
 const buildRetryInitialContext = (editorData: Record<string, any> | null | undefined) => {
@@ -1154,7 +1155,11 @@ export const generationSlice: StateCreator<
 
   openThreadCreator: (messageId: string) => {
     const chatStore = useChatStore.getState();
-    chatStore.openThreadCreator(messageId);
+    // Anchor the subtopic on the row's tail. A steered row's id is its host (the
+    // chain's *first* turn) while the user is looking at the chain's last turn —
+    // passing the raw id anchors the fork at the top of the row instead of where
+    // the user is. See `dataSelectors.rowTailId`.
+    chatStore.openThreadCreator(dataSelectors.rowTailId(messageId)(get()));
   },
 
   internal_beginHeteroOverloadWait: (scopeId: string) => {
