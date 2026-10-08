@@ -208,6 +208,7 @@
     "@chat-adapter/slack": "~4.38.0",
     "@chat-adapter/state-ioredis": "~4.38.0",
     "@chat-adapter/telegram": "~4.38.0",
+    "@codemirror/streamparser": "^6.0.0",
     "@codesandbox/sandpack-react": "^2.20.0",
     "@composio/core": "^0.10.0",
     "@discordjs/rest": "^2.6.3",
