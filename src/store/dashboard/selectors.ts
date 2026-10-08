@@ -1,7 +1,7 @@
 import type { WidgetLevelFilter } from '@lobechat/types';
 
-import type { DashboardStore } from './action';
 import { dashboardLevelKey } from './initialState';
+import type { DashboardStore } from './store';
 
 const EMPTY: never[] = [];
 

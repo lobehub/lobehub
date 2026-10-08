@@ -12,17 +12,36 @@ import { useWidgetReview } from './useWidgetReview';
 interface FakeResponse {
   data?: unknown;
   error?: unknown;
-  isLoading?: boolean;
-  mutate: ReturnType<typeof vi.fn>;
+  isValidating?: boolean;
 }
 
-/** SWR responses by key root: `dashboard:widget` / `dashboard:versions` / `dashboard:previewRun`. */
-const responses = vi.hoisted(() => new Map<string, FakeResponse>());
+/**
+ * Replica sync responses by resource name: `widgetDetail` / `widgetVersions` /
+ * `widgetPreviewRun`. The store reaches them through `useSync`, so the mock
+ * answers both the hydration read and the sync of each entry.
+ */
+const state = vi.hoisted(() => ({
+  /** Per-resource revalidate spy: `useSync().mutate()` is what `retry` calls. */
+  mutates: new Map<string, ReturnType<typeof vi.fn>>(),
+  responses: new Map<string, FakeResponse>(),
+}));
 
 vi.mock('@/libs/swr', () => ({
   mutate: vi.fn(),
-  useClientDataSWR: (key: unknown[] | null) =>
-    (key && responses.get(key[0] as string)) ?? { data: undefined, mutate: vi.fn() },
+  useClientDataSWR: (key: unknown[] | null) => {
+    if (!key) return { data: undefined, isValidating: false, mutate: vi.fn() };
+    // The persisted read completes, so the review is not stuck hydrating.
+    if (key[0] === 'replica:hydrate') {
+      return { data: true, isValidating: false, mutate: vi.fn() };
+    }
+    const name = key[1] as string;
+    if (!state.mutates.has(name)) state.mutates.set(name, vi.fn());
+    return {
+      isValidating: false,
+      mutate: state.mutates.get(name),
+      ...state.responses.get(name),
+    };
+  },
 }));
 
 const widget = { draftVersionId: 'v2', id: 'w1', title: 'Open PRs' } as any;
@@ -31,30 +50,29 @@ const versions = [
   { id: 'v2', status: 'draft', version: 2 },
 ] as any[];
 
-const respond = (root: string, response: Omit<FakeResponse, 'mutate'>) =>
-  responses.set(`dashboard:${root}`, { mutate: vi.fn(), ...response });
+const respond = (resource: string, response: FakeResponse) =>
+  state.responses.set(resource, response);
 
-/** Every review request settled, with the store filled as their `onSuccess` would. */
-const loadAll = () => {
-  respond('widget', { data: widget });
-  respond('versions', { data: versions });
-  respond('previewRun', { data: null });
+/** The replica projections a settled review reads, filled as `replace` would. */
+const loadAll = (patch: Record<string, unknown> = {}) => {
   useDashboardStore.setState({
     widgetDetailMap: { w1: widget },
-    widgetRunsMap: { w1: [] },
     widgetVersionsMap: { w1: versions },
+    ...patch,
   });
 };
 
 beforeEach(() => {
-  responses.clear();
+  state.responses.clear();
+  state.mutates.clear();
+  vi.clearAllMocks();
   useDashboardStore.setState(initialState);
 });
 
 describe('useWidgetReview', () => {
   it('reports a failed load as an error, holds approval, and retries every request', () => {
-    respond('widget', { error: new Error('500') });
-    respond('versions', { data: versions });
+    respond('widgetDetail', { error: new Error('500') });
+    respond('widgetVersions', { data: versions });
     const onApprovalBlockedChange = vi.fn();
 
     const { result } = renderHook(() => useWidgetReview('w1', 'v2', { onApprovalBlockedChange }));
@@ -64,13 +82,14 @@ describe('useWidgetReview', () => {
     expect(onApprovalBlockedChange).toHaveBeenLastCalledWith(true);
 
     act(() => result.current.retry());
-    expect(responses.get('dashboard:widget')!.mutate).toHaveBeenCalled();
-    expect(responses.get('dashboard:versions')!.mutate).toHaveBeenCalled();
+    // Every review request is revalidated through its own replica slice.
+    expect(state.mutates.get('widgetDetail')).toHaveBeenCalled();
+    expect(state.mutates.get('widgetVersions')).toHaveBeenCalled();
   });
 
   it('holds approval while loading, including a retry in flight after a failure', () => {
-    respond('widget', { error: new Error('500'), isLoading: true });
-    respond('versions', { isLoading: true });
+    respond('widgetDetail', { error: new Error('500'), isValidating: true });
+    respond('widgetVersions', { isValidating: true });
     const onApprovalBlockedChange = vi.fn();
 
     const { result } = renderHook(() => useWidgetReview('w1', 'v2', { onApprovalBlockedChange }));
@@ -124,7 +143,7 @@ describe('useWidgetReview', () => {
 
   it('treats the preview run as part of the publish review', () => {
     loadAll();
-    respond('previewRun', { error: new Error('503') });
+    respond('widgetPreviewRun', { error: new Error('503') });
     const onApprovalBlockedChange = vi.fn();
 
     const { result } = renderHook(() =>
@@ -134,15 +153,14 @@ describe('useWidgetReview', () => {
     expect(result.current.status).toBe('error');
     expect(onApprovalBlockedChange).toHaveBeenLastCalledWith(true);
     act(() => result.current.retry());
-    expect(responses.get('dashboard:previewRun')!.mutate).toHaveBeenCalled();
+    expect(state.mutates.get('widgetPreviewRun')).toHaveBeenCalled();
   });
 
   it('loads the reviewed version’s preview by version, not the capped run list', () => {
-    loadAll();
     // The approval-era preview no longer sits in the newest-run window; only
-    // the version-keyed request can still see it.
+    // the version-keyed entry can still see it.
     const run = { id: 'r1', versionId: 'v2' };
-    respond('previewRun', { data: run });
+    loadAll({ widgetPreviewRunMap: { 'w1:v2': run } });
     const onApprovalBlockedChange = vi.fn();
 
     const { result } = renderHook(() =>
@@ -156,9 +174,10 @@ describe('useWidgetReview', () => {
   });
 
   it('holds approval when the reviewed version has no usable preview run', () => {
-    loadAll();
-    // No usable dry run of v2: publishing would be refused (DRY_RUN_REQUIRED),
-    // so the review renders its warning and approval stays held.
+    // No usable dry run of v2 — the request settles on `null`, not an error:
+    // publishing would be refused (DRY_RUN_REQUIRED), so the review renders its
+    // warning and approval stays held.
+    loadAll({ widgetPreviewRunMap: { 'w1:v2': null } });
     const onApprovalBlockedChange = vi.fn();
 
     const { result } = renderHook(() =>
@@ -172,7 +191,7 @@ describe('useWidgetReview', () => {
 
   it('keeps a loaded review ready through a background revalidation failure', () => {
     loadAll();
-    respond('versions', { data: versions, error: new Error('500') });
+    respond('widgetVersions', { error: new Error('500') });
 
     const { result } = renderHook(() => useWidgetReview('w1', 'v2'));
 
@@ -180,7 +199,7 @@ describe('useWidgetReview', () => {
   });
 
   it('releases the hold when the review unmounts', () => {
-    respond('widget', { error: new Error('500') });
+    respond('widgetDetail', { error: new Error('500') });
     const onApprovalBlockedChange = vi.fn();
 
     const { unmount } = renderHook(() => useWidgetReview('w1', 'v2', { onApprovalBlockedChange }));
