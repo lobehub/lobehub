@@ -93,7 +93,7 @@ const PromptExtendItem = memo(() => {
     const options = enumValues.map((item) => ({
       disabled: !canCreate,
       key: item,
-      label: item,
+      label: t(`config.promptExtend.options.${item}`, { defaultValue: item }),
     }));
 
     return (

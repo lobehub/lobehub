@@ -1,9 +1,11 @@
+import { deserializeParts } from '@lobechat/utils';
 import { createStaticStyles, cx } from 'antd-style';
 import { memo } from 'react';
 
 import { LOADING_FLAT } from '@/const/message';
 import MarkdownMessage from '@/features/Conversation/Markdown';
 import ContentLoading from '@/features/Conversation/Messages/components/ContentLoading';
+import { RichContentRenderer } from '@/features/Conversation/Messages/components/RichContentRenderer';
 
 import { dataSelectors, useConversationStore } from '../../../store';
 import { normalizeThinkTags, processWithArtifact } from '../../../utils/markdown';
@@ -41,6 +43,16 @@ const MessageContent = memo<MessageContentProps>(
       const ms = new Date(value).getTime();
       return Number.isFinite(ms) ? ms : undefined;
     });
+    /**
+     * Image-output models (e.g. Nano Banana) persist content as serialized parts.
+     * A step block after a tool call still needs to render them as images, not raw JSON.
+     */
+    const isMultimodal = useConversationStore(
+      (s) => !!dataSelectors.getBlockMetadata(id)(s)?.isMultimodal,
+    );
+    const tempDisplayContent = useConversationStore(
+      (s) => dataSelectors.getBlockMetadata(id)(s)?.tempDisplayContent as string | undefined,
+    );
 
     const message = normalizeThinkTags(processWithArtifact(content ?? ''));
     // Once a tool call exists below this block's text, the text is already
@@ -54,6 +66,10 @@ const MessageContent = memo<MessageContentProps>(
       if (hasTools) return null;
       return <ContentLoading id={id} startTime={createdAt} />;
     }
+
+    const contentParts =
+      isMultimodal && content ? deserializeParts(tempDisplayContent || content) : null;
+    if (contentParts) return <RichContentRenderer parts={contentParts} />;
 
     const isSingleLine = (message || '').split('\n').length <= 2;
     const isToolSingleLine = hasTools && isSingleLine;

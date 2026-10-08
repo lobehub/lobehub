@@ -70,17 +70,19 @@ export interface ReplicaState<T> {
   scope?: string;
 }
 
-export interface ReplicaResource<TParams, TData, TFetched = TData> {
+export interface ReplicaResource<TParams, TData, TFetched = TData, TCursor = any> {
   /** Paged resources receive the page cursor (`undefined` = head page). */
-  fetcher?: (params: TParams, cursor?: any) => Promise<TFetched>;
+  fetcher?: (params: TParams, cursor?: TCursor) => Promise<TFetched>;
   key: (params: TParams) => string;
   name: string;
   /** Storage namespace — `name` + `version`, so a version bump orphans old rows. */
   namespace: string;
   /** Present on paged resources (`definePagedReplica`). */
-  paging?: ReplicaPagingConfig<any>;
+  paging?: ReplicaPagingConfig<any, TCursor>;
   /** Whether the resource survives a reload (it has a storage). */
   persisted: boolean;
+  /** Whether an entry key may be hydrated and persisted (see `persistKey`). */
+  persistKey: (key: string) => boolean;
   /**
    * Query identity beyond `key` (filters, page size). Persisted rows are
    * stored per query, so a different query never hydrates; in memory a query

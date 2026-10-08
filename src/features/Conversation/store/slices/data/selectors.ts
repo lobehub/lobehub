@@ -282,6 +282,15 @@ const getBlockContent =
   (s: State): string | undefined =>
     findBlockById(blockId, s.displayMessages)?.content;
 
+/**
+ * Block metadata from the same recursive lookup as {@link getBlockContent}, so blocks nested in
+ * compressed groups or council members resolve too (`getDbMessageById` only sees top-level rows).
+ */
+const getBlockMetadata =
+  (blockId: string) =>
+  (s: State): AssistantContentBlock['metadata'] =>
+    findBlockById(blockId, s.displayMessages)?.metadata;
+
 const getBlockHasTools =
   (blockId: string) =>
   (s: State): boolean => {
@@ -328,6 +337,7 @@ export const dataSelectors = {
   getDbMessageById,
   getDbMessageByToolCallId,
   getBlockContent,
+  getBlockMetadata,
   getBlockHasTools,
   getDisplayMessageById,
   getGroupLatestMessageWithoutTools,

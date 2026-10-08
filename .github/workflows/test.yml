@@ -66,7 +66,8 @@ jobs:
             .github/scripts/vercel-ignored-build-step.test.cjs \
             .github/scripts/bundle-size-gate.test.cjs \
             .github/scripts/size-gate-comment.test.cjs \
-            .github/scripts/mergeAllowBuilds.test.mjs
+            .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
@@ -240,7 +241,7 @@ jobs:
       - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
-          bun-version: '1.3.2'
+          bun-version: 'canary'
 
       - name: Verify Windows shell strategy
         run: bun run packages/local-file-shell/scripts/verify-windows-shell.ts

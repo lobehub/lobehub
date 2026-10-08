@@ -107,6 +107,7 @@ describe('thinkingResolver', () => {
       'gemini-3-pro-image-preview',
       'gemma-4-31b-it',
       'gemma-4-26b-a4b-it',
+      'gemini-nano-banana-2.1',
     ])('should return true for %s', (model) => {
       expect(isGemini3Model(model)).toBe(true);
     });
@@ -263,6 +264,12 @@ describe('thinkingResolver', () => {
   });
 
   describe('resolveGoogleThinkingConfig', () => {
+    it('passes the requested thinkingLevel through for Nano Banana 2.1', () => {
+      expect(
+        resolveGoogleThinkingConfig('gemini-nano-banana-2.1', { thinkingLevel: 'high' }),
+      ).toMatchObject({ thinkingBudget: undefined, thinkingLevel: 'high' });
+    });
+
     describe('gemini-pro (legacy unversioned model)', () => {
       const model = 'gemini-pro';
 

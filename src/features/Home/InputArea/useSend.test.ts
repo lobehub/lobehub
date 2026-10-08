@@ -182,6 +182,13 @@ describe('Home InputArea useSend', () => {
     sendMessageMock.mockReset();
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
+    clearChatUploadFileListMock.mockImplementation((submittedIds?: string[]) => {
+      fileState.chatUploadFileList = submittedIds
+        ? fileState.chatUploadFileList.filter(
+            (file: { id: string }) => !submittedIds.includes(file.id),
+          )
+        : [];
+    });
     clearChatContextSelectionsMock.mockReset();
     restoreChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
@@ -276,6 +283,14 @@ describe('Home InputArea useSend', () => {
   });
 
   it('keeps the draft and stays on Home when task creation throws', async () => {
+    fileState.chatUploadFileList = [
+      {
+        id: 'file-1',
+        file: new File(['report'], 'report.pdf'),
+        fileUrl: 'https://example.com/f/file-1',
+        status: 'success',
+      },
+    ] as any;
     createTaskMock.mockRejectedValue(new Error('create failed'));
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
@@ -292,12 +307,21 @@ describe('Home InputArea useSend', () => {
     expect(runTaskMock).not.toHaveBeenCalled();
     expect(routerMock.push).not.toHaveBeenCalled();
     expect(clearContentMock).not.toHaveBeenCalled();
+    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
     expect(messageSuccessMock).not.toHaveBeenCalled();
     expect(messageErrorMock).toHaveBeenCalledWith('dashboard.submitFailed');
   });
 
-  it('does not discard attachments that Task mode cannot persist', async () => {
-    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+  it('persists uploaded attachments when creating a task', async () => {
+    fileState.chatUploadFileList = [
+      {
+        id: 'file-1',
+        file: new File(['report'], 'report.pdf', { type: 'application/pdf' }),
+        fileUrl: 'https://example.com/f/file-1',
+        status: 'success',
+      },
+    ] as any;
+    createTaskMock.mockResolvedValue({ identifier: 'T-27' });
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
@@ -310,14 +334,77 @@ describe('Home InputArea useSend', () => {
       await result.current.send(params);
     });
 
-    expect(createTaskMock).not.toHaveBeenCalled();
-    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
-    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.task.unsupportedContext');
+    expect(createTaskMock).toHaveBeenCalledTimes(1);
+    const created = createTaskMock.mock.calls[0][0];
+    expect(created.editorData.root.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          children: [
+            expect.objectContaining({
+              type: 'file',
+              fileUrl: 'https://example.com/f/file-1',
+              name: 'report.pdf',
+              status: 'uploaded',
+            }),
+          ],
+        }),
+      ]),
+    );
+    expect(clearChatUploadFileListMock).toHaveBeenCalledTimes(1);
+    expect(messageErrorMock).not.toHaveBeenCalled();
   });
 
-  it('explains why an attachment-only Task submission cannot proceed', async () => {
+  it('preserves uploads added while task creation is pending', async () => {
+    const submittedFile = {
+      id: 'submitted',
+      file: new File(['first'], 'first.txt'),
+      fileUrl: 'https://example.com/first',
+      status: 'success',
+    };
+    const newFile = {
+      id: 'new-upload',
+      file: new File(['second'], 'second.txt'),
+      status: 'uploading',
+    };
+    fileState.chatUploadFileList = [submittedFile] as any;
+    let completeCreation!: (value: { identifier: string }) => void;
+    createTaskMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeCreation = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'First task',
+    };
+    let submission!: Promise<void>;
+    act(() => {
+      submission = Promise.resolve(result.current.send(params));
+    });
+    fileState.chatUploadFileList = [submittedFile, newFile] as any;
+    await act(async () => {
+      completeCreation({ identifier: 'T-28' });
+      await submission;
+    });
+    expect(fileState.chatUploadFileList).toEqual([newFile]);
+    expect(JSON.stringify(createTaskMock.mock.calls[0][0].editorData)).not.toContain('second.txt');
+  });
+
+  it('creates a task from an attachment-only submission', async () => {
     chatState.inputMessage = '';
-    fileState.chatUploadFileList = [{ id: 'file-1' }] as any;
+    fileState.chatUploadFileList = [
+      {
+        id: 'file-1',
+        file: new File(['report'], 'report.pdf', { type: 'application/pdf' }),
+        fileUrl: 'https://example.com/f/file-1',
+        status: 'success',
+      },
+    ] as any;
+    createTaskMock.mockResolvedValue({ identifier: 'T-27' });
     const { result } = renderHook(() => useSend('task'));
     const params: Parameters<SendButtonHandler>[0] = {
       clearContent: vi.fn(),
@@ -330,10 +417,48 @@ describe('Home InputArea useSend', () => {
       await result.current.send(params);
     });
 
-    expect(createTaskMock).not.toHaveBeenCalled();
-    expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
-    expect(messageErrorMock).toHaveBeenCalledWith('dashboard.task.unsupportedContext');
+    expect(createTaskMock).toHaveBeenCalledTimes(1);
+    const created = createTaskMock.mock.calls[0][0];
+    expect(created.instruction).toBe('report.pdf');
+    expect(created.name).toBe('report.pdf');
+    expect(created.editorData.root.children).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          children: [
+            expect.objectContaining({
+              type: 'file',
+              fileUrl: 'https://example.com/f/file-1',
+              name: 'report.pdf',
+              status: 'uploaded',
+            }),
+          ],
+        }),
+      ]),
+    );
+    expect(clearChatUploadFileListMock).toHaveBeenCalledTimes(1);
+    expect(messageErrorMock).not.toHaveBeenCalled();
   });
+
+  it.each(['pending', 'uploading', 'error'])(
+    'retains the attachment draft when upload is %s',
+    async (status) => {
+      fileState.chatUploadFileList = [
+        { id: 'file-1', file: new File(['report'], 'report.pdf'), status },
+      ] as any;
+      const { result } = renderHook(() => useSend('task'));
+      await act(async () => {
+        await result.current.send({
+          clearContent: vi.fn(),
+          editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+          getMarkdownContent: () => 'Report',
+        });
+      });
+      expect(createTaskMock).not.toHaveBeenCalled();
+      expect(clearContentMock).not.toHaveBeenCalled();
+      expect(clearChatUploadFileListMock).not.toHaveBeenCalled();
+      expect(messageErrorMock).toHaveBeenCalledWith('dashboard.task.attachmentsNotReady');
+    },
+  );
 
   it('routes cold homepage sends to the created topic instead of relying on ChatHydration timing', async () => {
     const { result } = renderHook(() => useSend());

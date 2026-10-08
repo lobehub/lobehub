@@ -104,4 +104,9 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
 ) => createCoreReplicaSlice(resource, { driver: replicaSWRDriver, ...options });
 
 export * from '@lobechat/replica';
-export { recordLens, type ReplicaLens, type ReplicaSyncResult } from '@lobechat/replica/zustand';
+export {
+  recordLens,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+  splitPagedLens,
+} from '@lobechat/replica/zustand';

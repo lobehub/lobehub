@@ -31,6 +31,9 @@ const hasGeneratedImage = (state: unknown): boolean =>
   );
 
 export const isImageBearingTool = (tool: ChatToolPayloadWithResult): boolean => {
+  // Image delivery failures must stay visible alongside successful outputs.
+  if (tool.identifier === 'codex' && tool.apiName === 'image_output') return true;
+
   const state = tool.result?.state;
   if (!state) return false;
 

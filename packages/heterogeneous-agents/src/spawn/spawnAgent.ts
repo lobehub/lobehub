@@ -708,6 +708,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
 
   const cliSpawnPlan = await resolveCliSpawnPlan(command, args);
   const detached = platform() !== 'win32' && (options.detached ?? true);
+  const startedAt = Date.now();
   const proc = spawnManaged(cliSpawnPlan.command, cliSpawnPlan.args, {
     cwd,
     detached,
@@ -718,9 +719,11 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const pipeline = new AgentStreamPipeline({
     agentType: options.agentType,
     cwd,
+    env: childEnv,
     initialCumulativeUsage,
     initialModel,
     operationId: options.operationId,
+    startedAt,
     uploadImage: options.uploadImage,
   });
   const stdout = proc.stdout!;

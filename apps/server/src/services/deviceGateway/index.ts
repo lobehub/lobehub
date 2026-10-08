@@ -133,6 +133,13 @@ const assertNotWorkspaceRoot = (
 
 export type { DeviceAttachment, DeviceStatusResult, DeviceSystemInfo };
 
+/**
+ * Outcome of a device system-info read. `reason` is the gateway's code when it
+ * gave one (`TIMEOUT`, `DEVICE_OFFLINE`, `DEVICE_NOT_FOUND`), otherwise a local one.
+ */
+export type DeviceSystemInfoRead =
+  { ok: true; systemInfo: DeviceSystemInfo } | { ok: false; reason: string };
+
 interface AppUpdateRpcParams {
   deviceId: string;
   timeout?: number;
@@ -249,15 +256,36 @@ export class DeviceGateway {
     deviceId: string,
     workspaceId?: string,
   ): Promise<DeviceSystemInfo | undefined> {
+    const read = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
+    return read.ok ? read.systemInfo : undefined;
+  }
+
+  /**
+   * Like {@link queryDeviceSystemInfo}, but a failed read says why. Use it when
+   * "the device did not answer" must not be mistaken for "the device answered
+   * without this capability" — e.g. gating a tool on `supportedTools`.
+   */
+  async readDeviceSystemInfo(
+    userId: string,
+    deviceId: string,
+    workspaceId?: string,
+  ): Promise<DeviceSystemInfoRead> {
     const client = this.getClient();
-    if (!client) return undefined;
+    if (!client) return { ok: false, reason: 'GATEWAY_NOT_CONFIGURED' };
 
     try {
       const result = await client.getDeviceSystemInfo(userId, deviceId, workspaceId);
-      return result.success ? result.systemInfo : undefined;
-    } catch {
-      log('queryDeviceSystemInfo: failed for userId=%s, deviceId=%s', userId, deviceId);
-      return undefined;
+      if (result.success && result.systemInfo) return { ok: true, systemInfo: result.systemInfo };
+      log(
+        'readDeviceSystemInfo: unanswered for userId=%s, deviceId=%s: %s',
+        userId,
+        deviceId,
+        result.error,
+      );
+      return { ok: false, reason: result.error ?? 'NO_SYSTEM_INFO' };
+    } catch (error) {
+      log('readDeviceSystemInfo: failed for userId=%s, deviceId=%s: %O', userId, deviceId, error);
+      return { ok: false, reason: describeGatewayRequestFailure(error, 'RPC call').code };
     }
   }
 

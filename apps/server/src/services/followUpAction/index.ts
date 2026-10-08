@@ -22,15 +22,24 @@ const log = debug('lobe-server:follow-up-action-service');
 
 const EMPTY_RESULT = (messageId: string): FollowUpExtractResult => ({ chips: [], messageId });
 
+interface FollowUpActionServiceOptions {
+  db: LobeChatDatabase;
+  userAgent?: string;
+  userId: string;
+  workspaceId?: string;
+}
+
 export class FollowUpActionService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
   private readonly workspaceId?: string;
+  private readonly userAgent?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor({ db, userAgent, userId, workspaceId }: FollowUpActionServiceOptions) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.userAgent = userAgent;
   }
 
   async extract({
@@ -92,7 +101,8 @@ export class FollowUpActionService {
           schema: FOLLOW_UP_JSON_SCHEMA,
         },
         {
-          metadata: { topicId, trigger: RequestTrigger.FollowUp },
+          // Keep the originating request identity for downstream model hooks.
+          metadata: { topicId, trigger: RequestTrigger.FollowUp, userAgent: this.userAgent },
           tracing: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.FollowUp,

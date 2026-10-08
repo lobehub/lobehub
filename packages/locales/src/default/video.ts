@@ -14,6 +14,9 @@ export default {
   'config.prompt.placeholderWithReference':
     'Describe the video, referring to the images as Image 1, Image 2…',
   'config.promptExtend.label': 'Prompt Extend',
+  'config.promptExtend.options.balanced': 'Balanced',
+  'config.promptExtend.options.disabled': 'Off',
+  'config.promptExtend.options.quality': 'Quality',
   'config.prompt.placeholder': 'Describe the video you want to generate',
   'config.prompt.placeholderWithRef': 'Describe the scene you want to generate with the image',
   'config.referenceImage.count': 'Reference {{count}}/{{max}}',

@@ -1,5 +1,9 @@
 import { BUILTIN_AGENT_SLUGS, getAgentPersistConfig } from '@lobechat/builtin-agents';
-import { INBOX_SESSION_ID, isHeterogeneousAgentModelId } from '@lobechat/const';
+import {
+  DEFAULT_INBOX_TITLE,
+  INBOX_SESSION_ID,
+  isHeterogeneousAgentModelId,
+} from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
@@ -610,37 +614,80 @@ export class AgentModel {
   };
 
   /**
-   * Build the where condition shared by queryAgents / countAgents:
-   * non-virtual agents of the current user, with optional keyword filter.
+   * Build the where condition shared by queryAgents / countAgents: the current
+   * user's agents, with optional keyword filter.
+   *
+   * Virtual rows are infrastructure (group-built members, supervisors) and stay
+   * excluded. That includes the inbox (Lobe AI): it is the product-owned
+   * assistant, so including it is a deliberate choice every caller makes with
+   * `includeInbox: true` — never something a generic agent lookup inherits. The
+   * default is therefore the long-standing behavior (real, user-created agents
+   * only), so callers that never asked for the inbox — older clients, the
+   * CRUD/management tool runtimes, group pickers — keep it out instead of
+   * discovering a row they cannot delete or add.
+   *
+   * When a caller does opt in, the inbox joins the page inside the where clause
+   * rather than being filtered afterwards, so `limit` is never spent on an inbox
+   * the caller would drop.
    */
-  private buildQueryAgentsWhere = (keyword?: string) => {
-    // Include agents where virtual is false OR null (legacy data without virtual field)
+  private buildQueryAgentsWhere = (keyword?: string, includeInbox = false) => {
+    // Include agents where virtual is false OR null (legacy data without virtual
+    // field), plus the inbox when the caller opts into it.
     const baseConditions = and(
       this.ownership(),
-      or(eq(agents.virtual, false), isNull(agents.virtual)),
+      includeInbox
+        ? or(eq(agents.virtual, false), isNull(agents.virtual), eq(agents.slug, INBOX_SESSION_ID))
+        : or(eq(agents.virtual, false), isNull(agents.virtual)),
     );
 
-    // Add keyword search condition if provided
-    return keyword
-      ? and(
-          baseConditions,
-          or(ilike(agents.title, `%${keyword}%`), ilike(agents.description, `%${keyword}%`)),
-        )
-      : baseConditions;
+    // `name` is the user-facing display name (see `agents.name`); resolving the
+    // label the UI shows is the primary way users and tools find an agent, so
+    // the keyword must match it alongside `title`/`description`.
+    if (!keyword) return baseConditions;
+
+    // An inbox with a blank title is shown as `DEFAULT_INBOX_TITLE` only after
+    // the query (see `normalizeInboxAgentMeta`), so the raw `title` column can't
+    // match it — match that default label here instead.
+    const matchesDefaultInboxTitle =
+      includeInbox && DEFAULT_INBOX_TITLE.toLowerCase().includes(keyword.toLowerCase());
+
+    return and(
+      baseConditions,
+      or(
+        ilike(agents.title, `%${keyword}%`),
+        ilike(agents.name, `%${keyword}%`),
+        ilike(agents.description, `%${keyword}%`),
+        matchesDefaultInboxTitle
+          ? and(
+              eq(agents.slug, INBOX_SESSION_ID),
+              or(isNull(agents.title), sql`trim(${agents.title}) = ''`),
+            )
+          : undefined,
+      ),
+    );
   };
 
   /**
-   * Query non-virtual agents with optional keyword filter.
-   * Returns minimal agent info (id, title, description, avatar, backgroundColor),
-   * plus `userId`/`visibility` so callers can gate per-agent actions (e.g.
-   * transfer is creator/primary-owner only), and a compact `heteroType` derived
-   * from `agencyConfig` so callers can tell which results are heterogeneous
-   * (external CLI/device) agents.
-   * Excludes virtual agents (like inbox, supervisors, etc).
+   * Query the user's agents with an optional keyword filter.
+   * Returns minimal agent info (id, title, name, description, avatar,
+   * backgroundColor), plus `userId`/`visibility` so callers can gate per-agent
+   * actions (e.g. transfer is creator/primary-owner only), a compact
+   * `heteroType` derived from `agencyConfig` so callers can tell which results
+   * are heterogeneous (external CLI/device) agents, and `isInbox` so callers can
+   * recognize the product-owned inbox (Lobe AI) without re-deriving it from a
+   * slug the row shape no longer carries.
+   * Excludes virtual agents (supervisors, group-built members) and, unless the
+   * caller opts in with `includeInbox: true`, the product-owned inbox (Lobe AI).
+   * See `buildQueryAgentsWhere`.
    */
-  queryAgents = async (params?: { keyword?: string; limit?: number; offset?: number }) => {
-    const { keyword, limit = 9999, offset = 0 } = params ?? {};
-    const searchCondition = this.buildQueryAgentsWhere(keyword);
+  queryAgents = async (params?: {
+    includeInbox?: boolean;
+    keyword?: string;
+    limit?: number;
+    offset?: number;
+  }) => {
+    const { includeInbox = false, keyword, limit = 9999, offset = 0 } = params ?? {};
+    const searchCondition = this.buildQueryAgentsWhere(keyword, includeInbox);
 
     const rows = await this.db
       .select({
@@ -662,16 +709,23 @@ export class AgentModel {
       .offset(offset);
 
     // Surface only the hetero runtime type, not the full agencyConfig payload.
-    return rows.map(({ slug, agencyConfig, ...row }) =>
-      normalizeInboxAgentMeta(
+    return rows.map(({ slug, agencyConfig, ...row }) => ({
+      ...normalizeInboxAgentMeta(
         { ...row, heteroType: agencyConfig?.heterogeneousProvider?.type },
         { slug },
       ),
-    );
+      // When the caller opted in, the inbox is the only virtual row this query
+      // keeps, and `slug` is consumed above rather than returned — so the flag
+      // is what lets callers pin or annotate Lobe AI without re-deriving it.
+      isInbox: slug === INBOX_SESSION_ID,
+    }));
   };
 
   /**
-   * Count non-virtual agents matching the same conditions as queryAgents.
+   * Count the agents matching the same conditions as queryAgents — the inbox is
+   * counted only when the caller opts in with `includeInbox: true`, other
+   * virtual rows always excluded — so the count stays a faithful total for
+   * paginated callers and for the assistants stats.
    * Used to report real totals (and pagination) when queryAgents is limited.
    * Accepts the same date filters as SessionModel.count so callers can compare
    * current vs. prior-period totals without falling back to the legacy
@@ -679,6 +733,7 @@ export class AgentModel {
    */
   countAgents = async (params?: {
     endDate?: string;
+    includeInbox?: boolean;
     keyword?: string;
     range?: [string, string];
     startDate?: string;
@@ -688,7 +743,7 @@ export class AgentModel {
       .from(agents)
       .where(
         genWhere([
-          this.buildQueryAgentsWhere(params?.keyword),
+          this.buildQueryAgentsWhere(params?.keyword, params?.includeInbox ?? false),
           params?.range
             ? genRangeWhere(params.range, agents.createdAt, (date) => date.toDate())
             : undefined,
@@ -1027,11 +1082,25 @@ export class AgentModel {
       // lock-then-guard order as transferAgents. A concurrent copy enqueue
       // locks the same source rows, so the guard here cannot run in the window
       // where the enqueue's job row exists but is not yet committed.
-      await trx
-        .select({ id: agents.id })
+      const [locked] = await trx
+        .select({ id: agents.id, slug: agents.slug })
         .from(agents)
         .where(and(eq(agents.id, agentId), this.ownership()))
         .for('update');
+
+      // Builtins (the inbox, the agent builders) are provisioned per user and
+      // carry `virtual` exactly like a group's own members. Deleting one takes
+      // its linked session and every conversation with it, and nothing can
+      // recreate them — refuse here, the same way `addAgentsToGroup` refuses to
+      // seat one. This only guards callers of `AgentModel.delete`; paths that
+      // delete `agents` rows directly (e.g. the OpenAPI `migrateSessionTo`
+      // delete) bypass it.
+      if (locked?.slug && RESERVED_AGENT_SLUGS.has(locked.slug)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'A builtin agent cannot be deleted',
+        });
+      }
 
       // The junction records every agent an unfinished job still maps, a
       // copy's TARGET included — and a group copy's drain writes those ids into

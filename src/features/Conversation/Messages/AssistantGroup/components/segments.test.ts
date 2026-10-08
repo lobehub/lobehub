@@ -54,6 +54,34 @@ describe('hasRenderableFinalAnswer', () => {
 });
 
 describe('shouldFoldProcess', () => {
+  it.each([undefined, { images: [{ url: 'https://x/image.png' }] }])(
+    'keeps Codex image outputs visible, including upload failures',
+    (state) => {
+      const output = {
+        id: 'image',
+        apiName: 'image_output',
+        identifier: 'codex',
+        result: { state },
+      };
+      expect(
+        shouldFoldProcess({
+          enabled: true,
+          hasFinalAnswer: true,
+          isGenerating: false,
+          isLatestItem: true,
+          operationEnded: true,
+          processSegments: [
+            w('commands', 2),
+            {
+              kind: 'workflow',
+              blocks: [{ id: 'image', tools: [output] } as any],
+              standalone: true,
+            },
+          ],
+        }),
+      ).toBe(false);
+    },
+  );
   const proc = [w('t1')];
 
   it('folds a finished, non-latest turn that has a workflow when enabled', () => {

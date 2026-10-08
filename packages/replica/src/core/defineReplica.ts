@@ -33,13 +33,18 @@ const DEFAULT_SCOPE = staticReplicaScope();
 /** Builds the storage of one resource from its namespace (`replica:<name>:v<version>`). */
 export type ReplicaStorageFactory<TData> = (namespace: string) => ReplicaStorage<TData> | undefined;
 
-export interface DefineReplicaOptions<TParams, TData, TFetched = TData> {
+export interface DefineReplicaOptions<TParams, TData, TFetched = TData, TCursor = any> {
   /** Default network fetcher; a store binding may override it. */
-  fetcher?: (params: TParams, cursor?: any) => Promise<TFetched>;
+  fetcher?: (params: TParams, cursor?: TCursor) => Promise<TFetched>;
   /** Entry identity inside one scope (memory bucket + persisted row). */
   key: (params: TParams) => string;
   name: string;
-  paging?: ReplicaPagingConfig<any>;
+  paging?: ReplicaPagingConfig<any, TCursor>;
+  /**
+   * Entries that never touch storage (no hydrate, no persist) — e.g. scoped
+   * buckets whose rows must not land under an ordinary entry. Defaults to all.
+   */
+  persistKey?: (key: string) => boolean;
   /**
    * Query identity beyond `key` (filters, sort, page size) — anything that
    * changes the rows without changing the key. Persisted rows are kept per
@@ -55,9 +60,9 @@ export interface DefineReplicaOptions<TParams, TData, TFetched = TData> {
   version: number;
 }
 
-export const defineReplica = <TParams, TData, TFetched = TData>(
-  options: DefineReplicaOptions<TParams, TData, TFetched>,
-): ReplicaResource<TParams, TData, TFetched> => {
+export const defineReplica = <TParams, TData, TFetched = TData, TCursor = any>(
+  options: DefineReplicaOptions<TParams, TData, TFetched, TCursor>,
+): ReplicaResource<TParams, TData, TFetched, TCursor> => {
   const namespace = `replica:${options.name}:v${options.version}`;
   const storage =
     typeof options.storage === 'function' ? options.storage(namespace) : options.storage;
@@ -68,6 +73,7 @@ export const defineReplica = <TParams, TData, TFetched = TData>(
     name: options.name,
     namespace,
     paging: options.paging,
+    persistKey: options.persistKey ?? (() => true),
     persisted: !!storage,
     query: (params) => (options.query ? stableQueryKey(options.query(params)) : undefined),
     storageKey: (params) =>
@@ -94,7 +100,7 @@ export interface DefinePagedReplicaOptions<TParams, TItem, TCursor> extends Omit
     params: TParams,
     cursor: TCursor | undefined,
   ) => Promise<ReplicaPageResult<TItem, TCursor>>;
-  paging: ReplicaPagingConfig<TItem>;
+  paging: ReplicaPagingConfig<TItem, TCursor>;
   storage?: ReplicaStorage<any> | ReplicaStorageFactory<any>;
 }
 
@@ -109,8 +115,8 @@ export const definePagedReplica = <
   TData extends ReplicaPagedData<TItem, TCursor> = ReplicaPagedData<TItem, TCursor>,
 >(
   options: DefinePagedReplicaOptions<TParams, TItem, TCursor>,
-): ReplicaResource<TParams, TData, ReplicaPageResult<TItem, TCursor>> =>
-  defineReplica<TParams, TData, ReplicaPageResult<TItem, TCursor>>({
+): ReplicaResource<TParams, TData, ReplicaPageResult<TItem, TCursor>, TCursor> =>
+  defineReplica<TParams, TData, ReplicaPageResult<TItem, TCursor>, TCursor>({
     ...options,
     fetcher: options.fetchPage,
     storage: options.storage as ReplicaStorage<TData> | ReplicaStorageFactory<TData> | undefined,

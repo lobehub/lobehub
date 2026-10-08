@@ -116,6 +116,7 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface OptionRowProps {
   active?: boolean;
+  className?: string;
   desc?: ReactNode;
   disabled?: boolean;
   /** Trailing action, kept live while the row itself is disabled. */
@@ -130,12 +131,13 @@ export interface OptionRowProps {
 }
 
 const OptionRow = memo<OptionRowProps>(
-  ({ active, desc, disabled, extra, icon, label, onClick, tag, tags }) => (
+  ({ active, className, desc, disabled, extra, icon, label, onClick, tag, tags }) => (
     <div
       className={cx(
         styles.option,
         active && styles.optionActive,
         disabled && styles.optionDisabled,
+        className,
       )}
       onClick={() => {
         if (!disabled) onClick();

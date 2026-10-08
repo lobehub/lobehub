@@ -430,11 +430,18 @@ export class AgentManagerRuntime {
       let userTotal = 0;
       let marketTotal = 0;
 
-      // Search user's agents
+      // This is the CRUD surface: every id it returns can be forwarded to
+      // `removeAgent`/`updateAgent`, and the inbox is product-owned. Opt it out
+      // explicitly so the reserved assistant is never offered as a target here.
       if (source === 'user' || source === 'all') {
         const [userAgents, total] = await Promise.all([
-          this.agentService.queryAgents({ keyword: params.keyword, limit, offset }),
-          this.agentService.countAgents({ keyword: params.keyword }),
+          this.agentService.queryAgents({
+            includeInbox: false,
+            keyword: params.keyword,
+            limit,
+            offset,
+          }),
+          this.agentService.countAgents({ includeInbox: false, keyword: params.keyword }),
         ]);
         userTotal = total;
 

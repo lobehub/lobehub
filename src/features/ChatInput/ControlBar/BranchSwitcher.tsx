@@ -45,6 +45,7 @@ import { gitService } from '@/services/git';
 import { useFetchGitWorkingTreeStatus } from '@/store/device';
 
 import { openCreateBranchModal } from './CreateBranchModal';
+import { gitMenuTriggerStyles } from './gitMenuTriggerStyles';
 import { openRenameBranchModal } from './RenameBranchModal';
 import { useSwitchWorktree } from './useSwitchWorktree';
 import { findWorktreeForBranch, getPathName } from './worktreeHelpers';
@@ -54,20 +55,6 @@ const styles = createStaticStyles(({ css }) => ({
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  `,
-  triggerAnchor: css`
-    display: inline-flex;
-    flex: none;
-  `,
-  /* See WorktreeSwitcher.triggerFill — keeps a full-row custom trigger's hover
-     background aligned with the popup-open background. */
-  triggerFill: css`
-    display: flex;
-    width: 100%;
-
-    > * {
-      flex: 1;
-    }
   `,
   footer: css`
     border-block-start: 1px solid ${cssVar.colorSplit};
@@ -474,8 +461,8 @@ const BranchSwitcher = memo<BranchSwitcherProps>(
 
     return (
       <DropdownMenuRoot open={open} onOpenChange={onOpenChange}>
-        <DropdownMenuTrigger className={styles.triggerAnchor}>
-          <div className={styles.triggerFill}>{children}</div>
+        <DropdownMenuTrigger>
+          <div className={gitMenuTriggerStyles.trigger}>{children}</div>
         </DropdownMenuTrigger>
         <DropdownMenuPortal>
           <DropdownMenuPositioner placement={placement} sideOffset={8}>

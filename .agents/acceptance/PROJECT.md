@@ -355,7 +355,7 @@ export ACCEPTANCE_RUN_TAG="acceptance-<subject>-<timestamp>-$$"   # required
 bash "$GUARD" start                     # before the first heavy command
 bash "$GUARD" claim <pid>...            # a process this run started
 bash "$GUARD" claim-browser <session>   # the browser behind an agent-browser session
-bash "$GUARD" check --json              # one verdict; 0 green, 10 yellow, 20 red
+bash "$GUARD" check --json              # 0 green, 10 yellow, 20 red, 2 unknown/error
 bash "$GUARD" status --json             # samples, tiers, recorded stops
 bash "$GUARD" stop                      # teardown, always
 ```
@@ -364,15 +364,23 @@ bash "$GUARD" stop                      # teardown, always
 | ------------------------- | --------------------------------------------- | ---------------------------------------------------------- |
 | `ACCEPTANCE_RUN_TAG`      | — (required)                                  | Proves ownership; must be ≥ 8 chars and `[A-Za-z0-9._-]+`  |
 | `ACCEPTANCE_GUARD_DIR`    | `${TMPDIR:-/tmp}/lobe-acceptance/guard/<tag>` | Keeps the run's samples and claims out of the working tree |
-| `ACCEPTANCE_GUARD_YELLOW` | `swap=60,free=20`                             | Recycle before red                                         |
-| `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Stop this run's claimed processes                          |
+| `ACCEPTANCE_GUARD_YELLOW` | `swap=60,free=20`                             | Linux host warning thresholds                              |
+| `ACCEPTANCE_GUARD_RED`    | `swap=80,free=8`                              | Linux host stop thresholds                                 |
 
 Thresholds are host-level on purpose. The groups (`Google Chrome for Testing`,
 `next-server|vite`, `tsgo`) also match other worktrees' servers and other runs'
 browsers — five such processes held \~20 GB here — so a group or total RSS cap turns a
-merely busy machine red and stops a healthy run. Swap exhaustion is what actually
-freezes the host, so that is what the tier is made of; the groups exist so
-`stop-owned` has something it is allowed to stop.
+merely busy machine red and stops a healthy run. The groups select what
+`stop-owned` may stop; they do not determine this adapter's tier.
+
+On **macOS**, kernel pressure (`kern.memorystatus_vm_pressure_level`: 1 normal,
+2 warning, 4 critical) determines the tier. Free-page and swap percentages are
+diagnostics only: neither low unused RAM nor a high fraction of dynamically
+allocated swap proves exhaustion. Three consecutive red samples are required
+before automatic termination. Unknown pressure exits 2 and never kills processes.
+On **Linux**, the existing `MemAvailable` and swap thresholds apply; cgroup/PSI
+support is not implemented. Native Windows is unsupported. See the skill's
+[platform policy](../skills/acceptance/references/resource-guard.md#platform-policy).
 
 ## 6. Known constraints
 

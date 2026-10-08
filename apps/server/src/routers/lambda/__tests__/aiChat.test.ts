@@ -1570,6 +1570,37 @@ describe('aiChatRouter', () => {
       );
     });
 
+    it.each([undefined, 'Mozilla/5.0', 'LobeHub-Mobile/ios-v1.0.5'])(
+      'preserves extensible metadata and uses request UA %s',
+      async (userAgent) => {
+        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
+        const generateObject = vi.fn().mockResolvedValue({ completion: 'ok' });
+        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ generateObject } as any);
+        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {}, userAgent } as any);
+
+        await caller.outputJSON({
+          messages: [],
+          metadata: {
+            correlationId: 'cid-1',
+            privateOption: true,
+            topicId: 'topic-1',
+            trigger: 'custom_feature',
+            userAgent: 'LobeHub-Mobile/android-v1.0.5',
+          },
+          model: 'test-model',
+          provider: 'test-provider',
+        });
+
+        expect(generateObject.mock.calls[0][1].metadata).toEqual({
+          correlationId: 'cid-1',
+          privateOption: true,
+          topicId: 'topic-1',
+          trigger: 'custom_feature',
+          userAgent,
+        });
+      },
+    );
+
     it('merges caller metadata over the default trigger and forwards tracing', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
       const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'hi there' });

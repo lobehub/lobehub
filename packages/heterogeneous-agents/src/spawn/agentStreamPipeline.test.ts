@@ -63,6 +63,81 @@ describe('AgentStreamPipeline', () => {
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 
+  it.each(['uploaded', 'unavailable', 'failed'])(
+    'recovers only the current rollout images before stream end (%s)',
+    async (upload) => {
+      const codexHome = await mkdtemp(path.join(os.tmpdir(), 'codex-images-'));
+      tempDirs.push(codexHome);
+      const sessionDir = path.join(codexHome, 'sessions', '2026', '10', '08');
+      await mkdir(sessionDir, { recursive: true });
+      const oldTimestamp = new Date(Date.now() - 60_000).toISOString();
+      const pipeline = new AgentStreamPipeline({
+        agentType: 'codex',
+        env: { CODEX_HOME: codexHome },
+        operationId: 'op-images',
+        uploadImage:
+          upload === 'unavailable'
+            ? undefined
+            : async () => {
+                if (upload === 'failed') throw new Error('Upload failed');
+                return { fileId: 'file-dog', url: 'https://cdn/dog.png' };
+              },
+      });
+      const timestamp = new Date().toISOString();
+      const record = (type: string, payload: unknown, at = timestamp) =>
+        JSON.stringify({ payload, timestamp: at, type });
+      const output = (callId: string) => ({
+        call_id: callId,
+        output: [
+          { text: 'Script completed', type: 'input_text' },
+          { image_url: 'data:image/png;base64,AAAA', type: 'input_image' },
+        ],
+        type: 'custom_tool_call_output',
+      });
+      await writeFile(
+        path.join(sessionDir, 'rollout-thread-images.jsonl'),
+        [
+          record('event_msg', { type: 'task_started' }, oldTimestamp),
+          record('response_item', output('old-image'), oldTimestamp),
+          record('event_msg', { type: 'task_started' }),
+          record('response_item', {
+            call_id: 'dog-image',
+            input: 'generate a dog',
+            name: 'exec',
+            type: 'custom_tool_call',
+          }),
+          record('response_item', output('dog-image')),
+        ].join('\n') + '\n',
+      );
+      const events = await pipeline.push(
+        [
+          { thread_id: 'thread-images', type: 'thread.started' },
+          { type: 'turn.started' },
+          { item: { id: 'reply', text: 'Done.', type: 'agent_message' }, type: 'item.completed' },
+          { type: 'turn.completed' },
+        ]
+          .map((event) => JSON.stringify(event))
+          .join('\n') + '\n',
+      );
+      const result = events.find(({ type }) => type === 'tool_result');
+      expect(result?.data).toMatchObject({
+        content: upload === 'uploaded' ? '![image/png](https://cdn/dog.png)' : '[Image: image/png]',
+        toolCallId: 'dog-image',
+      });
+      expect(result?.data.pluginState.images).toEqual(
+        upload === 'uploaded'
+          ? [{ fileId: 'file-dog', mediaType: 'image/png', url: 'https://cdn/dog.png' }]
+          : undefined,
+      );
+      expect(events.filter(({ type }) => type === 'tool_result')).toHaveLength(1);
+      expect(events.findIndex(({ type }) => type === 'tool_result')).toBeLessThan(
+        events.findIndex(({ data, type }) => type === 'stream_chunk' && data.chunkType === 'text'),
+      );
+      expect(JSON.stringify(events)).not.toContain('AAAA');
+      expect((await pipeline.flush()).some(({ type }) => type === 'tool_result')).toBe(false);
+    },
+  );
+
   it('runs JSONL → adapter → toStreamEvent and stamps operationId', async () => {
     const pipeline = new AgentStreamPipeline({
       agentType: 'claude-code',

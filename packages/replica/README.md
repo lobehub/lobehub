@@ -48,3 +48,18 @@ slice.optimistic(key, apply, serverCall);
 ```
 
 Inside LobeHub, use `@/libs/replica`. It presets the cache scope, IndexedDB / localStorage storage and the app's SWR driver.
+
+## Transcripts and other irregular pages
+
+Message-like resources page backward by cursor, with windows whose length changes on every refresh. The paging config covers them:
+
+| Option / API                                                       | Use                                                                                                                                                          |
+| ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `paging.isCursorable(item)`                                        | Skip synthetic rows (group / summary nodes) when pinning the join anchor or deriving a cursor. A head refresh replaces the head page's synthetic rows by id. |
+| `paging.deriveCursor(item)`                                        | Plain lists whose server reports no `nextCursor`: the next cursor comes from the oldest eligible row. Only for rows with a lossless position.                |
+| `paging.sort`                                                      | Stable: rows the comparator ties keep server order. Compare positions only.                                                                                  |
+| `persistKey(key)`                                                  | Entries that stay in memory (no hydrate, no persist), e.g. scoped buckets.                                                                                   |
+| `slice.update(key, fn, { persist: false })` + `slice.persist(key)` | Stream into memory, then persist the confirmed value once.                                                                                                   |
+| `splitPagedLens({ itemsField, metaField, derive })`                | Keep raw rows where readers expect them, paging bookkeeping beside them, and derived fields (a parsed display list) in the same commit.                      |
+
+`useSync(params, options)` forwards a sync schedule (`refreshInterval`, `dedupingInterval`, `revalidateIfStale`, `revalidateOnFocus`, …) to the driver, and runs `onSuccess` / `onError` side effects after a response is folded in.

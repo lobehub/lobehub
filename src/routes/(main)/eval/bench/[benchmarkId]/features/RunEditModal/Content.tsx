@@ -88,7 +88,9 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
     if (!canChangeConfig) return;
     setLoadingAgents(true);
     agentService
-      .queryAgents()
+      // The inbox is added locally as `inboxAgent` just below; asking the query
+      // for it as well would offer Lobe AI twice under two different ids.
+      .queryAgents({ includeInbox: false })
       .then((list) => setAgents(list as AgentOption[]))
       .finally(() => setLoadingAgents(false));
   }, [canChangeConfig]);

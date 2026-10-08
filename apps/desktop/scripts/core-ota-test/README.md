@@ -92,6 +92,43 @@ printf 'provider: generic\nurl: http://127.0.0.1:8787/canary\n' > $R/app-update.
 
 ## 辅助
 
+### 已暂存更新被新版本替换
+
+完成第 1 步构建并启动本地 feed 后，用 `staged <b|c> <reload|relaunch>` 发布两份基于内置 v1 的签名更新。B 为 `1.0.0-core.10`，C 为 `1.0.0-core.11`；renderer 带有 `STAGED B/C` 标记，relaunch 版本还会输出对应的 main 日志。不要先应用 B。
+
+每组从独立测试 App 的干净 userData 开始（`reset` 只用于该测试 App），依次验证下表三种组合：
+
+| B        | C        | 应用 C 的预期                            |
+| -------- | -------- | ---------------------------------------- |
+| reload   | reload   | 原进程刷新到 C                           |
+| relaunch | relaunch | 重启直接运行 C，B 不作为回滚目标且被清理 |
+| relaunch | reload   | 原进程刷新到 C，退出后冷启动也不运行 B   |
+
+以下以第三组为例，另两组替换 `staged` 的 mode 参数：
+
+```bash
+node scripts/core-ota-test/run.mjs kill
+node scripts/core-ota-test/run.mjs reset
+node scripts/core-ota-test/run.mjs staged b relaunch
+node scripts/core-ota-test/run.mjs launch
+# 等待日志确认 B staged；再次检查同一 B 应保留暂存状态
+node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.checkNow')"
+node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.getStatus')"
+node scripts/core-ota-test/run.mjs state
+node scripts/core-ota-test/run.mjs staged c reload
+node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.checkNow')"
+node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.getStatus')"
+node scripts/core-ota-test/run.mjs state
+node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.applyNow')"
+# 截图应显示 STAGED C reload；main 日志不应出现 STAGED B relaunch
+node scripts/core-ota-test/run.mjs eval --shot /tmp/core-ota-staged-c.png
+node scripts/core-ota-test/run.mjs kill
+node scripts/core-ota-test/run.mjs launch
+node scripts/core-ota-test/run.mjs state
+```
+
+记录 B/C manifest tree、暂存前后状态、pointer、main 日志和进程 PID，并打开截图确认实际加载的是 C。`relaunch → reload` 在应用前应恢复 `current/previous` 为内置基线、`staged` 为 C；`relaunch → relaunch` 应直接把 `current` 指向 C、`previous` 保留真正运行过的版本，不能指向 B。这里通过真实 IPC 加速检查，不修改更新逻辑，也不声称覆盖一小时定时器或已登录后的通知 UI。
+
 `launch` 带 `--remote-debugging-port=9333`，`run.mjs eval "<js>"` 在主窗口里求值（`window.electronAPI.invoke('rendererOta.<applyNow|checkNow|getStatus>')`），
 `run.mjs eval --shot <file.png>` 截主窗口。`tamper` 改 `cores/1.0.0-core.2/dist/main/index.js` 一行。
 onboarding 页不挂 UpdateNotification，toast 要登录后才看得到；用 `eval` 触发 IPC 即可。

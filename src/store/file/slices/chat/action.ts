@@ -119,8 +119,11 @@ export class FileActionImpl {
     this.#set({ chatContextSelectionsByContext: nextMap }, false, n('clearChatContextSelections'));
   };
 
-  clearChatUploadFileList = (): void => {
-    this.#set({ chatUploadFileList: [] }, false, n('clearChatUploadFileList'));
+  clearChatUploadFileList = (submittedIds?: string[]): void => {
+    const chatUploadFileList = submittedIds
+      ? this.#get().chatUploadFileList.filter((file) => !submittedIds.includes(file.id))
+      : [];
+    this.#set({ chatUploadFileList }, false, n('clearChatUploadFileList'));
   };
 
   dispatchChatUploadFileList = (payload: UploadFileListDispatch): void => {

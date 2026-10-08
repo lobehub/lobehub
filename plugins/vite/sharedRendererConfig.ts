@@ -176,6 +176,22 @@ function sharedManualChunks(id: string): string | undefined {
     if (locale) return `i18n-${locale}-ui-runtime`;
   }
 
+  // The antd locale above imports per-component locales (calendar, date-picker,
+  // time-picker, rc pagination/picker) and is itself re-exported by the
+  // `antd/locale/*` entry. Lazy groups capture only matched modules, so left
+  // unmatched these land in an entry-set chunk that imports the ui-runtime chunk
+  // while ui-runtime imports it back. That cycle breaks rolldown's lazy init
+  // ("r is not a function") and every non-English locale silently falls back to
+  // English. en_US stays out: antd components import it statically as their
+  // default locale, so it belongs with the antd vendor graph.
+  const antdPartMatch = id.match(
+    /[\\/](?:antd|@rc-component[\\/][^\\/]+)[\\/](?:[^\\/]+[\\/])*locale[\\/]([A-Za-z]{2}_[A-Z]{2})\.js$/,
+  );
+  if (antdPartMatch && antdPartMatch[1] !== 'en_US') {
+    const locale = ANTD_LOCALE[antdPartMatch[1]];
+    if (locale) return `i18n-${locale}-ui-runtime`;
+  }
+
   const dayjsMatch = id.match(/dayjs\/locale\/([^/.]+)\.js/);
   if (dayjsMatch) {
     const locale = DAYJS_LOCALE[dayjsMatch[1]];

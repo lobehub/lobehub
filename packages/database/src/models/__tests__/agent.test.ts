@@ -393,6 +393,112 @@ describe('AgentModel', () => {
     });
   });
 
+  describe('queryAgents', () => {
+    it('excludes the inbox by default, so callers that never ask for it keep legacy behavior', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'default-inbox', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'default-normal', userId },
+        { id: 'default-virtual', userId, virtual: true },
+      ]);
+
+      // The inbox is product-owned; a lookup that does not opt in must not
+      // inherit it, or older clients and CRUD/group surfaces start offering a
+      // row they cannot delete or add.
+      await expect(agentModel.queryAgents()).resolves.toHaveLength(1);
+      await expect(agentModel.countAgents()).resolves.toBe(1);
+    });
+
+    it('includes the inbox (Lobe AI) and flags it with isInbox when the caller opts in', async () => {
+      await serverDB.insert(agents).values([
+        {
+          id: 'inbox-agent',
+          name: 'Sienna',
+          slug: INBOX_SESSION_ID,
+          title: 'Lobe',
+          userId,
+          virtual: true,
+        },
+        { id: 'normal-agent', name: '三条', title: 'Architect', userId, virtual: false },
+        { id: 'group-built-agent', title: 'Group member', userId, virtual: true },
+      ]);
+
+      const result = await agentModel.queryAgents({ includeInbox: true });
+      const byId = new Map(result.map((agent) => [agent.id, agent] as const));
+
+      // The inbox is a real assistant the user talks to; the caller opted in.
+      expect(byId.get('inbox-agent')?.isInbox).toBe(true);
+      expect(byId.get('inbox-agent')?.name).toBe('Sienna');
+      expect(byId.get('inbox-agent')?.title).toBe('Lobe');
+      expect(byId.get('normal-agent')?.isInbox).toBe(false);
+      // Other virtual rows are infrastructure, not user content.
+      expect(byId.has('group-built-agent')).toBe(false);
+    });
+
+    it('matches the user-facing display name in a keyword search', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'sienna-agent', name: 'Sienna', title: 'Lobe', userId },
+        { id: 'coco-agent', name: 'Coco', title: 'Codex', userId },
+      ]);
+
+      const result = await agentModel.queryAgents({ keyword: 'Sienna' });
+
+      expect(result.map((agent) => agent.id)).toEqual(['sienna-agent']);
+    });
+
+    it('matches a blank-title inbox by its default display title when the caller opts in', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'blank-inbox', slug: INBOX_SESSION_ID, title: null, userId, virtual: true },
+        { id: 'normal-agent', title: 'Writer', userId },
+      ]);
+
+      const withInbox = await agentModel.queryAgents({ includeInbox: true, keyword: 'lobe' });
+      expect(withInbox.map((agent) => agent.id)).toEqual(['blank-inbox']);
+      expect(withInbox[0]?.title).toBe(DEFAULT_INBOX_TITLE);
+      await expect(agentModel.countAgents({ includeInbox: true, keyword: 'lobe' })).resolves.toBe(
+        1,
+      );
+
+      // Without the opt-in the inbox stays out even when the keyword matches.
+      await expect(agentModel.queryAgents({ keyword: 'lobe' })).resolves.toEqual([]);
+    });
+
+    it('counts the inbox in the shared total when the caller opts in, so pagination stays honest', async () => {
+      await serverDB.insert(agents).values([
+        { id: 'inbox-agent', slug: INBOX_SESSION_ID, userId, virtual: true },
+        { id: 'normal-agent', userId },
+        { id: 'group-built-agent', userId, virtual: true },
+      ]);
+
+      await expect(agentModel.countAgents({ includeInbox: true })).resolves.toBe(2);
+    });
+
+    it('keeps the inbox out of a limited page unless the caller opts in', async () => {
+      // The addable agent is the *older* row: if the inbox were merely filtered
+      // after the page was built, `limit: 1` would return the (newer) inbox and
+      // then drop it, leaving nothing.
+      await serverDB.insert(agents).values([
+        { id: 'optin-normal', updatedAt: new Date('2024-01-01'), userId },
+        {
+          id: 'optin-inbox',
+          slug: INBOX_SESSION_ID,
+          updatedAt: new Date('2024-02-01'),
+          userId,
+          virtual: true,
+        },
+      ]);
+
+      // Default (legacy) excludes it inside the where clause, before the limit.
+      const limited = await agentModel.queryAgents({ limit: 1 });
+      expect(limited.map((agent) => agent.id)).toEqual(['optin-normal']);
+      await expect(agentModel.countAgents()).resolves.toBe(1);
+
+      // Opting in brings it back, ordering included.
+      const withInbox = await agentModel.queryAgents({ includeInbox: true, limit: 1 });
+      expect(withInbox.map((agent) => agent.id)).toEqual(['optin-inbox']);
+      await expect(agentModel.countAgents({ includeInbox: true })).resolves.toBe(2);
+    });
+  });
+
   describe('getAgentConfig', () => {
     it('should find agent by ID', async () => {
       const agentId = 'test-agent-by-id';
@@ -1061,6 +1167,35 @@ describe('AgentModel', () => {
   });
 
   describe('delete', () => {
+    it('refuses to delete a reserved builtin (the inbox) and keeps its session', async () => {
+      // The inbox is product-owned: nothing recreates it, and its session
+      // cascades every conversation with it. A CRUD surface — the
+      // agent-management tool forwards ids straight to `delete` — must not be
+      // able to take it down.
+      const [inbox] = await serverDB
+        .insert(agents)
+        .values({ id: 'reserved-inbox', slug: INBOX_SESSION_ID, title: 'Lobe AI', userId })
+        .returning();
+      const [session] = await serverDB
+        .insert(sessions)
+        .values({ userId, type: 'agent' })
+        .returning();
+      await serverDB
+        .insert(agentsToSessions)
+        .values({ agentId: inbox.id, sessionId: session.id, userId });
+
+      await expect(agentModel.delete(inbox.id)).rejects.toThrow(
+        'A builtin agent cannot be deleted',
+      );
+
+      expect(
+        await serverDB.query.agents.findFirst({ where: eq(agents.id, inbox.id) }),
+      ).toBeDefined();
+      expect(
+        await serverDB.query.sessions.findFirst({ where: eq(sessions.id, session.id) }),
+      ).toBeDefined();
+    });
+
     it('refuses to delete an agent a pending history job still maps', async () => {
       // A group copy's drain writes the TARGET agent id into `messages.agent_id`.
       // Deleting that agent leaves the queue rows behind, so the drain hits a

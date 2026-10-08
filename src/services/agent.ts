@@ -11,6 +11,8 @@ export interface AvailableAgentItem {
   backgroundColor: string | null;
   description: string | null;
   id: string;
+  /** Product-owned inbox (Lobe AI). A builtin can never join a chat group. */
+  isInbox?: boolean;
   /** Personal name; resolve the label with `agentDisplayName(item, fallback)`. */
   name: string | null;
   title: string | null;
@@ -289,6 +291,7 @@ class AgentService {
    * Returns agents with minimal info (id, title, description, avatar, backgroundColor).
    */
   queryAgents = async (params?: {
+    includeInbox?: boolean;
     keyword?: string;
     limit?: number;
     offset?: number;
@@ -302,6 +305,7 @@ class AgentService {
    */
   countAgents = async (params?: {
     endDate?: string;
+    includeInbox?: boolean;
     keyword?: string;
     range?: [string, string];
     startDate?: string;

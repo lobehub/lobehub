@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, expectTypeOf, it } from 'vitest';
 
+import { definePagedReplica } from './defineReplica';
 import {
   applyHeadPage,
   applyNextPage,
@@ -242,6 +243,182 @@ describe('cursor / backward paging (message-like transcript)', () => {
     expect(refreshed.nextCursor).toEqual({ createdAt: 3, id: 'm3' });
   });
 
+  // Round-trimmed windows change length on every refresh; a cursor walk must
+  // not read that as a query change and drop the loaded history.
+  it('keeps older pages when the refreshed window has another length', () => {
+    const refreshed = applyHeadPage(
+      loadedTwoWindows(),
+      { items: range(7, 12), nextCursor: cursorOf(msg(7)) },
+      { pageSize: 6 },
+      messages,
+    );
+    expect(mids(refreshed)).toEqual(range(3, 12).map((m) => m.id));
+    expect(refreshed.currentPage).toBe(1);
+  });
+
+  it.each(['backward', 'forward'] as const)(
+    'refreshes the head cursor before trimming %s pages',
+    (direction) => {
+      const config = {
+        ...messages,
+        direction,
+        sort: (a: Message, b: Message) =>
+          direction === 'backward' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt,
+      };
+      const view = (rows: Message[]) => (direction === 'backward' ? rows : [...rows].reverse());
+      const head = applyHeadPage<Message, Cursor>(
+        undefined,
+        { items: view(range(7, 10)), nextCursor: cursorOf(msg(7)) },
+        { pageSize: 4 },
+        config,
+      );
+      const extended = applyNextPage(
+        head,
+        { items: view(range(3, 6)), nextCursor: cursorOf(msg(3)) },
+        config,
+      );
+      const refreshed = applyHeadPage(
+        extended,
+        { items: view(range(6, 10)), nextCursor: cursorOf(msg(6)) },
+        { pageSize: 5 },
+        config,
+      );
+      expect(refreshed.nextCursor).toEqual(cursorOf(msg(3)));
+      for (const trimmed of [
+        collapseToHead(refreshed, config),
+        toPersistedPage(refreshed, config),
+      ]) {
+        expect(trimmed.items).toEqual(view(range(6, 10)));
+        expect(getNextPageCursor(trimmed, config)).toEqual(cursorOf(msg(6)));
+      }
+    },
+  );
+
+  describe('synthetic group nodes', () => {
+    interface Node extends Message {
+      role?: 'compressedGroup' | 'user';
+    }
+    const grouped: ReplicaPagingConfig<Node> = {
+      ...(messages as ReplicaPagingConfig<Node>),
+      isCursorable: (m) => m.role !== 'compressedGroup',
+    };
+    const group = (n: number): Node => ({ createdAt: n, id: `g${n}`, role: 'compressedGroup' });
+
+    it.each(['backward', 'forward'] as const)(
+      'retains synthetic head rows sorted outside the head in %s views',
+      (direction) => {
+        const config = {
+          ...grouped,
+          direction,
+          sort: (a: Node, b: Node) =>
+            direction === 'backward' ? a.createdAt - b.createdAt : b.createdAt - a.createdAt,
+        };
+        const view = (rows: Node[]) => (direction === 'backward' ? rows : [...rows].reverse());
+        const head = applyHeadPage<Node, Cursor>(
+          undefined,
+          { items: view([group(0), ...range(7, 10)]), nextCursor: cursorOf(msg(7)) },
+          { pageSize: 5 },
+          config,
+        );
+        const extended = applyNextPage(
+          head,
+          { items: view(range(3, 6)), nextCursor: cursorOf(msg(3)) },
+          config,
+        );
+        for (const trimmed of [
+          collapseToHead(extended, config),
+          toPersistedPage(extended, config),
+        ]) {
+          expect(trimmed.items).toEqual(view([group(0), ...range(7, 10)]));
+          expect(trimmed.nextCursor).toEqual(cursorOf(msg(7)));
+        }
+      },
+    );
+
+    it('never pins the join anchor on a synthetic node', () => {
+      const head = applyHeadPage<Node, Cursor>(
+        undefined,
+        { items: [group(6), ...range(7, 10)], nextCursor: cursorOf(msg(7)) },
+        { pageSize: 5 },
+        grouped,
+      );
+      const extended = applyNextPage(head, { items: range(3, 5), nextCursor: null }, grouped);
+      expect(extended.anchorId).toBe('m7');
+
+      // The refreshed window still holds m7, so the older page survives even
+      // though the group node in front of it was re-summarized away.
+      const refreshed = applyHeadPage(
+        extended,
+        { items: range(7, 11), nextCursor: cursorOf(msg(7)) },
+        { pageSize: 5 },
+        grouped,
+      );
+      expect(mids(refreshed)).toEqual(['m3', 'm4', 'm5', ...range(7, 11).map((m) => m.id)]);
+    });
+  });
+
+  describe('plain list without server cursors (threads)', () => {
+    const plain: ReplicaPagingConfig<Message, Cursor> = {
+      ...messages,
+      deriveCursor: cursorOf,
+      isCursorable: (m) => !m.id.startsWith('g'),
+    };
+
+    it('derives the next cursor from the oldest eligible row', () => {
+      const head = applyHeadPage<Message, Cursor>(
+        undefined,
+        { items: [{ createdAt: 6, id: 'g6' }, ...range(7, 10)] },
+        { pageSize: 5 },
+        plain,
+      );
+      expect(head.hasMore).toBe(true);
+      expect(getNextPageCursor(head, plain)).toEqual({ createdAt: 7, id: 'm7' });
+    });
+
+    it('keeps loaded pages across head refreshes and ends on an empty page', () => {
+      const head = applyHeadPage<Message, Cursor>(
+        undefined,
+        { items: range(7, 10) },
+        { pageSize: 4 },
+        plain,
+      );
+      const extended = applyNextPage(head, { items: range(3, 6) }, plain);
+      expect(getNextPageCursor(extended, plain)).toEqual({ createdAt: 3, id: 'm3' });
+
+      const refreshed = applyHeadPage(extended, { items: range(7, 11) }, { pageSize: 5 }, plain);
+      expect(mids(refreshed)).toEqual(range(3, 11).map((m) => m.id));
+
+      const done = applyNextPage(refreshed, { items: [] }, plain);
+      expect(getNextPageCursor(done, plain)).toBeNull();
+    });
+
+    it('waits for a server cursor when the resource cannot derive one', () => {
+      const head = applyHeadPage<Message, Cursor>(
+        undefined,
+        { items: range(7, 10) },
+        { pageSize: 4 },
+        messages,
+      );
+      expect(getNextPageCursor(head, messages)).toBeUndefined();
+    });
+  });
+
+  it('keeps the server order of rows the sort ties', () => {
+    const sameTick = applyHeadPage<Message, Cursor>(
+      undefined,
+      {
+        items: [
+          { createdAt: 5, id: 'z-user' },
+          { createdAt: 5, id: 'a-assistant' },
+        ],
+        nextCursor: null,
+      },
+      { pageSize: 2 },
+      messages,
+    );
+    expect(mids(sameTick)).toEqual(['z-user', 'a-assistant']);
+  });
+
   it('collapses to the fresh window when it slid past the anchor (gap)', () => {
     const refreshed = applyHeadPage(
       loadedTwoWindows(),
@@ -284,5 +461,38 @@ describe('cursor / backward paging (message-like transcript)', () => {
     const capped = toPersistedPage(loadedTwoWindows(), { ...messages, persist: { maxItems: 2 } });
     expect(mids(capped)).toEqual(['m9', 'm10']);
     expect(capped.nextCursor).toBeUndefined();
+  });
+});
+
+describe('paged resource cursor types', () => {
+  it('preserves an object cursor in the configuration and resource', () => {
+    interface Cursor {
+      id: string;
+    }
+    const resource = definePagedReplica<undefined, Row, Cursor>({
+      key: () => 'rows',
+      name: 'rows',
+      version: 1,
+      paging: {
+        direction: 'backward',
+        getId: (row) => row.id,
+        mode: 'cursor',
+        deriveCursor: (row) => ({ id: row.id }),
+      },
+    });
+    expectTypeOf(resource.paging!.deriveCursor!).returns.toEqualTypeOf<Cursor>();
+    expectTypeOf(resource.fetcher!).parameter(1).toEqualTypeOf<Cursor | undefined>();
+    definePagedReplica<undefined, Row, Cursor>({
+      key: () => 'invalid',
+      name: 'invalid',
+      version: 1,
+      paging: {
+        direction: 'backward',
+        getId: (row) => row.id,
+        mode: 'cursor',
+        // @ts-expect-error An object-cursor resource cannot derive a string cursor.
+        deriveCursor: (row) => row.id,
+      },
+    });
   });
 });

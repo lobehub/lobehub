@@ -22,6 +22,7 @@ import { useTaskStore } from '@/store/task';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import type { HomeMode } from '../types';
+import { appendTaskAttachments } from './taskAttachments';
 import { taskNameFromMessage } from './taskName';
 
 /**
@@ -117,10 +118,8 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
       if ((mode === 'task' || !inputActiveMode) && !canUseResource) return;
 
-      // Task persistence does not support attachments or context yet. Check
-      // this before the empty-message guard so an attachment-only submission
-      // explains why it cannot proceed instead of appearing inert.
-      if (mode === 'task' && (fileList.length > 0 || contextList.length > 0)) {
+      // Selected context is separate from the task editor's persisted attachments.
+      if (mode === 'task' && contextList.length > 0) {
         toast.error(t('dashboard.task.unsupportedContext'));
         return;
       }
@@ -138,13 +137,17 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // action on the task itself, so a quick jot cannot launch an agent the
         // user only meant to note down.
         if (mode === 'task') {
-          if (!message || !selectedAgentId) return;
+          if (!selectedAgentId) return;
+          if (fileList.some((file) => file.status !== 'success' || !file.fileUrl)) {
+            toast.error(t('dashboard.task.attachmentsNotReady'));
+            return;
+          }
           setIsSubmitting(true);
-          const name = taskNameFromMessage(message);
+          const name = taskNameFromMessage(message || fileList[0]?.file.name || '');
           const created = await createTask({
             assigneeAgentId: selectedAgentId,
-            editorData,
-            instruction: message,
+            editorData: appendTaskAttachments(editorData, message, fileList),
+            instruction: message || name,
             name,
             visibility: activeWorkspaceId ? 'private' : undefined,
           });
@@ -253,7 +256,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // Preserve the complete draft when creation or execution fails. The
         // editor, files and context are one unit from the user's perspective.
         if (submitted) {
-          clearChatUploadFileList();
+          clearChatUploadFileList(mode === 'task' ? fileList.map((file) => file.id) : undefined);
           clearChatContextSelections(contextSelectionKey);
           mainInputEditor?.clearContent();
         }

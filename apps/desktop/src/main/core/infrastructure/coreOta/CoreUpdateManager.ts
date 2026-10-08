@@ -299,10 +299,8 @@ export class CoreUpdateManager {
   };
 
   private async runCheck() {
-    if (!this.enabled || this.busy || this.staged) {
-      logger.info('Core OTA check skipped', {
-        reason: !this.enabled ? 'disabled' : this.busy ? 'busy' : 'already-staged',
-      });
+    if (!this.enabled || this.busy) {
+      logger.info('Core OTA check skipped', { reason: !this.enabled ? 'disabled' : 'busy' });
       return;
     }
     if (this.pendingBootCheck && this.coldBootCheck) {
@@ -323,6 +321,7 @@ export class CoreUpdateManager {
       if (this.needsFullRelease) throw new SkipCheck('needs-full-release');
       if (remote.channel === this.running.channel && remote.seq <= this.running.seq)
         throw new SkipCheck('up-to-date');
+      if (version === this.staged?.version) throw new SkipCheck('already-staged');
       if (version === this.pointer.current) throw new SkipCheck('already-current');
       if (this.pointer.blacklist.includes(version)) throw new SkipCheck('blacklisted');
       if (!this.inRollout(version, remote.rollout)) throw new SkipCheck('rollout-excluded');
@@ -355,6 +354,9 @@ export class CoreUpdateManager {
       if (generation !== this.checkGeneration) throw new SkipCheck('superseded');
       const applyMode = computeApplyMode(this.running.tree, remote.tree);
       logger.info('Core OTA staged', { applyMode, version, ...staged.downloaded });
+      if (this.staged?.applyMode === 'relaunch') {
+        this.pointer = { ...this.pointer, current: this.pointer.previous, previous: null };
+      }
       this.staged = { applyMode, version };
       this.unloadPrevented = false;
       this.savePointer(

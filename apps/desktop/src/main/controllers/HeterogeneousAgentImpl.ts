@@ -3224,8 +3224,10 @@ export default class HeterogeneousAgentCtr {
     const pipeline = new AgentStreamPipeline({
       agentType: session.agentType,
       cwd,
+      env: spawnEnv,
       initialCumulativeUsage,
       initialModel: session.model,
+      startedAt: startedAt ? Date.parse(startedAt) : undefined,
       operationId: params.operationId,
       uploadImage: this.uploadResultImage,
     });

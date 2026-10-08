@@ -442,6 +442,49 @@ describe('DeviceGateway', () => {
     });
   });
 
+  describe('readDeviceSystemInfo', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('reports an unconfigured gateway', async () => {
+      const result = await new DeviceGateway().readDeviceSystemInfo('user-1', 'dev-1');
+      expect(result).toEqual({ ok: false, reason: 'GATEWAY_NOT_CONFIGURED' });
+    });
+
+    it('returns systemInfo on success', async () => {
+      configure();
+      const systemInfo = { arch: 'arm64', supportedTools: ['lobe-computer-use'] };
+      mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo });
+
+      const result = await new DeviceGateway().readDeviceSystemInfo('user-1', 'dev-1', 'ws-1');
+
+      expect(result).toEqual({ ok: true, systemInfo });
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1', 'ws-1');
+    });
+
+    it("keeps the gateway's reason for an unanswered read", async () => {
+      configure();
+      mockClient.getDeviceSystemInfo.mockResolvedValue({ error: 'TIMEOUT', success: false });
+
+      const result = await new DeviceGateway().readDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(result).toEqual({ ok: false, reason: 'TIMEOUT' });
+    });
+
+    it('classifies a client-side timeout', async () => {
+      configure();
+      mockClient.getDeviceSystemInfo.mockRejectedValue(
+        Object.assign(new Error('The operation timed out.'), { name: 'TimeoutError' }),
+      );
+
+      const result = await new DeviceGateway().readDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(result).toEqual({ ok: false, reason: 'DEVICE_RESPONSE_TIMEOUT' });
+    });
+  });
+
   describe('queryDeviceMetrics', () => {
     const params = { deviceId: 'dev-1', since: 1000, userId: 'user-1', workspaceId: 'ws-1' };
     const configure = () => {

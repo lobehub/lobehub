@@ -453,6 +453,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ limit: 20, offset: 20, source: 'user' });
 
       expect(mockAgentService.queryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
         keyword: undefined,
         limit: 20,
         offset: 20,
@@ -477,6 +478,7 @@ describe('AgentManagerRuntime', () => {
       const result = await runtime.searchAgents({ limit: 50, source: 'user' });
 
       expect(mockAgentService.queryAgents).toHaveBeenCalledWith({
+        includeInbox: false,
         keyword: undefined,
         limit: 20,
         offset: 0,

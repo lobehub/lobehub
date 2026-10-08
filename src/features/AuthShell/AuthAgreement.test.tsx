@@ -1,6 +1,6 @@
 import * as BaseUI from '@lobehub/ui/base-ui';
 import { useForm } from '@lobehub/ui/base-ui/form';
-import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -59,6 +59,56 @@ describe('AuthAgreement', () => {
 });
 
 describe('SignInEmailStep', () => {
+  it.each(['', 'invalid@', 'user@example.com'])(
+    'should not validate or submit email %j when choosing OAuth',
+    async (email) => {
+      const onSubmit = vi.fn();
+      const onSocialSignIn = vi.fn();
+      const TestSignInEmailStep = () => {
+        const form = useForm({ initialValues: { email }, onSubmit });
+
+        return (
+          <SignInEmailStep
+            agreementChecked
+            serverConfigInit
+            continueWithAgreement={(next) => next()}
+            form={form}
+            isSocialOnly={false}
+            loading={false}
+            oAuthSSOProviders={['google']}
+            setAgreementChecked={vi.fn()}
+            socialLoading={null}
+            onGoToSignup={vi.fn()}
+            onResetEmail={vi.fn()}
+            onSetPassword={vi.fn()}
+            onSocialSignIn={onSocialSignIn}
+          />
+        );
+      };
+
+      render(<TestSignInEmailStep />);
+      const input = screen.getByRole('textbox');
+      await act(async () => {
+        fireEvent.blur(input);
+        fireEvent.click(screen.getByRole('button', { name: /Google/ }));
+      });
+
+      expect(onSocialSignIn).toHaveBeenCalledExactlyOnceWith('google');
+      expect(onSubmit).not.toHaveBeenCalled();
+      expect(input).not.toHaveAttribute('aria-invalid', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'betterAuth.signin.nextStep' }));
+      await waitFor(() => {
+        if (email === 'user@example.com') {
+          expect(onSubmit).toHaveBeenCalledExactlyOnceWith({ email });
+        } else {
+          expect(input).toHaveAttribute('aria-invalid', 'true');
+          expect(onSubmit).not.toHaveBeenCalled();
+        }
+      });
+    },
+  );
+
   it('should confirm the agreement before social sign-in', async () => {
     let confirmAgreement: (() => Promise<void>) | (() => void) | undefined;
     vi.spyOn(BaseUI, 'confirmModal').mockImplementation(({ onOk }) => {
