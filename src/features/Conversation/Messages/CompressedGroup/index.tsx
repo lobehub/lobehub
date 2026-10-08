@@ -1,15 +1,16 @@
 'use client';
 
-import type { CompressionGroupMetadata, UIChatMessage } from '@lobechat/types';
+import type { UIChatMessage } from '@lobechat/types';
 import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { ActionIcon, confirmModal, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp, History, Sparkles, Undo2 } from 'lucide-react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import StreamingMarkdown from '@/components/StreamingMarkdown';
+import { useLocalStorageState } from '@/hooks/useLocalStorageState';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { shinyTextStyles } from '@/styles/loading';
@@ -18,17 +19,13 @@ import { dataSelectors, useConversationStore } from '../../store';
 import CompressedMessageItem from './CompressedMessageItem';
 import { isCompressionSummaryGenerating, shouldShowCompressedGroupPanel } from './logic';
 
-const STORAGE_KEY_PREFIX = 'compressed-group-tab:';
-
-const getStoredTab = (id: string): string => {
-  if (typeof window === 'undefined') return 'summary';
-  return localStorage.getItem(`${STORAGE_KEY_PREFIX}${id}`) || 'summary';
-};
-
-const setStoredTab = (id: string, tab: string) => {
-  if (typeof window === 'undefined') return;
-  localStorage.setItem(`${STORAGE_KEY_PREFIX}${id}`, tab);
-};
+/**
+ * Whether a group is folded open, and which of its two views is showing, are
+ * per-browser reading preferences rather than conversation data: both live in
+ * localStorage and are never written back to the message group.
+ */
+const activeTabStorageKey = (id: string) => `compressed-group-tab:${id}`;
+const expandedStorageKey = (id: string) => `compressed-group-expanded:${id}`;
 
 const styles = createStaticStyles(({ css }) => ({
   container: css`
@@ -51,20 +48,9 @@ export interface CompressedGroupMessageProps {
 
 const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
   const { t } = useTranslation('chat');
-  const [activeTab, setActiveTab] = useState<string>(() => getStoredTab(id));
-
-  const handleTabChange = useCallback(
-    (tab: string) => {
-      setActiveTab(tab);
-      setStoredTab(id, tab);
-    },
-    [id],
-  );
+  const [activeTab, setActiveTab] = useLocalStorageState(activeTabStorageKey(id), 'summary');
 
   const message = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual);
-  const toggleCompressedGroupExpanded = useConversationStore(
-    (s) => s.toggleCompressedGroupExpanded,
-  );
   const cancelCompression = useConversationStore((s) => s.cancelCompression);
 
   const handleCancelCompression = useCallback(() => {
@@ -77,7 +63,9 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
 
   const content = message?.content;
   const rawCompressedMessages = (message as UIChatMessage)?.compressedMessages;
-  const expanded = (message?.metadata as CompressionGroupMetadata)?.expanded ?? true;
+  const [expanded, setExpanded] = useLocalStorageState(expandedStorageKey(id), true);
+
+  const handleToggleExpanded = useCallback(() => setExpanded((prev) => !prev), [setExpanded]);
 
   // Filter out placeholder assistant message (content === '...' without tools)
   const compressedMessages = useMemo(() => {
@@ -138,7 +126,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             className={styles.header}
             items={tabItems}
             variant={'rounded'}
-            onChange={handleTabChange}
+            onChange={setActiveTab}
           />
           <Flexbox horizontal gap={4}>
             <ActionIcon
@@ -150,7 +138,7 @@ const CompressedGroupMessage = memo<CompressedGroupMessageProps>(({ id }) => {
             <ActionIcon
               icon={expanded ? ChevronUp : ChevronDown}
               size={'small'}
-              onClick={() => toggleCompressedGroupExpanded(id)}
+              onClick={handleToggleExpanded}
             />
           </Flexbox>
         </Flexbox>
