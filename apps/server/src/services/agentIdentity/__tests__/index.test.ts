@@ -254,6 +254,42 @@ describe('AgentAccountService — provisioning', () => {
     expect(calls).toContainEqual({ method: 'DELETE', path: '/v1/inboxes/inb_1' });
   });
 
+  it('keeps the live inbox when a retry collides on its own routing key', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const first = await service.provision({ agentId, provider: 'agent-mail' });
+
+    // `provision` is idempotent by contract, so a retry can be handed the inbox
+    // that already backs the live row; the insert then collides on the routing
+    // key. That collision is *this* account, not a rival: releasing here would
+    // delete the inbox the live account is using.
+    const retry = await service.provision({ agentId, provider: 'agent-mail' });
+
+    expect(retry.id).toBe(first.id);
+    expect(retry.identifier).toBe('agent-7@lobe.id');
+    expect(calls.some((c) => c.method === 'DELETE')).toBe(false);
+    expect(await service.list()).toHaveLength(1);
+  });
+
+  it('reconciles a rebind against the live row, not the revoked one it replaced', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+    const first = await service.provision({ agentId, provider: 'agent-mail' });
+    await service.revoke(first.id);
+
+    // A released handle can be bound again, so the key now carries both the
+    // revoked row and the account that replaced it. A retry that collides has to
+    // read the live one; reading the replaced row would release its inbox.
+    const live = await service.provision({ agentId, provider: 'agent-mail' });
+    const deletesBeforeRetry = calls.filter((c) => c.method === 'DELETE').length;
+
+    const retry = await service.provision({ agentId, provider: 'agent-mail' });
+
+    expect(retry.id).toBe(live.id);
+    expect(calls.filter((c) => c.method === 'DELETE')).toHaveLength(deletesBeforeRetry);
+    expect(await service.list()).toHaveLength(2);
+  });
+
   it('lets a released handle be bound again', async () => {
     const service = buildService(createMailFetch().fetchImpl);
     const first = await service.provision({ agentId, provider: 'agent-mail' });

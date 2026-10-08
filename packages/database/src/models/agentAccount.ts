@@ -4,7 +4,7 @@ import type {
   AgentAccountKind,
   AgentAccountStatus,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
@@ -90,6 +90,21 @@ const viewColumns = {
  * outbound.
  */
 const INBOUND_ROUTABLE_STATUSES: AgentAccountStatus[] = ['active', 'provisioning'];
+
+/**
+ * Statuses that actually hold the routing key.
+ *
+ * Mirrors the partial unique index on `(provider, identifier)`: a revoked row
+ * keeps its audit trail but no longer holds the handle, so the same key can
+ * carry both it and the account that replaced it. Anything reconciling a write
+ * *by* routing key must read only these — reading the replaced row would act on
+ * an account that is no longer there.
+ */
+export const ROUTING_KEY_HELD_STATUSES: AgentAccountStatus[] = [
+  'provisioning',
+  'active',
+  'suspended',
+];
 
 /**
  * Agent accounts (mail / phone / wallet / service) and their credentials.
@@ -327,7 +342,7 @@ export class AgentAccountModel {
         and(
           eq(agentAccounts.provider, provider),
           eq(agentAccounts.identifier, identifier),
-          ne(agentAccounts.status, 'revoked'),
+          inArray(agentAccounts.status, ROUTING_KEY_HELD_STATUSES),
         ),
       )
       .limit(1);

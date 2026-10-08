@@ -15,7 +15,7 @@ import type {
   AgentAccountPatch,
   AgentAccountView,
 } from '@/database/models/agentAccount';
-import { AgentAccountModel } from '@/database/models/agentAccount';
+import { AgentAccountModel, ROUTING_KEY_HELD_STATUSES } from '@/database/models/agentAccount';
 import type { LobeChatDatabase } from '@/database/type';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 
@@ -178,32 +178,38 @@ export class AgentAccountService {
     } catch (error) {
       const conflict = this.toConflictError(error, provider.provider, issued.identifier);
 
-      // Anything but a unique violation leaves the write's outcome unknown: the
-      // insert may have committed and only its acknowledgement been lost.
-      // Releasing then would leave a live account backed by a deleted inbox, so
-      // look first, and treat a committed row as the success it is. If even the
-      // lookup fails, keep the resource — an orphaned inbox can be reaped, a
-      // broken account cannot be repaired by the user.
-      if (!conflict) {
-        let committed: AgentAccountView | undefined;
-        try {
-          committed = await AgentAccountModel.findByRoutingKey(
-            this.db,
-            provider.provider,
-            issued.identifier,
-          );
-        } catch {
-          throw error;
-        }
-        if (committed && committed.agentId === params.agentId && committed.status !== 'revoked') {
-          return committed;
-        }
+      // Two very different failures land here, and the routing key settles both:
+      //
+      // - a unique violation means a live row already holds the handle. On an
+      //   idempotent provisioning retry that row is *this* account — the provider
+      //   contract makes `provision` idempotent, so it can hand back the very
+      //   inbox already backing the live row — and the first write simply
+      //   committed;
+      // - any other error leaves the write's outcome unknown: the insert may have
+      //   committed and only its acknowledgement been lost.
+      //
+      // Only a live row counts. A released handle can be bound again, so the key
+      // may carry both the revoked row and its replacement; reconciling against
+      // the replaced one would release the resource the live account is using.
+      // If even the lookup fails, keep the resource — an orphaned inbox can be
+      // reaped, a broken account cannot be repaired by the user.
+      let committed: AgentAccountView | undefined;
+      try {
+        committed = await AgentAccountModel.findByRoutingKey(
+          this.db,
+          provider.provider,
+          issued.identifier,
+          ROUTING_KEY_HELD_STATUSES,
+        );
+      } catch {
+        throw conflict ?? error;
       }
+      if (committed && committed.agentId === params.agentId) return committed;
 
-      // The provider holds a resource (an inbox, a number binding) that no row
-      // points at. Hand it back so a failed write leaves nothing billable
-      // behind; the release is best-effort because the original error is the
-      // one worth surfacing.
+      // The provider holds a resource (an inbox, a number binding) that no live
+      // row of this agent points at. Hand it back so a failed write leaves
+      // nothing billable behind; the release is best-effort because the original
+      // error is the one worth surfacing.
       await provider
         .release({
           credential: issued.credential ?? null,
