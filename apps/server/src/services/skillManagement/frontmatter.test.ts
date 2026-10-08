@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   normalizeSkillIndexContent,
   parseSkillFrontmatter,
+  renderSkillIndexContent,
   validateSkillName,
 } from './frontmatter';
 
@@ -110,5 +111,60 @@ describe('normalizeSkillIndexContent', () => {
         description: '   ',
       }),
     ).toThrow('Skill frontmatter description is required');
+  });
+});
+
+describe('renderSkillIndexContent', () => {
+  it('renders frontmatter from structured fields and keeps the body', () => {
+    expect(
+      renderSkillIndexContent({
+        bodyMarkdown: '# Review\n\n## Workflow\n- Check tests.',
+        description: 'Review PRs',
+        name: 'review',
+      }),
+    ).toBe(
+      '---\ndescription: Review PRs\nname: review\n---\n# Review\n\n## Workflow\n- Check tests.',
+    );
+  });
+
+  it('strips a pasted frontmatter block from the body instead of failing', () => {
+    expect(
+      renderSkillIndexContent({
+        bodyMarkdown:
+          '---\nname: stale-name\ndescription: Stale description\n---\n\n# Review\n\nBody.',
+        description: 'Review PRs',
+        name: 'review',
+      }),
+    ).toBe('---\ndescription: Review PRs\nname: review\n---\n# Review\n\nBody.');
+  });
+
+  it('ignores frontmatter fields in the pasted block; structured fields win', () => {
+    const rendered = renderSkillIndexContent({
+      bodyMarkdown: '---\nname: other-name\ninjected: yes\n---\nBody',
+      description: 'Canonical',
+      name: 'review',
+    });
+
+    expect(parseSkillFrontmatter(rendered)).toEqual({ description: 'Canonical', name: 'review' });
+  });
+
+  it('rejects an unclosed frontmatter block', () => {
+    expect(() =>
+      renderSkillIndexContent({
+        bodyMarkdown: '---\nname: review\n# No closing delimiter',
+        description: 'Review PRs',
+        name: 'review',
+      }),
+    ).toThrow('Skill bodyMarkdown must close YAML frontmatter');
+  });
+
+  it('rejects a body that is empty after stripping frontmatter', () => {
+    expect(() =>
+      renderSkillIndexContent({
+        bodyMarkdown: '---\nname: review\ndescription: Stale\n---\n',
+        description: 'Review PRs',
+        name: 'review',
+      }),
+    ).toThrow('Skill bodyMarkdown is required');
   });
 });

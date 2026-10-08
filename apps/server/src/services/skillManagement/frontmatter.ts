@@ -99,18 +99,29 @@ const parseMatter = (content: string): ParsedMatterResult => {
  *
  * After:
  * - "---\nname: review\ndescription: Review PRs\n---\n# Review\n\n## Workflow\n- Check tests."
+ *
+ * Models often paste a full SKILL.md-shaped body that already carries a
+ * frontmatter block. Frontmatter is always rendered from the structured
+ * fields (`name` / `description`), so a well-formed leading block is stripped
+ * from the body instead of failing the save; an unclosed block is rejected.
  */
 export const renderSkillIndexContent = (input: RenderSkillIndexContentInput): string => {
   const name = validateSkillName(input.name);
   const description = normalizeFrontmatterScalar(input.description, 'description');
-  const body = input.bodyMarkdown.trimStart();
+  let body = input.bodyMarkdown.trimStart();
 
   if (!body) {
     throw new Error('Skill bodyMarkdown is required');
   }
 
   if (body.startsWith('---')) {
-    throw new Error('Skill bodyMarkdown must not include YAML frontmatter');
+    if (!FRONTMATTER_BLOCK_PATTERN.test(body)) {
+      throw new Error('Skill bodyMarkdown must close YAML frontmatter');
+    }
+    body = matter(body).content.trimStart();
+    if (!body) {
+      throw new Error('Skill bodyMarkdown is required');
+    }
   }
 
   return matter
