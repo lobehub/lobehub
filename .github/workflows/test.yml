@@ -329,7 +329,7 @@ jobs:
       - name: alint · restore cache
         if: ${{ !cancelled() && env.ALINT_API_KEY != '' }}
         continue-on-error: true
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .alintcache
           # alint keys each cached result by the rule's own text (>= 0.7.2), so a
