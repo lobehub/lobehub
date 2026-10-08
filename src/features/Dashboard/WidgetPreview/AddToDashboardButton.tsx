@@ -7,8 +7,11 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { openCreateDashboardModal } from '../DashboardFormModal';
+import { placeableDashboards } from './previewWidget';
 
 interface AddToDashboardButtonProps {
   /** Boards the widget is already on; they show checked and are not re-added. */
@@ -27,6 +30,10 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
     const adding = useDashboardStore(dashboardSelectors.isWidgetAdding(widgetId));
     const { isLoading } = useFetchDashboards();
     const dashboards = useDashboardStore(dashboardSelectors.dashboardList());
+    const currentUserId = useUserStore(userProfileSelectors.userId);
+    // Only the caller's own boards can take the placement (addItem writes as
+    // the board's creator); teammates' readable boards are not offered.
+    const placeable = placeableDashboards(dashboards, currentUserId);
 
     const add = async (dashboard: { id: string; title: string }) => {
       try {
@@ -39,7 +46,7 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
     };
 
     const items: DropdownItem[] = [
-      ...dashboards.map((dashboard) => {
+      ...placeable.map((dashboard) => {
         const placed = placedIds.includes(dashboard.id);
         return {
           disabled: placed,
@@ -49,7 +56,7 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
           onClick: () => void add(dashboard),
         };
       }),
-      ...(dashboards.length > 0 ? [{ type: 'divider' as const }] : []),
+      ...(placeable.length > 0 ? [{ type: 'divider' as const }] : []),
       {
         icon: <Icon icon={PlusIcon} />,
         key: 'new',

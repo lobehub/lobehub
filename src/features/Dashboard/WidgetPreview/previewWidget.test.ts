@@ -5,6 +5,7 @@ import {
   defaultDiffPair,
   findSucceededPreviewRun,
   getPreviewPublishState,
+  placeableDashboards,
   resolvePublishSchedule,
   toPreviewWidget,
 } from './previewWidget';
@@ -110,6 +111,23 @@ describe('canPreviewPublish', () => {
     expect(canPreviewPublish(widget, 'u-member')).toBe(false);
     expect(canPreviewPublish(widget, null)).toBe(false);
     expect(canPreviewPublish(widget, undefined)).toBe(false);
+  });
+});
+
+describe('placeableDashboards', () => {
+  const boards = [
+    { id: 'd1', title: 'Mine', userId: 'u-member' },
+    { id: 'd2', title: 'Teammate public', userId: 'u-owner' },
+  ];
+
+  it('offers only the caller’s own boards — placement writes as the board’s creator', () => {
+    expect(placeableDashboards(boards, 'u-member')).toEqual([boards[0]]);
+    expect(placeableDashboards(boards, 'u-owner')).toEqual([boards[1]]);
+  });
+
+  it('offers nothing while the current user is unknown', () => {
+    expect(placeableDashboards(boards, undefined)).toEqual([]);
+    expect(placeableDashboards(boards, null)).toEqual([]);
   });
 });
 

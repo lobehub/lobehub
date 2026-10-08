@@ -80,6 +80,19 @@ export const canPreviewPublish = (
   currentUserId?: string | null,
 ): boolean => !!currentUserId && currentUserId === widget.userId;
 
+/**
+ * Boards offered as placement targets from a widget preview. Placing writes
+ * through `DashboardModel.addItem`, which only the board's creator can
+ * perform — in a workspace the readable list includes teammates' public
+ * boards, and offering them only ends in a refused write. While the current
+ * user is unknown (profile still loading) nothing is offered.
+ */
+export const placeableDashboards = <T extends { userId: string }>(
+  dashboards: T[],
+  currentUserId?: string | null,
+): T[] =>
+  currentUserId ? dashboards.filter((dashboard) => dashboard.userId === currentUserId) : [];
+
 /** Versions to compare by default: the one under review against the live one (or its parent). */
 export const defaultDiffPair = (
   versions: Pick<DashboardWidgetVersionItem, 'id' | 'parentVersionId' | 'status'>[],
