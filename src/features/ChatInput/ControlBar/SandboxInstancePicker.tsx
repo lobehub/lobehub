@@ -1,8 +1,8 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Popover, Skeleton, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   AppWindowMacIcon,
@@ -46,7 +46,6 @@ const styles = createStaticStyles(({ css }) => ({
   groupLabel: css`
     margin-block-start: 6px;
     padding-block: 4px;
-    padding-inline: 8px;
 
     font-size: 11px;
     font-weight: 500;
@@ -60,7 +59,6 @@ const styles = createStaticStyles(({ css }) => ({
     justify-content: space-between;
 
     padding-block: 4px;
-    padding-inline: 8px;
   `,
   headerInfo: css`
     cursor: help;
@@ -99,17 +97,19 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   notice: css`
     padding-block: 8px;
-    padding-inline: 8px;
     font-size: 12px;
     color: ${cssVar.colorTextDescription};
+  `,
+  option: css`
+    && {
+      padding-inline: 0;
+    }
   `,
   skeletonRow: css`
     display: flex;
     gap: 10px;
     align-items: center;
-
     padding-block: 8px;
-    padding-inline: 8px;
   `,
   blocked: css`
     color: ${cssVar.colorWarning};
@@ -326,6 +326,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       return (
         <OptionRow
           active={instance.id === boundInstanceId}
+          className={styles.option}
           // Already this conversation's own instance: it stays selectable
           // however the lease reads, because "you cannot pick what you are
           // already using" is never the right thing to tell someone.
@@ -451,6 +452,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         <Flexbox className={styles.temporary}>
           <OptionRow
             active={value.mode === 'ephemeral'}
+            className={styles.option}
             desc={t('sandboxStorage.ephemeralDesc')}
             icon={<Icon icon={TimerIcon} size={16} />}
             label={t('sandboxStorage.ephemeral')}
@@ -464,6 +466,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           // more place files could go — and the tag says why it is not
           // simply selectable.
           <OptionRow
+            className={styles.option}
             desc={t('sandboxStorage.persistentUpsellDesc')}
             icon={<Icon icon={FolderClockIcon} size={16} />}
             label={t('sandboxStorage.persistentUpsell')}
@@ -483,6 +486,7 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           // the row only changes which step it names, because "set up an
           // environment" reads as a dead end to someone who already has one.
           <OptionRow
+            className={styles.option}
             icon={<Icon icon={PlusIcon} size={16} />}
             desc={t(
               hasNoEnvironments
