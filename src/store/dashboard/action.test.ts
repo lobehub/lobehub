@@ -15,6 +15,7 @@ vi.mock('@/services/dashboard', () => ({
   dashboardService: {
     addItem: vi.fn(),
     create: vi.fn(),
+    getPreviewRun: vi.fn(),
     publish: vi.fn(),
     runWidget: vi.fn(),
     updateItemLayouts: vi.fn(),
@@ -228,6 +229,22 @@ describe('useFetchWidgetRun', () => {
 
   it('does not fetch without both ids', () => {
     useDashboardStore.getState().useFetchWidgetRun('w1', undefined);
+    expect(vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[0]).toBeNull();
+  });
+});
+
+describe('useFetchWidgetVersionPreviewRun', () => {
+  it('keys on widget and version and caches the run by its id', () => {
+    useDashboardStore.getState().useFetchWidgetVersionPreviewRun('w1', 'v1');
+    const [key, , options] = vi.mocked(useClientDataSWR).mock.calls.at(-1) as any;
+    expect(key).toEqual(['dashboard:previewRun', 'w1', 'v1']);
+
+    options.onSuccess({ id: 'r1', versionId: 'v1' });
+    expect(useDashboardStore.getState().widgetRunDetailMap.r1).toMatchObject({ id: 'r1' });
+  });
+
+  it('does not fetch without both ids', () => {
+    useDashboardStore.getState().useFetchWidgetVersionPreviewRun('w1', undefined);
     expect(vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[0]).toBeNull();
   });
 });

@@ -18,12 +18,7 @@ import { formatDuration } from '../utils/format';
 import { getDashboardPath } from '../utils/path';
 import WidgetCard from '../WidgetCard';
 import AddToDashboardButton from './AddToDashboardButton';
-import {
-  canPreviewPublish,
-  findSucceededPreviewRun,
-  getPreviewPublishState,
-  toPreviewWidget,
-} from './previewWidget';
+import { canPreviewPublish, getPreviewPublishState, toPreviewWidget } from './previewWidget';
 
 const styles = createStaticStyles(({ css }) => ({
   definition: css`
@@ -218,16 +213,20 @@ const WidgetPreviewCard = memo<WidgetPreviewCardProps>(({ widgetId, runId }) => 
 
 WidgetPreviewCard.displayName = 'DashboardWidgetPreviewCard';
 
-/** A version's latest successful dry run — e.g. the one a publish approval was based on. */
+/**
+ * A version's successful dry run — e.g. the one a publish approval was based
+ * on. Fetched by version, not from the newest-run window, so the card keeps
+ * its body after the widget's run history rolls past the approval.
+ */
 export const WidgetVersionPreviewCard = memo<{ versionId: string; widgetId: string }>(
   ({ widgetId, versionId }) => {
     const useFetchWidgetDetail = useDashboardStore((s) => s.useFetchWidgetDetail);
-    const useFetchWidgetRuns = useDashboardStore((s) => s.useFetchWidgetRuns);
+    const useFetchWidgetVersionPreviewRun = useDashboardStore(
+      (s) => s.useFetchWidgetVersionPreviewRun,
+    );
     useFetchWidgetDetail(widgetId);
-    useFetchWidgetRuns(widgetId);
+    const { data: run } = useFetchWidgetVersionPreviewRun(widgetId, versionId);
     const widget = useDashboardStore(dashboardSelectors.widgetDetail(widgetId));
-    const runs = useDashboardStore(dashboardSelectors.widgetRuns(widgetId));
-    const run = findSucceededPreviewRun(runs, versionId);
 
     if (!widget || !run) return null;
     return <WidgetPreviewBody run={run} widget={widget} />;

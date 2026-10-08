@@ -180,6 +180,27 @@ export class DashboardActionImpl {
       },
     );
 
+  /**
+   * The preview run a publish approval was shown, fetched by version. The run
+   * list only holds the newest {@link RUN_HISTORY_LIMIT} runs, so an old
+   * approval's preview must be fetched directly or the card vanishes once its
+   * runs roll out of the window.
+   */
+  useFetchWidgetVersionPreviewRun = (widgetId?: string, versionId?: string) =>
+    useClientDataSWR(
+      widgetId && versionId ? dashboardKeys.previewRun(widgetId, versionId) : null,
+      () => dashboardService.getPreviewRun(widgetId!, versionId!),
+      {
+        onSuccess: (data) => {
+          this.#set(
+            (s) => ({ widgetRunDetailMap: { ...s.widgetRunDetailMap, [data.id]: data } }),
+            false,
+            'useFetchWidgetVersionPreviewRun/onSuccess',
+          );
+        },
+      },
+    );
+
   useFetchWidgetVersions = (widgetId?: string) =>
     useClientDataSWR(
       widgetId ? dashboardKeys.versions(widgetId) : null,

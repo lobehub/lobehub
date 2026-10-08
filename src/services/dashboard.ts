@@ -112,6 +112,15 @@ class DashboardService {
     return data;
   };
 
+  /**
+   * The preview run behind a publish approval, by version: not window-limited,
+   * so the card survives run-history rollover.
+   */
+  getPreviewRun = async (widgetId: string, versionId: string) => {
+    const { data } = await lambdaClient.widget.getPreviewRun.query({ versionId, widgetId });
+    return data;
+  };
+
   publish = async (widgetId: string, versionId: string) => {
     const { data } = await lambdaClient.widget.publish.mutate({ versionId, widgetId });
     return data;

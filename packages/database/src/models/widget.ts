@@ -559,6 +559,34 @@ export class WidgetModel {
   }
 
   /**
+   * The newest usable preview run of one version — what a publish approval was
+   * shown, however far the run history has rolled on. Unlike {@link listRuns}
+   * this is keyed by version, so it keeps answering after the version's runs
+   * leave the newest-N window.
+   */
+  async findPreviewRun(widgetId: string, versionId: string) {
+    if (!isUuid(versionId)) return undefined;
+    const widget = await this.findById(widgetId);
+    if (!widget) return undefined;
+
+    const [run] = await this.db
+      .select()
+      .from(widgetRuns)
+      .where(
+        and(
+          eq(widgetRuns.widgetId, widgetId),
+          eq(widgetRuns.versionId, versionId),
+          eq(widgetRuns.trigger, 'preview'),
+          inArray(widgetRuns.status, [...WIDGET_RUN_OUTPUT_STATUSES]),
+        ),
+      )
+      .orderBy(desc(widgetRuns.createdAt))
+      .limit(1);
+
+    return run;
+  }
+
+  /**
    * Whether any version of this widget with the given content hash has a run
    * that produced a usable output (`succeeded` or `partial`). Publishing a
    * draft is gated on this: the exact content going live must have executed

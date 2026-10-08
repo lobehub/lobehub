@@ -183,6 +183,23 @@ export const widgetRouter = router({
       }
     }),
 
+  /**
+   * The preview run a publish approval was based on, fetched by version — it
+   * stays reachable after the widget's run history rolls past the list
+   * window, so old publish cards keep their body.
+   */
+  getPreviewRun: widgetProcedure
+    .input(z.object({ versionId: uuid, widgetId: uuid }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.widgetModel.findPreviewRun(input.widgetId, input.versionId);
+        if (!data) throw notFound('Run');
+        return { data, success: true };
+      } catch (error) {
+        fail(error, 'get widget preview run');
+      }
+    }),
+
   getVersion: widgetProcedure
     .input(z.object({ versionId: uuid, widgetId: uuid }))
     .query(async ({ ctx, input }) => {

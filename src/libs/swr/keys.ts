@@ -311,6 +311,16 @@ export const dashboardKeys = {
     widgetId,
     runId,
   ]),
+  /**
+   * The preview run a publish approval was based on, keyed by version: unlike
+   * `runs` it is not window-limited, so old publish cards keep their body
+   * after run history rolls over.
+   */
+  previewRun: def('dashboard:previewRun', (widgetId: string, versionId: string) => [
+    'dashboard:previewRun',
+    widgetId,
+    versionId,
+  ]),
   runs: def('dashboard:runs', (widgetId: string) => ['dashboard:runs', widgetId]),
   trend: def('dashboard:trend', (widgetId: string, source: string) => [
     'dashboard:trend',
