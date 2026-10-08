@@ -1129,7 +1129,7 @@ describe('ConversationControl actions', () => {
           batchId: 'batch-durable',
           operationId: 'operation-durable',
           resolutionRequestId: expect.any(String),
-          streamFeatures: ['member_runtime_end'],
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
         });
         expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
@@ -3265,7 +3265,7 @@ describe('ConversationControl actions', () => {
           batchId: `batch-${interactionKind}`,
           operationId: `server-operation-${interactionKind}`,
           resolutionRequestId: expect.any(String),
-          streamFeatures: ['member_runtime_end'],
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
         });
         const resolvingIntervention = {
