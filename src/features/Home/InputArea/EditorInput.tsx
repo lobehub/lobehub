@@ -100,7 +100,7 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
           leftContent={
             <Flexbox horizontal align={'center'} gap={2}>
               <ModeSelect value={mode} onChange={onModeChange} />
-              {mode !== 'chat' ? null : isAgentConfigLoading ? (
+              {isAgentConfigLoading ? (
                 <ActionIcon disabled icon={PlusIcon} size={'small'} />
               ) : (
                 <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
