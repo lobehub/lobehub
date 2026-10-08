@@ -494,6 +494,7 @@ export const buildServerAgentMemberRunner = (
 
       // 3. Fork members.
       let startedCount = 0;
+      const startErrors: string[] = [];
       await Promise.all(
         resolvedMembers.map(async (member, i) => {
           const anchorMessageId = anchorIds[i];
@@ -520,7 +521,9 @@ export const buildServerAgentMemberRunner = (
               startedCount += 1;
               return;
             }
+            if (result?.error) startErrors.push(result.error);
           } catch (error) {
+            startErrors.push(String(error));
             log(
               'buildServerAgentMemberRunner: member %s failed to start: %O',
               member.agentId,
@@ -558,7 +561,7 @@ export const buildServerAgentMemberRunner = (
             log('buildServerAgentMemberRunner: cleanup failed for %s: %O', id, error);
           }
         }
-        return { started: false, startedCount: 0 };
+        return { errors: startErrors, started: false, startedCount: 0 };
       }
 
       return { started: true, startedCount };
