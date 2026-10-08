@@ -5,12 +5,13 @@ import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Spin, Text, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
-import { AlertTriangleIcon, CircleDashedIcon } from 'lucide-react';
+import { CircleDashedIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DashboardTrendSeries, DashboardWidgetItem } from '@/services/dashboard';
 
+import { ErrorLine } from '../ErrorLine';
 import { getWidgetCardBody, getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import HealthDot from './HealthDot';
 import StatusBadges from './StatusBadges';
@@ -136,16 +137,8 @@ const WidgetCard = memo<WidgetCardProps>(
       );
     } else if (bodyState === 'failedNoOutput') {
       body = (
-        <Center data-widget-state={'failed-no-output'} gap={6} height={'100%'} padding={8}>
-          <Icon color={cssVar.colorError} icon={AlertTriangleIcon} size={20} />
-          <Text fontSize={12} type={'secondary'}>
-            {t('widget.state.failedNoOutput')}
-          </Text>
-          {health.error?.message && (
-            <Text ellipsis={{ rows: 2 }} fontSize={12} type={'danger'}>
-              {health.error.message}
-            </Text>
-          )}
+        <Center data-widget-state={'failed-no-output'} height={'100%'} padding={8}>
+          <ErrorLine detail={health.error?.message} summary={t('widget.state.failedNoOutput')} />
         </Center>
       );
     } else {

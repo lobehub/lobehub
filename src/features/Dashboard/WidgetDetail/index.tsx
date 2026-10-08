@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 import type { DashboardWidgetItem } from '@/services/dashboard';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 
+import { ErrorLine } from '../ErrorLine';
 import { useWidgetTrend } from '../hooks/useWidgetTrend';
 import { getWidgetHealth, getWidgetUpdatedAt } from '../utils/widgetHealth';
 import HealthDot, { getHealthTone, HEALTH_TONE_COLOR } from '../WidgetCard/HealthDot';
@@ -151,14 +152,12 @@ const WidgetSummary = memo<{ widget: DashboardWidgetItem }>(({ widget }) => {
         </div>
       </div>
       {health.failed && health.error && (
-        <Alert
-          showIcon
-          description={health.error.message}
-          type={'error'}
-          title={
+        <ErrorLine
+          detail={`${health.error.code}\n${health.error.message}`}
+          summary={
             widget.consecutiveFailures > 1
-              ? `${health.error.code} · ${t('detail.failures')} ${widget.consecutiveFailures}`
-              : health.error.code
+              ? `${t('widget.status.failed')} · ${t('detail.failures')} ${widget.consecutiveFailures}`
+              : t('widget.status.failed')
           }
         />
       )}

@@ -60,6 +60,8 @@ export default {
   'dryRun.intro':
     'The agent wants to run this draft once to preview its output. It runs in a sandbox with the access below; nothing goes live and no dashboard changes.',
   'dryRun.runtime': 'Runtime',
+  'error.hideDetails': 'Hide details',
+  'error.showDetails': 'Show details',
   'form.descriptionLabel': 'Description',
   'form.descriptionPlaceholder': 'What this dashboard keeps an eye on (optional)',
   'form.titleLabel': 'Name',

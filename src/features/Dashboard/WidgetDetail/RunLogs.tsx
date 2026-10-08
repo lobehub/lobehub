@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import type { DashboardWidgetRunItem } from '@/services/dashboard';
 
+import { ErrorLine } from '../ErrorLine';
 import { truncateLog } from '../utils/format';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -64,14 +65,7 @@ const RunLogs = memo<{ run: DashboardWidgetRunItem }>(({ run }) => {
   return (
     <Flexbox gap={12}>
       {run.error && (
-        <Flexbox gap={4}>
-          <Text fontSize={12} weight={500}>
-            {t('run.error')}
-          </Text>
-          <Text fontSize={12} type={'danger'}>
-            {`[${run.error.code}] ${run.error.message}`}
-          </Text>
-        </Flexbox>
+        <ErrorLine detail={`[${run.error.code}] ${run.error.message}`} summary={t('run.error')} />
       )}
       <LogBlock label={'stdout'} stream={'stdout'} text={run.stdout} />
       <LogBlock label={'stderr'} stream={'stderr'} text={run.stderr} />

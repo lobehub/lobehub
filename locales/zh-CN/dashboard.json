@@ -56,6 +56,8 @@
   "detail.versionPublished": "v{{version}} 生效中",
   "dryRun.intro": "智能体想先试运行一次此草稿以预览输出。它会在沙箱中以下方列出的权限运行；不会上线，也不会改动任何看板。",
   "dryRun.runtime": "运行环境",
+  "error.hideDetails": "隐藏详情",
+  "error.showDetails": "显示详情",
   "form.descriptionLabel": "描述",
   "form.descriptionPlaceholder": "这个看板关注什么（可选）",
   "form.titleLabel": "名称",
