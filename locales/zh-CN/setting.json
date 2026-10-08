@@ -819,6 +819,7 @@
   "identity.inbox.detail.to": "收件人",
   "identity.inbox.empty": "暂无消息。发往上列地址的邮件会出现在这里。",
   "identity.inbox.loadFailed": "收件箱加载失败。",
+  "identity.inbox.loadMore": "加载更早的消息",
   "identity.inbox.markAllRead": "全部标记为已读",
   "identity.inbox.markAllReadFailed": "标记已读失败",
   "identity.inbox.noSubject": "（无主题）",

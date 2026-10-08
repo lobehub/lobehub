@@ -28,7 +28,7 @@ interface InboxSectionProps {
  */
 const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
   const { t } = useTranslation('setting');
-  const { data, error, isLoading, mutate } = useAgentInbox(agentId);
+  const { data, error, hasMore, isLoading, loadMore, mutate } = useAgentInbox(agentId);
   const { data: unreadCount = 0, mutate: mutateUnread } = useAgentInboxUnreadCount(agentId);
   const refresh = useCallback(
     () => Promise.all([mutate(), mutateUnread()]),
@@ -137,6 +137,11 @@ const InboxSection = memo<InboxSectionProps>(({ agentId }) => {
           );
         })}
       </Flexbox>
+      {hasMore && (
+        <Button block size={'small'} type={'text'} onClick={loadMore}>
+          {t('identity.inbox.loadMore')}
+        </Button>
+      )}
     </Flexbox>
   );
 });

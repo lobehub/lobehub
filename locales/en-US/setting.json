@@ -819,6 +819,7 @@
   "identity.inbox.detail.to": "To",
   "identity.inbox.empty": "Nothing here yet. Mail sent to the addresses above lands here.",
   "identity.inbox.loadFailed": "Couldn't load the inbox.",
+  "identity.inbox.loadMore": "Load older messages",
   "identity.inbox.markAllRead": "Mark all read",
   "identity.inbox.markAllReadFailed": "Could not mark messages as read",
   "identity.inbox.noSubject": "(no subject)",
