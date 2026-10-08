@@ -5,9 +5,11 @@ import { ArrowUpRightIcon, LayoutDashboardIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import AsyncError from '@/components/AsyncError';
 import { WidgetDetailPanel } from '@/features/Dashboard/WidgetDetail';
 import WidgetRunPreview from '@/features/Dashboard/WidgetDetail/RunPreview';
+import { canCreateDashboardFromPreview } from '@/features/Dashboard/WidgetPreview/previewWidget';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
@@ -83,6 +85,12 @@ const Body = memo(() => {
   const { error, mutate } = useFetchWidgetDetail(widgetId);
   const widget = useDashboardStore(dashboardSelectors.widgetDetail(widgetId));
   const openDashboard = useOpenDashboard();
+  // A workspace-root widget's board list resolves to the home list, which
+  // workspaces disable — opening it would close this Portal onto nothing.
+  const canOpenDashboards = canCreateDashboardFromPreview(
+    widget?.projectId,
+    !!useActiveWorkspaceSlug(),
+  );
 
   if (!widgetId) return null;
 
@@ -121,15 +129,17 @@ const Body = memo(() => {
       <Section
         title={t('portal.dashboards')}
         extra={
-          <Button
-            data-portal-all-dashboards
-            icon={LayoutDashboardIcon}
-            size={'small'}
-            type={'text'}
-            onClick={() => openDashboard(undefined, widget.projectId)}
-          >
-            {t('portal.goToDashboards')}
-          </Button>
+          canOpenDashboards ? (
+            <Button
+              data-portal-all-dashboards
+              icon={LayoutDashboardIcon}
+              size={'small'}
+              type={'text'}
+              onClick={() => openDashboard(undefined, widget.projectId)}
+            >
+              {t('portal.goToDashboards')}
+            </Button>
+          ) : undefined
         }
       >
         {widget.dashboards.length > 0 ? (
