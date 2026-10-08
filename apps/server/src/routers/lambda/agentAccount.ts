@@ -4,12 +4,14 @@ import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import type { LobeChatDatabase } from '@/database/type';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService, isAgentAccountError } from '@/server/services/agentIdentity';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
+import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 /**
  * Agent accounts — the identity assets an agent owns (mail / phone / wallet /
@@ -19,9 +21,11 @@ import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdenti
  * owns provider orchestration and the model owns storage + scoping. Two rules
  * are enforced here rather than there:
  *
- * 1. Every write states which agent it acts on and proves the caller may use
- *    that agent (`assertAgentUsableBy`), so an account can never be attached to
- *    someone else's private agent.
+ * 1. Every write states which agent it acts on and proves the caller may
+ *    **edit** that agent: `assertAgentUsableBy` (the visibility predicate) for
+ *    the 404 a foreign private agent deserves, plus the resource ACL for the
+ *    403 a `view` / `use` shared agent deserves. Looking at an agent is not
+ *    permission to take over its identity.
  * 2. Installing a credential is separated from managing the account. It is the
  *    only write that stores a secret, it is write-only (nothing returns it),
  *    and a restricted API key needs `agent:credential:write` on top of
@@ -81,6 +85,56 @@ const mapAccountError = (error: unknown, operation: string): never => {
   });
 };
 
+type AgentAccountWriteScope = {
+  agentAccountService: AgentAccountService;
+  serverDB: LobeChatDatabase;
+  userId: string;
+  workspaceId?: null | string;
+};
+
+/**
+ * Account writes are agent writes, and only the agent's *edit* level authorizes
+ * them: an account carries an address and, through `setCredential`, a secret.
+ *
+ * `assertAgentUsableBy` is not enough on its own — it resolves visibility, so a
+ * member who may merely view or use a public agent another member created would
+ * otherwise be able to rotate that agent's credential or release its identity.
+ * The resource ACL answers the actual question, and returns early outside a
+ * workspace, where the model's `userId` scope already keeps rows personal.
+ */
+const assertCanEditAgent = async (
+  scope: AgentAccountWriteScope,
+  agentId: string,
+): Promise<void> => {
+  await assertCanEditResource({
+    db: scope.serverDB,
+    resourceId: agentId,
+    resourceType: 'agent',
+    userId: scope.userId,
+    workspaceId: scope.workspaceId ?? undefined,
+  });
+};
+
+/**
+ * The same check for a mutation addressed by account id: resolve the account
+ * first (through the service's scoped `get`, so an account outside the caller's
+ * scope stays a plain 404 and the ACL never becomes an oracle for what exists),
+ * then authorize the write against the agent that owns it.
+ */
+const assertAccountEditable = async (
+  scope: AgentAccountWriteScope,
+  id: string,
+): Promise<string> => {
+  const account = await scope.agentAccountService.get(id);
+  if (!account) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: ACCOUNT_NOT_FOUND_MESSAGE });
+  }
+
+  await assertCanEditAgent(scope, account.agentId);
+
+  return account.agentId;
+};
+
 export const agentAccountRouter = router({
   /**
    * The accounts in the caller's scope. Credentials are structurally absent —
@@ -129,6 +183,7 @@ export const agentAccountRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });
+      await assertCanEditAgent(ctx, input.agentId);
 
       try {
         return await ctx.agentAccountService.create(input);
@@ -155,6 +210,7 @@ export const agentAccountRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId ?? undefined,
       });
+      await assertCanEditAgent(ctx, input.agentId);
 
       try {
         return await ctx.agentAccountService.provision(input);
@@ -178,6 +234,8 @@ export const agentAccountRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...patch } = input;
+      await assertAccountEditable(ctx, id);
+
       const updated = await ctx.agentAccountService.update(id, patch);
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: ACCOUNT_NOT_FOUND_MESSAGE });
@@ -199,6 +257,8 @@ export const agentAccountRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, credential, hint } = input;
+      await assertAccountEditable(ctx, id);
+
       const updated = await ctx.agentAccountService.setCredential(id, credential, hint);
       if (!updated) {
         throw new TRPCError({ code: 'NOT_FOUND', message: ACCOUNT_NOT_FOUND_MESSAGE });
@@ -219,6 +279,8 @@ export const agentAccountRouter = router({
     )
     .mutation(async ({ ctx, input }) => {
       const { id, ...options } = input;
+      await assertAccountEditable(ctx, id);
+
       const revoked = await ctx.agentAccountService.revoke(id, options);
       if (!revoked) {
         throw new TRPCError({ code: 'NOT_FOUND', message: ACCOUNT_NOT_FOUND_MESSAGE });

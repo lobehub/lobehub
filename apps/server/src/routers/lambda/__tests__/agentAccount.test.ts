@@ -29,6 +29,9 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
 const assertAgentUsableBy = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('@/database/utils/agent-access', () => ({ assertAgentUsableBy }));
 
+const assertCanEditResource = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('@/server/services/resourcePermission', () => ({ assertCanEditResource }));
+
 const registry = vi.hoisted(() => ({ list: vi.fn(() => []) }));
 vi.mock('@/server/services/agentIdentity/providers', () => ({
   createDefaultAgentAccountRegistry: vi.fn(() => registry),
@@ -36,7 +39,12 @@ vi.mock('@/server/services/agentIdentity/providers', () => ({
 
 const service = vi.hoisted(() => ({
   create: vi.fn(async (_params: Record<string, unknown>) => ({ id: 'acc_1' })),
-  get: vi.fn(async (_id: string) => ({ agentId: 'agt_1', id: 'acc_1' })),
+  get: vi.fn(
+    async (_id: string): Promise<{ agentId: string; id: string } | undefined> => ({
+      agentId: 'agt_1',
+      id: 'acc_1',
+    }),
+  ),
   list: vi.fn(async () => []),
   provision: vi.fn(async (_params: Record<string, unknown>) => ({ id: 'acc_2' })),
   revoke: vi.fn(async (_id: string, _options?: unknown): Promise<string | undefined> => 'acc_1'),
@@ -64,6 +72,9 @@ const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: undefined };
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // `clearAllMocks` keeps implementations, so a test that makes the ACL refuse
+  // would otherwise leak that refusal into every later test.
+  assertCanEditResource.mockResolvedValue(undefined);
   service.create.mockResolvedValue({ id: 'acc_1' });
   service.get.mockResolvedValue({ agentId: 'agt_1', id: 'acc_1' });
   service.list.mockResolvedValue([]);
@@ -121,6 +132,71 @@ describe('agentAccountRouter', () => {
         }),
       ).rejects.toMatchObject({ code: 'NOT_FOUND' });
       expect(service.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('writes prove the caller may edit the agent, not merely use it', () => {
+    it('checks the edit ACL on the agent a write names', async () => {
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await caller.provision({ agentId: 'agt_1', provider: 'agent-mail' });
+
+      expect(assertCanEditResource).toHaveBeenCalledWith({
+        db: {},
+        resourceId: 'agt_1',
+        resourceType: 'agent',
+        userId: 'user-1',
+        workspaceId: undefined,
+      });
+    });
+
+    it('resolves an account-addressed mutation to its agent before authorizing', async () => {
+      service.get.mockResolvedValueOnce({ agentId: 'agt_of_account', id: 'acc_9' });
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await caller.revoke({ id: 'acc_9' });
+
+      expect(assertCanEditResource).toHaveBeenCalledWith(
+        expect.objectContaining({ resourceId: 'agt_of_account' }),
+      );
+      expect(service.revoke).toHaveBeenCalledWith('acc_9', {});
+    });
+
+    it('refuses a use-only agent: neither a credential rotation nor a release happens', async () => {
+      assertCanEditResource.mockRejectedValue(
+        Object.assign(new Error('You do not have permission to edit this resource'), {
+          code: 'FORBIDDEN',
+          name: 'TRPCError',
+        }),
+      );
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await expect(
+        caller.setCredential({ credential: { password: 'secret' }, id: 'acc_1' }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(caller.revoke({ id: 'acc_1' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        caller.create({
+          agentId: 'agt_1',
+          capabilities: { receive: false, send: false },
+          identifier: 'x@y',
+          kind: 'mail',
+          provider: 'user',
+        }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      expect(service.setCredential).not.toHaveBeenCalled();
+      expect(service.revoke).not.toHaveBeenCalled();
+      expect(service.create).not.toHaveBeenCalled();
+    });
+
+    it('answers an unknown account as NOT_FOUND before consulting the ACL', async () => {
+      service.get.mockResolvedValueOnce(undefined);
+      const caller = agentAccountRouter.createCaller(ctx);
+
+      await expect(caller.update({ id: 'missing' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(assertCanEditResource).not.toHaveBeenCalled();
     });
   });
 

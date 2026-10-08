@@ -5,6 +5,7 @@ import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import { AgentAccountService, isAgentAccountError } from '@/server/services/agentIdentity';
 import { createDefaultAgentAccountRegistry } from '@/server/services/agentIdentity/providers';
 import type { AgentAccountProviderRegistry } from '@/server/services/agentIdentity/registry';
+import { assertCanEditResource } from '@/server/services/resourcePermission';
 
 import { BaseService } from '../common/base.service';
 import type { ServiceResult } from '../types';
@@ -30,6 +31,11 @@ import type {
  *   use that agent (`assertAgentUsableBy`, the same predicate task assignees and
  *   bot bindings use). Another user's private agent answers 404, never 403, so
  *   its existence cannot be probed.
+ * - Writes additionally prove the caller may **edit** that agent. An account
+ *   carries an address and, through the credential sub-resource, a secret, so a
+ *   member whose General Access is `view` or `use` must not be able to rotate a
+ *   colleague's credential or release their identity. The visibility check runs
+ *   first so the ACL never turns a foreign private agent into a 403 oracle.
  * - The account must actually belong to the agent in the path; an account
  *   reached through a different agent's URL is a 404 rather than a read of the
  *   caller's unrelated row.
@@ -87,6 +93,21 @@ export class AgentAccountRestService extends BaseService {
   }
 
   /**
+   * Writes need the agent's effective `edit` level, not just visibility. Only
+   * reachable after {@link requireAgent}, so a foreign private agent still
+   * answers 404 and this never becomes a way to probe for one.
+   */
+  private async requireEditableAgent(agentId: string): Promise<void> {
+    await assertCanEditResource({
+      db: this.db,
+      resourceId: agentId,
+      resourceType: 'agent',
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
+  }
+
+  /**
    * The agent in the path is checked first, so an account of a colleague's
    * private agent answers 404 exactly like the agent itself does — reaching it
    * by account id must not bypass the agent's visibility.
@@ -129,6 +150,8 @@ export class AgentAccountRestService extends BaseService {
     body: CreateAgentAccountRequest,
   ): ServiceResult<AgentAccountView> {
     await this.requireAgent(agentId);
+    await this.requireEditableAgent(agentId);
+
     const identity = await this.identity();
 
     if ('identifier' in body) {
@@ -174,6 +197,7 @@ export class AgentAccountRestService extends BaseService {
     body: UpdateAgentAccountRequest,
   ): ServiceResult<AgentAccountView> {
     await this.requireAccount(agentId, accountId);
+    await this.requireEditableAgent(agentId);
 
     const patch: AgentAccountPatch = {};
     if (body.capabilities) patch.capabilities = body.capabilities;
@@ -195,6 +219,7 @@ export class AgentAccountRestService extends BaseService {
     body: SetAgentAccountCredentialRequest,
   ): ServiceResult<AgentAccountView> {
     await this.requireAccount(agentId, accountId);
+    await this.requireEditableAgent(agentId);
 
     await (await this.identity()).setCredential(accountId, body.credential, body.hint);
 
@@ -208,6 +233,7 @@ export class AgentAccountRestService extends BaseService {
     query: RevokeAgentAccountQuery,
   ): ServiceResult<AgentAccountView> {
     await this.requireAccount(agentId, accountId);
+    await this.requireEditableAgent(agentId);
 
     await (
       await this.identity()
