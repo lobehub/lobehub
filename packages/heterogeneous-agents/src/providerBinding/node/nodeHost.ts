@@ -9,11 +9,11 @@ import type {
   ProviderBindingDriver,
   ProviderBindingFilePlan,
   ProviderBindingPlan,
-} from './hostTypes';
+} from '../hostTypes';
 import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingResolution,
-} from './types';
+} from '../types';
 
 // Preserve Desktop's existing profile paths when sharing its host with connect.
 const HETERO_AGENT_BINDINGS_DIR = path.join('heteroAgent', 'bindings');
@@ -307,4 +307,4 @@ export type {
   ProviderBindingDriver,
   ProviderBindingFilePlan,
   ProviderBindingPlan,
-} from './hostTypes';
+} from '../hostTypes';

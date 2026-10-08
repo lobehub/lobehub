@@ -758,6 +758,67 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     }
   });
 
+  /** @example Existing API Topics retain their binding when the Agent defaults change. */
+  it.each([undefined, 'api-session-a'])(
+    'dispatches the Topic API binding with resume %s',
+    async (sessionId) => {
+      // ROOT CAUSE:
+      // Receipts and wrapper args used Topic A, but the device RPC sent Agent B.
+      // The connector correctly treated the RPC binding as authoritative and
+      // sanitized away the model arg for A, making execution disagree with its receipt.
+      Object.assign(heteroAgentConfig.agencyConfig, {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: {
+          apiConfig: { model: 'agent-model-b', providerId: 'provider-b' },
+          authMode: 'api',
+          effort: 'medium',
+          type: 'codex',
+        },
+      });
+      topicMock.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-existing',
+        model: 'topic-model-a',
+        provider: 'provider-a',
+        metadata: { heteroEffort: 'low', heteroSpeed: 'default', heteroSessionId: sessionId },
+      });
+      mockGetHeterogeneousResumeSessionId.mockResolvedValue(sessionId);
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Continue the existing API Topic',
+        appContext: { topicId: 'topic-existing' },
+      });
+      /** @example The binding carries the Topic model; wrapper args carry its reasoning effort. */
+      expect(mockDispatchProviderBoundAgentRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--effort', 'low'],
+          providerBinding: expect.objectContaining({
+            apiConfig: { model: 'topic-model-a', providerId: 'provider-a' },
+          }),
+          resumeSessionId: sessionId,
+        }),
+      );
+      const receipt = recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig;
+      /** @example Operation receipt reports the model that the connector will actually execute. */
+      expect(receipt?.fields).toContainEqual({
+        key: 'model',
+        source: 'topic',
+        value: 'topic-model-a',
+      });
+      /** @example Topic receipt mirrors the identical resolved configuration. */
+      expect(topicMock.updateMetadata).toHaveBeenCalledWith(
+        'topic-existing',
+        expect.objectContaining({ heteroRuntimeConfig: receipt }),
+      );
+      /** @example A Topic override must leave the Agent binding intact. */
+      expect(heteroAgentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'agent-model-b',
+        providerId: 'provider-b',
+      });
+    },
+  );
+
   it.each(['claude-code', 'codex'] as const)(
     'should reject %s provider binding before sandbox or device dispatch',
     async (type) => {

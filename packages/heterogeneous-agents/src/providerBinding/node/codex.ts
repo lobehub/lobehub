@@ -1,4 +1,4 @@
-import type { PrepareProviderBindingContext, ProviderBindingPlan } from './hostTypes';
+import type { PrepareProviderBindingContext, ProviderBindingPlan } from '../hostTypes';
 
 const HOST_PROVIDER_ID = 'lobehub';
 const HOST_API_KEY_ENV = 'LOBEHUB_CODEX_API_KEY';

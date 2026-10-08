@@ -20,8 +20,8 @@
     "./spawn": "./src/spawn/index.ts",
     "./transcript": "./src/transcript/index.ts",
     "./workingDirectory": "./src/spawn/workingDirectory.ts",
-    "./providerBindingHost": "./src/providerBinding/nodeHost.ts",
-    "./codexProviderBinding": "./src/providerBinding/codex.ts"
+    "./providerBindingHost": "./src/providerBinding/node/nodeHost.ts",
+    "./codexProviderBinding": "./src/providerBinding/node/codex.ts"
   },
   "main": "./src/index.ts",
   "scripts": {

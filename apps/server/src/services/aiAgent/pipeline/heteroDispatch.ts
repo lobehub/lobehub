@@ -539,15 +539,14 @@ export const dispatchHeteroAgent = async (
     runAttachments.imageList && runAttachments.imageList.length > 0
       ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
       : undefined;
+  // Resolve once so the connector's authoritative binding and the native args
+  // honor the same Topic override already used by the runtime receipt.
+  const effectiveHeterogeneousProvider =
+    heterogeneousProvider?.type === heteroType
+      ? applyTopicModelToHeterogeneousProvider(heterogeneousProvider, pinnedHeterogeneousTopicModel)
+      : { type: heteroType };
   const heteroExecArgs = isLocalHeterogeneousType(heteroType)
-    ? buildHeteroExecArgs(
-        heterogeneousProvider?.type === heteroType
-          ? applyTopicModelToHeterogeneousProvider(
-              heterogeneousProvider,
-              pinnedHeterogeneousTopicModel,
-            )
-          : { type: heteroType },
-      )
+    ? buildHeteroExecArgs(effectiveHeterogeneousProvider)
     : undefined;
 
   const heteroParams = {
@@ -742,7 +741,7 @@ export const dispatchHeteroAgent = async (
     }
   };
 
-  const apiProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+  const apiProvider = effectiveHeterogeneousProvider;
   const deviceProviderBinding =
     apiProvider?.type === 'codex' &&
     apiProvider.authMode === 'api' &&
