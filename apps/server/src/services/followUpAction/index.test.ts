@@ -2,6 +2,7 @@
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import * as DatabaseModule from '@/database/core/db-adaptor';
 import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
 import * as TracingServiceModule from '@/server/services/llmGenerationTracing';
@@ -41,6 +42,27 @@ describe('FollowUpActionService.extract', () => {
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it('preserves the originating mobile request through the router and service', async () => {
+    const { followUpActionRouter } = await import('@/server/routers/lambda/followUpAction');
+    const userAgent = 'LobeHub-Mobile/ios-v1.0.5';
+    queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'Choose a next step.' });
+    runtimeMock.generateObject.mockImplementation(async (_payload, options) => {
+      if (options.metadata.userAgent !== userAgent) throw new Error('Missing request identity');
+      return { chips: [{ label: 'Continue', message: 'Continue please' }] };
+    });
+    vi.spyOn(DatabaseModule, 'getServerDB').mockResolvedValue(dbMock);
+    const caller = followUpActionRouter.createCaller({
+      serverDB: dbMock,
+      userAgent,
+      userId: TEST_USER,
+    } as any);
+
+    expect(await caller.extract({ modelConfig: MODEL_CONFIG, topicId: TEST_TOPIC })).toMatchObject({
+      chips: [{ label: 'Continue', message: 'Continue please' }],
+      messageId: FOUND_MSG,
+    });
   });
 
   it('reuses the source topic in outgoing OpenCode requests across extractions', async () => {

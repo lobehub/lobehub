@@ -26,11 +26,13 @@ export class FollowUpActionService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
   private readonly workspaceId?: string;
+  private readonly userAgent?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
+  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string, userAgent?: string) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;
+    this.userAgent = userAgent;
   }
 
   async extract({
@@ -92,7 +94,8 @@ export class FollowUpActionService {
           schema: FOLLOW_UP_JSON_SCHEMA,
         },
         {
-          metadata: { topicId, trigger: RequestTrigger.FollowUp },
+          // Keep the originating request identity for downstream model hooks.
+          metadata: { topicId, trigger: RequestTrigger.FollowUp, userAgent: this.userAgent },
           tracing: {
             promptVersion: FOLLOW_UP_PROMPT_VERSION,
             scenario: TRACING_SCENARIOS.FollowUp,

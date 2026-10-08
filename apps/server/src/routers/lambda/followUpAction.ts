@@ -11,7 +11,7 @@ const followUpProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts)
   const wsId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
-      followUpService: new FollowUpActionService(ctx.serverDB, ctx.userId, wsId),
+      followUpService: new FollowUpActionService(ctx.serverDB, ctx.userId, wsId, ctx.userAgent),
     },
   });
 });
