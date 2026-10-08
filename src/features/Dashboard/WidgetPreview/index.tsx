@@ -72,6 +72,8 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
   const canPublish = canPreviewPublish(widget, currentUserId);
   const preview = toPreviewWidget(widget, run);
   const outputType = run.output?.type ?? version?.outputType ?? 'stat';
+  // Normalize once: an older server may not send the widget's boards list.
+  const dashboards = widget.dashboards ?? [];
 
   // Publishing goes through the same review the requestPublish intervention
   // renders — nothing goes live on a bare click from the preview.
@@ -158,11 +160,11 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
           </Tooltip>
         )}
         <AddToDashboardButton
-          placedIds={widget.dashboards.map((dashboard) => dashboard.id)}
+          placedIds={dashboards.map((dashboard) => dashboard.id)}
           projectId={widget.projectId}
           widgetId={widget.id}
         />
-        {widget.dashboards.map((dashboard) => (
+        {dashboards.map((dashboard) => (
           <Button
             data-widget-dashboard-link={dashboard.id}
             icon={ArrowUpRightIcon}
