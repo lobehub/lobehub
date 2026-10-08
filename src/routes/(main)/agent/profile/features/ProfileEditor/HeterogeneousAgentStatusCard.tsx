@@ -5,6 +5,7 @@ import { type BinaryStatus, type ClaudeAuthStatus } from '@lobechat/electron-cli
 import { isHeterogeneousProviderBindingSupported } from '@lobechat/heterogeneous-agents';
 import {
   getHeterogeneousAgentClientConfig,
+  isLocalRuntimeHeterogeneousType,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents/client';
 import type {
@@ -15,7 +16,7 @@ import type {
 import { CopyButton, Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { ActionIcon, Button, Input, Segmented, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { PencilLine, RefreshCw, XCircle } from 'lucide-react';
+import { CheckCircle2, KeyRound, PencilLine, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -32,6 +33,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { usePermission } from '@/hooks/usePermission';
 import { binaryService } from '@/services/electron/binary';
 import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors } from '@/store/aiInfra/slices/aiProvider/selectors';
 
 const COMMAND_LINE_HEIGHT = 28;
 const SERVER_DEFAULT_PROVIDER_VALUE = 'server-default';
@@ -207,7 +209,59 @@ interface HeterogeneousAgentStatusCardProps {
   serverDefaultUnavailableReason?: string;
 }
 
-const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
+const LocalRuntimeStatusCard = memo<{ provider: HeterogeneousProviderConfig }>(({ provider }) => {
+  const { t } = useTranslation('setting');
+  const navigate = useWorkspaceAwareNavigate();
+  const keyVault = useAiInfraStore(aiProviderSelectors.providerKeyVaults('deepseek'));
+  const configured = Boolean(keyVault?.apiKey);
+  const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
+  const AgentIcon = providerConfig?.icon;
+
+  return (
+    <Flexbox className={styles.card} gap={12}>
+      <div className={styles.cardHeader}>
+        <div className={styles.cardTitleWrap}>
+          <div className={styles.cardTitle}>
+            {AgentIcon && <AgentIcon size={16} />}
+            <Text strong>{providerConfig?.title || provider.type}</Text>
+          </div>
+          <Flexbox horizontal align="center" className={styles.metaRow} gap={8}>
+            <Tag color="success" style={{ marginInlineEnd: 0 }}>
+              {t('heterogeneousStatus.runtime.bundled')}
+            </Tag>
+            <Text className={styles.metaText}>{t('heterogeneousStatus.runtime.description')}</Text>
+          </Flexbox>
+        </div>
+      </div>
+      <div className={styles.detailList}>
+        <div className={styles.detailRow}>
+          <Text className={styles.detailLabel}>{t('heterogeneousStatus.auth.label')}</Text>
+          <Flexbox horizontal align="center" flex={1} gap={8} justify="space-between">
+            <Flexbox horizontal align="center" gap={8}>
+              <Icon
+                color={configured ? 'var(--ant-color-success)' : 'var(--ant-color-warning)'}
+                icon={configured ? CheckCircle2 : KeyRound}
+                size={16}
+              />
+              <Text>
+                {t(
+                  configured
+                    ? 'heterogeneousStatus.runtime.keyReady'
+                    : 'heterogeneousStatus.runtime.keyMissing',
+                )}
+              </Text>
+            </Flexbox>
+            <Button size="small" onClick={() => navigate('/settings/provider/deepseek')}>
+              {t('heterogeneousStatus.runtime.configure')}
+            </Button>
+          </Flexbox>
+        </div>
+      </div>
+    </Flexbox>
+  );
+});
+
+const CliHeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
   ({
     apiModeAvailable = false,
     apiModeWorkspaceBlocked = false,
@@ -225,7 +279,8 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
     const navigate = useWorkspaceAwareNavigate();
     const { allowed: canEdit } = usePermission('edit_own_content');
     const providerConfig = getHeterogeneousAgentClientConfig(provider.type);
-    const defaultCommand = providerConfig?.defaultCommand || '';
+    const defaultCommand =
+      providerConfig && 'defaultCommand' in providerConfig ? providerConfig.defaultCommand : '';
     const resolvedCommand = provider.command?.trim() || defaultCommand;
     const isUsingCustomCommand = resolvedCommand !== defaultCommand;
     const [status, setStatus] = useState<BinaryStatus | undefined>();
@@ -893,6 +948,16 @@ const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>(
       </Flexbox>
     );
   },
+);
+
+CliHeterogeneousAgentStatusCard.displayName = 'CliHeterogeneousAgentStatusCard';
+
+const HeterogeneousAgentStatusCard = memo<HeterogeneousAgentStatusCardProps>((props) =>
+  isLocalRuntimeHeterogeneousType(props.provider.type) ? (
+    <LocalRuntimeStatusCard provider={props.provider} />
+  ) : (
+    <CliHeterogeneousAgentStatusCard {...props} />
+  ),
 );
 
 HeterogeneousAgentStatusCard.displayName = 'HeterogeneousAgentStatusCard';

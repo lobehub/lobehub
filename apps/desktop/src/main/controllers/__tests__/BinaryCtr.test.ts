@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -56,5 +56,36 @@ describe('BinaryCtr', () => {
     // rescan result without probing again or falling back to the stale entry.
     await expect(manager.detect('codex')).resolves.toMatchObject(detectedStatus);
     expect(detectSpec).toHaveBeenCalledTimes(2);
+  });
+
+  it('probes the user-installed dsh CLI instead of assuming DeepSeek Harness is present', async () => {
+    const controller = new BinaryCtr({} as App);
+    const dsh = path.join(cacheRoot, 'dsh');
+    await writeFile(dsh, '#!/bin/sh\necho 0.2.0-rc.2\n');
+    await chmod(dsh, 0o755);
+
+    await expect(
+      controller.detectHeterogeneousAgentCommand({ agentType: 'deepseek-harness', command: dsh }),
+    ).resolves.toMatchObject({ available: true, version: '0.2.0-rc.2' });
+    await expect(
+      controller.detectHeterogeneousAgentCommand({
+        agentType: 'deepseek-harness',
+        command: path.join(cacheRoot, 'missing-dsh'),
+      }),
+    ).resolves.toMatchObject({ available: false });
+  });
+
+  it('reports an installed dsh without the acp profile as needing an update', async () => {
+    const controller = new BinaryCtr({} as App);
+    const dsh = path.join(cacheRoot, 'dsh');
+    await writeFile(dsh, '#!/bin/sh\necho 0.0.1\n');
+    await chmod(dsh, 0o755);
+
+    await expect(
+      controller.detectHeterogeneousAgentCommand({ agentType: 'deepseek-harness', command: dsh }),
+    ).resolves.toMatchObject({
+      available: false,
+      error: expect.stringMatching(/0\.0\.1 is too old.*npm i -g @deepseek-ai\/dsh/),
+    });
   });
 });

@@ -261,6 +261,7 @@
   "connectAgent.providerDesc.codebuddy": "Tencent coding agent CLI",
   "connectAgent.providerDesc.codex": "OpenAI coding agent CLI",
   "connectAgent.providerDesc.cursor": "Cursor coding agent CLI",
+  "connectAgent.providerDesc.deepseek-harness": "DeepSeek Harness agent (dsh CLI) with tools and subagents",
   "connectAgent.providerDesc.devin": "Cognition coding agent CLI",
   "connectAgent.providerDesc.droid": "Factory coding agent CLI",
   "connectAgent.providerDesc.grok-build": "xAI coding agent CLI",

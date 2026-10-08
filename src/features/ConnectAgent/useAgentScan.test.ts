@@ -26,6 +26,10 @@ describe('scanLocal', () => {
 
     const agents = await scanLocal();
 
+    expect(agents['deepseek-harness']).toEqual({
+      available: true,
+      version: 'deepseek-harness-version',
+    });
     expect(agents.openclaw).toEqual({ available: true, version: 'openclaw-version' });
     expect(agents.hermes).toEqual({ available: true, version: 'hermes-version' });
     expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
@@ -35,6 +39,25 @@ describe('scanLocal', () => {
     expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
       agentType: 'hermes',
       command: 'hermes',
+    });
+  });
+
+  it('reports DeepSeek Harness unavailable when the dsh CLI is not installed', async () => {
+    detectHeterogeneousAgentCommand.mockImplementation(async ({ agentType }) =>
+      agentType === 'deepseek-harness'
+        ? { available: false, error: 'dsh not found' }
+        : { available: true },
+    );
+
+    const agents = await scanLocal();
+
+    expect(detectHeterogeneousAgentCommand).toHaveBeenCalledWith({
+      agentType: 'deepseek-harness',
+      command: 'dsh',
+    });
+    expect(agents['deepseek-harness']).toMatchObject({
+      available: false,
+      reason: 'dsh not found',
     });
   });
 
@@ -80,6 +103,18 @@ describe('buildPlatformAgencyConfig', () => {
 });
 
 describe('buildConnectAgentConfig', () => {
+  it('creates the DeepSeek runtime without persisting its probe command', () => {
+    const provider = getConnectableProvider('deepseek-harness')!;
+    const config = buildConnectAgentConfig({ provider, target: { kind: 'local' } });
+
+    expect(config).toMatchObject({
+      agencyConfig: { heterogeneousProvider: { type: 'deepseek-harness' } },
+      provider: 'deepseek-harness',
+      title: 'DeepSeek Harness',
+    });
+    expect(config.agencyConfig.heterogeneousProvider.command).toBeUndefined();
+  });
+
   it('stores a customized label as the personal name without overwriting the platform profile', () => {
     const provider = getConnectableProvider('hermes')!;
 

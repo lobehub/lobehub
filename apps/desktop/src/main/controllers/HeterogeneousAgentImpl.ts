@@ -13,17 +13,21 @@ import type {
   CodexQuotaSnapshot,
   CodexRateLimitResetResult,
   HeterogeneousAgentSessionError,
-  HeterogeneousCliAgentType,
   KimiCodeQuotaSnapshot,
 } from '@lobechat/electron-client-ipc';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc/types/heterogeneous-agent';
-import type { HeterogeneousProviderBindingReference } from '@lobechat/heterogeneous-agents';
+import type {
+  HeterogeneousAgentType,
+  HeterogeneousProviderBindingReference,
+} from '@lobechat/heterogeneous-agents';
 import {
   buildHeterogeneousAgentAuthRequiredError,
   buildHeterogeneousAgentCliNotFoundError,
   formatHeterogeneousProviderBindingError,
   getHeterogeneousAgentConfigOrThrow,
   isHeterogeneousAgentAuthRequired,
+  isLocalHeterogeneousType,
+  isLocalRuntimeHeterogeneousType,
   isServerDefaultHeterogeneousAgentType,
   resolveHeterogeneousAgentCommand,
   resolveHeterogeneousProviderBinding,
@@ -59,7 +63,11 @@ import {
   PiRpcSession,
   type PiRpcSessionCallbacks,
 } from '@lobechat/heterogeneous-agents/rpc';
-import type { AgentStreamEvent, UsageData } from '@lobechat/heterogeneous-agents/spawn';
+import type {
+  AgentStreamEvent,
+  DshAcpSessionHandle,
+  UsageData,
+} from '@lobechat/heterogeneous-agents/spawn';
 import {
   AcpRpcResponseError,
   AgentStreamPipeline,
@@ -82,8 +90,10 @@ import {
   CodexThreadSession,
   createFileStoreImageUploader,
   CursorAcpSession,
+  detectDshCommand,
   DevinAcpSession,
   DroidAcpSession,
+  DSH_COMMAND,
   ensureClaudeCodeResumeTranscript,
   getCodexAppServerUnsupportedArgs,
   GrokAcpSession,
@@ -96,6 +106,7 @@ import {
   resolveClaudeCodeTranscriptPath,
   resolveCliSpawnPlan,
   resolveCodexInitialModel,
+  spawnDshAcpSession,
   TraeAcpSession,
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
@@ -254,10 +265,7 @@ const PI_RPC_POOL_DEFAULT_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
 const waitForHeteroSessionCompleteGrace = () =>
   new Promise<void>((resolve) => setTimeout(resolve, HETERO_SESSION_COMPLETE_GRACE_MS));
 
-export const redactPromptArgs = (
-  args: string[],
-  agentType: HeterogeneousCliAgentType,
-): string[] => {
+export const redactPromptArgs = (args: string[], agentType: HeterogeneousAgentType): string[] => {
   let redactNext = false;
   const supportsShortPromptFlag = agentType === 'kimi-code';
 
@@ -283,7 +291,7 @@ export const redactPromptArgs = (
 
 interface StartSessionParams {
   /** Agent type key (e.g., 'claude-code'). Defaults to 'claude-code'. */
-  agentType?: HeterogeneousCliAgentType;
+  agentType?: HeterogeneousAgentType;
   /** Additional CLI arguments */
   args?: string[];
   /** Command to execute */
@@ -465,7 +473,7 @@ export interface SessionInfo {
 
 interface AgentSession {
   agentSessionId?: string;
-  agentType: HeterogeneousCliAgentType;
+  agentType: HeterogeneousAgentType;
   appServerSession?: CodexThreadSession;
   args: string[];
   /**
@@ -482,6 +490,7 @@ interface AgentSession {
   cwd?: string;
   devinAcpSession?: DevinAcpSession;
   droidAcpSession?: DroidAcpSession;
+  dshSession?: DshAcpSessionHandle;
   env?: Record<string, string>;
   grokAcpSession?: GrokAcpSession;
   hostedProviderBinding?: HostedProviderBinding;
@@ -673,7 +682,7 @@ export default class HeterogeneousAgentCtr {
    * future agent adopting an RPC mode only adds one entry — no dispatch edit.
    */
   private readonly runtimeDispatchers: Partial<
-    Record<HeterogeneousCliAgentType, HeterogeneousRuntimeDispatcher>
+    Record<HeterogeneousAgentType, HeterogeneousRuntimeDispatcher>
   > = {
     'claude-code': async (params, session) => {
       if (!(session.useClaudeCodeSdk || this.isClaudeCodeSdkLabEnabled)) return false;
@@ -723,6 +732,10 @@ export default class HeterogeneousAgentCtr {
     },
     'droid': async (params, session) => {
       await this.sendPromptWithDroidAcp(params, session);
+      return true;
+    },
+    'deepseek-harness': async (params, session) => {
+      await this.sendPromptWithDsh(params, session);
       return true;
     },
     'grok-build': async (params, session) => {
@@ -795,6 +808,7 @@ export default class HeterogeneousAgentCtr {
   );
 
   private resolveSessionCommand(session: AgentSession): string {
+    if (isLocalRuntimeHeterogeneousType(session.agentType)) return 'DeepSeek Harness';
     return resolveHeterogeneousAgentCommand(session.agentType, session.command);
   }
 
@@ -1096,6 +1110,8 @@ export default class HeterogeneousAgentCtr {
     if (!isSpawnableDirectory(workingDirectory)) {
       return this.buildWorkingDirectoryMissingError(session, workingDirectory);
     }
+
+    if (!isLocalHeterogeneousType(session.agentType)) return;
 
     const defaultCommand = getHeterogeneousAgentConfigOrThrow(session.agentType).defaultCommand;
 
@@ -1664,10 +1680,14 @@ export default class HeterogeneousAgentCtr {
   async startSession(params: StartSessionParams): Promise<StartSessionResult> {
     const sessionId = randomUUID();
     const agentType = params.agentType || 'claude-code';
-    const driver = getHeterogeneousAgentDriver(agentType);
+    // Protocol-driven runtimes (DeepSeek Harness) have no CLI driver and no
+    // provider-binding support; they authenticate through their own env.
+    const driver = isLocalRuntimeHeterogeneousType(agentType)
+      ? undefined
+      : getHeterogeneousAgentDriver(agentType);
     let hostedProviderBinding: HostedProviderBinding | undefined;
 
-    if (params.providerBinding && params.providerBinding.kind !== 'server-default') {
+    if (driver && params.providerBinding && params.providerBinding.kind !== 'server-default') {
       const bindingRuntime = await getProviderBindingRuntime(
         this.remoteServerAuth,
         params.providerBinding,
@@ -1706,7 +1726,7 @@ export default class HeterogeneousAgentCtr {
             logger.info('Removed stale provider-binding profiles:', removedProfiles);
         })
         .catch((error) => logger.warn('Provider-binding profile GC failed:', error));
-    } else if (params.providerBinding?.kind === 'server-default') {
+    } else if (driver && params.providerBinding?.kind === 'server-default') {
       hostedProviderBinding = await prepareHostedServerDefaultBinding({
         agentType,
         appStoragePath: this.app.appStoragePath,
@@ -1871,8 +1891,7 @@ export default class HeterogeneousAgentCtr {
     // SDK) select themselves via the runtime registry. A dispatcher that
     // returns `true` handled the prompt; `false` falls through to the generic
     // CLI spawn below.
-    const runtimeDispatcher =
-      this.runtimeDispatchers[session.agentType as HeterogeneousCliAgentType];
+    const runtimeDispatcher = this.runtimeDispatchers[session.agentType];
     if (runtimeDispatcher && (await runtimeDispatcher(params, session))) return;
 
     // Stand up the AskUserQuestion MCP bridge for supported prompts BEFORE
@@ -2052,6 +2071,95 @@ export default class HeterogeneousAgentCtr {
   private async completeCancelledSessionBeforeLaunch(session: AgentSession): Promise<void> {
     await session.hostedProviderBinding?.cleanup();
     this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+  }
+
+  private async sendPromptWithDsh(params: SendPromptParams, session: AgentSession): Promise<void> {
+    if (params.imageList?.length) {
+      throw new Error('DeepSeek Harness currently supports text prompts only.');
+    }
+
+    const cwd = this.resolveSessionWorkingDirectory(session);
+    const env = this.buildSessionSpawnEnv(session) as Record<string, string>;
+    // DSH is the user-installed DeepSeek Harness CLI, served through its `acp`
+    // profile. A GUI-launched app inherits a lean PATH, so resolve it the way
+    // the other CLI agents are resolved (login-shell PATH fallback) and spawn
+    // with the PATH it was found under.
+    const dsh = await detectDshCommand(session.command?.trim() || DSH_COMMAND, env);
+    if (!dsh.available || !dsh.path) {
+      // A CLI that was found but rejected (too old) carries its own reason.
+      throw new Error(
+        dsh.path && dsh.error
+          ? dsh.error
+          : `DeepSeek Harness CLI (dsh) not found${dsh.error ? `: ${dsh.error}` : ''}. Install it with: npm i -g @deepseek-ai/dsh`,
+      );
+    }
+    if (dsh.resolvedPathEnv) env.PATH = dsh.resolvedPathEnv;
+    // Same semantic prompt as every other transport: session-scoped context
+    // (the `lh` guide) only opens a new session, never a resumed one.
+    const prompt = buildHeterogeneousPrompt({
+      isNewSession: this.needsSessionIntroduction(session),
+      prompt: params.prompt,
+      systemContext: params.systemContext,
+    })
+      .flatMap((block) => (block.type === 'text' ? [block.text] : []))
+      .join('\n\n');
+
+    try {
+      const dshSession = spawnDshAcpSession({
+        clientVersion: electronApp.getVersion(),
+        command: dsh.path,
+        cwd,
+        env,
+        model: session.model,
+        onSessionId: (agentSessionId) => {
+          session.agentSessionId = agentSessionId;
+        },
+        operationId: params.operationId,
+        // A resumed topic continues its persisted harness session.
+        resumeSessionId: session.agentSessionId,
+      });
+      session.dshSession = dshSession;
+
+      // Stop pressed before launch: nothing has spawned yet. The `finally`
+      // below still disposes the handle.
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      for await (const event of dshSession.prompt(prompt)) {
+        this.broadcast('heteroAgentEvent', { event, sessionId: session.sessionId });
+      }
+
+      this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+    } catch (error) {
+      if (session.cancelledByUs) {
+        this.broadcast('heteroAgentSessionComplete', { sessionId: session.sessionId });
+        return;
+      }
+
+      const message = this.getErrorMessage(error) || 'DeepSeek Harness execution failed';
+      const sessionError: HeterogeneousAgentSessionError = {
+        agentType: 'deepseek-harness',
+        code: /DEEPSEEK_API_KEY|api key|401|unauthorized/i.test(message)
+          ? HeterogeneousAgentSessionErrorCode.AuthRequired
+          : undefined,
+        docsUrl: 'https://platform.deepseek.com/api_keys',
+        message: /DEEPSEEK_API_KEY|api key|401|unauthorized/i.test(message)
+          ? 'DeepSeek Harness could not authenticate. Configure the DeepSeek API key in Provider Settings, then retry.'
+          : message,
+        stderr: message,
+      };
+      this.broadcast('heteroAgentSessionError', {
+        error: sessionError,
+        sessionId: session.sessionId,
+      });
+      throw new Error(sessionError.message, { cause: error });
+    } finally {
+      const dshSession = session.dshSession;
+      session.dshSession = undefined;
+      await dshSession?.dispose().catch(() => {});
+    }
   }
 
   private async sendPromptWithClaudeSdk(
@@ -3943,6 +4051,10 @@ export default class HeterogeneousAgentCtr {
     if (!session) return;
 
     session.cancelledByUs = true;
+    if (session.dshSession) {
+      await session.dshSession.dispose();
+      return;
+    }
     if (session.devinAcpSession) {
       session.devinAcpSession.interrupt();
       return;
@@ -4017,6 +4129,11 @@ export default class HeterogeneousAgentCtr {
     const session = this.sessions.get(params.sessionId);
     if (!session) return;
 
+    if (session.dshSession) {
+      session.cancelledByUs = true;
+      await session.dshSession.dispose();
+      session.dshSession = undefined;
+    }
     if (session.devinAcpSession) {
       session.cancelledByUs = true;
       session.devinAcpSession.close();
@@ -4171,6 +4288,14 @@ export default class HeterogeneousAgentCtr {
         if (session.sdkSession) {
           session.cancelledByUs = true;
           session.sdkSession.close();
+        }
+        // A plain-spawned DSH runtime is not reaped with its parent, and stdin
+        // EOF alone starts an unbounded disposal — wait for its bounded
+        // shutdown → SIGTERM → SIGKILL so its tools stop writing to the workspace.
+        if (session.dshSession) {
+          session.cancelledByUs = true;
+          piClosing.push(session.dshSession.dispose());
+          session.dshSession = undefined;
         }
         if (session.process && !session.process.killed) {
           session.cancelledByUs = true;
