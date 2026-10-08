@@ -427,6 +427,21 @@ describe('builtin tool registry', () => {
     expect(getBuiltinIntervention('qoder', UserInteractionApiName.askUserQuestion)).toBeDefined();
   });
 
+  it('registers command and local-file surfaces for Devin ACP tool names', () => {
+    // Devin tool calls arrive under the CLI's inference names
+    // (`_meta['cognition.ai/inferenceToolName']`), not Claude Code's.
+    expect(getBuiltinInspector('devin', 'exec')).toBeDefined();
+    expect(getBuiltinRender('devin', 'exec')).toBeDefined();
+    expect(getBuiltinInspector('devin', 'read')).toBeDefined();
+    expect(getBuiltinRender('devin', 'read')).toBeDefined();
+    expect(getBuiltinInspector('devin', 'write')).toBeDefined();
+    expect(getBuiltinRender('devin', 'write')).toBeDefined();
+    expect(getBuiltinInspector('devin', 'edit')).toBeDefined();
+    // No diffText is synthesized for ACP updates, so edit keeps the generic
+    // result view instead of an empty patch card.
+    expect(getBuiltinRender('devin', 'edit')).toBeUndefined();
+  });
+
   it('exposes the marketplace APIs under the web onboarding manifest', () => {
     const apiNames = WebOnboardingManifest.api.map((entry) => entry.name);
     expect(apiNames).toContain(WebOnboardingApiName.showAgentMarketplace);

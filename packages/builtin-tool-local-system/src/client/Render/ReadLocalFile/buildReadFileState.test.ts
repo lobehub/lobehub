@@ -1,3 +1,4 @@
+import type { ReadFileState } from '@lobechat/tool-runtime';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -55,6 +56,11 @@ describe('buildReadFileState', () => {
       identifier: 'pi',
       parsedContent: { content: 'const a = 1;' },
     });
+    const fromDevin = buildReadFileState({
+      args: { file_path: '/repo/file.ts' },
+      identifier: 'devin',
+      parsedContent: { content: 'const a = 1;' },
+    });
     const fromBuiltin = buildReadFileState({
       args: { path: '/repo/file.ts' },
       identifier: 'lobe-local-system',
@@ -62,7 +68,24 @@ describe('buildReadFileState', () => {
     });
 
     expect(fromPi).toMatchObject({ content: 'const a = 1;', fileType: 'ts' });
+    expect(fromDevin).toMatchObject({ content: 'const a = 1;', fileType: 'ts' });
     expect(fromBuiltin).toBeUndefined();
+  });
+
+  it('ignores non-string ACP content blocks parked on pluginState', () => {
+    // Devin's tool_state carries the raw session update, whose `content` is a
+    // content-block array — the read text only lives in the result content.
+    const state = buildReadFileState({
+      args: { file_path: '/repo/file.ts' },
+      identifier: 'devin',
+      parsedContent: { content: 'body' },
+      pluginState: {
+        content: [{ text: 'Reading…', type: 'content' }],
+        sessionUpdate: 'tool_call_update',
+      } as unknown as ReadFileState,
+    });
+
+    expect(state?.content).toBe('body');
   });
 
   it('derives loc from offset and limit args', () => {
