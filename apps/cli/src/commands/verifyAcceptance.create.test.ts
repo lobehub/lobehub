@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTrpcClient } from '../api/client';
+import { registerManCommand } from './man';
 import { registerAcceptanceCommands } from './verifyAcceptance';
 
 vi.mock('../api/client', () => ({ getTrpcClient: vi.fn() }));
@@ -47,9 +48,39 @@ afterEach(() => {
 });
 
 describe('acceptance create', () => {
+  it('explains the prerequisite in the manual before creation', async () => {
+    const program = new Command().name('lh').exitOverride();
+    registerAcceptanceCommands(program);
+    registerManCommand(program);
+    await program.parseAsync(['node', 'lh', 'man', 'acceptance', 'create']);
+    const manual = String(output.mock.calls.at(-1)?.[0]);
+    expect(manual).toContain('--skill-read');
+    expect(manual).toContain('.agents/skills/acceptance/SKILL.md');
+    expect(manual).toContain('lh acceptance install');
+    expect(manual).toContain('Creation alone does not publish verification or evidence');
+    expect(getTrpcClient).not.toHaveBeenCalled();
+  });
+
+  it('requires skill acknowledgment before contacting the server', async () => {
+    await expect(run(['create', '--requirement', requirement, '--json'])).rejects.toThrow(
+      /Read.*acceptance.*SKILL.md.*--skill-read/s,
+    );
+    expect(getTrpcClient).not.toHaveBeenCalled();
+    expect(ensure).not.toHaveBeenCalled();
+    expect(output).not.toHaveBeenCalled();
+  });
+
   it('creates a standalone acceptance without a report, ambient subject, or verification round', async () => {
     vi.stubEnv('LOBEHUB_TOPIC_ID', 'unrelated-topic');
-    await run(['create', '--title', 'Checkout recovery', '--requirement', requirement, '--json']);
+    await run([
+      'create',
+      '--skill-read',
+      '--title',
+      'Checkout recovery',
+      '--requirement',
+      requirement,
+      '--json',
+    ]);
 
     const subject = { subjectId: expect.any(String), subjectType: 'standalone' };
     expect(ensure).toHaveBeenCalledExactlyOnceWith({
@@ -59,17 +90,23 @@ describe('acceptance create', () => {
     });
     expect(ensure.mock.calls[0][0].subjectId).toMatch(/^[\da-f]{8}(-[\da-f]{4}){3}-[\da-f]{12}$/);
     expect(jsonOutput()).toEqual({
+      nextSteps: expect.any(Array),
       acceptanceId,
       acceptanceUrl,
       requirement,
       status: 'pending',
       subject,
     });
+    expect(jsonOutput().nextSteps.join(' ')).toContain(
+      'Creation alone is not completed acceptance',
+    );
+    expect(jsonOutput().nextSteps.join(' ')).toContain(`--acceptance ${acceptanceId}`);
+    expect(jsonOutput().nextSteps.join(' ')).toContain('required evidence coverage');
     expect(jsonOutput()).not.toHaveProperty('verifyRunId');
     expect(createRun).not.toHaveBeenCalled();
     expect(attachRun).not.toHaveBeenCalled();
 
-    await run(['create', '--requirement', requirement, '--json']);
+    await run(['create', '--skill-read', '--requirement', requirement, '--json']);
     expect(ensure.mock.calls[1][0].subjectId).not.toBe(ensure.mock.calls[0][0].subjectId);
   });
 
@@ -84,10 +121,19 @@ describe('acceptance create', () => {
         subjectId,
         subjectType,
       });
-      await run(['create', '--subject', ref, '--requirement', requirement, '--json']);
+      await run([
+        'create',
+        '--skill-read',
+        '--subject',
+        ref,
+        '--requirement',
+        requirement,
+        '--json',
+      ]);
 
       expect(ensure).toHaveBeenCalledWith({ requirement, subjectId, subjectType });
       expect(jsonOutput()).toEqual({
+        nextSteps: expect.any(Array),
         acceptanceId,
         acceptanceUrl,
         requirement: 'Original goal',
@@ -98,15 +144,24 @@ describe('acceptance create', () => {
   );
 
   it('prints the acceptance ID, URL and absence of new rounds in human-readable output', async () => {
-    await run(['create', '--requirement', requirement]);
+    await run(['create', '--skill-read', '--requirement', requirement]);
     const text = output.mock.calls.map(([line]) => line).join('\n');
     expect(text).toContain(acceptanceId);
     expect(text).toContain(acceptanceUrl);
     expect(text).toContain('No verification round or results created');
+    expect(text).toContain(`--acceptance ${acceptanceId}`);
+    expect(text).toContain('required evidence coverage');
   });
 
   it('supports JSON field selection', async () => {
-    await run(['create', '--requirement', requirement, '--json', 'acceptanceId,acceptanceUrl']);
+    await run([
+      'create',
+      '--skill-read',
+      '--requirement',
+      requirement,
+      '--json',
+      'acceptanceId,acceptanceUrl',
+    ]);
     expect(jsonOutput()).toEqual({ acceptanceId, acceptanceUrl });
   });
 
@@ -119,7 +174,7 @@ describe('acceptance create', () => {
       error: /--subject must be one of/,
     })),
   ])('rejects invalid options before contacting the server: $args', async ({ args, error }) => {
-    await expect(run(['create', ...args])).rejects.toThrow(error);
+    await expect(run(['create', '--skill-read', ...args])).rejects.toThrow(error);
     expect(getTrpcClient).not.toHaveBeenCalled();
     expect(ensure).not.toHaveBeenCalled();
   });
@@ -127,7 +182,7 @@ describe('acceptance create', () => {
   it('propagates creation failures without printing a success or link', async () => {
     ensure.mockRejectedValueOnce(new Error('Subject not found in the current workspace'));
     await expect(
-      run(['create', '--subject', 'task:missing', '--requirement', requirement]),
+      run(['create', '--skill-read', '--subject', 'task:missing', '--requirement', requirement]),
     ).rejects.toThrow('Subject not found');
     expect(output).not.toHaveBeenCalled();
   });
@@ -135,7 +190,7 @@ describe('acceptance create', () => {
   it('publishes a flow using the returned acceptance ID, not the standalone subject ID', async () => {
     const dir = await mkdtemp(path.join(tmpdir(), 'acceptance-create-'));
     try {
-      await run(['create', '--requirement', requirement, '--json']);
+      await run(['create', '--skill-read', '--requirement', requirement, '--json']);
       const created = jsonOutput();
       const nodeId = 'cb7dcb9e-4fd2-46f3-ab41-23f7c59a1727';
       const definition = {
