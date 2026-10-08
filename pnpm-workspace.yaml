@@ -70,6 +70,9 @@ overrides:
   drizzle-orm: ^0.45.2
   fast-xml-parser: 5.4.2
   lexical: 0.42.0
+  # Keep the coupled core/autolink patches applied without a root lockfile.
+  micromark: 4.0.3
+  micromark-extension-gfm-autolink-literal: 2.1.0
   node-gyp: ^12.4.0
   pdfjs-dist: 5.4.530
   react: 19.2.7
@@ -82,4 +85,5 @@ overrides:
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch
+  micromark@4.0.3: patches/micromark@4.0.3.patch
   micromark-extension-gfm-autolink-literal@2.1.0: patches/micromark-extension-gfm-autolink-literal@2.1.0.patch

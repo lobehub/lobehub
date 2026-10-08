@@ -61,6 +61,56 @@ describe.each([false, true])('GFM strong-emphasis boundaries (CJK plugin: %s)', 
     },
   );
 
+  it('allows a new strong-wrapped URL after already resolved emphasis', () => {
+    expect(render('**标题**正文**https://example.com/path**（备注）')).toBe(
+      '<p><strong>标题</strong>正文<strong><a href="https://example.com/path">https://example.com/path</a></strong>（备注）</p>\n',
+    );
+  });
+
+  it('closes multiple strong-wrapped URLs in the same paragraph', () => {
+    expect(
+      render('**https://example.com/first**（一）正文**https://example.com/second**（二）'),
+    ).toBe(
+      '<p><strong><a href="https://example.com/first">https://example.com/first</a></strong>（一）正文<strong><a href="https://example.com/second">https://example.com/second</a></strong>（二）</p>\n',
+    );
+  });
+
+  it('keeps an opener that the rule of three prevents from closing earlier emphasis', () => {
+    expect(render('*前文**https://example.com/path**（备注）')).toBe(
+      '<p>*前文<strong><a href="https://example.com/path">https://example.com/path</a></strong>（备注）</p>\n',
+    );
+  });
+
+  it('does not reuse strong delimiters after resolving earlier strikethrough', () => {
+    expect(render('~~x**one~~y**z**https://example.com/path**（备注）')).toBe(
+      '<p><del>x**one</del>y<strong>z</strong><a href="https://example.com/path**%EF%BC%88%E5%A4%87%E6%B3%A8%EF%BC%89">https://example.com/path**（备注）</a></p>\n',
+    );
+  });
+
+  it('recognizes a fresh opener after resolving earlier strikethrough', () => {
+    expect(render('~~x**one~~y**https://example.com/path**（备注）')).toBe(
+      '<p><del>x**one</del>y<strong><a href="https://example.com/path">https://example.com/path</a></strong>（备注）</p>\n',
+    );
+  });
+
+  it('preserves upstream boundaries when a later strikethrough closer changes attention scope', () => {
+    expect(render('~~q~~ **a~~b**c**https://example.com/path**（备注）~~')).toBe(
+      '<p><del>q</del> **a<del>b<strong>c</strong><a href="https://example.com/path**%EF%BC%88%E5%A4%87%E6%B3%A8%EF%BC%89">https://example.com/path**（备注）</a></del></p>\n',
+    );
+  });
+
+  it('recognizes a fresh opener after an explicit link', () => {
+    expect(render('[**标题**](https://example.org)正文**https://example.com/path**（备注）')).toBe(
+      '<p><a href="https://example.org"><strong>标题</strong></a>正文<strong><a href="https://example.com/path">https://example.com/path</a></strong>（备注）</p>\n',
+    );
+  });
+
+  it('preserves pending-label fallback instead of creating nested links', () => {
+    expect(render('[**https://example.com/path**（备注）](https://example.org)')).toBe(
+      '<p><a href="https://example.org"><strong>https://example.com/path</strong>（备注）</a></p>\n',
+    );
+  });
+
   it('closes strong after a trailing slash with the active attention tokenizer', () => {
     expect(render('**https://example.com/path/**（备注）')).toBe(
       '<p><strong><a href="https://example.com/path/">https://example.com/path/</a></strong>（备注）</p>\n',
