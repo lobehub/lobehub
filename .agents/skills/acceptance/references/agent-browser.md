@@ -237,8 +237,9 @@ Providers: `agentcore`, `browserbase`, `browserless`, `browseruse`, `kernel`.
 - **Sessions leak when not closed** — daemons never exit on their own unless
   `AGENT_BROWSER_IDLE_TIMEOUT_MS` is set, and `session list` can miss a daemon
   whose run already died. Reap by pid, not only by session name, and keep the
-  [resource guard](resource-guard.md) running so a host that starts swapping is
-  stopped at the threshold instead of freezing.
+  [resource guard](resource-guard.md) running. With `stop-owned`, it stops only
+  this run's owned processes when the platform-specific stop conditions are met;
+  swap usage alone does not trigger a stop on macOS.
 - **HMR invalidates everything** — after code changes during dev, refs break;
   re-snapshot or restart.
 - **`snapshot -i` doesn't find contenteditable** — use `snapshot -i -C` for rich
