@@ -174,7 +174,9 @@ export class AgentInboxModel {
   static releaseWake = async (db: LobeChatDatabase, id: string): Promise<void> => {
     await db
       .update(agentInboxMessages)
-      .set({ metadata: sql`coalesce(${agentInboxMessages.metadata}, '{}'::jsonb) - 'wakeClaimedAt'` })
+      .set({
+        metadata: sql`coalesce(${agentInboxMessages.metadata}, '{}'::jsonb) - 'wakeClaimedAt'`,
+      })
       .where(eq(agentInboxMessages.id, id));
   };
 
@@ -315,9 +317,14 @@ export class AgentInboxModel {
 
   /**
    * The newest message from someone other than `recipient`, received at or
-   * after `since`, whose body contains any of `candidates` verbatim. The
-   * counterpart of {@link listCodesFromOtherSenders} for secrets the code
-   * extractor does not recognise: links, alphanumeric tokens, credentials.
+   * after `since`, whose body contains any of `candidates` once case and
+   * separators are stripped from both sides. The counterpart of
+   * {@link listCodesFromOtherSenders} for secrets the code extractor does not
+   * recognise: links, alphanumeric tokens, credentials.
+   *
+   * `candidates` must already be normalised the same way (lowercased, non
+   * alphanumerics removed): a secret reformatted on the way out would otherwise
+   * slip past a verbatim comparison.
    */
   findTextFromOtherSender = async (params: {
     agentId: string;
@@ -338,7 +345,8 @@ export class AgentInboxModel {
           sql`lower(trim(${agentInboxMessages.from})) <> ${params.recipient}`,
           or(
             ...params.candidates.map(
-              (candidate) => sql`strpos(${agentInboxMessages.text}, ${candidate}) > 0`,
+              (candidate) =>
+                sql`strpos(lower(regexp_replace(${agentInboxMessages.text}, '[^0-9A-Za-z]', '', 'g')), ${candidate}) > 0`,
             ),
           ),
         ),

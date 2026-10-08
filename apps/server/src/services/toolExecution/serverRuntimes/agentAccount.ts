@@ -33,6 +33,14 @@ const POLL_INTERVAL_MS = 1_000;
 const DEFAULT_READ_LIMIT = 10;
 const MAX_READ_LIMIT = 20;
 
+/**
+ * Per-message body budget for a read. Bodies are attacker-controlled and a read
+ * returns up to {@link MAX_READ_LIMIT} of them, so one call must not be able to
+ * spend the whole context window: each body is clipped the way the wake preview
+ * clips its own.
+ */
+const MAX_READ_BODY_CHARS = 2000;
+
 /** How far back a reply is checked for codes relayed from another sender. */
 const CODE_RELAY_LOOKBACK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -55,7 +63,7 @@ const compact = (value: string) => value.replaceAll(/[^\da-z]/gi, '').toLowerCas
 const secretCandidates = (text: string): string[] => {
   const urls = text.match(/https?:\/\/[^\s<>"')\]]+/g) ?? [];
   const tokens = (text.match(/[\w+./=-]{6,}/g) ?? []).filter(
-    (token) => token.length >= 20 || (/\d/.test(token) && /[A-Za-z]/.test(token)),
+    (token) => token.length >= 20 || (/\d/.test(token) && /[A-Z]/i.test(token)),
   );
   return [...new Set([...urls, ...tokens])].slice(0, 100);
 };
@@ -169,7 +177,10 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         ? undefined
         : await inbox.findTextFromOtherSender({
             agentId: requireAgentId(),
-            candidates: secretCandidates(args.text),
+            // Same treatment as the codes above: a token reformatted on the way
+            // out (`AB12CD34` sent as `ab-12-cd-34`) is the same secret, so both
+            // sides are compared with case and separators stripped.
+            candidates: secretCandidates(args.text).map(compact),
             recipient,
             since: new Date(Date.now() - CODE_RELAY_LOOKBACK_MS),
           });
@@ -218,7 +229,9 @@ export const agentAccountRuntime: ServerRuntimeRegistration = {
         await inbox.markRead(rows.filter((row) => !row.readAt).map((row) => row.id));
 
         return {
-          content: fenceUntrustedInbox(rows.map((row) => toUntrustedInboxEntry(row))),
+          content: fenceUntrustedInbox(
+            rows.map((row) => toUntrustedInboxEntry(row, { maxBodyChars: MAX_READ_BODY_CHARS })),
+          ),
           state: { inboxMessageIds: rows.map((row) => row.id) },
           success: true,
         };
