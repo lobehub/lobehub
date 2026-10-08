@@ -1451,6 +1451,44 @@ describe('buildGoogleToolsWithSearch', () => {
     expect(config.toolConfig).toBeUndefined();
   });
 
+  it('should request image output and image search for Nano Banana 2.1', async () => {
+    const mockStream = new ReadableStream({
+      start(controller) {
+        controller.enqueue({
+          candidates: [
+            {
+              content: { parts: [{ text: 'test' }], role: 'model' },
+              finishReason: 'STOP',
+              index: 0,
+            },
+          ],
+          usageMetadata: { promptTokenCount: 1, totalTokenCount: 2 },
+          modelVersion: 'gemini-nano-banana-2.1',
+        });
+        controller.close();
+      },
+    });
+    vi.spyOn(instance['client'].models, 'generateContentStream').mockResolvedValue(
+      mockStream as any,
+    );
+
+    await instance.chat({
+      enabledSearch: true,
+      imageResolution: '2K',
+      messages: [{ content: 'Draw an apple', role: 'user' }],
+      model: 'gemini-nano-banana-2.1',
+      temperature: 1,
+    });
+
+    const config = (instance['client'].models.generateContentStream as any).mock.calls[0][0].config;
+    // Without the Image modality, Vertex AI answers with IMAGE_RECITATION and no image.
+    expect(config.responseModalities).toEqual(['Text', 'Image']);
+    expect(config.imageConfig).toEqual({ imageSize: '2K' });
+    expect(config.tools).toEqual([
+      { googleSearch: { searchTypes: { imageSearch: {}, webSearch: {} } } },
+    ]);
+  });
+
   it('should keep image resolution in imageConfig when aspect ratio is auto', async () => {
     const mockStream = new ReadableStream({
       start(controller) {

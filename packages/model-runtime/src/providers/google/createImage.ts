@@ -231,11 +231,13 @@ function extractImageFromResponse(response: GenerateContentResponse): CreateImag
     throw createGoogleImageNoImageError('No image generated', response);
   }
 
-  for (const part of candidate.content.parts) {
-    if (part.inlineData?.data) {
-      const imageUrl = `data:${part.inlineData.mimeType || 'image/png'};base64,${part.inlineData.data}`;
-      return { imageUrl };
-    }
+  // Thinking image models (e.g. Nano Banana 2.1 on Vertex AI) return interim draft images as
+  // `thought` parts before the final image, so prefer the final one and fall back to a draft.
+  const imageParts = candidate.content.parts.filter((part) => part.inlineData?.data);
+  const imagePart = imageParts.find((part) => !part.thought) ?? imageParts.at(-1);
+  if (imagePart?.inlineData) {
+    const imageUrl = `data:${imagePart.inlineData.mimeType || 'image/png'};base64,${imagePart.inlineData.data}`;
+    return { imageUrl };
   }
 
   const textFromParts = getTextFromParts(candidate.content.parts);

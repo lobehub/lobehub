@@ -49,6 +49,24 @@ describe('modelId', () => {
         source: 'googlePrefixed',
       });
     });
+
+    it('parses versioned gemini-nano-banana ids as the Nano Banana family', () => {
+      expect(parseGoogleModelId('gemini-nano-banana-2.1')).toMatchObject({
+        family: 'nanoBanana',
+        majorVersion: 2,
+        minorVersion: 1,
+        modifiers: [],
+        normalizedModelId: 'gemini-nano-banana-2.1',
+      });
+      expect(parseGoogleModelId('gemini-nano-banana-2.1:image')).toMatchObject({
+        family: 'nanoBanana',
+        majorVersion: 2,
+        minorVersion: 1,
+        modifiers: ['image'],
+      });
+      // The Nano Banana product version must not be read as a Gemini version.
+      expect(isGemini3OrAbove('gemini-nano-banana-3')).toBe(false);
+    });
   });
 
   describe('version helpers', () => {
@@ -96,6 +114,9 @@ describe('modelId', () => {
       'nano-banana',
       'nano-banana-lite',
       'google/nano-banana-lite',
+      // Nano Banana 2.1 uses a `gemini-nano-banana-*` id without the `-image` modifier.
+      'gemini-nano-banana-2.1',
+      'gemini-nano-banana-2.1:image',
     ])('detects image-response model %s', (model) => {
       expect(isGoogleImageResponseModel(model)).toBe(true);
     });
@@ -108,12 +129,15 @@ describe('modelId', () => {
       expect(supportsGoogleSearchOnImageResponseModel('gemini-3.5-pro-image-preview')).toBe(true);
       expect(supportsGoogleSearchOnImageResponseModel('gemini-2.5-flash-image')).toBe(false);
       expect(supportsGoogleSearchOnImageResponseModel('nano-banana-pro-preview')).toBe(false);
+      expect(supportsGoogleSearchOnImageResponseModel('gemini-nano-banana-2.1')).toBe(true);
     });
 
     it('keeps the imageSearch payload exception narrow', () => {
       expect(shouldUseGoogleImageSearchTypes('gemini-3.1-flash-image')).toBe(true);
       expect(shouldUseGoogleImageSearchTypes('gemini-3.1-flash-image-preview')).toBe(true);
       expect(shouldUseGoogleImageSearchTypes('gemini-3.5-pro-image-preview')).toBe(false);
+      expect(shouldUseGoogleImageSearchTypes('gemini-nano-banana-2.1')).toBe(true);
+      expect(shouldUseGoogleImageSearchTypes('nano-banana-pro-preview')).toBe(false);
     });
   });
 
@@ -127,6 +151,8 @@ describe('modelId', () => {
       'gemini-3.1-flash-image-preview:image',
       'gemini-3.1-flash-lite-image',
       'gemini-3.1-flash-lite-image:image',
+      'gemini-nano-banana-2.1',
+      'gemini-nano-banana-2.1:image',
     ])('detects Nano Banana model %s', (model) => {
       expect(isGoogleNanoBananaModel(model)).toBe(true);
     });

@@ -21,6 +21,11 @@ const VERSIONED_GOOGLE_MODEL_PATTERN =
 const LEGACY_GEMINI_MODEL_PATTERN = /^gemini[-.:]([a-z][a-z0-9]*(?:[-.:][a-z0-9]+)*)/;
 const LEARNLM_MODEL_PATTERN = /^learnlm[-.:]?([a-z0-9]+(?:[-.:][a-z0-9]+)*)?/;
 const NANO_BANANA_MODEL_PATTERN = /^nano-banana[-.:]?([a-z0-9]+(?:[-.:][a-z0-9]+)*)?/;
+// Nano Banana 2.1 dropped the `gemini-<version>-flash-image` shape for `gemini-nano-banana-2.1`.
+// The version is the Nano Banana product version (2 = Gemini 3.1 Flash Image), not a Gemini version.
+// https://ai.google.dev/gemini-api/docs/models/gemini-nano-banana-2.1
+const GEMINI_NANO_BANANA_MODEL_PATTERN =
+  /^gemini-nano-banana(?:[-.:](\d+)(?:\.(\d+))?)?(?:[-.:]([a-z][a-z0-9]*(?:[-.:][a-z0-9]+)*))?/;
 
 const SAFETY_OFF_MODELS = new Set(['gemini-2.0-flash-exp']);
 
@@ -142,6 +147,20 @@ export const parseGoogleModelId = (model: string): ParsedGoogleModelId | undefin
     };
   }
 
+  const geminiNanoBananaMatch = GEMINI_NANO_BANANA_MODEL_PATTERN.exec(extracted.normalizedModelId);
+  if (geminiNanoBananaMatch) {
+    const [, majorVersion, minorVersion, modifiers] = geminiNanoBananaMatch;
+
+    return {
+      family: 'nanoBanana',
+      modifiers: parseModifiers(modifiers),
+      normalizedModelId: extracted.normalizedModelId,
+      source: extracted.source,
+      ...(majorVersion ? { majorVersion: Number(majorVersion) } : {}),
+      ...parseMinorVersion(minorVersion),
+    };
+  }
+
   const legacyGeminiMatch = LEGACY_GEMINI_MODEL_PATTERN.exec(extracted.normalizedModelId);
   if (legacyGeminiMatch) {
     const [, modifiers] = legacyGeminiMatch;
@@ -258,13 +277,26 @@ export const isGoogleNanoBananaModel = (model: string | undefined): boolean => {
   return parseGoogleModelId(model)?.family === 'nanoBanana';
 };
 
+/**
+ * Versioned Nano Banana ids (`gemini-nano-banana-2.1`) start at Nano Banana 2, which supports
+ * Google Search grounding with both web and image search.
+ */
+const isVersionedNanoBananaModel = (parsed: ParsedGoogleModelId | undefined): boolean =>
+  parsed?.family === 'nanoBanana' && hasVersionAtLeast(parsed, 2);
+
 export const shouldUseGoogleImageSearchTypes = (model: string): boolean => {
   const normalizedModelId = normalizeGoogleModelId(model);
-  return !!normalizedModelId && IMAGE_SEARCH_TYPES_MODELS.has(normalizedModelId);
+  if (!normalizedModelId) return false;
+
+  return (
+    IMAGE_SEARCH_TYPES_MODELS.has(normalizedModelId) ||
+    isVersionedNanoBananaModel(parseGoogleModelId(model))
+  );
 };
 
 export const supportsGoogleSearchOnImageResponseModel = (model: string): boolean => {
   const parsed = parseGoogleModelId(model);
+  if (isVersionedNanoBananaModel(parsed)) return true;
   if (!parsed || parsed.family !== 'gemini') return false;
 
   return isGoogleImageResponseModel(model) && hasVersionAtLeast(parsed, 3);
