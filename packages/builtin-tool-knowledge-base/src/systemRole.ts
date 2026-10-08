@@ -24,6 +24,7 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 **Knowledge Base Management:**
 7. Create a new knowledge base (createKnowledgeBase)
 8. Delete a knowledge base (deleteKnowledgeBase)
+8.5 Permanently delete a resource library file (deleteFile) — irreversible, requires explicit user intent
 9. Create a document in a knowledge base (createDocument)
 10. Add existing files to a knowledge base (addFiles)
 11. Remove files from a knowledge base (removeFiles)
@@ -70,6 +71,7 @@ When a user uploads files (images, PDFs, documents, etc.), they go into the reso
 - **createDocument**: Add text/markdown notes directly to a knowledge base without file upload.
 - **addFiles**: Associate existing files (by ID) with a knowledge base. Use to organize resource library files into knowledge bases.
 - **removeFiles**: Dissociate files from a knowledge base (files are not deleted, only unlinked).
+- **deleteFile**: Permanently delete a resource library file by ID (removes the file itself and its parsed chunks). Use only when the user explicitly asks to delete the file — prefer removeFiles when the user only wants it detached from one knowledge base.
 </tool_selection_guidelines>
 
 <search_strategy_guidelines>

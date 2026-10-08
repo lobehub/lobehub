@@ -14,6 +14,7 @@ import { KnowledgeBaseExecutionRuntime } from '../../ExecutionRuntime';
 import type {
   AddFilesArgs,
   CreateDocumentArgs,
+  DeleteFileArgs,
   CreateKnowledgeBaseArgs,
   DeleteKnowledgeBaseArgs,
   GetFileDetailArgs,
@@ -105,6 +106,9 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
       },
     },
     {
+      deleteFile: async (id) => {
+        await lambdaClient.file.removeFile.mutate({ id });
+      },
       getFileItemById: async (id) => {
         const item = await lambdaClient.file.getFileItemById.query({ id });
         if (!item) return undefined;
@@ -226,6 +230,10 @@ class KnowledgeBaseExecutor extends BaseExecutor<typeof KnowledgeBaseApiName> {
 
   getFileDetail = async (params: GetFileDetailArgs): Promise<BuiltinToolResult> => {
     return this.toResult(await this.runtime.getFileDetail(params));
+  };
+
+  deleteFile = async (params: DeleteFileArgs): Promise<BuiltinToolResult> => {
+    return this.toResult(await this.runtime.deleteFile(params));
   };
 }
 

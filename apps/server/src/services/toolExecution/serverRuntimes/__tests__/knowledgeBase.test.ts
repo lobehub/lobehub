@@ -84,3 +84,48 @@ describe('knowledgeBaseRuntime searchKnowledgeBase scope', () => {
     expect(result.content).toContain('No relevant files found');
   });
 });
+
+describe('knowledgeBaseRuntime deleteFile', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const setupFileModel = (fileModelMock: any, file?: Record<string, any>) => {
+    fileModelMock.findById = vi.fn().mockResolvedValue(file ?? null);
+    fileModelMock.delete = vi.fn().mockResolvedValue(file ? { url: 'https://r2.example/f.png' } : null);
+  };
+
+  it('deletes via FileModel with router semantics and removes the stored object', async () => {
+    const { FileModel } = await import('@/database/models/file');
+    const { FileService } = await import('@/server/services/file');
+    const fileModelMock: any = new (FileModel as any)();
+    const fileServiceMock: any = new (FileService as any)();
+    setupFileModel(fileModelMock, { id: 'file_1', url: 'https://r2.example/f.png' });
+
+    const runtime = createRuntime();
+    const result = await (runtime as any).deleteFile({ id: 'file_1' });
+
+    expect(fileModelMock.findById).toHaveBeenCalledWith('file_1');
+    expect(fileModelMock.delete).toHaveBeenCalledWith('file_1', {
+      removeGlobalFile: expect.any(Boolean),
+    });
+    expect(fileServiceMock.deleteFile).toHaveBeenCalledWith('https://r2.example/f.png');
+    expect(result.success).toBe(true);
+  });
+
+  it('throws NOT-found when the file does not exist and skips deletion', async () => {
+    const { FileModel } = await import('@/database/models/file');
+    const { FileService } = await import('@/server/services/file');
+    const fileModelMock: any = new (FileModel as any)();
+    const fileServiceMock: any = new (FileService as any)();
+    setupFileModel(fileModelMock, null);
+
+    const runtime = createRuntime();
+    const result = await (runtime as any).deleteFile({ id: 'file_missing' });
+
+    expect(fileModelMock.delete).not.toHaveBeenCalled();
+    expect(fileServiceMock.deleteFile).not.toHaveBeenCalled();
+    expect(result.success).toBe(false);
+    expect(result.content).toContain('not found');
+  });
+});

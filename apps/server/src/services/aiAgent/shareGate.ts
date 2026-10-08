@@ -342,6 +342,7 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
     },
     writeApiNames: [
       KnowledgeBaseApiName.createKnowledgeBase,
+      KnowledgeBaseApiName.deleteFile,
       KnowledgeBaseApiName.deleteKnowledgeBase,
       KnowledgeBaseApiName.createDocument,
       KnowledgeBaseApiName.addFiles,

@@ -154,6 +154,21 @@ export const KnowledgeBaseManifest: BuiltinToolManifest = {
     // ---- P1: Management ----
     {
       description:
+        'Permanently delete a file from the resource library by ID (removes the file itself, its parsed chunks and any knowledge base associations). Use only when the user explicitly asks to delete the file — this is irreversible. Prefer removeFiles first when the user only wants the file detached from a specific knowledge base.',
+      name: KnowledgeBaseApiName.deleteFile,
+      parameters: {
+        properties: {
+          id: {
+            description: 'The file ID to delete permanently.',
+            type: 'string',
+          },
+        },
+        required: ['id'],
+        type: 'object',
+      },
+    },
+    {
+      description:
         'Create a new knowledge base. Returns the ID of the newly created knowledge base.',
       name: KnowledgeBaseApiName.createKnowledgeBase,
       parameters: {

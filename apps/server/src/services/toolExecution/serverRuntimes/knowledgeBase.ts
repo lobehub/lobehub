@@ -1,6 +1,8 @@
 import { KnowledgeBaseIdentifier } from '@lobechat/builtin-tool-knowledge-base';
 import { KnowledgeBaseExecutionRuntime } from '@lobechat/builtin-tool-knowledge-base/executionRuntime';
 
+import { serverDBEnv } from '@/config/db';
+
 import { AgentModel } from '@/database/models/agent';
 import { FileModel } from '@/database/models/file';
 import { KnowledgeBaseModel } from '@/database/models/knowledgeBase';
@@ -168,6 +170,21 @@ export const knowledgeBaseRuntime: ServerRuntimeRegistration = {
         },
       },
       {
+        deleteFile: async (id) => {
+          // Mirror the resource-library `file.removeFile` router semantics:
+          // ownership is enforced by FileModel's ordinary-file access scope,
+          // `FileModel.delete` runs in a transaction with reference counting
+          // (global files referenced elsewhere are kept), and the stored
+          // object is removed from S3 only when unreferenced.
+          const existing = await fileModel.findById(id);
+          if (!existing) {
+            throw new Error(`File not found: ${id}`);
+          }
+          const file = await fileModel.delete(id, {
+            removeGlobalFile: serverDBEnv.REMOVE_GLOBAL_FILE,
+          });
+          if (file) await fileService.deleteFile(file.url!);
+        },
         getFileItemById: async (id) => {
           const item = await fileModel.findById(id);
           if (!item) return undefined;

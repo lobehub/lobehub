@@ -6,6 +6,7 @@ export const KnowledgeBaseApiName = {
   addFiles: 'addFiles',
   createDocument: 'createDocument',
   createKnowledgeBase: 'createKnowledgeBase',
+  deleteFile: 'deleteFile',
   deleteKnowledgeBase: 'deleteKnowledgeBase',
   getFileDetail: 'getFileDetail',
   listFiles: 'listFiles',
@@ -132,6 +133,10 @@ export interface CreateKnowledgeBaseArgs {
 }
 
 export interface CreateKnowledgeBaseState {
+  id: string;
+}
+
+export interface DeleteFileArgs {
   id: string;
 }
 

@@ -10,6 +10,7 @@ import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 import type {
   AddFilesArgs,
   CreateDocumentArgs,
+  DeleteFileArgs,
   CreateDocumentState,
   CreateKnowledgeBaseArgs,
   CreateKnowledgeBaseState,
@@ -121,6 +122,7 @@ interface DocumentService {
 }
 
 interface FileService {
+  deleteFile: (id: string) => Promise<void>;
   getFileItemById: (id: string) => Promise<FileResourceResult | undefined>;
   getKnowledgeItems: (params: {
     category?: string;
@@ -614,6 +616,35 @@ export class KnowledgeBaseExecutionRuntime {
     } catch (e) {
       return {
         content: `Error listing files: ${(e as Error).message}`,
+        error: e,
+        success: false,
+      };
+    }
+  }
+
+  async deleteFile(args: DeleteFileArgs): Promise<BuiltinServerRuntimeOutput> {
+    try {
+      if (!this.fileService) {
+        return { content: 'File service is not available.', success: false };
+      }
+
+      const { id } = args;
+      const item = await this.fileService.getFileItemById(id);
+
+      if (!item) {
+        return { content: `File with ID "${id}" not found.`, success: false };
+      }
+
+      const name = item.name;
+      await this.fileService.deleteFile(id);
+
+      return {
+        content: `File "${name}" (ID: \`${id}\`) deleted permanently from the resource library.`,
+        success: true,
+      };
+    } catch (e) {
+      return {
+        content: `Error deleting file: ${(e as Error).message}`,
         error: e,
         success: false,
       };
