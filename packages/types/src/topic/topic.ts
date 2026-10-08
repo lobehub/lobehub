@@ -213,8 +213,10 @@ export interface ChatTopicMetadata {
    * Agent messages after the viewer's `readAt` count as unread. A viewer's entry
    * only ever moves forward, and tracking viewers separately keeps one member of
    * a shared workspace conversation from clearing everyone else's unread.
+   * `createdAtUs` is the stored ordering value: it keeps the cursor comparable
+   * after that message is deleted, and at the microseconds a Date drops.
    */
-  imReadCursors?: Record<string, { messageId: string; readAt: string }>;
+  imReadCursors?: Record<string, { createdAtUs: string; messageId: string; readAt: string }>;
   /**
    * Root operation that most recently consumed `runningOperation`.
    * Used to scope a post-terminal `unread` → `active` correction when the

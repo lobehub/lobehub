@@ -59,6 +59,14 @@ type MessageRow = {
 type LatestRun = { createdAtUs: string; startedAt: Date | null; status: string };
 
 /**
+ * What a viewer's read cursor stores: the newest agent message they have seen,
+ * plus its own ordering value — the cursor must keep working after that message
+ * is deleted, and `readAt` alone (a JS Date) drops the microseconds the
+ * comparison needs.
+ */
+type ReadCursor = { createdAtUs: string; messageId: string; readAt: string };
+
+/**
  * An incremental cursor: `<epoch micros>_<message id>`.
  *
  * `created_at` alone is not unique — one transaction stamps every row it writes
@@ -90,6 +98,12 @@ const compareCursor = (a: ParsedCursor, b: ParsedCursor) => {
   return a.id < b.id ? -1 : 1;
 };
 
+/** A stored read cursor in the shape the sync comparisons already use. */
+const asCursor = ({ createdAtUs, messageId }: ReadCursor): ParsedCursor => ({
+  id: messageId,
+  us: BigInt(createdAtUs),
+});
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const toImMessage = (row: Omit<MessageRow, 'createdAtUs'>): ImMessage => ({
@@ -109,6 +123,13 @@ const toImMessage = (row: Omit<MessageRow, 'createdAtUs'>): ImMessage => ({
 const VISIBLE_BUBBLE = sql`(${messages.error} is not null or (btrim(coalesce(${messages.content}, '')) <> '' and btrim(coalesce(${messages.content}, '')) <> ${LOADING_PLACEHOLDER}))`;
 
 const visibleRow = (): SQL => sql`(${messages.role} = 'user' or ${VISIBLE_BUBBLE})`;
+
+/** JS twin of {@link VISIBLE_BUBBLE}'s agent branch: a row that says something (or failed). */
+const isDeliveredAgentRow = (row: { content: string | null; error: unknown }) => {
+  if (row.error !== null && row.error !== undefined) return true;
+  const content = (row.content ?? '').trim();
+  return content !== '' && content !== LOADING_PLACEHOLDER;
+};
 
 /**
  * IM channel REST service — the asynchronous, whole-message view of an agent
@@ -221,8 +242,24 @@ export class ImRestService extends BaseService {
     if (!message || message.topicId !== topicId) {
       throw this.createNotFoundError('Message not found in this conversation');
     }
+    // The cursor names the newest AGENT message the caller has seen, so only a
+    // delivered agent bubble may move it: a later user row or a hidden working
+    // row would otherwise mark earlier unread replies as read.
+    if (
+      message.threadId !== null ||
+      message.role !== 'assistant' ||
+      !isDeliveredAgentRow(message)
+    ) {
+      throw this.createValidationError(
+        'messageId must be an agent message this conversation has delivered',
+      );
+    }
 
-    await this.advanceReadCursor(topicId, message.id, message.createdAt.toISOString());
+    await this.advanceReadCursor(topicId, {
+      createdAtUs: message.createdAtUs,
+      messageId: message.id,
+      readAt: message.createdAt.toISOString(),
+    });
 
     const snapshot = await this.snapshot(topicId, { limit: 1 });
     return { unread: snapshot.unread };
@@ -281,8 +318,11 @@ export class ImRestService extends BaseService {
 
   /**
    * The receipt for a `clientMessageId` this user already got through, or
-   * `undefined` when the id is unused here. A client id always names a user
-   * message, so an assistant or topic-less row under it is not a receipt.
+   * `undefined` when the id is unused — or was consumed by a send that never got
+   * a turn. `execAgent` stores the user row before the assistant placeholder and
+   * the operation, so a failure in between leaves the row behind with nothing to
+   * wait for; reporting that as an accepted duplicate would leave every retry
+   * answering "already received" for a message no run will ever pick up.
    */
   private async idempotentReceipt(clientMessageId?: string): Promise<ImSendResult | undefined> {
     if (!clientMessageId) return undefined;
@@ -292,6 +332,7 @@ export class ImRestService extends BaseService {
     if (existing.topicId === null) {
       throw this.createConflictError('clientMessageId is already used outside a conversation');
     }
+    if (!(await this.turnStarted(existing.topicId, existing.createdAt))) return undefined;
 
     return {
       accepted: false,
@@ -299,6 +340,34 @@ export class ImRestService extends BaseService {
       topicId: existing.topicId,
       userMessage: toImMessage(existing),
     };
+  }
+
+  /** The reply placeholder or the operation a send's turn lands after the user row. */
+  private async turnStarted(topicId: string, since: Date): Promise<boolean> {
+    const [reply] = await this.db
+      .select({ id: messages.id })
+      .from(messages)
+      .where(
+        and(
+          this.chatRows(topicId, ['assistant']),
+          sql`${messages.createdAt} >= ${since.toISOString()}::timestamptz`,
+        ),
+      )
+      .limit(1);
+    if (reply) return true;
+
+    const [operation] = await this.db
+      .select({ id: agentOperations.id })
+      .from(agentOperations)
+      .where(
+        and(
+          eq(agentOperations.topicId, topicId),
+          this.buildWorkspaceWhere(agentOperations),
+          sql`${agentOperations.createdAt} >= ${since.toISOString()}::timestamptz`,
+        ),
+      )
+      .limit(1);
+    return !!operation;
   }
 
   private async requireTopic(topicId: string) {
@@ -322,10 +391,12 @@ export class ImRestService extends BaseService {
   }
 
   private async findOwnMessage(id: string) {
-    return this.db.query.messages.findFirst({
-      columns: { content: true, createdAt: true, error: true, id: true, role: true, topicId: true },
-      where: and(eq(messages.id, id), this.buildWorkspaceWhere(messages)),
-    });
+    const [row] = await this.db
+      .select({ ...this.rowSelect, threadId: messages.threadId, topicId: messages.topicId })
+      .from(messages)
+      .where(and(eq(messages.id, id), this.buildWorkspaceWhere(messages)))
+      .limit(1);
+    return row;
   }
 
   /** The newest top-level run on the conversation — the one the user is waiting on. */
@@ -572,9 +643,12 @@ export class ImRestService extends BaseService {
   }
 
   /** This viewer's read cursor, so two members of a shared topic don't share one. */
-  private async readCursor(topicId: string): Promise<string | undefined> {
+  private async readCursor(topicId: string): Promise<ReadCursor | undefined> {
     const topic = await this.topicModel.findById(topicId);
-    return topic?.metadata?.imReadCursors?.[this.userId]?.messageId;
+    const cursor = topic?.metadata?.imReadCursors?.[this.userId];
+    // A cursor written before this shape existed carries no ordering value and
+    // cannot be compared safely; treat it as unread rather than hiding replies.
+    return cursor?.createdAtUs ? cursor : undefined;
   }
 
   /**
@@ -582,8 +656,13 @@ export class ImRestService extends BaseService {
    * write share one `SELECT … FOR UPDATE` on the topic row: with two devices
    * marking B and C, each would otherwise compare against the same old cursor,
    * both look newer, and the later write could move the cursor *backwards*.
+   *
+   * The cursor carries its own ordering value, so it keeps working after the
+   * message it names is deleted, and it is compared in the same
+   * `(created_at, id)` order as sync — two replies of one microsecond would
+   * otherwise both count as read once the earlier one is marked.
    */
-  private async advanceReadCursor(topicId: string, messageId: string, readAt: string) {
+  private async advanceReadCursor(topicId: string, next: ReadCursor) {
     await this.db.transaction(async (tx) => {
       const [topic] = await tx
         .select({ metadata: topics.metadata })
@@ -592,26 +671,16 @@ export class ImRestService extends BaseService {
         .for('update');
       if (!topic) return;
 
-      const current = topic.metadata?.imReadCursors?.[this.userId]?.messageId;
-      // Compared in SQL — `created_at` carries microseconds a JS Date drops.
-      const [candidate] = await tx
-        .select({
-          isNewer: sql<boolean>`${messages.createdAt} > coalesce((select m2.created_at from messages m2 where m2.id = ${current ?? null}), '-infinity'::timestamptz)`,
-        })
-        .from(messages)
-        .where(eq(messages.id, messageId));
+      const current = topic.metadata?.imReadCursors?.[this.userId];
       // Read cursors only move forward: a stale device must not resurrect unread.
-      if (!candidate?.isNewer) return;
+      if (current?.createdAtUs && compareCursor(asCursor(current), asCursor(next)) >= 0) return;
 
       await tx
         .update(topics)
         .set({
           metadata: {
             ...topic.metadata,
-            imReadCursors: {
-              ...topic.metadata?.imReadCursors,
-              [this.userId]: { messageId, readAt },
-            },
+            imReadCursors: { ...topic.metadata?.imReadCursors, [this.userId]: next },
           } as ChatTopicMetadata,
         })
         .where(and(eq(topics.id, topicId), this.buildWorkspaceWhere(topics)));
@@ -629,8 +698,10 @@ export class ImRestService extends BaseService {
           this.chatRows(topicId, ['assistant']),
           VISIBLE_BUBBLE,
           this.notWithheld(withheldAfter),
+          // Same order as sync's incremental read, and independent of the cursor's
+          // own row still existing.
           readFrom
-            ? sql`${messages.createdAt} > (select m2.created_at from messages m2 where m2.id = ${readFrom})`
+            ? sql`(${messages.createdAt}, ${messages.id}) > (${fromEpochUs(readFrom.createdAtUs)}, ${readFrom.messageId})`
             : undefined,
         ),
       );

@@ -394,7 +394,10 @@ describe('ImRestService.send', () => {
   });
 
   it('is idempotent on clientMessageId: a retry does not start a second run', async () => {
+    // What a send that got through leaves behind: the user row plus the reply
+    // placeholder its run writes into. Only that pair is an accepted send.
     await insertMessage('msg_client0001', 'user', 'hello', '2026-10-04T10:00:01Z');
+    await insertMessage('msg_client0001_reply', 'assistant', '...', '2026-10-04T10:00:01.5Z');
 
     const retry = await service.send({
       agentId: AGENT,
@@ -412,6 +415,7 @@ describe('ImRestService.send', () => {
     // already — including when the collision surfaces as a thrown error.
     execAgentMock.mockImplementation(async () => {
       await insertMessage('msg_client0001', 'user', 'hello', '2026-10-04T10:00:01Z');
+      await insertMessage('msg_client0001_reply', 'assistant', '...', '2026-10-04T10:00:01.5Z');
       return { error: 'duplicate key value violates unique constraint', success: false };
     });
 
@@ -429,6 +433,7 @@ describe('ImRestService.send', () => {
 
     execAgentMock.mockImplementation(async () => {
       await insertMessage('msg_client0002', 'user', 'hello again', '2026-10-04T10:00:02Z');
+      await insertMessage('msg_client0002_reply', 'assistant', '...', '2026-10-04T10:00:02.5Z');
       throw new Error('duplicate key value violates unique constraint');
     });
 
@@ -439,6 +444,36 @@ describe('ImRestService.send', () => {
       topicId: TOPIC,
     });
     expect(threw).toMatchObject({ accepted: false, userMessage: { id: 'msg_client0002' } });
+  });
+
+  it('does not report a receipt for a send that stored the message but never started a turn', async () => {
+    // execAgent stores the user row before the placeholder and the operation, so a
+    // failure in between leaves the row behind with nothing to wait for.
+    execAgentMock.mockImplementation(async () => {
+      await insertMessage('msg_client_failed', 'user', 'hello', '2026-10-04T10:00:03Z');
+      throw new Error('operation creation failed');
+    });
+
+    await expect(
+      service.send({
+        agentId: AGENT,
+        clientMessageId: 'msg_client_failed',
+        content: 'hello',
+        topicId: TOPIC,
+      }),
+    ).rejects.toThrow('operation creation failed');
+
+    // A retry must not answer "already received" for a message no run picked up.
+    execAgentMock.mockResolvedValue({ error: 'id taken', success: false });
+    await expect(
+      service.send({
+        agentId: AGENT,
+        clientMessageId: 'msg_client_failed',
+        content: 'hello',
+        topicId: TOPIC,
+      }),
+    ).rejects.toMatchObject({ name: 'BusinessError' });
+    expect(execAgentMock).toHaveBeenCalledTimes(2);
   });
 
   it('refuses to post into another user’s conversation without starting a run', async () => {
