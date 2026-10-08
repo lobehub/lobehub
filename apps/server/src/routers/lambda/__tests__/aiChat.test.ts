@@ -1571,7 +1571,7 @@ describe('aiChatRouter', () => {
     });
 
     it.each([undefined, 'Mozilla/5.0', 'LobeHub-Mobile/ios-v1.0.5'])(
-      'uses request identity and drops private metadata with UA %s',
+      'preserves extensible metadata and uses request UA %s',
       async (userAgent) => {
         const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
         const generateObject = vi.fn().mockResolvedValue({ completion: 'ok' });
@@ -1584,7 +1584,7 @@ describe('aiChatRouter', () => {
             correlationId: 'cid-1',
             privateOption: true,
             topicId: 'topic-1',
-            trigger: 'onboarding',
+            trigger: 'custom_feature',
             userAgent: 'LobeHub-Mobile/android-v1.0.5',
           },
           model: 'test-model',
@@ -1593,31 +1593,15 @@ describe('aiChatRouter', () => {
 
         expect(generateObject.mock.calls[0][1].metadata).toEqual({
           correlationId: 'cid-1',
+          privateOption: true,
           topicId: 'topic-1',
-          trigger: 'chat',
+          trigger: 'custom_feature',
           userAgent,
         });
       },
     );
 
-    it.each(['topic_title', 'thread_title', 'builder_suggestion', 'input_completion'])(
-      'preserves public feature attribution: %s',
-      async (trigger) => {
-        const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
-        const generateObject = vi.fn().mockResolvedValue({});
-        vi.mocked(initModelRuntimeFromDB).mockResolvedValue({ generateObject } as any);
-        const caller = aiChatRouter.createCaller({ ...mockCtx, serverDB: {} } as any);
-        await caller.outputJSON({
-          messages: [],
-          metadata: { trigger },
-          model: 'test',
-          provider: 'test',
-        });
-        expect(generateObject.mock.calls[0][1].metadata.trigger).toBe(trigger);
-      },
-    );
-
-    it('preserves public caller metadata and forwards tracing', async () => {
+    it('merges caller metadata over the default trigger and forwards tracing', async () => {
       const { initModelRuntimeFromDB } = await import('@/server/modules/ModelRuntime');
       const mockGenerateObject = vi.fn().mockResolvedValue({ completion: 'hi there' });
       vi.mocked(initModelRuntimeFromDB).mockResolvedValue({

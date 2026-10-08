@@ -243,9 +243,8 @@ export const StructureSchema = z.object({
 
 export const StructureOutputSchema = z.object({
   /**
-   * Public attribution context (`correlationId`, `topicId`, and supported feature
-   * `trigger`). Other fields are discarded by the server. Use `tracing` for
-   * `llm_generation_tracing` config.
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
    */
   metadata: z.record(z.string(), z.unknown()).optional(),
   messages: z.array(z.any()),
@@ -284,9 +283,8 @@ interface IStructureSchema {
 export interface StructureOutputParams {
   messages: OpenAIChatMessage[];
   /**
-   * Public attribution context (`correlationId`, `topicId`, and supported feature
-   * `trigger`). Other fields are discarded by the server. Use `tracing` for
-   * `llm_generation_tracing` config.
+   * Free-form context forwarded to non-tracing hooks (e.g. billing). Use
+   * `tracing` for `llm_generation_tracing` config.
    */
   metadata?: Record<string, unknown>;
   model: string;

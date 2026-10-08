@@ -30,17 +30,6 @@ import { archiveToolResultIfNeeded } from '@/server/services/toolExecution/archi
 
 const log = debug('lobe-lambda-router:ai-chat');
 
-/** Only public feature attribution may be supplied by structured-output clients. */
-const publicOutputTriggerSchema = z
-  .enum([
-    RequestTrigger.Chat,
-    RequestTrigger.TopicTitle,
-    RequestTrigger.ThreadTitle,
-    RequestTrigger.BuilderSuggestion,
-    RequestTrigger.InputCompletion,
-  ])
-  .catch(RequestTrigger.Chat);
-
 const PG_UNIQUE_VIOLATION = '23505';
 
 /**
@@ -183,14 +172,10 @@ export const aiChatRouter = router({
           tools: input.tools,
         },
         {
-          // Project public context explicitly: arbitrary client fields must never
-          // become internal runtime options. Request identity comes from the transport.
           metadata: {
-            ...(typeof input.metadata?.correlationId === 'string' && {
-              correlationId: input.metadata.correlationId,
-            }),
-            ...(typeof input.metadata?.topicId === 'string' && { topicId: input.metadata.topicId }),
-            trigger: publicOutputTriggerSchema.parse(input.metadata?.trigger),
+            trigger: RequestTrigger.Chat,
+            ...input.metadata,
+            // Preserve extensible metadata while using the originating request's UA.
             userAgent: ctx.userAgent,
           },
           tracing: { ...input.tracing, tracingId },
