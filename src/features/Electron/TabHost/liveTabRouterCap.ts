@@ -2,7 +2,7 @@ import { create } from 'zustand';
 
 const STORAGE_KEY = 'LOBE_LIVE_TAB_ROUTER_CAP';
 
-export const DEFAULT_LIVE_TAB_ROUTER_CAP = 10;
+export const DEFAULT_LIVE_TAB_ROUTER_CAP = 5;
 
 const normalizeCap = (value: unknown): number | null => {
   const cap = Number(value);
