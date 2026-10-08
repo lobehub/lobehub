@@ -30,7 +30,10 @@ export const useDeviceCliUpdate = (deviceId: string, live: boolean, canEdit: boo
     () => deviceService.getCliUpdateState({ deviceId }),
     {
       refreshInterval: (result) =>
-        deriveCliUpdateView(result, operation, timedOut) === 'pending' ? 3000 : 0,
+        deriveCliUpdateView(result, operation, timedOut) === 'pending' ||
+        (result?.status === 'ok' && result.state.activeTasks > 0)
+          ? 3000
+          : 0,
       revalidateOnFocus: false,
       shouldRetryOnError: !!operation && !timedOut,
       errorRetryCount: 100,

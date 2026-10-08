@@ -124,26 +124,29 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
         );
       })}
       {seenCli.current === scope && (
-        <ConnectionCard
-          channel={'cli'}
+        <CliUpdate
+          canEdit={canEdit}
+          deviceId={device.deviceId}
+          key={`${workspaceId}:${device.deviceId}`}
           live={kinds.includes('cli')}
-          version={getChannelVersion('cli', device.metadata)}
-          detail={
-            <CliUpdate
-              canEdit={canEdit}
-              deviceId={device.deviceId}
-              key={`${workspaceId}:${device.deviceId}`}
+        >
+          {({ actions, detail }) => (
+            <ConnectionCard
+              channel={'cli'}
+              detail={detail}
+              extra={actions}
               live={kinds.includes('cli')}
+              version={getChannelVersion('cli', device.metadata)}
+              status={plainStatus(
+                kinds.includes('cli')
+                  ? t('devices.channel.connected', {
+                      time: dayjs(channels[kinds.indexOf('cli')].connectedAt).fromNow(),
+                    })
+                  : t('devices.status.offline'),
+              )}
             />
-          }
-          status={plainStatus(
-            kinds.includes('cli')
-              ? t('devices.channel.connected', {
-                  time: dayjs(channels[kinds.indexOf('cli')].connectedAt).fromNow(),
-                })
-              : t('devices.status.offline'),
           )}
-        />
+        </CliUpdate>
       )}
       {restartInFlight && desktopCard('desktop', t('devices.status.offline'), false)}
       {channels.length === 0 &&

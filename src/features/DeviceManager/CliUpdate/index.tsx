@@ -1,15 +1,18 @@
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, confirmModal, Popover, Text } from '@lobehub/ui/base-ui';
-import { CloudDownloadIcon, RotateCwIcon } from 'lucide-react';
+import { RotateCwIcon } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDeviceCliUpdate } from './useDeviceCliUpdate';
 
 export const CliUpdate = ({
+  children,
   deviceId,
   live,
   canEdit,
 }: {
+  children: (slots: { actions?: ReactNode; detail?: ReactNode }) => ReactNode;
   deviceId: string;
   live: boolean;
   canEdit: boolean;
@@ -33,76 +36,80 @@ export const CliUpdate = ({
     view === 'unsupported'
       ? undefined
       : [operationError, update.error].filter(Boolean).join('\n\n');
-  if (!canEdit) return null;
-  return (
-    <Flexbox gap={4} style={{ paddingInlineStart: 16 }}>
-      <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-        {canEdit && (
-          <>
-            {(update.error ||
-              !live ||
-              update.ambiguous ||
-              view === 'failed' ||
-              view === 'timedOut' ||
-              (state?.activeTasks ?? 0) > 0) && (
-              <Button
-                loading={update.refreshing}
-                size={'small'}
-                type={'text'}
-                onClick={update.retryRead}
-              >
-                {t('devices.cliUpdate.retryRead')}
-              </Button>
-            )}
-            {live &&
-              view !== 'unsupported' &&
-              view !== 'pending' &&
-              view !== 'timedOut' &&
-              !update.ambiguous && (
-                <>
-                  <ActionIcon
-                    aria-label={t('common:checkForUpdates')}
+  if (!canEdit || (state?.activeTasks ?? 0) > 0) return children({});
+  const actions = (
+    <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
+      {canEdit && (
+        <>
+          {(update.error ||
+            !live ||
+            update.ambiguous ||
+            view === 'failed' ||
+            view === 'timedOut') && (
+            <Button
+              loading={update.refreshing}
+              size={'small'}
+              type={'text'}
+              onClick={update.retryRead}
+            >
+              {t('devices.cliUpdate.retryRead')}
+            </Button>
+          )}
+          {live &&
+            view !== 'unsupported' &&
+            view !== 'pending' &&
+            view !== 'timedOut' &&
+            !update.ambiguous && (
+              <>
+                {state?.latestVersion ? (
+                  <>
+                    <Text fontSize={12} type={'secondary'}>
+                      {t('devices.cliUpdate.available', { version: state.latestVersion })}
+                    </Text>
+                    <ActionIcon
+                      aria-label={t('devices.cliUpdate.update')}
+                      disabled={!update.allowed || update.requesting}
+                      icon={RotateCwIcon}
+                      loading={update.requesting}
+                      size={'small'}
+                      title={t('devices.cliUpdate.update')}
+                      onClick={() => confirm(true)}
+                    />
+                  </>
+                ) : view === 'ready' && update.checked && !update.error ? (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('common:alreadyUpToDate')}
+                  </Text>
+                ) : (
+                  <Button
                     disabled={update.requesting}
-                    icon={CloudDownloadIcon}
                     loading={update.requesting}
                     size={'small'}
-                    title={t('common:checkForUpdates')}
+                    type={'text'}
                     onClick={update.check}
-                  />
-                  <ActionIcon
-                    aria-label={t('devices.cliUpdate.restart')}
-                    disabled={!update.allowed || update.requesting}
-                    icon={RotateCwIcon}
-                    size={'small'}
-                    title={t('devices.cliUpdate.restart')}
-                    onClick={() => confirm(false)}
-                  />
-                  {state?.latestVersion && (
-                    <Button
-                      disabled={!update.allowed || update.requesting}
-                      size={'small'}
-                      type={'fill'}
-                      onClick={() => confirm(true)}
-                    >
-                      {t('devices.cliUpdate.update')}
-                    </Button>
-                  )}
-                </>
-              )}
-            {(update.ambiguous || view === 'timedOut') && view !== 'success' && (
-              <Button
-                disabled={!update.allowed || update.requesting}
-                loading={update.requesting}
-                size={'small'}
-                type={'text'}
-                onClick={() => confirm(update.operation?.kind === 'update', true)}
-              >
-                {t('devices.cliUpdate.retryCommand')}
-              </Button>
+                  >
+                    {t('common:checkForUpdates')}
+                  </Button>
+                )}
+              </>
             )}
-          </>
-        )}
-      </Flexbox>
+          {(update.ambiguous || view === 'timedOut') && view !== 'success' && (
+            <Button
+              disabled={!update.allowed || update.requesting}
+              loading={update.requesting}
+              size={'small'}
+              type={'text'}
+              onClick={() => confirm(update.operation?.kind === 'update', true)}
+            >
+              {t('devices.cliUpdate.retryCommand')}
+            </Button>
+          )}
+        </>
+      )}
+    </Flexbox>
+  );
+  const detail = (
+    <Flexbox gap={4} style={{ paddingInlineStart: 16 }}>
       {view !== 'ready' && !(view === 'loading' && update.error) && (
         <Text
           fontSize={12}
@@ -114,21 +121,6 @@ export const CliUpdate = ({
         >
           {t(`devices.cliUpdate.${view}`)}
           {view === 'unsupported' && ` · ${t('devices.cliUpdate.bootstrap')}`}
-        </Text>
-      )}
-      {state && state.activeTasks > 0 && (
-        <Text fontSize={12} type={'secondary'}>
-          {t('devices.cliUpdate.busy', { count: state.activeTasks })}
-        </Text>
-      )}
-      {view === 'ready' && update.checked && !state?.latestVersion && !update.error && (
-        <Text fontSize={12} type={'secondary'}>
-          {t('common:alreadyUpToDate')}
-        </Text>
-      )}
-      {state?.latestVersion && (
-        <Text fontSize={12} type={'secondary'}>
-          {t('devices.cliUpdate.available', { version: state.latestVersion })}
         </Text>
       )}
       {update.error && view !== 'unsupported' && (
@@ -167,4 +159,5 @@ export const CliUpdate = ({
       )}
     </Flexbox>
   );
+  return children({ actions, detail });
 };

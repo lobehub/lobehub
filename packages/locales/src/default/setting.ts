@@ -13,9 +13,7 @@ export default {
   'devices.cliUpdate.failed': 'CLI maintenance failed. Review the error before trying again.',
   'devices.cliUpdate.timedOut':
     'Restart could not be confirmed within five minutes. Read status before retrying.',
-  'devices.cliUpdate.busy':
-    'Maintenance is blocked by {{count}} active tasks. Wait for them to finish.',
-  'devices.cliUpdate.available': 'CLI {{version}} is available.',
+  'devices.cliUpdate.available': 'v{{version}} available',
   'devices.cliUpdate.retryRead': 'Refresh status',
   'devices.cliUpdate.requestFailed': 'The CLI request failed. Refresh status before trying again.',
   'devices.cliUpdate.showDetails': 'Show details',
