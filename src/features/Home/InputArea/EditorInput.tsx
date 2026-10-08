@@ -10,6 +10,7 @@ import {
   type SendButtonHandler,
 } from '@/features/ChatInput';
 import ActionBar from '@/features/ChatInput/ActionBar';
+import FileUpload from '@/features/ChatInput/ActionBar/Upload';
 import { useChatStore } from '@/store/chat';
 
 import type { HomeMode } from '../types';
@@ -102,6 +103,8 @@ const HomeEditorInput = memo<HomeEditorInputProps>(
               <ModeSelect value={mode} onChange={onModeChange} />
               {isAgentConfigLoading ? (
                 <ActionIcon disabled icon={PlusIcon} size={'small'} />
+              ) : mode === 'task' ? (
+                <FileUpload includeKnowledge={false} />
               ) : (
                 <ActionBar disableCollapse dropdownPlacement="bottomLeft" />
               )}
