@@ -688,6 +688,63 @@ describe('CoreUpdateManager checkForUpdates', () => {
     });
   });
 
+  it('replaces a staged reload core when a newer one is published', async () => {
+    serveLatest(rendererOnly('1.0.1', 1));
+    const { app, manager } = await loadManager();
+    await manager.checkForUpdates();
+
+    serveLatest(rendererOnly('1.0.2', 2));
+    await manager.checkForUpdates();
+
+    expect(manager.getStatus()).toMatchObject({ applyMode: 'reload', staged: '1.0.2' });
+    expect(readPointer(otaRoot(), ABI)).toMatchObject({ current: null, staged: '1.0.2' });
+    expect(app.browserManager.broadcastToAllWindows).toHaveBeenLastCalledWith('updateReady', {
+      kind: 'core-reload',
+      version: '1.0.2',
+    });
+
+    expect(manager.applyStagedNow()).toBe(true);
+    expectAppliedRenderer(app, 'index-1.0.2');
+  });
+
+  it('replaces a staged relaunch core without keeping the stale one as rollback', async () => {
+    serveLatest(mainChanged('1.0.1', 1));
+    const { app, manager } = await loadManager();
+    await manager.checkForUpdates();
+
+    serveLatest(mainChanged('1.0.2', 2));
+    await manager.checkForUpdates();
+    await flushGc(manager);
+
+    expect(manager.getStatus()).toMatchObject({ applyMode: 'relaunch', staged: '1.0.2' });
+    expect(readPointer(otaRoot(), ABI)).toMatchObject({
+      current: '1.0.2',
+      previous: null,
+      staged: null,
+    });
+    expect(existsSync(coreDir('1.0.1'))).toBe(false);
+    expect(app.browserManager.broadcastToAllWindows).toHaveBeenLastCalledWith('updateReady', {
+      kind: 'core-relaunch',
+      version: '1.0.2',
+    });
+  });
+
+  it('reverts a staged relaunch when the newer core only needs a reload', async () => {
+    serveLatest(mainChanged('1.0.1', 1));
+    const { manager } = await loadManager();
+    await manager.checkForUpdates();
+
+    serveLatest(rendererOnly('1.0.2', 2));
+    await manager.checkForUpdates();
+
+    expect(manager.getStatus()).toMatchObject({ applyMode: 'reload', staged: '1.0.2' });
+    expect(readPointer(otaRoot(), ABI)).toMatchObject({
+      current: null,
+      previous: null,
+      staged: '1.0.2',
+    });
+  });
+
   it('stages a main-process change as core-relaunch and switches pointer immediately', async () => {
     serveLatest(mainChanged('1.0.1', 1));
     const { app, manager } = await loadManager();
