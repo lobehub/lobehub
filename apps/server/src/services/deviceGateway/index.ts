@@ -19,6 +19,9 @@ import type {
   DeviceAppUpdateInstallResult,
   DeviceAppUpdateState,
   DeviceAppUpdateStateResult,
+  DeviceCliRestartParams,
+  DeviceCliUpdateState,
+  DeviceCliUpdateStateResult,
   DeviceCopyAssetForPublishResult,
   DeviceCopyProjectFileItem,
   DeviceCopyProjectFileResultItem,
@@ -2117,6 +2120,59 @@ export class DeviceGateway {
         message.includes('does not support remote updates') ||
         message.includes('Unknown device RPC method');
       return { message, status: unsupported ? 'unsupported' : 'unavailable' };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      log('%s: error for deviceId=%s — %s', method, deviceId, message);
+      return { message, status: 'unavailable' };
+    }
+  }
+
+  async getCliUpdateState(params: AppUpdateRpcParams): Promise<DeviceCliUpdateStateResult> {
+    return this.invokeCliUpdate('getCliUpdateState', params);
+  }
+
+  async checkCliUpdate(params: AppUpdateRpcParams): Promise<DeviceCliUpdateStateResult> {
+    return this.invokeCliUpdate('checkCliUpdate', params);
+  }
+
+  async restartCli(
+    params: AppUpdateRpcParams & DeviceCliRestartParams,
+  ): Promise<DeviceCliUpdateStateResult> {
+    return this.invokeCliUpdate('restartCli', params, {
+      requestId: params.requestId,
+      update: params.update,
+    });
+  }
+
+  private async invokeCliUpdate(
+    method: 'getCliUpdateState' | 'checkCliUpdate' | 'restartCli',
+    params: AppUpdateRpcParams,
+    restartParams?: DeviceCliRestartParams,
+  ): Promise<DeviceCliUpdateStateResult> {
+    const { deviceId, timeout = 15_000, userId, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) return { message: 'Device Gateway is not configured', status: 'unavailable' };
+
+    try {
+      const result = await client.invokeRpc<DeviceCliUpdateState>(
+        { channel: 'cli', deviceId, timeout, userId, workspaceId },
+        { method, ...(restartParams ? { params: restartParams } : {}) },
+      );
+      if (result.success && result.data !== undefined) return { state: result.data, status: 'ok' };
+
+      const message = result.error || `${method} failed`;
+      const unsupported =
+        message.includes('does not support remote CLI updates') ||
+        message.includes('Unknown device RPC method');
+      log('%s: failed for deviceId=%s — %s', method, deviceId, message);
+      return {
+        message: message.replace('CLI_MAINTENANCE_REJECTED: ', ''),
+        status: unsupported
+          ? 'unsupported'
+          : message.startsWith('CLI_MAINTENANCE_REJECTED: ')
+            ? 'rejected'
+            : 'unavailable',
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       log('%s: error for deviceId=%s — %s', method, deviceId, message);

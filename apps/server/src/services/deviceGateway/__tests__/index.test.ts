@@ -108,6 +108,83 @@ describe('DeviceGateway', () => {
     });
   });
 
+  describe('remote CLI maintenance', () => {
+    const params = { deviceId: 'device', userId: 'user', workspaceId: 'workspace' };
+    const restart = { requestId: '89d177cf-52e5-4d55-b71c-13deef4ea366', update: true };
+
+    beforeEach(() => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    });
+
+    it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'] as const)(
+      'targets only the CLI channel for %s',
+      async (method) => {
+        const state = {
+          activeTasks: 0,
+          currentVersion: '1.0.0',
+          instanceId: 'instance',
+          supported: true,
+        };
+        mockClient.invokeRpc.mockResolvedValue({ data: state, success: true });
+        await expect(new DeviceGateway()[method]({ ...params, ...restart })).resolves.toEqual({
+          state,
+          status: 'ok',
+        });
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+          { ...params, channel: 'cli', timeout: 15_000 },
+          { method, ...(method === 'restartCli' ? { params: restart } : {}) },
+        );
+      },
+    );
+
+    it.each([
+      'Unknown device RPC method: checkCliUpdate',
+      'This device client does not support remote CLI updates',
+    ])('reports unsupported old clients: %s', async (message) => {
+      mockClient.invokeRpc.mockResolvedValue({ error: message, success: false });
+      await expect(new DeviceGateway().checkCliUpdate(params)).resolves.toEqual({
+        message,
+        status: 'unsupported',
+      });
+    });
+
+    it('reports offline devices as unavailable', async () => {
+      mockClient.invokeRpc.mockResolvedValue({ error: 'Device offline', success: false });
+      await expect(new DeviceGateway().restartCli({ ...params, ...restart })).resolves.toEqual({
+        message: 'Device offline',
+        status: 'unavailable',
+      });
+    });
+
+    it('distinguishes an explicit maintenance refusal from an ambiguous transport failure', async () => {
+      mockClient.invokeRpc.mockResolvedValue({
+        error: 'CLI_MAINTENANCE_REJECTED: This device has active tasks.',
+        success: false,
+      });
+      await expect(new DeviceGateway().restartCli({ ...params, ...restart })).resolves.toEqual({
+        message: 'This device has active tasks.',
+        status: 'rejected',
+      });
+    });
+
+    it('reports timeout as unavailable', async () => {
+      mockClient.invokeRpc.mockRejectedValue(new Error('timeout'));
+      await expect(new DeviceGateway().getCliUpdateState(params)).resolves.toEqual({
+        message: 'timeout',
+        status: 'unavailable',
+      });
+    });
+
+    it('reports an unconfigured gateway as unavailable', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = undefined;
+      await expect(new DeviceGateway().getCliUpdateState(params)).resolves.toMatchObject({
+        status: 'unavailable',
+      });
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+  });
+
   describe('isConfigured', () => {
     it('should return false when DEVICE_GATEWAY_URL is not set', () => {
       const proxy = new DeviceGateway();

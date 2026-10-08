@@ -1042,3 +1042,35 @@ export type DeviceAppUpdateStateResult =
 
 export type DeviceAppUpdateInstallResult =
   { status: 'ok'; targetVersion: string } | { message: string; status: DeviceAppUpdateFailure };
+
+/** A CLI maintenance request is acknowledged before the connection goes away. */
+export interface DeviceCliUpdateOperation {
+  error?: string;
+  fromInstanceId: string;
+  id: string;
+  kind: 'restart' | 'update';
+  stage: 'updating' | 'restarting' | 'failed';
+  targetVersion: string;
+}
+
+export interface DeviceCliUpdateState {
+  activeTasks: number;
+  currentVersion: string;
+  /** Changes on every process start; reconnecting a socket alone is not a restart. */
+  instanceId: string;
+  latestVersion?: string;
+  operation?: DeviceCliUpdateOperation;
+  /** Remote maintenance requires a standalone daemon and a stable installed CLI entry. */
+  supported: boolean;
+  unsupportedReason?: string;
+}
+
+export interface DeviceCliRestartParams {
+  /** Idempotency key, retained when retrying an ambiguous request. */
+  requestId: string;
+  update: boolean;
+}
+
+export type DeviceCliUpdateStateResult =
+  | { state: DeviceCliUpdateState; status: 'ok' }
+  | { message: string; status: 'rejected' | 'unavailable' | 'unsupported' };

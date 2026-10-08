@@ -1431,6 +1431,43 @@ export const deviceRouter = router({
       });
     }),
 
+  getCliUpdateState: deviceProcedure
+    .input(z.object({ deviceId: z.string() }).strict())
+    .query(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'maintain the CLI');
+      return deviceGateway.getCliUpdateState({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  checkCliUpdate: deviceProcedure
+    .input(z.object({ deviceId: z.string() }).strict())
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'maintain the CLI');
+      return deviceGateway.checkCliUpdate({
+        deviceId: input.deviceId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
+  restartCli: deviceProcedure
+    .input(
+      z
+        .object({ deviceId: z.string(), requestId: z.string().uuid(), update: z.boolean() })
+        .strict(),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'maintain the CLI');
+      return deviceGateway.restartCli({
+        ...input,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+    }),
+
   /** Live tunnel links the caller can reach, newest first. */
   listTunnels: deviceProcedure
     .input(z.object({ deviceId: z.string().optional() }).optional())
