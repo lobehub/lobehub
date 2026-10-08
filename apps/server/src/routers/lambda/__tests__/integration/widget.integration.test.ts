@@ -1198,9 +1198,12 @@ describe('widget + dashboard routers integration', () => {
         expect(await post('/tick', {})).toMatchObject({ claimed: 0, dispatched: 1, due: 1 });
         expect(publish).toHaveBeenCalledWith({
           body: { slot: slot.toISOString(), widgetId: widget.id },
-          deduplicationId: `widget:${widget.id}:${slot.toISOString()}`,
+          // QStash rejects `:` in a deduplication id, so the logical
+          // `widget:<id>:<slot>` key is encoded before it is published.
+          deduplicationId: expect.stringMatching(/^[a-f0-9]{64}$/),
           url: 'https://app.test/api/workflows/widget/run-widget',
         });
+        expect(publish.mock.calls[0][0].deduplicationId).not.toContain(':');
         // Not claimed and nothing ran in the tick: the slot is still due.
         expect(await nextRunAt(widget.id)).toEqual(slot);
         expect(runSandbox).not.toHaveBeenCalled();
@@ -1307,7 +1310,8 @@ describe('widget + dashboard routers integration', () => {
         const resumeMessage = { leaseStartedAt, runId: reserved.id, widgetId: widget.id };
         expect(publish).toHaveBeenCalledWith({
           body: resumeMessage,
-          deduplicationId: `widget-run:${reserved.id}:${leaseStartedAt}`,
+          // Same QStash-safe encoding as a due slot's publish.
+          deduplicationId: expect.stringMatching(/^[a-f0-9]{64}$/),
           url: 'https://app.test/api/workflows/widget/run-widget',
         });
 

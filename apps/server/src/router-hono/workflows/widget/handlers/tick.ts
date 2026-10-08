@@ -2,7 +2,7 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
-import { qstashClient } from '@/libs/qstash';
+import { qstashClient, toQStashDeduplicationId } from '@/libs/qstash';
 import { createWidgetSandboxRunner } from '@/server/services/widget/sandbox';
 import {
   isWidgetResumeTarget,
@@ -12,6 +12,7 @@ import {
 
 export const RUN_WIDGET_PATH = '/api/workflows/widget/run-widget';
 
+/** Logical run key per due slot; encoded for QStash at the publish boundary. */
 export const widgetRunDeduplicationId = (widgetId: string, slotIso: string) =>
   `widget:${widgetId}:${slotIso}`;
 
@@ -57,7 +58,9 @@ export async function tick(c: Context) {
             await qstashClient.publishJSON({
               body: { leaseStartedAt, runId: target.runId, widgetId: target.widgetId },
               // Overlapping ticks see the same stale lease; publish it once.
-              deduplicationId: widgetResumeDeduplicationId(target.runId, leaseStartedAt),
+              deduplicationId: toQStashDeduplicationId(
+                widgetResumeDeduplicationId(target.runId, leaseStartedAt),
+              ),
               url,
             });
             return;
@@ -67,7 +70,9 @@ export async function tick(c: Context) {
           await qstashClient.publishJSON({
             body: { slot: slotIso, widgetId: target.widgetId },
             // Overlapping ticks see the same unclaimed slot; publish it once.
-            deduplicationId: widgetRunDeduplicationId(target.widgetId, slotIso),
+            deduplicationId: toQStashDeduplicationId(
+              widgetRunDeduplicationId(target.widgetId, slotIso),
+            ),
             url,
           });
         }
