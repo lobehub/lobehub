@@ -854,6 +854,68 @@ describe('spawnAgent', () => {
     }
   });
 
+  it.each(['starting', 'running'] as const)(
+    'does not resend an inherited-group SIGTERM while ACP is %s',
+    async (phase) => {
+      const fake = createFakeAcpProc({ promptAutoComplete: false });
+      nextFakeProc = fake.proc;
+      const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      try {
+        const { spawnAgent } = await import('./spawnAgent');
+        const handle = await spawnAgent({
+          agentType: 'devin',
+          detached: false,
+          operationId: 'op-devin-sigterm',
+          prompt: 'keep running',
+        });
+        if (phase === 'running') {
+          await vi.waitFor(() => {
+            expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+          });
+        }
+
+        handle.interrupt?.('SIGTERM');
+        const events = [];
+        for await (const event of handle.events) events.push(event);
+
+        await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGTERM' });
+        expect(events.some(({ type }) => type === 'error')).toBe(false);
+        expect(fake.proc.kill).not.toHaveBeenCalled();
+        expect(processKill).not.toHaveBeenCalled();
+        if (phase === 'starting') {
+          expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
+        }
+      } finally {
+        processKill.mockRestore();
+      }
+    },
+  );
+
+  it.each(['SIGTERM', 'SIGKILL'] as const)(
+    'still delivers an owned %s to an inherited-group ACP child',
+    async (signal) => {
+      const fake = createFakeAcpProc({ promptAutoComplete: false });
+      nextFakeProc = fake.proc;
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        detached: false,
+        operationId: 'op-devin-owned-signal',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      if (signal === 'SIGKILL') handle.interrupt?.(signal);
+      else handle.kill(signal);
+
+      await expect(handle.exit).resolves.toEqual({ code: null, signal });
+      expect(fake.proc.kill).toHaveBeenCalledExactlyOnceWith(signal);
+    },
+  );
+
   it('allows the official canonical trae-cli command to run through ACP', async () => {
     const fake = createFakeAcpProc();
     nextFakeProc = fake.proc;

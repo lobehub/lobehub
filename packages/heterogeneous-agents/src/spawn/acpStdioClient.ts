@@ -177,12 +177,13 @@ export class AcpStdioClient {
     if (this.fatalError) throw this.fatalError;
   }
 
-  close(signal: NodeJS.Signals = 'SIGTERM'): void {
+  /** Pass null when the host already delivered the terminating OS signal. */
+  close(signal: NodeJS.Signals | null = 'SIGTERM'): void {
     if (this.closed) return;
     this.closed = true;
     this.stdoutBuffer = '';
     this.rejectPendingRequests(new Error('ACP stdio client closed by host'));
-    this.shutdownProcess(signal);
+    if (signal !== null) this.shutdownProcess(signal);
   }
 
   private consumeStdout(chunk: Buffer): void {

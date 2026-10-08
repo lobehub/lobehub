@@ -196,8 +196,8 @@ export abstract class AcpAgentSession<
     this.cancelTimer.unref?.();
   }
 
-  /** Host-forced shutdown: suppresses further events and kills the child. */
-  close(signal: NodeJS.Signals = 'SIGTERM'): void {
+  /** Host-forced shutdown. Pass null if the host already signalled the child. */
+  close(signal: NodeJS.Signals | null = 'SIGTERM'): void {
     if (this.hostClosed) return;
     this.cancelRequested = true;
     this.hostClosed = true;

@@ -110,9 +110,9 @@ export interface SpawnAgentHandle {
    * Notify a session transport of host-initiated cancellation at the protocol
    * level (ACP `session/cancel`, RPC abort). Present only on session
    * transports — absent on one-shot CLI spawns where `kill` is the only
-   * cancel channel. Safe to invoke when an OS signal already reached the
-   * agent through a shared process group: it delivers no extra signal for
-   * graceful-cancel signals like SIGINT.
+   * cancel channel. ACP SIGTERM closes the session without resending the
+   * already-delivered signal; SIGINT retains protocol cancellation and its
+   * grace timeout. SIGKILL remains a host-requested force-kill escalation.
    */
   interrupt?: (signal?: NodeJS.Signals) => void;
   /**
@@ -470,7 +470,7 @@ const createAcpSpawnBridge = () => {
   };
 
   const attach = (session: {
-    close: (signal?: NodeJS.Signals) => void;
+    close: (signal?: NodeJS.Signals | null) => void;
     interrupt: () => void;
     run: () => Promise<void>;
   }): Pick<SpawnAgentHandle, 'exit' | 'interrupt' | 'kill'> => {
@@ -497,17 +497,21 @@ const createAcpSpawnBridge = () => {
       if (signal === 'SIGINT') session.interrupt();
       else session.close(signal);
     };
-    // SIGINT goes through `session/cancel` — protocol-level, not an OS signal —
-    // so exposing `kill` as `interrupt` lets hosts mark a host-driven cancel
-    // even when the process group already delivered the OS signal itself.
-    return { exit, interrupt: kill, kill };
+    const interrupt = (signal: NodeJS.Signals = 'SIGINT'): void => {
+      hostSignal = signal;
+      // SIGTERM already reached the child through the inherited process group.
+      // Close pending RPCs without interrupting the child's shutdown again.
+      if (signal === 'SIGTERM') session.close(null);
+      else kill(signal);
+    };
+    return { exit, interrupt, kill };
   };
 
   return { attach, events, onEvents, onStderr, stderr };
 };
 
 interface AcpSpawnSession {
-  close: (signal?: NodeJS.Signals) => void;
+  close: (signal?: NodeJS.Signals | null) => void;
   interrupt: () => void;
   pid?: number;
   run: () => Promise<void>;
