@@ -116,13 +116,14 @@ export const createDashboardToolService = (
     addToDashboard: async (dashboardId, widgetId) => {
       await requireScopedWidget(widgetId);
       const board = await dashboards.findById(dashboardId);
-      // Only what listDashboards offers may take the placement: the home
-      // level's boards, or boards of the conversation's own project. A
-      // readable board of another project or of an agent-only level is out
-      // of reach even when the caller owns it.
+      // Only what listDashboards offers may take the placement: boards of the
+      // conversation's own project, or home boards in personal mode. A
+      // readable board of another project, of an agent-only level, or of the
+      // workspace root is out of reach even when the caller owns it.
       const offered =
         !!board &&
-        (board.projectId === projectId || (board.projectId === null && board.agentId === null));
+        (board.projectId === projectId ||
+          (!workspaceId && board.projectId === null && board.agentId === null));
       const item = offered ? await dashboards.addItem(dashboardId, widgetId) : undefined;
       if (!board || !item) throw new Error('Dashboard or widget not found');
       return { projectId: board.projectId, title: board.title };
@@ -211,8 +212,14 @@ export const createDashboardToolService = (
       // but placing writes through the board's creator (DashboardModel's
       // manageable rule) — the same creator-only filter the client-side
       // picker applies, so every listed board is a board the tool can
-      // actually place on.
-      const boards = [...projectBoards, ...homeBoards].filter((board) => board.userId === userId);
+      // actually place on. Workspace-root boards are caller-owned too, but
+      // they have no UI while a workspace is active (the home routes are
+      // disabled there), so they are excluded as well.
+      const boards = [...projectBoards, ...homeBoards].filter(
+        (board) =>
+          board.userId === userId &&
+          (!workspaceId || board.projectId !== null || board.agentId !== null),
+      );
       const items = await dashboards.listItemsForDashboards(boards.map(({ id }) => id));
       const widgetsByBoard = new Map<string, { id: string; title: string }[]>();
       for (const { item, widget } of items) {

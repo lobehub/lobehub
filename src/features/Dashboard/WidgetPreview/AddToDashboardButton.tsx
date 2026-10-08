@@ -43,15 +43,16 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
       dashboardSelectors.projectDashboards(projectId ?? undefined),
     );
     const currentUserId = useUserStore(userProfileSelectors.userId);
+    const workspaceActive = !!useActiveWorkspaceSlug();
     // Only the caller's own boards can take the placement (addItem writes as
     // the board's creator); teammates' readable boards are not offered.
     const placeable = placeableDashboards(
-      placementBoards(homeBoards, projectBoards, projectId),
+      placementBoards(homeBoards, projectBoards, projectId, workspaceActive),
       currentUserId,
     );
     // In a workspace, a widget outside a project cannot create a board it
     // could open — home-level boards have no UI there.
-    const canCreate = canCreateDashboardFromPreview(projectId, !!useActiveWorkspaceSlug());
+    const canCreate = canCreateDashboardFromPreview(projectId, workspaceActive);
 
     const add = async (dashboard: { id: string; title: string }) => {
       try {

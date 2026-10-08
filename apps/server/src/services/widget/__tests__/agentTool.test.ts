@@ -558,21 +558,52 @@ describe('resolveClientTopic in a workspace', () => {
   });
 
   it('lists only boards the caller can place on', async () => {
-    const service = createDashboardToolService(db, {
+    // A workspace-root conversation: nothing is placeable. The home level's
+    // boards are workspace-root boards with no UI inside a workspace, and a
+    // teammate's public board can never take the caller's placement.
+    const homeService = createDashboardToolService(db, {
       ...scope,
       agentId: wsAgentId,
       workspaceId,
     });
-    // The teammate's public workspace board is readable, but placement writes
-    // as the board's creator — listing it would offer a target that always
-    // fails, so only the caller's own boards are returned.
+    const { widgetId } = await homeService.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Workspace metric',
+    });
     await new DashboardModel(db, teammateId, workspaceId).create({ title: 'Teammate board' });
-    const ownBoard = await new DashboardModel(db, userId, workspaceId).create({
-      title: 'Own board',
+    const workspaceRoot = await new DashboardModel(db, userId, workspaceId).create({
+      title: 'Workspace root',
     });
 
-    expect(await service.listDashboards()).toEqual([
-      { id: ownBoard.id, projectId: null, title: 'Own board', widgets: [] },
+    expect(await homeService.listDashboards()).toEqual([]);
+    await expect(homeService.addToDashboard(workspaceRoot.id, widgetId)).rejects.toThrow(
+      /not found/i,
+    );
+    expect(
+      (await new DashboardModel(db, userId, workspaceId).listItems(workspaceRoot.id)).length,
+    ).toBe(0);
+
+    // A project conversation: the caller's own project boards are offered,
+    // teammates' project boards are not.
+    const projectService = createDashboardToolService(db, {
+      ...scope,
+      agentId: wsAgentId,
+      projectId: wsProjectId,
+      topicId: teammateTopicId,
+      workspaceId,
+    });
+    const ownProject = await new DashboardModel(db, userId, workspaceId).create({
+      projectId: wsProjectId,
+      title: 'Own project board',
+    });
+    await new DashboardModel(db, teammateId, workspaceId).create({
+      projectId: wsProjectId,
+      title: 'Teammate project board',
+    });
+
+    expect(await projectService.listDashboards()).toEqual([
+      { id: ownProject.id, projectId: wsProjectId, title: 'Own project board', widgets: [] },
     ]);
   });
 

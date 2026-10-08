@@ -111,12 +111,22 @@ export const canCreateDashboardFromPreview = (
  * project's boards, project first. The widget can be placed on either level
  * (the dashboard tool scopes placements to exactly this set), so hiding the
  * project's boards would lose real targets.
+ *
+ * While a workspace is active, workspace-root boards (no project, no agent)
+ * have no UI — the home routes are disabled there — so the home level
+ * offers nothing; in personal mode the home route works and stays listed.
  */
-export const placementBoards = <T>(
+export const placementBoards = <T extends { agentId?: string | null; projectId?: string | null }>(
   homeBoards: T[],
   projectBoards: T[],
   projectId?: string | null,
-): T[] => (projectId ? [...projectBoards, ...homeBoards] : homeBoards);
+  workspaceActive = false,
+): T[] => {
+  const home = workspaceActive
+    ? homeBoards.filter((board) => board.agentId != null || board.projectId != null)
+    : homeBoards;
+  return projectId ? [...projectBoards, ...home] : home;
+};
 
 /** Versions to compare by default: the one under review against the live one (or its parent). */
 export const defaultDiffPair = (

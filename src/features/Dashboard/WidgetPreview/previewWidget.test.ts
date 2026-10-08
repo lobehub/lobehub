@@ -134,8 +134,14 @@ describe('canCreateDashboardFromPreview', () => {
 });
 
 describe('placementBoards', () => {
-  const home = [{ id: 'h1' }, { id: 'h2' }];
-  const project = [{ id: 'p1' }, { id: 'p2' }];
+  const home = [
+    { agentId: null, id: 'h1', projectId: null },
+    { agentId: null, id: 'h2', projectId: null },
+  ];
+  const project = [
+    { agentId: null, id: 'p1', projectId: 'prj' },
+    { agentId: null, id: 'p2', projectId: 'prj' },
+  ];
 
   it('lists the widget’s project boards ahead of the home boards', () => {
     expect(placementBoards(home, project, 'prj')).toEqual([
@@ -146,6 +152,18 @@ describe('placementBoards', () => {
     ]);
     expect(placementBoards(home, project, null)).toEqual(home);
     expect(placementBoards(home, project, undefined)).toEqual(home);
+  });
+
+  it('offers no workspace-root boards while a workspace is active', () => {
+    const agentLevel = { agentId: 'ag1', id: 'a1', projectId: null };
+    // Workspace-root boards have no UI inside a workspace — the home level
+    // contributes only boards that live under a project or an agent.
+    expect(placementBoards([...home, agentLevel], [], undefined, true)).toEqual([agentLevel]);
+    expect(placementBoards(home, [], null, true)).toEqual([]);
+    // Personal mode keeps the home route, and project widgets keep their
+    // project boards in both modes.
+    expect(placementBoards(home, [], undefined, false)).toEqual(home);
+    expect(placementBoards(home, project, 'prj', true)).toEqual(project);
   });
 });
 
