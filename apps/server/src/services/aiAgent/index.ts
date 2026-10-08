@@ -84,6 +84,7 @@ import { startOperation } from './pipeline/startOperation';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
+import { resolveAgentSenderFromOperation } from './sourceAttribution';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
 import { acquireTopicStartReservation, TopicStartReservationError } from './topicStartReservation';
@@ -1212,10 +1213,10 @@ export class AiAgentService {
     );
     if (reusedContinuation) return reusedContinuation;
 
-    // Agent → agent attribution: resolve the launching topic's agent into a
+    // Agent → agent attribution: resolve the launching run's agent into a
     // display snapshot once, before the turn rows exist, so the persisted user
     // message carries a self-contained sender block.
-    const agentSender = await this.resolveSourceAgentSnapshot(params.sourceTopicId);
+    const agentSender = await this.resolveSourceAgentSnapshot(params.sourceOperationId);
 
     // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
     // model), device-access policy, hetero detection, attachment ingestion, and
@@ -1685,45 +1686,20 @@ export class AiAgentService {
    * Resolve the agent that launched an agent → agent run into the snapshot the
    * UI renders as the message author (`metadata.agentSender`).
    *
-   * The client names only the topic it came from: a launcher's environment
-   * carries its own topic id but never its agent id (device-dispatched runs
-   * strip it), and trusting a client-sent agent id would let a caller attribute
-   * a turn to any agent it liked. Resolving through the ownership-scoped topic
-   * means the sender is always an agent the caller actually owns.
-   *
-   * Attribution is display-only, so an unknown topic or a since-deleted agent
-   * degrades to the bare ids (the bubble then falls back to a generic label)
-   * rather than failing a run that is otherwise perfectly valid.
+   * The client names only the operation its launcher's run belongs to; the topic
+   * and the agent are read from that operation row, which this server wrote.
+   * `resolveAgentSenderFromOperation` owns the trust rule (the row must be the
+   * caller's own, not merely visible to them).
    */
-  private resolveSourceAgentSnapshot = async (
-    sourceTopicId?: string,
-  ): Promise<AgentSenderMetadata | undefined> => {
-    if (!sourceTopicId) return undefined;
-
-    const topic = await this.topicModel.findById(sourceTopicId);
-    if (!topic?.agentId) return undefined;
-
-    const base: AgentSenderMetadata = {
-      agentId: topic.agentId,
-      topicId: sourceTopicId,
-      topicTitle: topic.title ?? undefined,
-    };
-
-    try {
-      const config = await this.agentModel.getAgentConfigById(topic.agentId);
-      if (!config) return base;
-
-      return {
-        ...base,
-        avatar: config.avatar ?? undefined,
-        name: config.name ?? undefined,
-        title: config.title ?? undefined,
-      };
-    } catch (error) {
-      log('execAgent: failed to resolve source agent %s: %O', topic.agentId, error);
-      return base;
-    }
-  };
+  private resolveSourceAgentSnapshot = (
+    sourceOperationId?: string,
+  ): Promise<AgentSenderMetadata | undefined> =>
+    resolveAgentSenderFromOperation(sourceOperationId, {
+      findAgentConfig: (agentId) => this.agentModel.getAgentConfigById(agentId),
+      findOperation: (operationId) => this.agentOperationModel.findById(operationId),
+      findTopic: (topicId) => this.topicModel.findById(topicId),
+      userId: this.userId,
+    });
 
   /**
    * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see

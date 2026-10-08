@@ -1354,14 +1354,15 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
-     * The topic the launching agent was running in, when another agent started
-     * this run (agent → agent: a sibling agent calling `lh agent run`). The
-     * launcher's own agent id is deliberately not sent — device-dispatched runs
-     * strip it — so the server derives the sending agent from this topic
-     * (ownership-scoped) and stamps `metadata.agentSender` on the created user
-     * message. An unknown or foreign topic simply resolves to nothing.
+     * The operation the launching agent's run belongs to, when another agent
+     * started this run (agent → agent: a sibling agent calling `lh agent run`).
+     * The launcher's own agent id is deliberately not sent — device-dispatched
+     * runs strip it — and neither is its topic: the server reads both from this
+     * operation row (ownership-scoped, the caller's own) and stamps
+     * `metadata.agentSender` on the created user message. An unknown, foreign,
+     * or topic-less operation simply resolves to nothing.
      */
-    sourceTopicId: z.string().optional(),
+    sourceOperationId: z.string().optional(),
     /**
      * User intervention configuration for tool approvals.
      * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
@@ -2665,7 +2666,7 @@ export const aiAgentRouter = router({
         resumeToolResult,
         selectedToolIds,
         slug,
-        sourceTopicId: input.sourceTopicId,
+        sourceOperationId: input.sourceOperationId,
         steer,
         trigger: trigger ?? RequestTrigger.Chat,
         userAgent: ctx.userAgent ?? undefined,

@@ -7,7 +7,7 @@ import { Link2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import Link from '@/libs/router/Link';
+import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   link: css`
@@ -63,10 +63,13 @@ const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(
 
     return (
       <Tooltip title={caption}>
-        <Link className={styles.link} href={AGENT_CHAT_TOPIC_URL(agentId, topicId)}>
+        {/* `WorkspaceLink`, not the bare router `Link`: `/agent/...` is mirrored
+            under `/:workspaceSlug`, so an unprefixed href would drop a workspace
+            reader into their personal route and the source topic would not load. */}
+        <WorkspaceLink className={styles.link} to={AGENT_CHAT_TOPIC_URL(agentId, topicId)}>
           <Icon icon={Link2} size={12} />
           <span className={styles.label}>{name || caption}</span>
-        </Link>
+        </WorkspaceLink>
       </Tooltip>
     );
   },
