@@ -3,6 +3,7 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { useEffect } from 'react';
 
+import { useMacWindowFullscreen } from '@/features/Electron/system/useMacWindowFullscreen';
 import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useElectronStore } from '@/store/electron';
 
@@ -18,6 +19,8 @@ import { useElectronStore } from '@/store/electron';
  * this with the other store initializers so layout changes can't detach it.
  */
 const ElectronAppStateSync = () => {
+  useMacWindowFullscreen();
+
   const [useInitElectronAppState, updateElectronAppState] = useElectronStore((s) => [
     s.useInitElectronAppState,
     s.updateElectronAppState,

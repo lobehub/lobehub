@@ -1,6 +1,7 @@
 import { cssVar } from 'antd-style';
 
 import { isDesktop } from '@/const/version';
+import { MAC_VIBRANCY_BACKGROUND } from '@/features/Electron/system/macWindowFullscreen';
 import { useGlobalStore } from '@/store/global';
 import { INITIAL_STATUS } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -24,7 +25,7 @@ const readIsDark = () => {
 // Mirrors `NavPanelDraggable`'s panel background so the shell hands over to a
 // panel of the same color instead of flashing an opaque block over vibrancy.
 const readNavPanelBackground = () =>
-  isDesktop && isMacOS() ? 'transparent' : cssVar.colorBgLayout;
+  isDesktop && isMacOS() ? MAC_VIBRANCY_BACKGROUND : cssVar.colorBgLayout;
 
 export const readBootShellGeometry = (): BootShellGeometry => {
   const base = {

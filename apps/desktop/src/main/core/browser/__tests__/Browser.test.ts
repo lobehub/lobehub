@@ -723,9 +723,11 @@ describe('Browser', () => {
         });
       });
 
-      it('should disable macOS vibrancy in fullscreen and restore it after leaving', () => {
+      it('should replace the transparent macOS background in fullscreen and restore it after leaving', () => {
         mockEnv.isMac = true;
         mockEnv.isWindows = false;
+        mockNativeTheme.themeSource = 'system';
+        mockNativeTheme.shouldUseDarkColors = false;
         mockBrowserWindow.on.mockClear();
 
         new Browser(defaultOptions, mockApp);
@@ -738,10 +740,68 @@ describe('Browser', () => {
         )?.[1];
 
         enterHandler();
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenLastCalledWith('#ffffff');
         expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith(null);
+        expect(mockBrowserWindow.setBackgroundColor.mock.invocationCallOrder.at(-1)).toBeLessThan(
+          mockBrowserWindow.setVibrancy.mock.invocationCallOrder.at(-1)!,
+        );
+
+        mockNativeTheme.shouldUseDarkColors = true;
+        enterHandler();
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenLastCalledWith('#1a1a1a');
 
         leaveHandler();
         expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith('sidebar');
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenLastCalledWith('#00000000');
+        expect(mockBrowserWindow.setVibrancy.mock.invocationCallOrder.at(-1)).toBeLessThan(
+          mockBrowserWindow.setBackgroundColor.mock.invocationCallOrder.at(-1)!,
+        );
+      });
+
+      it('should keep the fullscreen background opaque when the theme changes', () => {
+        mockEnv.isMac = true;
+        mockEnv.isWindows = false;
+        mockBrowserWindow.isFullScreen.mockReturnValue(true);
+        mockBrowserWindow.on.mockClear();
+        mockNativeTheme.on.mockClear();
+        mockNativeTheme.themeSource = 'system';
+        mockNativeTheme.shouldUseDarkColors = true;
+
+        new Browser(defaultOptions, mockApp);
+
+        const themeHandler = mockNativeTheme.on.mock.calls.find(
+          (call) => call[0] === 'updated',
+        )?.[1];
+        mockBrowserWindow.setBackgroundColor.mockClear();
+        mockBrowserWindow.setVibrancy.mockClear();
+
+        themeHandler();
+        vi.advanceTimersByTime(0);
+
+        expect(mockBrowserWindow.setBackgroundColor).toHaveBeenLastCalledWith('#1a1a1a');
+        expect(mockBrowserWindow.setVibrancy).toHaveBeenLastCalledWith(null);
+      });
+
+      it('should leave the transparent macOS background in place outside fullscreen', () => {
+        mockEnv.isMac = true;
+        mockEnv.isWindows = false;
+        mockBrowserWindow.isFullScreen.mockReturnValue(false);
+        mockBrowserWindow.on.mockClear();
+        mockNativeTheme.on.mockClear();
+
+        new Browser(defaultOptions, mockApp);
+
+        const themeHandler = mockNativeTheme.on.mock.calls.find(
+          (call) => call[0] === 'updated',
+        )?.[1];
+        mockBrowserWindow.setBackgroundColor.mockClear();
+        mockBrowserWindow.setVibrancy.mockClear();
+
+        themeHandler();
+        vi.advanceTimersByTime(0);
+
+        expect(mockBrowserWindow.setBackgroundColor).not.toHaveBeenCalled();
+        expect(mockBrowserWindow.setVibrancy).not.toHaveBeenCalled();
       });
     });
 

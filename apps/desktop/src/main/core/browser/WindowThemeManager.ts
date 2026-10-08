@@ -18,6 +18,7 @@ import {
 const logger = createLogger('core:WindowThemeManager');
 
 const MACOS_VIBRANCY = 'sidebar';
+const MACOS_TRANSPARENT_BACKGROUND = '#00000000';
 
 interface WindowsThemeConfig {
   backgroundColor: string;
@@ -160,21 +161,33 @@ export class WindowThemeManager {
     }, THEME_CHANGE_DELAY);
   }
 
-  /**
-   * Disable macOS vibrancy while fullscreen so the window remains opaque.
-   */
   handleFullscreenChange(isFullScreen: boolean): void {
     if (!isMac || !this.browserWindow || this.browserWindow.isDestroyed()) return;
 
-    logger.debug(
-      `[${this.identifier}] Updating macOS vibrancy for fullscreen state: ${isFullScreen}`,
-    );
+    logger.debug(`[${this.identifier}] Updating macOS fullscreen background: ${isFullScreen}`);
 
     try {
-      this.browserWindow.setVibrancy(isFullScreen ? null : MACOS_VIBRANCY);
+      this.applyMacFullscreenChrome(isFullScreen);
     } catch (error) {
-      logger.error(`[${this.identifier}] Failed to update macOS fullscreen vibrancy:`, error);
+      logger.error(`[${this.identifier}] Failed to update macOS fullscreen background:`, error);
     }
+  }
+
+  private opaqueBackground(): string {
+    return this.resolveIsDarkMode() ? BACKGROUND_DARK : BACKGROUND_LIGHT;
+  }
+
+  private applyMacFullscreenChrome(isFullScreen: boolean): void {
+    if (!this.browserWindow) return;
+
+    if (isFullScreen) {
+      this.browserWindow.setBackgroundColor(this.opaqueBackground());
+      this.browserWindow.setVibrancy(null);
+      return;
+    }
+
+    this.browserWindow.setVibrancy(MACOS_VIBRANCY);
+    this.browserWindow.setBackgroundColor(MACOS_TRANSPARENT_BACKGROUND);
   }
 
   // ==================== Visual Effects ====================
@@ -204,6 +217,8 @@ export class WindowThemeManager {
         this.applyWindowsVisualEffects(isDarkMode);
       } else if (isLinux) {
         this.applyLinuxVisualEffects();
+      } else if (isMac && this.browserWindow.isFullScreen()) {
+        this.applyMacFullscreenChrome(true);
       }
     } catch (error) {
       logger.error(`[${this.identifier}] Failed to apply visual effects:`, error);
