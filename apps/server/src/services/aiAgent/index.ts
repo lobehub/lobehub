@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
+  AgentSenderMetadata,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
@@ -1211,6 +1212,11 @@ export class AiAgentService {
     );
     if (reusedContinuation) return reusedContinuation;
 
+    // Agent → agent attribution: resolve the launching topic's agent into a
+    // display snapshot once, before the turn rows exist, so the persisted user
+    // message carries a self-contained sender block.
+    const agentSender = await this.resolveSourceAgentSnapshot(params.sourceTopicId);
+
     // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
     // model), device-access policy, hetero detection, attachment ingestion, and
     // the persisted user/assistant rows (see `pipeline/turnSetup`).
@@ -1225,6 +1231,7 @@ export class AiAgentService {
         },
         {
           agentConfig,
+          agentSender,
           agentSlug,
           appContext,
           assistantAgentId,
@@ -1673,6 +1680,46 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
+
+  /**
+   * Resolve the agent that launched an agent → agent run into the snapshot the
+   * UI renders as the message author (`metadata.agentSender`).
+   *
+   * The client names only the topic it came from: a launcher's environment
+   * carries its own topic id but never its agent id (device-dispatched runs
+   * strip it), and trusting a client-sent agent id would let a caller attribute
+   * a turn to any agent it liked. Resolving through the ownership-scoped topic
+   * means the sender is always an agent the caller actually owns.
+   *
+   * Attribution is display-only, so an unknown topic or a since-deleted agent
+   * degrades to the bare ids (the bubble then falls back to a generic label)
+   * rather than failing a run that is otherwise perfectly valid.
+   */
+  private resolveSourceAgentSnapshot = async (
+    sourceTopicId?: string,
+  ): Promise<AgentSenderMetadata | undefined> => {
+    if (!sourceTopicId) return undefined;
+
+    const topic = await this.topicModel.findById(sourceTopicId);
+    if (!topic?.agentId) return undefined;
+
+    const base: AgentSenderMetadata = { agentId: topic.agentId, topicId: sourceTopicId };
+
+    try {
+      const config = await this.agentModel.getAgentConfigById(topic.agentId);
+      if (!config) return base;
+
+      return {
+        ...base,
+        avatar: config.avatar ?? undefined,
+        name: config.name ?? undefined,
+        title: config.title ?? undefined,
+      };
+    } catch (error) {
+      log('execAgent: failed to resolve source agent %s: %O', topic.agentId, error);
+      return base;
+    }
+  };
 
   /**
    * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see

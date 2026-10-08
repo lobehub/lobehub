@@ -23,6 +23,7 @@ import {
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import Actions from './Actions';
+import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
 import { UserMessageExtra } from './Extra';
@@ -39,6 +40,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
   const { content, createdAt, error, role, extra, targetId, sender, metadata } = item;
   const botSender = getBotSender(item);
+  // An agent → agent turn (a sibling agent's `lh agent run`): the row belongs to
+  // the receiving agent's topic, so the sending agent — not the human owner —
+  // is who the bubble must be attributed to.
+  const agentSender = metadata?.agentSender;
   // A wake-up message from the SCM integration is authored by the pull
   // request, so GitHub takes the sender slot instead of the card's header.
   const scmSource = useMemo(() => getScmEventSource(content), [content]);
@@ -54,10 +59,11 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // hidden-avatar behavior. Self identity applies only to the viewer's own
   // rows — see resolveSenderIdentity.
   // A bot-channel row is authored by someone else even in personal mode, so
-  // its sender is always shown.
-  const showSender = Boolean(activeWorkspaceId) || !!botSender || !!scmSource;
+  // its sender is always shown. Same for an agent → agent turn.
+  const showSender = Boolean(activeWorkspaceId) || !!botSender || !!scmSource || !!agentSender;
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { avatar, title } = resolveSenderIdentity({
+    agentSender,
     botSender,
     currentUserId,
     selfAvatar,
@@ -128,10 +134,16 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
         ) : undefined
       }
       headerAddon={
-        scmSource || metadata?.steer ? (
+        scmSource || metadata?.steer || agentSender?.topicId ? (
           <>
             {scmSource && <ScmEventSenderTitle source={scmSource} />}
             {metadata?.steer && <Tag>{t('steer.tag')}</Tag>}
+            {/* Sits in the header rather than `titleAddon` so the reversed
+                (right-aligned) row reads name → source link → avatar, keeping
+                the author first and its origin a trailing affordance. */}
+            {agentSender?.topicId && (
+              <AgentSenderSourceLink agentId={agentSender.agentId} topicId={agentSender.topicId} />
+            )}
           </>
         ) : undefined
       }

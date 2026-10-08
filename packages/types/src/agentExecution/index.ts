@@ -357,6 +357,16 @@ export interface ExecAgentParams {
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
   /**
+   * The topic the launching agent was running in, for an agent → agent run (a
+   * sibling agent calling `lh agent run`). Attribution only — no permission
+   * meaning. The environment a launcher's tooling runs in always carries its own
+   * topic id, but *not* its agent id: device-dispatched runs deliberately strip
+   * that, so the topic is the one id that survives every path. The server
+   * resolves the sending agent from it (ownership-scoped) and stamps
+   * `metadata.agentSender` on the created user message.
+   */
+  sourceTopicId?: string;
+  /**
    * User agent of the originating request, captured server-side for run
    * attribution. Propagated into the run's `state.metadata` and downstream
    * LLM-call metadata for auditing and spend attribution. Never client-passable

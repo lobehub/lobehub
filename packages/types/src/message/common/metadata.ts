@@ -204,6 +204,36 @@ export interface AgentDispatchMetadata {
 }
 
 /**
+ * The agent that authored a user turn on another agent's behalf (agent → agent
+ * dispatch: a sibling agent calling `lh agent run`). Such rows are persisted
+ * inside the RECEIVING agent's conversation, where the joined `sender` is the
+ * human owner — so without this block the bubble reads as if the user typed it
+ * themselves. The server resolves this from the launching topic (a launcher's
+ * environment carries its topic id, never its agent id), and the UI shows it as
+ * the author, using `topicId` to jump back to where the run was launched.
+ */
+export interface AgentSenderMetadata {
+  /** Sending agent's id, resolved from the source topic's owning agent. */
+  agentId: string;
+  /** Sending agent's avatar at send time; snapshotted so a later delete can't blank the bubble. */
+  avatar?: string;
+  /** Sending agent's personal name at send time; resolve the label with `agentDisplayName`. */
+  name?: string;
+  /** Sending agent's role title at send time; the fallback label when it has no name. */
+  title?: string;
+  /** The topic the run was launched from, for jumping back. */
+  topicId?: string;
+}
+
+export const AgentSenderMetadataSchema = z.object({
+  agentId: z.string(),
+  avatar: z.string().optional(),
+  name: z.string().optional(),
+  title: z.string().optional(),
+  topicId: z.string().optional(),
+});
+
+/**
  * Where a server-injected user turn came from when no human typed it: a
  * provider event (GitHub CI failure, review feedback, …) that woke the
  * agent. Rendered as a badge on the bubble and usable as a filter key.
@@ -260,6 +290,7 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   botSender: BotSenderMetadataSchema.optional(),
   externalOrigin: ExternalOriginMetadataSchema.optional(),
   agentDispatch: AgentDispatchMetadataSchema.optional(),
+  agentSender: AgentSenderMetadataSchema.optional(),
   collapsed: z.boolean().optional(),
   contextSelections: z.array(ContextSelectionSchema).optional(),
   // Hetero-agent (Claude Code) per-message provenance. Listed here so zod does
@@ -359,6 +390,10 @@ export interface MessageMetadata {
    * Renderers consume this marker instead of inferring intent from the message tree.
    */
   agentDispatch?: AgentDispatchMetadata;
+  /**
+   * Sending agent of an agent → agent turn; see `AgentSenderMetadata`.
+   */
+  agentSender?: AgentSenderMetadata;
   /**
    * Real platform author of a bot-channel user message; see `BotSenderMetadata`.
    */

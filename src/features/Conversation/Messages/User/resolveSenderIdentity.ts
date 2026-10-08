@@ -1,8 +1,20 @@
-import { type BotSenderMetadata, type MessageSender, RequestTrigger } from '@lobechat/types';
+import {
+  agentDisplayName,
+  type AgentSenderMetadata,
+  type BotSenderMetadata,
+  type MessageSender,
+  RequestTrigger,
+} from '@lobechat/types';
 
 import { parseSpeakerTag } from '@/store/chat/utils/parseSpeakerTag';
 
 interface ResolveSenderIdentityOptions {
+  /**
+   * Sending agent of an agent → agent turn (a sibling agent's `lh agent run`).
+   * Wins over `sender`, which for such rows is the human OWNER the run was
+   * persisted under rather than who actually sent it.
+   */
+  agentSender?: AgentSenderMetadata | null;
   /**
    * Real platform author of a bot-channel message. Wins over `sender`, which
    * for such rows is the bot OWNER's account rather than who actually typed.
@@ -29,6 +41,7 @@ interface ResolveSenderIdentityOptions {
  * misattribute their messages to whoever is looking.
  */
 export const resolveSenderIdentity = ({
+  agentSender,
   botSender,
   currentUserId,
   selfAvatar,
@@ -36,6 +49,16 @@ export const resolveSenderIdentity = ({
   sender,
   unknownLabel,
 }: ResolveSenderIdentityOptions) => {
+  // Another agent sent this turn. It is never the viewer's own message, and the
+  // label follows the product-wide agent naming rule (personal name over role).
+  if (agentSender) {
+    return {
+      avatar: agentSender.avatar || undefined,
+      isOwn: false,
+      title: agentDisplayName(agentSender) || unknownLabel,
+    };
+  }
+
   if (botSender) {
     return {
       avatar: botSender.avatar || undefined,

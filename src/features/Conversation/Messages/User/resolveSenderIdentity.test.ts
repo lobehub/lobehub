@@ -100,6 +100,38 @@ describe('resolveSenderIdentity', () => {
       resolveSenderIdentity({ ...viewer, botSender: { id: '1', platform: 'discord' } }).title,
     ).toBe(viewer.unknownLabel);
   });
+
+  it('attributes an agent → agent turn to the sending agent, not the human owner', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      agentSender: {
+        agentId: 'agt_coco',
+        avatar: 'https://a.com/coco.png',
+        name: 'Coco',
+        title: 'Product Agent',
+        topicId: 'tpc_source',
+      },
+      // The row is persisted under the human owner; that must not win.
+      sender: { avatar: 'owner.png', fullName: 'Lin', id: 'user-viewer', username: null },
+    });
+
+    expect(result).toEqual({ avatar: 'https://a.com/coco.png', isOwn: false, title: 'Coco' });
+  });
+
+  it('falls back to the sending agent role when it has no personal name', () => {
+    const result = resolveSenderIdentity({
+      ...viewer,
+      agentSender: { agentId: 'agt_three', title: 'LobeHub 架构工程师' },
+    });
+
+    expect(result).toEqual({ avatar: undefined, isOwn: false, title: 'LobeHub 架构工程师' });
+  });
+
+  it('still labels a sending agent that was deleted after the turn, leaving only its id', () => {
+    const result = resolveSenderIdentity({ ...viewer, agentSender: { agentId: 'agt_gone' } });
+
+    expect(result).toEqual({ avatar: undefined, isOwn: false, title: viewer.unknownLabel });
+  });
 });
 
 describe('getBotSender', () => {
