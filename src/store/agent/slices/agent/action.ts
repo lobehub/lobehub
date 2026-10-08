@@ -55,21 +55,21 @@ import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDire
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 import { agentConfigResource } from './projection';
 
-export type AgentMetaUpdate = Partial<
-  Pick<
-    AgentItem,
-    | 'avatar'
-    | 'backgroundColor'
-    | 'description'
-    | 'marketIdentifier'
-    | 'metadata'
-    | 'name'
-    | 'profile'
-    | 'societyId'
-    | 'tags'
-    | 'title'
-  >
->;
+const AGENT_META_KEYS = [
+  'avatar',
+  'backgroundColor',
+  'description',
+  'marketIdentifier',
+  'metadata',
+  'name',
+  'profile',
+  'societyId',
+  'tags',
+  'title',
+] as const satisfies readonly (keyof AgentItem)[];
+const AGENT_META_FIELDS: ReadonlySet<string> = new Set(AGENT_META_KEYS);
+
+export type AgentMetaUpdate = Partial<Pick<AgentItem, (typeof AGENT_META_KEYS)[number]>>;
 interface AgentConfigUpdateOptions {
   /** Devices whose directory selection was explicitly edited, never cached sibling entries. */
   replaceWorkingDirDeviceIds?: string[];
@@ -788,10 +788,17 @@ export class AgentSliceActionImpl {
 
       // 3. Apply returned data, then seed related caches for later subscribers.
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent, { workingDirByDeviceSnapshot: true });
+        // Metadata saves run independently of config saves. Their full server
+        // response may predate a newer config, so confirm only metadata fields.
+        const confirmedMeta = Object.fromEntries(
+          Object.entries(result.agent).filter(
+            ([key]) => key === 'id' || AGENT_META_FIELDS.has(key),
+          ),
+        );
+        internal_dispatchAgentMap(id, confirmedMeta);
         const confirmed = this.#get().agentMap[id];
         if (confirmed) this.#replaceConfirmedAgentConfig(id, scope, confirmed);
-        await this.#get().internal_refreshAgentConfig(id, result.agent, scope);
+        await this.#get().internal_refreshAgentConfig(id, confirmed as LobeAgentConfig, scope);
         void revalidateReplica(agentListResource);
         this.#get().invalidateAvailableAgents();
       }

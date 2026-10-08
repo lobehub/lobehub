@@ -1413,6 +1413,48 @@ describe('AgentSlice Actions', () => {
   });
 
   describe('optimisticUpdateAgentMeta', () => {
+    it.each([{}, { workingDirByDevice: { 'device-a': { path: '/stale-project' } } }])(
+      'keeps a newer directory when an older metadata response arrives last: %j',
+      async (staleAgencyConfig) => {
+        useAgentStore.setState({
+          agentMap: { 'agent-1': { title: 'Original', agencyConfig: staleAgencyConfig } },
+        });
+        let resolveMeta!: (value: Awaited<ReturnType<typeof agentService.updateAgentMeta>>) => void;
+        vi.mocked(agentService.updateAgentMeta).mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              resolveMeta = resolve;
+            }),
+        );
+        const metadataSave = useAgentStore
+          .getState()
+          .updateAgentMetaById('agent-1', { title: 'Renamed' });
+        const workingDirByDevice = {
+          'device-a': { path: '/new-project', git: { activeWorktree: '/new-worktree' } },
+        };
+        vi.mocked(agentService.updateAgentConfig).mockResolvedValue({
+          success: true,
+          agent: { title: 'Renamed', agencyConfig: { workingDirByDevice } } as LobeAgentConfig,
+        });
+        await useAgentStore
+          .getState()
+          .updateAgentConfigById(
+            'agent-1',
+            { agencyConfig: { workingDirByDevice } },
+            { replaceWorkingDirDeviceIds: ['device-a'] },
+          );
+        resolveMeta({
+          success: true,
+          agent: { title: 'Renamed', agencyConfig: staleAgencyConfig } as LobeAgentConfig,
+        });
+        await metadataSave;
+        expect(
+          useAgentStore.getState().agentMap['agent-1']?.agencyConfig?.workingDirByDevice,
+        ).toEqual(workingDirByDevice);
+        expect(useAgentStore.getState().agentMap['agent-1']?.title).toBe('Renamed');
+      },
+    );
+
     it('should perform optimistic update and then use API result', async () => {
       const { result } = renderHook(() => useAgentStore());
 
