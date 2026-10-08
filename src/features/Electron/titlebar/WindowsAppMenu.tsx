@@ -1,8 +1,9 @@
 'use client';
 
 import type { AppMenuNode } from '@lobechat/electron-client-ipc';
-import { DropdownMenu } from '@lobehub/ui/base-ui';
+import { DropdownMenu, Tooltip } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cx } from 'antd-style';
+import { ChevronDown } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -20,6 +21,22 @@ import {
 } from './editingFocus';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
+  chevron: css`
+    flex-shrink: 0;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  logo: css`
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    width: 100%;
+    height: 100%;
+  `,
+  menu: css`
+    width: 176px;
+    min-width: 176px;
+  `,
   trigger: css`
     cursor: pointer;
 
@@ -27,8 +44,10 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     align-items: center;
     justify-content: center;
 
-    width: 28px;
+    width: 44px;
     height: 28px;
+    /* Align the mark with the sidebar navigation icons below. */
+    margin-inline-start: -4px;
     padding: 0;
     border: none;
     border-radius: 8px;
@@ -51,7 +70,7 @@ const WindowsAppMenu = memo(() => {
   const { t } = useTranslation('electron');
   const [nodes, setNodes] = useState<AppMenuNode[]>([]);
   const editingTargetRef = useRef<EditingTarget | null>(null);
-  const menuOpenRef = useRef(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const refresh = useCallback(() => {
     void electronSystemService.getAppMenu().then(setNodes, (error: unknown) => {
@@ -86,16 +105,18 @@ const WindowsAppMenu = memo(() => {
 
   return (
     <DropdownMenu
+      iconSpaceMode={'group'}
       items={items}
       placement={'bottomLeft'}
       popupProps={{
+        className: styles.menu,
         finalFocus: () => {
           const element = editingTargetRef.current?.element;
           return element?.isConnected ? element : true;
         },
       }}
       onOpenChange={(open) => {
-        menuOpenRef.current = open;
+        setMenuOpen(open);
         if (open) refresh();
       }}
     >
@@ -104,11 +125,20 @@ const WindowsAppMenu = memo(() => {
         className={cx(electronStylish.nodrag, styles.trigger)}
         type={'button'}
         onPointerDown={() => {
-          if (menuOpenRef.current) return;
+          if (menuOpen) return;
           editingTargetRef.current = captureEditingTarget();
         }}
       >
-        <ProductLogo size={16} type={'mono'} />
+        <Tooltip
+          open={menuOpen ? false : undefined}
+          placement={'bottomLeft'}
+          title={t('navigation.appMenu')}
+        >
+          <span className={styles.logo}>
+            <ProductLogo size={16} type={'mono'} />
+            <ChevronDown aria-hidden className={styles.chevron} size={12} />
+          </span>
+        </Tooltip>
       </button>
     </DropdownMenu>
   );
