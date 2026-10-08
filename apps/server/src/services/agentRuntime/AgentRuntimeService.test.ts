@@ -536,6 +536,34 @@ describe('AgentRuntimeService', () => {
       },
     );
 
+    describe('file Works declaration (host.acceptsFileWorks)', () => {
+      it('stores the declaration the client made', async () => {
+        await service.createOperation({ ...mockParams, acceptsFileWorks: true, autoStart: false });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host.acceptsFileWorks).toBe(true);
+      });
+
+      it("lets a group member inherit its supervisor's declaration", async () => {
+        await mockCoordinator.saveAgentState('parent-op', { host: { acceptsFileWorks: true } });
+        mockCoordinator.saveAgentState.mockClear();
+
+        await service.createOperation({
+          ...mockParams,
+          appContext: { ...mockParams.appContext, orchestrationRole: 'member' },
+          autoStart: false,
+          parentOperationId: 'parent-op',
+        });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host.acceptsFileWorks).toBe(true);
+      });
+
+      it.each([undefined, false])('carries no declaration for %s', async (acceptsFileWorks) => {
+        await service.createOperation({ ...mockParams, acceptsFileWorks, autoStart: false });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host).not.toHaveProperty('acceptsFileWorks');
+      });
+    });
+
     describe('relay executor (host.llmExecutor)', () => {
       const executor = { capabilities: ['llm_relay@1'], clientId: 'tab-a', providers: ['ollama'] };
 
@@ -2909,6 +2937,21 @@ describe('AgentRuntimeService', () => {
       await service.queryUiMessages({ origin: { agentId: 'agt_1', topicId: 'tpc_1' } } as any);
 
       expect(queryMessages.mock.calls[0][0].includeFileWorks).toBeUndefined();
+      expect(queryMessages.mock.calls[0][1]).toEqual({ allowShareVisitor: true });
+    });
+
+    it('includes file Works for an ordinary run whose client declared it renders them', async () => {
+      // Regression: an ordinary run's terminal snapshot/patch dropped the
+      // exported pptx card until the user reloaded the conversation.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        host: { acceptsFileWorks: true },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages.mock.calls[0][0].includeFileWorks).toBe(true);
       expect(queryMessages.mock.calls[0][1]).toEqual({ allowShareVisitor: true });
     });
 

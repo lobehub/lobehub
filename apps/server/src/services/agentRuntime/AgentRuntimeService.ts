@@ -834,6 +834,21 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Whether the client that started this operation declared it renders `file`
+   * Works. An unknown or expired operation reads as `false`, so a continuation
+   * then keeps the pushed snapshot every client can render.
+   */
+  async acceptsFileWorks(operationId: string): Promise<boolean> {
+    try {
+      const state = await this.coordinator.loadAgentState(operationId);
+      return state?.host?.acceptsFileWorks === true;
+    } catch (error) {
+      log('[%s] Failed to read the file Works declaration: %O', operationId, error);
+      return false;
+    }
+  }
+
+  /**
    * Whether the client that started this operation declared it handles
    * `member_runtime_end`. An unknown or expired operation reads as `false`, so
    * a continuation then keeps the verbatim terminal every client understands.
@@ -1156,6 +1171,7 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      acceptsFileWorks,
       acceptsMemberRuntimeEnd,
       activeDeviceId,
       activeDeviceScope,
@@ -1315,6 +1331,13 @@ export class AgentRuntimeService {
         parentOperationId,
         appContext?.orchestrationRole === 'member',
       );
+      // A member's pushes reach the supervisor's client, so it renders what
+      // that client declared.
+      const fileWorksAccepted =
+        acceptsFileWorks ??
+        (parentOperationId && appContext?.orchestrationRole === 'member'
+          ? await this.acceptsFileWorks(parentOperationId)
+          : undefined);
 
       const initialState = {
         activatedStepTools,
@@ -1337,6 +1360,7 @@ export class AgentRuntimeService {
         // What the host needs to deliver and retry the run. Hooks are stamped
         // right after creation once the dispatcher has serialized them.
         host: {
+          ...(fileWorksAccepted === true && { acceptsFileWorks: true }),
           ...(params.clientProtocol === 2 && { clientProtocol: 2 as const }),
           ...(params.includeFinalState === true && { includeFinalState: true }),
           ...(llmExecutor && { llmExecutor }),
@@ -1639,13 +1663,16 @@ export class AgentRuntimeService {
       topicId,
     });
     const isShareVisitorRun = !!workAccessScope;
+    // `file` Works stay out of the push unless the receiving client declared
+    // it renders them: released desktop builds crash on the unknown type.
+    const includeFileWorks = isShareVisitorRun || agentState?.host?.acceptsFileWorks === true;
 
     try {
       return await this.messageService.queryMessages(
         {
           agentId,
           groupId,
-          ...(isShareVisitorRun && { includeFileWorks: true }),
+          ...(includeFileWorks && { includeFileWorks: true }),
           skipWorks: options?.skipWorks,
           threadId,
           topicId,

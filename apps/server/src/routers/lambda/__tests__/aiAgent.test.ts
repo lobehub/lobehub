@@ -219,6 +219,34 @@ describe('AI Agent Router Integration Tests', () => {
       expect(createOperationCalls()).toEqual([false, false]);
     });
 
+    // Only a client that declares `file_works` gets file Work cards in the
+    // pushed snapshots; a released desktop crashes on that Work type.
+    it('forwards a declared file_works stream feature on both routes', async () => {
+      const { AgentRuntimeService } = await import('@/server/services/agentRuntime');
+      const caller = aiAgentRouter.createCaller(createTestContext());
+      const createOperationCalls = () =>
+        vi
+          .mocked(AgentRuntimeService)
+          .mock.results.flatMap((r) => (r.value as any).createOperation.mock.calls)
+          .map(([params]) => params.acceptsFileWorks);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'single',
+        streamFeatures: ['file_works'],
+      });
+      await caller.execAgents({
+        tasks: [{ agentId: testAgentId, prompt: 'batch', streamFeatures: ['file_works'] }],
+      });
+      expect(createOperationCalls()).toEqual([true, true]);
+
+      vi.mocked(AgentRuntimeService).mockClear();
+      await caller.execAgent({ agentId: testAgentId, prompt: 'undeclared single' });
+      await caller.execAgents({ tasks: [{ agentId: testAgentId, prompt: 'undeclared' }] });
+      expect(createOperationCalls()).toEqual([false, false]);
+    });
+
     it('should create a new topic when topicId is not provided', async () => {
       const caller = aiAgentRouter.createCaller(createTestContext());
 
