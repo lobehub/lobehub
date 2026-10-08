@@ -125,6 +125,22 @@ describe('auvRuntime', () => {
       expect(result.content).toContain('`lh connect` CLI');
     });
 
+    it('does not dispatch when the device also runs the CLI, which the gateway prefers', async () => {
+      readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: false, reason: 'TIMEOUT' });
+      resolveDeviceClientKindMock.mockResolvedValueOnce('mixed');
+
+      const runtime = auvRuntime.factory(baseContext);
+      const result = await runtime.runCommand({ argv: ['invoke', 'display.list'] });
+
+      expect(executeToolCallMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        error: { code: 'COMPUTER_USE_DEVICE_UNAVAILABLE' },
+        success: false,
+      });
+      expect(result.content).toContain('TIMEOUT');
+      expect(result.content).toContain('stop `lh connect`');
+    });
+
     it('reports the gateway reason, not a missing capability, when presence is unknown', async () => {
       readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: false, reason: 'DEVICE_NOT_FOUND' });
       resolveDeviceClientKindMock.mockResolvedValueOnce('unknown');
