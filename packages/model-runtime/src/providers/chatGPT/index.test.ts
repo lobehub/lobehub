@@ -281,7 +281,7 @@ describe('LobeChatGPTAI', () => {
     expect(request.reasoning).toEqual({ effort: 'max', summary: 'auto' });
   });
 
-  it('drops reasoning entirely when only mode was set on a rejecting model', async () => {
+  it('reduces mode-only reasoning to the provider baseline on a rejecting model', async () => {
     await instance.chat({
       messages: [{ content: 'Write a chapter', role: 'user' }],
       model: 'gpt-6.1-sol',
@@ -290,7 +290,11 @@ describe('LobeChatGPTAI', () => {
 
     const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
 
-    expect(request.reasoning).toBeUndefined();
+    // The shared Responses payload pipeline injects the provider baseline
+    // `{ summary: 'auto' }` before this gate runs (mirroring a request with no
+    // reasoning config at all, which is accepted), so stripping `mode` yields
+    // exactly that baseline rather than an absent field.
+    expect(request.reasoning).toEqual({ summary: 'auto' });
   });
 
   it.each(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'])(
