@@ -1,3 +1,4 @@
+export * from './appMenu';
 export * from './binary';
 export * from './bootstrap';
 export * from './browserControl';

@@ -26,10 +26,14 @@ const mockShowContextMenu = vi.fn();
 const mockRebuildAppMenu = vi.fn();
 const mockPopupContextMenu = vi.fn();
 const mockClosePopupContextMenu = vi.fn();
+const mockGetAppMenu = vi.fn();
+const mockInvokeAppMenuItem = vi.fn();
 
 const mockApp = {
   menuManager: {
     closePopupContextMenu: mockClosePopupContextMenu,
+    getAppMenu: mockGetAppMenu,
+    invokeAppMenuItem: mockInvokeAppMenuItem,
     popupContextMenu: mockPopupContextMenu,
     refreshMenus: mockRefreshMenus,
     rebuildAppMenu: mockRebuildAppMenu,
@@ -137,6 +141,34 @@ describe('MenuController', () => {
       const result = menuController.closePopupContextMenu();
 
       expect(mockClosePopupContextMenu).toHaveBeenCalled();
+      expect(result).toEqual({ success: true });
+    });
+  });
+
+  describe('getAppMenu', () => {
+    it('returns the live application menu snapshot', () => {
+      const snapshot = [{ enabled: true, id: 'app-0', label: 'File', type: 'submenu' as const }];
+      mockGetAppMenu.mockReturnValueOnce(snapshot);
+
+      expect(menuController.getAppMenu()).toBe(snapshot);
+      expect(mockGetAppMenu).toHaveBeenCalled();
+    });
+  });
+
+  describe('invokeAppMenuItem', () => {
+    it('invokes the item on the window that opened the menu', () => {
+      const sender = {} as any;
+      const context = { event: { sender } as any, sender } as IpcContext;
+      const mockWindow = { id: 'window' };
+      fromWebContentsMock.mockReturnValueOnce(mockWindow);
+      mockInvokeAppMenuItem.mockReturnValueOnce({ success: true });
+
+      const result = runWithIpcContext(context, () =>
+        menuController.invokeAppMenuItem({ id: 'app-0-1' }),
+      );
+
+      expect(fromWebContentsMock).toHaveBeenCalledWith(sender);
+      expect(mockInvokeAppMenuItem).toHaveBeenCalledWith('app-0-1', mockWindow, sender);
       expect(result).toEqual({ success: true });
     });
   });

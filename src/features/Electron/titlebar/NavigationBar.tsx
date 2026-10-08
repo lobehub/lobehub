@@ -17,14 +17,16 @@ import type { GlobalState } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { getHomeStoreState } from '@/store/home';
 import { electronStylish } from '@/styles/electron';
-import { isMacOS } from '@/utils/platform';
+import { getPlatform, isMacOS } from '@/utils/platform';
 
 import { useNavigationHistory } from '../navigation/useNavigationHistory';
 import { getMacTrafficLightPadding } from './layout';
 import RecentlyViewed from './RecentlyViewed';
 import { useTrayMenuSync } from './TrayMenu/useTrayMenuSync';
+import WindowsAppMenu from './WindowsAppMenu';
 
 const isMac = isMacOS();
+const isWindows = getPlatform() === 'Windows';
 const COLLAPSED_NAVIGATION_BAR_WIDTH = 150;
 const MAC_COLLAPSED_NAVIGATION_BAR_WIDTH = 116;
 
@@ -142,7 +144,7 @@ const NavigationBar = memo(() => {
       className={styles.root}
       data-width={leftPanelWidth}
       gap={8}
-      justify={isMac ? 'space-between' : 'end'}
+      justify={isMac || isWindows ? 'space-between' : 'end'}
       style={{
         paddingLeft: macTrafficLightPadding,
         paddingRight: 8,
@@ -151,13 +153,13 @@ const NavigationBar = memo(() => {
         width: navigationWidth,
       }}
     >
-      {/* The persistent panel toggle is macOS-only; other platforms keep the
-          in-page toggles, so the titlebar shows just the navigation controls. */}
+      {/* macOS keeps the sidebar toggle here. Windows uses the app icon as the menu. */}
       {isMac && (
         <Flexbox horizontal align="center" className={electronStylish.nodrag}>
           <ToggleLeftPanelButton forceVisible id={NAV_TOGGLE_ID} size="small" />
         </Flexbox>
       )}
+      {isWindows && <WindowsAppMenu />}
       <Flexbox horizontal align="center" className={electronStylish.nodrag} gap={2}>
         <ActionIcon disabled={!canGoBack} icon={ArrowLeft} size="small" onClick={goBack} />
         <ActionIcon disabled={!canGoForward} icon={ArrowRight} size="small" onClick={goForward} />

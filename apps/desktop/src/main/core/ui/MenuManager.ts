@@ -1,12 +1,14 @@
 import type {
+  AppMenuNode,
   PopupContextMenuParams,
   PopupContextMenuResult,
   TrayNavigationSnapshot,
 } from '@lobechat/electron-client-ipc';
-import type { BrowserWindow, Menu } from 'electron';
+import { type BrowserWindow, Menu, type WebContents } from 'electron';
 
 import type { IMenuPlatform, MenuOptions } from '@/menus';
 import { createMenuImpl } from '@/menus';
+import { serializeAppMenu } from '@/menus/appMenuSnapshot';
 import { createLogger } from '@/utils/logger';
 
 import type { App } from '../App';
@@ -54,6 +56,25 @@ export class MenuManager {
   closePopupContextMenu() {
     logger.debug('Closing native context menu popup');
     closeNativeContextMenuPopup();
+    return { success: true };
+  }
+
+  getAppMenu(): AppMenuNode[] {
+    const menu = Menu.getApplicationMenu();
+    if (!menu) return [];
+
+    return serializeAppMenu(menu.items);
+  }
+
+  invokeAppMenuItem(
+    id: string,
+    window: BrowserWindow | null,
+    webContents?: WebContents,
+  ): { success: boolean } {
+    const item = Menu.getApplicationMenu()?.getMenuItemById(id);
+    if (!item || item.type === 'separator' || item.type === 'submenu') return { success: false };
+
+    item.click(undefined, window ?? undefined, webContents);
     return { success: true };
   }
 

@@ -43,7 +43,11 @@ vi.mock('@/store/electron', () => ({
     selector({ activeRecentScope: { slug: 'acme', type: 'workspace' } }),
 }));
 vi.mock('@/styles/electron', () => ({ electronStylish: { nodrag: 'nodrag' } }));
-vi.mock('@/utils/platform', () => ({ isMacOS: () => mocks.isMac }));
+vi.mock('@/utils/platform', () => ({
+  getPlatform: () => 'Linux',
+  isMacOS: () => mocks.isMac,
+}));
+vi.mock('./WindowsAppMenu', () => ({ default: () => null }));
 vi.mock('../navigation/useNavigationHistory', () => ({
   useNavigationHistory: () => ({
     canGoBack: false,

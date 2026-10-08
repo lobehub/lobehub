@@ -1,4 +1,5 @@
 import type {
+  AppMenuNode,
   ElectronAppState,
   PopupContextMenuParams,
   PopupContextMenuResult,
@@ -107,6 +108,14 @@ class ElectronSystemService {
 
   closePopupContextMenu = async (): Promise<void> => {
     return this.ipc.menu.closePopupContextMenu();
+  };
+
+  getAppMenu = async (): Promise<AppMenuNode[]> => {
+    return this.ipc.menu.getAppMenu();
+  };
+
+  invokeAppMenuItem = async (id: string): Promise<{ success: boolean }> => {
+    return this.ipc.menu.invokeAppMenuItem({ id });
   };
 
   /**

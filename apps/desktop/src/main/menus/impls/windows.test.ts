@@ -139,6 +139,17 @@ describe('WindowsMenu', () => {
       expect(menuLabels).toContain('Window');
       expect(menuLabels).toContain('Help');
     });
+
+    it('assigns ids the title bar menu can invoke', () => {
+      windowsMenu.buildAndSetAppMenu();
+
+      const template = (Menu.buildFromTemplate as any).mock.calls[0][0];
+      const fileMenu = template.find((item: any) => item.label === 'File');
+      const newTab = fileMenu.submenu.find((item: any) => item.accelerator === 'Ctrl+T');
+
+      expect(fileMenu.id).toBe('app-0');
+      expect(newTab.id).toBe('app-0-1');
+    });
   });
 
   describe('buildContextMenu', () => {
