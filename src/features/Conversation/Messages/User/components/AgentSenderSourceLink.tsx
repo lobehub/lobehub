@@ -1,7 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { Icon } from '@lobehub/ui';
+import { Icon, Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from 'antd-style';
 import { Link2 } from 'lucide-react';
 import { memo } from 'react';
@@ -16,7 +16,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 3px;
     align-items: center;
 
-    max-inline-size: 220px;
+    max-inline-size: 320px;
 
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
@@ -51,20 +51,23 @@ interface AgentSenderSourceLinkProps {
  *
  * Labels itself with the topic's OWN name rather than a generic "source topic"
  * caption: the name is what tells a reader *which* conversation this came from,
- * and repeating a caption on every such message is chrome. The caption stays as
- * the hover title — and as the label for an untitled topic — so the affordance
- * still explains itself.
+ * and repeating a caption on every such message is chrome. The caption appears
+ * on hover — and is the label for an untitled topic — so the affordance still
+ * explains itself without occupying the row.
  */
 const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(
   ({ agentId, topicId, topicTitle }) => {
     const { t } = useTranslation('chat');
     const caption = t('agentSender.sourceTopic');
+    const name = topicTitle?.trim();
 
     return (
-      <Link className={styles.link} href={AGENT_CHAT_TOPIC_URL(agentId, topicId)} title={caption}>
-        <Icon icon={Link2} size={12} />
-        <span className={styles.label}>{topicTitle || caption}</span>
-      </Link>
+      <Tooltip title={caption}>
+        <Link className={styles.link} href={AGENT_CHAT_TOPIC_URL(agentId, topicId)}>
+          <Icon icon={Link2} size={12} />
+          <span className={styles.label}>{name || caption}</span>
+        </Link>
+      </Tooltip>
     );
   },
 );
