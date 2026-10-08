@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ConnectorModel } from '@/database/models/connector';
 import { ConnectorToolModel } from '@/database/models/connectorTool';
-import { ConnectorStatus } from '@/database/schemas';
+import { ConnectorSourceType, ConnectorStatus } from '@/database/schemas';
 
 import { connectorRouter } from '../connector';
 
@@ -33,6 +33,102 @@ vi.mock('@/libs/trpc/lambda/middleware', () => ({
 }));
 
 const CONNECTOR_ID = '9f1f6f30-0000-4000-8000-000000000001';
+
+describe('connectorRouter.syncToolsFromClient Linear retirement', () => {
+  const connectorModel = { queryByIdentifiers: vi.fn(), update: vi.fn() };
+  const toolModel = { deleteToolsByNames: vi.fn(), upsertMany: vi.fn() };
+  const params = {
+    identifier: 'linear',
+    name: 'Linear',
+    sourceType: ConnectorSourceType.marketplace,
+  };
+  const caller = () => connectorRouter.createCaller({ serverDB: {}, userId: 'user_test' } as any);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    connectorModel.queryByIdentifiers.mockResolvedValue([
+      { id: CONNECTOR_ID, sourceType: ConnectorSourceType.marketplace, userId: 'user_test' },
+    ]);
+    vi.mocked(ConnectorModel).mockImplementation(function () {
+      return connectorModel as any;
+    });
+    vi.mocked(ConnectorToolModel).mockImplementation(function () {
+      return toolModel as any;
+    });
+  });
+
+  it('should filter retired names even when an old client replays its cached list', async () => {
+    await caller().syncToolsFromClient({ ...params, tools: [{ toolName: 'save_document' }] });
+    const result = await caller().syncToolsFromClient({
+      ...params,
+      tools: [
+        { toolName: 'create_document' },
+        { toolName: 'get_document' },
+        { toolName: 'update_document' },
+      ],
+    });
+
+    expect(result).toEqual({ connectorId: CONNECTOR_ID, toolCount: 1 });
+    expect(toolModel.upsertMany).toHaveBeenLastCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ toolName: 'get_document' }),
+    ]);
+    expect(toolModel.deleteToolsByNames).toHaveBeenCalledTimes(2);
+    expect(toolModel.deleteToolsByNames).toHaveBeenLastCalledWith(CONNECTOR_ID, [
+      'create_document',
+      'update_document',
+    ]);
+  });
+
+  it('should only retire the known names for empty or partial concurrent snapshots', async () => {
+    await Promise.all([
+      caller().syncToolsFromClient({ ...params, tools: [] }),
+      caller().syncToolsFromClient({ ...params, tools: [{ toolName: 'save_document' }] }),
+    ]);
+
+    expect(toolModel.deleteToolsByNames.mock.calls).toEqual([
+      [CONNECTOR_ID, ['create_document', 'update_document']],
+      [CONNECTOR_ID, ['create_document', 'update_document']],
+    ]);
+    expect(toolModel.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ toolName: 'save_document' }),
+    ]);
+  });
+
+  it.each([
+    ['twitter', ConnectorSourceType.marketplace],
+    ['linear', ConnectorSourceType.custom],
+    ['linear', ConnectorSourceType.builtin],
+  ])('should not retire tools for %s with stored source %s', async (identifier, sourceType) => {
+    connectorModel.queryByIdentifiers.mockResolvedValue([
+      { id: CONNECTOR_ID, sourceType, userId: 'user_test' },
+    ]);
+
+    await caller().syncToolsFromClient({
+      ...params,
+      identifier,
+      tools: [{ toolName: 'create_document' }],
+    });
+
+    expect(toolModel.deleteToolsByNames).not.toHaveBeenCalled();
+    expect(toolModel.upsertMany).toHaveBeenCalledWith(CONNECTOR_ID, [
+      expect.objectContaining({ toolName: 'create_document' }),
+    ]);
+  });
+
+  it('should not retire tools when a workspace viewer opens the detail panel', async () => {
+    await connectorRouter
+      .createCaller({
+        serverDB: {},
+        userId: 'user_test',
+        workspaceId: 'ws_1',
+        workspaceRole: 'viewer',
+      } as any)
+      .syncToolsFromClient({ ...params, tools: [] });
+
+    expect(toolModel.upsertMany).not.toHaveBeenCalled();
+    expect(toolModel.deleteToolsByNames).not.toHaveBeenCalled();
+  });
+});
 
 // The desktop-reported install path for MCP servers the cloud can't reach
 // (stdio / localhost / LAN endpoints, #16533): the client lists the tools

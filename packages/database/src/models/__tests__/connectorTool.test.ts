@@ -336,6 +336,59 @@ describe('ConnectorToolModel', () => {
     });
   });
 
+  describe('deleteToolsByNames', () => {
+    it('should remove only named tools and preserve other tools and their permissions', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      const secondConnectorId = await insertConnector({ identifier: 'notion' });
+      await model.upsertMany(connectorId, [
+        tool({ toolName: 'create_document' }),
+        tool({ toolName: 'update_document' }),
+        tool({ defaultPermission: ConnectorToolPermission.disabled, toolName: 'save_document' }),
+        tool({
+          defaultPermission: ConnectorToolPermission.needs_approval,
+          toolName: 'get_document',
+        }),
+      ]);
+      await model.upsertMany(secondConnectorId, [tool({ toolName: 'create_document' })]);
+      const before = await model.queryByConnector(connectorId);
+
+      await model.deleteToolsByNames(connectorId, ['create_document', 'update_document']);
+      await model.deleteToolsByNames(connectorId, []);
+      await model.deleteToolsByNames(connectorId, ['create_document', 'update_document']);
+
+      const remaining = await model.queryByConnector(connectorId);
+      expect(remaining).toHaveLength(2);
+      expect(remaining).toEqual(
+        expect.arrayContaining(
+          before.filter((row) => ['get_document', 'save_document'].includes(row.toolName)),
+        ),
+      );
+      expect(await model.queryByConnector(secondConnectorId)).toHaveLength(1);
+    });
+
+    it('should enforce user and workspace ownership even with another connector id', async () => {
+      const model = new ConnectorToolModel(serverDB, userId);
+      const otherModel = new ConnectorToolModel(serverDB, otherUserId);
+      const workspaceModel = new ConnectorToolModel(serverDB, userId, workspaceId);
+      await model.upsertMany(connectorId, [tool({ toolName: 'create_document' })]);
+      await otherModel.upsertMany(otherConnectorId, [tool({ toolName: 'create_document' })]);
+      await workspaceModel.upsertMany(workspaceConnectorId, [
+        tool({ toolName: 'create_document' }),
+      ]);
+
+      await model.deleteToolsByNames(otherConnectorId, ['create_document']);
+      await model.deleteToolsByNames(workspaceConnectorId, ['create_document']);
+      await workspaceModel.deleteToolsByNames(connectorId, ['create_document']);
+
+      expect(await otherModel.queryByConnector(otherConnectorId)).toHaveLength(1);
+      expect(await workspaceModel.queryByConnector(workspaceConnectorId)).toHaveLength(1);
+      expect(await model.queryByConnector(connectorId)).toHaveLength(1);
+
+      await workspaceModel.deleteToolsByNames(workspaceConnectorId, ['create_document']);
+      expect(await workspaceModel.queryByConnector(workspaceConnectorId)).toHaveLength(0);
+    });
+  });
+
   describe('deleteToolsNotIn', () => {
     it('deletes rows whose toolName is not in the keep list', async () => {
       const model = new ConnectorToolModel(serverDB, userId);
