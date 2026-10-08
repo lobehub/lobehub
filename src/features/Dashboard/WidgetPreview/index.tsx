@@ -89,6 +89,9 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
           toast.error(
             t('chat.publishFailed', { message: error instanceof Error ? error.message : '' }),
           );
+          // A failure must keep the review open for a retry — re-throw so the
+          // modal never treats the confirm as done.
+          throw error;
         }
       },
     });

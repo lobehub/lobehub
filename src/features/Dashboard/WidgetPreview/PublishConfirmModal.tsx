@@ -35,6 +35,9 @@ const PublishConfirmModal = memo<PublishConfirmModalProps>(({ widgetId, versionI
     try {
       await onConfirm();
       close();
+    } catch {
+      // The confirm handler already surfaced the failure (toast) — keep the
+      // review open so the user can fix and retry.
     } finally {
       setConfirming(false);
     }
