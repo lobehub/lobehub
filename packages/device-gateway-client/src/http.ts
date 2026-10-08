@@ -389,18 +389,22 @@ export class GatewayHttpClient {
     userId: string,
     deviceId: string,
     workspaceId?: string,
-  ): Promise<{ success: boolean; systemInfo?: DeviceSystemInfo }> {
+  ): Promise<{ error?: string; success: boolean; systemInfo?: DeviceSystemInfo }> {
     const res = await this.post(
       '/api/device/system-info',
       { deviceId, userId, workspaceId },
       { timeout: DEVICE_QUERY_TIMEOUT_MS },
     );
     if (!res.ok) {
-      return { success: false };
+      // Keep the gateway's reason (`TIMEOUT`, `DEVICE_OFFLINE`, `DEVICE_NOT_FOUND`):
+      // a device that did not answer is not a device that lacks a capability.
+      const data = (await res.json().catch(() => undefined)) as { error?: string } | undefined;
+      return { error: data?.error, success: false };
     }
 
     const data = await res.json();
     return {
+      error: data.error,
       success: data.success ?? false,
       systemInfo: data.systemInfo,
     };

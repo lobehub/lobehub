@@ -3,24 +3,47 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { type ToolExecutionContext } from '../../types';
 
+type SystemInfoRead =
+  { ok: true; systemInfo: Record<string, unknown> } | { ok: false; reason: string };
+
 const executeToolCallMock = vi.fn();
-const queryDeviceSystemInfoMock = vi.fn();
+const readDeviceSystemInfoMock = vi.fn<(...args: unknown[]) => Promise<SystemInfoRead>>();
+const resolveDeviceClientKindMock = vi.fn();
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
-    queryDeviceSystemInfo: (...args: unknown[]) => queryDeviceSystemInfoMock(...args),
+    // Mirrors the service: the lossy read is the detailed one minus the reason.
+    queryDeviceSystemInfo: async (...args: unknown[]) => {
+      const read = await readDeviceSystemInfoMock(...args);
+      return read.ok ? read.systemInfo : undefined;
+    },
+    readDeviceSystemInfo: (...args: unknown[]) => readDeviceSystemInfoMock(...args),
   },
 }));
 vi.mock('@/server/services/deviceGateway/authorizedToolCall', () => ({
   executeAuthorizedDeviceToolCall: (_serverDB: unknown, ...args: unknown[]) =>
     executeToolCallMock(...args),
 }));
+vi.mock('@/server/services/deviceGateway/deviceChannels', () => ({
+  resolveDeviceClientKind: (...args: unknown[]) => resolveDeviceClientKindMock(...args),
+}));
 
 const { auvRuntime } = await import('../auv');
+
+const baseContext: ToolExecutionContext = {
+  activeDeviceId: 'device-1',
+  toolManifestMap: {},
+  userId: 'user-1',
+};
 
 describe('auvRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    queryDeviceSystemInfoMock.mockResolvedValue({ supportedTools: [AuvIdentifier] });
+    readDeviceSystemInfoMock.mockResolvedValue({
+      ok: true,
+      systemInfo: { supportedTools: [AuvIdentifier] },
+    });
+    resolveDeviceClientKindMock.mockResolvedValue('desktop');
+    executeToolCallMock.mockResolvedValue({ content: 'ok', success: true });
   });
 
   it('requires a user and active device', () => {
@@ -33,12 +56,8 @@ describe('auvRuntime', () => {
   });
 
   it('rejects old clients before forwarding a tool call', async () => {
-    queryDeviceSystemInfoMock.mockResolvedValueOnce({ arch: 'arm64' });
-    const runtime = auvRuntime.factory({
-      userId: 'user-1',
-      activeDeviceId: 'device-1',
-      toolManifestMap: {},
-    });
+    readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: true, systemInfo: { arch: 'arm64' } });
+    const runtime = auvRuntime.factory(baseContext);
     await expect(runtime.runCommand({ argv: ['invoke', 'display.list'] })).rejects.toThrow(
       'does not support Computer Use',
     );
@@ -47,10 +66,8 @@ describe('auvRuntime', () => {
 
   it('proxies runCommand to the active desktop device', async () => {
     const context: ToolExecutionContext = {
-      activeDeviceId: 'device-1',
+      ...baseContext,
       operationId: 'operation-1',
-      toolManifestMap: {},
-      userId: 'user-1',
       workspaceId: 'workspace-1',
     };
     const args = { argv: ['invoke', 'display.capture'] };
@@ -76,5 +93,49 @@ describe('auvRuntime', () => {
       undefined,
     );
     expect(result).toEqual(expected);
+    expect(resolveDeviceClientKindMock).not.toHaveBeenCalled();
+  });
+
+  describe('when the device does not answer the capability check', () => {
+    it('dispatches to a device with a live desktop app instead of reporting it unsupported', async () => {
+      // Production: a busy desktop missed the 10s system-info deadline and the
+      // call failed as "does not support Computer Use" without being sent.
+      readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: false, reason: 'TIMEOUT' });
+
+      const runtime = auvRuntime.factory(baseContext);
+      const result = await runtime.runCommand({ argv: ['invoke', 'display.list'] });
+
+      expect(resolveDeviceClientKindMock).toHaveBeenCalledWith('user-1', 'device-1', undefined);
+      expect(executeToolCallMock).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ content: 'ok', success: true });
+    });
+
+    it('does not dispatch to a CLI-only device and names the CLI', async () => {
+      readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: false, reason: 'TIMEOUT' });
+      resolveDeviceClientKindMock.mockResolvedValueOnce('cli-only');
+
+      const runtime = auvRuntime.factory(baseContext);
+      const result = await runtime.runCommand({ argv: ['invoke', 'display.list'] });
+
+      expect(executeToolCallMock).not.toHaveBeenCalled();
+      expect(result).toMatchObject({
+        error: { code: 'COMPUTER_USE_DEVICE_UNAVAILABLE' },
+        success: false,
+      });
+      expect(result.content).toContain('`lh connect` CLI');
+    });
+
+    it('reports the gateway reason, not a missing capability, when presence is unknown', async () => {
+      readDeviceSystemInfoMock.mockResolvedValueOnce({ ok: false, reason: 'DEVICE_NOT_FOUND' });
+      resolveDeviceClientKindMock.mockResolvedValueOnce('unknown');
+
+      const runtime = auvRuntime.factory(baseContext);
+      const result = await runtime.runCommand({ argv: ['invoke', 'display.list'] });
+
+      expect(executeToolCallMock).not.toHaveBeenCalled();
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('DEVICE_NOT_FOUND');
+      expect(result.content).not.toContain('does not support');
+    });
   });
 });
