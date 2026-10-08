@@ -109,6 +109,44 @@ describe('useFetchDashboardDetail', () => {
     expect(options.refreshInterval(scheduled)).toBe(30_000);
   });
 
+  it('drops the board widgets’ trend caches when a poll observes a completed run', () => {
+    // The cached board shows w2 mid-run; the poll response settles it.
+    useDashboardStore.setState({ dashboardDetailMap: { d1: detail } });
+    useDashboardStore.getState().useFetchDashboardDetail('d1');
+    const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+      onSuccess: (data: unknown) => void;
+    };
+
+    const settled = {
+      ...detail,
+      items: [
+        detail.items[0],
+        { item: detail.items[1].item, widget: widget({ id: 'w2', lastRunStatus: 'succeeded' }) },
+      ],
+    };
+    options.onSuccess(settled);
+
+    // Only this board's widgets' trend keys are invalidated.
+    const filter = vi.mocked(mutate).mock.calls.at(-1)![0] as (key: unknown) => boolean;
+    expect(filter(['dashboard:trend', 'w1', 'metric:x'])).toBe(true);
+    expect(filter(['dashboard:trend', 'w2', 'metric:y'])).toBe(true);
+    expect(filter(['dashboard:trend', 'w9', 'metric:x'])).toBe(false);
+    expect(filter(['dashboard:detail', 'd1'])).toBe(false);
+  });
+
+  it('leaves trend caches alone while runs are still in flight', () => {
+    useDashboardStore.setState({ dashboardDetailMap: { d1: detail } });
+    useDashboardStore.getState().useFetchDashboardDetail('d1');
+    const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+      onSuccess: (data: unknown) => void;
+    };
+
+    const calls = vi.mocked(mutate).mock.calls.length;
+    options.onSuccess(detail); // w2 still running — no completion observed
+
+    expect(vi.mocked(mutate).mock.calls.length).toBe(calls);
+  });
+
   it('does not fetch without an id', () => {
     useDashboardStore.getState().useFetchDashboardDetail(undefined);
     expect(vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[0]).toBeNull();

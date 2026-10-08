@@ -31,6 +31,22 @@ const hasRunningWidget = (detail?: DashboardDetail) =>
 const hasScheduledWidget = (detail?: DashboardDetail) =>
   !!detail?.items.some(({ widget }) => widget.nextRunAt != null);
 
+const boardWidgetIds = (detail: DashboardDetail) =>
+  new Set(detail.items.map(({ widget }) => widget.id));
+
+/**
+ * Whether a poll response settles a widget the cached board showed running —
+ * the moment a scheduled/manual run completed and its output is live. The
+ * board's own cache refreshes with the response; a widget's trend cache is
+ * keyed separately and needs its own invalidation to pick the new point up.
+ */
+const hasRunCompleted = (previous: DashboardDetail | undefined, next: DashboardDetail) =>
+  (previous?.items ?? []).some(({ widget }) => {
+    if (widget.lastRunStatus !== 'running') return false;
+    const current = next.items.find(({ widget: item }) => item.id === widget.id)?.widget;
+    return !current || current.lastRunStatus !== 'running';
+  });
+
 /** SWR matcher over every cached board detail — a widget can sit on several boards. */
 const isDashboardDetailKey = (key: unknown) =>
   Array.isArray(key) && key[0] === dashboardKeys.detail.root;
@@ -135,7 +151,18 @@ export class DashboardActionImpl {
       () => dashboardService.detail(dashboardId!),
       {
         onSuccess: (data) => {
+          const previous = this.#get().dashboardDetailMap[dashboardId!];
           this.internal_setDashboardDetail(data);
+          if (!hasRunCompleted(previous, data)) return;
+          // A run completed while this board was open: the card value and
+          // status refresh with the board, but each widget's trend is cached
+          // under its own key — drop just this board's widgets' trends so the
+          // sparkline picks the new point up without a manual refresh.
+          const ids = boardWidgetIds(data);
+          void mutate(
+            (key: unknown) =>
+              Array.isArray(key) && key[0] === dashboardKeys.trend.root && ids.has(key[1]),
+          );
         },
         refreshInterval: (data?: DashboardDetail) =>
           hasRunningWidget(data)
