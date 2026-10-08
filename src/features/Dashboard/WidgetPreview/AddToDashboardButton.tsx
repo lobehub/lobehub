@@ -6,12 +6,13 @@ import { CheckIcon, LayoutDashboardIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { openCreateDashboardModal } from '../DashboardFormModal';
-import { placeableDashboards } from './previewWidget';
+import { canCreateDashboardFromPreview, placeableDashboards } from './previewWidget';
 
 interface AddToDashboardButtonProps {
   /** Boards the widget is already on; they show checked and are not re-added. */
@@ -34,6 +35,9 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
     // Only the caller's own boards can take the placement (addItem writes as
     // the board's creator); teammates' readable boards are not offered.
     const placeable = placeableDashboards(dashboards, currentUserId);
+    // In a workspace, a widget outside a project cannot create a board it
+    // could open — home-level boards have no UI there.
+    const canCreate = canCreateDashboardFromPreview(projectId, !!useActiveWorkspaceSlug());
 
     const add = async (dashboard: { id: string; title: string }) => {
       try {
@@ -56,22 +60,27 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
           onClick: () => void add(dashboard),
         };
       }),
-      ...(placeable.length > 0 ? [{ type: 'divider' as const }] : []),
-      {
-        icon: <Icon icon={PlusIcon} />,
-        key: 'new',
-        label: t('chat.newDashboard'),
-        onClick: () =>
-          // Created and placed in one write; a failure keeps the modal open
-          // with its error and leaves no empty board behind. The board is
-          // created on the widget's own level, so a project widget never
-          // creates a home board its link cannot open.
-          openCreateDashboardModal({
-            level: { projectId: projectId ?? null },
-            onCreated: (dashboard) => toast.success(t('chat.added', { title: dashboard.title })),
-            widgetId,
-          }),
-      },
+      ...(placeable.length > 0 && canCreate ? [{ type: 'divider' as const }] : []),
+      ...(canCreate
+        ? [
+            {
+              icon: <Icon icon={PlusIcon} />,
+              key: 'new',
+              label: t('chat.newDashboard'),
+              onClick: () =>
+                // Created and placed in one write; a failure keeps the modal open
+                // with its error and leaves no empty board behind. The board is
+                // created on the widget's own level, so a project widget never
+                // creates a home board its link cannot open.
+                openCreateDashboardModal({
+                  level: { projectId: projectId ?? null },
+                  onCreated: (dashboard) =>
+                    toast.success(t('chat.added', { title: dashboard.title })),
+                  widgetId,
+                }),
+            },
+          ]
+        : []),
     ];
 
     return (

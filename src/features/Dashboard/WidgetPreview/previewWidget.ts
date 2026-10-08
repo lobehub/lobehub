@@ -93,6 +93,18 @@ export const placeableDashboards = <T extends { userId: string }>(
 ): T[] =>
   currentUserId ? dashboards.filter((dashboard) => dashboard.userId === currentUserId) : [];
 
+/**
+ * Whether a widget preview may offer creating a new board. Creating lands on
+ * the widget's own level, and inside a workspace the home level has no UI at
+ * all — the home dashboard routes are disabled there — so a widget that lives
+ * outside a project gets no creation action; the board it would create could
+ * not be opened. Personal mode (no active workspace) can always create.
+ */
+export const canCreateDashboardFromPreview = (
+  projectId: string | null | undefined,
+  workspaceActive: boolean,
+): boolean => !workspaceActive || !!projectId;
+
 /** Versions to compare by default: the one under review against the live one (or its parent). */
 export const defaultDiffPair = (
   versions: Pick<DashboardWidgetVersionItem, 'id' | 'parentVersionId' | 'status'>[],

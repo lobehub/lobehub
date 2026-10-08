@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canCreateDashboardFromPreview,
   canPreviewPublish,
   defaultDiffPair,
   findSucceededPreviewRun,
@@ -111,6 +112,23 @@ describe('canPreviewPublish', () => {
     expect(canPreviewPublish(widget, 'u-member')).toBe(false);
     expect(canPreviewPublish(widget, null)).toBe(false);
     expect(canPreviewPublish(widget, undefined)).toBe(false);
+  });
+});
+
+describe('canCreateDashboardFromPreview', () => {
+  it('always offers creation in personal mode', () => {
+    expect(canCreateDashboardFromPreview(null, false)).toBe(true);
+    expect(canCreateDashboardFromPreview(undefined, false)).toBe(true);
+    expect(canCreateDashboardFromPreview('p1', false)).toBe(true);
+  });
+
+  it('hides creation for a project-less widget inside a workspace', () => {
+    // The board would land on the workspace home level, whose /dashboard
+    // routes are disabled there — nothing could open it.
+    expect(canCreateDashboardFromPreview(null, true)).toBe(false);
+    expect(canCreateDashboardFromPreview(undefined, true)).toBe(false);
+    // A project widget still creates inside its project, where routes exist.
+    expect(canCreateDashboardFromPreview('p1', true)).toBe(true);
   });
 });
 
