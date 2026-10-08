@@ -135,6 +135,37 @@ describe('createDashboardToolService', () => {
     expect(await db.select().from(widgets)).toHaveLength(0);
   });
 
+  it('rejects widget metadata beyond the router limits, on create and update', async () => {
+    const service = createDashboardToolService(db, scope);
+
+    // Create path: a title longer than the router's 200 fails before any write.
+    await expect(
+      service.createWidgetDraft({
+        content: statDraft,
+        description: '',
+        title: 'x'.repeat(201),
+      }),
+    ).rejects.toThrow(/Invalid widget metadata/);
+    expect(await db.select().from(widgets)).toHaveLength(0);
+
+    const { widgetId } = await service.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Seven',
+    });
+
+    // Update path: over-long descriptions and empty titles are refused too,
+    // and the stored metadata is untouched.
+    await expect(service.updateWidget(widgetId, { description: 'y'.repeat(2001) })).rejects.toThrow(
+      /Invalid widget metadata/,
+    );
+    await expect(service.updateWidget(widgetId, { title: '' })).rejects.toThrow(
+      /Invalid widget metadata/,
+    );
+    const [row] = await db.select().from(widgets).where(eq(widgets.id, widgetId));
+    expect(row).toMatchObject({ description: '', title: 'Seven' });
+  });
+
   it('refuses to publish an untried draft, then publishes and runs it once after a dry run', async () => {
     runSandbox.mockResolvedValue(printed({ type: 'stat', value: 7 }));
     const service = createDashboardToolService(db, scope);

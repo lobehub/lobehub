@@ -12,6 +12,10 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
 import { WidgetService } from '@/server/services/widget';
+import {
+  widgetMetadataPatchSchema,
+  widgetMetadataSchema,
+} from '@/server/services/widget/metadataSchema';
 import { widgetVersionContentSchema } from '@/server/services/widget/versionSchema';
 
 import { assertDashboardEnabled } from './_helpers/dashboardFeatureGate';
@@ -79,11 +83,11 @@ export const widgetRouter = router({
       z.object({
         agentId: z.string().nullish(),
         dashboardId: uuid.optional(),
-        description: z.string().max(2000).nullish(),
+        // Same bounds the dashboard tool enforces — one schema, no drift.
+        ...widgetMetadataSchema.shape,
         layout: layoutSchema.nullish(),
         metadata,
         projectId: z.string().nullish(),
-        title: z.string().min(1).max(200),
         visibility: visibility.optional(),
       }),
     )
@@ -348,9 +352,8 @@ export const widgetRouter = router({
       z.object({
         id: uuid,
         value: z.object({
-          description: z.string().max(2000).nullish(),
+          ...widgetMetadataPatchSchema.shape,
           metadata,
-          title: z.string().min(1).max(200).optional(),
           visibility: visibility.optional(),
         }),
       }),

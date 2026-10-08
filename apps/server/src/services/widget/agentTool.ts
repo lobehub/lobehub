@@ -15,6 +15,7 @@ import type { WidgetRunRow, WidgetVersionRow } from '@/database/schemas';
 import { topics } from '@/database/schemas';
 
 import { WidgetFlowError, WidgetService } from './index';
+import { widgetMetadataPatchSchema, widgetMetadataSchema } from './metadataSchema';
 import { widgetVersionContentSchema } from './versionSchema';
 
 /** Where the conversation that authors the widget lives; stamped on what it creates. */
@@ -61,6 +62,17 @@ const parseContent = (content: WidgetVersionContent & { changeNote?: string | nu
   const result = widgetVersionContentSchema.safeParse(content);
   if (!result.success) throw new Error(`Invalid widget draft: ${z.prettifyError(result.error)}`);
   return result.data;
+};
+
+/**
+ * The widget router's metadata limits (title 1–200, description ≤ 2000),
+ * shared as one schema so model-emitted metadata cannot bypass what the API
+ * would refuse.
+ */
+const parseMetadata = <S extends z.ZodType>(metadata: unknown, schema: S): z.infer<S> => {
+  const result = schema.safeParse(metadata);
+  if (!result.success) throw new Error(`Invalid widget metadata: ${z.prettifyError(result.error)}`);
+  return result.data as z.infer<S>;
 };
 
 /**
@@ -156,11 +168,12 @@ export const createDashboardToolService = (
 
     createWidgetDraft: async ({ content, description, title }) => {
       const version = parseContent(content);
+      const metadata = parseMetadata({ description, title }, widgetMetadataSchema);
       const widget = await widgets.create({
         agentId: agentId ?? null,
-        description,
+        description: metadata.description,
         projectId: projectId ?? null,
-        title,
+        title: metadata.title,
       });
       try {
         const draft = await flow.saveDraft(widget.id, { ...version, ...source });
@@ -281,9 +294,10 @@ export const createDashboardToolService = (
 
     updateWidget: async (widgetId, patch) => {
       await requireScopedWidget(widgetId);
+      const metadata = parseMetadata(patch, widgetMetadataPatchSchema);
       const updated = await widgets.update(widgetId, {
-        ...(patch.description !== undefined && { description: patch.description }),
-        ...(patch.title !== undefined && { title: patch.title }),
+        ...(metadata.description !== undefined && { description: metadata.description }),
+        ...(metadata.title !== undefined && { title: metadata.title }),
       });
       if (!updated) throw new Error('Widget not found or not editable');
     },
