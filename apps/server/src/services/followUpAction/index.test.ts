@@ -36,7 +36,7 @@ describe('FollowUpActionService.extract', () => {
     runtimeMock = { generateObject: vi.fn() };
     vi.spyOn(ModelRuntimeModule, 'initModelRuntimeFromDB').mockResolvedValue(runtimeMock as any);
 
-    svc = new FollowUpActionService(dbMock, TEST_USER);
+    svc = new FollowUpActionService({ db: dbMock, userId: TEST_USER });
   });
 
   afterEach(() => {
@@ -294,7 +294,7 @@ describe('FollowUpActionService.extract', () => {
   });
 
   it('filters workspace mode by workspaceId and forwards it to model runtime', async () => {
-    svc = new FollowUpActionService(dbMock, TEST_USER, 'workspace-1');
+    svc = new FollowUpActionService({ db: dbMock, userId: TEST_USER, workspaceId: 'workspace-1' });
     queryFindFirstSpy.mockResolvedValue({ id: FOUND_MSG, content: 'q?' });
     runtimeMock.generateObject.mockResolvedValue({ chips: [] });
 

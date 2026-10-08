@@ -22,13 +22,20 @@ const log = debug('lobe-server:follow-up-action-service');
 
 const EMPTY_RESULT = (messageId: string): FollowUpExtractResult => ({ chips: [], messageId });
 
+interface FollowUpActionServiceOptions {
+  db: LobeChatDatabase;
+  userAgent?: string;
+  userId: string;
+  workspaceId?: string;
+}
+
 export class FollowUpActionService {
   private readonly db: LobeChatDatabase;
   private readonly userId: string;
   private readonly workspaceId?: string;
   private readonly userAgent?: string;
 
-  constructor(db: LobeChatDatabase, userId: string, workspaceId?: string, userAgent?: string) {
+  constructor({ db, userAgent, userId, workspaceId }: FollowUpActionServiceOptions) {
     this.db = db;
     this.userId = userId;
     this.workspaceId = workspaceId;

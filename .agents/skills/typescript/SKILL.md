@@ -15,13 +15,14 @@ user-invocable: false
 - Prefer `as const satisfies XyzInterface` over plain `as const`
 - Prefer `@ts-expect-error` over `@ts-ignore` over `as any`
 - Avoid meaningless null/undefined parameters; design strict function contracts
+- Do not add a fourth positional parameter to a function or constructor; use a typed options object with named fields instead (for example, `FollowUpActionService({ db, userId, workspaceId, userAgent })`).
 - Prefer ES module augmentation (`declare module '...'`) over `namespace`; do not introduce `namespace`-based extension patterns
 - When a type needs extensibility, expose a small mergeable interface at the source type and let each feature/plugin augment it locally instead of centralizing all extension fields in one registry file
 - For package-local extensibility patterns like `PipelineContext.metadata`, define the metadata fields next to the processor/provider/plugin that reads or writes them
 
 ## Async Patterns
 
-- **Async-first for IO**: new IO code (fs, child\_process, etc.) must use async APIs at its boundaries — use promise-based variants like `import { readFile } from 'fs/promises'`, never `*Sync` by default. Function coloring is asymmetric: async→sync migration is never needed, while sync→async (when IO gets slower, gains concurrency, or grows a subprocess/network call) forces rewriting every caller up the chain — sync-first debt that compounds. Micro-costs of async (thread-pool dispatch, cache races) are not valid reasons: races are solved by caching the promise instead of the result
+- **Async-first for IO**: new IO code (fs, child_process, etc.) must use async APIs at its boundaries — use promise-based variants like `import { readFile } from 'fs/promises'`, never `*Sync` by default. Function coloring is asymmetric: async→sync migration is never needed, while sync→async (when IO gets slower, gains concurrency, or grows a subprocess/network call) forces rewriting every caller up the chain — sync-first debt that compounds. Micro-costs of async (thread-pool dispatch, cache races) are not valid reasons: races are solved by caching the promise instead of the result
 - `*Sync` is acceptable in exactly one place: call sites locked inside a synchronous contract you don't control — an existing sync signature chain (don't virally refactor a legacy sync chain in a bugfix, but new standalone modules must not extend such chains), or sync-only callbacks like `process.on('exit')`. Module-load-time and CLI startup init are NOT exceptions — use top-level `await` (ESM) there
 
 ## Imports

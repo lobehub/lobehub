@@ -8,10 +8,14 @@ import { FollowUpActionService } from '@/server/services/followUpAction';
 
 const followUpProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
-  const wsId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
-      followUpService: new FollowUpActionService(ctx.serverDB, ctx.userId, wsId, ctx.userAgent),
+      followUpService: new FollowUpActionService({
+        db: ctx.serverDB,
+        userAgent: ctx.userAgent,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId ?? undefined,
+      }),
     },
   });
 });
