@@ -1,12 +1,18 @@
 import { remark } from 'remark';
+import remarkCjkFriendly from 'remark-cjk-friendly';
 import remarkGfm from 'remark-gfm';
 import remarkHtml from 'remark-html';
 import { describe, expect, it } from 'vitest';
 
-const render = (markdown: string) =>
-  String(remark().use(remarkGfm, { singleTilde: false }).use(remarkHtml).processSync(markdown));
+describe.each([false, true])('GFM strong-emphasis boundaries (CJK plugin: %s)', (cjk) => {
+  const render = (markdown: string) => {
+    const processor = remark();
+    if (cjk) processor.use(remarkCjkFriendly);
+    return String(
+      processor.use(remarkGfm, { singleTilde: false }).use(remarkHtml).processSync(markdown),
+    );
+  };
 
-describe('GFM autolink CJK boundaries', () => {
   it('keeps the closing emphasis and Chinese annotation outside the PR link', () => {
     expect(render('PR：**https://github.com/example/project/pull/123**（OPEN，base `main`）')).toBe(
       '<p>PR：<strong><a href="https://github.com/example/project/pull/123">https://github.com/example/project/pull/123</a></strong>（OPEN，base <code>main</code>）</p>\n',
@@ -27,12 +33,74 @@ describe('GFM autolink CJK boundaries', () => {
     '’然后继续',
     '…下一句',
     '……”然后继续',
-  ])('ends plain and bold bare links before %s', (suffix) => {
-    expect(render(`https://example.com/path${suffix}`)).toBe(
-      `<p><a href="https://example.com/path">https://example.com/path</a>${suffix}</p>\n`,
-    );
+  ])('closes directly wrapping strong emphasis before %s', (suffix) => {
     expect(render(`**https://example.com/path**${suffix}`)).toBe(
       `<p><strong><a href="https://example.com/path">https://example.com/path</a></strong>${suffix}</p>\n`,
+    );
+  });
+
+  it.each([
+    'https://zh.wikipedia.org/wiki/三体（小说）',
+    'https://en.wikipedia.org/wiki/Schrödinger’s_cat',
+    'https://example.com/search?q=你好，世界&lang=zh',
+    'https://example。com/path',
+    'https://example.com/path?（查询值）',
+    'https://example.com/path**（备注）',
+    'https://example.com/path…下一句',
+  ])('preserves the complete unwrapped URL %s', (url) => {
+    const href = encodeURI(url).replaceAll('&', '&#x26;');
+    expect(render(url)).toBe(`<p><a href="${href}">${url.replaceAll('&', '&#x26;')}</a></p>\n`);
+  });
+
+  it.each(['', ' '])(
+    'does not reuse an already closed strong opener (separator: %s)',
+    (separator) => {
+      expect(render(`**已闭合**${separator}https://example.com/path**（备注）`)).toBe(
+        `<p><strong>已闭合</strong>${separator}<a href="https://example.com/path**%EF%BC%88%E5%A4%87%E6%B3%A8%EF%BC%89">https://example.com/path**（备注）</a></p>\n`,
+      );
+    },
+  );
+
+  it('closes strong after a trailing slash with the active attention tokenizer', () => {
+    expect(render('**https://example.com/path/**（备注）')).toBe(
+      '<p><strong><a href="https://example.com/path/">https://example.com/path/</a></strong>（备注）</p>\n',
+    );
+  });
+
+  it.each([
+    ['**', '***（备注）'],
+    ['***', '**（备注）'],
+    ['**前文 ', '**（备注）'],
+    ['**', '*（备注）'],
+    ['**', '**suffix'],
+  ])('does not reinterpret other delimiter contexts: %s URL %s', (prefix, suffix) => {
+    const url = `https://example.com/path${suffix}`;
+    expect(render(`${prefix}${url}`)).toBe(
+      `<p>${prefix}<a href="${encodeURI(url)}">${url}</a></p>\n`,
+    );
+  });
+
+  it('preserves the existing mdast fallback autolink boundaries', () => {
+    expect(render('链接：www.example.com/path（备注）')).toBe(
+      '<p>链接：<a href="http://www.example.com/path%EF%BC%88%E5%A4%87%E6%B3%A8%EF%BC%89">www.example.com/path（备注）</a></p>\n',
+    );
+    expect(render('[https://example.com/path（备注）]')).toBe(
+      '<p>[<a href="https://example.com/path%EF%BC%88%E5%A4%87%E6%B3%A8%EF%BC%89">https://example.com/path（备注）</a>]</p>\n',
+    );
+  });
+
+  it.each(['http://example.com', 'https://example.com', 'www.example.com/path'])(
+    'closes strong around %s',
+    (url) => {
+      expect(render(`**${url}**（备注）`)).toBe(
+        `<p><strong><a href="${url.startsWith('www.') ? 'http://' : ''}${url}">${url}</a></strong>（备注）</p>\n`,
+      );
+    },
+  );
+
+  it('preserves punctuation inside a strongly wrapped URL', () => {
+    expect(render('**https://example.com/path?（查询值）**（备注）')).toBe(
+      '<p><strong><a href="https://example.com/path?%EF%BC%88%E6%9F%A5%E8%AF%A2%E5%80%BC%EF%BC%89">https://example.com/path?（查询值）</a></strong>（备注）</p>\n',
     );
   });
 

@@ -1,82 +1,162 @@
 diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
-index 904e27200a..f34ffeba2d 100644
 --- a/dev/lib/syntax.js
 +++ b/dev/lib/syntax.js
-@@ -662,7 +662,8 @@ function tokenizePath(effects, ok) {
+@@ -16,6 +16,7 @@
+ const domain = {tokenize: tokenizeDomain, partial: true}
+ const path = {tokenize: tokenizePath, partial: true}
+ const trail = {tokenize: tokenizeTrail, partial: true}
++const strongEnd = {tokenize: tokenizeStrongEnd, partial: true}
+ const emailDomainDotTrail = {
+   tokenize: tokenizeEmailDomainDotTrail,
+   partial: true
+@@ -607,6 +608,26 @@
+  * @type {Tokenizer}
+  */
+ function tokenizePath(effects, ok) {
++  const self = this
++  // The two current events enter literalAutolink and its protocol/www token.
++  const before = self.events[self.events.length - 3]
++  const strong =
++    before &&
++    before[0] === 'exit' &&
++    before[1].type === 'attentionSequence' &&
++    before[1]._open &&
++    self.sliceSerialize(before[1]) === '**' &&
++    // CJK attention can mark an opener as also closing. Do not reuse it if an
++    // earlier opener could consume it; leave ambiguous nesting to upstream.
++    (!before[1]._close ||
++      !self.events.some(
++        (event, index) =>
++          index < self.events.length - 4 &&
++          event[0] === 'exit' &&
++          event[1].type === 'attentionSequence' &&
++          event[1]._open &&
++          self.sliceSerialize(event[1]).charAt(0) === '*'
++      ))
+   let sizeOpen = 0
+   let sizeClose = 0
+
+@@ -656,7 +677,13 @@
+       code === codes.underscore ||
+       code === codes.tilde
+     ) {
+-      return effects.check(trail, ok, pathAtPunctuation)(code)
++      return effects.check(
++        trail,
++        ok,
++        strong && code === codes.asterisk && self.previous !== codes.asterisk
++          ? effects.check(strongEnd, ok, pathAtPunctuation)
++          : pathAtPunctuation
++      )(code)
+     }
+
      if (
-       code === codes.eof ||
-       markdownLineEndingOrSpace(code) ||
--      unicodeWhitespace(code)
-+      unicodeWhitespace(code) ||
-+      cjkPunctuation(code)
-     ) {
-       return ok(code)
-     }
-@@ -762,7 +763,8 @@ function tokenizeTrail(effects, ok, nok) {
-       // So is whitespace.
-       code === codes.eof ||
-       markdownLineEndingOrSpace(code) ||
--      unicodeWhitespace(code)
-+      unicodeWhitespace(code) ||
-+      cjkPunctuation(code)
-     ) {
-       return ok(code)
-     }
-@@ -982,2 +984,15 @@ function previousUnbalanced(events) {
-   return result
+@@ -693,6 +720,38 @@
  }
+
+ /**
++ * Let an adjacent ** opener close before non-ASCII punctuation without changing
++ * bare URL boundaries. The lookahead leaves both stars for attention parsing.
++ *
++ * @this {TokenizeContext}
++ * @type {Tokenizer}
++ */
++function tokenizeStrongEnd(effects, ok, nok) {
++  const self = this
++  // Use the active attention tokenizer, including CJK flanking rules, rather
++  // than guessing whether this delimiter can close from punctuation alone.
++  return effects.attempt(
++    self.parser.constructs.text[codes.asterisk],
++    after,
++    nok
++  )
++
++  /** @type {State} */
++  function after(code) {
++    const event = self.events[self.events.length - 1]
++    return code !== codes.eof &&
++      code > 127 &&
++      unicodePunctuation(code) &&
++      event[0] === 'exit' &&
++      event[1].type === 'attentionSequence' &&
++      event[1]._close &&
++      self.sliceSerialize(event[1]) === '**'
++      ? ok(code)
++      : nok(code)
++  }
++}
 +
 +/**
-+ * CJK prose punctuation terminates literal URLs, including a preceding emphasis
-+ * trail (`**https://example.com/path**（note）`). Unicode letters remain valid in
-+ * paths; explicit Markdown destinations and percent-encoded punctuation bypass
-+ * this literal-autolink boundary.
-+ *
-+ * @param {Code} code
-+ * @returns {boolean}
-+ */
-+function cjkPunctuation(code) {
-+  return code !== null && code >= 0x2000 && /[‘’“”…、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code))
-+}
+  * Trail.
+  *
+  * This calls `ok` if this *is* the trail, followed by an end, which means
 diff --git a/lib/syntax.js b/lib/syntax.js
-index dffbaf1514..7ef7842dad 100644
 --- a/lib/syntax.js
 +++ b/lib/syntax.js
-@@ -584,7 +584,7 @@ function tokenizePath(effects, ok) {
+@@ -17,6 +17,10 @@
+ };
+ const trail = {
+   tokenize: tokenizeTrail,
++  partial: true
++};
++const strongEnd = {
++  tokenize: tokenizeStrongEnd,
+   partial: true
+ };
+ const emailDomainDotTrail = {
+@@ -550,6 +554,12 @@
+  * @type {Tokenizer}
+  */
+ function tokenizePath(effects, ok) {
++  const self = this;
++  // The two current events enter literalAutolink and its protocol/www token.
++  const before = self.events[self.events.length - 3];
++  // CJK attention can mark an opener as also closing. Do not reuse it if an
++  // earlier opener could consume it; leave ambiguous nesting to upstream.
++  const strong = before && before[0] === 'exit' && before[1].type === 'attentionSequence' && before[1]._open && self.sliceSerialize(before[1]) === '**' && (!before[1]._close || !self.events.some((event, index) => index < self.events.length - 4 && event[0] === 'exit' && event[1].type === 'attentionSequence' && event[1]._open && self.sliceSerialize(event[1]).charAt(0) === '*'));
+   let sizeOpen = 0;
+   let sizeClose = 0;
+   return pathInside;
+@@ -582,7 +592,7 @@
+     // followed by more trailing markers, and then followed
+     // by an end.
      if (code === 33 || code === 34 || code === 38 || code === 39 || code === 41 || code === 42 || code === 44 || code === 46 || code === 58 || code === 59 || code === 60 || code === 63 || code === 93 || code === 95 || code === 126) {
-       return effects.check(trail, ok, pathAtPunctuation)(code);
+-      return effects.check(trail, ok, pathAtPunctuation)(code);
++      return effects.check(trail, ok, strong && code === 42 && self.previous !== 42 ? effects.check(strongEnd, ok, pathAtPunctuation) : pathAtPunctuation)(code);
      }
--    if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
-+    if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code) || cjkPunctuation(code)) {
+     if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
        return ok(code);
+@@ -608,6 +618,26 @@
      }
      effects.consume(code);
-@@ -665,7 +665,7 @@ function tokenizeTrail(effects, ok, nok) {
-     // `<` is an end.
-     code === 60 ||
-     // So is whitespace.
--    code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
-+    code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code) || cjkPunctuation(code)) {
-       return ok(code);
-     }
-     return nok(code);
-@@ -851,4 +851,17 @@ function previousUnbalanced(events) {
+     return pathInside;
++  }
++}
++
++/**
++ * Let an adjacent ** opener close before non-ASCII punctuation without changing
++ * bare URL boundaries. The lookahead leaves both stars for attention parsing.
++ *
++ * @this {TokenizeContext}
++ * @type {Tokenizer}
++ */
++function tokenizeStrongEnd(effects, ok, nok) {
++  const self = this;
++  // Use the active attention tokenizer, including CJK flanking rules, rather
++  // than guessing whether this delimiter can close from punctuation alone.
++  return effects.attempt(self.parser.constructs.text[42], after, nok);
++
++  /** @type {State} */
++  function after(code) {
++    const event = self.events[self.events.length - 1];
++    return code !== null && code > 127 && unicodePunctuation(code) && event[0] === 'exit' && event[1].type === 'attentionSequence' && event[1]._close && self.sliceSerialize(event[1]) === '**' ? ok(code) : nok(code);
+   }
+ }
+
+@@ -851,4 +881,4 @@
      events[events.length - 1][1]._gfmAutolinkLiteralWalkedInto = true;
    }
    return result;
 -}
 \ No newline at end of file
-+}
-+
-+/**
-+ * CJK prose punctuation terminates literal URLs, including a preceding emphasis
-+ * trail (`**https://example.com/path**（note）`). Unicode letters remain valid in
-+ * paths; explicit Markdown destinations and percent-encoded punctuation bypass
-+ * this literal-autolink boundary.
-+ *
-+ * @param {Code} code
-+ * @returns {boolean}
-+ */
-+function cjkPunctuation(code) {
-+  return code !== null && code >= 0x2000 && /[‘’“”…、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code));
 +}
