@@ -10,6 +10,7 @@ import { fileEnv } from '@/envs/file';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
+import { sandboxEnv } from '@/envs/sandbox';
 import { toolsEnv } from '@/envs/tools';
 import { parseSSOProviders } from '@/libs/better-auth/utils/server';
 import { parseSystemAgent } from '@/server/globalConfig/parseSystemAgent';
@@ -169,6 +170,10 @@ export const getServerGlobalConfig = async () => {
     // resolver's own function so both sides read the raw value identically —
     // unset/invalid stays `undefined`, i.e. the resolver's default 64.
     toolNameMaxLength: parseToolNameMaxLength(toolsEnv.TOOL_NAME_MAX_LENGTH),
+    // Lets the widget publish review match the sandbox's real egress contract:
+    // unless the Worker enforces per-host allowlists, declared hosts are
+    // advisory and the review must say any host is reachable.
+    widgetSandboxNetworkFormat: sandboxEnv.WIDGET_SANDBOX_NETWORK_FORMAT,
   };
 
   return config;

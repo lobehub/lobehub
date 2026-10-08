@@ -8,6 +8,7 @@ import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 export const reviewStyles = createStaticStyles(({ css }) => ({
   label: css`
@@ -38,16 +39,29 @@ export const AccessFacts = memo<{ manifest?: WidgetManifest | null }>(({ manifes
   const { t } = useTranslation('dashboard');
   const hosts = manifest?.network?.allow ?? [];
   const env = manifest?.env ?? [];
+  // The boolean network format — the deployed Worker's only one — switches
+  // egress on for any nonempty allowlist without enforcing the hosts, so the
+  // facts must say the script can reach any host, not just the declared ones.
+  const enforcesHosts = useServerConfigStore(
+    serverConfigSelectors.widgetSandboxEnforcesNetworkHosts,
+  );
 
   return (
     <>
       <Fact label={t('publish.network')}>
         {hosts.length > 0 ? (
-          hosts.map((host) => (
-            <Tag key={host} size={'small'}>
-              {host}
-            </Tag>
-          ))
+          <>
+            {!enforcesHosts && (
+              <Text fontSize={12} type={'warning'}>
+                {t('publish.networkUnrestricted')}
+              </Text>
+            )}
+            {hosts.map((host) => (
+              <Tag key={host} size={'small'}>
+                {host}
+              </Tag>
+            ))}
+          </>
         ) : (
           <Text fontSize={12}>{t('publish.networkNone')}</Text>
         )}

@@ -98,6 +98,7 @@
   "publish.intro": "Once published, this script runs on its schedule with the listed credentials and its result shows on dashboards.",
   "publish.network": "Network",
   "publish.networkNone": "No network access",
+  "publish.networkUnrestricted": "The sandbox cannot restrict egress to the listed hosts — the script can reach any host, including ones it did not declare.",
   "publish.noSuccessfulRun": "This draft has not succeeded in a dry run yet, so publishing it will be refused.",
   "publish.previewTitle": "Latest dry run",
   "publish.schedule": "Refresh",

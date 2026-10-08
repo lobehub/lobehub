@@ -97,4 +97,28 @@ describe('serverConfigSelectors', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('widgetSandboxEnforcesNetworkHosts', () => {
+    it('is true only when the sandbox runs in allowlist mode', () => {
+      const enforced = initServerConfigStore({
+        serverConfig: { aiProvider: {}, telemetry: {}, widgetSandboxNetworkFormat: 'allowlist' },
+      });
+      expect(serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(enforced.getState())).toBe(
+        true,
+      );
+
+      // The deployed Worker's boolean format — and an unset format, which
+      // defaults to it — cannot limit egress to the declared hosts.
+      const booleanFormat = initServerConfigStore({
+        serverConfig: { aiProvider: {}, telemetry: {}, widgetSandboxNetworkFormat: 'boolean' },
+      });
+      expect(
+        serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(booleanFormat.getState()),
+      ).toBe(false);
+      const unset = initServerConfigStore({
+        serverConfig: { aiProvider: {}, telemetry: {} },
+      });
+      expect(serverConfigSelectors.widgetSandboxEnforcesNetworkHosts(unset.getState())).toBe(false);
+    });
+  });
 });
