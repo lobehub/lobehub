@@ -69,6 +69,17 @@ export const getPreviewPublishState = (
   return isUsableRunStatus(run.status) ? 'publishable' : 'notReady';
 };
 
+/**
+ * Whether the preview may offer publishing at all. Publishing goes through
+ * `WidgetService.publish`, which refuses everyone but the widget's creator —
+ * a teammate reading a public widget would only meet a guaranteed failure, so
+ * the action stays hidden from them. False until the current user is known.
+ */
+export const canPreviewPublish = (
+  widget: Pick<DashboardWidgetDetail, 'userId'>,
+  currentUserId?: string | null,
+): boolean => !!currentUserId && currentUserId === widget.userId;
+
 /** Versions to compare by default: the one under review against the live one (or its parent). */
 export const defaultDiffPair = (
   versions: Pick<DashboardWidgetVersionItem, 'id' | 'parentVersionId' | 'status'>[],

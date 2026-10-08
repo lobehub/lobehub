@@ -11,12 +11,19 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { DashboardWidgetDetail, DashboardWidgetRunItem } from '@/services/dashboard';
 import { useChatStore } from '@/store/chat';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
 import { formatDuration } from '../utils/format';
 import { getDashboardPath } from '../utils/path';
 import WidgetCard from '../WidgetCard';
 import AddToDashboardButton from './AddToDashboardButton';
-import { findSucceededPreviewRun, getPreviewPublishState, toPreviewWidget } from './previewWidget';
+import {
+  canPreviewPublish,
+  findSucceededPreviewRun,
+  getPreviewPublishState,
+  toPreviewWidget,
+} from './previewWidget';
 
 const styles = createStaticStyles(({ css }) => ({
   definition: css`
@@ -63,6 +70,10 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
   const version = versions.find((item) => item.id === run.versionId);
   const draft = versions.find((item) => item.id === widget.draftVersionId);
   const publishState = getPreviewPublishState(widget, run);
+  const currentUserId = useUserStore(userProfileSelectors.userId);
+  // Publishing is creator-only server-side; teammates reading the widget get
+  // no publish action at all instead of a button that always fails.
+  const canPublish = canPreviewPublish(widget, currentUserId);
   const preview = toPreviewWidget(widget, run);
   const outputType = run.output?.type ?? version?.outputType ?? 'stat';
 
@@ -124,7 +135,7 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
       )}
 
       <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
-        {publishState === 'publishable' && (
+        {canPublish && publishState === 'publishable' && (
           <Button
             data-widget-publish
             icon={RocketIcon}
@@ -136,7 +147,7 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
             {t('chat.publish')}
           </Button>
         )}
-        {publishState === 'notReady' && (
+        {canPublish && publishState === 'notReady' && (
           <Tooltip title={t('chat.publishHint')}>
             <Button disabled icon={RocketIcon} size={'small'}>
               {t('chat.publish')}

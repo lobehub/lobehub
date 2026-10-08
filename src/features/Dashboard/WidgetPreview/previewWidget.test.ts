@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  canPreviewPublish,
   defaultDiffPair,
   findSucceededPreviewRun,
   getPreviewPublishState,
@@ -95,6 +96,20 @@ describe('getPreviewPublishState', () => {
         { status: 'succeeded', versionId: 'v1' },
       ),
     ).toBe('outdated');
+  });
+});
+
+describe('canPreviewPublish', () => {
+  const widget = { userId: 'u-creator' };
+
+  it('offers publishing to the widget creator', () => {
+    expect(canPreviewPublish(widget, 'u-creator')).toBe(true);
+  });
+
+  it('hides publishing from everyone else, so teammates never hit a guaranteed failure', () => {
+    expect(canPreviewPublish(widget, 'u-member')).toBe(false);
+    expect(canPreviewPublish(widget, null)).toBe(false);
+    expect(canPreviewPublish(widget, undefined)).toBe(false);
   });
 });
 
