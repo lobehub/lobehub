@@ -159,8 +159,8 @@ jobs:
         run: |
           set -euo pipefail
           echo "seq=$SEQ" >> "$GITHUB_OUTPUT"
-          echo "version=$APP_VERSION-$SEQ" >> "$GITHUB_OUTPUT"
-          echo "Next core: $APP_VERSION-$SEQ (seq $SEQ)"
+          echo "version=$APP_VERSION-core.$SEQ" >> "$GITHUB_OUTPUT"
+          echo "Next core: $APP_VERSION-core.$SEQ (seq $SEQ)"
 
       - name: Resolve Cloud revision
         id: cloud-ref

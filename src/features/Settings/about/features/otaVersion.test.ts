@@ -36,4 +36,8 @@ describe('formatOtaVersionLabel', () => {
   it('does not add a v prefix to non-semver OTA names', () => {
     expect(formatOtaVersionLabel('r1')).toBe('OTA r1');
   });
+
+  it('hides the core segment in the displayed version', () => {
+    expect(formatOtaVersionLabel('2.2.19-canary.33-core.2')).toBe('OTA 2.2.19-canary.33-2');
+  });
 });

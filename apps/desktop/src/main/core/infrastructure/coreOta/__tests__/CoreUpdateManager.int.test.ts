@@ -525,7 +525,7 @@ describe('CoreUpdateManager checkForUpdates', () => {
   it.each(['1.0.0', '2.0.0-canary.1'])(
     'isolates v4 feed by shell version %s even when an OTA core is running',
     async (shellVersion) => {
-      const manifest = mainChanged('1.0.0-17', 17);
+      const manifest = mainChanged('1.0.0-core.17', 17);
       // A shared or another application's feed must never be used as a fallback.
       served.set(`${SERVER}/stable/core-v4/${PLATFORM}/latest.json`, Buffer.from('{}'));
       const { manager } = await loadManager(

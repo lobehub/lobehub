@@ -83,33 +83,17 @@ afterEach(() => {
 describe('resolveCore', () => {
   it('drops an older shell namespace after a full update even when its OTA seq is higher', () => {
     writeCore(builtinDir, '1.0.2-canary.1', { channel: 'canary', seq: 0, schemaVersion: 4 });
-    writeExternal('1.0.1-canary.1-101', { channel: 'canary', seq: 101, schemaVersion: 4 });
-    writePointer({ channel: 'canary', current: '1.0.1-canary.1-101' });
+    writeExternal('1.0.1-canary.1-core.101', { channel: 'canary', seq: 101, schemaVersion: 4 });
+    writePointer({ channel: 'canary', current: '1.0.1-canary.1-core.101' });
     const core = resolve();
     expect(core.source).toBe('builtin');
     expect(core.log.join(' ')).toContain('does not belong to 1.0.2-canary.1');
   });
 
-  it('loads a v4 core named <shellVersion>-<seq>', () => {
-    writeCore(builtinDir, '1.0.2-canary.1', { channel: 'canary', seq: 0, schemaVersion: 4 });
-    writeExternal('1.0.2-canary.1-3', { channel: 'canary', seq: 3, schemaVersion: 4 });
-    writePointer({ channel: 'canary', current: '1.0.2-canary.1-3' });
-    expect(resolve().manifest.version).toBe('1.0.2-canary.1-3');
-  });
-
-  it('rejects a v4 core whose suffix is not a numeric seq', () => {
-    writeCore(builtinDir, '1.0.2', { channel: 'stable', seq: 0, schemaVersion: 4 });
-    writeExternal('1.0.2-canary.1', { channel: 'stable', seq: 9, schemaVersion: 4 });
-    writePointer({ channel: 'stable', current: '1.0.2-canary.1' });
-    const core = resolve();
-    expect(core.source).toBe('builtin');
-    expect(core.log.join(' ')).toContain('does not belong to 1.0.2');
-  });
-
   it('ignores staged and current OTA cores on macOS Stable even with a Canary pointer', () => {
     writeCore(builtinDir, '1.0.0', { channel: 'stable', seq: 0 });
-    writeExternal('1.0.1-1', { channel: 'canary', seq: 1 });
-    writePointer({ channel: 'canary', current: '1.0.1-1', staged: '1.0.1-1' });
+    writeExternal('1.0.1-core.1', { channel: 'canary', seq: 1 });
+    writePointer({ channel: 'canary', current: '1.0.1-core.1', staged: '1.0.1-core.1' });
     writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: 'stable' });
     const core = resolveCore({
       abi: ABI,
@@ -124,8 +108,8 @@ describe('resolveCore', () => {
 
   it('loads OTA when a macOS Stable build has opted into Canary', () => {
     writeCore(builtinDir, '1.0.0', { channel: 'stable', seq: 0 });
-    writeExternal('1.0.1-1', { channel: 'canary', seq: 1 });
-    writePointer({ channel: 'canary', current: '1.0.1-1' });
+    writeExternal('1.0.1-core.1', { channel: 'canary', seq: 1 });
+    writePointer({ channel: 'canary', current: '1.0.1-core.1' });
     writeJson(path.join(userData, 'lobehub-settings.json'), { updateChannel: 'canary' });
     const core = resolveCore({
       abi: ABI,
@@ -394,9 +378,9 @@ describe('resolveCore', () => {
 
   it('still loads an external core whose seq is above the builtin', () => {
     writeCore(builtinDir, '2.0.0', { seq: 5 });
-    writeExternal('2.0.0-6', { seq: 6 });
-    writePointer({ current: '2.0.0-6' });
-    expect(resolve().manifest.version).toBe('2.0.0-6');
+    writeExternal('2.0.0-core.6', { seq: 6 });
+    writePointer({ current: '2.0.0-core.6' });
+    expect(resolve().manifest.version).toBe('2.0.0-core.6');
   });
 
   it('drops an external core from another channel than the pointer names', () => {

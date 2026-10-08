@@ -40,7 +40,7 @@ node scripts/core-ota-test/run.mjs launch  # RENDERER_OTA_CHECK_DELAY=3000
 ```
 
 期望：日志 `Core OTA staged {"applyMode":"reload",...}`；toast 点「刷新」或等 5 分钟空闲后窗口右上角出现 `CORE V2`；
-`run.mjs state` 显示 `current: "1.0.0-1"`。
+`run.mjs state` 显示 `current: "1.0.0-core.1"`。
 
 ## 3. main 变更（relaunch）
 
@@ -49,17 +49,17 @@ node scripts/core-ota-test/run.mjs v3 # dist/main/index.js 追加 console.log('c
 ```
 
 app 内触发检查（或等 60 分钟定时）→ 日志 `applyMode":"relaunch"` → toast「立即重启」→
-重启后日志开头出现 `core v3`，`state` 显示 `current: "1.0.0-2"`，壳日志 `source: external`。
+重启后日志开头出现 `core v3`，`state` 显示 `current: "1.0.0-core.2"`，壳日志 `source: external`。
 
 ## 4. 篡改拒绝
 
 ```bash
 node scripts/core-ota-test/run.mjs kill
-node scripts/core-ota-test/run.mjs tamper # 改 cores/1.0.0-2/dist/main/index.js
+node scripts/core-ota-test/run.mjs tamper # 改 cores/1.0.0-core.2/dist/main/index.js
 node scripts/core-ota-test/run.mjs launch
 ```
 
-期望：壳日志 `core 1.0.0-2 rejected: size mismatch dist/main/index.js`，回退到 `previous`（1.0.0-1）。
+期望：壳日志 `core 1.0.0-core.2 rejected: size mismatch dist/main/index.js`，回退到 `previous`（1.0.0-core.1）。
 
 ## 5. boot 失败回滚
 
@@ -71,8 +71,8 @@ node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.
 node scripts/core-ota-test/run.mjs eval "window.electronAPI.invoke('rendererOta.applyNow')"
 ```
 
-期望：3 s 内 `Core OTA rolled back {coldBoot: false, reason: 'load-timeout'}`，pointer `blacklist` 含 `1.0.0-3`，
-窗口回到 v3 的 renderer。冷启动检查：把 `pointer.current` 手动指回 `1.0.0-3`、删掉 `boot.json` 再 `launch`，
+期望：3 s 内 `Core OTA rolled back {coldBoot: false, reason: 'load-timeout'}`，pointer `blacklist` 含 `1.0.0-core.3`，
+窗口回到 v3 的 renderer。冷启动检查：把 `pointer.current` 手动指回 `1.0.0-core.3`、删掉 `boot.json` 再 `launch`，
 60 s 后 `Core OTA rolled back {coldBoot: true}` 并自动 relaunch 到上一版本。
 
 ## 6. 壳救援（内置 core 坏掉）
@@ -93,7 +93,7 @@ printf 'provider: generic\nurl: http://127.0.0.1:8787/canary\n' > $R/app-update.
 ## 辅助
 
 `launch` 带 `--remote-debugging-port=9333`，`run.mjs eval "<js>"` 在主窗口里求值（`window.electronAPI.invoke('rendererOta.<applyNow|checkNow|getStatus>')`），
-`run.mjs eval --shot <file.png>` 截主窗口。`tamper` 改 `cores/1.0.0-2/dist/main/index.js` 一行。
+`run.mjs eval --shot <file.png>` 截主窗口。`tamper` 改 `cores/1.0.0-core.2/dist/main/index.js` 一行。
 onboarding 页不挂 UpdateNotification，toast 要登录后才看得到；用 `eval` 触发 IPC 即可。
 
 ## 收尾
