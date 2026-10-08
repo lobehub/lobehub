@@ -38,6 +38,7 @@ export default {
   'chat.publish': 'Publish',
   'chat.publishFailed': 'Could not publish: {{message}}',
   'chat.publishHint': 'Publishing is available after a successful dry run.',
+  'chat.publishReviewTitle': 'Review before publishing',
   'chat.published': 'Published v{{version}}. It now refreshes on its schedule.',
   'chat.unavailable': 'This widget is no longer available.',
   'create.action': 'New dashboard',

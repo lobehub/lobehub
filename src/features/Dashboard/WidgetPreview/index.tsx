@@ -19,6 +19,7 @@ import { getDashboardPath } from '../utils/path';
 import WidgetCard from '../WidgetCard';
 import AddToDashboardButton from './AddToDashboardButton';
 import { canPreviewPublish, getPreviewPublishState, toPreviewWidget } from './previewWidget';
+import { openPublishConfirmModal } from './PublishConfirmModal';
 
 const styles = createStaticStyles(({ css }) => ({
   definition: css`
@@ -72,16 +73,23 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
   const preview = toPreviewWidget(widget, run);
   const outputType = run.output?.type ?? version?.outputType ?? 'stat';
 
-  const handlePublish = async () => {
-    try {
-      const result = await publishWidgetVersion(widget.id, run.versionId);
-      toast.success(t('chat.published', { version: result?.version.version }));
-    } catch (error) {
-      toast.error(
-        t('chat.publishFailed', { message: error instanceof Error ? error.message : '' }),
-      );
-    }
-  };
+  // Publishing goes through the same review the requestPublish intervention
+  // renders — nothing goes live on a bare click from the preview.
+  const handlePublish = () =>
+    openPublishConfirmModal({
+      versionId: run.versionId,
+      widgetId: widget.id,
+      onConfirm: async () => {
+        try {
+          const result = await publishWidgetVersion(widget.id, run.versionId);
+          toast.success(t('chat.published', { version: result?.version.version }));
+        } catch (error) {
+          toast.error(
+            t('chat.publishFailed', { message: error instanceof Error ? error.message : '' }),
+          );
+        }
+      },
+    });
 
   return (
     <Flexbox className={styles.root} data-widget-preview={widget.id} gap={10}>

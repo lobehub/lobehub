@@ -34,6 +34,7 @@
   "chat.publish": "发布",
   "chat.publishFailed": "发布失败：{{message}}",
   "chat.publishHint": "试运行成功后才能发布。",
+  "chat.publishReviewTitle": "发布前审查",
   "chat.published": "已发布 v{{version}}，将按计划自动刷新。",
   "chat.unavailable": "该组件已不可用。",
   "create.action": "新建看板",
