@@ -15,7 +15,6 @@ user-invocable: false
 - Prefer `as const satisfies XyzInterface` over plain `as const`
 - Prefer `@ts-expect-error` over `@ts-ignore` over `as any`
 - Avoid meaningless null/undefined parameters; design strict function contracts
-- Do not add a fourth positional parameter to a function or constructor; use a typed options object with named fields instead (for example, `FollowUpActionService({ db, userId, workspaceId, userAgent })`).
 - Prefer ES module augmentation (`declare module '...'`) over `namespace`; do not introduce `namespace`-based extension patterns
 - When a type needs extensibility, expose a small mergeable interface at the source type and let each feature/plugin augment it locally instead of centralizing all extension fields in one registry file
 - For package-local extensibility patterns like `PipelineContext.metadata`, define the metadata fields next to the processor/provider/plugin that reads or writes them
