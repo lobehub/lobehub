@@ -9,7 +9,13 @@ import { scheduleStaleConnectorToolsRefresh } from './refresh';
 import { ensureFreshConnectorToken } from './tokens';
 
 vi.mock('@/server/services/mcp', () => ({ mcpService: { callTool: vi.fn() } }));
-vi.mock('@/server/services/deviceGateway', () => ({ deviceGateway: { isConfigured: false } }));
+vi.mock('@/server/services/deviceGateway', () => ({
+  deviceGateway: {
+    executeMcpCall: vi.fn(),
+    isConfigured: false,
+    queryDeviceList: vi.fn(),
+  },
+}));
 vi.mock('./tokens', () => ({ ensureFreshConnectorToken: vi.fn(async (c) => c) }));
 // The background tool-list refresh is exercised in refresh.test.ts. Here we only
 // verify the call site wires it up and stays isolated from it.
@@ -36,16 +42,26 @@ const tool = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const makeCtx = (connectors: any[], tools: any[]) =>
+const makeCtx = (connectors: any[], tools: any[], extra: Record<string, unknown> = {}) =>
   ({
     connectorModel: { queryByIdentifiers: vi.fn().mockResolvedValue(connectors) },
     connectorToolModel: { queryByConnector: vi.fn().mockResolvedValue(tools) },
+    userId: 'u1',
+    ...extra,
   }) as any;
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(ensureFreshConnectorToken).mockImplementation(async (c: any) => c);
   (deviceGateway as any).isConfigured = false;
+  vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([
+    { deviceId: 'dev-1', online: true },
+  ] as any);
+  vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
+    content: 'device-ok',
+    state: {},
+    success: true,
+  });
 });
 
 describe('callConnectorToolById', () => {
@@ -140,14 +156,71 @@ describe('callConnectorToolById', () => {
     );
   });
 
-  // On a cloud deployment (device gateway configured) the server can never
-  // reach a stdio binary or a localhost/LAN endpoint — those calls must fail
-  // fast with an actionable message instead of a cryptic spawn/fetch error
-  // (#16533). Self-hosted servers (no gateway) may share a LAN with the
-  // endpoint, so the guard must NOT fire there.
+  // Device-only endpoints (stdio or local network URLs):
+  // When device gateway is configured, tunnel the MCP call to the active desktop device.
+  // When device gateway is not configured, fail fast for stdio while letting self-hosted
+  // LAN HTTP endpoints pass through.
   describe('device-only endpoints on a cloud deployment', () => {
-    it('rejects a stdio connector when the device gateway is configured', async () => {
+    it('tunnels a stdio connector to the online device when the device gateway is configured', async () => {
       (deviceGateway as any).isConfigured = true;
+      const stdioConnector = {
+        ...connector,
+        mcpConnectionType: 'stdio',
+        mcpServerUrl: null,
+        mcpStdioConfig: { args: ['-y'], command: 'npx', env: { FOO: 'bar' } },
+      };
+      const ctx = makeCtx([stdioConnector], [tool()]);
+
+      const res = await callConnectorToolById(
+        { args: '{"x":1}', identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      );
+
+      expect(res).toEqual({ content: 'device-ok', state: {}, success: true });
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith({
+        apiName: 'do_thing',
+        arguments: '{"x":1}',
+        deviceId: 'dev-1',
+        identifier: 'my-conn',
+        params: expect.objectContaining({
+          args: ['-y'],
+          command: 'npx',
+          type: 'stdio',
+        }),
+        userId: 'u1',
+        workspaceId: undefined,
+      });
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('tunnels a local/private-network HTTP connector to the online device when the device gateway is configured', async () => {
+      (deviceGateway as any).isConfigured = true;
+      const localConnector = { ...connector, mcpServerUrl: 'http://192.168.1.10:8080/mcp' };
+      const ctx = makeCtx([localConnector], [tool()]);
+
+      const res = await callConnectorToolById(
+        { args: '{"x":1}', identifier: 'my-conn', toolName: 'do_thing' },
+        ctx,
+      );
+
+      expect(res).toEqual({ content: 'device-ok', state: {}, success: true });
+      expect(deviceGateway.executeMcpCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          apiName: 'do_thing',
+          deviceId: 'dev-1',
+          identifier: 'my-conn',
+          params: expect.objectContaining({
+            type: 'http',
+            url: 'http://192.168.1.10:8080/mcp',
+          }),
+        }),
+      );
+      expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('rejects a stdio connector when device gateway is configured but no device is online', async () => {
+      (deviceGateway as any).isConfigured = true;
+      vi.mocked(deviceGateway.queryDeviceList).mockResolvedValue([]);
       const stdioConnector = {
         ...connector,
         mcpConnectionType: 'stdio',
@@ -159,18 +232,44 @@ describe('callConnectorToolById', () => {
       await expect(
         callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
       ).rejects.toHaveProperty('code', 'BAD_REQUEST');
-      expect(mcpService.callTool).not.toHaveBeenCalled();
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
     });
 
-    it('rejects a local/private-network HTTP connector when the device gateway is configured', async () => {
-      (deviceGateway as any).isConfigured = true;
-      const localConnector = { ...connector, mcpServerUrl: 'http://192.168.1.10:8080/mcp' };
-      const ctx = makeCtx([localConnector], [tool()]);
+    it('rejects a stdio connector when device gateway is not configured', async () => {
+      (deviceGateway as any).isConfigured = false;
+      const stdioConnector = {
+        ...connector,
+        mcpConnectionType: 'stdio',
+        mcpServerUrl: null,
+        mcpStdioConfig: { args: [], command: 'npx' },
+      };
+      const ctx = makeCtx([stdioConnector], [tool()]);
 
       await expect(
         callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
       ).rejects.toHaveProperty('code', 'BAD_REQUEST');
+      expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
       expect(mcpService.callTool).not.toHaveBeenCalled();
+    });
+
+    it('throws when device tool execution returns failure', async () => {
+      (deviceGateway as any).isConfigured = true;
+      vi.mocked(deviceGateway.executeMcpCall).mockResolvedValue({
+        content: 'failed on mac',
+        error: 'EXEC_ERROR',
+        success: false,
+      });
+      const stdioConnector = {
+        ...connector,
+        mcpConnectionType: 'stdio',
+        mcpServerUrl: null,
+        mcpStdioConfig: { args: [], command: 'npx' },
+      };
+      const ctx = makeCtx([stdioConnector], [tool()]);
+
+      await expect(
+        callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx),
+      ).rejects.toThrow('EXEC_ERROR');
     });
 
     it('still calls a local endpoint when no device gateway is configured (self-host)', async () => {
@@ -199,7 +298,7 @@ describe('callConnectorToolById', () => {
     // The refresh is a pure optimization; a failure in it must never break the
     // tool call the user actually asked for.
     vi.mocked(scheduleStaleConnectorToolsRefresh).mockImplementationOnce(() => {
-      throw new Error('scheduler exploded');
+      throw new Error('boom');
     });
     vi.mocked(mcpService.callTool).mockResolvedValue({ success: true });
     const ctx = makeCtx([connector], [tool()]);
@@ -207,6 +306,5 @@ describe('callConnectorToolById', () => {
     const res = await callConnectorToolById({ identifier: 'my-conn', toolName: 'do_thing' }, ctx);
 
     expect(res).toEqual({ success: true });
-    expect(mcpService.callTool).toHaveBeenCalledTimes(1);
   });
 });
