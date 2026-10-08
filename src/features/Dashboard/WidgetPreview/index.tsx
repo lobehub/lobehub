@@ -8,6 +8,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { usePermission } from '@/hooks/usePermission';
 import type { DashboardWidgetDetail, DashboardWidgetRunItem } from '@/services/dashboard';
 import { useChatStore } from '@/store/chat';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
@@ -69,8 +70,11 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
   const publishState = getPreviewPublishState(widget, run);
   const currentUserId = useUserStore(userProfileSelectors.userId);
   // Publishing is creator-only server-side; teammates reading the widget get
-  // no publish action at all instead of a button that always fails.
-  const canPublish = canPreviewPublish(widget, currentUserId);
+  // no publish action at all instead of a button that always fails. The same
+  // create_content permission gates the write: a demoted creator keeps
+  // widget.userId but the server refuses their publish.
+  const { allowed: canWrite } = usePermission('create_content');
+  const canPublish = canWrite && canPreviewPublish(widget, currentUserId);
   const preview = toPreviewWidget(widget, run);
   const outputType = run.output?.type ?? version?.outputType ?? 'stat';
   // Normalize once: an older server may not send the widget's boards list.
