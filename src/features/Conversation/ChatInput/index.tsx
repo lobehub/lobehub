@@ -49,6 +49,7 @@ import {
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   toChatInputMessages,
+  toDisplayableSendErrorMessage,
 } from './utils';
 import {
   canSendVoiceMessage,
@@ -270,6 +271,22 @@ const ChatInput = memo<ChatInputProps>(
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
+    // `inputSendErrorMsg` is the failed call's `error.message` verbatim, so it
+    // can still be a raw database dump on servers predating the databaseError
+    // middleware. That text is SQL plus every bound parameter — including the
+    // user's own input — so it is never echoed; generic copy stands in for it.
+    const sendMessageErrorTitle = useMemo(
+      () =>
+        sendMessageErrorMsg
+          ? t('input.errorMsg', {
+              errorMsg:
+                toDisplayableSendErrorMessage(sendMessageErrorMsg) ??
+                t('unknownError', { ns: 'common' }),
+            })
+          : undefined,
+      [sendMessageErrorMsg, t],
+    );
+
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
@@ -452,11 +469,11 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
-          {sendMessageErrorMsg && (
+          {sendMessageErrorTitle && (
             <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
               <Alert
                 closable
-                title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+                title={sendMessageErrorTitle}
                 type={'secondary'}
                 onClose={clearSendMessageError}
               />

@@ -8,6 +8,7 @@
  * @link https://trpc.io/docs/v11/procedures
  */
 
+import { databaseError } from '../middleware/databaseError';
 import { openTelemetry } from '../middleware/openTelemetry';
 import { upstreamError } from '../middleware/upstreamError';
 import { userAuth } from '../middleware/userAuth';
@@ -26,7 +27,7 @@ export const router = trpc.router;
  * Create an unprotected procedure
  * @link https://trpc.io/docs/v11/procedures
  **/
-const baseProcedure = trpc.procedure.use(openTelemetry).use(upstreamError);
+const baseProcedure = trpc.procedure.use(openTelemetry).use(upstreamError).use(databaseError);
 
 // `apiKeyScopeGuard` also covers public procedures: `createLambdaContext`
 // authenticates an `X-API-Key` before procedure selection, and several public
