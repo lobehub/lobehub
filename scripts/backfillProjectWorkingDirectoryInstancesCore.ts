@@ -14,6 +14,12 @@
  *
  * Idempotent: an upgraded row satisfies the natural-key chain and is no longer
  * selected; the id cursor keeps a dry run from revisiting rows.
+ *
+ * The cursor scan deliberately does NOT use `SKIP LOCKED`. Skipping a locked
+ * row would still return later rows, so the cursor would advance past the
+ * skipped one and the row would be stranded behind it — never upgraded, while
+ * the run still reports completion. Waiting for the lock instead keeps the
+ * scanned window gap-free, so the backfill always converges.
  */
 
 export interface BackfillQueryClient {
@@ -68,7 +74,7 @@ export const SELECT_LEGACY_DIRECTORIES = `
     )
   ORDER BY pwd.id
   LIMIT $2
-  FOR UPDATE OF pwd SKIP LOCKED
+  FOR UPDATE OF pwd
 `;
 
 export const backfillProjectWorkingDirectoryInstances = async (

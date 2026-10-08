@@ -1,9 +1,11 @@
 // @vitest-environment node
+import { sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   type BackfillPool,
   backfillProjectWorkingDirectoryInstances,
+  SELECT_LEGACY_DIRECTORIES,
 } from '../../../../../scripts/backfillProjectWorkingDirectoryInstancesCore';
 import { getTestDB } from '../../core/getTestDB';
 import {
@@ -119,5 +121,52 @@ describe('backfillProjectWorkingDirectoryInstances', () => {
     await expect(model.resolve(legacy.id)).resolves.toMatchObject({
       environmentId: environment.id,
     });
+  });
+
+  // The cursor advances to the last row of each batch, so a scan that drops a
+  // qualifying row from its window strands that row *behind* the cursor: it is
+  // never revisited and the run reports completion anyway. `SKIP LOCKED` used
+  // to do exactly that whenever a row was briefly locked, so the scan must wait
+  // for the lock instead of stepping over it.
+  //
+  // Under the client-db PGlite engine every statement shares one session, so the
+  // lock belongs to the scanning transaction itself and cannot be skipped; the
+  // real assertion needs a node-postgres pool (`TEST_SERVER_DB=1`) where the
+  // holder and the scan run on separate connections.
+  it('keeps a locked row in the cursor window instead of skipping past it', async () => {
+    const a = await insertLegacyDirectory('/work/a');
+    const b = await insertLegacyDirectory('/work/b');
+    const earlier = a.id < b.id ? a : b;
+
+    let markLocked!: () => void;
+    const locked = new Promise<void>((resolve) => {
+      markLocked = resolve;
+    });
+    let releaseLock!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseLock = resolve;
+    });
+
+    const holding = db.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT id FROM project_working_directories WHERE id = ${earlier.id} FOR UPDATE`,
+      );
+      markLocked();
+      await gate;
+    });
+
+    await locked;
+
+    const scan = (db as any).$client.query(SELECT_LEGACY_DIRECTORIES, [
+      '00000000-0000-0000-0000-000000000000',
+      1,
+    ]);
+    // Let the scan reach the locked row before the holder goes away.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    releaseLock();
+    await holding;
+
+    const { rows } = await scan;
+    expect(rows.map((row: { id: string }) => row.id)).toEqual([earlier.id]);
   });
 });
