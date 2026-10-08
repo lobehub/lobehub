@@ -134,6 +134,39 @@ describe('useFetchDashboardDetail', () => {
     expect(filter(['dashboard:detail', 'd1'])).toBe(false);
   });
 
+  it('drops trends when a poll moves a widget’s run identity, even with no running state', () => {
+    // A short scheduled run finished entirely between two polls: both
+    // snapshots read "succeeded"; only the run identity moved.
+    const before = {
+      ...detail,
+      items: [
+        {
+          item: detail.items[0].item,
+          widget: widget({ lastRunAt: '2026-01-01T00:00:00Z', lastRunStatus: 'succeeded' }),
+        },
+      ],
+    };
+    useDashboardStore.setState({ dashboardDetailMap: { d1: before } });
+    useDashboardStore.getState().useFetchDashboardDetail('d1');
+    const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+      onSuccess: (data: unknown) => void;
+    };
+
+    const after = {
+      ...detail,
+      items: [
+        {
+          item: detail.items[0].item,
+          widget: widget({ lastRunAt: '2026-01-01T00:05:00Z', lastRunStatus: 'succeeded' }),
+        },
+      ],
+    };
+    options.onSuccess(after);
+
+    const filter = vi.mocked(mutate).mock.calls.at(-1)![0] as (key: unknown) => boolean;
+    expect(filter(['dashboard:trend', 'w1', 'metric:x'])).toBe(true);
+  });
+
   it('leaves trend caches alone while runs are still in flight', () => {
     useDashboardStore.setState({ dashboardDetailMap: { d1: detail } });
     useDashboardStore.getState().useFetchDashboardDetail('d1');
@@ -276,6 +309,20 @@ describe('project-wide reads', () => {
     expect(state.projectWidgetsMap.p1).toEqual([
       expect.objectContaining({ agentId: 'a1', id: 'w1' }),
     ]);
+  });
+
+  it('invalidates trends when the project-widget poll moves a run identity', () => {
+    useDashboardStore.setState({
+      projectWidgetsMap: { p1: [widget({ id: 'w1', lastRunAt: '2026-01-01T00:00:00Z' })] },
+    });
+    useDashboardStore.getState().useFetchProjectWidgets('p1');
+    const [, , options] = vi.mocked(useClientDataSWR).mock.calls.at(-1) as any;
+
+    options.onSuccess([widget({ id: 'w1', lastRunAt: '2026-01-01T00:05:00Z' })]);
+
+    const filter = vi.mocked(mutate).mock.calls.at(-1)![0] as (key: unknown) => boolean;
+    expect(filter(['dashboard:trend', 'w1', 'metric:x'])).toBe(true);
+    expect(filter(['dashboard:trend', 'w9', 'metric:x'])).toBe(false);
   });
 
   it('does not fetch without a project', () => {

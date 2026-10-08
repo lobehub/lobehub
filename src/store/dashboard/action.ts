@@ -47,6 +47,29 @@ const hasRunCompleted = (previous: DashboardDetail | undefined, next: DashboardD
     return !current || current.lastRunStatus !== 'running';
   });
 
+/**
+ * Whether any widget's run identity moved between two cached snapshots. A
+ * short scheduled run can start and finish entirely between two polls, so the
+ * cached and polled data both read "succeeded" — only the run identity
+ * (lastRunAt) reveals the new output a trend is missing.
+ */
+const hasRunIdentityChange = (
+  previous: { id: string; lastRunAt?: string | Date | null }[] | undefined,
+  next: { id: string; lastRunAt?: string | Date | null }[],
+) =>
+  (previous ?? []).some((widget) => {
+    const current = next.find((item) => item.id === widget.id);
+    return !!current && String(current.lastRunAt) !== String(widget.lastRunAt);
+  });
+
+/** Drop the trend caches of exactly these widgets — key-scoped, no global flush. */
+const invalidateWidgetTrends = (widgetIds: Set<string>) => {
+  void mutate(
+    (key: unknown) =>
+      Array.isArray(key) && key[0] === dashboardKeys.trend.root && widgetIds.has(key[1]),
+  );
+};
+
 /** SWR matcher over every cached board detail — a widget can sit on several boards. */
 const isDashboardDetailKey = (key: unknown) =>
   Array.isArray(key) && key[0] === dashboardKeys.detail.root;
@@ -130,11 +153,18 @@ export class DashboardActionImpl {
       () => dashboardService.listWidgetsByProject(projectId!),
       {
         onSuccess: (data) => {
+          const previous = this.#get().projectWidgetsMap[projectId!];
           this.#set(
             (s) => ({ projectWidgetsMap: { ...s.projectWidgetsMap, [projectId!]: data } }),
             false,
             'useFetchProjectWidgets/onSuccess',
           );
+          // Same trend invalidation as the board poll: a run finishing
+          // between polls moves a widget's run identity even when the
+          // running state was never observed.
+          if (hasRunIdentityChange(previous, data)) {
+            invalidateWidgetTrends(new Set(data.map((widget) => widget.id)));
+          }
         },
         refreshInterval: (data?: { lastRunStatus?: string | null; nextRunAt?: Date | null }[]) =>
           data?.some((widget) => widget.lastRunStatus === 'running')
@@ -153,16 +183,19 @@ export class DashboardActionImpl {
         onSuccess: (data) => {
           const previous = this.#get().dashboardDetailMap[dashboardId!];
           this.internal_setDashboardDetail(data);
-          if (!hasRunCompleted(previous, data)) return;
-          // A run completed while this board was open: the card value and
-          // status refresh with the board, but each widget's trend is cached
-          // under its own key — drop just this board's widgets' trends so the
-          // sparkline picks the new point up without a manual refresh.
-          const ids = boardWidgetIds(data);
-          void mutate(
-            (key: unknown) =>
-              Array.isArray(key) && key[0] === dashboardKeys.trend.root && ids.has(key[1]),
-          );
+          // A run the poll observed — settled mid-poll or finished entirely
+          // between polls — landed new output: the board refreshes with this
+          // response, but each widget's trend is cached under its own key and
+          // needs its own invalidation to pick the new point up.
+          if (
+            hasRunCompleted(previous, data) ||
+            hasRunIdentityChange(
+              previous?.items.map(({ widget }) => widget),
+              data.items.map(({ widget }) => widget),
+            )
+          ) {
+            invalidateWidgetTrends(boardWidgetIds(data));
+          }
         },
         refreshInterval: (data?: DashboardDetail) =>
           hasRunningWidget(data)
