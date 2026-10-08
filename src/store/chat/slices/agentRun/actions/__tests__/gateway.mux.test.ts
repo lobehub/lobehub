@@ -33,6 +33,7 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
+    getTopicDetail: vi.fn().mockResolvedValue(null),
     settleRunningOperation: vi.fn().mockResolvedValue(undefined),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
