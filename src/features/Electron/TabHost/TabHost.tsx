@@ -21,7 +21,8 @@ import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors, preferenceSelectors } from '@/store/user/selectors';
 
-import { MAX_LIVE_TAB_ROUTERS, resolveLiveTabIds } from './resolveLiveTabIds';
+import { useLiveTabRouterCap } from './liveTabRouterCap';
+import { resolveLiveTabIds } from './resolveLiveTabIds';
 import { TabIdContext } from './TabIdContext';
 import {
   getOrCreateTabRouter,
@@ -145,6 +146,7 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
   const focusTabPane = useElectronStore((s) => s.focusTabPane);
   const setSplitRatio = useElectronStore((s) => s.setSplitRatio);
   const effectiveSplitView = isPreferenceInit && splitViewEnabled ? splitView : null;
+  const liveTabCap = useLiveTabRouterCap((s) => s.cap);
 
   const visibleTabIds = useMemo(
     () =>
@@ -166,10 +168,10 @@ const TabHost = ({ createRouter = createTabRouter }: TabHostProps) => {
         // Persisted tabs are cold until first shown; only retain already-created routers.
         tabs.filter((tab) => visibleTabIds.includes(tab.id) || getTabRouter(tab.id)),
         activeTabId,
-        MAX_LIVE_TAB_ROUTERS,
+        liveTabCap,
         visibleTabIds,
       ),
-    [tabs, activeTabId, visibleTabIds],
+    [tabs, activeTabId, liveTabCap, visibleTabIds],
   );
 
   useEffect(() => {
