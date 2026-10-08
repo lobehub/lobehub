@@ -19,6 +19,7 @@ import type {
   DeviceAppUpdateInstallResult,
   DeviceAppUpdateState,
   DeviceAppUpdateStateResult,
+  DeviceClient,
   DeviceCliRestartParams,
   DeviceCliUpdateState,
   DeviceCliUpdateStateResult,
@@ -74,6 +75,8 @@ import debug from 'debug';
 import { isAbsolute, relative, resolve } from 'pathe';
 
 import { gatewayEnv } from '@/envs/gateway';
+
+import { resolveDeviceClientKinds } from './clientKinds';
 
 const log = debug('lobe-server:device-gateway');
 
@@ -266,13 +269,26 @@ export class DeviceGateway {
     );
   }
 
+  /**
+   * The device's system info, preferring the desktop app's answer: its
+   * `supportedTools` gate desktop-only tools, and when `lh connect` is up on the
+   * same device an unconstrained read is answered by the CLI, which reports
+   * none. A device without the desktop app still answers from whichever client
+   * it has. A gateway that predates `clientKinds` answers the first read as before.
+   */
   async queryDeviceSystemInfo(
     userId: string,
     deviceId: string,
     workspaceId?: string,
   ): Promise<DeviceSystemInfo | undefined> {
-    const read = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
-    return read.ok ? read.systemInfo : undefined;
+    const desktop = await this.readDeviceSystemInfo(userId, deviceId, workspaceId, {
+      clientKinds: ['desktop'],
+    });
+    if (desktop.ok) return desktop.systemInfo;
+    if (desktop.reason !== 'NO_CAPABLE_CONNECTION') return undefined;
+
+    const any = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
+    return any.ok ? any.systemInfo : undefined;
   }
 
   /**
@@ -284,12 +300,13 @@ export class DeviceGateway {
     userId: string,
     deviceId: string,
     workspaceId?: string,
+    options?: { clientKinds?: DeviceClient[] },
   ): Promise<DeviceSystemInfoRead> {
     const client = this.getClient();
     if (!client) return { ok: false, reason: 'GATEWAY_NOT_CONFIGURED' };
 
     try {
-      const result = await client.getDeviceSystemInfo(userId, deviceId, workspaceId);
+      const result = await client.getDeviceSystemInfo(userId, deviceId, workspaceId, options);
       if (result.success && result.systemInfo) return { ok: true, systemInfo: result.systemInfo };
       log(
         'readDeviceSystemInfo: unanswered for userId=%s, deviceId=%s: %s',
@@ -2279,7 +2296,11 @@ export class DeviceGateway {
     if (!url || !token) return null;
 
     if (!this.client) {
-      this.client = new GatewayHttpClient({ gatewayUrl: url, serviceToken: token });
+      this.client = new GatewayHttpClient({
+        gatewayUrl: url,
+        resolveClientKinds: resolveDeviceClientKinds,
+        serviceToken: token,
+      });
     }
     return this.client;
   }

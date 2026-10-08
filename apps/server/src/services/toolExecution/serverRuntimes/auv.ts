@@ -1,4 +1,4 @@
-import { AuvApiName, AuvIdentifier } from '@lobechat/builtin-tool-auv';
+import { AuvApiName, AuvIdentifier, AuvManifest } from '@lobechat/builtin-tool-auv';
 
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { executeAuthorizedDeviceToolCall } from '@/server/services/deviceGateway/authorizedToolCall';
@@ -75,10 +75,14 @@ export const auvRuntime: ServerRuntimeRegistration = {
        */
       runCommand: async (args: unknown) => {
         const workspaceId = await getDeviceWorkspaceId();
+        // Ask the client that would run the call: with `lh connect` up beside the
+        // desktop app, an unconstrained read is answered by the CLI, which reports
+        // no `supportedTools`. A gateway that predates `clientKinds` ignores it.
         const read = await deviceGateway.readDeviceSystemInfo(
           context.userId!,
           context.activeDeviceId!,
           workspaceId,
+          { clientKinds: AuvManifest.deviceClients },
         );
         if (read.ok) {
           // An answer without the capability is an old client (or `lh connect`):

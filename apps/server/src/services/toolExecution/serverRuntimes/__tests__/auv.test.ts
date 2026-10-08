@@ -96,6 +96,15 @@ describe('auvRuntime', () => {
     expect(resolveDeviceClientKindMock).not.toHaveBeenCalled();
   });
 
+  it('reads the capability from the desktop client, not a cli on the same device', async () => {
+    const runtime = auvRuntime.factory(baseContext);
+    await runtime.runCommand({ argv: ['invoke', 'display.list'] });
+
+    expect(readDeviceSystemInfoMock).toHaveBeenCalledWith('user-1', 'device-1', undefined, {
+      clientKinds: ['desktop'],
+    });
+  });
+
   describe('when the device does not answer the capability check', () => {
     it('dispatches to a device with a live desktop app instead of reporting it unsupported', async () => {
       // Production: a busy desktop missed the 10s system-info deadline and the

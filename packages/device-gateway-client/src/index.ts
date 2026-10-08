@@ -15,6 +15,7 @@ export type {
   DeviceRpcResult,
   DeviceStatusResult,
   DeviceToolCallResult,
+  GatewayDispatchTarget,
   GatewayHttpClientOptions,
 } from './http';
 export { GatewayHttpClient } from './http';

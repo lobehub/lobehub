@@ -292,6 +292,7 @@
     "@lobechat/conversation-flow": "workspace:*",
     "@lobechat/database": "workspace:*",
     "@lobechat/desktop-bridge": "workspace:*",
+    "@lobechat/device-control": "workspace:*",
     "@lobechat/device-gateway-client": "workspace:*",
     "@lobechat/edge-config": "workspace:*",
     "@lobechat/editor-runtime": "workspace:*",
