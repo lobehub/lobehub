@@ -16,7 +16,7 @@ interface FakeResponse {
   mutate: ReturnType<typeof vi.fn>;
 }
 
-/** SWR responses by key root: `dashboard:widget` / `dashboard:versions` / `dashboard:runs`. */
+/** SWR responses by key root: `dashboard:widget` / `dashboard:versions` / `dashboard:previewRun`. */
 const responses = vi.hoisted(() => new Map<string, FakeResponse>());
 
 vi.mock('@/libs/swr', () => ({
@@ -38,7 +38,7 @@ const respond = (root: string, response: Omit<FakeResponse, 'mutate'>) =>
 const loadAll = () => {
   respond('widget', { data: widget });
   respond('versions', { data: versions });
-  respond('runs', { data: [] });
+  respond('previewRun', { data: null });
   useDashboardStore.setState({
     widgetDetailMap: { w1: widget },
     widgetRunsMap: { w1: [] },
@@ -122,9 +122,9 @@ describe('useWidgetReview', () => {
     expect(onApprovalBlockedChange).toHaveBeenLastCalledWith(true);
   });
 
-  it('treats the runs as part of the publish review', () => {
+  it('treats the preview run as part of the publish review', () => {
     loadAll();
-    respond('runs', { error: new Error('503') });
+    respond('previewRun', { error: new Error('503') });
     const onApprovalBlockedChange = vi.fn();
 
     const { result } = renderHook(() =>
@@ -134,7 +134,20 @@ describe('useWidgetReview', () => {
     expect(result.current.status).toBe('error');
     expect(onApprovalBlockedChange).toHaveBeenLastCalledWith(true);
     act(() => result.current.retry());
-    expect(responses.get('dashboard:runs')!.mutate).toHaveBeenCalled();
+    expect(responses.get('dashboard:previewRun')!.mutate).toHaveBeenCalled();
+  });
+
+  it('loads the reviewed version’s preview by version, not the capped run list', () => {
+    loadAll();
+    // The approval-era preview no longer sits in the newest-run window; only
+    // the version-keyed request can still see it.
+    const run = { id: 'r1', versionId: 'v2' };
+    respond('previewRun', { data: run });
+
+    const { result } = renderHook(() => useWidgetReview('w1', 'v2', { withRuns: true }));
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.run).toEqual(run);
   });
 
   it('keeps a loaded review ready through a background revalidation failure', () => {

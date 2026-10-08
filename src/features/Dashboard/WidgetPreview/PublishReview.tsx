@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import WidgetCard from '../WidgetCard';
 import { ScriptDiff } from '../WidgetDetail/VersionDiff';
-import { findSucceededPreviewRun, resolvePublishSchedule, toPreviewWidget } from './previewWidget';
+import { resolvePublishSchedule, toPreviewWidget } from './previewWidget';
 import { AccessFacts, Fact, reviewStyles, ReviewUnavailable } from './ReviewFacts';
 import { useWidgetReview } from './useWidgetReview';
 
@@ -35,7 +35,7 @@ interface PublishReviewProps {
 const PublishReview = memo<PublishReviewProps>(
   ({ widgetId, versionId, summary, onApprovalBlockedChange, onPinVersion }) => {
     const { t } = useTranslation('dashboard');
-    const { error, retry, runs, status, target, versions, widget } = useWidgetReview(
+    const { error, retry, run, status, target, versions, widget } = useWidgetReview(
       widgetId,
       versionId,
       { onApprovalBlockedChange, onPinVersion, withRuns: true },
@@ -56,7 +56,6 @@ const PublishReview = memo<PublishReviewProps>(
       );
     }
 
-    const run = findSucceededPreviewRun(runs, target.id);
     const manifest = target.manifest;
     // The cadence publishing will actually retain, not the manifest's raw
     // suggestion: an already-scheduled widget keeps its own schedule.

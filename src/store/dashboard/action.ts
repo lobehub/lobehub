@@ -10,6 +10,7 @@ import {
   type DashboardWidgetRunDetail,
 } from '@/services/dashboard';
 import type { StoreSetter } from '@/store/types';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { dashboardLevelKey, type DashboardState } from './initialState';
 
@@ -184,14 +185,21 @@ export class DashboardActionImpl {
    * The preview run a publish approval was shown, fetched by version. The run
    * list only holds the newest {@link RUN_HISTORY_LIMIT} runs, so an old
    * approval's preview must be fetched directly or the card vanishes once its
-   * runs roll out of the window.
+   * runs roll out of the window. A version with no usable preview run answers
+   * NOT_FOUND — a normal state the surfaces render as "no successful run", so
+   * it maps to null instead of an error; real failures still propagate.
    */
   useFetchWidgetVersionPreviewRun = (widgetId?: string, versionId?: string) =>
     useClientDataSWR(
       widgetId && versionId ? dashboardKeys.previewRun(widgetId, versionId) : null,
-      () => dashboardService.getPreviewRun(widgetId!, versionId!),
+      () =>
+        dashboardService.getPreviewRun(widgetId!, versionId!).catch((error) => {
+          if (isTrpcErrorCode(error, 'NOT_FOUND')) return null;
+          throw error;
+        }),
       {
         onSuccess: (data) => {
+          if (!data) return;
           this.#set(
             (s) => ({ widgetRunDetailMap: { ...s.widgetRunDetailMap, [data.id]: data } }),
             false,

@@ -66,20 +66,26 @@ export const useWidgetReview = (
   { onApprovalBlockedChange, onPinVersion, withRuns = false }: UseWidgetReviewOptions = {},
 ) => {
   const useFetchWidgetDetail = useDashboardStore((s) => s.useFetchWidgetDetail);
-  const useFetchWidgetRuns = useDashboardStore((s) => s.useFetchWidgetRuns);
   const useFetchWidgetVersions = useDashboardStore((s) => s.useFetchWidgetVersions);
+  const useFetchWidgetVersionPreviewRun = useDashboardStore(
+    (s) => s.useFetchWidgetVersionPreviewRun,
+  );
   const detailRequest = useFetchWidgetDetail(widgetId);
   const versionsRequest = useFetchWidgetVersions(widgetId);
-  const runsRequest = useFetchWidgetRuns(withRuns ? widgetId : undefined);
   const widget = useDashboardStore(dashboardSelectors.widgetDetail(widgetId));
   const versions = useDashboardStore(dashboardSelectors.widgetVersions(widgetId));
-  const runs = useDashboardStore(dashboardSelectors.widgetRuns(widgetId));
 
   const targetId = versionId ?? widget?.draftVersionId ?? undefined;
   const target = versions.find((version) => version.id === targetId);
+  // Keyed by version, not the newest-N run list: a long-pending approval
+  // keeps its preview after later runs push it out of the capped list.
+  const previewRunRequest = useFetchWidgetVersionPreviewRun(
+    withRuns ? widgetId : undefined,
+    withRuns ? targetId : undefined,
+  );
 
   const requests = withRuns
-    ? [detailRequest, versionsRequest, runsRequest]
+    ? [detailRequest, versionsRequest, previewRunRequest]
     : [detailRequest, versionsRequest];
   const status = resolveWidgetReviewStatus({
     hasTarget: !!widget && !!target,
@@ -103,12 +109,12 @@ export const useWidgetReview = (
 
   const { mutate: retryDetail } = detailRequest;
   const { mutate: retryVersions } = versionsRequest;
-  const { mutate: retryRuns } = runsRequest;
+  const { mutate: retryPreviewRun } = previewRunRequest;
   const retry = useCallback(() => {
     void retryDetail();
     void retryVersions();
-    if (withRuns) void retryRuns();
-  }, [retryDetail, retryRuns, retryVersions, withRuns]);
+    if (withRuns) void retryPreviewRun();
+  }, [retryDetail, retryPreviewRun, retryVersions, withRuns]);
 
-  return { error, retry, runs, status, target, versions, widget };
+  return { error, retry, run: previewRunRequest.data, status, target, versions, widget };
 };
