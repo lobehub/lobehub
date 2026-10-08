@@ -11,6 +11,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import type { DashboardWidgetDetail, DashboardWidgetRunItem } from '@/services/dashboard';
 import { useChatStore } from '@/store/chat';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -74,6 +75,9 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
   const outputType = run.output?.type ?? version?.outputType ?? 'stat';
   // Normalize once: an older server may not send the widget's boards list.
   const dashboards = widget.dashboards ?? [];
+  // Board routes exist only in the desktop shell — the chips would navigate
+  // nowhere on mobile.
+  const isMobile = useServerConfigStore((s) => s.isMobile);
 
   // Publishing goes through the same review the requestPublish intervention
   // renders — nothing goes live on a bare click from the preview.
@@ -167,18 +171,19 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
           projectId={widget.projectId}
           widgetId={widget.id}
         />
-        {dashboards.map((dashboard) => (
-          <Button
-            data-widget-dashboard-link={dashboard.id}
-            icon={ArrowUpRightIcon}
-            key={dashboard.id}
-            size={'small'}
-            type={'text'}
-            onClick={() => navigate(getDashboardPath(dashboard))}
-          >
-            {t('chat.onDashboard', { title: dashboard.title })}
-          </Button>
-        ))}
+        {!isMobile &&
+          dashboards.map((dashboard) => (
+            <Button
+              data-widget-dashboard-link={dashboard.id}
+              icon={ArrowUpRightIcon}
+              key={dashboard.id}
+              size={'small'}
+              type={'text'}
+              onClick={() => navigate(getDashboardPath(dashboard))}
+            >
+              {t('chat.onDashboard', { title: dashboard.title })}
+            </Button>
+          ))}
       </Flexbox>
     </Flexbox>
   );
