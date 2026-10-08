@@ -82,7 +82,7 @@ apps/cli/src/
 ├── utils/
 │   ├── logger.ts             # Logging (verbose mode)
 │   ├── format.ts             # Table output, JSON, timeAgo/timeUntil, truncate
-│   └── agentStream.ts        # SSE streaming for agent runs
+│   └── agentStream.ts        # WebSocket streaming for agent runs and task follow
 └── constants/
     └── urls.ts               # Official server & gateway URLs
 ```

@@ -26,6 +26,7 @@ function createMockInner(): IStreamEventManager & { calls: Record<string, any[][
     disconnect: track('disconnect') as any,
     getActiveOperationsCount: track('getActiveOperationsCount') as any,
     getStreamHistory: track('getStreamHistory') as any,
+    getStreamHistoryPage: track('getStreamHistoryPage') as any,
     publishAgentRuntimeEnd: track('publishAgentRuntimeEnd') as any,
     publishAgentRuntimeInit: track('publishAgentRuntimeInit') as any,
     publishStreamChunk: track('publishStreamChunk') as any,
@@ -854,6 +855,15 @@ describe('GatewayStreamNotifier', () => {
 
       expect(inner.calls.getStreamHistory).toHaveLength(1);
       expect(inner.calls.getStreamHistory[0]).toEqual(['op-1', 50]);
+    });
+  });
+
+  describe('getStreamHistoryPage', () => {
+    it('delegates the exclusive history cursor to inner', async () => {
+      const result = await notifier.getStreamHistoryPage('op-1', '123-4', 200);
+
+      expect(inner.calls.getStreamHistoryPage).toEqual([['op-1', '123-4', 200]]);
+      expect(result).toBe('getStreamHistoryPage-result');
     });
   });
 

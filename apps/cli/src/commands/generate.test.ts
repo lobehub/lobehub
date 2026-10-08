@@ -141,28 +141,12 @@ describe('generate command', () => {
       expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(responseBody, null, 2));
     });
 
-    it('should stream when --stream is explicitly passed', async () => {
-      const encoder = new TextEncoder();
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(
-            encoder.encode('data: {"choices":[{"delta":{"content":"Hello"}}]}\n\n'),
-          );
-          controller.enqueue(encoder.encode('data: [DONE]\n\n'));
-          controller.close();
-        },
-      });
-
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ body: stream, ok: true }));
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
-
-      const fetchCall = vi.mocked(fetch).mock.calls[0];
-      const body = JSON.parse(fetchCall[1]!.body as string);
-      expect(body.stream).toBe(true);
-
-      expect(stdoutSpy).toHaveBeenCalledWith('Hello');
+    it('rejects the removed --stream option without making a request', async () => {
+      vi.stubGlobal('fetch', vi.fn());
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']),
+      ).rejects.toThrow("unknown option '--stream'");
+      expect(fetch).not.toHaveBeenCalled();
     });
 
     it('should parse provider from model string', async () => {

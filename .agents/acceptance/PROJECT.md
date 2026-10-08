@@ -218,13 +218,15 @@ stale standalone install: a recently added workspace package fails to resolve â€
   edited-file cards, works, topic content), drive the run with
 
   ```bash
-  lh agent run -a local --sse --json -p '<prompt>' [-t < agentId > --device < topicId > ]
+  lh agent run -a <agentId> --json -p '<prompt>' [-t <topicId>] [--device local]
   ```
 
-  and use the browser only to capture the rendered evidence afterwards. `--sse`
-  is REQUIRED against a local dev server â€” without it the run dies with
-  `Gateway auth failed: signature verification failed` (local agent-gateway
-  JWKS mismatch; see `references/probe-field-notes.md` E43). `--json` gives assertable
+  and use the browser only to capture the rendered evidence afterwards. CLI
+  streaming uses the agent gateway WebSocket only. For local runs, configure
+  both the backend and CLI to use the same local `AGENT_GATEWAY_URL`, with
+  matching service-token and local JWT verification configuration (see
+  `references/agent-gateway.md`). The production gateway cannot verify local
+  JWT signatures; there is no SSE fallback. `--json` gives assertable
   output; reuse `-t` to chain multi-step cases in one topic. This is faster and
   far more deterministic than typing prompts through agent-browser, and the
   server-side state it produces is identical.

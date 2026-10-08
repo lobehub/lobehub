@@ -129,6 +129,13 @@ export interface StreamEvent {
   type: AgentStreamEventType;
 }
 
+export interface StreamHistoryPage {
+  available: boolean;
+  events: StreamEvent[];
+  hasMore: boolean;
+  nextCursor: string;
+}
+
 export interface StreamChunkData {
   chunkType:
     | 'text'
@@ -216,9 +223,8 @@ export class StreamEventManager {
       const xaddStart = Date.now();
       const eventId = await this.redis.xadd(
         streamKey,
-        'MAXLEN',
-        '~',
-        '1000', // Limit stream length to prevent memory overflow
+        // Retain every event until the stream's inactivity TTL expires.
+        // Count trimming makes a reconnect silently lose earlier output.
         '*', // Auto-generate ID
         'type',
         eventData.type,
@@ -502,6 +508,49 @@ export class StreamEventManager {
       console.error('[StreamEventManager] Failed to get stream history:', error);
       return [];
     }
+  }
+
+  /** Forward, exclusive-cursor replay; never substitute a truncated suffix for full history. */
+  async getStreamHistoryPage(
+    operationId: string,
+    cursor = '0',
+    limit = 200,
+  ): Promise<StreamHistoryPage> {
+    const key = `${this.STREAM_PREFIX}:${operationId}`;
+    const unavailable = { available: false, events: [], hasMore: false, nextCursor: cursor };
+    if (cursor !== '0') {
+      const previous = await this.redis.xrange(key, cursor, cursor, 'COUNT', 1);
+      if (previous.length === 0) return unavailable;
+    }
+    const rows = await this.redis.xrange(
+      key,
+      cursor === '0' ? '-' : `(${cursor}`,
+      '+',
+      'COUNT',
+      limit + 1,
+    );
+    const events = rows.slice(0, limit).map(([id, fields]) => {
+      const record: Record<string, unknown> = { id };
+      for (let i = 0; i < fields.length; i += 2) {
+        const field = fields[i];
+        const value = fields[i + 1];
+        record[field] =
+          field === 'data'
+            ? JSON.parse(value)
+            : field === 'stepIndex' || field === 'timestamp'
+              ? Number(value)
+              : value;
+      }
+      return record as unknown as StreamEvent;
+    });
+    // Legacy streams may already have been trimmed before this deployment.
+    if (cursor === '0' && events[0]?.type !== 'agent_runtime_init') return unavailable;
+    return {
+      available: true,
+      events,
+      hasMore: rows.length > limit,
+      nextCursor: events.at(-1)?.id ?? cursor,
+    };
   }
 
   /**

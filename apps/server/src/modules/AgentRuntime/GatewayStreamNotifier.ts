@@ -604,6 +604,10 @@ export class GatewayStreamNotifier implements IStreamEventManager {
     return this.inner.getStreamHistory(operationId, count);
   }
 
+  async getStreamHistoryPage(operationId: string, cursor?: string, limit?: number) {
+    return this.inner.getStreamHistoryPage(operationId, cursor, limit);
+  }
+
   async cleanupOperation(operationId: string): Promise<void> {
     return this.inner.cleanupOperation(operationId);
   }

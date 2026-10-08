@@ -12,7 +12,6 @@ export function registerTextCommand(parent: Command) {
     .option('-s, --system <prompt>', 'System prompt')
     .option('--temperature <n>', 'Temperature (0-2)')
     .option('--max-tokens <n>', 'Maximum output tokens')
-    .option('--stream', 'Enable streaming (SSE, renders incrementally)')
     .option('--json', 'Output full JSON response')
     .option('--pipe', 'Pipe mode: read additional context from stdin')
     .action(
@@ -24,7 +23,6 @@ export function registerTextCommand(parent: Command) {
           model: string;
           pipe?: boolean;
           provider?: string;
-          stream?: boolean;
           system?: string;
           temperature?: string;
         },
@@ -53,15 +51,11 @@ export function registerTextCommand(parent: Command) {
         }
         messages.push({ content: fullPrompt, role: 'user' });
 
-        const useStream = options.stream === true;
-
         const payload: Record<string, any> = {
           messages,
           model,
-          // For non-streaming, use responseMode 'json' to get a plain JSON response
-          // instead of SSE (the backend converts non-stream to SSE by default)
-          responseMode: useStream ? 'stream' : 'json',
-          stream: useStream,
+          responseMode: 'json',
+          stream: false,
         };
         if (options.temperature) payload.temperature = Number.parseFloat(options.temperature);
         if (options.maxTokens) payload.max_tokens = Number.parseInt(options.maxTokens, 10);
@@ -81,77 +75,19 @@ export function registerTextCommand(parent: Command) {
           return;
         }
 
-        if (!useStream) {
-          const body = await res.json();
-          if (options.json) {
-            console.log(JSON.stringify(body, null, 2));
-          } else {
-            // Support both OpenAI format (choices[].message.content) and
-            // Anthropic format (content[].text)
-            const content =
-              (body as any).choices?.[0]?.message?.content ||
-              (body as any).content?.[0]?.text ||
-              JSON.stringify(body);
-            process.stdout.write(content);
-            process.stdout.write('\n');
-          }
-          return;
+        const body = await res.json();
+        if (options.json) {
+          console.log(JSON.stringify(body, null, 2));
+        } else {
+          // Support both OpenAI format (choices[].message.content) and
+          // Anthropic format (content[].text)
+          const content =
+            (body as any).choices?.[0]?.message?.content ||
+            (body as any).content?.[0]?.text ||
+            JSON.stringify(body);
+          process.stdout.write(content);
+          process.stdout.write('\n');
         }
-
-        // Stream SSE response
-        if (!res.body) {
-          log.error('No response body received');
-          process.exit(1);
-          return;
-        }
-
-        await streamSSEResponse(res.body, options.json);
       },
     );
-}
-
-async function streamSSEResponse(body: ReadableStream<Uint8Array>, json?: boolean): Promise<void> {
-  const reader = body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-
-  try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        const data = line.slice(5).trim();
-        if (data === '[DONE]') {
-          if (!json) process.stdout.write('\n');
-          return;
-        }
-
-        try {
-          const parsed = JSON.parse(data);
-          if (json) {
-            console.log(JSON.stringify(parsed));
-          } else if (typeof parsed === 'string' && parsed !== 'stop') {
-            // LobeHub SSE sends content as JSON strings: "Hello", "world"
-            process.stdout.write(parsed);
-          } else if (parsed?.choices?.[0]?.delta?.content) {
-            // Standard OpenAI SSE format
-            process.stdout.write(parsed.choices[0].delta.content);
-          }
-        } catch {
-          // Not JSON, might be raw text chunk
-          if (!json) process.stdout.write(data);
-        }
-      }
-    }
-    // Final newline
-    if (!json) process.stdout.write('\n');
-  } finally {
-    reader.releaseLock();
-  }
 }

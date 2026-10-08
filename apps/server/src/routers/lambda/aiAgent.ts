@@ -69,7 +69,10 @@ import { notTrashed } from '@/database/utils/softDelete';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
-import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
+import {
+  createAgentStateManager,
+  createStreamEventManager,
+} from '@/server/modules/AgentRuntime/factory';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
   getServerDefaultHeterogeneousModels,
@@ -885,6 +888,7 @@ const assertCanUseOperationAgent = async (params: {
  * exist.
  */
 const assertOperationVisibleToCaller = async (params: {
+  allowRuntimeOwner?: boolean;
   db: LobeChatDatabase;
   operationId: string;
   userId: string;
@@ -911,7 +915,23 @@ const assertOperationVisibleToCaller = async (params: {
 
   const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
 
-  if (!row) throw notFound();
+  if (!row) {
+    if (params.allowRuntimeOwner) {
+      // A deliberately non-fatal initial operation insert must not strand a
+      // live run. Fall back only for a genuinely absent row, never for a
+      // persisted visitor-topic operation filtered out by the guard above.
+      const [persisted] = await db
+        .select({ id: agentOperations.id })
+        .from(agentOperations)
+        .where(eq(agentOperations.id, operationId))
+        .limit(1);
+      if (!persisted) {
+        const metadata = await createAgentStateManager().getOperationMetadata(operationId);
+        if (metadata?.userId === userId && !metadata.streamOwnerUserId) return;
+      }
+    }
+    throw notFound();
+  }
   if (row.userId === userId) return;
 
   if (!row.workspaceId || !workspaceId || row.workspaceId !== workspaceId || !row.agentId) {
@@ -2889,6 +2909,32 @@ export const aiAgentRouter = router({
           message: `Failed to execute sub-agent task: ${error.message}`,
         });
       }
+    }),
+
+  getOperationStreamHistory: aiAgentBaseProcedure
+    .input(
+      z.object({
+        cursor: z
+          .string()
+          .regex(/^(0|\d+-\d+)$/)
+          .default('0'),
+        limit: z.number().int().min(1).max(200).default(200),
+        operationId: z.string().min(1),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      await assertOperationVisibleToCaller({
+        allowRuntimeOwner: true,
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return createStreamEventManager().getStreamHistoryPage(
+        input.operationId,
+        input.cursor,
+        input.limit,
+      );
     }),
 
   getOperationStatus: aiAgentProcedure
