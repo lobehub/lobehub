@@ -207,7 +207,12 @@ export const createDashboardToolService = (
         projectId ? dashboards.listByProject(projectId) : [],
         dashboards.list({}),
       ]);
-      const boards = [...projectBoards, ...homeBoards];
+      // In a workspace the readable lists include teammates' public boards,
+      // but placing writes through the board's creator (DashboardModel's
+      // manageable rule) — the same creator-only filter the client-side
+      // picker applies, so every listed board is a board the tool can
+      // actually place on.
+      const boards = [...projectBoards, ...homeBoards].filter((board) => board.userId === userId);
       const items = await dashboards.listItemsForDashboards(boards.map(({ id }) => id));
       const widgetsByBoard = new Map<string, { id: string; title: string }[]>();
       for (const { item, widget } of items) {

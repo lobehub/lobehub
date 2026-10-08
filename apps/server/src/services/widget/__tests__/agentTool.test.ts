@@ -557,6 +557,25 @@ describe('resolveClientTopic in a workspace', () => {
     expect(await model.listByProject(wsProjectId)).toEqual([]);
   });
 
+  it('lists only boards the caller can place on', async () => {
+    const service = createDashboardToolService(db, {
+      ...scope,
+      agentId: wsAgentId,
+      workspaceId,
+    });
+    // The teammate's public workspace board is readable, but placement writes
+    // as the board's creator — listing it would offer a target that always
+    // fails, so only the caller's own boards are returned.
+    await new DashboardModel(db, teammateId, workspaceId).create({ title: 'Teammate board' });
+    const ownBoard = await new DashboardModel(db, userId, workspaceId).create({
+      title: 'Own board',
+    });
+
+    expect(await service.listDashboards()).toEqual([
+      { id: ownBoard.id, projectId: null, title: 'Own board', widgets: [] },
+    ]);
+  });
+
   it('does not reach a workspace topic from personal mode', async () => {
     expect(await resolveClientTopic(db, teammateTopicId, userId)).toEqual({});
     expect(await resolveClientTopic(db, teammateTopicId, teammateId)).toEqual({});
