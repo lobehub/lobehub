@@ -66,7 +66,8 @@ jobs:
             .github/scripts/vercel-ignored-build-step.test.cjs \
             .github/scripts/bundle-size-gate.test.cjs \
             .github/scripts/size-gate-comment.test.cjs \
-            .github/scripts/mergeAllowBuilds.test.mjs
+            .github/scripts/mergeAllowBuilds.test.mjs \
+            .github/scripts/desktop-core-gate.test.mjs
 
       - name: Setup environment
         uses: ./.github/actions/setup-env
