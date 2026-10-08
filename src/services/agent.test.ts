@@ -15,7 +15,7 @@ describe('agent config working directory request contract', () => {
     'marks only explicitly submitted devices for replacement (%j)',
     async (selection) => {
       const config = { agencyConfig: { workingDirByDevice: { 'device-a': selection } } };
-      await agentService.updateAgentConfig('agent-1', config);
+      await agentService.updateAgentConfig('agent-1', config, undefined, ['device-a']);
 
       expect(lambdaClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith(
         {
@@ -36,6 +36,20 @@ describe('agent config working directory request contract', () => {
         replaceWorkingDirDeviceIds: [],
         value: { agencyConfig: { executionTarget: 'local' } },
       },
+      { context: { showNotification: false }, signal: undefined },
+    );
+  });
+
+  it('does not infer edited devices from a cached full agency config', async () => {
+    const config = {
+      agencyConfig: {
+        executionTarget: 'sandbox' as const,
+        workingDirByDevice: { 'device-a': { path: '/a' }, 'device-b': { path: '/stale-b' } },
+      },
+    };
+    await agentService.updateAgentConfig('agent-1', config);
+    expect(lambdaClient.agent.updateAgentConfig.mutate).toHaveBeenCalledWith(
+      { agentId: 'agent-1', replaceWorkingDirDeviceIds: [], value: config },
       { context: { showNotification: false }, signal: undefined },
     );
   });

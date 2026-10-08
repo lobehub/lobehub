@@ -243,11 +243,12 @@ class AgentService {
     agentId: string,
     config: PartialDeep<LobeAgentConfig>,
     signal?: AbortSignal,
+    replaceWorkingDirDeviceIds: string[] = [],
   ) => {
     return lambdaClient.agent.updateAgentConfig.mutate(
       {
         agentId,
-        replaceWorkingDirDeviceIds: Object.keys(config.agencyConfig?.workingDirByDevice ?? {}),
+        replaceWorkingDirDeviceIds,
         value: config,
       },
       { context: { showNotification: false }, signal },

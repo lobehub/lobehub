@@ -71,6 +71,8 @@ export type AgentMetaUpdate = Partial<
   >
 >;
 interface AgentConfigUpdateOptions {
+  /** Devices whose directory selection was explicitly edited, never cached sibling entries. */
+  replaceWorkingDirDeviceIds?: string[];
   /** Propagate the persistence failure so a scoped editor can render failed + Retry. */
   rethrow?: boolean;
   /** Keep generic error messaging for ordinary config controls. @default true */
@@ -84,13 +86,13 @@ interface AgentMetaUpdateOptions {
 
 /**
  * Deep-merge a partial config into the current one. `profile` is replaced as a
- * whole and per-device working directory selections are replaced atomically.
+ * whole and explicitly edited working directory selections are replaced atomically.
  * Returns `current` itself when nothing changed, so readers keep their reference.
  */
 const mergeAgentConfig = (
   current: PartialDeep<AgentItem> | undefined,
   config: PartialDeep<LobeAgentConfig>,
-  options?: { workingDirByDeviceSnapshot?: boolean },
+  options?: { replaceWorkingDirDeviceIds?: string[]; workingDirByDeviceSnapshot?: boolean },
 ): PartialDeep<AgentItem> => {
   const { value } = produce({ value: current ?? {} }, (draft) => {
     draft.value = merge(draft.value, config);
@@ -106,7 +108,7 @@ const mergeAgentConfig = (
       applyWorkingDirByDevicePatch(
         agencyConfig,
         config.agencyConfig,
-        Object.keys(config.agencyConfig?.workingDirByDevice ?? {}),
+        options?.replaceWorkingDirDeviceIds,
       );
     }
   });
@@ -671,7 +673,7 @@ export class AgentSliceActionImpl {
   internal_dispatchAgentMap = (
     id: string,
     config: PartialDeep<LobeAgentConfig>,
-    options?: { workingDirByDeviceSnapshot?: boolean },
+    options?: { replaceWorkingDirDeviceIds?: string[]; workingDirByDeviceSnapshot?: boolean },
   ): void => {
     this.#config.update(id, (current) => mergeAgentConfig(current, config, options), {
       persist: false,
@@ -681,6 +683,7 @@ export class AgentSliceActionImpl {
   #mergeLatestAgencyConfigPatch = (
     id: string,
     data: PartialDeep<LobeAgentConfig>,
+    replaceWorkingDirDeviceIds: string[] = [],
   ): PartialDeep<LobeAgentConfig> => {
     const agencyConfigPatch = data.agencyConfig;
     if (!agencyConfigPatch) return data;
@@ -691,11 +694,15 @@ export class AgentSliceActionImpl {
       agencyConfigPatch,
     ) as PartialDeep<LobeAgentAgencyConfig>;
 
-    // Keep the latest sibling config, but only send explicitly patched device
-    // entries. Resending the whole map would overwrite another device's choice.
+    // Settings editors may spread a stale agencyConfig. Only directory edits
+    // explicitly identify devices whose selections should be written.
     delete agencyConfig.workingDirByDevice;
-    if (Object.hasOwn(agencyConfigPatch, 'workingDirByDevice')) {
-      agencyConfig.workingDirByDevice = agencyConfigPatch.workingDirByDevice;
+    const directoryPatch = agencyConfigPatch.workingDirByDevice;
+    if (directoryPatch) {
+      const entries = replaceWorkingDirDeviceIds
+        .filter((deviceId) => Object.hasOwn(directoryPatch, deviceId))
+        .map((deviceId) => [deviceId, directoryPatch[deviceId]]);
+      if (entries.length > 0) agencyConfig.workingDirByDevice = Object.fromEntries(entries);
     }
 
     return { ...data, agencyConfig };
@@ -708,16 +715,22 @@ export class AgentSliceActionImpl {
     options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
-    const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
+    const replaceWorkingDirDeviceIds = options?.replaceWorkingDirDeviceIds;
+    const mergedData = this.#mergeLatestAgencyConfigPatch(id, data, replaceWorkingDirDeviceIds);
     const scope = getCacheScope();
 
     // 1. Optimistic update (instant UI feedback)
-    internal_dispatchAgentMap(id, mergedData);
+    internal_dispatchAgentMap(id, mergedData, { replaceWorkingDirDeviceIds });
     updateSaveStatus('saving');
 
     try {
       // 2. API call returns updated agent data
-      const result = await agentService.updateAgentConfig(id, mergedData, signal);
+      const result = await agentService.updateAgentConfig(
+        id,
+        mergedData,
+        signal,
+        replaceWorkingDirDeviceIds,
+      );
 
       // 3. Apply returned data, then invalidate the SWR key for later subscribers.
       if (result?.success && result.agent) {

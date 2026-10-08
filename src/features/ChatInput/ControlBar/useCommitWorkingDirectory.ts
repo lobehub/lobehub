@@ -200,13 +200,17 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
             workingDirectory: sessionCwd || undefined,
           });
         } else if (writeDeviceId) {
-          await updateAgentConfigById(agentId, {
-            agencyConfig: {
-              workingDirByDevice: {
-                [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
+          await updateAgentConfigById(
+            agentId,
+            {
+              agencyConfig: {
+                workingDirByDevice: {
+                  [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
+                },
               },
             },
-          });
+            { replaceWorkingDirDeviceIds: [writeDeviceId] },
+          );
         }
         // Clearing the agent default must also drop the legacy per-agent value —
         // otherwise it keeps re-supplying a stale cwd from a lower precedence
@@ -262,9 +266,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     // per-device map from the legacy slot, so clear both together to avoid a
     // dead second click.
     if (targetDeviceId && agencyConfig?.workingDirByDevice?.[targetDeviceId]) {
-      await updateAgentConfigById(agentId, {
-        agencyConfig: { workingDirByDevice: { [targetDeviceId]: undefined } },
-      });
+      await updateAgentConfigById(
+        agentId,
+        { agencyConfig: { workingDirByDevice: { [targetDeviceId]: undefined } } },
+        { replaceWorkingDirDeviceIds: [targetDeviceId] },
+      );
     }
     // (Only clears the localStorage map; no network round-trip since
     // `workingDirectory` is stripped before send.)
@@ -344,7 +350,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
               workingDirByDevice: { [targetDeviceId]: path },
             },
           },
-          options,
+          { ...options, replaceWorkingDirDeviceIds: [targetDeviceId] },
         );
       } else {
         // No resolvable device (e.g. gateway id unavailable), or a workspace

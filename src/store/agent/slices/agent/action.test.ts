@@ -833,6 +833,7 @@ describe('AgentSlice Actions', () => {
         'agent-1',
         { model: 'gpt-4' },
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -1044,6 +1045,7 @@ describe('AgentSlice Actions', () => {
         'agent-1',
         { chatConfig: { historyCount: 10 } },
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
@@ -1073,6 +1075,43 @@ describe('AgentSlice Actions', () => {
   });
 
   describe('optimisticUpdateAgentConfig', () => {
+    it.each([
+      { executionTarget: 'sandbox' as const },
+      { heterogeneousProvider: { apiConfig: { model: 'new-model', providerId: 'openai' } } },
+    ])('ignores cached directory maps during unrelated settings updates: %j', async (patch) => {
+      const workingDirByDevice = {
+        'device-a': { path: '/a' },
+        'device-b': {
+          git: { activeWorktree: '/new-b-worktree' },
+          path: '/new-b',
+          repoType: 'git' as const,
+        },
+      };
+      useAgentStore.setState({
+        agentMap: { 'agent-1': { agencyConfig: { workingDirByDevice } } },
+      });
+      vi.mocked(agentService.updateAgentConfig).mockImplementation(async (_id, data) => {
+        expect(data.agencyConfig).not.toHaveProperty('workingDirByDevice');
+        expect(
+          useAgentStore.getState().agentMap['agent-1']?.agencyConfig?.workingDirByDevice,
+        ).toEqual(workingDirByDevice);
+        return { success: true };
+      });
+      await useAgentStore.getState().updateAgentConfigById(
+        'agent-1',
+        {
+          agencyConfig: {
+            workingDirByDevice: { 'device-a': { path: '/a' }, 'device-b': { path: '/stale-b' } },
+            ...patch,
+          },
+        },
+        { rethrow: true },
+      );
+      expect(
+        useAgentStore.getState().agentMap['agent-1']?.agencyConfig?.workingDirByDevice,
+      ).toEqual(workingDirByDevice);
+    });
+
     it.each([
       { path: '/repos/lobehub', repoType: 'github' as const },
       { path: '/plain-folder' },
@@ -1116,9 +1155,11 @@ describe('AgentSlice Actions', () => {
           await useAgentStore.getState().updateAgentConfigById(
             'agent-1',
             {
-              agencyConfig: { workingDirByDevice: { 'device-a': selection } },
+              agencyConfig: {
+                workingDirByDevice: { 'device-a': selection, 'device-b': '/stale-sibling' },
+              },
             },
-            { rethrow: true },
+            { replaceWorkingDirDeviceIds: ['device-a'], rethrow: true },
           );
         });
 
@@ -1178,9 +1219,13 @@ describe('AgentSlice Actions', () => {
       });
 
       await act(async () => {
-        await useAgentStore.getState().updateAgentConfigById('agent-1', {
-          agencyConfig: { workingDirByDevice: { 'device-a': undefined } },
-        });
+        await useAgentStore.getState().updateAgentConfigById(
+          'agent-1',
+          {
+            agencyConfig: { workingDirByDevice: { 'device-a': undefined } },
+          },
+          { replaceWorkingDirDeviceIds: ['device-a'] },
+        );
       });
 
       const [, payload] = vi.mocked(agentService.updateAgentConfig).mock.calls[0];
@@ -1213,6 +1258,7 @@ describe('AgentSlice Actions', () => {
         'agent-1',
         { agencyConfig: { executionTarget: 'local', heterogeneousProvider: { effort: 'high' } } },
         expect.any(AbortSignal),
+        undefined,
       );
       expect(
         useAgentStore.getState().agentMap['agent-1']?.agencyConfig?.workingDirByDevice,
@@ -1291,6 +1337,7 @@ describe('AgentSlice Actions', () => {
           },
         },
         expect.any(AbortSignal),
+        undefined,
       );
     });
 
