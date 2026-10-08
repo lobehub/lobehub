@@ -293,6 +293,49 @@ describe('ImRestService.markRead', () => {
     expect(topic.metadata?.imReadCursors?.[USER]?.messageId).toBe('msg_a2');
   });
 
+  it('refuses a read target that is not a delivered agent reply', async () => {
+    await insertMessage('msg_u1', 'user', 'did it ship?', '2026-10-04T10:00:00.000100Z');
+    await insertMessage('msg_a1', 'assistant', 'shipped', '2026-10-04T10:00:00.000200Z');
+    // A working row: the placeholder a run is still writing into.
+    await insertMessage('msg_writing', 'assistant', '...', '2026-10-04T10:00:00.000300Z');
+
+    await expect(service.markRead(TOPIC, { messageId: 'msg_u1' })).rejects.toMatchObject({
+      name: 'ValidationError',
+    });
+    await expect(service.markRead(TOPIC, { messageId: 'msg_writing' })).rejects.toMatchObject({
+      name: 'ValidationError',
+    });
+
+    // Neither attempt moved the cursor, so the delivered reply is still unread.
+    expect((await service.sync(TOPIC, {})).unread).toBe(1);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, TOPIC));
+    expect(topic.metadata?.imReadCursors).toBeUndefined();
+  });
+
+  it('keeps unread after the read cursor’s own message is deleted', async () => {
+    await insertMessage('msg_a1', 'assistant', 'one', '2026-10-04T10:00:00.000100Z');
+    await insertMessage('msg_a2', 'assistant', 'two', '2026-10-04T10:00:00.000200Z');
+
+    expect(await service.markRead(TOPIC, { messageId: 'msg_a1' })).toEqual({ unread: 1 });
+    // The user deletes the reply they had read: the cursor has to keep ordering the
+    // replies after it instead of comparing every one of them against NULL.
+    await db.delete(messages).where(eq(messages.id, 'msg_a1'));
+
+    expect((await service.sync(TOPIC, {})).unread).toBe(1);
+    expect(await service.markRead(TOPIC, { messageId: 'msg_a2' })).toEqual({ unread: 0 });
+  });
+
+  it('does not read a reply that only shares the cursor’s microsecond', async () => {
+    // One transaction stamps every row it writes with the same microsecond.
+    await insertMessage('msg_same_1', 'assistant', 'one', '2026-10-04T10:00:00.000100Z');
+    await insertMessage('msg_same_2', 'assistant', 'two', '2026-10-04T10:00:00.000100Z');
+
+    expect((await service.sync(TOPIC, {})).unread).toBe(2);
+    // The id breaks the tie: only the row the cursor names becomes read.
+    expect(await service.markRead(TOPIC, { messageId: 'msg_same_1' })).toEqual({ unread: 1 });
+    expect(await service.markRead(TOPIC, { messageId: 'msg_same_2' })).toEqual({ unread: 0 });
+  });
+
   it('counts every unread reply, not just the newest page, and ignores hidden rows', async () => {
     const base = Date.parse('2026-10-04T10:00:00Z');
     for (let i = 0; i < 120; i++) {
