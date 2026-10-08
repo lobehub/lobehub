@@ -1,6 +1,7 @@
 import type { Command } from 'commander';
 
 import { getAuthInfo } from '../../api/http';
+import { CLI_PRIMARY_BIN } from '../../constants/identity';
 import { log } from '../../utils/logger';
 
 export function registerTextCommand(parent: Command) {
@@ -58,8 +59,8 @@ export function registerTextCommand(parent: Command) {
         const payload: Record<string, any> = {
           messages,
           model,
-          // For non-streaming, use responseMode 'json' to get a plain JSON response
-          // instead of SSE (the backend converts non-stream to SSE by default)
+          // Ask for a plain JSON body when not streaming; runtimes that ignore
+          // responseMode still reply with SSE, handled below
           responseMode: useStream ? 'stream' : 'json',
           stream: useStream,
         };
@@ -81,7 +82,11 @@ export function registerTextCommand(parent: Command) {
           return;
         }
 
-        if (!useStream) {
+        // `/webapi/chat/*` answers with LobeHub's SSE protocol even for `stream: false`
+        // on most providers (`responseMode: 'json'` is only honored by some runtimes),
+        // so only treat the body as plain JSON when the server says it is.
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
           const body = await res.json();
           if (options.json) {
             console.log(JSON.stringify(body, null, 2));
@@ -98,60 +103,202 @@ export function registerTextCommand(parent: Command) {
           return;
         }
 
-        // Stream SSE response
         if (!res.body) {
           log.error('No response body received');
           process.exit(1);
           return;
         }
 
-        await streamSSEResponse(res.body, options.json);
+        if (useStream) {
+          await streamSSEResponse(res.body, options.json);
+        } else {
+          await collectSSEResponse(res.body, options.json);
+        }
       },
     );
 }
 
-async function streamSSEResponse(body: ReadableStream<Uint8Array>, json?: boolean): Promise<void> {
+interface SSEEvent {
+  data: any;
+  /** SSE `event:` field; `undefined` for plain OpenAI-style streams */
+  event?: string;
+}
+
+/**
+ * Parse an SSE body into events. LobeHub's chat protocol tags every event with
+ * `event: <type>` (`text`, `content_part`, `reasoning`, `stop`, `usage`, `error`, ...),
+ * and the meaning of `data` depends on that type.
+ */
+async function* parseSSE(body: ReadableStream<Uint8Array>): AsyncGenerator<SSEEvent> {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let event: string | undefined;
+  let dataLines: string[] = [];
+
+  const flush = (): SSEEvent | undefined => {
+    if (dataLines.length === 0) {
+      event = undefined;
+      return;
+    }
+    const raw = dataLines.join('\n');
+    const current = event;
+    event = undefined;
+    dataLines = [];
+
+    try {
+      return { data: JSON.parse(raw), event: current };
+    } catch {
+      return { data: raw, event: current };
+    }
+  };
 
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 
-      buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+      buffer = done ? '' : lines.pop() || '';
 
-      for (const line of lines) {
-        if (!line.startsWith('data:')) continue;
-        const data = line.slice(5).trim();
-        if (data === '[DONE]') {
-          if (!json) process.stdout.write('\n');
-          return;
-        }
-
-        try {
-          const parsed = JSON.parse(data);
-          if (json) {
-            console.log(JSON.stringify(parsed));
-          } else if (typeof parsed === 'string' && parsed !== 'stop') {
-            // LobeHub SSE sends content as JSON strings: "Hello", "world"
-            process.stdout.write(parsed);
-          } else if (parsed?.choices?.[0]?.delta?.content) {
-            // Standard OpenAI SSE format
-            process.stdout.write(parsed.choices[0].delta.content);
-          }
-        } catch {
-          // Not JSON, might be raw text chunk
-          if (!json) process.stdout.write(data);
+      for (const rawLine of lines) {
+        const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+        if (line === '') {
+          const parsed = flush();
+          if (parsed) yield parsed;
+        } else if (line.startsWith('event:')) {
+          event = line.slice(6).trim();
+        } else if (line.startsWith('data:')) {
+          dataLines.push(line.slice(5).trimStart());
         }
       }
+
+      if (done) {
+        const parsed = flush();
+        if (parsed) yield parsed;
+        return;
+      }
     }
-    // Final newline
-    if (!json) process.stdout.write('\n');
   } finally {
     reader.releaseLock();
   }
+}
+
+type SSEPayload =
+  | { kind: 'done' }
+  | { kind: 'error'; data: unknown }
+  | { kind: 'image' }
+  | { kind: 'reasoning'; text: string }
+  | { kind: 'text'; text: string }
+  | { kind: 'other' };
+
+function classifySSEEvent({ data, event }: SSEEvent): SSEPayload {
+  if (data === '[DONE]') return { kind: 'done' };
+
+  switch (event) {
+    case 'text': {
+      return typeof data === 'string' ? { kind: 'text', text: data } : { kind: 'other' };
+    }
+    case 'reasoning': {
+      return typeof data === 'string' ? { kind: 'reasoning', text: data } : { kind: 'other' };
+    }
+    // Gemini emits its reply as multimodal content parts instead of `text` events
+    case 'content_part': {
+      if (data?.partType === 'image' && !data.inReasoning) return { kind: 'image' };
+      if (data?.partType !== 'text' || typeof data.content !== 'string') return { kind: 'other' };
+      return data.inReasoning
+        ? { kind: 'reasoning', text: data.content }
+        : { kind: 'text', text: data.content };
+    }
+    case 'base64_image': {
+      return { kind: 'image' };
+    }
+    case 'error': {
+      return { data, kind: 'error' };
+    }
+    case undefined: {
+      // Plain OpenAI chat-completion chunks without `event:` tags
+      const content = data?.choices?.[0]?.delta?.content;
+      return typeof content === 'string' ? { kind: 'text', text: content } : { kind: 'other' };
+    }
+    default: {
+      return { kind: 'other' };
+    }
+  }
+}
+
+/** Image models answer with image parts only, which would otherwise print nothing */
+function warnImageOnlyReply(imageCount: number): void {
+  log.warn(
+    `The model returned ${imageCount} image(s) and no text. Use \`${CLI_PRIMARY_BIN} generate image\` for image models.`,
+  );
+}
+
+function reportSSEError(data: unknown): void {
+  log.error(`Text generation failed: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+  process.exit(1);
+}
+
+async function streamSSEResponse(body: ReadableStream<Uint8Array>, json?: boolean): Promise<void> {
+  let hasText = false;
+  let imageCount = 0;
+
+  for await (const event of parseSSE(body)) {
+    const payload = classifySSEEvent(event);
+    if (payload.kind === 'done') break;
+
+    if (json) {
+      console.log(JSON.stringify(event));
+      if (payload.kind === 'error') process.exit(1);
+      continue;
+    }
+
+    if (payload.kind === 'error') {
+      process.stdout.write('\n');
+      reportSSEError(payload.data);
+      return;
+    }
+    if (payload.kind === 'text') {
+      hasText = true;
+      process.stdout.write(payload.text);
+    } else if (payload.kind === 'image') imageCount++;
+  }
+
+  if (json) return;
+  process.stdout.write('\n');
+  if (!hasText && imageCount > 0) warnImageOnlyReply(imageCount);
+}
+
+async function collectSSEResponse(body: ReadableStream<Uint8Array>, json?: boolean): Promise<void> {
+  let content = '';
+  let reasoning = '';
+  let finishReason: unknown;
+  let imageCount = 0;
+  let usage: unknown;
+
+  for await (const event of parseSSE(body)) {
+    const payload = classifySSEEvent(event);
+    if (payload.kind === 'done') break;
+
+    if (payload.kind === 'error') {
+      reportSSEError(payload.data);
+      return;
+    }
+    if (payload.kind === 'text') content += payload.text;
+    else if (payload.kind === 'reasoning') reasoning += payload.text;
+    else if (payload.kind === 'image') imageCount++;
+    else if (event.event === 'stop') finishReason = event.data;
+    else if (event.event === 'usage') usage = event.data;
+  }
+
+  if (json) {
+    console.log(
+      JSON.stringify({ content, finishReason, reasoning: reasoning || undefined, usage }, null, 2),
+    );
+    return;
+  }
+
+  process.stdout.write(content);
+  process.stdout.write('\n');
+  if (!content && imageCount > 0) warnImageOnlyReply(imageCount);
 }
