@@ -63,7 +63,9 @@ export const createSecretRedactor = (): SecretRedactor => {
 
   return {
     add(label, value) {
-      if (value.length < MIN_REDACT_LENGTH) return;
+      // No whole-value length guard here: `secretVariants` already drops the representations
+      // shorter than the minimum. Gating on the raw value would skip a short secret's longer
+      // encodings too (e.g. `abc` → `YWJj`, `616263`), leaving them in the output unredacted.
       const placeholder = formatSecretPlaceholder(label);
       for (const variant of secretVariants(value)) patterns.push({ placeholder, variant });
       // Longest first so a raw value inside its own longer encoding is handled by the longer match.
