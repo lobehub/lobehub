@@ -143,11 +143,31 @@ describe('useWidgetReview', () => {
     // the version-keyed request can still see it.
     const run = { id: 'r1', versionId: 'v2' };
     respond('previewRun', { data: run });
+    const onApprovalBlockedChange = vi.fn();
 
-    const { result } = renderHook(() => useWidgetReview('w1', 'v2', { withRuns: true }));
+    const { result } = renderHook(() =>
+      useWidgetReview('w1', 'v2', { onApprovalBlockedChange, withRuns: true }),
+    );
 
     expect(result.current.status).toBe('ready');
     expect(result.current.run).toEqual(run);
+    // A proven preview means the publish it approves will not be refused.
+    expect(onApprovalBlockedChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('holds approval when the reviewed version has no usable preview run', () => {
+    loadAll();
+    // No usable dry run of v2: publishing would be refused (DRY_RUN_REQUIRED),
+    // so the review renders its warning and approval stays held.
+    const onApprovalBlockedChange = vi.fn();
+
+    const { result } = renderHook(() =>
+      useWidgetReview('w1', 'v2', { onApprovalBlockedChange, withRuns: true }),
+    );
+
+    expect(result.current.status).toBe('ready');
+    expect(result.current.run).toBeNull();
+    expect(onApprovalBlockedChange).toHaveBeenLastCalledWith(true);
   });
 
   it('keeps a loaded review ready through a background revalidation failure', () => {

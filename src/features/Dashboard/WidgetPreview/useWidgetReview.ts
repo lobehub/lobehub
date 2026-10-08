@@ -100,8 +100,12 @@ export const useWidgetReview = (
   }, [unpinnedTargetId, onPinVersion]);
 
   // Layout effect: the host's approve action is held before the first paint,
-  // so it is never clickable while nothing has been reviewed.
-  const blocked = status !== 'ready';
+  // so it is never clickable while nothing has been reviewed. A publish
+  // review is exactly what approval acts on — a version with no usable
+  // preview run would be refused by the publish flow (DRY_RUN_REQUIRED), so
+  // approval stays held until a successful dry run of this version exists.
+  const hasUsablePreview = !withRuns || !!previewRunRequest.data;
+  const blocked = status !== 'ready' || !hasUsablePreview;
   useLayoutEffect(() => {
     onApprovalBlockedChange?.(blocked);
   }, [blocked, onApprovalBlockedChange]);
