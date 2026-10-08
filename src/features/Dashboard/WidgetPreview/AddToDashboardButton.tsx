@@ -104,6 +104,10 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
         : []),
     ];
 
+    // Nothing placeable and no creation — an empty dropdown helps no one
+    // (e.g. a workspace-root widget inside a workspace).
+    if (items.length === 0) return null;
+
     return (
       <DropdownMenu items={items} placement={'bottomLeft'}>
         <Button
