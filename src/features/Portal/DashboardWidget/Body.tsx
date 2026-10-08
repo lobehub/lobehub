@@ -13,6 +13,7 @@ import { canCreateDashboardFromPreview } from '@/features/Dashboard/WidgetPrevie
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import { useOpenDashboard } from './useOpenDashboard';
 
@@ -87,10 +88,12 @@ const Body = memo(() => {
   const openDashboard = useOpenDashboard();
   // A workspace-root widget's board list resolves to the home list, which
   // workspaces disable — opening it would close this Portal onto nothing.
-  const canOpenDashboards = canCreateDashboardFromPreview(
-    widget?.projectId,
-    !!useActiveWorkspaceSlug(),
-  );
+  // And dashboard routes exist only in the desktop shell, so on mobile every
+  // dashboard navigation hides rather than clear the stack onto nothing.
+  const isMobile = useServerConfigStore((s) => s.isMobile);
+  const workspaceActive = !!useActiveWorkspaceSlug();
+  const canOpenDashboards =
+    !isMobile && canCreateDashboardFromPreview(widget?.projectId, workspaceActive);
 
   if (!widgetId) return null;
 
@@ -142,25 +145,26 @@ const Body = memo(() => {
           ) : undefined
         }
       >
-        {widget.dashboards.length > 0 ? (
-          <Flexbox horizontal gap={8} wrap={'wrap'}>
-            {widget.dashboards.map((dashboard) => (
-              <Button
-                data-portal-dashboard-link={dashboard.id}
-                icon={ArrowUpRightIcon}
-                key={dashboard.id}
-                size={'small'}
-                onClick={() => openDashboard(dashboard)}
-              >
-                {dashboard.title}
-              </Button>
-            ))}
-          </Flexbox>
-        ) : (
-          <Text fontSize={12} type={'secondary'}>
-            {t('portal.notOnDashboard')}
-          </Text>
-        )}
+        {!isMobile &&
+          (widget.dashboards.length > 0 ? (
+            <Flexbox horizontal gap={8} wrap={'wrap'}>
+              {widget.dashboards.map((dashboard) => (
+                <Button
+                  data-portal-dashboard-link={dashboard.id}
+                  icon={ArrowUpRightIcon}
+                  key={dashboard.id}
+                  size={'small'}
+                  onClick={() => openDashboard(dashboard)}
+                >
+                  {dashboard.title}
+                </Button>
+              ))}
+            </Flexbox>
+          ) : (
+            <Text fontSize={12} type={'secondary'}>
+              {t('portal.notOnDashboard')}
+            </Text>
+          ))}
       </Section>
 
       <WidgetDetailPanel diffTargetVersionId={widget.draftVersionId ?? undefined} widget={widget} />
