@@ -142,7 +142,11 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
                 (right-aligned) row reads name → source link → avatar, keeping
                 the author first and its origin a trailing affordance. */}
             {agentSender?.topicId && (
-              <AgentSenderSourceLink agentId={agentSender.agentId} topicId={agentSender.topicId} />
+              <AgentSenderSourceLink
+                agentId={agentSender.agentId}
+                topicId={agentSender.topicId}
+                topicTitle={agentSender.topicTitle}
+              />
             )}
           </>
         ) : undefined

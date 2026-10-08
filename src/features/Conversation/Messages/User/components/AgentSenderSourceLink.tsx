@@ -16,12 +16,20 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     gap: 3px;
     align-items: center;
 
+    max-inline-size: 220px;
+
     font-size: 12px;
     color: ${cssVar.colorTextTertiary};
 
     &:hover {
       color: ${cssVar.colorTextSecondary};
     }
+  `,
+  label: css`
+    overflow: hidden;
+    min-inline-size: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
 }));
 
@@ -30,23 +38,36 @@ interface AgentSenderSourceLinkProps {
   agentId: string;
   /** The source topic id. */
   topicId: string;
+  /**
+   * The source topic's own name. Shown as the link label; the generic caption is
+   * only the fallback for a topic that has none.
+   */
+  topicTitle?: string | null;
 }
 
 /**
- * Jump-back to the topic an agent → agent turn was launched from. Sits right
- * after the sending agent's name so the authorship and its origin read as one
- * cluster rather than two facts the reader has to reconcile.
+ * Jump-back to the topic an agent → agent turn was launched from. Sits after the
+ * sending agent's name so the authorship and its origin read as one cluster.
+ *
+ * Labels itself with the topic's OWN name rather than a generic "source topic"
+ * caption: the name is what tells a reader *which* conversation this came from,
+ * and repeating a caption on every such message is chrome. The caption stays as
+ * the hover title — and as the label for an untitled topic — so the affordance
+ * still explains itself.
  */
-const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(({ agentId, topicId }) => {
-  const { t } = useTranslation('chat');
+const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(
+  ({ agentId, topicId, topicTitle }) => {
+    const { t } = useTranslation('chat');
+    const caption = t('agentSender.sourceTopic');
 
-  return (
-    <Link className={styles.link} href={AGENT_CHAT_TOPIC_URL(agentId, topicId)}>
-      <Icon icon={Link2} size={12} />
-      {t('agentSender.sourceTopic')}
-    </Link>
-  );
-});
+    return (
+      <Link className={styles.link} href={AGENT_CHAT_TOPIC_URL(agentId, topicId)} title={caption}>
+        <Icon icon={Link2} size={12} />
+        <span className={styles.label}>{topicTitle || caption}</span>
+      </Link>
+    );
+  },
+);
 
 AgentSenderSourceLink.displayName = 'AgentSenderSourceLink';
 

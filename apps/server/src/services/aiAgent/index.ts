@@ -1703,7 +1703,11 @@ export class AiAgentService {
     const topic = await this.topicModel.findById(sourceTopicId);
     if (!topic?.agentId) return undefined;
 
-    const base: AgentSenderMetadata = { agentId: topic.agentId, topicId: sourceTopicId };
+    const base: AgentSenderMetadata = {
+      agentId: topic.agentId,
+      topicId: sourceTopicId,
+      topicTitle: topic.title ?? undefined,
+    };
 
     try {
       const config = await this.agentModel.getAgentConfigById(topic.agentId);

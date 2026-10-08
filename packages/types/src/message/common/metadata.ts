@@ -223,6 +223,12 @@ export interface AgentSenderMetadata {
   title?: string;
   /** The topic the run was launched from, for jumping back. */
   topicId?: string;
+  /**
+   * The source topic's own name at send time. Snapshotted rather than looked up
+   * because the source topic belongs to ANOTHER agent's conversation, so the
+   * receiving side's topic list does not carry it.
+   */
+  topicTitle?: string;
 }
 
 export const AgentSenderMetadataSchema = z.object({
@@ -231,6 +237,7 @@ export const AgentSenderMetadataSchema = z.object({
   name: z.string().optional(),
   title: z.string().optional(),
   topicId: z.string().optional(),
+  topicTitle: z.string().optional(),
 });
 
 /**
