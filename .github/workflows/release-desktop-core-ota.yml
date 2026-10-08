@@ -4,6 +4,7 @@ name: Release Desktop Core OTA
 # core-only 发布（壳不变，只发 main/preload/renderer/cli）
 # ============================================
 # 门禁: HEAD 的 shellAbi 必须等于 <channel>/shell.json 的 shellAbi，
+#       且 shell.json 的 shellVersion 必须比最新 stable tag 新（或就是该 stable），
 #       否则 requires_full_release=true，由调用方走全量发版。
 # 产物: <channel>/<appVersion>/core-v4/<platform>/packs/<sha>.pack           独立 Zstd 块
 #       <channel>/<appVersion>/core-v4/<platform>/versions/<version>.json     签名快照
@@ -125,16 +126,30 @@ jobs:
           BASE_SHELL_ABI: ${{ steps.base.outputs.shell_abi }}
           FOUND: ${{ steps.base.outputs.found }}
           RENDERER_OTA_PUBLIC_KEY: ${{ secrets.RENDERER_OTA_PUBLIC_KEY }}
+          SHELL_VERSION: ${{ steps.base.outputs.app_version }}
         run: |
           set -euo pipefail
           SHELL_ABI=$(node apps/desktop/scripts/shellAbi.mjs)
           echo "shell_abi=$SHELL_ABI" >> "$GITHUB_OUTPUT"
           echo "HEAD shellAbi:    $SHELL_ABI"
           echo "Shipped shellAbi: ${BASE_SHELL_ABI:-<none>}"
+          LATEST_STABLE=$(git ls-remote --tags --refs origin 'v*' | sed -n 's|.*refs/tags/v\([0-9]*\.[0-9]*\.[0-9]*\)$|\1|p' | sort -V | tail -n 1)
+          echo "Shipped shell:    ${SHELL_VERSION:-<none>} (latest stable: ${LATEST_STABLE:-<none>})"
+          # 2.2.19-canary.39 在 v2.2.19 发布后已落后于 stable，继续叠 -core.N 会让版本号断档，必须全量发一次 2.2.20-canary.1
+          STABLE_AHEAD=false
+          if [ -n "$LATEST_STABLE" ] && [ -n "$SHELL_VERSION" ] && [ "$SHELL_VERSION" != "$LATEST_STABLE" ] \
+            && [ "$(printf '%s\n%s\n' "${SHELL_VERSION%%-*}" "$LATEST_STABLE" | sort -V | tail -n 1)" = "$LATEST_STABLE" ]; then
+            STABLE_AHEAD=true
+          fi
           if [ "$FOUND" != "true" ] || [ "$SHELL_ABI" != "$BASE_SHELL_ABI" ]; then
             echo "::warning::shell changed since last full release — core-only release is not allowed"
             echo "allowed=false" >> "$GITHUB_OUTPUT"
             echo "reason=abi-changed" >> "$GITHUB_OUTPUT"
+            echo "requires_full_release=true" >> "$GITHUB_OUTPUT"
+          elif [ "$STABLE_AHEAD" = "true" ]; then
+            echo "::warning::shell $SHELL_VERSION is not newer than stable v$LATEST_STABLE — core-only release is not allowed"
+            echo "allowed=false" >> "$GITHUB_OUTPUT"
+            echo "reason=stable-ahead" >> "$GITHUB_OUTPUT"
             echo "requires_full_release=true" >> "$GITHUB_OUTPUT"
           else
             echo "allowed=true" >> "$GITHUB_OUTPUT"
