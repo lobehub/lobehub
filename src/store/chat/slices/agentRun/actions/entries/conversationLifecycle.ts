@@ -44,6 +44,7 @@ import {
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { resolveReachableWorkingDirectory } from '@/helpers/workingDirectoryReachability';
 import { agentService } from '@/services/agent';
 import { aiAgentService, MAX_CLIENT_OPERATION_SNAPSHOT } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -1280,15 +1281,30 @@ export class ConversationLifecycleActionImpl {
       topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
         ? undefined
         : existingTopic?.metadata;
-    const workingDirectory =
-      getWorkingDirEffectivePath(topicCwdMetadata?.workingDirectoryConfig) ??
-      topicCwdMetadata?.workingDirectory ??
-      agentWorkingDirectory;
     const workingDirectoryConfig =
       topicCwdMetadata?.workingDirectoryConfig ??
       (topicCwdMetadata?.workingDirectory
         ? { path: topicCwdMetadata.workingDirectory }
         : agentWorkingDirectoryConfig);
+    const recordedWorkingDirectory =
+      getWorkingDirEffectivePath(topicCwdMetadata?.workingDirectoryConfig) ??
+      topicCwdMetadata?.workingDirectory ??
+      agentWorkingDirectory;
+    // A recorded worktree can be deleted out of band while the topic keeps naming
+    // it as its active checkout. Spawning into a directory that no longer exists
+    // kills the run (the spawn layer refuses to auto-create one), so fall back to
+    // the repo it was linked from. Read-only: the topic keeps its record, so the
+    // status bar can still explain it and offer its one-click reset.
+    const { path: workingDirectory } = resolvesRunCwd
+      ? await resolveReachableWorkingDirectory({
+          // This machine reads its own filesystem directly, which is the only
+          // unambiguous answer — a remote device has to be online to answer.
+          deviceId: runCwdDeviceId === currentDeviceId ? undefined : runCwdDeviceId,
+          recorded:
+            workingDirectoryConfig ??
+            (recordedWorkingDirectory ? { path: recordedWorkingDirectory } : undefined),
+        })
+      : { fellBackToSource: false, path: recordedWorkingDirectory };
     // Record which machine a new conversation runs on, so its next turn — and
     // the device picker — stay on it after the agent default changes. `auto`
     // has not picked a machine yet; the server stamps the one it routes to.
