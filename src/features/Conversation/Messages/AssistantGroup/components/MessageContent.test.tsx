@@ -39,6 +39,7 @@ vi.mock('../../../store', () => ({
   dataSelectors: {
     getBlockContent: () => () => mockStoreContent,
     getBlockHasTools: () => () => mockStoreHasTools,
+    getBlockMetadata: () => () => mockStoreMessage?.metadata,
     getDbMessageById: () => () => mockStoreMessage,
   },
   useConversationStore: (selector: (state: unknown) => unknown) => selector({}),

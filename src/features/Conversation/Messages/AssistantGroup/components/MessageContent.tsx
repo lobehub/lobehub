@@ -48,10 +48,10 @@ const MessageContent = memo<MessageContentProps>(
      * A step block after a tool call still needs to render them as images, not raw JSON.
      */
     const isMultimodal = useConversationStore(
-      (s) => !!dataSelectors.getDbMessageById(id)(s)?.metadata?.isMultimodal,
+      (s) => !!dataSelectors.getBlockMetadata(id)(s)?.isMultimodal,
     );
     const tempDisplayContent = useConversationStore(
-      (s) => dataSelectors.getDbMessageById(id)(s)?.metadata?.tempDisplayContent,
+      (s) => dataSelectors.getBlockMetadata(id)(s)?.tempDisplayContent as string | undefined,
     );
 
     const message = normalizeThinkTags(processWithArtifact(content ?? ''));
