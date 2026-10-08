@@ -51,16 +51,21 @@ export type PreviewPublishState =
   | 'publishable'
   /** The run did not succeed (yet); nothing to publish. */
   | 'notReady'
-  /** The agent saved a newer draft since; this preview is history. */
+  /** Not the current draft; publishing it would roll the widget back. */
   | 'outdated';
 
-/** What the preview card offers for a dry run of `run.versionId`. */
+/**
+ * What the preview card offers for a dry run of `run.versionId`. Only the
+ * current draft is publishable: any other version — a superseded draft or an
+ * archived one — would silently roll the widget back to code the user never
+ * approved as a release, so it reads as outdated history.
+ */
 export const getPreviewPublishState = (
   widget: Pick<DashboardWidgetDetail, 'draftVersionId' | 'publishedVersionId'>,
   run: Pick<PreviewRun, 'status' | 'versionId'>,
 ): PreviewPublishState => {
   if (widget.publishedVersionId === run.versionId) return 'live';
-  if (widget.draftVersionId && widget.draftVersionId !== run.versionId) return 'outdated';
+  if (widget.draftVersionId !== run.versionId) return 'outdated';
   return isUsableRunStatus(run.status) ? 'publishable' : 'notReady';
 };
 

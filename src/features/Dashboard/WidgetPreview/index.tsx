@@ -117,9 +117,9 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
         </Text>
       </Flexbox>
 
-      {publishState === 'outdated' && draft && (
+      {publishState === 'outdated' && (
         <Text fontSize={12} type={'warning'}>
-          {t('chat.outdated', { version: draft.version })}
+          {draft ? t('chat.outdated', { version: draft.version }) : t('chat.outdatedVersion')}
         </Text>
       )}
 

@@ -78,12 +78,23 @@ describe('getPreviewPublishState', () => {
       'outdated',
     );
     expect(getPreviewPublishState(widget, { status: 'succeeded', versionId: 'v1' })).toBe('live');
+  });
+
+  it('marks a preview of an archived version outdated once nothing points at it', () => {
+    // v1 and v2 went live and the draft is gone: reopening v1's successful
+    // preview must not offer publishing it — the server would accept the
+    // archived version and silently roll the widget back.
+    const rolled = { draftVersionId: null, publishedVersionId: 'v2' };
+    expect(getPreviewPublishState(rolled, { status: 'succeeded', versionId: 'v1' })).toBe(
+      'outdated',
+    );
+    expect(getPreviewPublishState(rolled, { status: 'succeeded', versionId: 'v2' })).toBe('live');
     expect(
       getPreviewPublishState(
         { draftVersionId: null, publishedVersionId: null },
         { status: 'succeeded', versionId: 'v1' },
       ),
-    ).toBe('publishable');
+    ).toBe('outdated');
   });
 });
 

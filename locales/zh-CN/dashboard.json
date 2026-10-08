@@ -27,6 +27,7 @@
   "chat.openDashboard": "打开看板",
   "chat.openDetail": "详情",
   "chat.outdated": "已有更新的草稿（v{{version}}），此预览已过时。",
+  "chat.outdatedVersion": "此预览来自旧版本，无法再发布。",
   "chat.preview.draft": "试运行 · 草稿 v{{version}}",
   "chat.preview.live": "已上线 · v{{version}}",
   "chat.preview.running": "正在沙箱中试运行草稿…",

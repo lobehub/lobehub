@@ -31,6 +31,7 @@ export default {
   'chat.openDashboard': 'Open dashboard',
   'chat.openDetail': 'Details',
   'chat.outdated': 'A newer draft (v{{version}}) replaced this preview.',
+  'chat.outdatedVersion': 'This preview is from an older version and can no longer be published.',
   'chat.preview.draft': 'Dry run · draft v{{version}}',
   'chat.preview.live': 'Live · v{{version}}',
   'chat.preview.running': 'Running the draft in the sandbox…',
