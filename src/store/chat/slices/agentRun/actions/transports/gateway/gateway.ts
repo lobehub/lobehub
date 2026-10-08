@@ -683,6 +683,19 @@ export class GatewayActionImpl {
     // `disconnected` twice for one close). Cleared once the reconcile settles, so
     // a silent end after a redial reconciles again.
     let silentEndReconciling = false;
+    // Set when a reconcile answered "not over" — the read may simply have failed,
+    // or outrun the server's own settlement. See the `connected` hook below.
+    let silentEndRetryArmed = false;
+
+    // Drop the store's handle for this operation, but only while it still belongs
+    // to THIS client. Re-entering `connectToGateway` (the mux → v1 fallback)
+    // installs a replacement under the same operation id while this connection's
+    // teardown is still in flight, and an id-only cleanup would delete the
+    // replacement's handle while its transport stays alive and untracked.
+    const cleanupOwnConnection = (): void => {
+      if (this.#get().gatewayConnections[operationId]?.client !== client) return;
+      this.internal_cleanupGatewayConnection(operationId);
+    };
 
     // Reconcile a stream that ended without the run's terminal frame.
     //
@@ -714,7 +727,11 @@ export class GatewayActionImpl {
       void Promise.resolve()
         .then(() => onSilentEnd())
         .then((runOver) => {
-          if (!runOver) return;
+          if (!runOver) {
+            silentEndRetryArmed = true;
+            return;
+          }
+          silentEndRetryArmed = false;
           // The terminal event is the path that applies the run's canonical final
           // state — its `uiMessages` snapshot, or a refetch — while the
           // terminal-missing completion only closes the op and settles the topic.
@@ -732,7 +749,7 @@ export class GatewayActionImpl {
           });
           fireSessionComplete();
           client.disconnect();
-          this.internal_cleanupGatewayConnection(operationId);
+          cleanupOwnConnection();
         })
         .catch((error) => {
           console.error('[Gateway] Silent-end reconcile failed:', error);
@@ -746,11 +763,22 @@ export class GatewayActionImpl {
     // lifecycle to complete the op, so the close is pure cleanup.
     // (auth_failed is handled separately below — it's also session-terminal.)
     client.on('disconnected', () => {
-      this.internal_cleanupGatewayConnection(operationId);
+      cleanupOwnConnection();
       if (receivedTerminalEvent) {
         fireSessionComplete();
         return;
       }
+      reconcileSilentEnd();
+    });
+
+    // A loss-time read can fail outright — the tab is offline while the dial is
+    // still backing off — and a socket that then reconnects emits no further loss
+    // signal, so nothing else would re-check. `useGatewayReconnect` cannot rescue
+    // it either: its SWR fetcher already resolved and reconnect revalidation is
+    // off. Re-check once the transport is back, for the runs whose loss-time
+    // answer was "not over".
+    client.on('connected', () => {
+      if (!silentEndRetryArmed) return;
       reconcileSilentEnd();
     });
 
@@ -2163,9 +2191,13 @@ export class GatewayActionImpl {
     // stays fail-safe: unknown is not proof that it ran on the server.
     if (!topicId || heteroType !== null) return false;
 
-    // A newer turn in THIS tab already owns the topic: its own lifecycle settles
-    // the row, and retiring here would fight it.
-    if (this.#hasOtherLiveRunOnTopic(topicId, serverOperationId)) return false;
+    // A newer turn in THIS tab may own the topic by now. That is not a reason to
+    // skip the read — the server naming another operation is exactly what proves
+    // THIS one ended — and the completion path is already ownership-guarded:
+    // `settleRunningOperation` compares the operation id, `clearLocalRunningOperation`
+    // checks the marker, and only this local operation is completed. Skipping the
+    // read instead left a superseded operation locally `running` forever: its
+    // transport is torn down, so no later loss signal ever retries.
 
     // A share visitor cannot read the creator-owned topic through the owner-scoped
     // `topicService` — `topic.getTopicDetail` resolves with `findOwnTopicById`, so

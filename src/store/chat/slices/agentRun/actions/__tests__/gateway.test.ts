@@ -559,6 +559,87 @@ describe('GatewayActionImpl', () => {
 
         expect(onSilentEnd).toHaveBeenCalledOnce();
       });
+
+      // A loss-time read can fail outright (offline while the dial backs off), and
+      // the dial that then succeeds emits no further loss signal — so nothing else
+      // would ever re-check and the op would stay `running`.
+      it('re-checks once the transport reconnects after a "not over" answer', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledTimes(1));
+
+        mockClient.emitEvent('connected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ terminalReceived: false }),
+          ),
+        );
+      });
+
+      it('does not read the topic on a plain initial connect', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('connected');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(onSilentEnd).not.toHaveBeenCalled();
+      });
+
+      it('leaves a replacement transport alone when a stale reconcile resolves', async () => {
+        const { action, mockClient, set, state } = createTestAction();
+        let resolveRunOver: ((value: boolean) => void) | undefined;
+        const onSilentEnd = vi.fn(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveRunOver = resolve;
+            }),
+        );
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        // The mux → v1 fallback re-enters `connectToGateway` under the SAME
+        // operation id while this read is still in flight.
+        const replacement = createMockClient();
+        set({ gatewayConnections: { 'op-1': { client: replacement, status: 'connecting' } } });
+
+        resolveRunOver!(true);
+        await vi.waitFor(() => expect(mockClient.disconnect).toHaveBeenCalled());
+
+        expect(state.gatewayConnections['op-1']?.client).toBe(replacement);
+      });
     });
 
     it('should cleanup on auth_failed', () => {
@@ -4170,6 +4251,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internalDispatchTopic,
         startOperation,
+        state,
       };
     }
 
@@ -4365,6 +4447,39 @@ describe('GatewayActionImpl', () => {
       // it is over, and its spinner must not outlive the newer run's.
       it('reports the run over once a newer operation owns the topic', async () => {
         const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-2', operationId: 'server-op-2' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      // Regression: this branch used to return early whenever a newer turn in the
+      // same tab owned the topic, skipping the authoritative read — and the
+      // transport is torn down right after, so no later loss signal ever retried
+      // and the superseded operation stayed locally `running` forever. The
+      // completion path is ownership-guarded, so the read must still run.
+      it('still reads the server row when a newer local turn owns the topic', async () => {
+        const { action, captured, state } = createSeededReconnectHarness();
+        state.operations = {
+          'op-newer': {
+            context: { topicId: 'topic-1' },
+            metadata: {},
+            status: 'running',
+            type: 'execServerAgentRuntime',
+          },
+        };
+        state.operationsByType = { execServerAgentRuntime: ['op-newer'] };
         vi.mocked(topicService.getTopicDetail).mockResolvedValue({
           id: 'topic-1',
           metadata: {
