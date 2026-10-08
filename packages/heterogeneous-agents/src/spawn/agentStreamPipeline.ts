@@ -10,7 +10,7 @@ import type {
   UsageData,
 } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
-import { readCodexImageOutputs } from './codexImageOutputs';
+import { createCodexImageOutputReader } from './codexImageOutputs';
 import { JsonlStreamProcessor } from './jsonlProcessor';
 import { readPostRunUsage } from './postRunUsage';
 import { toStreamEvent } from './streamEvent';
@@ -70,16 +70,17 @@ export class AgentStreamPipeline {
   private readonly operationId: string;
   private readonly codexTracker?: CodexFileChangeTracker;
   private readonly uploadImage?: UploadHeterogeneousImage;
-  private readonly env: Record<string, string | undefined>;
-  private readonly startedAt: number;
+  private readonly readCodexImages: ReturnType<typeof createCodexImageOutputReader>;
   private recoveredCodexImageCallIds = new Set<string>();
   private queuedEvents: AgentStreamEvent[] = [];
 
   constructor(options: AgentStreamPipelineOptions) {
     this.adapter = createAdapter(options.agentType);
     this.agentType = options.agentType;
-    this.env = options.env ?? process.env;
-    this.startedAt = options.startedAt ?? Date.now();
+    this.readCodexImages = createCodexImageOutputReader({
+      env: options.env ?? process.env,
+      startedAt: options.startedAt ?? Date.now(),
+    });
     this.operationId = options.operationId;
     this.uploadImage = options.uploadImage;
     this.codexTracker =
@@ -192,10 +193,7 @@ export class AgentStreamPipeline {
   private async recoverCodexImages(): Promise<HeterogeneousAgentEvent[]> {
     if (this.agentType !== 'codex' || !this.adapter.sessionId) return [];
     try {
-      const items = await readCodexImageOutputs(this.adapter.sessionId, {
-        env: this.env,
-        startedAt: this.startedAt,
-      });
+      const items = await this.readCodexImages(this.adapter.sessionId);
       return items.flatMap((item) => {
         if (this.recoveredCodexImageCallIds.has(item.id)) return [];
         this.recoveredCodexImageCallIds.add(item.id);

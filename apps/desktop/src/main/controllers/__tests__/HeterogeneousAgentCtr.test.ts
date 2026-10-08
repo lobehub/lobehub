@@ -5119,6 +5119,87 @@ describe('HeterogeneousAgentCtr', () => {
       mockGetAllWindows.mockReturnValue([]);
     });
 
+    it.each(['uploaded', 'failed'])(
+      'recovers desktop Codex images from the spawned profile (%s)',
+      async (mode) => {
+        const startedAt = Date.now();
+        vi.useFakeTimers({ toFake: ['Date'] });
+        vi.setSystemTime(startedAt);
+        const codexHome = path.join(appStoragePath, 'isolated-codex');
+        const dir = path.join(codexHome, 'sessions', '2026', '10', '08');
+        await mkdir(dir, { recursive: true });
+        await writeFile(
+          path.join(dir, 'rollout-desktop-images.jsonl'),
+          [
+            {
+              timestamp: new Date(startedAt + 1000).toISOString(),
+              type: 'event_msg',
+              payload: { type: 'task_started' },
+            },
+            {
+              type: 'response_item',
+              payload: {
+                type: 'custom_tool_call_output',
+                call_id: 'dog-image',
+                output: [{ type: 'input_image', image_url: 'data:image/png;base64,AAAA' }],
+              },
+            },
+          ]
+            .map((record) => JSON.stringify(record))
+            .join('\n') + '\n',
+        );
+        // The CLI starts its turn before the pipeline is constructed.
+        onSpawnMock.mockImplementation(() => vi.setSystemTime(startedAt + 5000));
+        nextFakeProc = createFakeProc({
+          stdoutLines: [
+            { type: 'thread.started', thread_id: 'desktop-images' },
+            { type: 'turn.started' },
+            { type: 'item.completed', item: { id: 'reply', type: 'agent_message', text: 'Done.' } },
+            { type: 'turn.completed' },
+          ].map((record) => JSON.stringify(record) + '\n'),
+        }).proc;
+        const ctr = new HeterogeneousAgentCtr({
+          appStoragePath,
+          storeManager: { get: vi.fn() },
+        } as any);
+        const upload = vi.fn(async () => {
+          if (mode === 'failed') throw new Error('Upload rejected');
+          return { fileId: 'file-dog', url: 'https://cdn/dog.png' };
+        });
+        Object.assign(ctr, { uploadResultImage: upload });
+        try {
+          const { sessionId } = await ctr.startSession({
+            agentType: 'codex',
+            command: 'codex',
+            env: { CODEX_HOME: codexHome },
+          });
+          await ctr.sendPrompt({
+            operationId: 'op-desktop-images',
+            prompt: 'draw a dog',
+            sessionId,
+          });
+          const events = broadcasts
+            .filter((b) => b.channel === 'heteroAgentEvent')
+            .map((b) => b.data.event);
+          const results = events.filter((event) => event.type === 'tool_result');
+          expect(results).toHaveLength(1);
+          expect(results[0].data).toMatchObject({
+            toolCallId: 'dog-image',
+            content:
+              mode === 'uploaded' ? '![image/png](https://cdn/dog.png)' : '[Image: image/png]',
+          });
+          expect(upload).toHaveBeenCalledOnce();
+          expect(JSON.stringify(events)).not.toContain('AAAA');
+          expect(
+            events.some((event) => event.type === 'stream_chunk' && event.data.content === 'Done.'),
+          ).toBe(true);
+        } finally {
+          onSpawnMock.mockReset();
+          vi.useRealTimers();
+        }
+      },
+    );
+
     it('delivers pipeline.flush() events BEFORE heteroAgentSessionComplete even when proc exit precedes stdout end', async () => {
       // Codex `item.started` for a tool — adapter buffers it as a pending
       // tool call. On flush, adapter synthesizes a trailing `tool_end`. This

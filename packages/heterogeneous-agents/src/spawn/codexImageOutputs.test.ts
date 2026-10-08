@@ -1,10 +1,13 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import * as fs from 'node:fs/promises';
+import { appendFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { readCodexImageOutputs } from './codexImageOutputs';
+import { createCodexImageOutputReader, readCodexImageOutputs } from './codexImageOutputs';
+
+vi.mock('node:fs/promises', { spy: true });
 
 const tempDirs: string[] = [];
 const startedAt = Date.parse('2026-10-08T02:52:15.000Z');
@@ -26,7 +29,36 @@ const prepare = async (content: string) => {
 };
 
 describe('readCodexImageOutputs', () => {
+  it('does not rescan or reparse unchanged history, but reads newly appended outputs', async () => {
+    const options = await prepare(record({ type: 'task_started' }, 'event_msg') + '\n');
+    const source = path.join(
+      options.env.CODEX_HOME,
+      'sessions',
+      '2026',
+      '10',
+      '08',
+      'rollout-thread-1.jsonl',
+    );
+    const read = createCodexImageOutputReader(options);
+    const readSpy = vi.mocked(fs.readFile).mockClear();
+    const scanSpy = vi.mocked(fs.readdir).mockClear();
+    expect(await read('thread-1')).toEqual([]);
+    const scans = scanSpy.mock.calls.length;
+    expect(await read('thread-1')).toEqual([]);
+    expect(readSpy).toHaveBeenCalledTimes(1);
+    expect(scanSpy).toHaveBeenCalledTimes(scans);
+    await appendFile(
+      source,
+      record(imageOutput('new-image', ['data:image/png;base64,AAAA'])) + '\n',
+    );
+    expect(await read('thread-1')).toMatchObject([{ id: 'new-image' }]);
+    expect(await read('thread-1')).toMatchObject([{ id: 'new-image' }]);
+    expect(readSpy).toHaveBeenCalledTimes(2);
+    expect(scanSpy).toHaveBeenCalledTimes(scans);
+  });
+
   afterEach(async () => {
+    vi.restoreAllMocks();
     await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
   });
 

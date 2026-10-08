@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 
 import { isRecord } from '@lobechat/utils/object';
 
@@ -7,16 +7,45 @@ import { parseJsonlRecords } from '../transcript/utils';
 import type { HeterogeneousToolResultImage } from '../types';
 import { getCodexHome, readNewestMatchingSessionFile } from './codexModel';
 
-/**
- * exec --json omits built-in tool outputs, including images returned through exec.
- * Recover only this invocation's latest turn, never historical images on resume.
- */
-export const readCodexImageOutputs = async (
-  sessionId: string,
-  { env, startedAt }: { env: Record<string, string | undefined>; startedAt: number },
+interface CodexImageOutputOptions {
+  env: Record<string, string | undefined>;
+  startedAt: number;
+}
+
+/** Cache the current invocation's rollout path and unchanged parsed output. */
+export const createCodexImageOutputReader = (options: CodexImageOutputOptions) => {
+  let cached:
+    | {
+        sessionId: string;
+        source: string;
+        mtimeMs?: number;
+        size?: number;
+        outputs?: CodexImageOutputItem[];
+      }
+    | undefined;
+  return async (sessionId: string): Promise<CodexImageOutputItem[]> => {
+    if (cached?.sessionId !== sessionId) {
+      const source = await readNewestMatchingSessionFile(getCodexHome(options.env), sessionId);
+      if (!source) return [];
+      cached = { sessionId, source };
+    }
+    const info = await stat(cached.source);
+    if (cached.outputs && cached.mtimeMs === info.mtimeMs && cached.size === info.size)
+      return cached.outputs;
+    const outputs = await readImageOutputs(cached.source, options.startedAt);
+    Object.assign(cached, { mtimeMs: info.mtimeMs, outputs, size: info.size });
+    return outputs;
+  };
+};
+
+/** Recover only the invocation's latest turn, never historical images on resume. */
+export const readCodexImageOutputs = async (sessionId: string, options: CodexImageOutputOptions) =>
+  createCodexImageOutputReader(options)(sessionId);
+
+const readImageOutputs = async (
+  source: string,
+  startedAt: number,
 ): Promise<CodexImageOutputItem[]> => {
-  const source = await readNewestMatchingSessionFile(getCodexHome(env), sessionId);
-  if (!source) return [];
   const records = parseJsonlRecords(await readFile(source, 'utf8'));
   const turnStart = records.findLastIndex(
     (record) =>
