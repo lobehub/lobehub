@@ -16,10 +16,20 @@ import { dashboardLevelKey, type DashboardState } from './initialState';
 
 /** Poll a board while one of its widgets is mid-run, so the card settles on its own. */
 const RUNNING_POLL_INTERVAL = 3000;
+/**
+ * Slow baseline poll for boards with a scheduled run pending: a scheduled
+ * widget can start after an idle load, when the cached response still says
+ * nothing is running — the baseline observes the transition. SWR only fires
+ * it while the tab is visible, so hidden boards cost nothing.
+ */
+const IDLE_POLL_INTERVAL = 30_000;
 const RUN_HISTORY_LIMIT = 30;
 
 const hasRunningWidget = (detail?: DashboardDetail) =>
   !!detail?.items.some(({ widget }) => widget.lastRunStatus === 'running');
+
+const hasScheduledWidget = (detail?: DashboardDetail) =>
+  !!detail?.items.some(({ widget }) => widget.nextRunAt != null);
 
 /** SWR matcher over every cached board detail — a widget can sit on several boards. */
 const isDashboardDetailKey = (key: unknown) =>
@@ -110,8 +120,12 @@ export class DashboardActionImpl {
             'useFetchProjectWidgets/onSuccess',
           );
         },
-        refreshInterval: (data?: { lastRunStatus?: string | null }[]) =>
-          data?.some((widget) => widget.lastRunStatus === 'running') ? RUNNING_POLL_INTERVAL : 0,
+        refreshInterval: (data?: { lastRunStatus?: string | null; nextRunAt?: Date | null }[]) =>
+          data?.some((widget) => widget.lastRunStatus === 'running')
+            ? RUNNING_POLL_INTERVAL
+            : data?.some((widget) => widget.nextRunAt != null)
+              ? IDLE_POLL_INTERVAL
+              : 0,
       },
     );
 
@@ -124,7 +138,11 @@ export class DashboardActionImpl {
           this.internal_setDashboardDetail(data);
         },
         refreshInterval: (data?: DashboardDetail) =>
-          hasRunningWidget(data) ? RUNNING_POLL_INTERVAL : 0,
+          hasRunningWidget(data)
+            ? RUNNING_POLL_INTERVAL
+            : hasScheduledWidget(data)
+              ? IDLE_POLL_INTERVAL
+              : 0,
       },
     );
 

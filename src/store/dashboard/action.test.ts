@@ -84,6 +84,31 @@ describe('useFetchDashboardDetail', () => {
     expect(options.refreshInterval(undefined)).toBe(0);
   });
 
+  it('keeps a slow baseline poll while a scheduled run is pending', () => {
+    useDashboardStore.getState().useFetchDashboardDetail('d1');
+    const options = vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[2] as {
+      refreshInterval: (data?: unknown) => number;
+    };
+
+    const running = {
+      ...detail,
+      items: [{ item: detail.items[1].item, widget: widget({ lastRunStatus: 'running' }) }],
+    };
+    // A scheduled widget that starts after an idle load is still observed.
+    const scheduled = {
+      ...detail,
+      items: [
+        {
+          item: detail.items[0].item,
+          widget: widget({ lastRunStatus: 'succeeded', nextRunAt: new Date() }),
+        },
+      ],
+    };
+
+    expect(options.refreshInterval(running)).toBe(3000);
+    expect(options.refreshInterval(scheduled)).toBe(30_000);
+  });
+
   it('does not fetch without an id', () => {
     useDashboardStore.getState().useFetchDashboardDetail(undefined);
     expect(vi.mocked(useClientDataSWR).mock.calls.at(-1)?.[0]).toBeNull();
@@ -204,6 +229,9 @@ describe('project-wide reads', () => {
     widgetsOptions.onSuccess([widget({ agentId: 'a1', projectId: 'p1' })]);
     expect(widgetsOptions.refreshInterval([{ lastRunStatus: 'running' }])).toBeGreaterThan(0);
     expect(widgetsOptions.refreshInterval([{ lastRunStatus: 'succeeded' }])).toBe(0);
+    expect(
+      widgetsOptions.refreshInterval([{ lastRunStatus: 'succeeded', nextRunAt: new Date() }]),
+    ).toBe(30_000);
 
     const state = useDashboardStore.getState();
     expect(state.projectDashboardsMap.p1).toEqual([{ id: 'd1' }]);
