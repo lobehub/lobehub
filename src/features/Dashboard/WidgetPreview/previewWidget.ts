@@ -105,6 +105,19 @@ export const canCreateDashboardFromPreview = (
   workspaceActive: boolean,
 ): boolean => !workspaceActive || !!projectId;
 
+/**
+ * The boards a widget preview loads as placement candidates: the home
+ * level's boards, plus — for a widget that lives in a project — that
+ * project's boards, project first. The widget can be placed on either level
+ * (the dashboard tool scopes placements to exactly this set), so hiding the
+ * project's boards would lose real targets.
+ */
+export const placementBoards = <T>(
+  homeBoards: T[],
+  projectBoards: T[],
+  projectId?: string | null,
+): T[] => (projectId ? [...projectBoards, ...homeBoards] : homeBoards);
+
 /** Versions to compare by default: the one under review against the live one (or its parent). */
 export const defaultDiffPair = (
   versions: Pick<DashboardWidgetVersionItem, 'id' | 'parentVersionId' | 'status'>[],

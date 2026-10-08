@@ -7,6 +7,7 @@ import {
   findSucceededPreviewRun,
   getPreviewPublishState,
   placeableDashboards,
+  placementBoards,
   resolvePublishSchedule,
   toPreviewWidget,
 } from './previewWidget';
@@ -129,6 +130,22 @@ describe('canCreateDashboardFromPreview', () => {
     expect(canCreateDashboardFromPreview(undefined, true)).toBe(false);
     // A project widget still creates inside its project, where routes exist.
     expect(canCreateDashboardFromPreview('p1', true)).toBe(true);
+  });
+});
+
+describe('placementBoards', () => {
+  const home = [{ id: 'h1' }, { id: 'h2' }];
+  const project = [{ id: 'p1' }, { id: 'p2' }];
+
+  it('lists the widget’s project boards ahead of the home boards', () => {
+    expect(placementBoards(home, project, 'prj')).toEqual([
+      project[0],
+      project[1],
+      home[0],
+      home[1],
+    ]);
+    expect(placementBoards(home, project, null)).toEqual(home);
+    expect(placementBoards(home, project, undefined)).toEqual(home);
   });
 });
 

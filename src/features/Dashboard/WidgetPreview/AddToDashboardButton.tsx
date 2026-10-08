@@ -12,7 +12,11 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
 import { openCreateDashboardModal } from '../DashboardFormModal';
-import { canCreateDashboardFromPreview, placeableDashboards } from './previewWidget';
+import {
+  canCreateDashboardFromPreview,
+  placeableDashboards,
+  placementBoards,
+} from './previewWidget';
 
 interface AddToDashboardButtonProps {
   /** Boards the widget is already on; they show checked and are not re-added. */
@@ -22,19 +26,29 @@ interface AddToDashboardButtonProps {
   widgetId: string;
 }
 
-/** Put a widget on one of the home boards, or on a new one. */
+/** Put a widget on one of its placeable boards — the home level's, and its
+ * project's when it lives in one — or on a new one. */
 const AddToDashboardButton = memo<AddToDashboardButtonProps>(
   ({ placedIds, projectId, widgetId }) => {
     const { t } = useTranslation('dashboard');
     const useFetchDashboards = useDashboardStore((s) => s.useFetchDashboards);
+    const useFetchProjectDashboards = useDashboardStore((s) => s.useFetchProjectDashboards);
     const addWidgetToDashboard = useDashboardStore((s) => s.addWidgetToDashboard);
     const adding = useDashboardStore(dashboardSelectors.isWidgetAdding(widgetId));
     const { isLoading } = useFetchDashboards();
-    const dashboards = useDashboardStore(dashboardSelectors.dashboardList());
+    // A project widget can also be placed on its project's boards.
+    const { isLoading: isProjectLoading } = useFetchProjectDashboards(projectId ?? undefined);
+    const homeBoards = useDashboardStore(dashboardSelectors.dashboardList());
+    const projectBoards = useDashboardStore(
+      dashboardSelectors.projectDashboards(projectId ?? undefined),
+    );
     const currentUserId = useUserStore(userProfileSelectors.userId);
     // Only the caller's own boards can take the placement (addItem writes as
     // the board's creator); teammates' readable boards are not offered.
-    const placeable = placeableDashboards(dashboards, currentUserId);
+    const placeable = placeableDashboards(
+      placementBoards(homeBoards, projectBoards, projectId),
+      currentUserId,
+    );
     // In a workspace, a widget outside a project cannot create a board it
     // could open — home-level boards have no UI there.
     const canCreate = canCreateDashboardFromPreview(projectId, !!useActiveWorkspaceSlug());
@@ -88,7 +102,7 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
         <Button
           data-widget-add
           icon={LayoutDashboardIcon}
-          loading={adding || isLoading}
+          loading={adding || isLoading || isProjectLoading}
           size={'small'}
         >
           {t('chat.add')}
