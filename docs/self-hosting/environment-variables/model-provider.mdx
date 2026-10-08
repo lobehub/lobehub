@@ -884,6 +884,31 @@ NewAPI is a multi-provider model aggregation service that supports automatic mod
 - Default: `-`
 - Example: `-all,+straico-model-1,+straico-model-2=straico-special`
 
+## Cheaper Inference
+
+Use the [Cheaper Inference](https://cheaperinference.com) OpenAI-compatible API. See [Using Cheaper Inference in LobeHub](/docs/usage/providers/cheaperinference) for setup instructions.
+
+### `CHEAPERINFERENCE_API_KEY`
+
+- Type: Optional for the deployment; required when providing a shared server key. Users can instead enter their own key in provider settings.
+- Description: A key created in your [Cheaper Inference account](https://cheaperinference.com/signup). Setting a non-empty key enables Cheaper Inference in the server configuration. LobeHub derives this name from the provider ID, so it uses `CHEAPERINFERENCE_API_KEY` rather than the `CHEAPER_INFERENCE_API_KEY` name in the Cheaper Inference docs.
+- Default: Unset; no shared server key.
+- Example: `ci_live_xxxxxx...xxxxxx`
+
+### `CHEAPERINFERENCE_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL. The proxy must support `/chat/completions` and `/responses`. Supply the base URL, not a full endpoint.
+- Default: `https://api.cheaperinference.com/v1`
+- Example: `https://your-proxy.example.com/v1`
+
+### `CHEAPERINFERENCE_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: Unset; uses the built-in model list.
+- Example: `-all,+gpt-5.4-mini,+claude-sonnet-5`
+
 ## Unsloth
 
 Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/docs/usage/providers/unsloth) for browser authentication and desktop CORS limitations.
