@@ -1,0 +1,82 @@
+diff --git a/dev/lib/syntax.js b/dev/lib/syntax.js
+index 904e27200a..f34ffeba2d 100644
+--- a/dev/lib/syntax.js
++++ b/dev/lib/syntax.js
+@@ -662,7 +662,8 @@ function tokenizePath(effects, ok) {
+     if (
+       code === codes.eof ||
+       markdownLineEndingOrSpace(code) ||
+-      unicodeWhitespace(code)
++      unicodeWhitespace(code) ||
++      cjkPunctuation(code)
+     ) {
+       return ok(code)
+     }
+@@ -762,7 +763,8 @@ function tokenizeTrail(effects, ok, nok) {
+       // So is whitespace.
+       code === codes.eof ||
+       markdownLineEndingOrSpace(code) ||
+-      unicodeWhitespace(code)
++      unicodeWhitespace(code) ||
++      cjkPunctuation(code)
+     ) {
+       return ok(code)
+     }
+@@ -982,2 +984,15 @@ function previousUnbalanced(events) {
+   return result
+ }
++
++/**
++ * CJK prose punctuation terminates literal URLs, including a preceding emphasis
++ * trail (`**https://example.com/path**（note）`). Unicode letters remain valid in
++ * paths; explicit Markdown destinations and percent-encoded punctuation bypass
++ * this literal-autolink boundary.
++ *
++ * @param {Code} code
++ * @returns {boolean}
++ */
++function cjkPunctuation(code) {
++  return code !== null && code >= 0x3000 && /[、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code))
++}
+diff --git a/lib/syntax.js b/lib/syntax.js
+index dffbaf1514..7ef7842dad 100644
+--- a/lib/syntax.js
++++ b/lib/syntax.js
+@@ -584,7 +584,7 @@ function tokenizePath(effects, ok) {
+     if (code === 33 || code === 34 || code === 38 || code === 39 || code === 41 || code === 42 || code === 44 || code === 46 || code === 58 || code === 59 || code === 60 || code === 63 || code === 93 || code === 95 || code === 126) {
+       return effects.check(trail, ok, pathAtPunctuation)(code);
+     }
+-    if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
++    if (code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code) || cjkPunctuation(code)) {
+       return ok(code);
+     }
+     effects.consume(code);
+@@ -665,7 +665,7 @@ function tokenizeTrail(effects, ok, nok) {
+     // `<` is an end.
+     code === 60 ||
+     // So is whitespace.
+-    code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code)) {
++    code === null || markdownLineEndingOrSpace(code) || unicodeWhitespace(code) || cjkPunctuation(code)) {
+       return ok(code);
+     }
+     return nok(code);
+@@ -851,4 +851,17 @@ function previousUnbalanced(events) {
+     events[events.length - 1][1]._gfmAutolinkLiteralWalkedInto = true;
+   }
+   return result;
+-}
+\ No newline at end of file
++}
++
++/**
++ * CJK prose punctuation terminates literal URLs, including a preceding emphasis
++ * trail (`**https://example.com/path**（note）`). Unicode letters remain valid in
++ * paths; explicit Markdown destinations and percent-encoded punctuation bypass
++ * this literal-autolink boundary.
++ *
++ * @param {Code} code
++ * @returns {boolean}
++ */
++function cjkPunctuation(code) {
++  return code !== null && code >= 0x3000 && /[、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code));
++}

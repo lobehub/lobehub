@@ -82,3 +82,4 @@ overrides:
 
 patchedDependencies:
   '@upstash/qstash': patches/@upstash__qstash.patch
+  micromark-extension-gfm-autolink-literal@2.1.0: patches/micromark-extension-gfm-autolink-literal@2.1.0.patch
