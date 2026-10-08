@@ -145,6 +145,7 @@ export const WidgetPreviewBody = memo<WidgetPreviewBodyProps>(({ widget, run }) 
         )}
         <AddToDashboardButton
           placedIds={widget.dashboards.map((dashboard) => dashboard.id)}
+          projectId={widget.projectId}
           widgetId={widget.id}
         />
         {widget.dashboards.map((dashboard) => (
