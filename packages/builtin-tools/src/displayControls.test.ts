@@ -13,6 +13,10 @@ vi.mock('@lobechat/builtin-tool-claude-code/client', () => ({
 }));
 
 describe('CodexRenderDisplayControls', () => {
+  it('expands Codex image results so users see generated images immediately', () => {
+    expect(getBuiltinRenderDisplayControl('codex', 'image_output')).toBe('expand');
+  });
+
   it('collapses Codex command output by default', () => {
     expect(CodexRenderDisplayControls.command_execution).toBe('collapsed');
     expect(getBuiltinRenderDisplayControl('codex', 'command_execution')).toBe('collapsed');

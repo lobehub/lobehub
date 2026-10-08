@@ -2,6 +2,7 @@ import type { AssistantGroupSegment } from '@lobechat/conversation-flow';
 
 import { LOADING_FLAT } from '@/const/message';
 
+import { isImageBearingTool } from '../toolRenderRules';
 import type { RenderableAssistantContentBlock } from './types';
 import type { WorkflowExpandLevel, WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
@@ -65,7 +66,12 @@ export const shouldFoldProcess = ({
   operationEnded &&
   (!isLatestItem || !!hasFinalAnswer) &&
   !isGenerating &&
-  processSegments.some((segment) => segment.kind === 'workflow');
+  processSegments.some((segment) => segment.kind === 'workflow') &&
+  !processSegments.some((segment) =>
+    (segment.kind === 'answer' ? [segment.block] : segment.blocks).some((block) =>
+      block.tools?.some(isImageBearingTool),
+    ),
+  );
 
 /**
  * Merge the per-surface expand override with the user's streaming preference.

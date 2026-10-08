@@ -160,6 +160,8 @@ export default {
   'builtins.codex.apiName.collab_tool_call': 'Coordinate subagents',
   'builtins.codex.apiName.command_execution': 'Run command',
   'builtins.codex.apiName.file_change': 'Edit files',
+  'builtins.codex.apiName.image_output': 'Image result',
+  'builtins.codex.imageOutput.unavailable': 'The image could not be uploaded.',
   'builtins.codex.apiName.mcp_tool_call': 'Call MCP tool',
   'builtins.codex.apiName.todo_list': 'Update tasks',
   'builtins.codex.apiName.web_search': 'Search the web',

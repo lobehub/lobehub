@@ -10,6 +10,7 @@ import type {
   UsageData,
 } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
+import { readCodexImageOutputs } from './codexImageOutputs';
 import { JsonlStreamProcessor } from './jsonlProcessor';
 import { readPostRunUsage } from './postRunUsage';
 import { toStreamEvent } from './streamEvent';
@@ -32,12 +33,16 @@ export interface AgentStreamPipelineOptions {
   agentType: string;
   /** Working directory used to resolve relative file paths emitted by CLI tools. */
   cwd?: string;
+  /** Environment of the spawned CLI, including its CODEX_HOME. */
+  env?: Record<string, string | undefined>;
   /** Last known Codex cumulative usage before a resumed turn starts. */
   initialCumulativeUsage?: UsageData | undefined;
   /** Host-known model to emit before the CLI's first stdout payload. */
   initialModel?: string | undefined;
   /** Operation id to stamp onto every emitted `AgentStreamEvent`. */
   operationId: string;
+  /** Invocation start, recorded before spawning the CLI. */
+  startedAt?: number;
   /**
    * Uploader for tool_result images. When omitted, `pluginState.images` base64
    * entries are dropped (the `[Image: …]` content placeholder is the fallback)
@@ -65,11 +70,16 @@ export class AgentStreamPipeline {
   private readonly operationId: string;
   private readonly codexTracker?: CodexFileChangeTracker;
   private readonly uploadImage?: UploadHeterogeneousImage;
+  private readonly env: Record<string, string | undefined>;
+  private readonly startedAt: number;
+  private recoveredCodexImageCallIds = new Set<string>();
   private queuedEvents: AgentStreamEvent[] = [];
 
   constructor(options: AgentStreamPipelineOptions) {
     this.adapter = createAdapter(options.agentType);
     this.agentType = options.agentType;
+    this.env = options.env ?? process.env;
+    this.startedAt = options.startedAt ?? Date.now();
     this.operationId = options.operationId;
     this.uploadImage = options.uploadImage;
     this.codexTracker =
@@ -105,7 +115,8 @@ export class AgentStreamPipeline {
    */
   async flush(): Promise<AgentStreamEvent[]> {
     const trailing = await this.processPayloads(this.processor.flush());
-    const flushedEvents = this.adapter.flush();
+    const recovered = await this.recoverCodexImages();
+    const flushedEvents = [...recovered, ...this.adapter.flush()];
     await this.uploadResultImages(flushedEvents);
     const flushed = flushedEvents.map((event) => toStreamEvent(event, this.operationId));
     return [...trailing, ...flushed];
@@ -164,12 +175,36 @@ export class AgentStreamPipeline {
 
     for (const raw of payloads) {
       const payload = this.codexTracker ? await this.codexTracker.track(raw as any) : raw;
-      const events = this.adapter.adapt(payload);
+      const rawEvent = payload as { item?: { type?: string }; type?: string };
+      const recoverImages =
+        rawEvent?.type === 'turn.completed' ||
+        rawEvent?.type === 'turn.failed' ||
+        (rawEvent?.type === 'item.completed' && rawEvent.item?.type === 'agent_message');
+      const recovered = recoverImages ? await this.recoverCodexImages() : [];
+      const events = [...recovered, ...this.adapter.adapt(payload)];
       await this.uploadResultImages(events);
       out.push(...this.toStreamEvents(events));
     }
 
     return out;
+  }
+
+  private async recoverCodexImages(): Promise<HeterogeneousAgentEvent[]> {
+    if (this.agentType !== 'codex' || !this.adapter.sessionId) return [];
+    try {
+      const items = await readCodexImageOutputs(this.adapter.sessionId, {
+        env: this.env,
+        startedAt: this.startedAt,
+      });
+      return items.flatMap((item) => {
+        if (this.recoveredCodexImageCallIds.has(item.id)) return [];
+        this.recoveredCodexImageCallIds.add(item.id);
+        return this.adapter.adapt({ item, type: 'item.completed' });
+      });
+    } catch (error) {
+      console.error('Failed to recover Codex tool images from the session transcript:', error);
+      return [];
+    }
   }
 
   /**
