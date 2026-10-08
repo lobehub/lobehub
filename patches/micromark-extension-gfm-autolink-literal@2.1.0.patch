@@ -36,7 +36,7 @@ index 904e27200a..f34ffeba2d 100644
 + * @returns {boolean}
 + */
 +function cjkPunctuation(code) {
-+  return code !== null && code >= 0x3000 && /[、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code))
++  return code !== null && code >= 0x2000 && /[‘’“”…、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code))
 +}
 diff --git a/lib/syntax.js b/lib/syntax.js
 index dffbaf1514..7ef7842dad 100644
@@ -78,5 +78,5 @@ index dffbaf1514..7ef7842dad 100644
 + * @returns {boolean}
 + */
 +function cjkPunctuation(code) {
-+  return code !== null && code >= 0x3000 && /[、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code));
++  return code !== null && code >= 0x2000 && /[‘’“”…、。〈〉《》「」『』【】〔〕！（），：；？［］｛｝]/u.test(String.fromCodePoint(code));
 +}

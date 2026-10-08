@@ -13,18 +13,35 @@ describe('GFM autolink CJK boundaries', () => {
     );
   });
 
-  it.each(['（备注）', '，然后继续', '。下一句', '；另一项', '！完成', '？确认', '、下一项'])(
-    'ends bare links before %s',
-    (suffix) => {
-      expect(render(`https://example.com/path${suffix}`)).toBe(
-        `<p><a href="https://example.com/path">https://example.com/path</a>${suffix}</p>\n`,
-      );
-    },
-  );
+  it.each([
+    '（备注）',
+    '，然后继续',
+    '。下一句',
+    '；另一项',
+    '！完成',
+    '？确认',
+    '、下一项',
+    '“说明”',
+    '”然后继续',
+    '‘说明’',
+    '’然后继续',
+    '…下一句',
+    '……”然后继续',
+  ])('ends plain and bold bare links before %s', (suffix) => {
+    expect(render(`https://example.com/path${suffix}`)).toBe(
+      `<p><a href="https://example.com/path">https://example.com/path</a>${suffix}</p>\n`,
+    );
+    expect(render(`**https://example.com/path**${suffix}`)).toBe(
+      `<p><strong><a href="https://example.com/path">https://example.com/path</a></strong>${suffix}</p>\n`,
+    );
+  });
 
   it('preserves Unicode paths and balanced ASCII parentheses', () => {
     expect(render('https://example.com/中文_(page)?a=1&b=2')).toBe(
       '<p><a href="https://example.com/%E4%B8%AD%E6%96%87_(page)?a=1&#x26;b=2">https://example.com/中文_(page)?a=1&#x26;b=2</a></p>\n',
+    );
+    expect(render('https://example.com/a–b')).toBe(
+      '<p><a href="https://example.com/a%E2%80%93b">https://example.com/a–b</a></p>\n',
     );
   });
 
@@ -34,6 +51,9 @@ describe('GFM autolink CJK boundaries', () => {
     );
     expect(render('https://example.com/a%EF%BC%88b%EF%BC%89')).toBe(
       '<p><a href="https://example.com/a%EF%BC%88b%EF%BC%89">https://example.com/a%EF%BC%88b%EF%BC%89</a></p>\n',
+    );
+    expect(render('[文档](https://example.com/a…b)')).toBe(
+      '<p><a href="https://example.com/a%E2%80%A6b">文档</a></p>\n',
     );
   });
 
