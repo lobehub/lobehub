@@ -273,3 +273,114 @@ describe('DocumentHistoryModel', () => {
     });
   });
 });
+
+describe('DocumentHistoryModel.deleteAll', () => {
+  it('should delete only the current user rows', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+    const otherDocumentId = await createTestDocument(documentModel2, fileModel2, 'Other content');
+
+    await historyModel.create({
+      documentId,
+      editorData: { tag: 1 },
+      saveSource: 'manual',
+      savedAt: new Date('2026-04-11T00:00:01.000Z'),
+    });
+    await historyModel2.create({
+      documentId: otherDocumentId,
+      editorData: { tag: 1 },
+      saveSource: 'manual',
+      savedAt: new Date('2026-04-11T00:00:01.000Z'),
+    });
+
+    await historyModel.deleteAll();
+
+    expect(await historyModel.list({ documentId })).toHaveLength(0);
+    expect(await historyModel2.list({ documentId: otherDocumentId })).toHaveLength(1);
+  });
+});
+
+describe('DocumentHistoryModel.query', () => {
+  it('should mirror list', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+
+    await historyModel.create({
+      documentId,
+      editorData: { tag: 1 },
+      saveSource: 'manual',
+      savedAt: new Date('2026-04-11T00:00:01.000Z'),
+    });
+
+    const rows = await historyModel.query({ documentId });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ documentId });
+  });
+});
+
+describe('DocumentHistoryModel.listByDocumentId', () => {
+  it('should page with the default and an explicit limit', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+
+    for (const i of [1, 2, 3]) {
+      await historyModel.create({
+        documentId,
+        editorData: { tag: i },
+        saveSource: 'manual',
+        savedAt: new Date(`2026-04-11T00:00:0${i}.000Z`),
+      });
+    }
+
+    expect(await historyModel.listByDocumentId(documentId)).toHaveLength(3);
+    expect(await historyModel.listByDocumentId(documentId, 2)).toHaveLength(2);
+  });
+});
+
+describe('DocumentHistoryModel.list cursor', () => {
+  it('should break a savedAt tie with the beforeId cursor', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+    const savedAt = new Date('2026-04-11T00:00:05.000Z');
+
+    const first = await historyModel.create({
+      documentId,
+      editorData: { tag: 'tie-a' },
+      saveSource: 'manual',
+      savedAt,
+    });
+    const second = await historyModel.create({
+      documentId,
+      editorData: { tag: 'tie-b' },
+      saveSource: 'manual',
+      savedAt,
+    });
+
+    const [lowerId, higherId] = [first.id, second.id].sort();
+
+    const rows = await historyModel.list({
+      beforeId: higherId,
+      beforeSavedAt: savedAt,
+      documentId,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.id).toBe(lowerId);
+  });
+
+  it('should ignore beforeId when there is no savedAt anchor', async () => {
+    const documentId = await createTestDocument(documentModel, fileModel, 'Initial content');
+
+    for (const i of [1, 2, 3]) {
+      await historyModel.create({
+        documentId,
+        editorData: { tag: i },
+        saveSource: 'manual',
+        savedAt: new Date(`2026-04-11T00:00:0${i}.000Z`),
+      });
+    }
+
+    const rows = await historyModel.list({
+      beforeId: '00000000-0000-0000-0000-000000000000',
+      documentId,
+    });
+
+    expect(rows).toHaveLength(3);
+  });
+});
