@@ -132,6 +132,16 @@ export const createDashboardToolService = (
       // Same conversation-scope check as placing on an existing board, before
       // anything is written: another agent's or project's widget creates no board.
       await requireScopedWidget(widgetId);
+      // A workspace-level board has no UI at all — the home dashboard routes
+      // are disabled inside a workspace — so creating one would report
+      // success while leaving an unreachable board behind. Boards belong in
+      // the conversation's project (or the home level in personal mode).
+      if (workspaceId && !projectId) {
+        throw new WidgetFlowError(
+          'FORBIDDEN',
+          'Workspace-level dashboards are not available yet — create the dashboard inside a project instead',
+        );
+      }
       // One transaction: a widget that cannot be placed (stale, deleted,
       // unreadable, another workspace) rolls the new board back with it.
       return db.transaction(async (tx) => {

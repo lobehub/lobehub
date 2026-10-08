@@ -528,6 +528,35 @@ describe('resolveClientTopic in a workspace', () => {
     expect(board).toMatchObject({ projectId: wsProjectId, title: 'Team board' });
   });
 
+  it('refuses a workspace-level board outside a project and writes nothing', async () => {
+    // A workspace-root conversation: workspace set, no project. Its boards
+    // would live on the workspace home level, which has no UI at all — the
+    // tool must refuse instead of accumulating unreachable boards.
+    const service = createDashboardToolService(db, {
+      ...scope,
+      agentId: wsAgentId,
+      workspaceId,
+    });
+    const { widgetId } = await service.createWidgetDraft({
+      content: statDraft,
+      description: '',
+      title: 'Workspace metric',
+    });
+
+    await expect(service.createDashboardWithWidget('Ops', widgetId)).rejects.toThrow(
+      /inside a project/,
+    );
+    // The agent sees the same refusal, worded for the conversation.
+    const runtime = new DashboardExecutionRuntime(service);
+    const result = await runtime.addWidgetToDashboard({ newDashboardTitle: 'Ops', widgetId });
+    expect(result.success).toBe(false);
+    expect(result.content).toMatch(/inside a project/);
+
+    const model = new DashboardModel(db, userId, workspaceId);
+    expect(await model.list({})).toEqual([]);
+    expect(await model.listByProject(wsProjectId)).toEqual([]);
+  });
+
   it('does not reach a workspace topic from personal mode', async () => {
     expect(await resolveClientTopic(db, teammateTopicId, userId)).toEqual({});
     expect(await resolveClientTopic(db, teammateTopicId, teammateId)).toEqual({});
