@@ -39,72 +39,59 @@ export const CliUpdate = ({
   if (!canEdit || (state?.activeTasks ?? 0) > 0) return children({});
   const actions = (
     <Flexbox horizontal align={'center'} gap={8} style={{ flex: 'none' }}>
-      {canEdit && (
-        <>
-          {(update.error ||
-            !live ||
-            update.ambiguous ||
-            view === 'failed' ||
-            view === 'timedOut') && (
-            <Button
-              loading={update.refreshing}
-              size={'small'}
-              type={'text'}
-              onClick={update.retryRead}
-            >
-              {t('devices.cliUpdate.retryRead')}
-            </Button>
-          )}
-          {live &&
-            view !== 'unsupported' &&
-            view !== 'pending' &&
-            view !== 'timedOut' &&
-            !update.ambiguous && (
+      {(update.error || !live || update.ambiguous || view === 'failed' || view === 'timedOut') && (
+        <Button loading={update.refreshing} size={'small'} type={'text'} onClick={update.retryRead}>
+          {t('devices.cliUpdate.retryRead')}
+        </Button>
+      )}
+      {live &&
+        view !== 'unsupported' &&
+        view !== 'pending' &&
+        view !== 'timedOut' &&
+        !update.ambiguous && (
+          <>
+            {state?.latestVersion ? (
               <>
-                {state?.latestVersion ? (
-                  <>
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('devices.cliUpdate.available', { version: state.latestVersion })}
-                    </Text>
-                    <ActionIcon
-                      aria-label={t('devices.cliUpdate.update')}
-                      disabled={!update.allowed || update.requesting}
-                      icon={RotateCwIcon}
-                      loading={update.requesting}
-                      size={'small'}
-                      title={t('devices.cliUpdate.update')}
-                      onClick={() => confirm(true)}
-                    />
-                  </>
-                ) : view === 'ready' && update.checked && !update.error ? (
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('common:alreadyUpToDate')}
-                  </Text>
-                ) : (
-                  <Button
-                    disabled={update.requesting}
-                    loading={update.requesting}
-                    size={'small'}
-                    type={'text'}
-                    onClick={update.check}
-                  >
-                    {t('common:checkForUpdates')}
-                  </Button>
-                )}
+                <Text fontSize={12} type={'secondary'}>
+                  {t('devices.cliUpdate.available', { version: state.latestVersion })}
+                </Text>
+                <ActionIcon
+                  aria-label={t('devices.cliUpdate.update')}
+                  disabled={!update.allowed || update.requesting}
+                  icon={RotateCwIcon}
+                  loading={update.requesting}
+                  size={'small'}
+                  title={t('devices.cliUpdate.update')}
+                  onClick={() => confirm(true)}
+                />
               </>
+            ) : view === 'ready' && update.checked && !update.error ? (
+              <Text fontSize={12} type={'secondary'}>
+                {t('common:alreadyUpToDate')}
+              </Text>
+            ) : (
+              <Button
+                disabled={update.requesting}
+                loading={update.requesting}
+                size={'small'}
+                type={'text'}
+                onClick={update.check}
+              >
+                {t('common:checkForUpdates')}
+              </Button>
             )}
-          {(update.ambiguous || view === 'timedOut') && view !== 'success' && (
-            <Button
-              disabled={!update.allowed || update.requesting}
-              loading={update.requesting}
-              size={'small'}
-              type={'text'}
-              onClick={() => confirm(update.operation?.kind === 'update', true)}
-            >
-              {t('devices.cliUpdate.retryCommand')}
-            </Button>
-          )}
-        </>
+          </>
+        )}
+      {(update.ambiguous || view === 'timedOut') && view !== 'success' && (
+        <Button
+          disabled={!update.allowed || update.requesting}
+          loading={update.requesting}
+          size={'small'}
+          type={'text'}
+          onClick={() => confirm(update.operation?.kind === 'update', true)}
+        >
+          {t('devices.cliUpdate.retryCommand')}
+        </Button>
       )}
     </Flexbox>
   );
