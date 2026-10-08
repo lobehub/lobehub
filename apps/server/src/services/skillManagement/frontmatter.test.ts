@@ -1,3 +1,4 @@
+import matter from 'gray-matter';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -166,5 +167,41 @@ describe('renderSkillIndexContent', () => {
         name: 'review',
       }),
     ).toThrow('Skill bodyMarkdown is required');
+  });
+
+  it('keeps a thematic break around prose (scalar block) verbatim', () => {
+    const rendered = renderSkillIndexContent({
+      bodyMarkdown: '---\n\nIntroduction\n\n---\n\n# Steps',
+      description: 'Review PRs',
+      name: 'review',
+    });
+
+    expect(parseSkillFrontmatter(rendered)).toEqual({ description: 'Review PRs', name: 'review' });
+    // The prose between the delimiters must survive in the body.
+    expect(matter(rendered).content).toContain('Introduction');
+    expect(matter(rendered).content).toContain('# Steps');
+  });
+
+  it('keeps a block that parses to a YAML list verbatim', () => {
+    const rendered = renderSkillIndexContent({
+      bodyMarkdown: '---\n- a\n- b\n---\n\nBody',
+      description: 'Review PRs',
+      name: 'review',
+    });
+
+    expect(parseSkillFrontmatter(rendered)).toEqual({ description: 'Review PRs', name: 'review' });
+    expect(matter(rendered).content).toContain('- a');
+    expect(matter(rendered).content).toContain('Body');
+  });
+
+  it('keeps malformed YAML inside a closed block verbatim', () => {
+    const rendered = renderSkillIndexContent({
+      bodyMarkdown: '---\nfoo: [bar\n---\n\nBody',
+      description: 'Review PRs',
+      name: 'review',
+    });
+
+    expect(parseSkillFrontmatter(rendered)).toEqual({ description: 'Review PRs', name: 'review' });
+    expect(matter(rendered).content).toContain('foo: [bar');
   });
 });
