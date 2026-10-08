@@ -252,3 +252,76 @@ describe('useCommitWorkingDirectory — commitAgentDefault', () => {
     expect(result.current.isPreferenceLoading).toBe(true);
   });
 });
+
+describe('useCommitWorkingDirectory — worktree pin', () => {
+  const SOURCE_PATH = '/repo/lobehub';
+  const WORKTREE_PATH = '/repo/lobehub-worktree-feat';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    testState.agent.agencyConfig = {
+      boundDeviceId: 'this-machine',
+      executionTarget: 'local',
+      heterogeneousProvider: { command: 'claude', type: 'claude-code' },
+      workingDirByDevice: {
+        'this-machine': { git: { activeWorktree: WORKTREE_PATH }, path: SOURCE_PATH },
+      },
+    };
+    testState.agent.agentMap = {};
+    testState.agent.localAgentWorkingDirectoryMap = {};
+    testState.agent.updateAgentConfigById = vi.fn();
+    testState.agent.updateAgentRuntimeEnvConfigById = vi.fn();
+    testState.chat.activeTopicId = 'topic-id';
+    testState.chat.topic = {
+      metadata: { boundDeviceId: 'this-machine', workingDirectory: SOURCE_PATH },
+    };
+    testState.chat.updateTopicMetadata = vi.fn();
+    testState.currentDeviceId = 'this-machine';
+    testState.effective = {
+      agencyConfig: testState.agent.agencyConfig,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    };
+  });
+
+  // A heterogeneous CLI spawns in the effective path, so the topic must pin that
+  // same path. Pinning the SOURCE repo instead ran the first turn in the
+  // worktree and every later turn back in the source repo — the worktree looked
+  // like it "only worked once".
+  it('pins the worktree, not the source repo, for a local CLI heterogeneous agent', async () => {
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await result.current.commit({
+      git: { activeWorktree: WORKTREE_PATH },
+      path: SOURCE_PATH,
+      repoType: 'github',
+    });
+
+    expect(testState.chat.updateTopicMetadata).toHaveBeenCalledWith(
+      'topic-id',
+      expect.objectContaining({
+        workingDirectory: WORKTREE_PATH,
+        // The source repo stays only as the grouping identity.
+        workingDirectoryConfig: {
+          git: { activeWorktree: WORKTREE_PATH },
+          path: SOURCE_PATH,
+          repoType: 'github',
+        },
+      }),
+    );
+  });
+
+  it('pins the source repo when the pick clears the worktree override', async () => {
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await result.current.commit({ path: SOURCE_PATH, repoType: 'github' });
+
+    expect(testState.chat.updateTopicMetadata).toHaveBeenCalledWith(
+      'topic-id',
+      expect.objectContaining({
+        workingDirectory: SOURCE_PATH,
+        workingDirectoryConfig: { path: SOURCE_PATH, repoType: 'github' },
+      }),
+    );
+  });
+});

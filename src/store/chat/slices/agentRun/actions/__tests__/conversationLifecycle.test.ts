@@ -2720,6 +2720,103 @@ describe('ConversationLifecycle actions', () => {
             expect.objectContaining({ workingDirectory: DESKTOP_PATH }),
           );
         });
+
+        // The pinned branch used to resolve the SOURCE repo for a local CLI
+        // heterogeneous agent while the brand-new-topic fallback above resolved
+        // the effective one, so a worktree-selected conversation ran in its
+        // worktree for the first turn and silently moved to the source repo on
+        // every turn after it.
+        it('runs a topic pinned to a worktree in that worktree, not the source repo', async () => {
+          const SOURCE_PATH = '/repo/lobehub';
+          const WORKTREE_PATH = '/repo/lobehub-worktree-feat';
+          setupHeteroRun({
+            workingDirByDevice: {
+              [HETERO_DEVICE_ID]: {
+                git: { activeWorktree: WORKTREE_PATH, isWorktree: true },
+                path: SOURCE_PATH,
+              },
+            },
+          });
+          act(() => {
+            useChatStore.setState({
+              topicDataMap: {
+                [topicMapKey({ agentId: TEST_IDS.SESSION_ID })]: {
+                  currentPage: 0,
+                  hasMore: false,
+                  isExpandingPageSize: false,
+                  isLoadingMore: false,
+                  items: [
+                    {
+                      agentId: TEST_IDS.SESSION_ID,
+                      createdAt: 0,
+                      id: 'worktree-topic',
+                      metadata: {
+                        boundDeviceId: HETERO_DEVICE_ID,
+                        workingDirectory: SOURCE_PATH,
+                        workingDirectoryConfig: {
+                          git: { activeWorktree: WORKTREE_PATH, isWorktree: true },
+                          path: SOURCE_PATH,
+                          repoType: 'github',
+                        },
+                      },
+                      title: 'Worktree work',
+                      updatedAt: 0,
+                    } as any,
+                  ],
+                  pageSize: 20,
+                  total: 1,
+                },
+              },
+            });
+          });
+
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: 'worktree-topic' },
+              message: 'Continue in the worktree',
+            });
+          });
+
+          // The CLI spawns in the checkout the user picked; the source repo
+          // survives only as the config's `path` (the grouping identity).
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+              workingDirectory: WORKTREE_PATH,
+              workingDirectoryConfig: expect.objectContaining({ path: SOURCE_PATH }),
+            }),
+          );
+        });
+
+        // …and the first turn must name that SAME directory, so the two can no
+        // longer disagree about where the conversation runs.
+        it('pins a new worktree-selected topic to the worktree its run spawns in', async () => {
+          const SOURCE_PATH = '/repo/lobehub';
+          const WORKTREE_PATH = '/repo/lobehub-worktree-feat';
+          const sendMessageInServerSpy = setupHeteroRun({
+            workingDirByDevice: {
+              [HETERO_DEVICE_ID]: {
+                git: { activeWorktree: WORKTREE_PATH, isWorktree: true },
+                path: SOURCE_PATH,
+              },
+            },
+          });
+
+          await sendHeteroMessage();
+
+          const runWorkingDirectory =
+            executeHeterogeneousAgentMock.mock.calls[0][1].workingDirectory;
+          expect(runWorkingDirectory).toBe(WORKTREE_PATH);
+          expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+              newTopic: expect.objectContaining({
+                metadata: expect.objectContaining({ workingDirectory: runWorkingDirectory }),
+              }),
+            }),
+            expect.any(AbortController),
+          );
+        });
       });
 
       it('should rollback an optimistic topic if the create response resolves without a topic id', async () => {

@@ -4,7 +4,7 @@ import type {
   WorkingDirConfigValue,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -108,11 +108,9 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     isPreferenceLoading,
     workspaceScoped,
   } = useEffectiveAgencyConfig(agentId, { topicId: routeTopicId });
-  // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd, so
-  // their session cwd anchors to the SOURCE repo — a worktree switch (same repo,
-  // different activeWorktree) must NOT change the session cwd or reset the
-  // session. Non-hetero agents keep running in the effective (worktree) cwd.
-  const isHetero = !!agencyConfig?.heterogeneousProvider;
+  // Heterogeneous CLI agents (Claude Code, Codex, …) key their sessions to the
+  // cwd they run in, so the pinned cwd and the CLI session always name the same
+  // directory — the effective one (worktree included). See `writeCwd`.
   const updateAgentConfigById = useAgentStore((s) => s.updateAgentConfigById);
   const updateAgentRuntimeEnvConfigById = useAgentStore((s) => s.updateAgentRuntimeEnvConfigById);
   const legacyAgentWorkingDirectory = useAgentStore(
@@ -166,24 +164,26 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
         ? isWorkspaceAgent && !!currentDeviceId
         : isPersonalDeviceTarget;
       const effectivePath = getWorkingDirEffectivePath(entry);
-      // The session cwd anchors to the source repo for hetero (stable across
-      // worktree switches) and to the effective/worktree path otherwise.
-      const sessionCwd = isHetero ? getWorkingDirSourcePath(entry) : effectivePath;
+      // The run cwd IS the session cwd for every agent type: the CLI spawns in
+      // the effective path (the selected worktree when there is one) and the
+      // topic pins that same path, so every later turn resolves it identically.
+      // `heteroSessionIdByWorkingDirectory` carries one CLI session per cwd, so
+      // moving between worktrees restores each one's own context rather than
+      // dropping it — no reason to anchor the run to the source repo.
       // Topic override wins once a conversation exists; otherwise persist the
       // agent's per-device choice so a new topic inherits it.
       if (activeTopicId) {
-        const priorSessionCwd = isHetero
-          ? (getWorkingDirSourcePath(activeTopic?.metadata?.workingDirectoryConfig) ??
-            activeTopic?.metadata?.workingDirectory)
-          : activeTopic?.metadata?.workingDirectory;
+        // The path the topic currently pins — the same one `workingDirectory`
+        // above resolves for a run, so the two can't disagree about the cwd.
+        const priorSessionCwd = activeTopic?.metadata?.workingDirectory;
         const scopedHeteroSessionId = getHeteroSessionIdForWorkingDirectory(
           activeTopic?.metadata,
-          sessionCwd,
+          effectivePath,
         );
-        // Only a change of session cwd (repo for hetero) invalidates the session;
-        // a worktree switch within the same repo keeps it.
+        // A cwd change invalidates the session pinned to the OLD path; the new
+        // path's own scoped session (if any) takes over in the same write.
         const shouldUpdateHeteroSession =
-          priorSessionCwd !== sessionCwd &&
+          priorSessionCwd !== effectivePath &&
           (!!activeTopic?.metadata?.heteroSessionId || !!scopedHeteroSessionId);
         await updateTopicMetadata(activeTopicId, {
           // The pin is a bare path that only holds on the machine it was picked
@@ -192,20 +192,20 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
           // moved to another device keeps the directory just chosen there.
           boundDeviceId: entry ? writeDeviceId : undefined,
           ...(shouldUpdateHeteroSession ? { heteroSessionId: scopedHeteroSessionId } : {}),
-          workingDirectory: sessionCwd,
+          workingDirectory: effectivePath,
           workingDirectoryConfig: entry ? toAgentWorkingDirConfig(entry) : undefined,
         });
       } else {
         if (writeDeviceId && writePersonalSlot) {
           // Per-user slot (see `isPersonalDeviceTarget`) — never the shared row.
-          // The legacy slot stores a plain path, so persist the SESSION cwd
-          // (source repo for hetero — anchoring a CLI session to a worktree
-          // path would break resume; effective path otherwise). The worktree
-          // pick itself is carried by topic metadata once a conversation
-          // starts; full-fidelity pre-topic persistence needs a per-user
-          // server-side slot (deferred).
+          // The legacy slot stores a plain path, so persist the same effective
+          // cwd the picker would pin on a topic (worktree included) — anything
+          // else would spawn the next run somewhere the user did not pick. The
+          // worktree pick itself is carried by topic metadata once a
+          // conversation starts; full-fidelity pre-topic persistence needs a
+          // per-user server-side slot (deferred).
           await updateAgentRuntimeEnvConfigById(agentId, {
-            workingDirectory: sessionCwd || undefined,
+            workingDirectory: effectivePath || undefined,
           });
         } else if (writeDeviceId) {
           const prev = agencyConfig?.workingDirByDevice ?? {};
@@ -242,7 +242,6 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       activeTopic,
       activeTopicId,
       currentDeviceId,
-      isHetero,
       isPersonalDeviceTarget,
       targetDeviceId,
       legacyAgentWorkingDirectory,
@@ -320,16 +319,23 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       }
       const run = () => writeCwd(normalizedEntry, options);
 
-      // Warn about losing the CLI session only when the SESSION cwd changes.
-      // For hetero that's the source repo — a worktree switch within the same
-      // repo keeps the session, so it must not trigger the reset warning.
+      // Warn before a switch that starts a FRESH CLI session. Sessions are keyed
+      // to the cwd they ran in, so moving to a directory with no session of its
+      // own leaves the next message without the previous context. Moving to a
+      // directory that already has one is a context switch, not a reset — the
+      // topic keeps whichever session belongs to each cwd — so it stays silent.
       const priorSessionId = activeTopic?.metadata?.heteroSessionId;
-      const sessionCwd = isHetero ? getWorkingDirSourcePath(normalizedEntry) : effectivePath;
-      const priorSessionCwd = isHetero
-        ? (getWorkingDirSourcePath(activeTopic?.metadata?.workingDirectoryConfig) ??
-          activeTopic?.metadata?.workingDirectory)
-        : activeTopic?.metadata?.workingDirectory;
-      if (priorSessionId && priorSessionCwd && priorSessionCwd !== sessionCwd) {
+      const priorSessionCwd = activeTopic?.metadata?.workingDirectory;
+      const targetSessionId = getHeteroSessionIdForWorkingDirectory(
+        activeTopic?.metadata,
+        effectivePath,
+      );
+      if (
+        priorSessionId &&
+        priorSessionCwd &&
+        priorSessionCwd !== effectivePath &&
+        !targetSessionId
+      ) {
         confirmModal({
           cancelText: t('heteroAgent.switchCwd.cancel', { ns: 'chat' }),
           content: t('heteroAgent.switchCwd.content', { ns: 'chat' }),
@@ -341,7 +347,7 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       }
       await run();
     },
-    [activeTopic, isHetero, t, writeCwd],
+    [activeTopic, t, writeCwd],
   );
 
   /**

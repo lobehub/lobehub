@@ -3,7 +3,6 @@ import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
@@ -19,7 +18,6 @@ import type {
 import {
   applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
-  getWorkingDirSourcePath,
   RequestTrigger,
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
@@ -1262,20 +1260,18 @@ export class ConversationLifecycleActionImpl {
     const agentWorkingDirectoryConfig = runCwdParams
       ? resolveAgentWorkingDirectoryConfig(runCwdParams)
       : undefined;
-    // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
-    // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
-    // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
-    // sessionId consistent and never drops the conversation context. The active
-    // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
-    // record. The per-cwd session store is a LOCAL CLI trait — remote platform
-    // agents (openclaw / hermes) run through the gateway with no such
-    // constraint, so they (like non-hetero runtimes) keep the effective
-    // (worktree) path.
-    const isLocalCliHetero =
-      !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
-    const resolveWorkingDirPath = isLocalCliHetero
-      ? getWorkingDirSourcePath
-      : getWorkingDirEffectivePath;
+    // Every run executes in the EFFECTIVE path: the active worktree when one is
+    // selected, the source repo otherwise. The worktree is the directory the user
+    // picked, so the CLI has to spawn there. Resolving this branch to the SOURCE
+    // path instead — while the new-topic fallback below (`agentWorkingDirectory`)
+    // always resolved to the effective one — is what made a worktree-selected
+    // conversation run in its worktree for the first turn and then silently move
+    // to the source repo on every turn after it.
+    //
+    // Moving the cwd between worktrees of one repo does not drop the CLI session:
+    // `heteroSessionIdByWorkingDirectory` keeps one session per cwd, so each
+    // worktree returns to its own CLI context (`resolveHeteroResume`). The source
+    // path stays the grouping identity and the base `git worktree` operates on.
     // A topic's cwd is a bare path that only holds on the machine it was pinned
     // on — never hand another machine's path to this run (mirrors the server's
     // `topicPinFitsDevice`).
@@ -1285,7 +1281,7 @@ export class ConversationLifecycleActionImpl {
         ? undefined
         : existingTopic?.metadata;
     const workingDirectory =
-      resolveWorkingDirPath(topicCwdMetadata?.workingDirectoryConfig) ??
+      getWorkingDirEffectivePath(topicCwdMetadata?.workingDirectoryConfig) ??
       topicCwdMetadata?.workingDirectory ??
       agentWorkingDirectory;
     const workingDirectoryConfig =

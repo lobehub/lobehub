@@ -292,10 +292,10 @@ const WorkingDirectoryPicker = memo<WorkingDirectoryPickerProps>(({ agentId }) =
   const legacyAgentWorkingDirectory = getWorkingDirectoryPathString(rawLegacyAgentWorkingDirectory);
 
   // The explicitly-selected REPO (no home fallback) — drives the directory label,
-  // the active check, and the Reset affordance. Resolves to the SOURCE path
-  // (repo root), never the active worktree: the label shows the repo the agent is
-  // bound to, while the worktree switcher in git status tracks the active
-  // worktree separately.
+  // the active check, and the Reset affordance. Resolves to the SOURCE path (repo
+  // root), never the active worktree: the label names the repo, while which
+  // checkout inside it the run uses is the git-status bar's axis — its worktree
+  // switcher and branch chip already track that separately.
   const resolvedSelectedDir = resolveAgentWorkingDirectorySource({
     agencyConfig,
     currentDeviceId,

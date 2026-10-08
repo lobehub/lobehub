@@ -104,11 +104,11 @@ export const resolveAgentWorkingDirectory = (
  * SOURCE repo path (`config.path`) — the repo root, ignoring any active
  * worktree recorded in `config.git.activeWorktree`.
  *
- * Use this for the directory-picker DISPLAY, which shows the repo the agent is
- * bound to. The effective (worktree) path belongs to git status / the worktree
- * switcher, not the directory label: heterogeneous CLI agents anchor their
- * session cwd to the source repo (see `conversationLifecycle`), so showing the
- * worktree here would misrepresent where the run actually executes.
+ * Use this for the directory-picker DISPLAY, which names the repo the agent is
+ * bound to (and which its conversations are grouped by). The checkout inside it
+ * is a separate axis the git-status bar already owns: it shows the branch /
+ * worktree chip and offers the worktree switcher, so repeating the worktree in
+ * the directory label would name one thing in two places.
  */
 export const resolveAgentWorkingDirectorySource = (
   params: Parameters<typeof resolveAgentWorkingDirectoryConfig>[0],
