@@ -202,13 +202,16 @@ function classifySSEEvent({ data, event }: SSEEvent): SSEPayload {
     case 'reasoning': {
       return typeof data === 'string' ? { kind: 'reasoning', text: data } : { kind: 'other' };
     }
-    // Gemini emits its reply as multimodal content parts instead of `text` events
+    // Gemini emits multimodal parts instead of `text` / `reasoning` events:
+    // reply parts as `content_part`, thought parts as `reasoning_part`
     case 'content_part': {
-      if (data?.partType === 'image' && !data.inReasoning) return { kind: 'image' };
+      if (data?.partType === 'image') return { kind: 'image' };
       if (data?.partType !== 'text' || typeof data.content !== 'string') return { kind: 'other' };
-      return data.inReasoning
-        ? { kind: 'reasoning', text: data.content }
-        : { kind: 'text', text: data.content };
+      return { kind: 'text', text: data.content };
+    }
+    case 'reasoning_part': {
+      if (data?.partType !== 'text' || typeof data.content !== 'string') return { kind: 'other' };
+      return { kind: 'reasoning', text: data.content };
     }
     case 'base64_image': {
       return { kind: 'image' };

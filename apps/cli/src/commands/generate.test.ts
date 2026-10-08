@@ -232,14 +232,20 @@ describe('generate command', () => {
       expect(writtenText()).toBe('Hello, world\n');
     });
 
-    it('should keep reasoning content parts out of the reply text', async () => {
+    it('should keep reasoning parts out of the reply text', async () => {
       vi.stubGlobal(
         'fetch',
         vi.fn().mockResolvedValue(
           sseResponse([
+            // Gemini thought parts, as emitted by the google stream transformer
             {
-              data: { content: 'Thinking...', inReasoning: true, partType: 'text' },
-              event: 'content_part',
+              data: {
+                content: 'Thinking...',
+                inReasoning: true,
+                partType: 'text',
+                thoughtSignature: 'sig',
+              },
+              event: 'reasoning_part',
             },
             { data: 'more thoughts', event: 'reasoning' },
             { data: { content: 'Answer', partType: 'text' }, event: 'content_part' },
