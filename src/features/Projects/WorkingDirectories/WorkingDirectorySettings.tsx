@@ -10,7 +10,11 @@ import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDeviceStore } from '@/store/device';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import {
+  useProjectDirectories,
+  useProjectDirectoryStore,
+  useProjectEnvironments,
+} from '@/store/projectWorkingDirectory';
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
@@ -23,14 +27,14 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const environmentId = params.get('environment') ?? '';
   useProjectStore((s) => s.useFetchProjectDetail)(projectId);
   const project = useCurrentProjectDetail(projectId);
-  const environments = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const environments = useProjectEnvironments(projectId);
+  const directories = useProjectDirectories(projectId);
   const deviceRequest = useDeviceStore((s) => s.useFetchDevices)(true);
   const devices = useDeviceStore((s) => s.devices);
-  const items = (directories.data?.data ?? []).filter(
-    (d) => !environmentId || d.environmentId === environmentId,
-  );
-  const error = environments.error || directories.error || deviceRequest.error;
+  const items = directories.filter((d) => !environmentId || d.environmentId === environmentId);
+  const error = environmentsRequest.error || directoriesRequest.error || deviceRequest.error;
   return (
     <Flexbox gap={20}>
       <Flexbox gap={6}>
@@ -45,7 +49,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
           value={environmentId || '__all__'}
           options={[
             { label: t('settings.allEnvironments'), value: '__all__' },
-            ...(environments.data?.data ?? []).map((env) => ({ label: env.name, value: env.id })),
+            ...environments.map((env) => ({ label: env.name, value: env.id })),
           ]}
           onChange={(id) => setParams(id && id !== '__all__' ? { environment: id } : {})}
         />
@@ -53,7 +57,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
           icon={PlusIcon}
           type="primary"
           onClick={() =>
-            environments.data?.data.length
+            environments.length
               ? openAddDirectoryModal(projectId, environmentId || undefined)
               : navigate(`/project/${projectId}/settings/environments`)
           }
@@ -65,16 +69,22 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
         <AsyncError
           error={error}
           onRetry={() =>
-            Promise.all([environments.mutate(), directories.mutate(), deviceRequest.mutate()])
+            Promise.all([
+              environmentsRequest.revalidate(),
+              directoriesRequest.revalidate(),
+              deviceRequest.mutate(),
+            ])
           }
         />
       ) : null}
-      {error ? null : directories.isLoading || environments.isLoading || deviceRequest.isLoading ? (
+      {error ? null : !directoriesRequest.hasData ||
+        !environmentsRequest.hasData ||
+        deviceRequest.isLoading ? (
         <Text>{t('loading', { ns: 'common' })}</Text>
       ) : !items.length ? (
         <Flexbox gap={12} paddingBlock={24}>
           <Text type="secondary">{t('settings.noDirectories')}</Text>
-          {!environments.data?.data.length && (
+          {!environments.length && (
             <Button onClick={() => navigate(`/project/${projectId}/settings/environments`)}>
               {t('settings.addEnvironment')}
             </Button>
@@ -131,7 +141,7 @@ export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
                       : openProjectTopicModal({
                           projectId,
                           coordinatorAgentId: project!.project.coordinatorAgentId,
-                          directories: directories.data?.data ?? [],
+                          directories,
                           initialDirectoryId: directory.id,
                           title: t('directories.start'),
                         })

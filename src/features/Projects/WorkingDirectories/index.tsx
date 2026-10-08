@@ -8,16 +8,23 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import {
+  useProjectDirectories,
+  useProjectDirectoryStore,
+  useProjectEnvironments,
+} from '@/store/projectWorkingDirectory';
 
 import { openEnvironmentModal } from './EnvironmentModal';
 
 export function ProjectWorkingDirectories({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
-  const linked = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
-  const available = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
-  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const linkedRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const availableRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const linked = useProjectEnvironments(projectId);
+  const available = useProjectEnvironments();
+  const directories = useProjectDirectories(projectId);
   const attach = useProjectDirectoryStore((s) => s.attachEnvironment);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
@@ -36,10 +43,9 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
       setPending(false);
     }
   };
-  const unlinked = (available.data?.data ?? []).filter(
-    (env) => !linked.data?.data.some((item) => item.id === env.id),
-  );
-  const requestError = error || linked.error || available.error || directories.error;
+  const unlinked = available.filter((env) => !linked.some((item) => item.id === env.id));
+  const requestError =
+    error || linkedRequest.error || availableRequest.error || directoriesRequest.error;
   return (
     <Flexbox gap={20}>
       <Flexbox gap={12}>
@@ -84,20 +90,22 @@ export function ProjectWorkingDirectories({ projectId }: { projectId: string }) 
           onRetry={() =>
             failedEnvironmentId
               ? link(failedEnvironmentId)
-              : Promise.all([linked.mutate(), available.mutate(), directories.mutate()])
+              : Promise.all([
+                  linkedRequest.revalidate(),
+                  availableRequest.revalidate(),
+                  directoriesRequest.revalidate(),
+                ])
           }
         />
-      ) : linked.isLoading || directories.isLoading ? (
+      ) : !linkedRequest.hasData || !directoriesRequest.hasData ? (
         <Text>{t('loading', { ns: 'common' })}</Text>
-      ) : !linked.data?.data.length ? (
+      ) : !linked.length ? (
         <Text type="secondary">{t('settings.noEnvironments')}</Text>
       ) : (
         <Block padding={0} variant="outlined">
-          {linked.data.data.map((env, index) => {
+          {linked.map((env, index) => {
             const source = env.configuration.sources?.find((source) => source.kind === 'git');
-            const count = (directories.data?.data ?? []).filter(
-              (d) => d.environmentId === env.id,
-            ).length;
+            const count = directories.filter((d) => d.environmentId === env.id).length;
             return (
               <Flexbox
                 horizontal

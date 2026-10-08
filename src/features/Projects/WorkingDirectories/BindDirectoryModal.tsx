@@ -18,7 +18,7 @@ import AsyncError from '@/components/AsyncError';
 import { getDeviceIcon } from '@/features/DeviceManager/getDeviceIcon';
 import { useDeviceStore } from '@/store/device';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
 import { openEnvironmentModal } from './EnvironmentModal';
@@ -47,7 +47,8 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
   const devices = useDeviceStore((s) => s.devices);
   const device = devices.find((d) => d.deviceId === options.deviceId);
   const deviceName = device?.friendlyName ?? options.deviceId;
-  const environments = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
+  const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)();
+  const environments = useProjectEnvironments();
   const save = () => bindDirectory(projectId, environmentId);
   return (
     <>
@@ -107,8 +108,8 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
           />
         )}
         <Text>{t('directories.environment')}</Text>
-        {environments.error ? (
-          <AsyncError error={environments.error} onRetry={environments.mutate} />
+        {environmentsRequest.error ? (
+          <AsyncError error={environmentsRequest.error} onRetry={environmentsRequest.revalidate} />
         ) : (
           <Select
             aria-label={t('directories.environment')}
@@ -116,7 +117,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
             placeholder={t('directories.environment')}
             value={environmentId}
             optionRender={(option) => {
-              const env = environments.data?.data.find((env) => env.id === option.value);
+              const env = environments.find((env) => env.id === option.value);
               const source = env?.configuration.sources?.find((source) => source.kind === 'git');
               return (
                 <Flexbox horizontal align="center" gap={8}>
@@ -130,7 +131,7 @@ function BindDirectoryContent(options: BindDirectoryOptions) {
               );
             }}
             options={[
-              ...(environments.data?.data ?? []).map((env) => ({
+              ...environments.map((env) => ({
                 label: env.name,
                 value: env.id,
               })),

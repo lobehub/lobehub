@@ -19,7 +19,7 @@ import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectoryStore, useProjectTopics } from '@/store/projectWorkingDirectory';
 
 import { getProjectConversationPath } from '../Layout/navigation';
 
@@ -28,8 +28,11 @@ const ProjectConversation = memo(() => {
   const { projectId, topicId } = useParams<{ projectId: string; topicId?: string }>();
   const detail = useCurrentProjectDetail(projectId);
   const detailSWR = useProjectStore((s) => s.useFetchProjectDetail)(projectId);
-  const topics = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(detail?.project.id);
-  const selectedTopic = topics.data?.data.find((topic) => topic.id === topicId);
+  const topicsRequest = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(
+    detail?.project.id,
+  );
+  const topics = useProjectTopics(detail?.project.id);
+  const selectedTopic = topics.find((topic) => topic.id === topicId);
   const conversationAgentId = topicId
     ? (selectedTopic?.agentId ?? undefined)
     : detail?.project.coordinatorAgentId;
@@ -70,15 +73,17 @@ const ProjectConversation = memo(() => {
   if (topicDetail.error)
     return <AsyncError error={topicDetail.error} variant="page" onRetry={topicDetail.revalidate} />;
   if (agent.error) return <AsyncError error={agent.error} variant="page" onRetry={agent.mutate} />;
-  if (topics.error)
-    return <AsyncError error={topics.error} variant="page" onRetry={topics.mutate} />;
+  if (topicsRequest.error)
+    return (
+      <AsyncError error={topicsRequest.error} variant="page" onRetry={topicsRequest.revalidate} />
+    );
   if (!topicId)
     return (
       <Center height="100%">
         <Text>{t('topics.chooseTopic')}</Text>
       </Center>
     );
-  if (topics.data && !selectedTopic)
+  if (topicsRequest.hasData && !selectedTopic)
     return (
       <Center height="100%">
         <Text>{t('topics.notFound')}</Text>

@@ -6,7 +6,7 @@ import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { groupSidebarTopics, selectSidebarTopics } from '@/store/chat/slices/topic/selectors';
 import { useGlobalStore } from '@/store/global';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectoryStore, useProjectTopics } from '@/store/projectWorkingDirectory';
 import type { ChatTopic, TopicGroupMode, TopicSortBy } from '@/types/topic';
 
 import { useTopicListScope } from './TopicListScope';
@@ -14,9 +14,10 @@ import { useTopicListScope } from './TopicListScope';
 export const useScopedTopics = () => {
   const scope = useTopicListScope();
   const request = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(scope?.projectId);
+  const rows = useProjectTopics(scope?.projectId);
   const topics = useMemo(
     () =>
-      request.data?.data.map((topic) => ({
+      rows.map((topic) => ({
         ...topic,
         createdAt: new Date(topic.createdAt).getTime(),
         updatedAt: new Date(topic.updatedAt).getTime(),
@@ -24,9 +25,9 @@ export const useScopedTopics = () => {
         metadata: topic.metadata ?? undefined,
         title: topic.title ?? '',
       })),
-    [request.data],
+    [rows],
   );
-  return { scope, topics, refresh: request.mutate };
+  return { scope, topics, refresh: request.revalidate };
 };
 
 export const useScopedTopic = (id?: string) =>

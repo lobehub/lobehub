@@ -47,7 +47,8 @@ const rows = [
 ];
 vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectoryStore: (selector: (s: unknown) => unknown) =>
-    selector({ useFetchProjectTopics: () => ({ data: { data: rows } }) }),
+    selector({ useFetchProjectTopics: () => ({ hasData: true, revalidate: async () => {} }) }),
+  useProjectTopics: () => rows,
 }));
 vi.mock('@/hooks/useActiveRouteParams', () => ({ useActiveRouteParams: () => fixture }));
 vi.mock('@/store/chat', () => ({ useChatStore: () => new Set<string>() }));

@@ -18,7 +18,7 @@ import AsyncError from '@/components/AsyncError';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 import { useCurrentProjectList, useProjectStore } from '@/store/project';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectories, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openCreateProjectModal } from '../CreateProjectModal';
 import { getProjectConversationPath } from '../Layout/navigation';
@@ -34,10 +34,11 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
   const projects = useCurrentProjectList();
   const [selectedProject, setProject] = useState('');
   const projectId = topic?.projectId || selectedProject;
-  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(
     projectId,
     !!projectId,
   );
+  const directories = useProjectDirectories(projectId);
   const [directoryId, setDirectory] = useState('');
   const [includeDirectory, setIncludeDirectory] = useState(false);
   const [pending, setPending] = useState(false);
@@ -47,7 +48,7 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
     topic?.metadata?.workingDirectoryConfig ?? topic?.metadata?.workingDirectory,
   );
   const deviceId = topic?.metadata?.boundDeviceId;
-  const options = (directories.data?.data ?? []).filter(
+  const options = directories.filter(
     (d) =>
       !source ||
       (d.path.replace(/[\\/]+$/, '') === source.replace(/[\\/]+$/, '') &&
@@ -167,11 +168,15 @@ function AssociateTopicContent({ topicId, agentId }: { topicId: string; agentId?
           type="error"
         />
       ) : null}
-      {topicSync.error || projectSync.error || directories.error ? (
+      {topicSync.error || projectSync.error || directoriesRequest.error ? (
         <AsyncError
-          error={topicSync.error || projectSync.error || directories.error}
+          error={topicSync.error || projectSync.error || directoriesRequest.error}
           onRetry={() =>
-            Promise.all([topicSync.revalidate(), projectSync.revalidate(), directories.mutate()])
+            Promise.all([
+              topicSync.revalidate(),
+              projectSync.revalidate(),
+              directoriesRequest.revalidate(),
+            ])
           }
         />
       ) : null}

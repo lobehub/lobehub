@@ -25,7 +25,11 @@ import AssigneeAgentSelector from '@/features/AgentTasks/features/AssigneeAgentS
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { ProjectDirectory } from '@/store/projectWorkingDirectory';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import {
+  useProjectDirectories,
+  useProjectDirectoryStore,
+  useProjectTopics,
+} from '@/store/projectWorkingDirectory';
 
 import { getProjectConversationPath } from '../Layout/navigation';
 import { openAddDirectoryModal } from './AddDirectoryModal';
@@ -46,8 +50,9 @@ function StartDirectoryContent({
   const [directoryId, setDirectoryId] = useState(
     initialDirectoryId ?? (directories.length === 1 ? directories[0].id : ''),
   );
-  const liveDirectories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
-  const locations = liveDirectories.data?.data ?? directories;
+  useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const liveDirectories = useProjectDirectories(projectId);
+  const locations = liveDirectories.length ? liveDirectories : directories;
   const directory = locations.find((d) => d.id === directoryId);
   const attachEnvironment = useProjectDirectoryStore((s) => s.attachEnvironment);
   const { t } = useTranslation('project');
@@ -152,7 +157,9 @@ function ProjectTopicList({
   const { t } = useTranslation('project');
   const { topicGroupMode } = useAgentTopicGroupMode();
   const request = useProjectDirectoryStore((s) => s.useFetchProjectTopics)(projectId);
-  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(projectId);
+  const topics = useProjectTopics(projectId);
+  const directories = useProjectDirectories(projectId);
   return (
     <Flexbox gap={1} paddingBlock={12}>
       <Flexbox horizontal align="center" justify="space-between" paddingInline={8}>
@@ -164,7 +171,7 @@ function ProjectTopicList({
           <Filter />
           <ActionIcon
             aria-label={t('sidebar.newConversation')}
-            disabled={directories.isLoading || !!directories.error}
+            disabled={!directoriesRequest.hasData || !!directoriesRequest.error}
             icon={PlusIcon}
             size="small"
             title={t('sidebar.newConversation')}
@@ -174,7 +181,7 @@ function ProjectTopicList({
                 content: (
                   <StartDirectoryContent
                     coordinatorAgentId={coordinatorAgentId}
-                    directories={directories.data?.data ?? []}
+                    directories={directories}
                     projectId={projectId}
                   />
                 ),
@@ -185,15 +192,15 @@ function ProjectTopicList({
           />
         </Flexbox>
       </Flexbox>
-      {request.error || directories.error ? (
+      {request.error || directoriesRequest.error ? (
         <AsyncError
-          error={request.error || directories.error}
-          onRetry={() => Promise.all([request.mutate(), directories.mutate()])}
+          error={request.error || directoriesRequest.error}
+          onRetry={() => Promise.all([request.revalidate(), directoriesRequest.revalidate()])}
         />
       ) : null}
-      {request.isLoading ? (
+      {!request.hasData ? (
         <SkeletonList />
-      ) : !request.data?.data.length && !request.error ? (
+      ) : !topics.length && !request.error ? (
         <Text type="secondary">{t('directories.noConversations')}</Text>
       ) : null}
       {topicGroupMode === 'flat' ? (

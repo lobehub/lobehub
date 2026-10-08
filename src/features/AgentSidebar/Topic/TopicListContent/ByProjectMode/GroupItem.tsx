@@ -29,7 +29,7 @@ import { useQueryRoute } from '@/hooks/useQueryRoute';
 import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectories, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 import { getTopicWorkingDirectorySourcePath } from '@/utils/client/topic';
 
 import { buildPrefixedAgentRoutePath, parseAgentPathname } from '../../../utils/agentPathname';
@@ -170,13 +170,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const { id, title, children } = group;
   const scope = useTopicListScope();
   const navigate = useWorkspaceAwareNavigate();
-  const directories = useProjectDirectoryStore((s) => s.useFetchDirectories)(
+  useProjectDirectoryStore((s) => s.useFetchDirectories)(
     undefined,
     !!children[0]?.projectWorkingDirectoryId,
   );
-  const project = directories.data?.data.find(
-    (d) => d.id === children[0]?.projectWorkingDirectoryId,
-  );
+  const directories = useProjectDirectories();
+  const project = directories.find((d) => d.id === children[0]?.projectWorkingDirectoryId);
 
   const workingDirectory = useMemo(
     () =>

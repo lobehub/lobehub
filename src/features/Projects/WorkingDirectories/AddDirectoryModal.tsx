@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import { deviceService } from '@/services/device';
 import { useDeviceStore } from '@/store/device';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectoryStore, useProjectEnvironments } from '@/store/projectWorkingDirectory';
 
 function AddDirectoryContent({
   projectId,
@@ -27,7 +27,8 @@ function AddDirectoryContent({
   const { t } = useTranslation('project');
   const deviceRequest = useDeviceStore((s) => s.useFetchDevices)(true);
   const devices = useDeviceStore((s) => s.devices);
-  const environments = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const environmentsRequest = useProjectDirectoryStore((s) => s.useFetchEnvironments)(projectId);
+  const environments = useProjectEnvironments(projectId);
   const [environmentId, setEnvironment] = useState(initialEnvironmentId ?? '');
   const [deviceId, setDevice] = useState('');
   const [path, setPath] = useState('');
@@ -63,7 +64,7 @@ function AddDirectoryContent({
       <Select
         aria-label={t('directories.environment')}
         disabled={pending}
-        options={(environments.data?.data ?? []).map((env) => ({ value: env.id, label: env.name }))}
+        options={environments.map((env) => ({ value: env.id, label: env.name }))}
         placeholder={t('directories.environment')}
         value={environmentId}
         onChange={(id) => {
@@ -102,10 +103,10 @@ function AddDirectoryContent({
           type="error"
         />
       ) : null}
-      {deviceRequest.error || environments.error ? (
+      {deviceRequest.error || environmentsRequest.error ? (
         <AsyncError
-          error={deviceRequest.error || environments.error}
-          onRetry={() => Promise.all([deviceRequest.mutate(), environments.mutate()])}
+          error={deviceRequest.error || environmentsRequest.error}
+          onRetry={() => Promise.all([deviceRequest.mutate(), environmentsRequest.revalidate()])}
         />
       ) : null}
       <Flexbox horizontal gap={8} justify="flex-end">

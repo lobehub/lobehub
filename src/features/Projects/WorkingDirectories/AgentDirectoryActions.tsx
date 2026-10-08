@@ -9,7 +9,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useElectronStore } from '@/store/electron';
-import { useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
+import { useProjectDirectories, useProjectDirectoryStore } from '@/store/projectWorkingDirectory';
 
 import { openBindDirectoryModal } from './BindDirectoryModal';
 
@@ -34,8 +34,9 @@ export function AgentDirectoryActions({
   const deviceId =
     pinnedDevice ?? resolveTargetDeviceId(agencyConfig, currentDeviceId, { workspaceScoped });
   const request = useProjectDirectoryStore((s) => s.useFetchDirectories)();
+  const directories = useProjectDirectories();
   const bindingId = topics[0]?.projectWorkingDirectoryId;
-  const bindings = (request.data?.data ?? []).filter((directory) =>
+  const bindings = directories.filter((directory) =>
     bindingId
       ? directory.id === bindingId
       : directory.deviceId === deviceId &&
@@ -110,7 +111,7 @@ export function AgentDirectoryActions({
         title={t('directories.start')}
         disabled={
           pending ||
-          request.isLoading ||
+          !request.hasData ||
           !!request.error ||
           bindings.length > 1 ||
           (!!bindingId && !bindings.length)

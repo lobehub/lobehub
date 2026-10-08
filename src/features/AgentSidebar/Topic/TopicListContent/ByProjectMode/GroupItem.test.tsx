@@ -27,7 +27,8 @@ const directoryRows = vi.hoisted(
 );
 vi.mock('@/store/projectWorkingDirectory', () => ({
   useProjectDirectoryStore: (selector: (state: unknown) => unknown) =>
-    selector({ useFetchDirectories: () => ({ data: { data: directoryRows } }) }),
+    selector({ useFetchDirectories: () => ({ hasData: true }) }),
+  useProjectDirectories: () => directoryRows,
 }));
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => routerPushMock,
