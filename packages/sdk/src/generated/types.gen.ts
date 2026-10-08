@@ -5864,6 +5864,276 @@ export type PostApiV1GoalsByIdRestartResponses = {
 
 export type PostApiV1GoalsByIdRestartResponse = PostApiV1GoalsByIdRestartResponses[keyof PostApiV1GoalsByIdRestartResponses];
 
+export type GetApiV1HumanRequestsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        agentId?: string;
+        limit?: number;
+        status?: string;
+        topicId?: string;
+        type?: 'approval' | 'secret';
+    };
+    url: '/api/v1/human-requests';
+};
+
+export type GetApiV1HumanRequestsErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1HumanRequestsError = GetApiV1HumanRequestsErrors[keyof GetApiV1HumanRequestsErrors];
+
+export type GetApiV1HumanRequestsResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1HumanRequestsResponse = GetApiV1HumanRequestsResponses[keyof GetApiV1HumanRequestsResponses];
+
+export type GetApiV1HumanRequestsIdentityData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/human-requests/identity';
+};
+
+export type GetApiV1HumanRequestsIdentityErrors = {
+    /**
+     * Invalid request
+     */
+    400: ApiError;
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1HumanRequestsIdentityError = GetApiV1HumanRequestsIdentityErrors[keyof GetApiV1HumanRequestsIdentityErrors];
+
+export type GetApiV1HumanRequestsIdentityResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1HumanRequestsIdentityResponse = GetApiV1HumanRequestsIdentityResponses[keyof GetApiV1HumanRequestsIdentityResponses];
+
+export type GetApiV1HumanRequestsByIdData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/human-requests/{id}';
+};
+
+export type GetApiV1HumanRequestsByIdErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type GetApiV1HumanRequestsByIdError = GetApiV1HumanRequestsByIdErrors[keyof GetApiV1HumanRequestsByIdErrors];
+
+export type GetApiV1HumanRequestsByIdResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type GetApiV1HumanRequestsByIdResponse = GetApiV1HumanRequestsByIdResponses[keyof GetApiV1HumanRequestsByIdResponses];
+
+export type PostApiV1HumanRequestsByIdDecisionData = {
+    body: {
+        decision: {
+            action: 'approve';
+            edits?: {
+                subject?: string;
+                text?: string;
+                to?: string;
+            };
+        } | {
+            action: 'decline';
+        } | {
+            action: 'retry';
+        } | {
+            action: 'fulfill';
+            envelope: {
+                ct: string;
+                enc: string;
+                requestId: string;
+                sender?: string;
+                suite: string;
+                v: number;
+            };
+        };
+        via?: 'web' | 'desktop' | 'ios' | 'android' | 'api';
+    };
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/api/v1/human-requests/{id}/decision';
+};
+
+export type PostApiV1HumanRequestsByIdDecisionErrors = {
+    /**
+     * Validation Error
+     */
+    400: {
+        success: false;
+        error: Array<unknown>;
+        data: unknown;
+    };
+    /**
+     * Authentication required
+     */
+    401: ApiError;
+    /**
+     * Insufficient permission
+     */
+    403: ApiError;
+    /**
+     * Resource not found
+     */
+    404: ApiError;
+    /**
+     * Resource conflict
+     */
+    409: ApiError;
+    /**
+     * Rate limit exceeded
+     */
+    429: ApiError;
+    /**
+     * Internal server error
+     */
+    500: ApiError;
+};
+
+export type PostApiV1HumanRequestsByIdDecisionError = PostApiV1HumanRequestsByIdDecisionErrors[keyof PostApiV1HumanRequestsByIdDecisionErrors];
+
+export type PostApiV1HumanRequestsByIdDecisionResponses = {
+    /**
+     * Successful response
+     */
+    200: {
+        data?: Array<unknown> | {
+            [key: string]: unknown;
+        } | null;
+        message?: string;
+        success: true;
+        timestamp: string;
+    };
+};
+
+export type PostApiV1HumanRequestsByIdDecisionResponse = PostApiV1HumanRequestsByIdDecisionResponses[keyof PostApiV1HumanRequestsByIdDecisionResponses];
+
 export type GetApiV1KnowledgeBasesData = {
     body?: never;
     path?: never;

@@ -313,6 +313,7 @@
     "@lobechat/prompts": "workspace:*",
     "@lobechat/python-interpreter": "workspace:*",
     "@lobechat/replica": "workspace:*",
+    "@lobechat/secret-channel": "workspace:*",
     "@lobechat/shared-tool-ui": "workspace:*",
     "@lobechat/ssrf-safe-fetch": "workspace:*",
     "@lobechat/tool-runtime": "workspace:*",

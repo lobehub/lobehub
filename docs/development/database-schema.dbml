@@ -519,6 +519,40 @@ table agent_history_jobs {
   }
 }
 
+table agent_human_requests {
+  id text [pk, not null]
+  agent_id text [not null]
+  user_id text [not null]
+  workspace_id text
+  topic_id text
+  operation_id text
+  tool_call_id text
+  type text [not null]
+  status text [not null, default: 'pending']
+  action jsonb [not null]
+  original_action jsonb
+  reason text
+  secret jsonb
+  recipient_key text
+  result jsonb
+  expires_at "timestamp with time zone" [not null]
+  decided_at "timestamp with time zone"
+  decided_via text
+  notified_at "timestamp with time zone"
+  notify_attempts integer [not null, default: 0]
+  notify_attempted_at "timestamp with time zone"
+  notify_claim_id text
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (user_id, status, created_at) [name: 'agent_human_requests_user_status_idx']
+    (agent_id, created_at) [name: 'agent_human_requests_agent_created_at_idx']
+    topic_id [name: 'agent_human_requests_topic_id_idx']
+  }
+}
+
 table agent_intervention_resolutions {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   resolution_request_id uuid [not null]
