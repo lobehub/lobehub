@@ -36,10 +36,12 @@ interface ListViewProps {
 
 const ListView = memo<ListViewProps>(({ output, limit }) => {
   const { t } = useTranslation('dashboard');
-  const items = limit ? output.items.slice(0, limit) : output.items;
-  const hidden = output.items.length - items.length;
+  // Normalize once: an older server may send a list output without `items`.
+  const allItems = output.items ?? [];
+  const items = limit ? allItems.slice(0, limit) : allItems;
+  const hidden = allItems.length - items.length;
 
-  if (output.items.length === 0) {
+  if (allItems.length === 0) {
     return (
       <Text fontSize={12} type={'secondary'}>
         {t('widget.view.listEmpty')}

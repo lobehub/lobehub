@@ -46,6 +46,9 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
   const [refreshingAll, setRefreshingAll] = useState(false);
 
   const items = detail?.items;
+  // `data` is the raw server response — an older deployment may not send
+  // `items` yet, so normalize once before any dereference.
+  const responseItems = data?.items ?? [];
   const { layouts, ordered } = useMemo(() => {
     const entries = items ?? [];
     const resolved = resolveLayouts(
@@ -86,7 +89,7 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
     <AsyncBoundary
       data={data}
       error={error}
-      isEmpty={data?.items.length === 0}
+      isEmpty={responseItems.length === 0}
       isLoading={isLoading}
       empty={
         empty ?? (
