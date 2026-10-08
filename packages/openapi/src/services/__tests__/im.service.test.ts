@@ -3,7 +3,15 @@ import { eq, sql } from 'drizzle-orm';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
-import { agentOperations, messages, pushTokens, topics, users } from '@/database/schemas';
+import {
+  agentOperations,
+  messages,
+  pushLiveActivities,
+  pushTokens,
+  topics,
+  users,
+  workspaces,
+} from '@/database/schemas';
 
 import { ImRestService } from '../im.service';
 
@@ -57,10 +65,12 @@ const insertRun = (id: string, status: string, createdAt: string) =>
 
 beforeEach(async () => {
   execAgentMock.mockReset();
+  await db.delete(pushLiveActivities);
   await db.delete(pushTokens);
   await db.delete(agentOperations);
   await db.delete(messages);
   await db.delete(topics);
+  await db.delete(workspaces);
   await db.delete(users);
   await db.insert(users).values([{ id: USER }, { id: OTHER }]);
   await db.insert(topics).values({ id: TOPIC, title: 'toby', userId: USER });
@@ -113,6 +123,31 @@ describe('ImRestService.sync — whole-message delivery', () => {
     expect(landed.messages.map((m) => [m.id, m.content])).toEqual([['msg_a1', 'hey there']]);
   });
 
+  it('keeps a parked waiting_for_client run typing, so its in-place reply is not lost', async () => {
+    await insertMessage('msg_u1', 'user', 'hi', '2026-10-04T10:00:00.000100Z');
+    // The run streamed a few words, then parked on a call the device client has
+    // to make. That partial row is visible text, but it is not the reply yet.
+    await insertMessage('msg_a1', 'assistant', 'half a tho', '2026-10-04T10:00:00.000300Z');
+    await insertRun('op_1', 'waiting_for_client', '2026-10-04T10:00:00.000500Z');
+
+    const parked = await service.sync(TOPIC, {});
+    expect(parked.typing).toBe(true);
+    expect(parked.messages.map((m) => m.id)).toEqual(['msg_u1']);
+
+    // Resuming finishes the SAME row in place, so its created_at does not move:
+    // a cursor parked past it would hide the finished reply forever.
+    await db
+      .update(messages)
+      .set({ content: 'half a thought, finished' })
+      .where(eq(messages.id, 'msg_a1'));
+    await db.update(agentOperations).set({ status: 'done' }).where(eq(agentOperations.id, 'op_1'));
+
+    const landed = await service.sync(TOPIC, { cursor: parked.cursor });
+    expect(landed.messages.map((m) => [m.id, m.content])).toEqual([
+      ['msg_a1', 'half a thought, finished'],
+    ]);
+  });
+
   it('keeps a microsecond cursor so a row in the same millisecond is neither repeated nor skipped', async () => {
     await insertMessage('msg_u1', 'user', 'one', '2026-10-04T10:00:00.000100Z');
     const first = await service.sync(TOPIC, {});
@@ -125,6 +160,19 @@ describe('ImRestService.sync — whole-message delivery', () => {
 
     const third = await service.sync(TOPIC, { cursor: second.cursor });
     expect(third.messages).toEqual([]);
+  });
+
+  it('reads a row that shares the cursor’s microsecond (id breaks the tie)', async () => {
+    // One transaction stamps every row it writes with the same microsecond, so a
+    // cursor carrying only the timestamp skips the rows tied with it.
+    const sameMicrosecond = '2026-10-04T10:00:00.000100Z';
+    await insertMessage('msg_u1', 'user', 'one', sameMicrosecond);
+    const first = await service.sync(TOPIC, {});
+    expect(first.messages.map((m) => m.id)).toEqual(['msg_u1']);
+
+    await insertMessage('msg_u2', 'user', 'two', sameMicrosecond);
+    const second = await service.sync(TOPIC, { cursor: first.cursor });
+    expect(second.messages.map((m) => m.id)).toEqual(['msg_u2']);
   });
 
   it('does not move the cursor past a withheld reply when the user keeps typing', async () => {
@@ -157,6 +205,26 @@ describe('ImRestService.sync — whole-message delivery', () => {
     ]);
   });
 
+  it('applies the history limit to whole messages, not to hidden working rows', async () => {
+    const base = Date.parse('2026-10-04T10:00:00Z');
+    for (let i = 0; i < 5; i++) {
+      await insertMessage(`msg_u${i}`, 'user', `m${i}`, new Date(base + i).toISOString());
+    }
+    // A tool-heavy turn leaves many invisible working rows at the top.
+    for (let i = 0; i < 60; i++) {
+      await insertMessage(`msg_h${i}`, 'assistant', '', new Date(base + 100 + i).toISOString());
+    }
+
+    const result = await service.sync(TOPIC, { limit: 5 });
+    expect(result.messages.map((m) => m.id)).toEqual([
+      'msg_u0',
+      'msg_u1',
+      'msg_u2',
+      'msg_u3',
+      'msg_u4',
+    ]);
+  });
+
   it('answers a long-poll as soon as the state changes', async () => {
     await insertMessage('msg_u1', 'user', 'hi', '2026-10-04T10:00:01Z');
     await insertRun('op_1', 'running', '2026-10-04T10:00:02Z');
@@ -180,6 +248,30 @@ describe('ImRestService.sync — whole-message delivery', () => {
     expect(Date.now() - started).toBeLessThan(5000);
   });
 
+  it('keeps waiting while only already-delivered rows sit beyond the cursor', async () => {
+    await insertMessage('msg_u1', 'user', 'first', '2026-10-04T10:00:01Z');
+    await insertMessage('msg_a1', 'assistant', 'half a tho', '2026-10-04T10:00:02Z');
+    await insertRun('op_1', 'running', '2026-10-04T10:00:01.5Z');
+    await insertMessage('msg_u2', 'user', 'also…', '2026-10-04T10:00:03Z');
+
+    const during = await service.sync(TOPIC, {});
+    expect(during.messages.map((m) => m.id)).toEqual(['msg_u1', 'msg_u2']);
+
+    // The user row past the withheld reply is re-sent, but that is not "news":
+    // treating it as a change made every poll return at once (a tight loop).
+    // 2000ms of waiting polls at most twice, and the loop always stops up to one
+    // interval before the deadline — so ~1s is the whole wait, not an early return.
+    const started = Date.now();
+    const again = await service.sync(TOPIC, {
+      cursor: during.cursor,
+      state: during.state,
+      waitMs: 2000,
+    });
+    expect(Date.now() - started).toBeGreaterThanOrEqual(950);
+    expect(again.messages.map((m) => m.id)).toEqual(['msg_u2']);
+    expect(again.state).toBe(during.state);
+  });
+
   it('refuses another user’s conversation', async () => {
     await expect(new ImRestService(db, OTHER).sync(TOPIC, {})).rejects.toMatchObject({
       name: 'NotFoundError',
@@ -198,7 +290,48 @@ describe('ImRestService.markRead', () => {
     expect(await service.markRead(TOPIC, { messageId: 'msg_a1' })).toEqual({ unread: 0 });
 
     const [topic] = await db.select().from(topics).where(eq(topics.id, TOPIC));
-    expect(topic.metadata?.imReadCursor?.messageId).toBe('msg_a2');
+    expect(topic.metadata?.imReadCursors?.[USER]?.messageId).toBe('msg_a2');
+  });
+
+  it('counts every unread reply, not just the newest page, and ignores hidden rows', async () => {
+    const base = Date.parse('2026-10-04T10:00:00Z');
+    for (let i = 0; i < 120; i++) {
+      await insertMessage(`msg_a${i}`, 'assistant', `reply ${i}`, new Date(base + i).toISOString());
+    }
+    // Working rows: empty placeholders and a tool step, none of them a bubble.
+    for (let i = 0; i < 5; i++) {
+      await insertMessage(`msg_h${i}`, 'assistant', '', new Date(base + 200 + i).toISOString());
+    }
+
+    expect((await service.sync(TOPIC, {})).unread).toBe(120);
+    expect(await service.markRead(TOPIC, { messageId: 'msg_a119' })).toEqual({ unread: 0 });
+  });
+
+  it('keeps a cursor per viewer so one member’s read does not clear another’s', async () => {
+    await db
+      .insert(workspaces)
+      .values({ id: 'ws_1', name: 'Team', primaryOwnerId: USER, slug: 'team' });
+    await db
+      .insert(topics)
+      .values({ id: 'tpc_ws', title: 'shared', userId: USER, workspaceId: 'ws_1' });
+    await db.insert(messages).values({
+      content: 'hello team',
+      createdAt: atUs('2026-10-04T10:00:00.000100Z') as unknown as Date,
+      id: 'msg_ws_a1',
+      role: 'assistant',
+      topicId: 'tpc_ws',
+      updatedAt: atUs('2026-10-04T10:00:00.000100Z') as unknown as Date,
+      userId: USER,
+      workspaceId: 'ws_1',
+    });
+
+    const mine = new ImRestService(db, USER, 'ws_1');
+    const theirs = new ImRestService(db, OTHER, 'ws_1');
+
+    expect((await theirs.sync('tpc_ws', {})).unread).toBe(1);
+    expect(await mine.markRead('tpc_ws', { messageId: 'msg_ws_a1' })).toEqual({ unread: 0 });
+    // The shared topic carries one cursor per member: mine is read, theirs is not.
+    expect((await theirs.sync('tpc_ws', {})).unread).toBe(1);
   });
 
   it('refuses another user’s conversation', async () => {
@@ -208,7 +341,7 @@ describe('ImRestService.markRead', () => {
       new ImRestService(db, OTHER).markRead(TOPIC, { messageId: 'msg_a1' }),
     ).rejects.toMatchObject({ name: 'NotFoundError' });
     const [topic] = await db.select().from(topics).where(eq(topics.id, TOPIC));
-    expect(topic.metadata?.imReadCursor).toBeUndefined();
+    expect(topic.metadata?.imReadCursors).toBeUndefined();
   });
 
   it('refuses a message that belongs to a different conversation', async () => {
@@ -274,6 +407,40 @@ describe('ImRestService.send', () => {
     expect(retry).toMatchObject({ accepted: false, operationId: null, topicId: TOPIC });
   });
 
+  it('reports the winning receipt when a concurrent first send collides on the id', async () => {
+    // Both sends miss the pre-check; the loser is told the message was received
+    // already — including when the collision surfaces as a thrown error.
+    execAgentMock.mockImplementation(async () => {
+      await insertMessage('msg_client0001', 'user', 'hello', '2026-10-04T10:00:01Z');
+      return { error: 'duplicate key value violates unique constraint', success: false };
+    });
+
+    const lost = await service.send({
+      agentId: AGENT,
+      clientMessageId: 'msg_client0001',
+      content: 'hello',
+      topicId: TOPIC,
+    });
+    expect(lost).toMatchObject({
+      accepted: false,
+      operationId: null,
+      userMessage: { id: 'msg_client0001' },
+    });
+
+    execAgentMock.mockImplementation(async () => {
+      await insertMessage('msg_client0002', 'user', 'hello again', '2026-10-04T10:00:02Z');
+      throw new Error('duplicate key value violates unique constraint');
+    });
+
+    const threw = await service.send({
+      agentId: AGENT,
+      clientMessageId: 'msg_client0002',
+      content: 'hello again',
+      topicId: TOPIC,
+    });
+    expect(threw).toMatchObject({ accepted: false, userMessage: { id: 'msg_client0002' } });
+  });
+
   it('refuses to post into another user’s conversation without starting a run', async () => {
     await expect(
       new ImRestService(db, OTHER).send({ agentId: AGENT, content: 'hi', topicId: TOPIC }),
@@ -332,6 +499,22 @@ describe('ImRestService push tokens', () => {
     expect(rows.map((row) => row.expoToken)).toEqual(['ExponentPushToken[aaa]']);
   });
 
+  it('refuses a workspace-scoped credential, which would fan out beyond its workspace', async () => {
+    const scoped = new ImRestService(db, USER, 'ws_1');
+
+    await expect(
+      scoped.registerPushToken('device-1', {
+        expoToken: 'ExponentPushToken[aaa]',
+        platform: 'ios',
+      }),
+    ).rejects.toMatchObject({ name: 'AuthorizationError' });
+    await expect(scoped.unregisterPushToken('device-1')).rejects.toMatchObject({
+      name: 'AuthorizationError',
+    });
+
+    expect(await db.select().from(pushTokens)).toEqual([]);
+  });
+
   it('keeps a rotated token when a stale sign-out names the old one', async () => {
     await service.registerPushToken('device-1', {
       expoToken: 'ExponentPushToken[bbb]',
@@ -345,5 +528,32 @@ describe('ImRestService push tokens', () => {
     await service.unregisterPushToken('device-1', 'ExponentPushToken[bbb]');
     rows = await db.select().from(pushTokens).where(eq(pushTokens.userId, USER));
     expect(rows).toEqual([]);
+  });
+
+  it('leaves the Live Activity tokens alone when a stale sign-out retires nothing', async () => {
+    await service.registerPushToken('device-1', {
+      expoToken: 'ExponentPushToken[bbb]',
+      platform: 'ios',
+    });
+    await db.insert(pushLiveActivities).values({
+      activityId: 'activity-1',
+      activityKey: 'key-1',
+      apnsEnvironment: 'production',
+      deviceId: 'device-1',
+      operationId: 'op-1',
+      pushToken: 'ExponentPushToken[bbb]',
+      userId: USER,
+    });
+
+    // A sign-out naming a token the device already rotated retires nothing, so
+    // the newer registration and the activities it feeds must survive.
+    await service.unregisterPushToken('device-1', 'ExponentPushToken[aaa]');
+    expect(await db.select().from(pushTokens)).toHaveLength(1);
+    expect(await db.select().from(pushLiveActivities)).toHaveLength(1);
+
+    // An explicit sign-out still takes both.
+    await service.unregisterPushToken('device-1');
+    expect(await db.select().from(pushTokens)).toEqual([]);
+    expect(await db.select().from(pushLiveActivities)).toEqual([]);
   });
 });

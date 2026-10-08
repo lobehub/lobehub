@@ -39,16 +39,21 @@ export type ImTopicParam = z.infer<typeof ImTopicParamSchema>;
 export const IM_SYNC_MAX_WAIT_MS = 25_000;
 
 export const ImSyncQuerySchema = z.object({
-  /** Opaque cursor returned by the previous `sync`; omit for the full history. */
+  /**
+   * Opaque cursor returned by the previous `sync`; omit for the full history.
+   * `<epoch micros>_<message id>` — the id breaks ties between rows written in
+   * the same microsecond, which a timestamp-only cursor would skip.
+   */
   cursor: z
     .string()
-    .regex(/^\d+$/, 'cursor must be the value returned by a previous sync')
+    .regex(/^\d+(_[\w-]{1,128})?$/, 'cursor must be the value returned by a previous sync')
     .optional(),
   /** Max messages to return when there is no cursor (latest N). */
   limit: z.coerce.number().int().min(1).max(200).optional(),
   /**
    * The `state` string from the previous response. A long-poll returns early
-   * when the server's state differs (agent started/stopped typing, read more).
+   * when the server's state differs (a new message, the agent started or stopped
+   * typing, it read more, or the unread count moved).
    */
   state: z.string().max(200).optional(),
   /** Long-poll up to this many ms when nothing changed; 0 answers immediately. */

@@ -12985,7 +12985,7 @@ paths:
           name: cursor
           schema:
             type: string
-            pattern: ^\d+$
+            pattern: ^\d+(_[\w-]{1,128})?$
         - in: query
           name: limit
           schema:

@@ -208,11 +208,13 @@ export interface ChatTopicMetadata {
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
   /**
-   * The newest agent message the user has seen in a messaging client (toby),
-   * written by `POST /api/v1/im/topics/{topicId}/read`. Agent messages after
-   * `readAt` count as unread. Only ever moves forward.
+   * The newest agent message each viewer has seen in a messaging client (toby),
+   * written by `POST /api/v1/im/topics/{topicId}/read`, keyed by viewer id.
+   * Agent messages after the viewer's `readAt` count as unread. A viewer's entry
+   * only ever moves forward, and tracking viewers separately keeps one member of
+   * a shared workspace conversation from clearing everyone else's unread.
    */
-  imReadCursor?: { messageId: string; readAt: string };
+  imReadCursors?: Record<string, { messageId: string; readAt: string }>;
   /**
    * Root operation that most recently consumed `runningOperation`.
    * Used to scope a post-terminal `unread` → `active` correction when the
