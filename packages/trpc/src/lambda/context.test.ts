@@ -389,6 +389,36 @@ describe('createLambdaContext', () => {
     expect(mockCanUseWorkspaceApiKeys).toHaveBeenCalledWith('ws-1');
   });
 
+  it('should collapse a blank workspace scope instead of carrying it into every model', async () => {
+    // ROOT CAUSE:
+    //
+    // `''` is not a workspace. When a caller resolves "no workspace" into a
+    // blank string, every model built from this context writes
+    // `workspace_id = ''`, which the foreign key to `workspaces` rejects — the
+    // whole statement fails, so not even a single chat message could be
+    // persisted. This context is the funnel every lambda request passes
+    // through, so the collapse belongs here rather than at each of the ~90
+    // model constructors.
+    //
+    // Before: `ctx.workspaceId` was `''`.
+    // After: it is `undefined`, which is how the context already spells
+    // "personal" (see the API-key assertions above).
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: '' })).workspaceId,
+    ).toBeUndefined();
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: '   ' })).workspaceId,
+    ).toBeUndefined();
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: null })).workspaceId,
+    ).toBeUndefined();
+
+    // A real scope still comes through, trimmed.
+    expect(
+      (await createContextInner({ userId: 'user-1', workspaceId: ' ws-1 ' })).workspaceId,
+    ).toBe('ws-1');
+  });
+
   it('should accept a workspace API key with a matching workspace header', async () => {
     vi.mocked(ApiKeyModel.findByKey).mockResolvedValue(makeApiKeyRecord('ws-1'));
 
