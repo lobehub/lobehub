@@ -33,12 +33,19 @@ export type AgentAccountView = Omit<AgentAccountItem, 'credentials'> & {
   hasCredential: boolean;
 };
 
-/** The non-secret fields a caller may patch in place. */
+/**
+ * The non-secret fields a caller may patch in place.
+ *
+ * `status` is deliberately absent. Lifecycle moves through
+ * {@link AgentAccountModel.revoke}, which releases the provider resource,
+ * purges the credential and stamps `revokedAt`; a generic patch that could
+ * write `status` would free the routing handle while skipping all of that, and
+ * could equally revive a row that had already been released.
+ */
 export interface AgentAccountPatch {
   capabilities?: AgentAccountCapabilities;
   displayName?: string | null;
   metadata?: Record<string, unknown>;
-  status?: AgentAccountItem['status'];
 }
 
 /** Strip the ciphertext from a freshly written row. */

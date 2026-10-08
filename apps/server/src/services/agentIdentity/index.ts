@@ -7,7 +7,9 @@ import type {
   AgentAccountOutboundMessage,
   AgentAccountRef,
 } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
 
+import { AgentModel } from '@/database/models/agent';
 import type {
   AgentAccountGateKeeper,
   AgentAccountPatch,
@@ -109,6 +111,8 @@ export class AgentAccountService {
    * the account itself.
    */
   create = async (params: CreateAgentAccountParams): Promise<AgentAccountView> => {
+    await this.assertAgentOwned(params.agentId);
+
     const capabilities = params.capabilities ?? this.declaredCapabilities(params.provider);
     if (!capabilities) {
       throw new Error(
@@ -143,6 +147,10 @@ export class AgentAccountService {
    * caller — a provider is the only thing that knows what it issues.
    */
   provision = async (params: ProvisionAgentAccountParams): Promise<AgentAccountView> => {
+    // Before the provider is asked to open anything: a refused caller must not
+    // be able to make us create a remote inbox or bind a number at all.
+    await this.assertAgentOwned(params.agentId);
+
     const provider = this.options.registry.get(params.provider);
     const issued = await provider.provision({
       agentId: params.agentId,
@@ -212,8 +220,24 @@ export class AgentAccountService {
     }
   };
 
-  update = (id: string, patch: AgentAccountPatch): Promise<string | undefined> =>
-    this.model.update(id, patch);
+  /**
+   * Patch the non-secret fields.
+   *
+   * `status` is deliberately not patchable: writing it here would free the
+   * routing handle (the partial unique indexes stop counting revoked rows)
+   * while skipping the provider release, the credential purge and `revokedAt`
+   * — and could equally revive a row that had already been released. Lifecycle
+   * moves through {@link revoke}.
+   */
+  update = async (id: string, patch: AgentAccountPatch): Promise<string | undefined> => {
+    if ('status' in patch) {
+      throw new Error(
+        'Agent account status is not patchable; release the account through `revoke` instead.',
+      );
+    }
+
+    return this.model.update(id, patch);
+  };
 
   /** Install or rotate a credential. Write-only: nothing reads it back out here. */
   setCredential = (
@@ -314,6 +338,22 @@ export class AgentAccountService {
 
   private declaredCapabilities = (provider: string): AgentAccountCapabilities | undefined =>
     this.options.registry.has(provider) ? this.options.registry.capabilities(provider) : undefined;
+
+  /**
+   * An account binds an address *and a credential* to an agent, so only the
+   * agent's creator may attach one — the same rule `connector` and `composio`
+   * apply before storing credentials against an agent.
+   *
+   * Visibility is deliberately not enough: a member who can merely use a shared
+   * agent must not be able to mount their own mailbox, or a secret, onto it.
+   * `existsOwnedById` is creator-only for exactly that reason.
+   */
+  private assertAgentOwned = async (agentId: string): Promise<void> => {
+    const agentModel = new AgentModel(this.db, this.userId, this.options.workspaceId);
+    if (!(await agentModel.existsOwnedById(agentId))) {
+      throw new TRPCError({ code: 'FORBIDDEN', message: 'Agent not found or not editable' });
+    }
+  };
 
   /** Turn a routing-key unique violation into a refusal a person can act on. */
   private toConflictError = (

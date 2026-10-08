@@ -18,6 +18,8 @@ const serverDB: LobeChatDatabase = await getTestDB();
 const userId = 'agent-identity-service-user';
 const agentId = 'agent-identity-service-agent';
 const otherAgentId = 'agent-identity-service-agent-2';
+const foreignUserId = 'agent-identity-service-user-2';
+const foreignAgentId = 'agent-identity-service-agent-3';
 const WEBHOOK_SECRET = 'whsec_svc_secret';
 
 const gateKeeper = {
@@ -172,6 +174,36 @@ describe('AgentAccountService — provisioning', () => {
     expect(created.capabilities).toEqual({ login: true, receive: false, send: false });
   });
 
+  it('refuses to open an account on an agent the caller does not own', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const service = buildService(fetchImpl);
+
+    await serverDB.insert(users).values({ id: foreignUserId });
+    await serverDB.insert(agents).values({ id: foreignAgentId, userId: foreignUserId });
+
+    // Being able to see or use a shared agent is not enough: an account binds
+    // an address *and a credential* to it, which only its creator may do.
+    await expect(
+      service.provision({ agentId: foreignAgentId, provider: 'agent-mail' }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    // Refused before the provider ran, so no remote inbox was created at all.
+    expect(calls).toEqual([]);
+    expect(await service.list()).toHaveLength(0);
+
+    await expect(
+      service.create({
+        agentId: foreignAgentId,
+        capabilities: { receive: false, send: false },
+        identifier: 'agent@github',
+        kind: 'service',
+        provider: 'user',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+    expect(await service.list()).toHaveLength(0);
+  });
+
   it('releases the issued inbox and refuses readably when the row cannot be written', async () => {
     const { calls, fetchImpl } = createMailFetch();
     const service = buildService(fetchImpl);
@@ -319,6 +351,20 @@ describe('AgentAccountService — actions', () => {
     expect(calls.some((call) => call.method === 'POST' && call.path.includes('/messages'))).toBe(
       false,
     );
+  });
+
+  it('refuses to move an account through the generic patch', async () => {
+    const service = buildService(createMailFetch().fetchImpl);
+    const created = await service.provision({ agentId, provider: 'agent-mail' });
+
+    // Lifecycle must go through `revoke`, which also releases the provider
+    // resource, purges the credential and stamps `revokedAt` — writing the
+    // status directly would free the handle while skipping all of that.
+    const lifecyclePatch = { status: 'revoked' } as unknown as Parameters<typeof service.update>[1];
+
+    await expect(service.update(created.id, lifecyclePatch)).rejects.toThrow(/not patchable/);
+
+    expect(await service.get(created.id)).toMatchObject({ status: 'active' });
   });
 
   it('releases on the provider and purges the credential when revoking', async () => {
