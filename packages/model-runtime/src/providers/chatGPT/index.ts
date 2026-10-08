@@ -23,6 +23,23 @@ interface ChatGPTAdditionalToolsInput {
 const isResponsesLiteModel = (model: string | undefined) =>
   !!model && CHATGPT_RESPONSES_LITE_MODEL_IDS.has(model);
 
+/**
+ * Codex models that accept the `reasoning.mode` parameter. Mirrors the
+ * `reasoningMode` extend-param declarations in the model bank (`gpt-5.6-*`):
+ * every other Codex model — GPT-6.x included — rejects the field with
+ * `400 reasoning.mode is not supported with this model` (invalid_request_error,
+ * unsupported_value), which leaves a callSubAgent run with no way to recover.
+ *
+ * A stale `agencyConfig.subagent.chatConfig.reasoningMode` configured for one
+ * override model must not reach a model that no longer declares the param, so
+ * the provider strips it here as a final capability gate regardless of where
+ * the field leaked in from.
+ */
+const CHATGPT_REASONING_MODE_MODEL_PREFIXES = ['gpt-5.6-'];
+
+const supportsReasoningMode = (model: string | undefined) =>
+  !!model && CHATGPT_REASONING_MODE_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
+
 export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>({
   baseURL: CHATGPT_CODEX_BASE_URL,
   chatCompletion: {
@@ -52,10 +69,23 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
       const handledPayload = openAIParams.responses?.handlePayload?.(payload) || payload;
       const { service_tier: _serviceTier, ...rest } = handledPayload;
 
+      // Final capability gate for `reasoning.mode`: strip the field for models
+      // the Codex backend rejects it on (see supportsReasoningMode). Effort and
+      // summary stay untouched — only `mode` is a subscription-catalog-gated
+      // field, and a stale sub-agent override must not kill the whole request.
+      const reasoning = supportsReasoningMode(payload.model)
+        ? rest.reasoning
+        : (() => {
+            const { mode: _mode, ...reasoningWithoutMode } =
+              (rest.reasoning as { mode?: string } | undefined) ?? {};
+            return Object.keys(reasoningWithoutMode).length > 0 ? reasoningWithoutMode : undefined;
+          })();
+
       // The ChatGPT Codex backend manages output limits from the subscription
       // model catalog and rejects the public API's max_output_tokens field.
       return {
         ...rest,
+        reasoning,
         include: ['reasoning.encrypted_content'],
         max_tokens: undefined,
       };

@@ -263,4 +263,48 @@ describe('LobeChatGPTAI', () => {
     expect(request.reasoning).toEqual({ effort: 'high', summary: 'auto' });
     expect(request.tools).toContainEqual({ type: 'web_search' });
   });
+
+  // Regression: a stale `agencyConfig.subagent.chatConfig.reasoningMode` reached
+  // gpt-6.1-sol and the Codex backend rejected the whole request with
+  // `400 reasoning.mode is not supported with this model` (unsupported_value),
+  // leaving callSubAgent with no recovery path. The provider now strips
+  // `reasoning.mode` for models outside the gpt-5.6 family.
+  it('strips reasoning.mode for Codex models that reject it', async () => {
+    await instance.chat({
+      messages: [{ content: 'Write a chapter', role: 'user' }],
+      model: 'gpt-6.1-sol',
+      reasoning: { effort: 'max', mode: 'pro', summary: 'auto' },
+    });
+
+    const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+    expect(request.reasoning).toEqual({ effort: 'max', summary: 'auto' });
+  });
+
+  it('drops reasoning entirely when only mode was set on a rejecting model', async () => {
+    await instance.chat({
+      messages: [{ content: 'Write a chapter', role: 'user' }],
+      model: 'gpt-6.1-sol',
+      reasoning: { mode: 'pro' },
+    });
+
+    const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+    expect(request.reasoning).toBeUndefined();
+  });
+
+  it.each(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'])(
+    'keeps reasoning.mode for %s (declared capability)',
+    async (model) => {
+      await instance.chat({
+        messages: [{ content: 'Write a chapter', role: 'user' }],
+        model,
+        reasoning: { effort: 'high', mode: 'pro' },
+      });
+
+      const request = (instance['client'].responses.create as Mock).mock.calls[0][0];
+
+      expect(request.reasoning).toMatchObject({ effort: 'high', mode: 'pro' });
+    },
+  );
 });
