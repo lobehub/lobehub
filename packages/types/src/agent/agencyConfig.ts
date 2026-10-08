@@ -1092,6 +1092,9 @@ export interface LobeAgentAgencyConfig {
    * Legacy values are plain path strings. New git-aware values may carry `git`
    * metadata; when `git.activeWorktree` is present, that active worktree is the
    * effective cwd while `path` remains the source/recent entry.
+   * Each device value is a complete selection: updating it replaces the value,
+   * including Git metadata. Other devices are preserved; `undefined` deletes
+   * an explicitly patched device entry.
    *
    * Keyed per device so switching the bound device never resolves a path that
    * only exists on another machine. Persisted (server-synced) so the choice
@@ -1294,18 +1297,17 @@ export const resolveAgentAgencyConfig = (
 };
 
 /**
- * Apply "undefined means delete" semantics to a `workingDirByDevice` patch.
+ * Apply per-device replacement semantics to a `workingDirByDevice` patch.
  *
- * Deep-merge (used by both the client optimistic store and the server persist
- * path) can only add/overwrite keys — it silently skips `undefined` sources, so
- * it can never *remove* a per-device entry. To clear a device's cwd the patch
- * carries `{ [deviceId]: undefined }`; this prunes those keys from the merged
- * map after the merge has run.
+ * Run after a config deep-merge on both the client and server. A device value
+ * is a complete directory selection, so omitted Git fields must not survive
+ * from the previous repository. Explicit `undefined` values remove entries;
+ * devices absent from the patch are left untouched.
  *
  * Mutates `merged` in place (safe on an immer draft) and is a no-op when the
  * patch touches no device entries.
  */
-export const pruneWorkingDirByDeviceDeletes = (
+export const applyWorkingDirByDevicePatch = (
   merged: { workingDirByDevice?: Record<string, unknown> } | null | undefined,
   patch: { workingDirByDevice?: Record<string, unknown> } | null | undefined,
 ): void => {
@@ -1315,5 +1317,6 @@ export const pruneWorkingDirByDeviceDeletes = (
 
   for (const key of Object.keys(incoming)) {
     if (incoming[key] === undefined) delete target[key];
+    else target[key] = incoming[key];
   }
 };

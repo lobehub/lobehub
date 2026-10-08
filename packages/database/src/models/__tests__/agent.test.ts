@@ -3490,6 +3490,39 @@ describe('AgentModel', () => {
       expect((result?.agencyConfig as any)?.executionTarget).toBe('local');
     });
 
+    it('replaces a device directory selection without retaining stale repository metadata', async () => {
+      const [agent] = await serverDB
+        .insert(agents)
+        .values({
+          userId,
+          agencyConfig: {
+            executionTarget: 'local',
+            workingDirByDevice: {
+              'device-a': {
+                git: { activeWorktree: '/repos/titu-worktree', branch: 'master' },
+                path: '/repos/titu',
+                repoType: 'github',
+              },
+              'device-b': '/remote/repo',
+            },
+          },
+        })
+        .returning();
+
+      await agentModel.updateConfig(agent.id, {
+        agencyConfig: { workingDirByDevice: { 'device-a': { path: '/repos/lobehub' } } },
+      });
+
+      const result = await serverDB.query.agents.findFirst({ where: eq(agents.id, agent.id) });
+      expect(result?.agencyConfig).toEqual({
+        executionTarget: 'local',
+        workingDirByDevice: {
+          'device-a': { path: '/repos/lobehub' },
+          'device-b': '/remote/repo',
+        },
+      });
+    });
+
     it('should still upsert a workingDirByDevice entry when value is a path', async () => {
       const [agent] = await serverDB
         .insert(agents)

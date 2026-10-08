@@ -146,11 +146,41 @@ describe('useCommitWorkingDirectory — localTarget', () => {
 
     expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
       agencyConfig: {
-        boundDeviceId: 'other-device',
-        executionTarget: 'device',
         workingDirByDevice: { 'other-device': { path: 'C:/work' } },
       },
     });
+  });
+
+  it('writes only the selected device instead of replaying other directory choices', async () => {
+    testState.agent.agencyConfig = {
+      executionTarget: 'local',
+      workingDirByDevice: {
+        'this-machine': { git: { activeWorktree: '/titu-worktree' }, path: '/titu' },
+        'other-device': '/remote/repo',
+      },
+    };
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await result.current.commit({ path: '/lobehub', repoType: 'github' });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenLastCalledWith('agent-id', {
+      agencyConfig: {
+        workingDirByDevice: { 'this-machine': { path: '/lobehub', repoType: 'github' } },
+      },
+    });
+
+    await result.current.clear();
+    expect(testState.agent.updateAgentConfigById).toHaveBeenLastCalledWith('agent-id', {
+      agencyConfig: { workingDirByDevice: { 'this-machine': undefined } },
+    });
+
+    await result.current.commitAgentDefault('/plain-folder');
+    expect(testState.agent.updateAgentConfigById).toHaveBeenLastCalledWith(
+      'agent-id',
+      {
+        agencyConfig: { workingDirByDevice: { 'this-machine': '/plain-folder' } },
+      },
+      undefined,
+    );
   });
 });
 

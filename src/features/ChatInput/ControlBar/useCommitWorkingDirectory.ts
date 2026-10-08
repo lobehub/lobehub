@@ -1,14 +1,8 @@
-import type {
-  LobeAgentConfig,
-  WorkingDirConfig,
-  WorkingDirConfigValue,
-  WorkingDirEntry,
-} from '@lobechat/types';
+import type { WorkingDirConfig, WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { PartialDeep } from 'type-fest';
 
 import { resolveTargetDeviceId } from '@/helpers/agentWorkingDirectory';
 import { getHeteroSessionIdForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
@@ -95,10 +89,8 @@ const toAgentWorkingDirConfig = (entry: WorkingDirEntry): WorkingDirConfig => ({
 export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string | null) => {
   const { t } = useTranslation(['plugin', 'chat', 'project']);
 
-  // The RAW shared config — every write below spreads it back into
-  // `agents.agencyConfig`, so it must never contain this member's per-user
-  // device override (spreading the merged config would leak the override's
-  // executionTarget/boundDeviceId into the workspace-shared row).
+  // The RAW shared config identifies agent-owned state. Directory writes patch
+  // only their target device, never the member's effective device override.
   const agencyConfig = useAgentStore(agentByIdSelectors.getAgencyConfigById(agentId));
   // The EFFECTIVE config (override merged) — only for resolving
   // which device the cwd write should target, keeping it on the same machine
@@ -208,18 +200,13 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
             workingDirectory: sessionCwd || undefined,
           });
         } else if (writeDeviceId) {
-          const prev = agencyConfig?.workingDirByDevice ?? {};
-          // Clearing sends `undefined` rather than dropping the key: deep-merge
-          // (client store + server persist) can't remove a key, so the delete is
-          // carried as an explicit `undefined` and pruned after each merge.
-          const nextMap: Record<string, WorkingDirConfigValue | undefined> = {
-            ...prev,
-            [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
-          };
-          const configPatch = {
-            agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
-          } as PartialDeep<LobeAgentConfig>;
-          await updateAgentConfigById(agentId, configPatch);
+          await updateAgentConfigById(agentId, {
+            agencyConfig: {
+              workingDirByDevice: {
+                [writeDeviceId]: entry ? toAgentWorkingDirConfig(entry) : undefined,
+              },
+            },
+          });
         }
         // Clearing the agent default must also drop the legacy per-agent value —
         // otherwise it keeps re-supplying a stale cwd from a lower precedence
@@ -238,7 +225,6 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     },
     [
       agentId,
-      agencyConfig,
       activeTopic,
       activeTopicId,
       currentDeviceId,
@@ -270,21 +256,15 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       });
       return;
     }
-    // No topic override: clear the agent-level default(s). Clearing sends
-    // `undefined` rather than dropping the key — deep-merge (client store +
-    // server persist) can't remove a key, so the delete is carried as an
-    // explicit `undefined` and pruned after each merge. The user can't tell the
+    // No topic override: clear the agent-level default(s). An explicit
+    // `undefined` entry carries deletion through the client and server. The user
+    // can't tell the
     // per-device map from the legacy slot, so clear both together to avoid a
     // dead second click.
     if (targetDeviceId && agencyConfig?.workingDirByDevice?.[targetDeviceId]) {
-      const nextMap: Record<string, WorkingDirConfigValue | undefined> = {
-        ...agencyConfig.workingDirByDevice,
-        [targetDeviceId]: undefined,
-      };
-      const configPatch = {
-        agencyConfig: { ...agencyConfig, workingDirByDevice: nextMap },
-      } as PartialDeep<LobeAgentConfig>;
-      await updateAgentConfigById(agentId, configPatch);
+      await updateAgentConfigById(agentId, {
+        agencyConfig: { workingDirByDevice: { [targetDeviceId]: undefined } },
+      });
     }
     // (Only clears the localStorage map; no network round-trip since
     // `workingDirectory` is stripped before send.)
@@ -357,13 +337,11 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
       const path = newPath.trim();
       if (!path) return;
       if (targetDeviceId && !isPersonalDeviceTarget) {
-        const prev = agencyConfig?.workingDirByDevice ?? {};
         await updateAgentConfigById(
           agentId,
           {
             agencyConfig: {
-              ...agencyConfig,
-              workingDirByDevice: { ...prev, [targetDeviceId]: path },
+              workingDirByDevice: { [targetDeviceId]: path },
             },
           },
           options,
@@ -378,7 +356,6 @@ export const useCommitWorkingDirectory = (agentId: string, routeTopicId?: string
     },
     [
       agentId,
-      agencyConfig,
       isPersonalDeviceTarget,
       targetDeviceId,
       updateAgentConfigById,
