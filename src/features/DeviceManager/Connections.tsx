@@ -5,10 +5,14 @@ import { Block, Flexbox } from '@lobehub/ui';
 import { Tag, Text } from '@lobehub/ui/base-ui';
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 
 import { AppUpdateAction, AppUpdateHint, useDeviceAppUpdate } from './AppUpdate';
 import { getChannelKind, getChannelVersion } from './channelKind';
+import { CliUpdate } from './CliUpdate';
 import FieldLabel from './FieldLabel';
 import PresenceDot from './PresenceDot';
 
@@ -58,9 +62,13 @@ interface ConnectionsProps {
  */
 const Connections = ({ canEdit, device }: ConnectionsProps) => {
   const { t } = useTranslation('setting');
+  const workspaceId = useActiveWorkspaceId();
 
   const channels = device.channels ?? [];
   const kinds = channels.map((c) => getChannelKind(c.channel));
+  const scope = `${workspaceId}:${device.deviceId}`;
+  const seenCli = useRef<string | undefined>(undefined);
+  if (kinds.includes('cli') || device.metadata?.cliVersion) seenCli.current = scope;
   const desktopIndex = kinds.indexOf('desktop');
   const hasDesktopChannel = desktopIndex !== -1;
 
@@ -103,6 +111,7 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
           time: dayjs(channel.connectedAt).fromNow(),
         });
         if (index === desktopIndex) return desktopCard(label, connectedText, true, key);
+        if (kinds[index] === 'cli') return null;
 
         return (
           <ConnectionCard
@@ -114,6 +123,28 @@ const Connections = ({ canEdit, device }: ConnectionsProps) => {
           />
         );
       })}
+      {seenCli.current === scope && (
+        <ConnectionCard
+          channel={'cli'}
+          live={kinds.includes('cli')}
+          version={getChannelVersion('cli', device.metadata)}
+          detail={
+            <CliUpdate
+              canEdit={canEdit}
+              deviceId={device.deviceId}
+              key={`${workspaceId}:${device.deviceId}`}
+              live={kinds.includes('cli')}
+            />
+          }
+          status={plainStatus(
+            kinds.includes('cli')
+              ? t('devices.channel.connected', {
+                  time: dayjs(channels[kinds.indexOf('cli')].connectedAt).fromNow(),
+                })
+              : t('devices.status.offline'),
+          )}
+        />
+      )}
       {restartInFlight && desktopCard('desktop', t('devices.status.offline'), false)}
       {channels.length === 0 &&
         !restartInFlight &&

@@ -1,4 +1,25 @@
 export default {
+  'devices.cliUpdate.restart': 'Restart CLI',
+  'devices.cliUpdate.update': 'Update and restart',
+  'devices.cliUpdate.confirmDesc':
+    'The CLI will briefly go offline. Wait for active tasks to finish before continuing.',
+  'devices.cliUpdate.bootstrap':
+    'Update the CLI manually and reconnect with a standalone daemon to enable remote maintenance.',
+  'devices.cliUpdate.unsupported': 'Remote CLI maintenance is not supported.',
+  'devices.cliUpdate.loading': 'Reading CLI maintenance status…',
+  'devices.cliUpdate.unavailable': 'Cannot reach the CLI. Retry reading its status.',
+  'devices.cliUpdate.pending': 'Waiting for a new CLI process on the expected version…',
+  'devices.cliUpdate.success': 'CLI restarted on the expected version.',
+  'devices.cliUpdate.failed': 'CLI maintenance failed. Review the error before trying again.',
+  'devices.cliUpdate.timedOut':
+    'Restart could not be confirmed within five minutes. Read status before retrying.',
+  'devices.cliUpdate.busy':
+    'Maintenance is blocked by {{count}} active tasks. Wait for them to finish.',
+  'devices.cliUpdate.available': 'CLI {{version}} is available.',
+  'devices.cliUpdate.retryRead': 'Refresh status',
+  'devices.cliUpdate.retryCommand': 'Retry same request',
+  'devices.cliUpdate.ambiguous':
+    'The request may have been accepted. Refresh status or retry the same request; do not start another operation.',
   'devices.keepAwake.desc':
     'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
   'devices.keepAwake.title': 'Keep Awake While Connected',

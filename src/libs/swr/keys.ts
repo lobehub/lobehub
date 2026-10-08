@@ -747,6 +747,11 @@ export const trashKeys = {
 };
 
 export const deviceKeys = {
+  cliUpdateState: def('device:cliUpdateState', (workspaceId: string | null, deviceId: string) => [
+    'device:cliUpdateState',
+    workspaceId,
+    deviceId,
+  ]),
   appUpdateState: def('device:appUpdateState', (workspaceId: string | null, deviceId: string) => [
     'device:appUpdateState',
     workspaceId,
