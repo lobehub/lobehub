@@ -11,9 +11,6 @@ overrides:
   vitest: 5.0.3
   zod@^4: 4.6.5
 
-patchedDependencies:
-  electron-sparkle-updater@0.5.2: 6f583444e425a99e21e374a9afab303612eb8255ee21194afdb77f347c6cc045
-
 importers:
 
   .:
@@ -34,8 +31,8 @@ importers:
         specifier: ^5.4.4
         version: 5.4.4
       electron-sparkle-updater:
-        specifier: 0.5.2
-        version: 0.5.2(patch_hash=6f583444e425a99e21e374a9afab303612eb8255ee21194afdb77f347c6cc045)(electron@44.5.1(supports-color@9.4.0))
+        specifier: 0.5.3
+        version: 0.5.3(electron@44.5.1(supports-color@9.4.0))
       font-list:
         specifier: ^2.1.0
         version: 2.1.0
@@ -4896,8 +4893,8 @@ packages:
   electron-publish@26.16.0:
     resolution: {integrity: sha512-Vt3KzQIiw9BImvNOYtndg9Mjki+tl4+1sQiC/+G5j8khWaENOJFWodiB+sUl6yyHwtd37avehskdtPw7f8y/+Q==}
 
-  electron-sparkle-updater@0.5.2:
-    resolution: {integrity: sha512-S7C35axw51hTYer9/TSx28/1QyAxARFJZHIDpXrTDM2owxAeGlqnvcPduzk4FJhNkEah1tF/f3ko21/r/TwvoQ==}
+  electron-sparkle-updater@0.5.3:
+    resolution: {integrity: sha512-mEN+cKZ+oujw/kDTc0XbToVg0dNNZVELttD0xuFo/v3tw8b0aocWF0phcW1XvpUTFHpr4HRApfT3H9QzJgZs5w==}
     engines: {node: '>=20.19'}
     hasBin: true
     peerDependencies:
@@ -12790,7 +12787,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron-sparkle-updater@0.5.2(patch_hash=6f583444e425a99e21e374a9afab303612eb8255ee21194afdb77f347c6cc045)(electron@44.5.1(supports-color@9.4.0)):
+  electron-sparkle-updater@0.5.3(electron@44.5.1(supports-color@9.4.0)):
     dependencies:
       node-addon-api: 8.9.2
       node-gyp: 12.4.0
