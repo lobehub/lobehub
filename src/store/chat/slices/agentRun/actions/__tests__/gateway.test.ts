@@ -31,6 +31,7 @@ vi.mock('@/services/aiAgent', () => ({
 vi.mock('@/services/shareChat', () => ({
   shareChatService: {
     execAgentTask: vi.fn(),
+    getTopics: vi.fn().mockResolvedValue([]),
     interruptTask: vi.fn(),
     refreshGatewayToken: vi.fn(),
   },
@@ -465,6 +466,79 @@ describe('GatewayActionImpl', () => {
         expect(onComplete).toHaveBeenCalledWith(
           expect.objectContaining({ terminalReceived: true }),
         );
+      });
+
+      // A per-op `disconnected` follows terminal completion, auth failure or an
+      // explicit unsubscribe — never an unintentional socket loss. v1 takes its
+      // `reconnecting` branch on a close and the mux only broadcasts a per-op
+      // `reconnecting` / `status_changed` while it backs off, so hooking
+      // `disconnected` alone left the reconcile unreachable for every case the
+      // fix targets: the local op stayed `running` forever.
+      it('reconciles on the `reconnecting` signal an unintentional socket loss emits', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ succeeded: false, terminalReceived: false }),
+          ),
+        );
+      });
+
+      it('reconciles when the mux broadcasts a per-op status_changed(disconnected)', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        // A redial in progress is not yet the end.
+        mockClient.emitEvent('status_changed', 'reconnecting');
+        expect(onSilentEnd).not.toHaveBeenCalled();
+
+        mockClient.emitEvent('status_changed', 'disconnected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+      });
+
+      it('stops reconciling once the run has been retired', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        mockClient.emitEvent('reconnecting', 2000);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(onSilentEnd).toHaveBeenCalledOnce();
       });
     });
 
@@ -3582,6 +3656,10 @@ describe('GatewayActionImpl', () => {
         return { action, connectToGateway, getCancelHandler: () => cancelHandler, startOperation };
       }
 
+      beforeEach(() => {
+        vi.mocked(shareChatService.getTopics).mockReset().mockResolvedValue([]);
+      });
+
       afterEach(() => {
         delete (globalThis as any).window;
       });
@@ -3647,6 +3725,68 @@ describe('GatewayActionImpl', () => {
           'server-op-1',
         );
         expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+      });
+
+      // The silent-end reconcile must read the topic through the share surface
+      // too: `topic.getTopicDetail` resolves with `findOwnTopicById`, so a
+      // visitor's read cannot see the creator-owned row and the reconcile would
+      // always answer "still running" — leaving a terminal-less share run stuck
+      // exactly like the owner path this fix repairs.
+      async function runSilentEnd(action: GatewayActionImpl, connectToGateway: any) {
+        await action.reconnectToGatewayOperation({
+          agentShareId: 'share-1',
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        return connectToGateway.mock.calls[0]![0].onSilentEnd as () => Promise<boolean>;
+      }
+
+      it('reads the visitor topic through the share-authorized list, not the owner-scoped read', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(topicService.getTopicDetail).mockClear();
+        vi.mocked(shareChatService.getTopics).mockResolvedValue([
+          { id: 'topic-1', runningOperation: null },
+        ] as any);
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(true);
+        expect(shareChatService.getTopics).toHaveBeenCalledWith('share-1');
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      it('keeps waiting while the share projection still names a run on the topic', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(shareChatService.getTopics).mockResolvedValue([
+          { id: 'topic-1', runningOperation: { operationId: 'server-op-1' } },
+        ] as any);
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(false);
+      });
+
+      it('keeps waiting when the share read itself fails', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(shareChatService.getTopics).mockRejectedValue(new Error('offline'));
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(false);
+        expect(consoleError).toHaveBeenCalled();
       });
     });
 

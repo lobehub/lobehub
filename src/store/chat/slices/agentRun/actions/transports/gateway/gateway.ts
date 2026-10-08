@@ -684,32 +684,34 @@ export class GatewayActionImpl {
     // a silent end after a redial reconciles again.
     let silentEndReconciling = false;
 
-    // Handle disconnection. A terminal agent event has already told the shared run
-    // lifecycle to complete the op, so the close is pure cleanup.
-    // (auth_failed is handled separately below — it's also session-terminal.)
+    // Reconcile a stream that ended without the run's terminal frame.
     //
-    // Without a terminal frame the transport cannot read the end: the socket may
-    // merely have dropped (a reconnect finishes the run), or the run may already
-    // be over with its terminal lost (a hibernated DO buffer, a resumed op that
-    // never replied with its status). Guessing "over" here would settle live runs,
-    // and treating it as "still running" left the local operation stuck `running`
-    // forever — the input stop button never cleared and the status tray kept
-    // counting, with nothing on the server able to repair it because its own
-    // marker was already gone. So defer to the caller, which reads the server's
-    // reservation of the topic and retires the run only once the server proves it
-    // ended, through the terminal-missing `onSessionComplete`.
-    client.on('disconnected', () => {
-      this.internal_cleanupGatewayConnection(operationId);
-      if (receivedTerminalEvent) {
-        fireSessionComplete();
-        return;
-      }
+    // A terminal agent event has already told the shared run lifecycle to complete
+    // the op, and a session we already fired for has nothing left to settle — both
+    // bail. Otherwise the transport cannot read the end: the socket may merely have
+    // dropped (a reconnect finishes the run), or the run may already be over with
+    // its terminal lost (a hibernated DO buffer, a resumed op that never replied
+    // with its status). Guessing "over" here would settle live runs, and treating
+    // it as "still running" left the local operation stuck `running` forever — the
+    // input stop button never cleared and the status tray kept counting, with
+    // nothing on the server able to repair it because its own marker was already
+    // gone. So defer to the caller, which reads the server's reservation of the
+    // topic and retires the run only once the server proves it ended, through the
+    // terminal-missing `onSessionComplete`.
+    //
+    // Retiring also drops the store's connection entry: leaving it behind would
+    // keep a finished run reading as `connecting`/`reconnecting`, and
+    // `reconnectToGatewayOperation` skips any status other than `disconnected`.
+    const reconcileSilentEnd = (): void => {
+      if (receivedTerminalEvent || sessionCompleted) return;
       if (!onSilentEnd || silentEndReconciling) return;
       silentEndReconciling = true;
       void Promise.resolve()
         .then(() => onSilentEnd())
         .then((runOver) => {
-          if (runOver) fireSessionComplete();
+          if (!runOver) return;
+          this.internal_cleanupGatewayConnection(operationId);
+          fireSessionComplete();
         })
         .catch((error) => {
           console.error('[Gateway] Silent-end reconcile failed:', error);
@@ -717,6 +719,33 @@ export class GatewayActionImpl {
         .finally(() => {
           silentEndReconciling = false;
         });
+    };
+
+    // Handle disconnection. A terminal agent event has already told the shared run
+    // lifecycle to complete the op, so the close is pure cleanup.
+    // (auth_failed is handled separately below — it's also session-terminal.)
+    client.on('disconnected', () => {
+      this.internal_cleanupGatewayConnection(operationId);
+      if (receivedTerminalEvent) {
+        fireSessionComplete();
+        return;
+      }
+      reconcileSilentEnd();
+    });
+
+    // `disconnected` is NOT the signal an unintentional loss produces, so hooking
+    // it alone left the reconcile unreachable for the very cases it targets:
+    // v1 takes its `reconnecting` branch on a socket close
+    // (`packages/agent-gateway-client/src/client.ts`), and the mux only broadcasts
+    // a per-op `status_changed` / `reconnecting` while it backs off
+    // (`packages/agent-gateway-client/src/mux/GatewayMuxClient.ts`). A per-op
+    // `disconnected` instead follows terminal completion, auth failure or an
+    // explicit unsubscribe. Ride the loss signals the transports actually emit;
+    // the backoff retries re-check, so a drop that reconnects reads a row still
+    // naming this run and keeps waiting.
+    client.on('reconnecting', () => reconcileSilentEnd());
+    client.on('status_changed', (status) => {
+      if (status === 'disconnected') reconcileSilentEnd();
     });
 
     // Handle auth failures — server-side terminal: the op no longer exists on
@@ -1537,6 +1566,7 @@ export class GatewayActionImpl {
       // Only the server can tell those apart — see `#isRunOverAfterSilentEnd`.
       onSilentEnd: () =>
         this.#isRunOverAfterSilentEnd({
+          agentShareId,
           heteroType: result.heteroType,
           serverOperationId: result.operationId,
           topicId: result.topicId,
@@ -1884,6 +1914,7 @@ export class GatewayActionImpl {
       // proves the run is over — otherwise the reloaded tab spins forever.
       onSilentEnd: () =>
         this.#isRunOverAfterSilentEnd({
+          agentShareId,
           heteroType,
           serverOperationId: operationId,
           topicId,
@@ -2100,11 +2131,12 @@ export class GatewayActionImpl {
    * observation can prove it stopped.
    */
   #isRunOverAfterSilentEnd = async (params: {
+    agentShareId?: string;
     heteroType?: string | null;
     serverOperationId: string;
     topicId?: string;
   }): Promise<boolean> => {
-    const { heteroType, serverOperationId, topicId } = params;
+    const { agentShareId, heteroType, serverOperationId, topicId } = params;
     // Only a run that declares itself an ordinary server run may be retired from
     // here. `undefined` (an older marker that omits the field, mid rolling deploy)
     // stays fail-safe: unknown is not proof that it ran on the server.
@@ -2113,6 +2145,28 @@ export class GatewayActionImpl {
     // A newer turn in THIS tab already owns the topic: its own lifecycle settles
     // the row, and retiring here would fight it.
     if (this.#hasOtherLiveRunOnTopic(topicId, serverOperationId)) return false;
+
+    // A share visitor cannot read the creator-owned topic through the owner-scoped
+    // `topicService` — `topic.getTopicDetail` resolves with `findOwnTopicById`, so
+    // a visitor's read fails and reconciliation would always return false, leaving
+    // a terminal-less share run stuck. Read the visitor's own topic through the
+    // share-authorized list instead: it is the same read the share surface already
+    // hands `useGatewayReconnect`, carrying the sanitized `runningOperation`
+    // projection. That projection has no `childOperations` (they describe
+    // creator-side dispatch a visitor must not see), so a marker naming a
+    // different operation is not proof THIS run ended — keep waiting rather than
+    // risk retiring a live run.
+    if (agentShareId) {
+      try {
+        const topics = await shareChatService.getTopics(agentShareId);
+        // The row is gone, or the share-authorized projection names no run on the
+        // topic: both prove this run is over.
+        return !topics?.find((topic) => topic.id === topicId)?.runningOperation;
+      } catch (error) {
+        console.error('[Gateway] Silent-end share topic read failed:', error);
+        return false;
+      }
+    }
 
     let detail: ChatTopic | null;
     try {
