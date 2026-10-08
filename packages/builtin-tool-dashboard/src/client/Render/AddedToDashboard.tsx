@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 
 import { getDashboardPath } from '@/features/Dashboard/utils/path';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useServerConfigStore } from '@/store/serverConfig';
 
 import type { AddWidgetToDashboardState } from '../../types';
 
@@ -17,6 +18,9 @@ const AddedToDashboard = memo<AddWidgetToDashboardState>(
   ({ dashboardId, dashboardTitle, projectId }) => {
     const { t } = useTranslation('dashboard');
     const navigate = useWorkspaceAwareNavigate();
+    // Dashboard routes exist only in the desktop shell — on mobile the Open
+    // action would navigate nowhere, so the card just states the placement.
+    const isMobile = useServerConfigStore((s) => s.isMobile);
 
     return (
       <Block padding={10} variant={'outlined'} width={'100%'}>
@@ -25,14 +29,16 @@ const AddedToDashboard = memo<AddWidgetToDashboardState>(
           <Text ellipsis style={{ flex: 1, minWidth: 0 }}>
             {t('chat.added', { title: dashboardTitle })}
           </Text>
-          <Button
-            data-open-dashboard={dashboardId}
-            icon={ArrowUpRightIcon}
-            size={'small'}
-            onClick={() => navigate(getDashboardPath({ id: dashboardId, projectId }))}
-          >
-            {t('chat.openDashboard')}
-          </Button>
+          {!isMobile && (
+            <Button
+              data-open-dashboard={dashboardId}
+              icon={ArrowUpRightIcon}
+              size={'small'}
+              onClick={() => navigate(getDashboardPath({ id: dashboardId, projectId }))}
+            >
+              {t('chat.openDashboard')}
+            </Button>
+          )}
         </Flexbox>
       </Block>
     );
