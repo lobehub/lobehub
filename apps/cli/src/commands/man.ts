@@ -77,7 +77,10 @@ function formatManualHeader(command: Command) {
 }
 
 function formatNameSection(command: Command) {
-  return ['NAME', `  ${buildCommandPath(command).join(' ')} - ${command.description()}`].join('\n');
+  return [
+    'NAME',
+    `  ${buildCommandPath(command).join(' ')} - ${command.summary() || command.description()}`,
+  ].join('\n');
 }
 
 function formatSynopsisSection(root: Command, command: Command) {

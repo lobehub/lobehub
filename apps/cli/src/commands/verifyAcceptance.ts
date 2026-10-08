@@ -79,19 +79,15 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
   acceptance
     .command('create')
-    .description('Create or reuse an acceptance without creating a verification round or results')
-    .addHelpText(
-      'after',
-      '\nBefore creating: read and follow the acceptance skill at .agents/skills/acceptance/SKILL.md. ' +
-        'If missing, run `lh acceptance install`, then read it. Pass --skill-read only after reading it. ' +
-        'This confirms acknowledgment; it does not verify that the skill was followed.\n' +
-        'Creation saves only an acceptance record. Follow the skill to publish checks, execute verification, ' +
-        'upload the report and required evidence, and read back coverage before handing off completed acceptance.',
-    )
-    .option(
-      '--skill-read',
-      'Required acknowledgment: read and follow .agents/skills/acceptance/SKILL.md before creating; ' +
-        'if missing, run `lh acceptance install`, then read it. Creation alone does not publish verification or evidence.',
+    .summary('Create or reuse an acceptance without creating a verification round or results')
+    .description(
+      'Create or reuse an acceptance record. This does not create checks, verification rounds, results, reports, or evidence.\n\n' +
+        'Before creating, agents should load and read the acceptance skill (.agents/skills/acceptance/SKILL.md) ' +
+        'and follow its workflow. If the skill is missing, run `lh acceptance install`, then read it.\n\n' +
+        'Use create for flow-first planning. If a completed local report already exists, use ' +
+        '`lh acceptance run ingest <reportDir>` to publish it; a separate create call is unnecessary. ' +
+        'An acceptance URL alone does not mean verification is complete: publish results and required evidence, ' +
+        'then read back coverage before handing off a completed acceptance.',
     )
     .requiredOption(
       '--requirement <text>',
@@ -104,13 +100,12 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
     )
     .option(
       '--json [fields]',
-      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, requirement, status, subject, nextSteps)',
+      'Output JSON, optionally select fields (acceptanceId, acceptanceUrl, requirement, status, subject)',
     )
     .action(
       async (options: {
         json?: boolean | string;
         requirement: string;
-        skillRead?: boolean;
         subject?: string;
         title?: string;
       }) => {
@@ -129,14 +124,6 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           );
         }
 
-        if (!options.skillRead) {
-          throw new InvalidArgumentError(
-            'Read and follow .agents/skills/acceptance/SKILL.md before creating an acceptance. ' +
-              'If missing, run `lh acceptance install`, then read it. Retry with --skill-read after reading it. ' +
-              'Creation alone does not publish checks, verification results, reports, or evidence.',
-          );
-        }
-
         const client = await getTrpcClient();
         const result = await client.acceptance.ensure.mutate({ ...subject, requirement, title });
         const acceptanceUrl = new URL(
@@ -144,19 +131,10 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
           resolveServerUrl(),
         ).toString();
 
-        const nextSteps = [
-          'No verification round or results created by this command. Creation alone is not completed acceptance.',
-          'Follow the acceptance skill: publish checks, execute verification, and upload the report and required evidence. ' +
-            `For an existing local report, use lh acceptance run ingest <reportDir> --acceptance ${result.id}; ` +
-            'for flow-first planning, use lh acceptance flow publish.',
-          `Read back lh acceptance view ${result.id} --json and confirm required evidence coverage before handing off completed acceptance.`,
-        ];
-
         if (options.json !== undefined) {
           outputJson(
             {
               acceptanceId: result.id,
-              nextSteps,
               acceptanceUrl,
               requirement: result.requirement,
               status: result.status,
@@ -169,7 +147,11 @@ export function registerAcceptanceCommands(parent: Command, options?: { deprecat
 
         console.log(`${pc.bold('acceptance')}: ${result.id} (${result.status})`);
         console.log(`${pc.bold('open acceptance')}: ${acceptanceUrl}`);
-        for (const step of nextSteps) console.log(pc.dim(step));
+        console.log(
+          pc.dim(
+            'No verification round or results created. Use `lh acceptance flow publish` to add a plan.',
+          ),
+        );
       },
     );
 
