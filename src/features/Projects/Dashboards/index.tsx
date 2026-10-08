@@ -19,6 +19,7 @@ import NavHeader from '@/features/NavHeader';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useActiveRouteParams } from '@/hooks/useActiveRouteParams';
+import { usePermission } from '@/hooks/usePermission';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 
@@ -32,8 +33,8 @@ const Section = ({ children, title }: { children: ReactNode; title: string }) =>
 );
 
 /** The project's boards, whoever in the project created them, and creating one here. */
-const ProjectBoards = memo<{ onCreate: () => void; projectId: string }>(
-  ({ onCreate, projectId }) => {
+const ProjectBoards = memo<{ canCreate: boolean; onCreate: () => void; projectId: string }>(
+  ({ canCreate, onCreate, projectId }) => {
     const { t } = useTranslation('dashboard');
     const useFetchProjectDashboards = useDashboardStore((s) => s.useFetchProjectDashboards);
     const { data, error, isLoading, mutate } = useFetchProjectDashboards(projectId);
@@ -50,9 +51,11 @@ const ProjectBoards = memo<{ onCreate: () => void; projectId: string }>(
           empty={
             <Center gap={12} padding={24}>
               <Empty description={t('project.boardsEmpty')} icon={LayoutDashboardIcon} />
-              <Button icon={PlusIcon} onClick={onCreate}>
-                {t('create.action')}
-              </Button>
+              {canCreate && (
+                <Button icon={PlusIcon} onClick={onCreate}>
+                  {t('create.action')}
+                </Button>
+              )}
             </Center>
           }
           onRetry={() => void mutate()}
@@ -108,6 +111,9 @@ ProjectWidgets.displayName = 'ProjectWidgets';
 const ProjectDashboardsPage = memo<{ projectId: string }>(({ projectId }) => {
   const { t } = useTranslation('dashboard');
   const navigate = useWorkspaceAwareNavigate();
+  // Workspace viewers lack `create_content`, and the server refuses their
+  // creates with FORBIDDEN — give them no create controls at all.
+  const { allowed: canCreate } = usePermission('create_content');
 
   const handleCreate = () =>
     openCreateDashboardModal({
@@ -137,17 +143,19 @@ const ProjectDashboardsPage = memo<{ projectId: string }>(({ projectId }) => {
               <h1 className={pageStyles.title}>{t('list.title')}</h1>
               <Text className={pageStyles.description}>{t('project.description')}</Text>
             </Flexbox>
-            <Button
-              data-dashboard-create
-              icon={PlusIcon}
-              style={{ flex: 'none' }}
-              type={'primary'}
-              onClick={handleCreate}
-            >
-              {t('create.action')}
-            </Button>
+            {canCreate && (
+              <Button
+                data-dashboard-create
+                icon={PlusIcon}
+                style={{ flex: 'none' }}
+                type={'primary'}
+                onClick={handleCreate}
+              >
+                {t('create.action')}
+              </Button>
+            )}
           </Flexbox>
-          <ProjectBoards projectId={projectId} onCreate={handleCreate} />
+          <ProjectBoards canCreate={canCreate} projectId={projectId} onCreate={handleCreate} />
           <ProjectWidgets projectId={projectId} />
         </div>
       </div>
