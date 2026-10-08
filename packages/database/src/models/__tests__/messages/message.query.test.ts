@@ -4309,6 +4309,71 @@ describe('MessageModel Query Tests', () => {
       expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('a1');
     });
 
+    it('keeps a signalPromoted turn as a spine candidate', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'earlier',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // Woken by a background tool, but the writer settled it as an ANSWER
+          // (`signalPromoted`) — it is main-chain, so a continuation must anchor
+          // HERE, not back on a1, or the next turn forks around the answer.
+          id: 'answer',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'the plan, in full',
+          metadata: {
+            signal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'tool-stdout' },
+            signalPromoted: true,
+          } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('answer');
+    });
+
+    it('excludes a signal turn whose promotion was REVOKED (signalPromoted:false)', async () => {
+      await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
+      await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);
+      await serverDB.insert(messages).values([
+        {
+          id: 'a1',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: 'earlier',
+          createdAt: new Date('2023-01-01T00:00:00'),
+        },
+        {
+          // Promoted by an early batch, then the terminal error turned out to echo
+          // the prose: suppression cleared the content and revoked the marker to
+          // `false`. The empty error row must NOT remain a spine answer — the read
+          // by VALUE (`->> = 'true'`) excludes it, unlike a key-existence check.
+          id: 'revoked',
+          userId,
+          topicId: 'topic1',
+          role: 'assistant',
+          content: '',
+          metadata: {
+            signal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'tool-stdout' },
+            signalPromoted: false,
+          } as any,
+          createdAt: new Date('2023-01-01T00:00:01'),
+        },
+      ]);
+
+      expect(await messageModel.getLatestSpineMessageId({ topicId: 'topic1' })).toBe('a1');
+    });
+
     it('scopes the main thread to threadId IS NULL (ignores thread messages)', async () => {
       await serverDB.insert(sessions).values([{ id: 'session1', userId }]);
       await serverDB.insert(topics).values([{ id: 'topic1', sessionId: 'session1', userId }]);

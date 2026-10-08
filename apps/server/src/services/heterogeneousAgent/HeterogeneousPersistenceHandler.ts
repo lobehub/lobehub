@@ -844,6 +844,16 @@ export class HeterogeneousPersistenceHandler {
       state.heteroSessionId = snapshot.metadata.heteroSessionId;
     }
 
+    // Recover the signal that OPENED the current turn (its stream_start is long
+    // gone on a cold replica). The flush uses this to settle what the turn turned
+    // out to be — a reactive note, or an answer that puts it back on the main
+    // chain (`metadata.signalPromoted`). The current assistant's row is
+    // authoritative, so OVERWRITE rather than fill-if-empty: after an
+    // advanced-step resync `currentAssistantId` points at a DIFFERENT turn, and a
+    // stale in-memory `turnSignal` (e.g. a prior `tool-stdout`) would otherwise
+    // mis-promote a `task-completion` summary, or suppress a real answer.
+    state.main.turnSignal = snapshot.metadata.signal;
+
     if (snapshot.textSnapshotSeq > state.main.lastTextSnapshotSeq) {
       state.main.accContent = snapshot.content;
       state.main.lastTextSnapshotSeq = snapshot.textSnapshotSeq;
@@ -1074,7 +1084,10 @@ export class HeterogeneousPersistenceHandler {
       lastReasoningSnapshotSeq: 0,
       lastTextSnapshotSeq: 0,
       toolState: this.createEmptyMainToolState(),
+      // Per-turn fields reset with the pointer; `turnSignal` is then reloaded
+      // authoritatively from the new assistant's row in `refreshMainStateFromDb`.
       turnMetadata: {},
+      turnSignal: undefined,
     };
     await this.refreshToolMessageIndex(state);
     await this.refreshMainStateFromDb(state);

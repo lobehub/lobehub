@@ -1,9 +1,10 @@
 import type { AgentInterventionRequestData } from '@lobechat/agent-gateway-client';
+import { isSignalTurnAnswer } from '@lobechat/types';
 
 import { isEchoedErrorText } from '../errors/echo';
 import type { SubagentIntent, SubagentReduceCtx } from '../subagentCoordinator';
 import { getEventScope, reduceSubagentRuns } from '../subagentCoordinator';
-import type { ToolCallPayload } from '../types';
+import type { ExternalSignalContext, ToolCallPayload } from '../types';
 import type {
   MainAgentIntent,
   MainAgentInterventionState,
@@ -118,18 +119,82 @@ const computeTurnParentId = (state: MainAgentRunState, data: any): string => {
   return state.lastSpineMessageId;
 };
 
+/**
+ * A signal-opened turn that delivers an ANSWER (prose past the length cutoff) is
+ * really back on the main chain — advance the spine onto it so the NEXT turn
+ * chains off THIS turn, producing a LINEAR persisted shape. Leave it off the
+ * spine and the next turn re-mounts on the pre-signal assistant: the wire forks,
+ * and the read side resolves the fork into the signal branch and drops the
+ * continuation (and its final answer) entirely.
+ *
+ * A one-line progress note does NOT promote — it stays a tool-child callback, so
+ * the SignalCallbacks accordion still earns its keep on chatty tools. (A signal
+ * turn that emits a tool_use is promoted structurally by `reduceToolsChunk`.)
+ *
+ * Derived from `currentAssistantId`, not a per-turn flag, so it survives a cold
+ * replica: an in-memory flag is NOT rehydrated, but the batch's text chunks
+ * replay here and re-promote exactly as a warm replica would.
+ */
+/**
+ * Does a woken turn's output make it an ANSWER — back on the main chain — rather
+ * than a reactive callback?
+ *
+ * `task-completion` is EXCLUDED even past the length cutoff: it is the post-task
+ * summary, and the renderer contract keeps it AFTER the SignalCallbacks accordion
+ * (`initial reply → callbacks → summary`). Promoting it would pull it out of
+ * `collectTaskCompletions` and render it as an ordinary chain child before the
+ * callbacks, breaking that order. Only the reactive-reply kinds (`tool-stdout`,
+ * and the future `tool-callback`) become ordinary answers.
+ */
+const isPromotableAnswer = (signal: ExternalSignalContext | undefined, content: string): boolean =>
+  !!signal && signal.type !== 'task-completion' && isSignalTurnAnswer(content);
+
+/**
+ * A promotable answer is back on the main chain — advance the spine onto it AND
+ * stamp the verdict into `turnMetadata`, the per-turn metadata BOTH engines
+ * persist durably (server via `flushBatchContent`, renderer via its write
+ * batcher). Stamping it as the answer streams — not only at the next flush — is
+ * what keeps a cold replica honest: the marker lands in the SAME batch as the
+ * answer, so the next `newStep` batch already sees a `signalPromoted` row and
+ * `getLatestSpineMessageId` keeps it as the spine instead of re-forking off the
+ * pre-signal turn.
+ */
+const promoteSignalAnswerToSpine = (next: MainAgentRunState): void => {
+  if (!isPromotableAnswer(next.turnSignal, next.accContent)) return;
+  next.lastSpineMessageId = next.currentAssistantId;
+  if (!next.turnMetadata.signalPromoted) {
+    next.turnMetadata = { ...next.turnMetadata, signalPromoted: true };
+  }
+};
+
+/**
+ * The writer's verdict for the `persistAssistant` flush (the renderer's durable
+ * write, and the server's at a step/terminal boundary). Mirrors the
+ * `turnMetadata` stamp above so a flush that beats `flushBatchContent` still
+ * carries it. Only the writer can settle this — it holds the prose — so no reader
+ * re-derives it from content.
+ */
+const turnPromotionMetadata = (
+  state: MainAgentRunState,
+  content: string,
+): { signalPromoted: true } | undefined =>
+  isPromotableAnswer(state.turnSignal, content) ? { signalPromoted: true } : undefined;
+
 // ─── Per-event handlers ───
 
 /** `stream_start { newStep: true }` — flush the prior turn, open a new assistant. */
 const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx): ReduceResult => {
   const intents: AnyIntent[] = [];
 
-  // 1. Durably flush the prior turn's accumulators + model/provider.
+  // 1. Durably flush the prior turn's accumulators + model/provider + the
+  //    main-chain verdict on what that turn turned out to be.
   const flush: Record<string, any> = {};
   if (state.accContent) flush.content = state.accContent;
   if (state.accReasoning) flush.reasoning = state.accReasoning;
   if (state.turnModel) flush.model = state.turnModel;
   if (state.turnProvider) flush.provider = state.turnProvider;
+  const promotion = turnPromotionMetadata(state, state.accContent);
+  if (promotion) flush.metadata = promotion;
   if (Object.keys(flush).length > 0) {
     intents.push({ kind: 'persistAssistant', messageId: state.currentAssistantId, ...flush });
   }
@@ -161,6 +226,7 @@ const openTurn = (state: MainAgentRunState, data: any, ctx: MainAgentReduceCtx):
   // spine onto it at that point (derived from `currentAssistantId`, so it holds
   // on a cold replica too — see there).
   if (!isSignalTurn) next.lastSpineMessageId = messageId;
+  next.turnSignal = data?.externalSignal;
   next.currentMainMessageId = mainMessageId;
   next.accContent = '';
   next.accReasoning = '';
@@ -214,6 +280,11 @@ const reduceTextChunk = (state: MainAgentRunState, data: any): ReduceResult => {
     if (!data?.content) return { intents: [], state };
     next.accContent = state.accContent + data.content;
   }
+
+  // Once a woken turn's prose crosses the answer cutoff it is back on the main
+  // chain; advance the spine now so the next turn chains off it (linear shape),
+  // not off the pre-signal assistant (forked shape → dropped continuation).
+  promoteSignalAnswerToSpine(next);
 
   return {
     intents: [
@@ -518,6 +589,8 @@ const reduceVisibleOutputEnd = (state: MainAgentRunState): ReduceResult => {
   if (state.accReasoning) flush.reasoning = state.accReasoning;
   if (state.turnModel) flush.model = state.turnModel;
   if (state.turnProvider) flush.provider = state.turnProvider;
+  const promotion = turnPromotionMetadata(state, state.accContent);
+  if (promotion) flush.metadata = promotion;
   return {
     intents: [{ kind: 'persistAssistant', messageId: state.currentAssistantId, ...flush }],
     state,
@@ -539,6 +612,17 @@ const reduceTerminal = (
   if (state.accReasoning) flush.reasoning = state.accReasoning;
   if (state.turnModel) flush.model = state.turnModel;
   if (state.turnProvider) flush.provider = state.turnProvider;
+  // The run's LAST turn settles here — when the agent was parked on a background
+  // tool, this is exactly where its answer lands.
+  const promotion = turnPromotionMetadata(state, suppress ? '' : state.accContent);
+  if (promotion) flush.metadata = promotion;
+  // Echo suppression clears the content AFTER an earlier batch may have already
+  // stamped `signalPromoted` (the prose was long enough before it turned out to
+  // be an echoed error). Deep-merge can't drop the key, so REVOKE by value: write
+  // `signalPromoted: false`, which both the spine query (`->> = 'true'`) and the
+  // reader (`if (metadata.signalPromoted)`) read as not-promoted.
+  else if (suppress && state.turnMetadata.signalPromoted)
+    flush.metadata = { signalPromoted: false };
   if (Object.keys(flush).length > 0) {
     intents.push({ kind: 'persistAssistant', messageId: state.currentAssistantId, ...flush });
   }
@@ -557,6 +641,10 @@ const reduceTerminal = (
   drained.accContent = '';
   drained.accReasoning = '';
   drained.ended = true;
+  // Keep in-memory state consistent with the revoked marker above.
+  if (suppress && drained.turnMetadata.signalPromoted) {
+    drained.turnMetadata = { ...drained.turnMetadata, signalPromoted: false };
+  }
   const delegated = delegateSubagent(drained, event, ctx);
   return { intents: [...intents, ...delegated.intents], state: delegated.state };
 };

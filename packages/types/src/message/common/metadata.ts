@@ -289,6 +289,11 @@ export const MessageMetadataSchema = ModelUsageSchema.merge(ModelPerformanceSche
   scope: z.string().optional(),
   // External-signal lineage for Monitor-style callback turns ().
   signal: MessageSignalSchema.optional(),
+  // The writer's verdict that a woken signal turn was main-chain after all. MUST
+  // stay listed: the renderer executor flushes it through UpdateMessageParamsSchema,
+  // so an unlisted key is silently stripped and the desktop path would persist no
+  // verdict at all — leaving the reader to guess from content forever.
+  signalPromoted: z.boolean().optional(),
   steer: z.boolean().optional(),
   subAgentId: z.string().optional(),
   // role='taskCallback' card: which task delivered its handoff back to this
@@ -542,6 +547,25 @@ export interface MessageMetadata {
    */
   signal?: MessageSignal;
   /**
+   * Set on a `signal`-tagged turn that turned out to be on the MAIN CHAIN: it
+   * delivered an answer rather than a one-line reactive note (see
+   * `isSignalTurnAnswer`). Readers treat it as a normal step and do NOT fold it
+   * into the SignalCallbacks accordion; the spine query keeps it as a chain
+   * anchor.
+   *
+   * `signal` is stamped at stream_start, before the turn's output is known, so
+   * the verdict can only be reached once the turn flushes — and it is the WRITER
+   * that reaches it (it holds the turn's prose). Persisting it is what keeps the
+   * read side and the cold-replica spine query from each re-deriving it from
+   * message content, two copies of one rule that would drift.
+   *
+   * Deliberately TOP-LEVEL rather than nested under `signal`: the spine query
+   * filters on it, and nested access (`metadata -> 'signal'`) crashes the
+   * serverless Postgres engine as a WHERE predicate — only `jsonb_exists` on a
+   * top-level key survives there.
+   */
+  signalPromoted?: boolean;
+  /**
    * User message sent from the input queue while the previous turn was still
    * running. Renders as a continuation of that turn instead of a new one.
    */
@@ -654,3 +678,21 @@ export interface MessageSignal {
    */
   type: 'tool-stdout' | 'tool-callback' | 'task-completion';
 }
+
+/**
+ * Minimum trimmed prose length for a toolless signal turn to count as an ANSWER
+ * rather than a one-line reactive note — the writer's cutoff for promoting it
+ * onto the main chain (`metadata.signalPromoted`).
+ *
+ * `signal` is trigger provenance, stamped before the turn's output is known, so
+ * a woken turn and a real answer can only be told apart after the fact, and the
+ * only thing that separates them is scale: a Monitor progress push is a line
+ * ("100/84842 全 skip…"), an answer is the reply the user was waiting for. Set
+ * well clear of observed progress notes (5–50 chars) and observed answers
+ * (1000+). Lives in the WRITER alone; nothing downstream re-derives it.
+ */
+export const SIGNAL_TURN_ANSWER_MIN_LENGTH = 200;
+
+/** True when a signal-triggered turn's prose is long enough to be an answer. */
+export const isSignalTurnAnswer = (content: string | null | undefined): boolean =>
+  (content?.trim().length ?? 0) > SIGNAL_TURN_ANSWER_MIN_LENGTH;

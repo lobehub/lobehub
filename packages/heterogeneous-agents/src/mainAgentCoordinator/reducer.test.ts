@@ -381,6 +381,158 @@ describe('main agent reducer', () => {
     expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
   });
 
+  // ─── A TOOLLESS signal turn that delivers an ANSWER is back on the main chain ───
+  // tpc_MAA6wBdUN1gw: the agent parked on a background Bash; the stdout push that
+  // woke it is where its real reply (the whole plan) arrived. Length past the
+  // answer cutoff promotes the turn onto the spine (so the next turn is LINEAR
+  // under it, not forked — the Codex drop) AND the flush persists the verdict so
+  // the read side and the spine query read it instead of re-deriving from content.
+  const longAnswer = '方案可以落到文件级'.padEnd(210, '。');
+
+  it('promotes a toolless answer-bearing signal turn and persists the verdict', () => {
+    const { steps, state } = run([
+      textEvent('waiting on the agents'),
+      toolsEvent([tool('t1')]), // background Bash → msg_1 (tool)
+      newStepEvent(stdoutSignal(1)), // woken by its stdout → msg_2 (parent msg_1)
+      textEvent(longAnswer), // the run's REAL answer, no tools
+      newStepEvent(), // the next normal turn → msg_3, flushes msg_2
+    ]);
+
+    const created = steps
+      .flatMap((s) => ofKind(s, 'createAssistant'))
+      .map((c) => ({ messageId: c.messageId, parentId: c.parentId }));
+    expect(created).toEqual([
+      { messageId: 'msg_2', parentId: 'msg_1' }, // still MOUNTS on the source tool
+      { messageId: 'msg_3', parentId: 'msg_2' }, // …but the spine advanced → linear
+    ]);
+    expect(state.lastSpineMessageId).toBe('msg_3');
+
+    // The woken turn's flush carries the writer's main-chain verdict.
+    const flush = steps
+      .flatMap((s) => ofKind(s, 'persistAssistant'))
+      .find((i) => i.messageId === 'msg_2');
+    expect(flush?.metadata).toEqual({ signalPromoted: true });
+
+    // And the verdict is stamped into turnMetadata AS the answer streams (before
+    // the next step), so the server's per-batch flushBatchContent persists it —
+    // a cold replica then sees a signalPromoted row on the very next batch and
+    // does not re-fork (Codex P1).
+    let s = createMainAgentRunState('A0');
+    const ctx = makeCtx();
+    for (const e of [
+      toolsEvent([tool('t1')]),
+      newStepEvent(stdoutSignal(1)),
+      textEvent(longAnswer),
+    ]) {
+      s = reduceMainAgent(s, e, ctx).state;
+    }
+    expect(s.turnMetadata.signalPromoted).toBe(true);
+  });
+
+  it('leaves a short reactive note as a callback — no promotion, no verdict', () => {
+    const { steps, state } = run([
+      toolsEvent([tool('t1')]), // seed turn A0 → msg_1 (tool)
+      newStepEvent(stdoutSignal(1)), // woken → msg_2
+      textEvent('（计时器到点了，没有新信息。）'), // a one-line note, under the cutoff
+      newStepEvent(), // → msg_3, flushes msg_2
+    ]);
+
+    const created = steps
+      .flatMap((s) => ofKind(s, 'createAssistant'))
+      .map((c) => ({ messageId: c.messageId, parentId: c.parentId }));
+    expect(created).toEqual([
+      { messageId: 'msg_2', parentId: 'msg_1' }, // mounts on the tool …
+      { messageId: 'msg_3', parentId: 'A0' }, // … and the next turn resumes the pre-signal spine
+    ]);
+    // msg_3 mounted on A0 (not msg_2), proving the note did NOT promote; opening
+    // that normal turn then advances the spine onto msg_3 as usual.
+    expect(state.lastSpineMessageId).toBe('msg_3');
+
+    const flush = steps
+      .flatMap((s) => ofKind(s, 'persistAssistant'))
+      .find((i) => i.messageId === 'msg_2');
+    expect(flush?.metadata).toBeUndefined();
+  });
+
+  // A `task-completion` summary has its own render slot AFTER the callbacks
+  // accordion; promoting it (even past the cutoff) would pull it onto the chain
+  // before the callbacks and break the `reply → callbacks → summary` order. So
+  // length-based promotion is restricted to the reactive-reply kinds.
+  it('does NOT promote a task-completion summary even past the length cutoff', () => {
+    const taskCompletion = (seq: number) => ({
+      sequence: seq,
+      sourceToolCallId: 't1',
+      sourceToolName: 'Bash',
+      type: 'task-completion',
+    });
+    const { steps, state } = run([
+      toolsEvent([tool('t1')]), // A0 → msg_1 (tool)
+      newStepEvent(taskCompletion(1)), // post-task summary turn → msg_2
+      textEvent(longAnswer), // long, but it is a task-completion summary
+      newStepEvent(), // → msg_3, flushes msg_2
+    ]);
+
+    const created = steps
+      .flatMap((s) => ofKind(s, 'createAssistant'))
+      .map((c) => ({ messageId: c.messageId, parentId: c.parentId }));
+    // The summary did NOT promote: the next turn resumes the pre-signal spine A0.
+    expect(created).toEqual([
+      { messageId: 'msg_2', parentId: 'msg_1' },
+      { messageId: 'msg_3', parentId: 'A0' },
+    ]);
+    expect(state.lastSpineMessageId).toBe('msg_3');
+
+    const flush = steps
+      .flatMap((s) => ofKind(s, 'persistAssistant'))
+      .find((i) => i.messageId === 'msg_2');
+    expect(flush?.metadata).toBeUndefined();
+  });
+
+  // A long answer can turn out to be an echoed terminal error: an earlier batch
+  // stamps `signalPromoted`, then suppression clears the content. The stale
+  // marker must be revoked (deep-merge can't drop the key), or the empty error
+  // row stays classified as a main-chain/spine answer.
+  it('revokes a stamped promotion when echo suppression clears the answer', () => {
+    const echo = 'auth failed: '.padEnd(210, 'x'); // >cutoff, promoted, then echoed back
+    const { steps } = run([
+      toolsEvent([tool('t1')]), // A0 → msg_1 (tool)
+      newStepEvent(stdoutSignal(1)), // woken turn → msg_2
+      textEvent(echo), // long content → promotion is stamped
+      { data: { clearEchoedContent: true, message: echo }, type: 'error' }, // terminal echoes it
+    ]);
+
+    const flush = steps
+      .flatMap((s) => ofKind(s, 'persistAssistant'))
+      .find((i) => i.messageId === 'msg_2');
+    expect(flush?.content).toBe('');
+    expect(flush?.metadata).toEqual({ signalPromoted: false });
+  });
+
+  // The verdict is reached at FLUSH, and on a non-sticky replica the turn's
+  // stream_start is long gone — so `turnSignal` is rehydrated from the row's own
+  // `metadata.signal` (`refreshMainStateFromDb`). Without it the replica flushes
+  // the answer with no verdict and the reader is back to the accordion.
+  it('promotes an answer on a cold replica from the rehydrated turnSignal', () => {
+    const rehydrated: MainAgentRunState = {
+      ...createMainAgentRunState('SEED'),
+      currentAssistantId: 'SIG',
+      lastSpineMessageId: 'SPINE0',
+      lastToolMsgIdEver: 'toolPre',
+      turnSignal: stdoutSignal(1) as any, // recovered from the row's metadata.signal
+    };
+    const ctx = makeCtx();
+
+    let r = reduceMainAgent(rehydrated, textEvent(longAnswer), ctx); // replay the answer
+    expect(r.state.lastSpineMessageId).toBe('SIG'); // promoted via the rehydrated signal
+
+    r = reduceMainAgent(r.state, newStepEvent(), ctx); // next normal turn flushes SIG
+    expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
+    expect(ofKind(r.intents, 'persistAssistant')[0]).toMatchObject({
+      messageId: 'SIG',
+      metadata: { signalPromoted: true },
+    });
+  });
+
   it('falls back to the current assistant only before any tool exists', () => {
     const { steps } = run([textEvent('hi'), newStepEvent()]); // no tool ever seen
     expect(ofKind(steps[1], 'createAssistant')[0]).toMatchObject({

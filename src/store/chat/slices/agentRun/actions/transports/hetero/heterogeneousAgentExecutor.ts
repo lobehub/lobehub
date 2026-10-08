@@ -1651,16 +1651,21 @@ export const executeHeterogeneousAgent = async (
             stashMainFlush(intent.messageId, update);
           },
         );
-        // Mirror ONLY model/provider into the store: content/reasoning already
-        // stream live via the gateway handler's raw stream_chunk forward. The
-        // CLI's model has no live path at all — the run's FIRST assistant is
+        // Mirror model/provider/metadata into the store: content/reasoning
+        // already stream live via the gateway handler's raw stream_chunk forward.
+        // The CLI's model has no live path at all — the run's FIRST assistant is
         // already in `dbMessagesMap` when the run starts, so the gateway's
         // stream_start seed insert (its one model→store hop) is skipped for it
         // and the flush above is DB-only. `provider` is already seeded from the
         // agent config; re-stamping it keeps the store and the row identical.
+        // `metadata` carries the signal main-chain verdict (`signalPromoted`):
+        // without mirroring it live, a run that ends on `visible_output_end`
+        // before the terminal refresh keeps the answer folded into the callback
+        // accordion (`updateMessage` deep-merges, so `signal` is preserved).
         const liveUpdate: Record<string, any> = {};
         if (intent.model) liveUpdate.model = intent.model;
         if (intent.provider) liveUpdate.provider = intent.provider;
+        if (intent.metadata) liveUpdate.metadata = intent.metadata;
         if (Object.keys(liveUpdate).length > 0) {
           get().internal_dispatchMessage(
             { id: intent.messageId, type: 'updateMessage', value: liveUpdate },

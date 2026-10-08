@@ -4904,22 +4904,30 @@ export class MessageModel {
           eq(messages.topicId, topicId),
           not(eq(messages.role, 'tool')),
           threadId ? eq(messages.threadId, threadId) : isNull(messages.threadId),
-          // Exclude signal-tagged assistants — BUT only the toolless ones. The
-          // writer tags a turn `signal` at stream_start before it knows the turn
-          // will call tools; a signal turn that DOES emit a tool_use is really
-          // back on the main chain (see `reduceToolsChunk`'s spine promotion),
-          // so it must stay a spine candidate or a cold replica re-forks the
-          // wire off the pre-signal turn. Match the read side, which likewise
-          // treats a tools-bearing message as non-signal (`getMessageSignal`).
+          // Exclude signal-tagged assistants — BUT only the ones that stayed pure
+          // callbacks. A signal turn is excluded only when it has no tools AND no
+          // `signalPromoted` verdict. Two escapes keep a main-chain turn as a
+          // spine candidate (or a cold replica re-forks the wire off the
+          // pre-signal turn):
+          //   - tools: the writer tags `signal` at stream_start before it knows
+          //     the turn will call tools; a tool-bearing signal turn is main-chain.
+          //   - signalPromoted: the writer's persisted verdict that a toolless
+          //     turn delivered an answer, not a reactive note (set at flush — see
+          //     `turnPromotionMetadata`). This query does NOT re-derive it from
+          //     content; it reads the marker, matching the read side.
           //
-          // Key existence (`jsonb_exists`) is used instead of `metadata -> 'signal'
-          // IS NULL`, which crashes the serverless Postgres engine as a WHERE
-          // predicate (rt_fetch out-of-bounds, SQLSTATE XX000 — the `->` operator
-          // only survives in SELECT/ORDER BY). Toolless is expressed with plain
-          // jsonb equality (`= '[]'` / IS NULL) rather than `jsonb_array_length`,
-          // which is unproven on this engine as a qual.
+          // Key existence (`jsonb_exists`) is used for `signal` instead of
+          // `metadata -> 'signal' IS NULL`, which crashes the serverless Postgres
+          // engine as a WHERE predicate (rt_fetch out-of-bounds, SQLSTATE XX000 —
+          // the jsonb-returning `->` operator only survives in SELECT/ORDER BY).
+          // `signalPromoted` is read by VALUE (`->>' = 'true'`), not key existence:
+          // echo suppression REVOKES a stale marker by writing `false`, which must
+          // read as not-promoted, and deep-merge can't drop the key. The text
+          // `->>` operator (unlike jsonb `->`) is a proven WHERE qual here (see
+          // `agentOperation` / `connector`). Toolless is plain jsonb equality.
           sql`NOT (
             COALESCE(jsonb_exists(${messages.metadata}, 'signal'), false)
+            AND NOT COALESCE(${messages.metadata} ->> 'signalPromoted' = 'true', false)
             AND (${messages.tools} IS NULL OR ${messages.tools} = '[]'::jsonb)
           )`,
           this.ownership(),

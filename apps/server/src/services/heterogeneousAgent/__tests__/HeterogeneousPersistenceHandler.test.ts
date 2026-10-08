@@ -103,7 +103,13 @@ const createHarness = (params: {
     update: vi.fn(async (id: string, patch: Partial<FakeMessage>) => {
       const existing = messages.get(id);
       if (!existing) return { success: false };
-      messages.set(id, { ...existing, ...patch });
+      // Mirror the real model: metadata is DEEP-merged, not replaced, so a
+      // content flush carrying `{ signalPromoted }` does not drop the `signal`
+      // stamped at createAssistant.
+      const metadata = patch.metadata
+        ? { ...(existing.metadata as any), ...(patch.metadata as any) }
+        : existing.metadata;
+      messages.set(id, { ...existing, ...patch, metadata });
       return { success: true };
     }),
     updateToolMessage: vi.fn(
@@ -126,12 +132,15 @@ const createHarness = (params: {
     findById: vi.fn(async (id: string) => messages.get(id) ?? null),
     getLatestSpineMessageId: vi.fn(
       async ({ threadId }: { threadId?: string | null; topicId: string }) => {
-        const match = [...messages.values()].findLast(
-          (m) =>
-            m.role !== 'tool' &&
-            (m.threadId ?? null) === (threadId ?? null) &&
-            !(m as any).metadata?.signal,
-        );
+        const match = [...messages.values()].findLast((m) => {
+          if (m.role === 'tool') return false;
+          if ((m.threadId ?? null) !== (threadId ?? null)) return false;
+          // Mirror the real predicate: exclude a signal turn only when it stayed
+          // a pure callback — no `signalPromoted` verdict and no tools.
+          const meta = (m as any).metadata;
+          const toolless = !m.tools || m.tools.length === 0;
+          return !(meta?.signal && !meta?.signalPromoted && toolless);
+        });
         return match?.id;
       },
     ),
@@ -1975,6 +1984,56 @@ describe('HeterogeneousPersistenceHandler', () => {
       expect(h.messages.get('asst-1')?.content).toBe('hello world');
     });
 
+    it('persists signalPromoted in-batch so a cold replica keeps the answer on the spine', async () => {
+      // Codex P1: a long signal answer persisted in one batch, then a cold
+      // replica lands the next `newStep`. If the answer row were persisted
+      // WITHOUT `signalPromoted`, `getLatestSpineMessageId` would exclude it and
+      // the continuation would fork off the pre-signal seed — hiding it. The
+      // verdict must land in the SAME batch as the answer (via flushBatchContent),
+      // not only at the next step boundary.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const answer = '方案'.padEnd(220, '。');
+
+      // Batch 1 (warm): a woken turn (externalSignal) delivers a long answer.
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_start', 1, {
+            externalSignal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'tool-stdout' },
+            messageId: 'cc-sig',
+            newStep: true,
+          }),
+          buildEvent('stream_chunk', 1, { chunkType: 'text', content: answer }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // The answer row carries the writer's verdict, durably, within this batch.
+      const answerMsg = [...h.messages.values()].find((m) => (m.metadata as any)?.signal);
+      expect(answerMsg).toBeDefined();
+      expect((answerMsg!.metadata as any)?.signalPromoted).toBe(true);
+
+      // Cold replica: drop the in-memory operation state.
+      __resetOperationStatesForTesting();
+
+      // Batch 2 (cold): a normal next step. It must chain off the promoted
+      // answer, not fork off the pre-signal seed `asst-1`.
+      await h.handler.ingest({
+        events: [buildEvent('stream_start', 2, { messageId: 'cc-next', newStep: true })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      const nextMsg = [...h.messages.values()].find(
+        (m) => (m.metadata as any)?.mainMessageId === 'cc-next',
+      );
+      expect(nextMsg?.parentId).toBe(answerMsg!.id);
+    });
+
     it('restores toolState.payloads and persistedIds so cold replica does not duplicate tools or overwrite tools[]', async () => {
       const h = createHarness({
         assistantMessageId: 'asst-1',
@@ -2112,6 +2171,66 @@ describe('HeterogeneousPersistenceHandler', () => {
 
       expect(h.messages.get('asst-1')?.content).toBe('step1');
       expect(h.messages.get('asst-2')?.content).toBe('step2');
+    });
+
+    it('reloads turnSignal from the advanced assistant so a different signal type is not mis-promoted', async () => {
+      // Codex P1: the advanced-step resync repoints the assistant but a stale
+      // in-memory `turnSignal` must not leak across it. Old turn = tool-stdout
+      // (promotable); new turn = task-completion (never an ordinary answer). The
+      // long summary must NOT be promoted — the verdict follows the NEW row.
+      const h = createHarness({
+        assistantMessageId: 'asst-1',
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+      const summary = '任务完成总结'.padEnd(220, '。');
+
+      // Batch 1 (warm): a tool-stdout woken turn with a short note → in-memory
+      // turnSignal = tool-stdout.
+      await h.handler.ingest({
+        events: [
+          buildEvent('stream_start', 1, {
+            externalSignal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'tool-stdout' },
+            messageId: 'cc-1',
+            newStep: true,
+          }),
+          buildEvent('stream_chunk', 1, { chunkType: 'text', content: 'ping' }),
+        ],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      // Another replica advanced to a NEW task-completion turn.
+      h.messages.set('asst-tc', {
+        agentId: null,
+        content: '',
+        id: 'asst-tc',
+        metadata: {
+          signal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'task-completion' },
+        },
+        parentId: 'asst-1',
+        role: 'assistant',
+        topicId: 'topic-1',
+      } as any);
+      h.topicModel.findById.mockResolvedValue({
+        agentId: null,
+        id: 'topic-1',
+        metadata: {
+          heteroCurrentMsgId: { msgId: 'asst-tc', operationId: 'op-1' },
+          runningOperation: { assistantMessageId: 'asst-1', operationId: 'op-1' },
+        } satisfies FakeTopicMetadata,
+      });
+
+      // Batch 2 (advanced step): a long summary lands on asst-tc.
+      await h.handler.ingest({
+        events: [buildEvent('stream_chunk', 2, { chunkType: 'text', content: summary })],
+        operationId: 'op-1',
+        topicId: 'topic-1',
+      });
+
+      expect(h.messages.get('asst-tc')?.content).toBe(summary);
+      // task-completion is never promoted — the stale tool-stdout did not leak.
+      expect((h.messages.get('asst-tc')!.metadata as any)?.signalPromoted).toBeUndefined();
     });
   });
 

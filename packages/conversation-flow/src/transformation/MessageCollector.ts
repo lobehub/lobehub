@@ -28,19 +28,39 @@ interface MessageSignal {
 }
 
 /**
- * Read the external-signal lineage from a message. Returns undefined
- * when the message has tools (LLM was on the main chain, not reacting
- * to a signal) — the writer attaches the tag at stream_start before it
- * knows whether the step will end up using tools, so the collector
- * must defang that mismatch here.
+ * Read the external-signal lineage from a message. `signal` is trigger
+ * provenance — the writer attaches it at stream_start, before it knows what the
+ * turn will output — so the collector defangs the two cases where a woken turn
+ * is really back on the MAIN CHAIN and must render as a normal step:
+ *
+ * - it emitted TOOLS (the LLM kept working), recognised structurally here; or
+ * - the writer flagged it `signalPromoted` — its persisted verdict that the turn
+ *   delivered an ANSWER, not a one-line reactive note (set at flush time, where
+ *   the writer holds the prose; see `turnPromotionMetadata`). The classification
+ *   is NOT re-derived from content here — the writer settles it once, and this
+ *   reads the marker, so the read side and the spine query cannot drift. A
+ *   promoted turn is also persisted LINEARLY (the writer advances the spine onto
+ *   it), so it never competes with the real continuation as a fork.
+ *
+ * A toolless, unpromoted signal turn stays a callback and renders in the
+ * SignalCallbacks accordion — which is what the accordion is for.
+ *
+ * The tag is read FIRST and short-circuits: this runs in the chain-walk's
+ * per-step candidate filter, so for a topic with no signals it must stay a
+ * property read — the checks below only matter for a tagged message.
  *
  * Phase 2 compat seam (): when the `messages.signal` column
  * lands, prefer it over `metadata.signal`.
  */
 const getMessageSignal = (msg: Message): MessageSignal | undefined => {
   if (msg.role !== 'assistant') return undefined;
+  const meta = msg.metadata as
+    { signal?: MessageSignal; signalPromoted?: boolean } | undefined | null;
+  const signal = meta?.signal;
+  if (!signal) return undefined;
+  if (meta.signalPromoted) return undefined;
   if (msg.tools && msg.tools.length > 0) return undefined;
-  return (msg.metadata as { signal?: MessageSignal } | undefined | null)?.signal;
+  return signal;
 };
 
 /** `tool-stdout` / `tool-callback` — reactive callback turns rendered inside the SignalCallbacks accordion. */

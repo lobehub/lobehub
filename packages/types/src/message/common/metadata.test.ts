@@ -43,6 +43,22 @@ describe('MessageMetadataSchema', () => {
     expect(parsed).toEqual({ operationId: 'op-1' });
   });
 
+  it('preserves the signal main-chain verdict so it is not stripped on writes', () => {
+    // The renderer executor flushes the verdict through UpdateMessageParamsSchema;
+    // an unlisted key is silently stripped on the desktop path, leaving the reader
+    // to guess the answer-vs-callback call from content forever.
+    const parsed = MessageMetadataSchema.parse({
+      signal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'tool-stdout' },
+      signalPromoted: true,
+      unknown: 'stripped',
+    });
+
+    expect(parsed).toEqual({
+      signal: { sourceToolCallId: 'tc', sourceToolName: 'Bash', type: 'tool-stdout' },
+      signalPromoted: true,
+    });
+  });
+
   it('preserves the durable heterogeneous tool-state watermark', () => {
     const parsed = MessageMetadataSchema.parse({
       heterogeneousToolStateOperationId: 'op-1',
