@@ -9,6 +9,23 @@ import { projectWorkingDirectoryService } from '@/services/projectWorkingDirecto
 export type ProjectDirectory = Awaited<
   ReturnType<typeof projectWorkingDirectoryService.list>
 >['data'][number];
+export type ProjectTopic = Awaited<
+  ReturnType<typeof projectWorkingDirectoryService.listProjectTopics>
+>['data'][number];
+
+/** Poll cadence for the project topic list while a conversation is in flight. */
+export const PROJECT_TOPICS_POLL_INTERVAL = 5000;
+
+/**
+ * The statuses the server can still move on its own. Every other status —
+ * including `active`/`unread` — stays put until the user acts, so a project
+ * whose conversations are all settled has nothing left to refresh.
+ */
+const IN_FLIGHT_TOPIC_STATUSES = new Set(['running', 'waitingForHuman']);
+
+/** Whether a project still has a conversation the server may still be updating. */
+export const hasInFlightProjectTopic = (topics?: ProjectTopic[]) =>
+  !!topics?.some((topic) => !!topic.status && IN_FLIGHT_TOPIC_STATUSES.has(topic.status));
 const directoryKey = (scope: string, projectId?: string) =>
   ['project/directories', scope, projectId ?? 'all'] as const;
 const topicsKey = (scope: string, id: string) => ['project/directoryTopics', scope, id] as const;
@@ -25,7 +42,14 @@ const createActions = () => ({
     return useClientDataSWR(
       projectId ? projectTopicsKey(scope, projectId) : null,
       () => projectWorkingDirectoryService.listProjectTopics(projectId!),
-      { refreshInterval: 5000 },
+      {
+        // Poll only while a conversation is still in flight (same shape as the
+        // group-task poll): an idle project has no server-side change to pick
+        // up, and polling it every 5s would re-read the whole project history
+        // forever for nothing.
+        refreshInterval: (data) =>
+          hasInFlightProjectTopic(data?.data) ? PROJECT_TOPICS_POLL_INTERVAL : 0,
+      },
     );
   },
   createProjectTopic: async (
