@@ -336,20 +336,24 @@ export class AgentService {
   async updateAgentConfig(
     agentId: string,
     value: PartialDeep<AgentItem>,
+    replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
     if (
       AGENT_SHARE_ALLOWED_PROVIDERS &&
       !this.workspaceId &&
       ('model' in value || 'provider' in value)
     ) {
-      return this.withShareModelLock(agentId, (service) => service.saveAgentConfig(agentId, value));
+      return this.withShareModelLock(agentId, (service) =>
+        service.saveAgentConfig(agentId, value, replaceWorkingDirDeviceIds),
+      );
     }
-    return this.saveAgentConfig(agentId, value);
+    return this.saveAgentConfig(agentId, value, replaceWorkingDirDeviceIds);
   }
 
   private async saveAgentConfig(
     agentId: string,
     value: PartialDeep<AgentItem>,
+    replaceWorkingDirDeviceIds?: string[],
   ): Promise<UpdateAgentResult> {
     if (AGENT_SHARE_ALLOWED_PROVIDERS && ('model' in value || 'provider' in value)) {
       const share = await new AgentShareModel(this.db, this.userId, this.workspaceId).getByAgentId(
@@ -367,7 +371,7 @@ export class AgentService {
     // AgentItem, whose `plugins` column type is intentionally left as
     // `string[]` (only the domain types are widened for the tri-state
     // rollout, not the JSONB column's compile-time annotation).
-    await this.agentModel.updateConfig(agentId, value as any);
+    await this.agentModel.updateConfig(agentId, value as any, replaceWorkingDirDeviceIds);
 
     // 2. Query and return updated data (with default config merged)
     const agent = await this.getAgentConfigById(agentId);

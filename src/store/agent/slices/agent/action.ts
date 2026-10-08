@@ -103,7 +103,11 @@ const mergeAgentConfig = (
       // Complete server snapshots also remove device entries omitted by the server.
       agencyConfig.workingDirByDevice = config.agencyConfig?.workingDirByDevice;
     } else {
-      applyWorkingDirByDevicePatch(agencyConfig, config.agencyConfig);
+      applyWorkingDirByDevicePatch(
+        agencyConfig,
+        config.agencyConfig,
+        Object.keys(config.agencyConfig?.workingDirByDevice ?? {}),
+      );
     }
   });
   return current && isEqual(current, value) ? current : value;

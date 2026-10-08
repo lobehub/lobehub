@@ -124,9 +124,13 @@ describe('applyWorkingDirByDevicePatch', () => {
       },
     };
 
-    applyWorkingDirByDevicePatch(merged, {
-      workingDirByDevice: { 'device-a': { path: '/repos/lobehub' } },
-    });
+    applyWorkingDirByDevicePatch(
+      merged,
+      {
+        workingDirByDevice: { 'device-a': { path: '/repos/lobehub' } },
+      },
+      ['device-a'],
+    );
 
     expect(merged.workingDirByDevice).toEqual({
       'device-a': { path: '/repos/lobehub' },
@@ -144,9 +148,13 @@ describe('applyWorkingDirByDevicePatch', () => {
       },
     };
 
-    applyWorkingDirByDevicePatch(merged, {
-      workingDirByDevice: { 'device-a': { git: { branch: 'main' }, path: '/repos/source' } },
-    });
+    applyWorkingDirByDevicePatch(
+      merged,
+      {
+        workingDirByDevice: { 'device-a': { git: { branch: 'main' }, path: '/repos/source' } },
+      },
+      ['device-a'],
+    );
 
     expect(merged.workingDirByDevice['device-a']).toEqual({
       git: { branch: 'main' },

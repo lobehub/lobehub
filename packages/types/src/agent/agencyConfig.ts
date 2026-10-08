@@ -1299,10 +1299,10 @@ export const resolveAgentAgencyConfig = (
 /**
  * Apply per-device replacement semantics to a `workingDirByDevice` patch.
  *
- * Run after a config deep-merge on both the client and server. A device value
- * is a complete directory selection, so omitted Git fields must not survive
- * from the previous repository. Explicit `undefined` values remove entries;
- * devices absent from the patch are left untouched.
+ * Run after a config deep-merge. Only explicitly marked devices are complete
+ * selections: omitted Git fields must not survive from the previous repository.
+ * Unmarked entries retain legacy deep-merge semantics because older clients
+ * send cached complete maps. Explicit `undefined` values still remove entries.
  *
  * Mutates `merged` in place (safe on an immer draft) and is a no-op when the
  * patch touches no device entries.
@@ -1310,6 +1310,7 @@ export const resolveAgentAgencyConfig = (
 export const applyWorkingDirByDevicePatch = (
   merged: { workingDirByDevice?: Record<string, unknown> } | null | undefined,
   patch: { workingDirByDevice?: Record<string, unknown> } | null | undefined,
+  replaceDeviceIds: readonly string[] = [],
 ): void => {
   const incoming = patch?.workingDirByDevice;
   const target = merged?.workingDirByDevice;
@@ -1317,6 +1318,6 @@ export const applyWorkingDirByDevicePatch = (
 
   for (const key of Object.keys(incoming)) {
     if (incoming[key] === undefined) delete target[key];
-    else target[key] = incoming[key];
+    else if (replaceDeviceIds.includes(key)) target[key] = incoming[key];
   }
 };
