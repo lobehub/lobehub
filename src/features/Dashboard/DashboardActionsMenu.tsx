@@ -13,6 +13,7 @@ import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { usePermission } from '@/hooks/usePermission';
 import { useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -26,13 +27,18 @@ interface DashboardActionsMenuProps {
   onTrashed?: () => void;
 }
 
-/** Rename / trash a board. Only its creator may change it, so others get no menu. */
+/**
+ * Rename / trash a board. Only its creator with the create_content
+ * permission may change it — a demoted owner keeps ownership but the server
+ * refuses their writes, so they get no menu either.
+ */
 const DashboardActionsMenu = memo<DashboardActionsMenuProps>(({ dashboard, level, onTrashed }) => {
   const { t } = useTranslation(['dashboard', 'common']);
   const trashDashboard = useDashboardStore((s) => s.trashDashboard);
   const currentUserId = useUserStore(userProfileSelectors.userId);
+  const { allowed } = usePermission('create_content');
 
-  if (currentUserId !== dashboard.userId) return null;
+  if (!allowed || currentUserId !== dashboard.userId) return null;
 
   const items: DropdownItem[] = [
     {

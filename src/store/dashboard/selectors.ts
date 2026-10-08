@@ -35,11 +35,15 @@ const widgetById = (dashboardId: string, widgetId?: string) => (s: DashboardStor
     : undefined;
 
 /**
- * Only a board's creator can change it (`DashboardModel` write rule), so the
- * layout editor is offered to them alone.
+ * Only a board's creator can change it (`DashboardModel` write rule), and
+ * only with the create_content permission — a demoted owner keeps ownership
+ * but the server refuses their writes, so the layout editor is offered to
+ * them alone no more than the rename/trash menu is.
  */
-const canManageDashboard = (dashboardId: string, userId?: string) => (s: DashboardStore) =>
-  !!userId && s.dashboardDetailMap[dashboardId]?.userId === userId;
+const canManageDashboard =
+  (dashboardId: string, userId?: string, canWrite = true) =>
+  (s: DashboardStore) =>
+    !!userId && canWrite && s.dashboardDetailMap[dashboardId]?.userId === userId;
 
 const isWidgetRunning = (widgetId: string) => (s: DashboardStore) =>
   s.widgetRunningIds.includes(widgetId);

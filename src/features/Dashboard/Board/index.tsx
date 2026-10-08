@@ -7,6 +7,7 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import { usePermission } from '@/hooks/usePermission';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -37,8 +38,9 @@ const DashboardBoard = memo<DashboardBoardProps>(({ dashboardId, empty }) => {
   const { data, error, isLoading, mutate } = useFetchDashboardDetail(dashboardId);
   const detail = useDashboardStore(dashboardSelectors.dashboardDetail(dashboardId));
   const userId = useUserStore(userProfileSelectors.userId);
+  const { allowed: canWrite } = usePermission('create_content');
   const canEditLayout = useDashboardStore(
-    dashboardSelectors.canManageDashboard(dashboardId, userId),
+    dashboardSelectors.canManageDashboard(dashboardId, userId, canWrite),
   );
 
   const [editing, setEditing] = useState(false);

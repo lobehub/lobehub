@@ -14,6 +14,14 @@ describe('dashboardSelectors.canManageDashboard', () => {
     );
   });
 
+  it('offers nothing after a workspace demotion, whatever the ownership', () => {
+    // The demoted creator is still dashboard.userId; without create_content
+    // the server refuses their writes, so no editor either.
+    expect(
+      dashboardSelectors.canManageDashboard('d1', 'u-owner', false)(storeWith('u-owner')),
+    ).toBe(false);
+  });
+
   it('offers nothing before the board or the user is known', () => {
     expect(dashboardSelectors.canManageDashboard('d1', undefined)(storeWith('u-owner'))).toBe(
       false,
