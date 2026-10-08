@@ -67,7 +67,8 @@ const MessageContent = memo<MessageContentProps>(
       return <ContentLoading id={id} startTime={createdAt} />;
     }
 
-    const contentParts = isMultimodal ? deserializeParts(tempDisplayContent || content) : null;
+    const contentParts =
+      isMultimodal && content ? deserializeParts(tempDisplayContent || content) : null;
     if (contentParts) return <RichContentRenderer parts={contentParts} />;
 
     const isSingleLine = (message || '').split('\n').length <= 2;
