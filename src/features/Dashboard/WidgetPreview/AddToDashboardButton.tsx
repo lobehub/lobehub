@@ -7,6 +7,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspaceSlug';
+import { usePermission } from '@/hooks/usePermission';
 import { dashboardSelectors, useDashboardStore } from '@/store/dashboard';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
@@ -44,15 +45,20 @@ const AddToDashboardButton = memo<AddToDashboardButtonProps>(
     );
     const currentUserId = useUserStore(userProfileSelectors.userId);
     const workspaceActive = !!useActiveWorkspaceSlug();
+    // Placing and creating are writes: workspace viewers lack create_content
+    // and the server refuses their writes, so they get neither.
+    const { allowed: canWrite } = usePermission('create_content');
     // Only the caller's own boards can take the placement (addItem writes as
     // the board's creator); teammates' readable boards are not offered.
-    const placeable = placeableDashboards(
-      placementBoards(homeBoards, projectBoards, projectId, workspaceActive),
-      currentUserId,
-    );
+    const placeable = canWrite
+      ? placeableDashboards(
+          placementBoards(homeBoards, projectBoards, projectId, workspaceActive),
+          currentUserId,
+        )
+      : [];
     // In a workspace, a widget outside a project cannot create a board it
     // could open — home-level boards have no UI there.
-    const canCreate = canCreateDashboardFromPreview(projectId, workspaceActive);
+    const canCreate = canWrite && canCreateDashboardFromPreview(projectId, workspaceActive);
 
     const add = async (dashboard: { id: string; title: string }) => {
       try {
