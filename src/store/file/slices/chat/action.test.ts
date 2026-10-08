@@ -205,6 +205,20 @@ describe('useFileStore:chat', () => {
     expect(result.current.chatUploadFileList).toEqual([]);
   });
 
+  it('clears only submitted uploads while retaining newer files and their status', () => {
+    const { result } = renderHook(() => useStore());
+    const newerFile = { id: 'new', status: 'uploading' };
+    act(() => {
+      useStore.setState({ chatUploadFileList: [{ id: 'submitted' }, newerFile] as any });
+      result.current.clearChatUploadFileList(['submitted']);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+    act(() => {
+      result.current.clearChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile]);
+  });
+
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
     // chat mode: agent mode disabled and not a heterogeneous agent
     mockAgentMode({ enableAgentMode: false, heterogeneous: false });

@@ -256,7 +256,7 @@ export const useSend = (mode: HomeMode = 'chat') => {
         // Preserve the complete draft when creation or execution fails. The
         // editor, files and context are one unit from the user's perspective.
         if (submitted) {
-          clearChatUploadFileList();
+          clearChatUploadFileList(mode === 'task' ? fileList.map((file) => file.id) : undefined);
           clearChatContextSelections(contextSelectionKey);
           mainInputEditor?.clearContent();
         }

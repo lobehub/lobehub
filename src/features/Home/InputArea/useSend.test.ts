@@ -182,6 +182,13 @@ describe('Home InputArea useSend', () => {
     sendMessageMock.mockReset();
     clearContentMock.mockReset();
     clearChatUploadFileListMock.mockReset();
+    clearChatUploadFileListMock.mockImplementation((submittedIds?: string[]) => {
+      fileState.chatUploadFileList = submittedIds
+        ? fileState.chatUploadFileList.filter(
+            (file: { id: string }) => !submittedIds.includes(file.id),
+          )
+        : [];
+    });
     clearChatContextSelectionsMock.mockReset();
     restoreChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
@@ -345,6 +352,46 @@ describe('Home InputArea useSend', () => {
     );
     expect(clearChatUploadFileListMock).toHaveBeenCalledTimes(1);
     expect(messageErrorMock).not.toHaveBeenCalled();
+  });
+
+  it('preserves uploads added while task creation is pending', async () => {
+    const submittedFile = {
+      id: 'submitted',
+      file: new File(['first'], 'first.txt'),
+      fileUrl: 'https://example.com/first',
+      status: 'success',
+    };
+    const newFile = {
+      id: 'new-upload',
+      file: new File(['second'], 'second.txt'),
+      status: 'uploading',
+    };
+    fileState.chatUploadFileList = [submittedFile] as any;
+    let completeCreation!: (value: { identifier: string }) => void;
+    createTaskMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          completeCreation = resolve;
+        }),
+    );
+    const { result } = renderHook(() => useSend('task'));
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'First task',
+    };
+    let submission!: Promise<void>;
+    act(() => {
+      submission = Promise.resolve(result.current.send(params));
+    });
+    fileState.chatUploadFileList = [submittedFile, newFile] as any;
+    await act(async () => {
+      completeCreation({ identifier: 'T-28' });
+      await submission;
+    });
+    expect(fileState.chatUploadFileList).toEqual([newFile]);
+    expect(JSON.stringify(createTaskMock.mock.calls[0][0].editorData)).not.toContain('second.txt');
   });
 
   it('creates a task from an attachment-only submission', async () => {
