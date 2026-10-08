@@ -1,15 +1,25 @@
 import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { produce } from 'immer';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
-import { toolKeys } from '@/libs/swr/keys';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { lambdaClient, toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
 import { type ComposioStoreState } from './initialState';
+import {
+  COMPOSIO_SERVERS_KEY,
+  composioAppToolsResource,
+  composioServersEntity,
+  composioServersResource,
+} from './projection';
 import {
   type CallComposioToolParams,
   type CallComposioToolResult,
@@ -23,18 +33,67 @@ const n = setNamespace('composioStore');
 
 const VALID_COMPOSIO_IDENTIFIERS = new Set(COMPOSIO_APP_TYPES.map((t) => t.identifier));
 
+/** The connections list is one entry, so every sync shares these params. */
+const CONNECTIONS_PARAMS = {} as Record<string, never>;
+
+/**
+ * The connections list keeps its long-standing flat `composioServers` field as
+ * the replica view, so every selector reads what it did. `isComposioServersInit`
+ * gates `get`: before the first hydrate/replace the view must read `undefined`,
+ * otherwise the empty default would block hydration from storage.
+ */
+const composioServersLens: ReplicaLens<ToolStore, ComposioServer[]> = {
+  clear: () => ({ composioServers: [], isComposioServersInit: false }),
+  get: (state) => (state.isComposioServersInit ? state.composioServers : undefined),
+  keys: (state) => (state.isComposioServersInit ? [COMPOSIO_SERVERS_KEY] : []),
+  set: (_state, _key, data) =>
+    data
+      ? { composioServers: data, isComposioServersInit: true }
+      : { composioServers: [], isComposioServersInit: false },
+};
+
+/** The connections sync, plus the `mutate` alias the skills reload control calls. */
+export interface ComposioConnectionsSyncResult extends ReplicaSyncResult {
+  /** Alias of `revalidate`, kept for the existing "reload skills" control. */
+  mutate: () => Promise<unknown>;
+}
+
 type Setter = StoreSetter<ToolStore>;
 export const createComposioStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new ComposioStoreActionImpl(set, get, _api);
 
 export class ComposioStoreActionImpl {
+  readonly #appTools;
+  readonly #connections;
   readonly #get: () => ToolStore;
+  readonly #servers;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#connections = createReplicaSlice(composioServersResource, {
+      actionPrefix: 'composioServers',
+      entity: composioServersEntity,
+      fetcher: () => this.#fetchServers(),
+      get,
+      set,
+      stateKey: 'composioServersReplica',
+      view: composioServersLens,
+    });
+    this.#servers = linkReplicaEntity<ComposioServer>([this.#connections]);
+    this.#appTools = createReplicaSlice(composioAppToolsResource, {
+      actionPrefix: 'composioAppTools',
+      fetcher: async (appSlug) => {
+        const response = await toolsClient.composio.getActions.query({ appSlug });
+        return (response.tools || []) as ComposioTool[];
+      },
+      get,
+      set,
+      stateKey: 'composioAppToolsReplica',
+      view: recordLens<ToolStore, ComposioTool[]>('composioAppToolsMap'),
+    });
   }
 
   callComposioTool = async (params: CallComposioToolParams): Promise<CallComposioToolResult> => {
@@ -121,14 +180,17 @@ export class ComposioStoreActionImpl {
         status: ComposioServerStatus.PENDING_AUTH,
       };
 
+      // Replace the record in place (by identifier) or append the new one, so a
+      // re-authorization keeps showing the same row with a fresh `redirectUrl`.
+      this.#connections.update(COMPOSIO_SERVERS_KEY, (servers) => {
+        const list = servers ?? [];
+        const index = list.findIndex((s) => s.identifier === identifier);
+        if (index < 0) return [...list, server];
+        return list.map((s, i) => (i === index ? server : s));
+      });
+
       this.#set(
         produce((draft: ComposioStoreState) => {
-          const existingIndex = draft.composioServers.findIndex((s) => s.identifier === identifier);
-          if (existingIndex >= 0) {
-            draft.composioServers[existingIndex] = server;
-          } else {
-            draft.composioServers.push(server);
-          }
           draft.loadingComposioServerIds.delete(identifier);
         }),
         false,
@@ -202,17 +264,17 @@ export class ComposioStoreActionImpl {
 
       const tools = toolsResponse.tools as ComposioTool[];
 
+      this.#servers.update(identifier, (s) => ({
+        ...s,
+        errorMessage: undefined,
+        gmailReadPermission: connectionStatus.gmailReadPermission,
+        redirectUrl: undefined,
+        status: ComposioServerStatus.ACTIVE,
+        tools,
+      }));
+
       this.#set(
         produce((draft: ComposioStoreState) => {
-          const serverIndex = draft.composioServers.findIndex((s) => s.identifier === identifier);
-          if (serverIndex >= 0) {
-            draft.composioServers[serverIndex].tools = tools;
-            draft.composioServers[serverIndex].status = ComposioServerStatus.ACTIVE;
-            draft.composioServers[serverIndex].gmailReadPermission =
-              connectionStatus.gmailReadPermission;
-            draft.composioServers[serverIndex].redirectUrl = undefined;
-            draft.composioServers[serverIndex].errorMessage = undefined;
-          }
           draft.loadingComposioServerIds.delete(identifier);
         }),
         false,
@@ -236,14 +298,14 @@ export class ComposioStoreActionImpl {
     } catch (error) {
       console.error('[Composio] Failed to refresh connection status:', error);
 
+      this.#servers.update(identifier, (s) => ({
+        ...s,
+        errorMessage: error instanceof Error ? error.message : String(error),
+        status: ComposioServerStatus.ERROR,
+      }));
+
       this.#set(
         produce((draft: ComposioStoreState) => {
-          const serverIndex = draft.composioServers.findIndex((s) => s.identifier === identifier);
-          if (serverIndex >= 0) {
-            draft.composioServers[serverIndex].status = ComposioServerStatus.ERROR;
-            draft.composioServers[serverIndex].errorMessage =
-              error instanceof Error ? error.message : String(error);
-          }
           draft.loadingComposioServerIds.delete(identifier);
         }),
         false,
@@ -283,13 +345,9 @@ export class ComposioStoreActionImpl {
     const { composioServers } = this.#get();
     const server = composioServers.find((s) => s.identifier === identifier);
 
-    this.#set(
-      produce((draft: ComposioStoreState) => {
-        draft.composioServers = draft.composioServers.filter((s) => s.identifier !== identifier);
-      }),
-      false,
-      n('removeComposioConnection'),
-    );
+    // Drop the row locally first — the server delete stays best-effort, so a
+    // failure never resurrects the row the user just deleted.
+    this.#servers.remove(identifier);
 
     if (server) {
       try {
@@ -303,80 +361,64 @@ export class ComposioStoreActionImpl {
     }
   };
 
-  useFetchAppTools = (appSlug: string | undefined): SWRResponse<ComposioTool[]> => {
-    return useSWR<ComposioTool[]>(
-      appSlug ? toolKeys.composioAppTools(appSlug) : null,
-      async () => {
-        const response = await toolsClient.composio.getActions.query({ appSlug: appSlug! });
-        return (response.tools || []) as ComposioTool[];
-      },
-      { fallbackData: [], revalidateOnFocus: false },
-    );
+  /**
+   * Fetch orchestration only; read the tools through `composioAppToolsMap[appSlug]`.
+   * Deliberately does not subscribe to the store here — the composio slice is
+   * imported by `tool/selectors/tool.ts`, so a runtime `useToolStore` import
+   * would close a store↔slice cycle and break store initialization.
+   */
+  useFetchAppTools = (appSlug: string | undefined): ReplicaSyncResult =>
+    this.#appTools.useSync(appSlug ?? null);
+
+  /** Fetch orchestration only; read the servers through `composioStoreSelectors`'. */
+  useFetchUserComposioConnections = (enabled: boolean): ComposioConnectionsSyncResult => {
+    const sync = this.#connections.useSync(CONNECTIONS_PARAMS, { enabled });
+
+    return { ...sync, mutate: sync.revalidate };
   };
 
-  useFetchUserComposioConnections = (enabled: boolean): SWRResponse<ComposioServer[]> => {
-    return useSWR<ComposioServer[]>(
-      enabled ? toolKeys.composioConnections() : null,
-      async () => {
-        const composioPlugins = await lambdaClient.composio.getComposioPlugins.query();
+  /**
+   * The user's Composio connections (`getComposioPlugins`), mapped to the
+   * renderable catalog. Identifiers outside the static catalog are hidden
+   * locally — never deleted: an outdated bundle (missing a newly-added app)
+   * would otherwise silently destroy a legitimate remote connection. Deprecating
+   * an app is a server-side concern, not a side effect of a client fetch.
+   */
+  #fetchServers = async (): Promise<ComposioServer[]> => {
+    const composioPlugins = await lambdaClient.composio.getComposioPlugins.query();
 
-        if (composioPlugins.length === 0) return [];
+    if (composioPlugins.length === 0) return [];
 
-        const validPlugins = composioPlugins.filter((plugin) => plugin.customParams?.composio);
+    return composioPlugins
+      .filter((plugin) => plugin.customParams?.composio)
+      .filter((plugin) => VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier))
+      .map((plugin) => {
+        const params = plugin.customParams!.composio!;
+        const appType = COMPOSIO_APP_TYPES.find((t) => t.identifier === plugin.identifier);
+        const tools: ComposioTool[] = (plugin.manifest?.api || []).map((api) => ({
+          description: api.description,
+          inputSchema: api.parameters as ComposioTool['inputSchema'],
+          name: api.name,
+        }));
 
-        // Only surface connections this client knows how to render. Identifiers
-        // outside the static catalog are hidden locally — never deleted: an
-        // outdated bundle (missing a newly-added app) would otherwise silently
-        // destroy a legitimate remote connection. Deprecating an app is a
-        // server-side concern, not a side effect of a client fetch.
-        return validPlugins
-          .filter((plugin) => VALID_COMPOSIO_IDENTIFIERS.has(plugin.identifier))
-          .map((plugin) => {
-            const params = plugin.customParams!.composio!;
-            const appType = COMPOSIO_APP_TYPES.find((t) => t.identifier === plugin.identifier);
-            const tools: ComposioTool[] = (plugin.manifest?.api || []).map((api) => ({
-              description: api.description,
-              inputSchema: api.parameters as ComposioTool['inputSchema'],
-              name: api.name,
-            }));
+        const statusMap: Record<string, ComposioServerStatus> = {
+          ACTIVE: ComposioServerStatus.ACTIVE,
+          FAILED: ComposioServerStatus.ERROR,
+          PENDING: ComposioServerStatus.PENDING_AUTH,
+        };
 
-            const statusMap: Record<string, ComposioServerStatus> = {
-              ACTIVE: ComposioServerStatus.ACTIVE,
-              FAILED: ComposioServerStatus.ERROR,
-              PENDING: ComposioServerStatus.PENDING_AUTH,
-            };
-
-            return {
-              appSlug: params.appSlug || '',
-              authConfigId: params.authConfigId || '',
-              connectedAccountId: params.connectedAccountId,
-              createdAt: 0,
-              identifier: plugin.identifier,
-              label: appType?.label || plugin.identifier,
-              redirectUrl: params.redirectUrl,
-              status: statusMap[params.status] || ComposioServerStatus.PENDING_AUTH,
-              tools,
-            };
-          });
-      },
-      {
-        onSuccess: (data) => {
-          this.#set(
-            produce((draft: ComposioStoreState) => {
-              if (data.length > 0) {
-                const existingIdentifiers = new Set(draft.composioServers.map((s) => s.identifier));
-                const newServers = data.filter((s) => !existingIdentifiers.has(s.identifier));
-                draft.composioServers = [...draft.composioServers, ...newServers];
-              }
-              draft.isComposioServersInit = true;
-            }),
-            false,
-            n('useFetchUserComposioConnections'),
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
+        return {
+          appSlug: params.appSlug || '',
+          authConfigId: params.authConfigId || '',
+          connectedAccountId: params.connectedAccountId,
+          createdAt: 0,
+          identifier: plugin.identifier,
+          label: appType?.label || plugin.identifier,
+          redirectUrl: params.redirectUrl,
+          status: statusMap[params.status] || ComposioServerStatus.PENDING_AUTH,
+          tools,
+        };
+      });
   };
 }
 
