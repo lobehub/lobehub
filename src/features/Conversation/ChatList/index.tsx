@@ -18,6 +18,7 @@ import {
 } from '@/store/chat/utils/interventionSync';
 import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useUserStore } from '@/store/user';
+import { useUserMemoryStore } from '@/store/userMemory';
 import { authSelectors, settingsSelectors } from '@/store/user/selectors';
 
 import WideScreenContainer from '../../WideScreenContainer';
@@ -234,6 +235,13 @@ const ChatList = memo<ChatListProps>(
     // own mount; the slash menu fetches the slim `non-web` variant.
     useFetchNotebookDocuments(isSharePage ? undefined : context.topicId!);
     useFetchTopicMemories(enableUserMemories && !isSharePage ? context.topicId : undefined);
+    // The user persona is an input to the send-message context (`resolveUserPersona`),
+    // not to the message list, so it is pre-warmed here under the same memory flag as
+    // the topic memories instead of in the global boot init — that keeps
+    // `userMemory.getPersona` out of the app-boot batch, whose every member shares the
+    // critical path (see the note in `DeferredStoreInitialization`).
+    const useFetchPersona = useUserMemoryStore((s) => s.useFetchPersona);
+    useFetchPersona(Boolean(isLogin) && enableUserMemories && !isSharePage);
 
     // Use selectors for data
 
