@@ -16,12 +16,25 @@ let loader: FileLoaderInterface;
 
 const testFile = fixturePath('test.pptx'); // Use .pptx
 const nonExistentFile = fixturePath('nonexistent.pptx'); // Use .pptx
+// Same two slides as test.pptx, written next to each other in the archive,
+// which is how PowerPoint itself orders the slide parts.
+const adjacentSlideEntriesFile = fixturePath('adjacent-slide-entries.pptx');
 
 beforeEach(() => {
   loader = new PptxLoader(); // Instantiate PptxLoader
 });
 
 describe('PptxLoader', () => {
+  it('should load every slide when the slide entries are adjacent in the archive', async () => {
+    // ZIP entry order is not constrained by OOXML, so a loader must not depend
+    // on what sits between two slides.
+    const pages = await loader.loadPages(adjacentSlideEntriesFile);
+
+    expect(pages).toHaveLength(2);
+    expect(pages.map((page) => page.metadata.slideNumber)).toEqual([1, 2]);
+    expect(pages[1].pageContent).toContain('Page2');
+  });
+
   // Describe PptxLoader
   it('should load pages correctly from a PPTX file (one page per slide)', async () => {
     const pages = await loader.loadPages(testFile);
