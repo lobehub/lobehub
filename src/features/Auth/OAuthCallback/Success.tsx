@@ -50,7 +50,7 @@ const SuccessPage = memo(() => {
       icon={<FluentEmoji emoji={'✅'} size={96} type={'anim'} />}
       status="success"
       subTitle={
-        <Text fontSize={16} type="secondary">
+        <Text align="left" as="span" fontSize={16} style={{ display: 'block' }} type="secondary">
           {provider
             ? t('success.subTitleWithCountdown', {
                 countdown,
