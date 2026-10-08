@@ -1,24 +1,25 @@
 import type { BuiltinServerRuntimeOutput } from '@lobechat/types';
 
-import type {
-  AddWidgetToDashboardParams,
-  AddWidgetToDashboardState,
-  CreateWidgetDraftParams,
-  DashboardSummary,
-  DashboardWidgetRecord,
-  DashboardWidgetSummary,
-  DryRunWidgetParams,
-  DryRunWidgetState,
-  GetWidgetRunsParams,
-  GetWidgetRunsState,
-  ListDashboardsState,
-  RequestPublishParams,
-  RequestPublishState,
-  UpdateWidgetDraftParams,
-  WidgetDraftState,
-  WidgetRunRecord,
-  WidgetVersionContent,
-  WidgetVersionRecord,
+import {
+  type AddWidgetToDashboardParams,
+  type AddWidgetToDashboardState,
+  type CreateWidgetDraftParams,
+  DASHBOARD_TITLE_MAX_LENGTH,
+  type DashboardSummary,
+  type DashboardWidgetRecord,
+  type DashboardWidgetSummary,
+  type DryRunWidgetParams,
+  type DryRunWidgetState,
+  type GetWidgetRunsParams,
+  type GetWidgetRunsState,
+  type ListDashboardsState,
+  type RequestPublishParams,
+  type RequestPublishState,
+  type UpdateWidgetDraftParams,
+  type WidgetDraftState,
+  type WidgetRunRecord,
+  type WidgetVersionContent,
+  type WidgetVersionRecord,
 } from '../types';
 
 /**
@@ -397,6 +398,16 @@ export class DashboardExecutionRuntime {
     if (!params.dashboardId && !newTitle) {
       return fail(
         new Error('Pass dashboardId (from listDashboards) or newDashboardTitle'),
+        'add widget to dashboard',
+      );
+    }
+    // The API refuses titles beyond 200 characters — refuse here too, before
+    // a board is created, so a retry cannot pile malformed boards up.
+    if (newTitle && newTitle.length > DASHBOARD_TITLE_MAX_LENGTH) {
+      return fail(
+        new Error(
+          `newDashboardTitle must be at most ${DASHBOARD_TITLE_MAX_LENGTH} characters (got ${newTitle.length})`,
+        ),
         'add widget to dashboard',
       );
     }

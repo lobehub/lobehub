@@ -1,4 +1,4 @@
-import { DashboardApiName } from '@lobechat/builtin-tool-dashboard';
+import { DASHBOARD_TITLE_MAX_LENGTH, DashboardApiName } from '@lobechat/builtin-tool-dashboard';
 import { DashboardExecutionRuntime } from '@lobechat/builtin-tool-dashboard/executionRuntime';
 import { DASHBOARD_VISIBILITIES } from '@lobechat/types';
 import { z } from 'zod';
@@ -97,7 +97,7 @@ export const dashboardRouter = router({
         metadata,
         projectId: z.string().nullish(),
         sortOrder: z.number().int().optional(),
-        title: z.string().min(1).max(200),
+        title: z.string().min(1).max(DASHBOARD_TITLE_MAX_LENGTH),
         visibility: visibility.optional(),
         /**
          * Place this widget on the new board in the same transaction: a widget
@@ -259,7 +259,7 @@ export const dashboardRouter = router({
           icon: z.string().max(100).nullish(),
           metadata,
           sortOrder: z.number().int().optional(),
-          title: z.string().min(1).max(200).optional(),
+          title: z.string().min(1).max(DASHBOARD_TITLE_MAX_LENGTH).optional(),
           visibility: visibility.optional(),
         }),
       }),

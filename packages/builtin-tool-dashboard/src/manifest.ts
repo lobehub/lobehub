@@ -228,7 +228,8 @@ export const DashboardManifest: BuiltinToolManifest = {
         properties: {
           dashboardId: { description: 'Existing dashboard id (uuid).', type: 'string' },
           newDashboardTitle: {
-            description: 'Create a new dashboard with this name and place the widget on it.',
+            description:
+              'Create a new dashboard with this name and place the widget on it. Titles over 200 characters are rejected.',
             type: 'string',
           },
           widgetId: widgetIdSchema,

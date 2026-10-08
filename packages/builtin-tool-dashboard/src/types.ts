@@ -160,6 +160,13 @@ export interface RequestPublishState {
 
 // ==================== addWidgetToDashboard ====================
 
+/**
+ * The dashboard title length the API enforces (`dashboard.create` /
+ * `dashboard.update`). Exported so the tool runtime, the server router and
+ * the manifest text share one limit.
+ */
+export const DASHBOARD_TITLE_MAX_LENGTH = 200;
+
 export interface AddWidgetToDashboardParams {
   /** An existing dashboard from listDashboards. */
   dashboardId?: string;

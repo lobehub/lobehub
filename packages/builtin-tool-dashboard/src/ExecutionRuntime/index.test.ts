@@ -340,6 +340,17 @@ describe('addWidgetToDashboard', () => {
     expect(result.content).toContain('Widget not found');
   });
 
+  it('rejects a new-board title beyond the API limit before creating anything', async () => {
+    const result = await runtime.addWidgetToDashboard({
+      newDashboardTitle: 'x'.repeat(201),
+      widgetId: 'w1',
+    });
+    expect(result).toMatchObject({ success: false });
+    expect(result.content).toContain('at most 200 characters');
+    expect(service.createDashboardWithWidget).not.toHaveBeenCalled();
+    expect(service.addToDashboard).not.toHaveBeenCalled();
+  });
+
   it('carries the board project so the card links to the project dashboard', async () => {
     service.addToDashboard.mockResolvedValue({ projectId: 'prj_1', title: 'Project ops' });
     const result = await runtime.addWidgetToDashboard({ dashboardId: 'd2', widgetId: 'w1' });
