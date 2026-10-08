@@ -13,6 +13,10 @@ import { agents } from '@/database/schemas';
 import { buildWorkspaceWhere } from '@/database/utils/workspace';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import {
+  createAgentConfigResolver,
+  resolvePrecreatedTopicSnapshot,
+} from '@/server/services/aiAgent/pipeline/precreatedTopic';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
 import {
@@ -30,6 +34,18 @@ const procedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
       environmentModel: new EnvironmentModel(serverDB, userId, workspaceId ?? undefined),
       projectModel: new ProjectModel(serverDB, userId, workspaceId ?? undefined),
       topicModel: new TopicModel(serverDB, userId, workspaceId ?? undefined),
+      // Topics written here exist before any run does, so they have to pin their
+      // own model snapshot — see `resolvePrecreatedTopicSnapshot`.
+      precreatedTopicDeps: {
+        db: serverDB,
+        resolveAgentConfigOrThrow: createAgentConfigResolver(
+          serverDB,
+          userId,
+          workspaceId ?? undefined,
+        ),
+        userId,
+        workspaceId: workspaceId ?? undefined,
+      },
     },
   });
 });
@@ -75,8 +91,13 @@ export const projectWorkingDirectoryRouter = router({
       );
       if (!(await ctx.projectModel.findManageableById(input.projectId)))
         throw new Error('Project not found or access denied');
+      const { snapshot } = await resolvePrecreatedTopicSnapshot(
+        ctx.precreatedTopicDeps,
+        input.agentId,
+      );
       return {
         data: await ctx.topicModel.create({
+          ...snapshot,
           agentId: input.agentId,
           projectId: input.projectId,
           title: input.title,
@@ -197,10 +218,18 @@ export const projectWorkingDirectoryRouter = router({
           code: 'PRECONDITION_FAILED',
           message: 'Device is offline or working directory is unavailable',
         });
+      const { snapshot } = await resolvePrecreatedTopicSnapshot(
+        ctx.precreatedTopicDeps,
+        input.agentId,
+      );
       return {
         data: await ctx.topicModel.create({
+          ...snapshot,
           agentId: input.agentId,
+          // The reasoning snapshot lives in `metadata` too, so merge rather than
+          // replace it with the directory pin.
           metadata: {
+            ...snapshot.metadata,
             boundDeviceId: directory.deviceId,
             workingDirectory: directory.path,
             workingDirectoryConfig: { path: directory.path },
