@@ -124,15 +124,17 @@ function resolveCore({ userData, builtinDir, abi, publicKey, platform = process.
   const rejectReason = (manifest) => {
     if (channel && manifest.channel && manifest.channel !== channel)
       return `channel ${manifest.channel} != ${channel}`;
-    // v4 seq counters restart for each shell version. A full update must not keep
-    // an older shell's core just because that namespace had a higher seq.
+    // v4 seq counters restart for each shell version. An OTA core is
+    // `<shellVersion>-<seq>`; a full update must not keep an older shell's core.
+    const shellVersion = builtinManifest?.version;
+    const otaSuffix = shellVersion ? manifest.version.slice(shellVersion.length + 1) : '';
     if (
       manifest.schemaVersion === 4 &&
-      builtinManifest?.version &&
-      manifest.version !== builtinManifest.version &&
-      !manifest.version.startsWith(`${builtinManifest.version}-core.`)
+      shellVersion &&
+      manifest.version !== shellVersion &&
+      !(manifest.version.startsWith(`${shellVersion}-`) && /^\d+$/.test(otaSuffix))
     )
-      return `app version ${manifest.version} does not belong to ${builtinManifest.version}`;
+      return `app version ${manifest.version} does not belong to ${shellVersion}`;
     if (
       builtinSeq !== null &&
       manifest.channel === builtinManifest.channel &&

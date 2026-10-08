@@ -254,7 +254,7 @@ v3 为严格 schema，不能直接向原 `latest.json` 塞入 v4 字段。
 
 ### R2 发布目录与清理边界
 
-- 安装包与 OTA 统一归属于 `<channel>/<appVersion>/`。`appVersion` 是壳的 `shellVersion`，不是 OTA 的 `<appVersion>-core.<seq>`。客户端即使运行外置 core，也始终使用壳版本定位 feed。
+- 安装包与 OTA 统一归属于 `<channel>/<appVersion>/`。`appVersion` 是壳的 `shellVersion`，不是 OTA 的 `<appVersion>-<seq>`。客户端即使运行外置 core，也始终使用壳版本定位 feed。
 - 每个 App 版本的 `core-v4/<platform>/` 下保存 `latest.json`、`versions/<otaVersion>.json`、`packs/<sha256>.pack`；补丁只使用同一 App 版本的前序 manifest，seq 也仅在该版本所有平台中递增。pack 路径保持相对 feed，不跨 App 版本引用。
 - `<channel>/shell.json` 与完整安装包 updater manifest 是发现最新完整版本的固定入口，继续放在渠道根目录；`shell.json` 另存一份至 `<channel>/<appVersion>/shell.json`。v3 旧路径仅为已安装旧客户端保留，v4 不再向渠道根级 core 或全局 CAS 写入。
 - 本次上线不自动删除线上历史对象。完整版本上线并确认新客户端使用版本目录后，再盘点渠道根级旧 `core/`、`core-v4/`、历史 renderer OTA、全局 `cas/` 等引用；明确保留版本、回滚窗口和下载宽限期后单独执行清理。仍受支持的旧客户端所需对象不得仅因层级过时删除。

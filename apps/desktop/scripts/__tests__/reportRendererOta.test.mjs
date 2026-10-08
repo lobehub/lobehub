@@ -17,7 +17,7 @@ afterEach(async () => {
 });
 const base = { outcome: 'success', outputs: { found: 'true', shell_abi: 'a'.repeat(64) } };
 const gate = { outcome: 'success', outputs: { allowed: 'true', shell_abi: 'a'.repeat(64) } };
-const version = { outcome: 'success', outputs: { seq: '4', version: '1.0.0-core.4' } };
+const version = { outcome: 'success', outputs: { seq: '4', version: '1.0.0-4' } };
 
 describe('classifyResult', () => {
   it('requests a full release only for a successfully evaluated compatibility decision', () => {

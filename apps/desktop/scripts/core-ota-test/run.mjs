@@ -121,14 +121,14 @@ const steps = {
         '$&<div id="core-ota-e2e" style="position:fixed;top:8px;right:8px;z-index:99999;background:#e11;color:#fff;padding:6px 10px;font:bold 14px sans-serif">CORE V2</div>',
       ),
     );
-    publish('v2', { previous: 'v1', seq: 1, version: `${APP_VERSION}-core.1` });
+    publish('v2', { previous: 'v1', seq: 1, version: `${APP_VERSION}-1` });
   },
 
   v3() {
     rmSync(coreDir('v3'), { force: true, recursive: true });
     cpSync(coreDir('v2'), coreDir('v3'), { recursive: true });
     appendFileSync(path.join(coreDir('v3'), 'dist/main/index.js'), "\nconsole.log('core v3');\n");
-    publish('v3', { previous: 'v2', seq: 2, version: `${APP_VERSION}-core.2` });
+    publish('v3', { previous: 'v2', seq: 2, version: `${APP_VERSION}-2` });
   },
 
   v4() {
@@ -142,14 +142,14 @@ const steps = {
       path.join(rendererDir, 'apps/desktop/index.html'),
       `<html><body><script src="/assets/${asset}"></script><script>throw new Error("boot failure e2e")</script></body></html>`,
     );
-    publish('v4', { previous: 'v3', seq: 3, version: `${APP_VERSION}-core.3` });
+    publish('v4', { previous: 'v3', seq: 3, version: `${APP_VERSION}-3` });
   },
 
   v5() {
     rmSync(coreDir('v5'), { force: true, recursive: true });
     cpSync(coreDir('v3'), coreDir('v5'), { recursive: true });
     appendFileSync(path.join(coreDir('v5'), 'dist/main/index.js'), '\nprocess.exit(1);\n');
-    publish('v5', { previous: 'v4', seq: 4, version: `${APP_VERSION}-core.4` });
+    publish('v5', { previous: 'v4', seq: 4, version: `${APP_VERSION}-4` });
   },
 
   serve() {
@@ -179,12 +179,7 @@ const steps = {
   },
 
   tamper() {
-    const file = path.join(
-      USER_DATA,
-      'core-ota/cores',
-      `${APP_VERSION}-core.2`,
-      'dist/main/index.js',
-    );
+    const file = path.join(USER_DATA, 'core-ota/cores', `${APP_VERSION}-2`, 'dist/main/index.js');
     appendFileSync(file, '\n// tampered\n');
     console.log(`tampered ${file}`);
   },
