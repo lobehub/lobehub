@@ -21,6 +21,7 @@
   "deepseek.description": "DeepSeek 专注于人工智能研究与应用。其最新的 DeepSeek V4 系列包含 Flash 和 Pro 两个版本，具备 100 万上下文窗口和混合式思维能力，在推理与智能体基准测试中可与领先的闭源前沿模型竞争。",
   "fal.description": "一个为开发者打造的生成式媒体平台。",
   "fireworksai.description": "Fireworks AI 提供先进的语言模型服务，支持函数调用与多模态处理。Firefunction V2（基于 Llama-3）优化了函数调用、对话与指令执行，FireLLaVA-13B 支持图文混合输入，另有 Llama 与 Mixtral 系列模型。",
+  "flexai.description": "FlexAI 通过 OpenAI 兼容 API 提供开放权重模型服务，单个密钥即可访问对话、视觉、向量、图像、语音合成与语音转写等端点。",
   "giteeai.description": "Gitee AI Serverless API 为开发者提供即插即用的大模型推理服务。",
   "github.description": "通过 GitHub Models，开发者可使用行业领先模型构建 AI 工程项目。",
   "githubcopilot.description": "通过您的 GitHub Copilot 订阅访问 Claude、GPT 和 Gemini 模型。",
