@@ -5,8 +5,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   EphemeralRecipient,
+  createSecretRedactor,
   encodeFields,
   encodeRequestAad,
+  formatSecretPlaceholder,
   fromHex,
   hashArgv,
   hashDisplay,
@@ -14,7 +16,9 @@ import {
   isAscError,
   isVerifierChecked,
   pairedClientsFrom,
+  sanitizeSecretLabel,
   sealSecret,
+  secretVariants,
   toHex,
   unframePlaintext,
   utf8Decode,
@@ -150,5 +154,43 @@ describe('sender-auth.json', () => {
     const c = v.baseSuiteResidual;
     const r = await EphemeralRecipient.create(fromHex(c.ikmR.hex));
     expect(utf8Decode(await r.open(c.request, c.envelope, c.openAt))).toBe(v.relayValueUtf8);
+  });
+});
+
+describe('redaction.json', () => {
+  const v = load('redaction.json');
+
+  it('sanitizes labels into placeholders', () => {
+    for (const c of v.placeholders) {
+      expect(sanitizeSecretLabel(c.label)).toBe(c.sanitized);
+      expect(formatSecretPlaceholder(c.label)).toBe(c.placeholder);
+    }
+  });
+
+  it('registers exactly the representations secretVariants() reports', () => {
+    for (const c of v.variants) {
+      const redactor = createSecretRedactor();
+      redactor.add('test', c.value);
+      expect(redactor.size, JSON.stringify(c.value)).toBe(secretVariants(c.value).length);
+    }
+  });
+
+  it('registers every encoded variant of a secret for redaction', () => {
+    for (const c of v.variants) {
+      const redactor = createSecretRedactor();
+      redactor.add('test', c.value);
+      for (const variant of c.variants) {
+        expect(redactor.redact(`out ${variant} end`), `${JSON.stringify(c.value)} → ${variant}`).toBe(
+          'out «secret:test» end',
+        );
+      }
+    }
+  });
+
+  it('still registers the encodings of a secret shorter than the minimum length', () => {
+    const redactor = createSecretRedactor();
+    redactor.add('short', 'abc');
+
+    expect(redactor.redact('YWJj and 616263')).toBe('«secret:short» and «secret:short»');
   });
 });

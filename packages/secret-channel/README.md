@@ -5,7 +5,7 @@ requests, the canonical 14-field AAD, HPKE (RFC 9180) envelope seal/open and red
 placeholders.
 
 `src/asc/` is vendored unchanged from the reference implementation
-(`agent-secret-channel` → `packages/asc-core`, commit `d359a6b`); `test/vectors/` are the
+(`agent-secret-channel` → `packages/asc-core`, commit `e078942`); `test/vectors/` are the
 protocol's test vectors, so `test/vectors.test.ts` proves this copy is byte-for-byte
 conformant. Update both together; never edit `src/asc/` here without changing the upstream first.
 
