@@ -129,7 +129,7 @@ describe('generate command', () => {
       return new Response(stream, { headers: { 'content-type': 'text/event-stream' } });
     };
 
-    /** Gemini reply as captured from production `/webapi/chat/lobehub` */
+    /** Gemini reply as emitted by `/webapi/chat/*` */
     const geminiEvents = [
       { data: { content: 'Hello there', partType: 'text' }, event: 'content_part' },
       { data: { content: ', how are you?', partType: 'text' }, event: 'content_part' },
@@ -138,7 +138,7 @@ describe('generate command', () => {
       { data: { latency: 650, ttft: 607 }, event: 'speed' },
     ];
 
-    /** OpenAI Responses reply as captured from production `/webapi/chat/lobehub` */
+    /** OpenAI Responses reply as emitted by `/webapi/chat/*` */
     const openaiEvents = [
       { data: 'in_progress', event: 'data' },
       { data: { type: 'response.in_progress' }, event: 'data' },
