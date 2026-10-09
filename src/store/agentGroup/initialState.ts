@@ -2,6 +2,7 @@ import { type AgentGroupDetail } from '@lobechat/types';
 import { type ParsedQuery } from 'query-string';
 
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 
 export interface QueryRouter {
   push: (url: string, options?: { query?: ParsedQuery; replace?: boolean }) => void;
@@ -10,6 +11,11 @@ export interface QueryRouter {
 export interface ChatGroupState {
   activeGroupId?: string;
   activeThreadAgentId: string;
+  /** Replica bookkeeping for `groupMap`. */
+  agentGroupDetailReplica: ReplicaState<AgentGroupDetail>;
+  /** Replica bookkeeping for `groups`. */
+  agentGroupListReplica: ReplicaState<ChatGroupItem[]>;
+  /** Detailed groups by id. Replica view of `agentGroupDetailReplica`. */
   groupMap: Record<string, AgentGroupDetail>;
   /**
    * Groups whose detail fetch succeeded but resolved to nothing — the group
@@ -19,7 +25,13 @@ export interface ChatGroupState {
    * a later fetch succeeds.
    */
   groupNotFoundMap: Record<string, boolean>;
+  /** Group metadata rows of the active scope. Replica view of `agentGroupListReplica`. */
   groups: ChatGroupItem[];
+  /**
+   * Whether the group list has been filled (from storage or the server). Gates
+   * the list replica lens: an un-loaded list must read `undefined`, otherwise
+   * hydration would treat the empty default as a real value.
+   */
   groupsInit: boolean;
   router?: QueryRouter;
   showGroupSetting: boolean;
@@ -35,6 +47,8 @@ export interface ChatGroupState {
 
 export const initialChatGroupState: ChatGroupState = {
   activeThreadAgentId: '',
+  agentGroupDetailReplica: createReplicaState(),
+  agentGroupListReplica: createReplicaState(),
   groupMap: {},
   groupNotFoundMap: {},
   groups: [],
