@@ -32,18 +32,28 @@ describe('Redis domain service', () => {
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 
-  it('does not retain empty skill discoveries and scopes successful reads to the connection', async () => {
+  it('does not retain empty or static skill discoveries and scopes successful reads to the connection', async () => {
     const scope = {
       connection: { createdAt: 'date', providerUserId: 'account' },
       providerId: 'github',
       userId: 'u',
     };
-    await redisService.skillTools.remember(scope, async () => ({ tools: [] }));
+    await redisService.skillTools.remember(scope, async () => ({ source: 'live', tools: [] }));
     expect(set).not.toHaveBeenCalled();
-    await redisService.skillTools.remember(scope, async () => ({ tools: ['tool'] }));
+    // The static fallback is served when the live probe failed; it must not be
+    // pinned for the TTL, or later sends stop retrying live discovery.
+    await redisService.skillTools.remember(scope, async () => ({
+      source: 'static',
+      tools: ['tool'],
+    }));
+    expect(set).not.toHaveBeenCalled();
+    await redisService.skillTools.remember(scope, async () => ({
+      source: 'live',
+      tools: ['tool'],
+    }));
     expect(set).toHaveBeenCalledWith(
       'lobehub_skill_tools:v1:u:github:date|account',
-      JSON.stringify({ tools: ['tool'] }),
+      JSON.stringify({ source: 'live', tools: ['tool'] }),
       { px: 600_000 },
     );
   });

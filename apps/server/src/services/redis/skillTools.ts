@@ -3,7 +3,7 @@ import { readThroughRedis, RedisKeys } from '@/server/modules/Redis';
 import { getRedisServiceClient } from './client';
 
 export const skillTools = {
-  async remember<T extends { tools?: unknown[] } | undefined>(
+  async remember<T extends { source?: string; tools?: unknown[] } | undefined>(
     scope: {
       connection: { createdAt?: string; providerUserId?: string };
       providerId: string;
@@ -19,7 +19,12 @@ export const skillTools = {
       RedisKeys.sendPathCache.lobehubSkillTools(scope.userId, scope.providerId, identity),
       fetch,
       {
-        shouldCache: (value) => Array.isArray(value?.tools) && value.tools.length > 0,
+        // Only a successful live probe is worth remembering: the fallback
+        // (`source: 'static'`) is a cheap static catalog served when the live
+        // probe failed, and pinning it for the TTL would keep the next sends
+        // from retrying live discovery against the connection.
+        shouldCache: (value) =>
+          value?.source === 'live' && Array.isArray(value.tools) && value.tools.length > 0,
         ttlMs: 10 * 60 * 1000,
       },
     );
