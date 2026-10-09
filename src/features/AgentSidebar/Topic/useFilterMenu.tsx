@@ -9,10 +9,12 @@ import { preferenceSelectors } from '@/store/user/selectors';
 import type { TopicGroupMode, TopicSortBy } from '@/types/topic';
 
 import { useAgentTopicGroupMode } from './hooks/useAgentTopicGroupMode';
+import { useTopicListScope } from './TopicListScope';
 
 export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   const { t } = useTranslation('topic');
   const { topicGroupMode, updateTopicGroupMode } = useAgentTopicGroupMode();
+  const scope = useTopicListScope();
 
   const [topicSortBy, topicIncludeCompleted, updatePreference] = useUserStore((s) => [
     preferenceSelectors.topicSortBy(s),
@@ -21,7 +23,11 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   ]);
 
   return useCallback(() => {
-    const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'byAgent', 'flat'];
+    // "by agent" only exists where topics span multiple agents — the
+    // project-scoped list. A single agent's own sidebar hides it.
+    const groupModes: TopicGroupMode[] = scope
+      ? ['byStatus', 'byTime', 'byProject', 'byAgent', 'flat']
+      : ['byStatus', 'byTime', 'byProject', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
     return [
@@ -75,6 +81,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
     topicIncludeCompleted,
     updatePreference,
     updateTopicGroupMode,
+    scope,
     t,
   ]);
 };

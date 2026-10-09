@@ -6,11 +6,12 @@ import {
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  ActionIcon,
   Text,
 } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import isEqual from 'fast-deep-equal';
-import { FolderClosedIcon, FolderOpenIcon, type LucideIcon } from 'lucide-react';
+import { FolderClosedIcon, FolderOpenIcon, type LucideIcon, PlusIcon } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,6 +22,7 @@ import RingLoadingIcon from '@/components/RingLoading';
 import UnreadDot from '@/components/UnreadDot';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
+import { openProjectTopicModal } from '@/features/Projects/WorkingDirectories/StartDirectoryModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -185,6 +187,10 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const project = projectId
     ? directories.find((d) => d.projectId === projectId)
     : directories.find((d) => d.id === children[0]?.projectWorkingDirectoryId);
+  const projectDirectories = useMemo(
+    () => (projectId ? directories.filter((d) => d.projectId === projectId) : []),
+    [directories, projectId],
+  );
 
   const workingDirectory = useMemo(
     () =>
@@ -224,6 +230,25 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   ]);
 
   const canAddTopic = !scope && !!currentAgentId && !!workingDirectory;
+  // A merged project group may span several machines. Starting work from it
+  // must let the user pick the execution context (this machine / another
+  // computer / conversation only) instead of silently taking the most recent
+  // directory's device; single-directory groups keep the direct start.
+  const needsStartChooser = !!projectId && projectDirectories.length > 1;
+  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(
+    undefined,
+    needsStartChooser,
+  );
+  const { t: tProject } = useTranslation('project');
+  const openStartChooser = useCallback(() => {
+    if (!projectId || !currentAgentId) return;
+    openProjectTopicModal({
+      title: tProject('sidebar.newConversation'),
+      coordinatorAgentId: currentAgentId,
+      directories: projectDirectories,
+      projectId,
+    });
+  }, [projectId, currentAgentId, projectDirectories, tProject]);
 
   const statusCounts = useChatStore(
     (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
@@ -242,12 +267,34 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
         {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
         {canAddTopic && (
           <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
-            <AgentDirectoryActions
-              agentId={currentAgentId!}
-              path={workingDirectory!}
-              topics={children}
-              onLegacyStart={handleAddTopic}
-            />
+            {needsStartChooser ? (
+              <>
+                <AgentDirectoryActions
+                  hideStartAction
+                  agentId={currentAgentId!}
+                  path={workingDirectory!}
+                  topics={children}
+                  onLegacyStart={handleAddTopic}
+                />
+                <ActionIcon
+                  disabled={!directoriesRequest.hasData || !!directoriesRequest.error}
+                  icon={PlusIcon}
+                  size={'small'}
+                  title={tProject('directories.start')}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openStartChooser();
+                  }}
+                />
+              </>
+            ) : (
+              <AgentDirectoryActions
+                agentId={currentAgentId!}
+                path={workingDirectory!}
+                topics={children}
+                onLegacyStart={handleAddTopic}
+              />
+            )}
           </span>
         )}
       </Flexbox>

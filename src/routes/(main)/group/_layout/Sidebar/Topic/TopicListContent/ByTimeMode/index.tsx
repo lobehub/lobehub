@@ -16,8 +16,20 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
+import { type TopicGroupMode } from '@/types/topic';
 
 import GroupItem from './GroupItem';
+
+/**
+ * The group-chat sidebar renders every non-flat preference through its time
+ * renderer, but its menu never offers `byAgent` and group topics carry no
+ * per-row agent attribution. When a project-scoped sidebar persists `byAgent`
+ * into the global preference, grouping by it here would emit `agent:*` buckets
+ * that this surface's headers format as time-bucket translation keys — so the
+ * mode falls back to the default time grouping.
+ */
+export const resolveGroupSidebarMode = (mode: TopicGroupMode): TopicGroupMode =>
+  mode === 'byAgent' ? 'byTime' : mode;
 
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');
@@ -25,6 +37,7 @@ const ByTimeMode = memo(() => {
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
+  const groupMode = resolveGroupSidebarMode(topicGroupMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
@@ -38,15 +51,15 @@ const ByTimeMode = memo(() => {
       topicSelectors.groupedTopicsForSidebar(
         topicPageSize,
         topicSortBy,
-        topicGroupMode,
+        groupMode,
         topicIncludeCompleted,
       ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+    [topicPageSize, topicSortBy, groupMode, topicIncludeCompleted],
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
-  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
+  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(groupMode, groupIds);
 
   return (
     <Flexbox gap={2}>

@@ -18,11 +18,14 @@ export function AgentDirectoryActions({
   path,
   topics,
   onLegacyStart,
+  hideStartAction = false,
 }: {
   agentId: string;
   path: string;
   topics: ChatTopic[];
   onLegacyStart: () => Promise<void>;
+  /** Render only the binding/menu affordance; the caller provides its own start action. */
+  hideStartAction?: boolean;
 }) {
   const { t } = useTranslation('project');
   const navigate = useWorkspaceAwareNavigate();
@@ -105,22 +108,24 @@ export function AgentDirectoryActions({
           onClick={(e) => e.stopPropagation()}
         />
       </DropdownMenu>
-      <ActionIcon
-        icon={PlusIcon}
-        size="small"
-        title={t('directories.start')}
-        disabled={
-          pending ||
-          !request.hasData ||
-          !!request.error ||
-          bindings.length > 1 ||
-          (!!bindingId && !bindings.length)
-        }
-        onClick={(e) => {
-          e.stopPropagation();
-          void start(bindings[0]?.id);
-        }}
-      />
+      {!hideStartAction && (
+        <ActionIcon
+          icon={PlusIcon}
+          size="small"
+          title={t('directories.start')}
+          disabled={
+            pending ||
+            !request.hasData ||
+            !!request.error ||
+            bindings.length > 1 ||
+            (!!bindingId && !bindings.length)
+          }
+          onClick={(e) => {
+            e.stopPropagation();
+            void start(bindings[0]?.id);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -40,6 +40,11 @@ vi.mock('@/features/Projects/WorkingDirectories/AgentDirectoryActions', () => ({
   ),
 }));
 
+const openProjectTopicModalMock = vi.hoisted(() => vi.fn());
+vi.mock('@/features/Projects/WorkingDirectories/StartDirectoryModal', () => ({
+  openProjectTopicModal: openProjectTopicModalMock,
+}));
+
 vi.mock('react-router', () => ({
   useParams: () => routeParamsMock,
 }));
@@ -360,4 +365,105 @@ it('resolves a merged project group through any directory of that project', () =
   );
   fireEvent.click(screen.getByRole('link', { name: 'LobeHub' }));
   expect(routerPushMock).toHaveBeenCalledWith('/project/lobehub');
+});
+
+it('opens the execution-context chooser when a merged project group spans multiple directories', () => {
+  // ROOT CAUSE: the merged project-id group used to start work silently in
+  // the most recent directory's device. With several machines bound to one
+  // project, the "+" must open the chooser (this machine / another computer /
+  // conversation only) instead of guessing.
+  directoryRows.length = 0;
+  openProjectTopicModalMock.mockClear();
+  directoryRows.push(
+    {
+      id: 'binding-multi-a',
+      projectName: 'Multi Project',
+      projectSlug: 'multi-project',
+      projectId: 'prj-multi',
+      projectAvatar: '📦',
+    },
+    {
+      id: 'binding-multi-b',
+      projectName: 'Multi Project',
+      projectSlug: 'multi-project',
+      projectId: 'prj-multi',
+      projectAvatar: '📦',
+    },
+  );
+  render(
+    <AccordionRoot defaultValue={['project-id:prj-multi']}>
+      <GroupItem
+        expanded
+        group={{
+          id: 'project-id:prj-multi',
+          title: 'multi',
+          children: [
+            {
+              id: 'topic-multi-a',
+              title: 'Work A',
+              createdAt: 2,
+              updatedAt: 2,
+              projectId: 'prj-multi',
+              projectWorkingDirectoryId: 'binding-multi-a',
+              metadata: { workingDirectory: '/repo-a' },
+            },
+            {
+              id: 'topic-multi-b',
+              title: 'Work B',
+              createdAt: 1,
+              updatedAt: 1,
+              projectId: 'prj-multi',
+              projectWorkingDirectoryId: 'binding-multi-b',
+              metadata: { workingDirectory: '/repo-b' },
+            },
+          ],
+        }}
+      />
+    </AccordionRoot>,
+  );
+  fireEvent.click(screen.getByRole('button', { name: 'directories.start' }));
+  expect(openProjectTopicModalMock).toHaveBeenCalledTimes(1);
+  expect(openProjectTopicModalMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      projectId: 'prj-multi',
+      coordinatorAgentId: 'agent-1',
+      title: 'sidebar.newConversation',
+    }),
+  );
+});
+
+it('keeps the direct start action when a merged project group has a single directory', () => {
+  directoryRows.length = 0;
+  openProjectTopicModalMock.mockClear();
+  directoryRows.push({
+    id: 'binding-single',
+    projectName: 'Single Project',
+    projectSlug: 'single-project',
+    projectId: 'prj-single',
+    projectAvatar: '📦',
+  });
+  render(
+    <AccordionRoot defaultValue={['project-id:prj-single']}>
+      <GroupItem
+        expanded
+        group={{
+          id: 'project-id:prj-single',
+          title: 'single',
+          children: [
+            {
+              id: 'topic-single',
+              title: 'Work',
+              createdAt: 1,
+              updatedAt: 1,
+              projectId: 'prj-single',
+              projectWorkingDirectoryId: 'binding-single',
+              metadata: { workingDirectory: '/repo' },
+            },
+          ],
+        }}
+      />
+    </AccordionRoot>,
+  );
+  expect(screen.queryByRole('button', { name: 'directories.start' })).not.toBeInTheDocument();
+  expect(openProjectTopicModalMock).not.toHaveBeenCalled();
 });

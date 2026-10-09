@@ -18,7 +18,7 @@ import {
 
 import { openAddDirectoryModal } from './AddDirectoryModal';
 import { openBindDirectoryModal } from './BindDirectoryModal';
-import { openProjectTopicModal } from './SidebarTopics';
+import { openProjectTopicModal } from './StartDirectoryModal';
 
 export function WorkingDirectorySettings({ projectId }: { projectId: string }) {
   const { t } = useTranslation('project');
