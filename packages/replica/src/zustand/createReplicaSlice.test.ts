@@ -20,8 +20,9 @@ interface TestState {
   listsReplica: ReplicaState<string[]>;
 }
 
-const scopeState = { current: 'user-1:personal', trusted: true };
+const scopeState = { canHydrate: true, current: 'user-1:personal', trusted: true };
 const scope: ReplicaScope = {
+  canHydrate: () => scopeState.canHydrate,
   canPersist: () => scopeState.trusted,
   get: () => scopeState.current,
   // The real `use` is `useCacheScope`; a plain getter is enough for these tests.
@@ -88,6 +89,7 @@ const wrapper = ({ children }: PropsWithChildren) =>
   createElement(SWRConfig, { value: { dedupingInterval: 0, provider: () => new Map() } }, children);
 
 beforeEach(() => {
+  scopeState.canHydrate = true;
   scopeState.current = 'user-1:personal';
   scopeState.trusted = true;
 });
@@ -444,6 +446,22 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.a).toBeUndefined();
     });
 
+    it('does not hydrate the persisted projection when the runtime opts out', async () => {
+      // An identity-less runtime (e.g. the public Workbench) can only guess the
+      // scope, so it must not read another session's rows back into memory.
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['someone-elses'], updatedAt: 1 });
+      scopeState.canHydrate = false;
+      const { slice, store } = setup({ storage });
+
+      await act(async () => {
+        await slice.hydrate({ id: 'a' });
+      });
+
+      expect(store.getState().lists.a).toBeUndefined();
+      expect(store.getState().listsReplica.entries.a).toBeUndefined();
+    });
+
     it('never persists while the scope is untrusted', async () => {
       scopeState.trusted = false;
       const { slice, storage } = setup();
@@ -452,6 +470,43 @@ describe('createReplicaSlice', () => {
       });
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(storage.writes).toEqual([]);
+    });
+  });
+
+  describe('missing responses', () => {
+    it('applies a response the resource marks as missing as an explicit removal', () => {
+      // A nullable detail (e.g. the acceptance attached to a subject): the
+      // server answering "none" must clear a previously cached value, not let
+      // the merge fall back to it.
+      type NullableState = {
+        notes: Record<string, string[] | null>;
+        notesReplica: ReplicaState<string[] | null>;
+      };
+      const resource = defineReplica<{ id: string }, string[] | null>({
+        key: ({ id }) => id,
+        name: 'nullableNote',
+        scope,
+        version: 1,
+      });
+      const store = createStore<NullableState>()(() => ({
+        notes: {},
+        notesReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<NullableState, { id: string }, string[] | null>(resource, {
+        driver,
+        get: store.getState,
+        isMissing: (note) => note === null,
+        set: (partial) => store.setState(partial),
+        stateKey: 'notesReplica',
+        view: recordLens('notes'),
+      });
+
+      act(() => slice.replace({ id: 'a' }, ['kept']));
+      expect(store.getState().notes.a).toEqual(['kept']);
+
+      act(() => slice.replace({ id: 'a' }, null));
+      expect(store.getState().notes.a).toBeUndefined();
+      expect(store.getState().notesReplica.entries.a).toBeUndefined();
     });
   });
 

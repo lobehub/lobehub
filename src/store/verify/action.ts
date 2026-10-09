@@ -10,6 +10,7 @@ import type { AcceptanceBundle, AcceptanceBySubject } from '@/services/verify';
 import { verifyService } from '@/services/verify';
 import { type StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { initialState, type State, type VerifyCriterionEdit } from './initialState';
 import {
@@ -74,6 +75,10 @@ export class ActionImpl {
       fetcher: ({ subjectId, subjectType }) =>
         verifyService.getAcceptanceBySubject(subjectType, subjectId),
       get,
+      // The server answers `null` for a subject whose acceptance was deleted:
+      // treat it as an explicit removal so the previous aggregate is not kept
+      // (and re-persisted) by the merge.
+      isMissing: (acceptance) => acceptance == null,
       merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
       set,
       stateKey: 'acceptanceBySubjectReplica',
@@ -105,6 +110,17 @@ export class ActionImpl {
   ): ReplicaSyncResult =>
     this.#bundle.useSync(acceptanceId || null, {
       enabled: options.enabled ?? true,
+      onError: (error) => {
+        // A deleted (NOT_FOUND) or unauthorized (FORBIDDEN) bundle must not keep
+        // rendering from the projection: drop the entry so the gate shows its
+        // terminal state instead of a stale decision surface.
+        if (
+          acceptanceId &&
+          (isTrpcErrorCode(error, 'NOT_FOUND') || isTrpcErrorCode(error, 'FORBIDDEN'))
+        ) {
+          this.#bundle.remove(acceptanceId);
+        }
+      },
       refreshInterval: options.refreshInterval,
       revalidateOnFocus: true,
       revalidateOnReconnect: true,

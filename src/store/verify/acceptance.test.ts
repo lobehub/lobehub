@@ -115,6 +115,27 @@ describe('verify acceptance replica', () => {
     expect(useVerifyStore.getState().acceptanceBySubjectMap['task:task-2']).toBeUndefined();
   });
 
+  it('clears a subject attachment the server no longer has', async () => {
+    renderHook(() => useVerifyStore.getState().useFetchAcceptanceBySubject('task', 'task-3'));
+    const [call] = await syncCalls('acceptanceBySubject');
+
+    // The subject starts with an aggregate, as an earlier poll / hydrate left it.
+    await act(async () => {
+      call.config.onSuccess?.({ id: 'acceptance-1', status: 'verifying' });
+    });
+    expect(useVerifyStore.getState().acceptanceBySubjectMap['task:task-3']).toMatchObject({
+      id: 'acceptance-1',
+      status: 'verifying',
+    });
+
+    // A later poll reports none (the acceptance was deleted): the previous
+    // aggregate must be removed, not retained by the merge fallback.
+    await act(async () => {
+      call.config.onSuccess?.(null);
+    });
+    expect(useVerifyStore.getState().acceptanceBySubjectMap['task:task-3']).toBeUndefined();
+  });
+
   it('revalidates only the refreshed acceptance bundle', async () => {
     await useVerifyStore.getState().refreshAcceptanceBundle('acceptance-1');
 

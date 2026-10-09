@@ -70,6 +70,14 @@ export interface ReplicaEngineOptions<TParams, TData, TFetched> {
   /** Reject a persisted value that cannot serve these params. Rarely needed: rows are stored per query. */
   isHydratable?: (cached: TData, params: TParams) => boolean;
   /**
+   * Non-paged: whether a head response means the entry no longer exists. Such a
+   * response is applied as an explicit removal (memory + persisted row) instead
+   * of through `merge` — otherwise a `null` would fall back to the confirmed
+   * value (the reducer resolves `action.data(confirmed) ?? confirmed`), so a
+   * deleted aggregate would be retained and re-persisted.
+   */
+  isMissing?: (incoming: TFetched) => boolean;
+  /**
    * Non-paged: fold a server response into the confirmed value. Return
    * `undefined` to keep the current value. Defaults to "the response is the value".
    */
@@ -258,6 +266,9 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
 
   const hydrate = async (params: TParams, scope = resource.scope.get()) => {
     if (!resource.storage) return false;
+    // An identity-less runtime reads network-only: its scope is a guess, so
+    // hydrating it could paint another session's private rows.
+    if (resource.scope.canHydrate && !resource.scope.canHydrate()) return false;
     const key = resource.key(params);
     if (!resource.persistKey(key)) return false;
     const query = resource.query(params);
@@ -310,6 +321,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       ? options.prepareHead(fetched, port.read(key), params)
       : fetched;
     if (incoming === undefined) return false;
+    // A response that says the entry is gone clears it outright: the merge path
+    // would keep — and re-persist — the confirmed value it is replacing.
+    if (!paging && options.isMissing?.(incoming)) {
+      return dispatch({ key, scope, type: 'remove' });
+    }
     const query = resource.query(params);
     const entry = getSlot().entries[key];
     // A different query (filters, sort) must not merge with loaded pages. A

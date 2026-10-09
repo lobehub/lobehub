@@ -108,3 +108,37 @@ it('mutate revalidates this acceptance and resolves the freshly read value', asy
     acceptance: { status: 'verifying' },
   });
 });
+
+/** The `onError` handler the bundle's sync query was registered with. */
+const bundleSyncOnError = async () => {
+  const config = (await bundleSyncConfig()) as { onError?: (error: unknown) => void } | undefined;
+  return config?.onError;
+};
+
+it('drops a cached bundle when revalidation reports it is gone', async () => {
+  seedBundle('acceptance-1', { acceptance: { status: 'verifying' } });
+
+  renderHook(() => useAcceptanceBundle('acceptance-1'));
+
+  const onError = await bundleSyncOnError();
+  await act(async () => {
+    onError?.({ data: { code: 'NOT_FOUND' } });
+  });
+
+  // The gate must be able to show the terminal state, not a stale decision
+  // surface kept alive by the persisted projection.
+  expect(useVerifyStore.getState().acceptanceBundleMap['acceptance-1']).toBeUndefined();
+});
+
+it('keeps a cached bundle on a retryable revalidation failure', async () => {
+  seedBundle('acceptance-1', { acceptance: { status: 'verifying' } });
+
+  renderHook(() => useAcceptanceBundle('acceptance-1'));
+
+  const onError = await bundleSyncOnError();
+  await act(async () => {
+    onError?.(new Error('offline'));
+  });
+
+  expect(useVerifyStore.getState().acceptanceBundleMap['acceptance-1']).toBeDefined();
+});

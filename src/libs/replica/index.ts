@@ -28,7 +28,26 @@ import { getCacheScope, isScopeTrusted, useCacheScope } from '@/libs/swr/useCach
  * fetch through the app's SWR hook (workspace-augmented keys, retry policy).
  */
 
+/**
+ * Whether this runtime may hydrate replicas from their persisted projection.
+ *
+ * The Workbench runtime renders the public acceptance / verify surfaces and
+ * never mounts the user store, so its cache scope stays the last-known user's
+ * partition. Hydrating there would paint a previous — possibly expired or
+ * server-invalidated — session's private rows before any authorization is
+ * checked, so the Workbench entry turns hydration off at boot. The main SPA
+ * keeps it on for the instant-from-cache first paint (it hydrates the persisted
+ * partition in parallel with the session check, then resets on a scope change).
+ */
+let replicaHydrationEnabled = true;
+
+/** Enable/disable reads from the persisted projection for this runtime. */
+export const setReplicaPersistedHydration = (enabled: boolean): void => {
+  replicaHydrationEnabled = enabled;
+};
+
 export const cacheScope: ReplicaScope = {
+  canHydrate: () => replicaHydrationEnabled,
   canPersist: isScopeTrusted,
   get: getCacheScope,
   use: useCacheScope,
