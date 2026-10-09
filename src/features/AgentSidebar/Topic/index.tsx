@@ -33,6 +33,13 @@ import { useTopicActionsDropdownMenu } from './useDropdownMenu';
  */
 const STALE_RUNNING_TOPIC_SWEEP_INTERVAL = 15_000;
 
+/**
+ * Ceiling the cadence backs off to while a sweep keeps retiring nothing — i.e.
+ * while the run it is looking at is genuinely alive. An ordinary long run must
+ * not be polled at the leak-hunting cadence for its whole duration.
+ */
+const STALE_RUNNING_TOPIC_SWEEP_MAX_INTERVAL = 120_000;
+
 interface TopicProps {
   expanded: boolean;
   itemKey: string;
@@ -58,16 +65,48 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
 
   // Keep retiring whatever the server no longer backs for as long as a row still
   // reports itself running. The sweep returns before any server read when there
-  // is no candidate, so this only polls while a row is actually stuck — or
-  // genuinely mid-run.
+  // is no candidate, so this only runs while a row is stuck — or genuinely
+  // mid-run. Serialized (never two sweeps in flight) and backed off while a
+  // sweep retires nothing, so an ordinary long run is not polled at the
+  // leak-hunting cadence.
   useEffect(() => {
     if (!expanded || !hasVisiblyRunningTopic) return;
 
-    const sweep = () => void settleAllUnbackedTopicRuns().catch(console.error);
-    sweep();
-    const timer = setInterval(sweep, STALE_RUNNING_TOPIC_SWEEP_INTERVAL);
+    let cancelled = false;
+    let inFlight = false;
+    let delay = STALE_RUNNING_TOPIC_SWEEP_INTERVAL;
+    let timer: ReturnType<typeof setTimeout> | undefined;
 
-    return () => clearInterval(timer);
+    const schedule = () => {
+      timer = setTimeout(sweep, delay);
+    };
+
+    const sweep = async () => {
+      if (cancelled || inFlight) return;
+
+      inFlight = true;
+      try {
+        const settled = await settleAllUnbackedTopicRuns();
+        // Retiring nothing means the run is alive: back off rather than keep
+        // paying the per-topic detail read. Any settlement resets the cadence.
+        delay =
+          settled > 0
+            ? STALE_RUNNING_TOPIC_SWEEP_INTERVAL
+            : Math.min(delay * 2, STALE_RUNNING_TOPIC_SWEEP_MAX_INTERVAL);
+      } catch (error) {
+        console.error('[Topic] unbacked run sweep failed:', error);
+      } finally {
+        inFlight = false;
+        if (!cancelled) schedule();
+      }
+    };
+
+    void sweep();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [expanded, hasVisiblyRunningTopic, settleAllUnbackedTopicRuns]);
 
   return (

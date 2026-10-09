@@ -63,6 +63,7 @@ import {
 import type { ChatStore } from '@/store/chat/store';
 import { isInterventionRunActive } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
+import type { TopicMapScope } from '@/store/chat/utils/topicMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getElectronStoreState } from '@/store/electron';
 import { getFileStoreState } from '@/store/file/store';
@@ -2299,6 +2300,7 @@ export class GatewayActionImpl {
   settleUnbackedTopicRuns = async (params: {
     agentId?: string;
     groupId?: string;
+    scope?: TopicMapScope;
     topicId: string;
   }): Promise<number> => {
     const { topicId } = params;
@@ -2336,6 +2338,7 @@ export class GatewayActionImpl {
         agentId: params.agentId,
         groupId: params.groupId,
         operationId: op.metadata.serverOperationId ?? op.id,
+        scope: params.scope,
         status: terminalStatus,
         topicId,
       });
@@ -2361,15 +2364,26 @@ export class GatewayActionImpl {
     // bucket from the params it is handed — so dropping the scope here made the
     // sweep clear whichever agent happened to be active instead of the one the
     // run came from, completing the op but leaving the real row spinning.
-    const candidates = new Map<string, { agentId?: string; groupId?: string; topicId: string }>();
+    const candidates = new Map<
+      string,
+      { agentId?: string; groupId?: string; scope?: TopicMapScope; topicId: string }
+    >();
     for (const op of Object.values(this.#get().operations)) {
       if (!this.#isLiveLocalRuntimeOp(op)) continue;
 
       const { agentId, groupId, topicId } = op.context;
       if (!topicId) continue;
 
-      const key = `${agentId ?? ''}|${groupId ?? ''}|${topicId}`;
-      if (!candidates.has(key)) candidates.set(key, { agentId, groupId, topicId });
+      // Group MAIN topics are keyed `group_${groupId}` even though the op also
+      // carries the supervisor's agentId; leaving both would derive
+      // `group_agent_${groupId}_${agentId}` and never find the row. Mirrors the
+      // patch scope `cleanupStaleRunningTopics` uses and the optimistic-topic
+      // scope in conversationLifecycle.
+      const scope: TopicMapScope | undefined =
+        op.context.scope === 'group' && groupId ? 'group' : undefined;
+
+      const key = `${agentId ?? ''}|${groupId ?? ''}|${scope ?? ''}|${topicId}`;
+      if (!candidates.has(key)) candidates.set(key, { agentId, groupId, scope, topicId });
     }
     if (candidates.size === 0) return 0;
 
@@ -2510,6 +2524,12 @@ export class GatewayActionImpl {
     groupId?: string;
     operationId: string;
     /**
+     * Explicit bucket scope. Group MAIN topic rows are keyed `group_${groupId}`
+     * while the op also carries the supervisor's agentId, so the auto-detected
+     * `group_agent` bucket would miss them.
+     */
+    scope?: TopicMapScope;
+    /**
      * Mirror the topic's terminal status into the local Zustand copy alongside
      * the metadata clear. Omit for the "clean completion, not watching" case —
      * that one is owned by `markTopicUnread` elsewhere.
@@ -2517,11 +2537,12 @@ export class GatewayActionImpl {
     status?: ChatTopicStatus;
     topicId: string;
   }): boolean => {
-    const { topicId, operationId, agentId, groupId, status } = params;
+    const { topicId, operationId, agentId, groupId, scope, status } = params;
     const state = this.#get();
     const key = topicMapKey({
       agentId: agentId ?? state.activeAgentId,
       groupId: groupId ?? state.activeGroupId,
+      scope,
     });
     const existingTopic = state.topicDataMap[key]?.items?.find((t) => t.id === topicId);
     if (!existingTopic) return false;
@@ -2544,6 +2565,7 @@ export class GatewayActionImpl {
         agentId,
         groupId,
         id: topicId,
+        scope,
         type: 'updateTopic',
         value: { metadata: { ...existingTopic.metadata, runningOperation: null } },
       });
@@ -2555,7 +2577,7 @@ export class GatewayActionImpl {
     // run start) reconciles to this status instead of reapplying the stale
     // 'running' one and stranding the spinner again.
     if (!status) return false;
-    state.internal_pinTopicStatus?.({ agentId, groupId, status, topicId });
+    state.internal_pinTopicStatus?.({ agentId, groupId, scope, status, topicId });
     return !markerOperationId;
   };
 

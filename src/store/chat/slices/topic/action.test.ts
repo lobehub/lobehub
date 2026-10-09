@@ -3147,6 +3147,85 @@ describe('topic action', () => {
       });
     });
 
+    // Group MAIN topic rows live in `group_${groupId}` even though the run's op
+    // also carries the supervisor's agentId. Deriving the bucket from that pair
+    // alone lands in `group_agent_${groupId}_${agentId}` and never finds the row.
+    it('retires a group-main row from its own bucket', async () => {
+      const groupId = 'group-1';
+      const key = topicMapKey({ groupId });
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: undefined,
+          activeGroupId: undefined,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [
+                {
+                  agentId: 'supervisor-agent',
+                  groupId,
+                  id: topicId,
+                  metadata: {
+                    runningOperation: {
+                      assistantMessageId: 'assistant-1',
+                      operationId: serverOperationId,
+                    },
+                  },
+                  status: 'running',
+                  title: 'Leaked group topic',
+                  updatedAt: Date.now(),
+                } as unknown as ChatTopic,
+              ],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      let operationId = '';
+      act(() => {
+        operationId = useChatStore.getState().startOperation({
+          context: { agentId: 'supervisor-agent', groupId, scope: 'group', topicId },
+          metadata: { serverOperationId },
+          type: 'execServerAgentRuntime',
+        }).operationId;
+      });
+      const operation = useChatStore.getState().operations[operationId];
+      useChatStore.setState({
+        operations: {
+          ...useChatStore.getState().operations,
+          [operationId]: {
+            ...operation,
+            metadata: { ...operation.metadata, startTime: Date.now() - 60_000 },
+          },
+        },
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        agentId: 'supervisor-agent',
+        groupId,
+        id: topicId,
+        metadata: {},
+        status: 'active',
+        updatedAt: Date.now(),
+      } as unknown as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
+    });
+
     // A run that finished while the user was elsewhere settles the SERVER row to
     // `unread`. The sweep has to mirror that terminal status — stamping `active`
     // would hide the completion badge the user comes back for (and would clobber
