@@ -148,6 +148,60 @@ describe('lobehubSkill connections replica', () => {
     expect(sync.result.current.isValidating).toBe(true);
   });
 
+  it('keeps the pre-replica sync surface: isLoading is true until the list is painted', async () => {
+    // The caller gates on `isLoading` (ToolAuthAlert): reading an un-loaded list
+    // as an empty one flashes a false "needs authorization" card on a cold start.
+    mocks.connectListConnections.mockImplementation(pending);
+    mocks.connectListTools.mockResolvedValue({ tools: [] });
+
+    const sync = renderHook(() => useToolStore((s) => s.useFetchLobehubSkillConnections)(true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(sync.result.current.isLoading).toBe(true));
+    // Must be a real boolean: `isLoading` reading as `undefined` made
+    // `!isLoading` true, so the caller treated an un-loaded list as initialized
+    // and flashed a false "needs authorization" card on a cold start.
+    expect(typeof sync.result.current.isLoading).toBe('boolean');
+    expect(typeof sync.result.current.mutate).toBe('function');
+    expect(sync.result.current.error).toBeUndefined();
+
+    // The response lands: the list is painted and the flag clears.
+    mocks.connectListConnections.mockResolvedValue({ connections: [connection('linear')] });
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+
+    await waitFor(() => expect(serverIds()).toEqual(['linear']));
+    expect(sync.result.current.isLoading).toBe(false);
+  });
+
+  it('does not report loading once the persisted row has painted', async () => {
+    await lobehubSkillServersResource.storage!.set(
+      { queryKey: SERVERS_STORAGE_KEY, scope },
+      {
+        data: [
+          {
+            identifier: 'linear',
+            isConnected: true,
+            name: 'Linear',
+            status: LobehubSkillStatus.CONNECTED,
+          },
+        ],
+        updatedAt: 1,
+      },
+    );
+    mocks.connectListConnections.mockImplementation(pending);
+    mocks.connectListTools.mockResolvedValue({ tools: [] });
+
+    const sync = renderHook(() => useToolStore((s) => s.useFetchLobehubSkillConnections)(true), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(serverIds()).toEqual(['linear']));
+    expect(sync.result.current.isLoading).toBe(false);
+  });
+
   it('replaces the list with the server response and persists it', async () => {
     mocks.connectListConnections.mockResolvedValue({ connections: [connection('linear')] });
     mocks.connectListTools.mockResolvedValue({ tools: [] });

@@ -472,8 +472,10 @@ describe('lobehubSkillStore actions', () => {
       });
 
       expect(result.current.lobehubSkillServers).toHaveLength(1);
-      expect(result.current.lobehubSkillServers[0].isConnected).toBe(true);
-      expect(result.current.lobehubSkillServers[0].status).toBe(LobehubSkillStatus.CONNECTED);
+      expect((result.current.lobehubSkillServers ?? [])[0].isConnected).toBe(true);
+      expect((result.current.lobehubSkillServers ?? [])[0].status).toBe(
+        LobehubSkillStatus.CONNECTED,
+      );
     });
 
     it('should track loading state during status check', async () => {
@@ -618,7 +620,7 @@ describe('lobehubSkillStore actions', () => {
         });
       });
 
-      expect(result.current.lobehubSkillServers[0]).toMatchObject({
+      expect((result.current.lobehubSkillServers ?? [])[0]).toMatchObject({
         identifier: 'linear',
         status: LobehubSkillStatus.ERROR,
         errorMessage: 'Token expired',
@@ -680,8 +682,12 @@ describe('lobehubSkillStore actions', () => {
       });
 
       expect(refreshed).toBe(true);
-      expect(result.current.lobehubSkillServers[0].tokenExpiresAt).toBe('2024-12-31T00:00:00Z');
-      expect(result.current.lobehubSkillServers[0].status).toBe(LobehubSkillStatus.CONNECTED);
+      expect((result.current.lobehubSkillServers ?? [])[0].tokenExpiresAt).toBe(
+        '2024-12-31T00:00:00Z',
+      );
+      expect((result.current.lobehubSkillServers ?? [])[0].status).toBe(
+        LobehubSkillStatus.CONNECTED,
+      );
     });
 
     it('should return false when refresh fails', async () => {
@@ -770,9 +776,9 @@ describe('lobehubSkillStore actions', () => {
         await result.current.refreshLobehubSkillTools('linear');
       });
 
-      expect(result.current.lobehubSkillServers[0].tools).toHaveLength(2);
-      expect(result.current.lobehubSkillServers[0].tools![0].name).toBe('createIssue');
-      expect(result.current.lobehubSkillServers[0].tools![1].name).toBe('listIssues');
+      expect((result.current.lobehubSkillServers ?? [])[0].tools).toHaveLength(2);
+      expect((result.current.lobehubSkillServers ?? [])[0].tools![0].name).toBe('createIssue');
+      expect((result.current.lobehubSkillServers ?? [])[0].tools![1].name).toBe('listIssues');
     });
 
     it('should do nothing when server not found', async () => {
@@ -823,7 +829,7 @@ describe('lobehubSkillStore actions', () => {
       });
 
       // Should not crash and server should remain unchanged
-      expect(result.current.lobehubSkillServers[0].tools).toBeUndefined();
+      expect((result.current.lobehubSkillServers ?? [])[0].tools).toBeUndefined();
     });
   });
 
@@ -859,7 +865,7 @@ describe('lobehubSkillStore actions', () => {
       });
 
       expect(result.current.lobehubSkillServers).toHaveLength(1);
-      expect(result.current.lobehubSkillServers[0].identifier).toBe('github');
+      expect((result.current.lobehubSkillServers ?? [])[0].identifier).toBe('github');
       expect(toolsClient.market.connectRevoke.mutate).toHaveBeenCalledWith({
         provider: 'linear',
       });

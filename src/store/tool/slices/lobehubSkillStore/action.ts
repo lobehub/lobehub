@@ -59,6 +59,13 @@ const serversLens: ReplicaLens<ToolStore, LobehubSkillServer[]> = {
 
 /** The connections sync, plus the `mutate` alias the skills surfaces call. */
 export interface LobehubSkillConnectionsSyncResult extends ReplicaSyncResult {
+  /**
+   * Nothing has been painted yet (no persisted row, no response) and a sync is
+   * in flight. This is the `isLoading` the callers gated on before the replica
+   * — it must stay on the public surface: a caller that reads "un-loaded" as
+   * "empty" would flash a false state on a cold start (see `ToolAuthAlert`).
+   */
+  isLoading: boolean;
   /** Alias of `revalidate`, kept for the existing "reload skills" control. */
   mutate: () => Promise<unknown>;
 }
@@ -376,10 +383,16 @@ export class LobehubSkillStoreActionImpl {
         }
       },
       revalidateOnFocus: false,
-      shouldRetryOnError: false,
     });
 
-    return { ...sync, mutate: sync.revalidate };
+    // `isLoading` in the pre-replica sense: the list has not been painted yet
+    // (neither the persisted row nor a response) and a sync is in flight. It is
+    // read through the view instead of `isHydrated`, because hydration resolves
+    // just after mount even when there is nothing stored — gating on it would
+    // re-open the cold-start false state this flag exists to prevent.
+    const isLoading = this.#get().lobehubSkillServers === undefined && sync.isValidating;
+
+    return { ...sync, isLoading, mutate: sync.revalidate };
   };
 
   /**
