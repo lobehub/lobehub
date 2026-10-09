@@ -166,6 +166,7 @@ import {
   WebOnboardingRenders,
 } from '@lobechat/builtin-tool-web-onboarding/client';
 import {
+  createEditLocalFileInspector,
   createReadLocalFileInspector,
   createRunCommandInspector,
   createWriteLocalFileInspector,
@@ -224,6 +225,29 @@ const heterogeneousCliStreamings: Record<string, BuiltinStreaming> = {
   write: LocalSystemStreamings[LocalSystemApiName.writeFile] as BuiltinStreaming,
 };
 
+/**
+ * Devin's ACP stream reports the CLI's inference tool names via
+ * `_meta['cognition.ai/inferenceToolName']` (exec/read/write/edit/…), so the
+ * shared command and local-file surfaces apply under those apiName keys.
+ * `edit` gets an inspector but no render: its tool result is flattened diff
+ * text, not the `diffText` patch EditLocalFile expects. `grep`/`glob` stay
+ * inspector-less too — their count icons key off lobe-shaped pluginState
+ * (totalMatches/totalCount) that ACP updates never carry, so a successful
+ * search would render as a failure.
+ */
+const devinCliInspectors: Record<string, BuiltinInspector> = {
+  edit: createEditLocalFileInspector('builtins.devin.apiName.edit') as BuiltinInspector,
+  exec: createRunCommandInspector('builtins.devin.apiName.exec') as BuiltinInspector,
+  read: createReadLocalFileInspector('builtins.devin.apiName.read') as BuiltinInspector,
+  write: createWriteLocalFileInspector('builtins.devin.apiName.write') as BuiltinInspector,
+};
+
+const devinCliRenders: Record<string, BuiltinRender> = {
+  exec: RunCommandRender as BuiltinRender,
+  read: LocalSystemRenders[LocalSystemApiName.readFile] as BuiltinRender,
+  write: LocalSystemRenders[LocalSystemApiName.writeFile] as BuiltinRender,
+};
+
 let builtinToolSurfacesRegistered = false;
 
 export const registerBuiltinToolSurfaces = (): void => {
@@ -238,6 +262,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
     },
     [DEVIN_IDENTIFIER]: {
+      ...devinCliRenders,
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeRenders[ClaudeCodeApiName.AskUserQuestion],
     },
     [QODER_IDENTIFIER]: ClaudeCodeRenders as Record<string, BuiltinRender>,
@@ -296,6 +321,7 @@ export const registerBuiltinToolSurfaces = (): void => {
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
     },
     [DEVIN_IDENTIFIER]: {
+      ...devinCliInspectors,
       [ClaudeCodeApiName.AskUserQuestion]: ClaudeCodeInspectors[ClaudeCodeApiName.AskUserQuestion],
     },
     [QODER_IDENTIFIER]: ClaudeCodeInspectors as Record<string, BuiltinInspector>,

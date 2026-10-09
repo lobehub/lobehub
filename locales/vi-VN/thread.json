@@ -1,5 +1,6 @@
 {
   "actions.confirmRemoveThread": "Bạn sắp xóa chủ đề phụ này. Sau khi xóa, sẽ không thể khôi phục lại. Vui lòng tiến hành cẩn thận.",
   "newPortalThread.includeContext": "Bao gồm ngữ cảnh chủ đề",
-  "newPortalThread.title": "Bắt đầu chủ đề phụ mới"
+  "newPortalThread.title": "Bắt đầu chủ đề phụ mới",
+  "portal.openInMain": "Mở trong cuộc trò chuyện chính"
 }

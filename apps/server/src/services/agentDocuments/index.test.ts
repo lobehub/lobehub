@@ -6,11 +6,8 @@ import { createHeadlessEditor } from '@lobehub/editor/headless';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentModel } from '@/database/models/agent';
-import {
-  AgentDocumentModel,
-  buildDocumentFilename,
-  extractMarkdownH1Title,
-} from '@/database/models/agentDocuments';
+import type * as AgentDocumentsModels from '@/database/models/agentDocuments';
+import { AgentDocumentModel, buildDocumentFilename } from '@/database/models/agentDocuments';
 import { AgentSkillModel } from '@/database/models/agentSkill';
 import { FileModel } from '@/database/models/file';
 import { TopicDocumentModel } from '@/database/models/topicDocument';
@@ -26,14 +23,16 @@ const headlessEditorMocks = vi.hoisted(() => ({
   applyLiteXMLBatch: vi.fn(),
 }));
 
-vi.mock('@/database/models/agentDocuments', () => ({
+vi.mock('@/database/models/agentDocuments', async (importOriginal) => ({
+  // Spread the real module so pure helpers (e.g. extractMarkdownH1Title) keep
+  // their production behavior while the model classes stay mocked.
+  ...(await importOriginal<typeof AgentDocumentsModels>()),
   AgentDocumentModel: vi.fn(),
   DocumentLoadPosition: {
     BEFORE_FIRST_USER: 'before_first_user',
   },
   buildDocumentFilename: vi.fn(),
   deriveAgentDocumentFields: vi.fn(() => ({})),
-  extractMarkdownH1Title: vi.fn((content: string) => ({ content })),
 }));
 
 vi.mock('@/database/models/agent', () => ({
@@ -178,7 +177,6 @@ describe('AgentDocumentsService', () => {
       return mockTopicDocumentModel;
     });
     vi.mocked(buildDocumentFilename).mockImplementation((title: string) => title);
-    vi.mocked(extractMarkdownH1Title).mockImplementation((content: string) => ({ content }));
   });
 
   describe('createDocument', () => {
@@ -281,23 +279,22 @@ describe('AgentDocumentsService', () => {
       expect(mockModel.create).not.toHaveBeenCalled();
     });
 
-    it('keeps the explicit title and the H1 body line when they differ', async () => {
-      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
-        content: 'body',
-        title: 'FASE G-2D — INFORME DE CIERRE',
-      });
+    it('removes a leading H1 even when it differs from the explicit title', async () => {
       mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'G-2D-CIERRE-20260922-1101' });
 
       const service = new AgentDocumentsService(db, userId);
-      const content = '# FASE G-2D — INFORME DE CIERRE\n\nbody';
-      await service.createDocument('agent-1', 'G-2D-CIERRE-20260922-1101', content);
+      await service.createDocument(
+        'agent-1',
+        'G-2D-CIERRE-20260922-1101',
+        '# FASE G-2D — INFORME DE CIERRE\n\nbody',
+      );
 
       expect(vi.mocked(buildDocumentFilename)).toHaveBeenCalledWith('G-2D-CIERRE-20260922-1101');
       expect(mockModel.create).toHaveBeenCalledWith(
         'agent-1',
         'G-2D-CIERRE-20260922-1101',
-        content,
+        'body',
         {
           editorData: { root: { children: [] } },
           title: 'G-2D-CIERRE-20260922-1101',
@@ -308,10 +305,6 @@ describe('AgentDocumentsService', () => {
     it('names the document from its H1 when the tool call omits the title', async () => {
       // Seen in production after #19969: a model sent only `content`, and
       // `title.trim()` threw "Cannot read properties of undefined (reading 'trim')".
-      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
-        content: 'body',
-        title: 'Research Notes V2',
-      });
       mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Research Notes V2' });
 
@@ -329,10 +322,6 @@ describe('AgentDocumentsService', () => {
     });
 
     it('strips an H1 that duplicates the explicit title', async () => {
-      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
-        content: 'body',
-        title: 'My Title',
-      });
       mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
 
@@ -345,11 +334,56 @@ describe('AgentDocumentsService', () => {
       });
     });
 
-    it('falls back to the H1 as the title when no title is given', async () => {
-      vi.mocked(extractMarkdownH1Title).mockReturnValueOnce({
-        content: 'body',
-        title: 'My Title',
+    it('strips a near-duplicate H1 when the title carries a suffix', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: '任务验证未通过汇总' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument(
+        'agent-1',
+        '任务验证未通过汇总（T-77-T-312）',
+        '# 任务验证未通过汇总\n\nbody',
+      );
+
+      expect(mockModel.create).toHaveBeenCalledWith(
+        'agent-1',
+        '任务验证未通过汇总（T-77-T-312）',
+        'body',
+        {
+          editorData: { root: { children: [] } },
+          title: '任务验证未通过汇总（T-77-T-312）',
+        },
+      );
+    });
+
+    it('removes a leading H1 that differs from the explicit title', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Doc' });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.createDocument('agent-1', 'Doc', '# 一、总体结论\n\nbody');
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'Doc', 'body', {
+        editorData: { root: { children: [] } },
+        title: 'Doc',
       });
+    });
+
+    it('keeps H1 headings that appear after other body content', async () => {
+      mockModel.findByParentAndFilename.mockResolvedValue(undefined);
+      mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'Doc' });
+
+      const service = new AgentDocumentsService(db, userId);
+      const content = 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody';
+      await service.createDocument('agent-1', 'Doc', content);
+
+      expect(mockModel.create).toHaveBeenCalledWith('agent-1', 'Doc', content, {
+        editorData: { root: { children: [] } },
+        title: 'Doc',
+      });
+    });
+
+    it('falls back to the H1 as the title when no title is given', async () => {
       mockModel.findByParentAndFilename.mockResolvedValue(undefined);
       mockModel.create.mockResolvedValue({ id: 'new-doc', filename: 'My Title' });
 
@@ -1069,6 +1103,88 @@ lossless tool result
       expect(mockDocumentService.trySaveCurrentDocumentHistory).not.toHaveBeenCalled();
       expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
         content: 'same',
+        editorData: { root: { children: [] } },
+      });
+    });
+
+    it('strips a leading H1 that duplicates the document title', async () => {
+      mockModel.findById
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'old',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'My Title',
+        })
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'body',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'My Title',
+        });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.replaceDocumentContentById('agent-doc-1', '# My Title\n\nbody', 'agent-1');
+
+      expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
+        content: 'body',
+        editorData: { root: { children: [] } },
+      });
+    });
+
+    it('strips a leading H1 that differs from the document title', async () => {
+      mockModel.findById
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'old',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        })
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'body',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.replaceDocumentContentById('agent-doc-1', '# 一、总体结论\n\nbody', 'agent-1');
+
+      expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
+        content: 'body',
+        editorData: { root: { children: [] } },
+      });
+    });
+
+    it('keeps H1 headings that appear after other body content', async () => {
+      mockModel.findById
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'old',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        })
+        .mockResolvedValueOnce({
+          agentId: 'agent-1',
+          content: 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
+          documentId: 'documents-1',
+          id: 'agent-doc-1',
+          title: 'Doc',
+        });
+
+      const service = new AgentDocumentsService(db, userId);
+      await service.replaceDocumentContentById(
+        'agent-doc-1',
+        'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
+        'agent-1',
+      );
+
+      expect(mockModel.update).toHaveBeenCalledWith('agent-doc-1', {
+        content: 'intro\n\n# Echoes the title\n\n## Keep me\n\nbody',
         editorData: { root: { children: [] } },
       });
     });

@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Otwórz",
   "LocalFile.action.preview": "Podgląd",
   "LocalFile.action.showInFolder": "Pokaż w folderze",
+  "LocalFile.action.startTopic": "Rozpocznij nowy temat tutaj",
+  "LocalFile.action.startTopicFailed": "Nie udało się rozpocząć nowego tematu w tym folderze.",
   "MaxTokenSlider.unlimited": "Bez limitu",
   "ModelSelect.featureTag.audio": "Ten model obsługuje rozpoznawanie wejścia audio.",
   "ModelSelect.featureTag.custom": "Model niestandardowy, domyślnie obsługuje wywołania funkcji i rozpoznawanie wizualne. Sprawdź dostępność tych funkcji w zależności od sytuacji.",

@@ -36,6 +36,7 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
+import type { DeviceCliRestartParams } from '@lobechat/types';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -121,12 +122,18 @@ export const DEVICE_RPC_METHODS = [
   'getAppUpdateState',
   'checkAppUpdate',
   'installAppUpdate',
+  'getCliUpdateState',
+  'checkCliUpdate',
+  'restartCli',
 ] as const;
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
 
 /** Why a client without the app-update handlers rejects those RPCs. */
 export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
+
+export const CLI_UPDATE_UNSUPPORTED_MESSAGE =
+  'This device client does not support remote CLI updates';
 
 /** Why a client without a recoverable trash (the CLI daemon) rejects `trashLocalFiles`. */
 export const TRASH_UNSUPPORTED_MESSAGE = 'This device does not support moving files to the trash';
@@ -430,6 +437,21 @@ export const executeDeviceRpc = async (
     case 'installAppUpdate': {
       if (!deps.installAppUpdate) throw new Error(APP_UPDATE_UNSUPPORTED_MESSAGE);
       return deps.installAppUpdate();
+    }
+
+    case 'getCliUpdateState': {
+      if (!deps.getCliUpdateState) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.getCliUpdateState();
+    }
+
+    case 'checkCliUpdate': {
+      if (!deps.checkCliUpdate) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.checkCliUpdate();
+    }
+
+    case 'restartCli': {
+      if (!deps.restartCli) throw new Error(CLI_UPDATE_UNSUPPORTED_MESSAGE);
+      return deps.restartCli(params as DeviceCliRestartParams);
     }
 
     default: {

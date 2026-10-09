@@ -129,6 +129,8 @@
   "LocalFile.action.open": "開啟",
   "LocalFile.action.preview": "預覽",
   "LocalFile.action.showInFolder": "在資料夾中顯示",
+  "LocalFile.action.startTopic": "在此處開始新主題",
+  "LocalFile.action.startTopicFailed": "無法在此資料夾中開始新主題。",
   "MaxTokenSlider.unlimited": "無限制",
   "ModelSelect.featureTag.audio": "此模型支援音訊輸入識別。",
   "ModelSelect.featureTag.custom": "自訂模型，預設支援函式呼叫與視覺辨識，請根據實際情況驗證上述能力的可用性",

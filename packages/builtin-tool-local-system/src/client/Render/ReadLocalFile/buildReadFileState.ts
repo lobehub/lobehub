@@ -35,8 +35,14 @@ export const buildReadFileState = ({
     '';
   if (!filePath) return;
 
-  const canUseContentFallback = identifier === 'opencode' || identifier === 'pi';
-  const text = pluginState?.content ?? (canUseContentFallback ? parsedContent.content : '');
+  const canUseContentFallback =
+    identifier === 'opencode' || identifier === 'pi' || identifier === 'devin';
+  // ACP agents (Devin) park the raw session update in pluginState, whose
+  // `content` is a content-block array — never the read text — so only a
+  // string value counts as reported content.
+  const reportedContent =
+    typeof pluginState?.content === 'string' ? pluginState.content : undefined;
+  const text = reportedContent ?? (canUseContentFallback ? parsedContent.content : '');
   const images = pluginState?.images;
   // An empty file is still a successful read: keep the card when the builtin
   // tool reported a state, or when the OpenCode envelope confirms completion.

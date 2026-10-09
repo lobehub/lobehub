@@ -1,6 +1,6 @@
 {
   "name": "@lobehub/cli",
-  "version": "0.0.61",
+  "version": "0.0.62",
   "type": "module",
   "bin": {
     "lh": "dist/index.js",
@@ -17,7 +17,7 @@
     "man"
   ],
   "scripts": {
-    "build": "bun scripts/ensureWorkspaceLinks.ts && tsdown",
+    "build": "bun scripts/ensureWorkspaceLinks.ts && tsdown && tsdown src/daemon/maintenanceWorker.ts --no-config --no-clean --format esm --target node22",
     "cli:link": "bun link",
     "cli:unlink": "bun unlink",
     "dev": "LOBEHUB_CLI_HOME=.lobehub-dev bun src/index.ts",

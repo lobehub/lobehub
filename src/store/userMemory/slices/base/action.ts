@@ -51,6 +51,20 @@ export class BaseActionImpl {
     );
   };
 
+  /** PersonaHeader confirmation deletes the persona through memoryCRUDService, then clears its cache. */
+  deletePersona = async (): Promise<void> => {
+    const { memoryCRUDService } = await import('@/services/userMemory');
+    await mutate(
+      userMemoryKeys.persona(),
+      async () => {
+        await memoryCRUDService.deletePersona();
+        this.#set({ persona: undefined, personaInit: true }, false, n('deletePersona'));
+        return null;
+      },
+      { revalidate: false },
+    );
+  };
+
   purgeAllMemories = async (): Promise<void> => {
     const { memoryCRUDService } = await import('@/services/userMemory');
 

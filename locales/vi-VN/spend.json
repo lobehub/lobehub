@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "Chia sẻ của đại lý",
   "table.columns.trigger.enums.agent_signal": "Tín hiệu đại lý",
   "table.columns.trigger.enums.api": "Gọi API",
+  "table.columns.trigger.enums.asr": "Chuyển giọng nói thành văn bản",
   "table.columns.trigger.enums.bot": "Tin nhắn Bot",
   "table.columns.trigger.enums.builder_suggestion": "Gợi ý Builder",
   "table.columns.trigger.enums.chat": "Tin nhắn Chat",

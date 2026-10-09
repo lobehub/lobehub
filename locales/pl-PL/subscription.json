@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Połącz WeChat po ulepszeniu planu",
   "plansModal.modelAccess.desc": "Ten model jest dostępny w płatnych planach. Zmień plan, aby korzystać z pełnej gamy modeli.",
   "plansModal.modelAccess.title": "Odblokuj wszystkie modele",
+  "plansModal.persistentSandbox.desc": "Pliki, które Twój agent zapisuje w chmurowej piaskownicy, są usuwane po zakończeniu sesji. Ulepsz, aby zachować trwały katalog roboczy, który przetrwa sesje i będzie współdzielony między Twoimi tematami.",
+  "plansModal.persistentSandbox.title": "Zachowaj pliki piaskownicy",
   "qa.desc": "Jeśli nie znalazłeś odpowiedzi, sprawdź <1>Dokumentację Produktu</1> lub skontaktuj się z nami.",
   "qa.detail": "Zobacz szczegóły",
   "qa.list.credit.a": "Kredyty obliczeniowe to jednostka używana przez {{cloud}} do mierzenia wykorzystania modeli AI. Różne modele zużywają różną ilość kredytów.",
@@ -631,8 +633,16 @@
   "switchPlan": "Zmień Plan",
   "switchToMonthly.desc": "Po zmianie rozliczenie miesięczne zacznie obowiązywać po wygaśnięciu obecnego planu rocznego.",
   "switchToMonthly.title": "Zmień na Rozliczenie Miesięczne",
+  "switchToYearly.after": "Po przełączeniu",
+  "switchToYearly.billedYearly": "{{price}} rozliczane rocznie",
+  "switchToYearly.credit": "Kredyt za ten miesiąc",
   "switchToYearly.desc": "Po zmianie rozliczenie roczne zacznie obowiązywać natychmiast po dopłacie. Data rozpoczęcia zostanie zachowana z poprzedniego planu.",
+  "switchToYearly.dueToday": "Do zapłaty dzisiaj",
+  "switchToYearly.now": "Teraz",
+  "switchToYearly.period": "Okres rozliczeniowy",
+  "switchToYearly.price": "Cena",
   "switchToYearly.title": "Zmień na Rozliczenie Roczne",
+  "switchToYearly.yearlyPlan": "Plan roczny",
   "tab.billing": "Zarządzanie rozliczeniami",
   "tab.budget": "Budżet",
   "tab.credits": "Zarządzanie kredytami",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Podsumowanie Użytkowania",
   "usage.remaining": "Pozostało",
   "usage.storage.embeddings.used": "Przechowywanie Wektorów",
-  "usage.storage.file.used": "Wykorzystanie Plików"
+  "usage.storage.file.used": "Wykorzystanie Plików",
+  "usage.storage.sandboxStorage.used": "Użycie pamięci piaskownicy"
 }

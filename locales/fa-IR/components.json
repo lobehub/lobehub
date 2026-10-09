@@ -129,6 +129,8 @@
   "LocalFile.action.open": "باز کردن",
   "LocalFile.action.preview": "پیش‌نمایش",
   "LocalFile.action.showInFolder": "نمایش در پوشه",
+  "LocalFile.action.startTopic": "شروع موضوع جدید در اینجا",
+  "LocalFile.action.startTopicFailed": "شروع موضوع جدید در این پوشه ناموفق بود.",
   "MaxTokenSlider.unlimited": "نامحدود",
   "ModelSelect.featureTag.audio": "این مدل از تشخیص ورودی صوتی پشتیبانی می‌کند.",
   "ModelSelect.featureTag.custom": "مدل سفارشی که به‌طور پیش‌فرض از تماس‌های تابع و تشخیص بصری پشتیبانی می‌کند. لطفاً بر اساس شرایط واقعی، قابلیت‌های فوق را بررسی کنید.",

@@ -867,15 +867,28 @@ export default class GatewayConnectionCtr extends ControllerModule {
       this.remoteServerConfigCtr.getAccessToken(),
     ]);
 
+    // Never inherit the launcher's conversation identity for a dispatched run.
+    const inheritedEnv = { ...process.env };
+    for (const key of [
+      'LOBEHUB_AGENT_ID',
+      'LOBEHUB_ASSISTANT_MESSAGE_ID',
+      'LOBEHUB_TASK_ID',
+      'LOBEHUB_WORKSPACE_ID',
+    ]) {
+      delete inheritedEnv[key];
+    }
+
     // Inject auth + workspace scope into child env so `lh notify` can
     // authenticate AND target the same workspace as the dispatched topic
     // (without LOBEHUB_WORKSPACE_ID, the CLI's notify falls back to personal
     // mode and the workspace topic 404s).
     const childEnv: NodeJS.ProcessEnv = {
-      ...process.env,
+      ...inheritedEnv,
+      ...(agentId && { LOBEHUB_AGENT_ID: agentId }),
       ...(accessToken && { LOBEHUB_JWT: accessToken }),
       LOBEHUB_OPERATION_ID: operationId,
       ...(serverUrl && { LOBEHUB_SERVER: serverUrl }),
+      LOBEHUB_TOPIC_ID: topicId,
       ...(workspaceId && { LOBEHUB_WORKSPACE_ID: workspaceId }),
     };
     const sessionKey = parentOperationId ? operationId : topicId;

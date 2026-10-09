@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "브랜치 이름 변경",
   "workingDirectory.renameBranchTitle": "브랜치 이름 변경",
   "workingDirectory.renameFailed": "이름 변경 실패",
+  "workingDirectory.rollBranchName": "다른 브랜치 이름 롤링",
   "workingDirectory.searchPlaceholder": "디렉토리 검색",
   "workingDirectory.selectFolder": "폴더 선택",
   "workingDirectory.setDefault": "기본값으로 설정",

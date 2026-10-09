@@ -1,14 +1,31 @@
-// @vitest-environment node
-import type { ScopedMutator } from 'swr/_internal';
+/**
+ * @vitest-environment happy-dom
+ *
+ * The unresolved brief feed is a replica: the inbox paints the persisted rows
+ * on the first frame, a mutation shows at once and rolls back when the server
+ * rejects, and the view is cleared when the identity scope changes.
+ */
+import { randomUUID } from 'node:crypto';
+
+import { act, renderHook, waitFor } from '@testing-library/react';
+import type { PropsWithChildren } from 'react';
+import { createElement, useEffect } from 'react';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { setScopedMutate } from '@/libs/swr';
-import { briefKeys } from '@/libs/swr/keys';
+import { cacheScope } from '@/libs/replica';
+import { setScopedMutate } from '@/libs/swr/mutate';
 import { briefService } from '@/services/brief';
-import type { BriefStore } from '@/store/brief/store';
+import { useBriefStore } from '@/store/brief';
 import type { BriefItem } from '@/store/brief/types';
 
-import { BriefListActionImpl } from './action';
+import { initialBriefListState } from './initialState';
+import { briefListResource } from './projection';
+import { briefListSelectors } from './selectors';
+
+const LIST_PARAMS = {} as Record<string, never>;
+/** The persisted row of the feed under test (one entry, keyed `unresolved`). */
+const STORAGE_KEY = { queryKey: briefListResource.storageKey(LIST_PARAMS) };
 
 const createBrief = (id: string): BriefItem => ({
   actions: null,
@@ -31,89 +48,144 @@ const createBrief = (id: string): BriefItem => ({
   userId: 'user-1',
 });
 
-describe('BriefListActionImpl', () => {
-  const cache = new Map<string, BriefItem[]>();
+const deferred = <T>() => {
+  let reject!: (reason?: unknown) => void;
+  let resolve!: (value: T | PromiseLike<T>) => void;
+  const promise = new Promise<T>((resolvePromise, rejectPromise) => {
+    reject = rejectPromise;
+    resolve = resolvePromise;
+  });
+  return { promise, reject, resolve };
+};
 
-  beforeEach(() => {
-    vi.clearAllMocks();
-    cache.clear();
-    setScopedMutate((async (key, data) => {
-      if (Array.isArray(data)) cache.set(JSON.stringify(key), data);
-      return data;
-    }) as ScopedMutator);
+const MutateBridge = () => {
+  const { mutate } = useSWRConfig();
+  useEffect(() => setScopedMutate(mutate), [mutate]);
+  return null;
+};
+const wrapper = ({ children }: PropsWithChildren) =>
+  createElement(
+    SWRConfig,
+    { value: { dedupingInterval: 0, provider: () => new Map() } },
+    createElement(MutateBridge),
+    children,
+  );
+
+let scope = '';
+const useScope = (next: string) => {
+  scope = next;
+  vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
+  vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
+  vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+};
+
+/** The feed as the inbox reads it. */
+const feed = () => briefListSelectors.briefs(useBriefStore.getState());
+
+/** Drive the real sync path and wait until the head page has landed. */
+const load = async (briefs: BriefItem[]) => {
+  vi.spyOn(briefService, 'listUnresolved').mockResolvedValue({ data: briefs } as never);
+  renderHook(() => useBriefStore((s) => s.useFetchBriefs)(true), { wrapper });
+  await waitFor(() => expect(feed()).toBeDefined());
+  return briefs;
+};
+
+beforeEach(() => {
+  useScope(`brief-user-${randomUUID()}:personal`);
+  act(() => useBriefStore.setState({ ...initialBriefListState }));
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('brief list replica', () => {
+  it('paints the persisted feed before the network answers', async () => {
+    await briefListResource.storage!.set(
+      { ...STORAGE_KEY, scope },
+      { data: [createBrief('cached')], updatedAt: 1 },
+    );
+    vi.spyOn(briefService, 'listUnresolved').mockImplementation(() => new Promise(() => {}));
+
+    const { result } = renderHook(() => useBriefStore((s) => s.useFetchBriefs)(true), { wrapper });
+
+    await waitFor(() => expect(feed().map((brief) => brief.id)).toEqual(['cached']));
+    expect(briefListSelectors.isBriefsInit(useBriefStore.getState())).toBe(true);
+    expect(result.current.isValidating).toBe(true);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  it('does not fetch while logged out', () => {
+    const listUnresolved = vi.spyOn(briefService, 'listUnresolved');
+    renderHook(() => useBriefStore((s) => s.useFetchBriefs)(false), { wrapper });
+    expect(listUnresolved).not.toHaveBeenCalled();
   });
 
-  const SCOPE = 'user-1:workspace-1';
+  it('marks a brief read optimistically and rolls back when the server rejects', async () => {
+    await load([createBrief('b1')]);
+    const request = deferred<void>();
+    vi.spyOn(briefService, 'markRead').mockReturnValue(request.promise as never);
 
-  it('should remove resolved briefs from the SWR snapshot used on route remount', async () => {
-    const resolvedBrief = createBrief('brief-resolved');
-    const remainingBrief = createBrief('brief-remaining');
-    const initialBriefs = [resolvedBrief, remainingBrief];
-    const cacheKey = JSON.stringify(briefKeys.list(true, SCOPE));
-    cache.set(cacheKey, initialBriefs);
+    const pending = useBriefStore.getState().markBriefRead('b1');
+    expect(feed()[0].readAt).toBeTruthy();
 
-    const state = { briefs: initialBriefs, briefsScope: SCOPE, isBriefsInit: true };
-    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
-    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
-    vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({
-      data: [resolvedBrief.id],
-    } as never);
-
-    await action.resolveBriefsAsRead(initialBriefs.map((brief) => brief.id));
-
-    expect(state.briefs).toEqual([remainingBrief]);
-    expect(cache.get(cacheKey)).toEqual([remainingBrief]);
-
-    state.briefs = cache.get(cacheKey) ?? [];
-    expect(state.briefs).not.toContainEqual(expect.objectContaining({ id: resolvedBrief.id }));
+    request.reject(new Error('failed'));
+    await expect(pending).rejects.toThrow('failed');
+    expect(feed()[0].readAt).toBeNull();
   });
 
-  // The write-back must land on the entry the list came from. Keying it off the
-  // live scope instead would, on a mid-flight workspace switch, seed the new
-  // workspace's bucket and cache key with the previous workspace's briefs.
-  it('should abandon the write when the workspace changed while the request was in flight', async () => {
-    const brief = createBrief('brief-1');
-    const nextScopeBrief = createBrief('brief-from-next-workspace');
-    const state = { briefs: [brief], briefsScope: SCOPE, isBriefsInit: true };
-    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
-    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
-    vi.spyOn(briefService, 'resolveManyAsRead').mockImplementation(async () => {
-      // The switch lands before the response does.
-      Object.assign(state, { briefs: [nextScopeBrief], briefsScope: 'user-1:workspace-2' });
-      return { data: [brief.id] } as never;
+  it('writes a confirmed resolve through to the persisted row', async () => {
+    await load([createBrief('b1')]);
+    vi.spyOn(briefService, 'resolve').mockResolvedValue(undefined as never);
+
+    await act(() => useBriefStore.getState().resolveBrief('b1', 'approve'));
+
+    expect(feed()[0]).toMatchObject({ resolvedAction: 'approve' });
+    expect(feed()[0].resolvedAt).toBeTruthy();
+
+    await waitFor(async () => {
+      const row = await briefListResource.storage!.get({ ...STORAGE_KEY, scope });
+      expect(row?.data[0]).toMatchObject({ resolvedAction: 'approve' });
     });
-
-    await action.resolveBriefsAsRead([brief.id]);
-
-    expect(state.briefs).toEqual([nextScopeBrief]);
-    expect(cache.size).toBe(0);
   });
 
-  it('should not write an unstamped brief list into any scope entry', async () => {
-    const brief = createBrief('brief-1');
-    const state = { briefs: [brief], briefsScope: undefined, isBriefsInit: true };
-    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
-    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
-    vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({ data: [brief.id] } as never);
+  it('drops the briefs resolved as read from the feed', async () => {
+    await load([createBrief('b1'), createBrief('b2')]);
+    vi.spyOn(briefService, 'resolveManyAsRead').mockResolvedValue({ data: ['b1'] } as never);
 
-    await action.resolveBriefsAsRead([brief.id]);
+    await act(() => useBriefStore.getState().resolveBriefsAsRead(['b1']));
 
-    expect(set).not.toHaveBeenCalled();
-    expect(cache.size).toBe(0);
+    expect(feed().map((brief) => brief.id)).toEqual(['b2']);
   });
 
-  it('should skip the store write when deleting a brief the list no longer holds', async () => {
-    const state = { briefs: [createBrief('brief-1')], briefsScope: SCOPE, isBriefsInit: true };
-    const set = vi.fn((patch: Partial<typeof state>) => Object.assign(state, patch));
-    const action = new BriefListActionImpl(set as never, () => state as BriefStore);
-    vi.spyOn(briefService, 'delete').mockResolvedValue(undefined as never);
+  it('removes a deleted brief and restores it when the server rejects', async () => {
+    await load([createBrief('b1'), createBrief('b2')]);
+    const request = deferred<void>();
+    vi.spyOn(briefService, 'delete').mockReturnValue(request.promise as never);
 
-    await action.deleteBrief('brief-from-another-workspace');
+    const pending = useBriefStore.getState().deleteBrief('b1');
+    expect(feed().map((brief) => brief.id)).toEqual(['b2']);
 
-    expect(set).not.toHaveBeenCalled();
+    request.reject(new Error('failed'));
+    await expect(pending).rejects.toThrow('failed');
+    expect(feed().map((brief) => brief.id)).toEqual(['b1', 'b2']);
+  });
+
+  it('clears the previous scope’s feed on a scope switch, before any answer lands', async () => {
+    vi.spyOn(briefService, 'listUnresolved').mockResolvedValue({
+      data: [createBrief('b1'), createBrief('b2')],
+    } as never);
+    const { rerender } = renderHook(() => useBriefStore((s) => s.useFetchBriefs)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(feed()).toBeDefined());
+    expect(feed().length).toBeGreaterThan(0);
+
+    // A different identity: the previous scope's rows are unreachable here, so
+    // they must leave the view even while the new scope's fetch is in flight.
+    useScope(`brief-user-${randomUUID()}:personal`);
+    vi.spyOn(briefService, 'listUnresolved').mockImplementation(() => new Promise(() => {}));
+    rerender();
+
+    await waitFor(() => expect(briefListSelectors.hasBriefs(useBriefStore.getState())).toBe(false));
   });
 });

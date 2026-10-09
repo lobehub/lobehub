@@ -56,10 +56,10 @@ export type CodexReasoningEffort = (typeof CODEX_REASONING_EFFORT_LEVELS)[number
 export const CODEX_REASONING_EFFORT_CONFIG_KEY = 'model_reasoning_effort';
 
 /**
- * Non-OpenAI models explicitly supported through a model-specific Codex catalog
- * and the deployment-owned server-default relay. Keep this list explicit: tool
- * support alone does not prove that Codex's request and continuation behavior
- * is compatible.
+ * Non-OpenAI models with hand-tuned Codex catalog metadata (reasoning levels,
+ * truncation). Not an allowlist: any tool-capable relay model is offered to
+ * Codex, and models outside this list get a catalog entry built from their
+ * model card.
  */
 export const CODEX_SERVER_DEFAULT_CUSTOM_MODELS = [
   'deepseek-v4-flash',

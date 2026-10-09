@@ -1,12 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { type BriefStore } from '@/store/brief/store';
+import { type BriefItem } from '@/store/brief/types';
 
 import { initialBriefListState } from './initialState';
+import { BRIEF_LIST_KEY } from './projection';
 import { briefListSelectors } from './selectors';
-
-const SCOPE = 'user-1:workspace-1';
-const OTHER_SCOPE = 'user-1:workspace-2';
 
 const createState = (overrides: Partial<BriefStore> = {}) =>
   ({
@@ -14,66 +13,46 @@ const createState = (overrides: Partial<BriefStore> = {}) =>
     ...overrides,
   }) as BriefStore;
 
+const feed = (briefs: BriefItem[]) => ({ [BRIEF_LIST_KEY]: briefs });
+
 describe('briefListSelectors', () => {
   describe('briefs', () => {
     it('should return empty array by default', () => {
+      expect(briefListSelectors.briefs(createState())).toEqual([]);
+    });
+
+    it('should return the loaded feed', () => {
+      const briefs = [{ id: 'brief-1' }] as unknown as BriefItem[];
+      const state = createState({ briefListMap: feed(briefs) });
+      expect(briefListSelectors.briefs(state)).toBe(briefs);
+    });
+
+    // An identity scope with no value yet must not churn `shallow`-compared
+    // subscribers (and must not look like an empty feed).
+    it('should keep a stable identity for an unloaded feed', () => {
       const state = createState();
-      expect(briefListSelectors.briefs(SCOPE)(state)).toEqual([]);
-    });
-
-    it('should return briefs fetched for the active scope', () => {
-      const briefs = [{ id: 'brief-1', title: 'Test' }] as any;
-      const state = createState({ briefs, briefsScope: SCOPE });
-      expect(briefListSelectors.briefs(SCOPE)(state)).toBe(briefs);
-    });
-
-    // The reported bug: after a workspace switch the previous scope's briefs
-    // stayed on screen, and every action on them 404'd silently.
-    it('should hide briefs fetched for another scope', () => {
-      const briefs = [{ id: 'brief-1', title: 'Test' }] as any;
-      const state = createState({ briefs, briefsScope: OTHER_SCOPE, isBriefsInit: true });
-      expect(briefListSelectors.briefs(SCOPE)(state)).toEqual([]);
-    });
-
-    it('should keep a stable identity across scope misses so subscribers do not churn', () => {
-      const state = createState({ briefs: [{ id: 'brief-1' }] as any, briefsScope: OTHER_SCOPE });
-      expect(briefListSelectors.briefs(SCOPE)(state)).toBe(briefListSelectors.briefs(SCOPE)(state));
+      expect(briefListSelectors.briefs(state)).toBe(briefListSelectors.briefs(state));
     });
   });
 
   describe('hasBriefs', () => {
     it('should return false when empty', () => {
-      const state = createState();
-      expect(briefListSelectors.hasBriefs(SCOPE)(state)).toBe(false);
+      expect(briefListSelectors.hasBriefs(createState())).toBe(false);
     });
 
     it('should return true when has briefs', () => {
-      const state = createState({ briefs: [{ id: 'brief-1' }] as any, briefsScope: SCOPE });
-      expect(briefListSelectors.hasBriefs(SCOPE)(state)).toBe(true);
-    });
-
-    it('should return false when the briefs belong to another scope', () => {
-      const state = createState({ briefs: [{ id: 'brief-1' }] as any, briefsScope: OTHER_SCOPE });
-      expect(briefListSelectors.hasBriefs(SCOPE)(state)).toBe(false);
+      const state = createState({ briefListMap: feed([{ id: 'brief-1' } as BriefItem]) });
+      expect(briefListSelectors.hasBriefs(state)).toBe(true);
     });
   });
 
   describe('isBriefsInit', () => {
-    it('should return false by default', () => {
-      const state = createState();
-      expect(briefListSelectors.isBriefsInit(SCOPE)(state)).toBe(false);
+    it('should return false while the feed has no value for the active scope', () => {
+      expect(briefListSelectors.isBriefsInit(createState())).toBe(false);
     });
 
-    it('should return true when initialized for the active scope', () => {
-      const state = createState({ briefsScope: SCOPE, isBriefsInit: true });
-      expect(briefListSelectors.isBriefsInit(SCOPE)(state)).toBe(true);
-    });
-
-    // Reporting "loaded" for a foreign scope is what suppressed the skeleton and
-    // let the unreachable cards render.
-    it('should report not-initialized when the loaded scope differs', () => {
-      const state = createState({ briefsScope: OTHER_SCOPE, isBriefsInit: true });
-      expect(briefListSelectors.isBriefsInit(SCOPE)(state)).toBe(false);
+    it('should report loaded once the feed has a value, even an empty one', () => {
+      expect(briefListSelectors.isBriefsInit(createState({ briefListMap: feed([]) }))).toBe(true);
     });
   });
 });

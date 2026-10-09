@@ -1,17 +1,19 @@
 import { CURRENT_VERSION, isDesktop } from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
-import { type PluginItem, type PluginListResponse } from '@lobehub/market-sdk';
+import { type PluginItem } from '@lobehub/market-sdk';
 import { type TRPCClientError } from '@trpc/client';
 import debug from 'debug';
-import { uniqBy } from 'es-toolkit/compat';
 import { produce } from 'immer';
 import { gt, valid } from 'semver';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
 import { type MCPErrorData } from '@/libs/mcp/types';
 import { parseStdioErrorMessage } from '@/libs/mcp/types';
-import { toolKeys } from '@/libs/swr/keys';
+import {
+  createReplicaSlice,
+  type ReplicaLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { discoverService } from '@/services/discover';
 import { mcpService } from '@/services/mcp';
 import { pluginService } from '@/services/plugin';
@@ -24,7 +26,6 @@ import {
   type McpConnectionParams,
   type MCPErrorInfo,
   type MCPInstallProgress,
-  type MCPPluginListParams,
 } from '@/types/plugins';
 import { MCPInstallStep } from '@/types/plugins';
 import { getPlatform } from '@/utils/platform';
@@ -32,7 +33,8 @@ import { sleep } from '@/utils/sleep';
 import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
-import { type MCPStoreState } from './initialState';
+import { type MCPPluginListData, type MCPStoreState } from './initialState';
+import { MCP_PLUGIN_LIST_KEY, type MCPPluginListParams, mcpPluginListResource } from './projection';
 
 const log = debug('lobe-mcp:store:action');
 
@@ -142,19 +144,68 @@ export interface TestMcpConnectionResult {
   success: boolean;
 }
 
+/**
+ * The marketplace list keeps a dedicated `mcpPluginList` field as the replica
+ * view. It is `undefined` until the persisted row hydrates or the first network
+ * page lands, so an un-loaded list never reads as an empty one — the gate is the
+ * field's own default instead of a separate init flag.
+ */
+const mcpPluginListLens: ReplicaLens<ToolStore, MCPPluginListData> = {
+  clear: () => ({ mcpPluginList: undefined }),
+  get: (state) => state.mcpPluginList,
+  set: (_state, _key, data) => ({ mcpPluginList: data }),
+};
+
 type Setter = StoreSetter<ToolStore>;
 export const createMCPPluginStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new PluginMCPStoreActionImpl(set, get, _api);
 
 export class PluginMCPStoreActionImpl {
   readonly #get: () => ToolStore;
+  /**
+   * The MCP marketplace list is a `@lobechat/replica` paged resource: the
+   * persisted head page paints before the network answers, and "load more"
+   * appends further pages through the engine instead of a hand-rolled
+   * `currentPage` + accumulator.
+   */
+  readonly #mcpPluginList;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#mcpPluginList = createReplicaSlice(mcpPluginListResource, {
+      actionPrefix: 'mcpPluginList',
+      fetcher: (params, cursor) => this.#fetchMCPPluginListPage(params, cursor),
+      get,
+      set,
+      stateKey: 'mcpPluginListReplica',
+      view: mcpPluginListLens,
+      viewFields: ({ connectionType, locale, pageSize, q }) => ({
+        connectionType,
+        locale,
+        pageSize,
+        q: q || undefined,
+      }),
+    });
   }
+
+  /** One page of the marketplace list; `cursor` is the page index (0 = head). */
+  #fetchMCPPluginListPage = async (
+    params: MCPPluginListParams,
+    cursor?: number,
+  ): Promise<ReplicaPageResult<PluginItem, number>> => {
+    const response = await discoverService.getMCPPluginList({
+      connectionType: params.connectionType,
+      locale: params.locale,
+      page: (cursor ?? 0) + 1,
+      pageSize: params.pageSize,
+      q: params.q,
+    });
+
+    return { items: response.items, total: response.totalCount };
+  };
 
   cancelInstallMCPPlugin = async (identifier: string): Promise<void> => {
     // Get and cancel AbortController
@@ -705,32 +756,22 @@ export class PluginMCPStoreActionImpl {
     }
   };
 
-  loadMoreMCPPlugins = (): void => {
-    const { mcpPluginItems, totalCount, currentPage } = this.#get();
-
-    // Check if there's more data to load
-    if (mcpPluginItems.length < (totalCount || 0)) {
-      this.#set(
-        produce((draft: MCPStoreState) => {
-          draft.currentPage = currentPage + 1;
-        }),
-        false,
-        n('loadMoreMCPPlugins'),
-      );
-    }
+  /**
+   * Append the next page of the marketplace list. The engine reads the loaded
+   * head params, dedupes by identifier and keeps `hasMore` honest.
+   */
+  loadMoreMCPPlugins = async (): Promise<void> => {
+    await this.#mcpPluginList.loadMore(MCP_PLUGIN_LIST_KEY);
   };
 
+  /**
+   * The search term drives the resource query, so "reset" drops the painted page
+   * set: the next (query-changed) fetch repaints from its own head page instead
+   * of appending to the previous search. The persisted rows are left alone.
+   */
   resetMCPPluginList = (keywords?: string): void => {
-    this.#set(
-      produce((draft: MCPStoreState) => {
-        draft.mcpPluginItems = [];
-        draft.currentPage = 1;
-        draft.mcpSearchKeywords = keywords;
-        draft.isMcpListInit = false;
-      }),
-      false,
-      n('resetMCPPluginList'),
-    );
+    this.#set({ mcpSearchKeywords: keywords }, false, n('resetMCPPluginList'));
+    this.#mcpPluginList.update(MCP_PLUGIN_LIST_KEY, () => undefined, { persist: false });
   };
 
   testMcpConnection = async (params: McpConnectionParams): Promise<TestMcpConnectionResult> => {
@@ -860,57 +901,21 @@ export class PluginMCPStoreActionImpl {
     );
   };
 
-  useFetchMCPPluginList = (params: MCPPluginListParams): SWRResponse<PluginListResponse> => {
-    const locale = globalHelpers.getCurrentLanguage();
-    const requestParams = isDesktop
-      ? params
-      : { ...params, connectionType: McpConnectionType.http };
-    const page = requestParams.page ?? 1;
-
-    return useSWR<PluginListResponse>(
-      toolKeys.mcpPluginList(locale, {
-        connectionType: requestParams.connectionType,
-        page: requestParams.page,
-        pageSize: requestParams.pageSize,
-        q: requestParams.q,
-      }),
-      () => discoverService.getMCPPluginList(requestParams),
-      {
-        onSuccess: (data) => {
-          this.#set(
-            produce((draft: MCPStoreState) => {
-              draft.searchLoading = false;
-
-              // Set basic information
-              if (!draft.isMcpListInit) {
-                draft.activeMCPIdentifier = data.items?.[0]?.identifier;
-
-                draft.isMcpListInit = true;
-                draft.categories = data.categories;
-                draft.totalCount = data.totalCount;
-                draft.totalPages = data.totalPages;
-              }
-
-              // Accumulate data logic
-              if (page === 1) {
-                // First page, set directly
-                draft.mcpPluginItems = uniqBy(data.items, 'identifier');
-              } else {
-                // Subsequent pages, accumulate data
-                draft.mcpPluginItems = uniqBy(
-                  [...draft.mcpPluginItems, ...data.items],
-                  'identifier',
-                );
-              }
-            }),
-            false,
-            n('useFetchMCPPluginList/onSuccess'),
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
-  };
+  /**
+   * Fetch orchestration for the marketplace list. Hydrates the persisted head
+   * page, then revalidates; the rows land in the `mcpPluginList` view — read them
+   * from the store, never from this hook.
+   */
+  useFetchMCPPluginList = (
+    params: { connectionType?: McpConnectionType; pageSize?: number; q?: string } = {},
+  ): ReplicaSyncResult =>
+    this.#mcpPluginList.useSync({
+      // The web client can only reach http MCP endpoints; desktop may also use stdio.
+      connectionType: isDesktop ? params.connectionType : McpConnectionType.http,
+      locale: globalHelpers.getCurrentLanguage(),
+      pageSize: params.pageSize ?? 20,
+      q: params.q,
+    });
 }
 
 export type PluginMCPStoreAction = Pick<PluginMCPStoreActionImpl, keyof PluginMCPStoreActionImpl>;

@@ -415,3 +415,28 @@ describe('userMemoryRouter persona versions', () => {
     },
   );
 });
+
+describe('userMemoryRouter.deletePersona', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('deletes only the caller persona without purging memories or resetting topics', async () => {
+    mockDeletePersona.mockResolvedValue(undefined);
+    await expect(createCaller().deletePersona()).resolves.toEqual({ success: true });
+    expect(mockDeletePersona).toHaveBeenCalledOnce();
+    expect(mockDeleteAll).not.toHaveBeenCalled();
+    expect(mockResetMemoryExtractStatus).not.toHaveBeenCalled();
+  });
+
+  it('rejects workspace scope before deleting personal data', async () => {
+    await expect(
+      createCaller({ workspaceId: 'workspace-1' }).deletePersona(),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mockDeletePersona).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed deletion', async () => {
+    mockDeletePersona.mockRejectedValueOnce(new Error('delete failed'));
+    await expect(createCaller().deletePersona()).rejects.toThrow('delete failed');
+    expect(mockDeleteAll).not.toHaveBeenCalled();
+  });
+});

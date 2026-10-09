@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "پس از ارتقا، WeChat را متصل کنید",
   "plansModal.modelAccess.desc": "این مدل در طرح‌های پولی در دسترس است. برای استفاده از مجموعه کامل مدل‌ها، طرح خود را ارتقا دهید.",
   "plansModal.modelAccess.title": "همه مدل‌ها را باز کنید",
+  "plansModal.persistentSandbox.desc": "فایل‌هایی که عامل شما در سندباکس ابری می‌نویسد، پس از پایان جلسه حذف می‌شوند. برای داشتن یک دایرکتوری کاری پایدار که جلسات را حفظ کرده و بین موضوعات شما به اشتراک گذاشته می‌شود، ارتقا دهید.",
+  "plansModal.persistentSandbox.title": "فایل‌های سندباکس خود را نگه دارید",
   "qa.desc": "اگر پاسخ سوال خود را پیدا نکردید، به <1>مستندات محصول</1> مراجعه کنید یا با ما تماس بگیرید.",
   "qa.detail": "مشاهده جزئیات",
   "qa.list.credit.a": "اعتبارات محاسباتی معیاری هستند که توسط {{cloud}} برای اندازه‌گیری میزان استفاده از مدل‌های هوش مصنوعی هنگام فراخوانی آن‌ها استفاده می‌شود. مدل‌های مختلف هوش مصنوعی میزان متفاوتی از اعتبار محاسباتی مصرف می‌کنند.",
@@ -631,8 +633,16 @@
   "switchPlan": "تغییر طرح",
   "switchToMonthly.desc": "پس از تغییر، پرداخت ماهانه پس از پایان طرح سالانه فعلی فعال می‌شود.",
   "switchToMonthly.title": "تغییر به پرداخت ماهانه",
+  "switchToYearly.after": "پس از تغییر",
+  "switchToYearly.billedYearly": "{{price}} سالانه صورتحساب می‌شود",
+  "switchToYearly.credit": "اعتبار برای این ماه",
   "switchToYearly.desc": "پس از تغییر، پرداخت سالانه بلافاصله پس از پرداخت مابه‌التفاوت فعال می‌شود. تاریخ شروع از طرح قبلی ادامه می‌یابد.",
+  "switchToYearly.dueToday": "مبلغ قابل پرداخت امروز",
+  "switchToYearly.now": "اکنون",
+  "switchToYearly.period": "دوره صورتحساب",
+  "switchToYearly.price": "قیمت",
   "switchToYearly.title": "تغییر به پرداخت سالانه",
+  "switchToYearly.yearlyPlan": "طرح سالانه",
   "tab.billing": "مدیریت صورتحساب",
   "tab.budget": "بودجه",
   "tab.credits": "مدیریت اعتبار",
@@ -665,5 +675,6 @@
   "usage.overview.title": "نمای کلی استفاده",
   "usage.remaining": "باقی‌مانده",
   "usage.storage.embeddings.used": "ذخیره‌سازی برداری",
-  "usage.storage.file.used": "استفاده از فایل"
+  "usage.storage.file.used": "استفاده از فایل",
+  "usage.storage.sandboxStorage.used": "فضای ذخیره‌سازی سندباکس استفاده شده"
 }

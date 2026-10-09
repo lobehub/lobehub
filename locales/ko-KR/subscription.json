@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "업그레이드 후 위챗 연결",
   "plansModal.modelAccess.desc": "이 모델은 유료 플랜에서 사용할 수 있습니다. 업그레이드하여 전체 모델 라인업을 사용하세요.",
   "plansModal.modelAccess.title": "모든 모델 잠금 해제",
+  "plansModal.persistentSandbox.desc": "클라우드 샌드박스에서 에이전트가 작성한 파일은 세션이 종료되면 삭제됩니다. 세션이 종료되어도 유지되고 주제 간에 공유되는 지속적인 작업 디렉토리를 유지하려면 업그레이드하세요.",
+  "plansModal.persistentSandbox.title": "샌드박스 파일 유지",
   "qa.desc": "질문에 대한 답변이 없으신가요? <1>제품 문서</1>에서 더 많은 FAQ를 확인하거나 문의해 주세요.",
   "qa.detail": "자세히 보기",
   "qa.list.credit.a": "컴퓨팅 크레딧은 {{cloud}}에서 AI 모델 사용량을 측정하는 단위입니다. 모델마다 크레딧 소모량이 다릅니다.",
@@ -631,8 +633,16 @@
   "switchPlan": "플랜 전환",
   "switchToMonthly.desc": "전환 후 현재 연간 플랜이 만료되면 월간 결제가 적용됩니다.",
   "switchToMonthly.title": "월간 결제로 전환",
+  "switchToYearly.after": "전환 후",
+  "switchToYearly.billedYearly": "연간 {{price}} 청구",
+  "switchToYearly.credit": "이번 달의 크레딧",
   "switchToYearly.desc": "전환 후 차액 결제 시 즉시 연간 결제가 적용됩니다. 시작일은 기존 플랜을 기준으로 합니다.",
+  "switchToYearly.dueToday": "오늘 지불할 금액",
+  "switchToYearly.now": "지금",
+  "switchToYearly.period": "청구 기간",
+  "switchToYearly.price": "가격",
   "switchToYearly.title": "연간 결제로 전환",
+  "switchToYearly.yearlyPlan": "연간 플랜",
   "tab.billing": "청구 관리",
   "tab.budget": "예산",
   "tab.credits": "크레딧 관리",
@@ -665,5 +675,6 @@
   "usage.overview.title": "사용 개요",
   "usage.remaining": "남은 수량",
   "usage.storage.embeddings.used": "벡터 저장소",
-  "usage.storage.file.used": "파일 사용량"
+  "usage.storage.file.used": "파일 사용량",
+  "usage.storage.sandboxStorage.used": "샌드박스 저장소"
 }

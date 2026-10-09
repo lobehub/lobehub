@@ -39,6 +39,17 @@ const cleanRecord = (record?: Record<string, string>): Record<string, string> | 
 };
 
 /**
+ * The stdio launch config (including the `env` secrets an MCP stdio process is
+ * started with). Shipped at runtime by the list and edit reads, but not part of
+ * `ConnectorWithTools`.
+ */
+interface StdioConfig {
+  args?: string[];
+  command?: string;
+  env?: Record<string, string>;
+}
+
+/**
  * "Add / Edit custom connector" entry. Reuses the rich PluginDevModal MCP form,
  * but persists everything onto the connector subsystem (the single backend for
  * custom MCP) instead of the legacy custom-plugin store:
@@ -73,8 +84,16 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
 
     // Full connector data (with decrypted credentials) fetched for the edit form.
     // null = not yet loaded; object = loaded (credentials may still be null if none set).
+    //
+    // `metadata` and `mcpStdioConfig` come from this protected read, NOT from the
+    // list row: the list projection strips both secrets before it is persisted
+    // (see `withoutConnectorSecrets`), so a row hydrated from IndexedDB would
+    // seed the form with empty values and saving the untouched form would wipe
+    // the live env / custom headers.
     type EditFetchedData = {
       credentials: Exclude<ConnectorCredentials, { type: 'oauth2' }> | null;
+      mcpStdioConfig: StdioConfig | null | undefined;
+      metadata: Record<string, unknown> | null | undefined;
       oidcConfig: Omit<OIDCConfig, 'clientSecret'> | null | undefined;
     };
     const [editFetchedData, setEditFetchedData] = useState<EditFetchedData | null>(null);
@@ -95,6 +114,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         if (controller.signal.aborted) return;
         setEditFetchedData({
           credentials: (data?.credentials ?? null) as EditFetchedData['credentials'],
+          // Keep `undefined` (the read did not ship the field) distinct from
+          // `null` (the server confirmed there is none): only the former may
+          // fall back to the list row.
+          mcpStdioConfig: data?.mcpStdioConfig,
+          metadata: data?.metadata,
           oidcConfig: (data?.oidcConfig ?? null) as EditFetchedData['oidcConfig'],
         });
       });
@@ -102,7 +126,7 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       return () => {
         controller.abort();
       };
-    }, [open, connectorId]);
+    }, [open, connectorId, getConnectorForEdit]);
 
     // Build the pre-fill value for edit mode once the credentials fetch completes.
     // Returns undefined while loading so DevModal defers seeding the form.
@@ -114,9 +138,21 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       if (!isEditMode || !connector || editFetchedData === null) return undefined;
 
       const c = connector as typeof connector & {
-        mcpStdioConfig?: { args?: string[]; command?: string; env?: Record<string, string> };
+        mcpStdioConfig?: StdioConfig;
       };
-      const mcpStdioConfig = c.mcpStdioConfig;
+      // Both of these are stripped from the persisted list projection, so the
+      // protected edit read is authoritative. `undefined` means the read did not
+      // ship the field at all (older server), which is the only case where the
+      // list row may be used; `null` means the server confirmed there is none,
+      // and a row cached by this browser must not resurrect it — that is how a
+      // connector re-created or cleared in another session would come back with
+      // stale secrets written from the editor.
+      const mcpStdioConfig =
+        editFetchedData.mcpStdioConfig === undefined
+          ? c.mcpStdioConfig
+          : (editFetchedData.mcpStdioConfig ?? undefined);
+      const metadata =
+        editFetchedData.metadata === undefined ? connector.metadata : editFetchedData.metadata;
 
       const { credentials, oidcConfig } = editFetchedData;
 
@@ -133,14 +169,14 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
       // credential so existing connectors still pre-fill their headers — and do
       // so regardless of the auth radio (headers can coexist with bearer auth).
       const customHeaders =
-        (connector.metadata?.customHeaders as Record<string, string> | undefined) ??
+        (metadata?.customHeaders as Record<string, string> | undefined) ??
         (credentials?.type === 'header'
           ? (credentials as { headers: Record<string, string> }).headers
           : undefined);
 
       return {
         customParams: {
-          description: connector.metadata?.description as string | undefined,
+          description: metadata?.description as string | undefined,
           mcp: {
             args: mcpStdioConfig?.args,
             auth: {

@@ -1,6 +1,4 @@
 // Domain-namespaced SWR key roots. See the central registry in `@/libs/swr/keys`.
-export const SWR_USE_FETCH_NOTEBOOK_DOCUMENTS = 'notebook:documents';
-
 export const agentDocumentSWRKeys = {
   documents: (agentId: string) => ['agent:documents', agentId] as const,
   /**
@@ -21,8 +19,4 @@ export const documentSWRKeys = {
   pageDetail: (documentId: string) => ['page:detail', documentId] as const,
   pageDocuments: () => ['page:list'] as const,
   pageMeta: (documentId: string) => ['page:meta', documentId] as const,
-};
-
-export const notebookSWRKeys = {
-  documents: (topicId: string) => [SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId] as const,
 };

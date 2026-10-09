@@ -129,6 +129,8 @@
   "LocalFile.action.open": "開く",
   "LocalFile.action.preview": "プレビュー",
   "LocalFile.action.showInFolder": "フォルダーで表示",
+  "LocalFile.action.startTopic": "ここで新しいトピックを開始",
+  "LocalFile.action.startTopicFailed": "このフォルダーで新しいトピックを開始できませんでした。",
   "MaxTokenSlider.unlimited": "無制限",
   "ModelSelect.featureTag.audio": "このモデルは音声入力認識をサポートしています。",
   "ModelSelect.featureTag.custom": "カスタムモデル、デフォルトでは関数呼び出しとビジョン認識の両方をサポートしています。上記機能の有効性を確認してください。",

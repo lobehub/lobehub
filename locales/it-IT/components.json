@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Apri",
   "LocalFile.action.preview": "Anteprima",
   "LocalFile.action.showInFolder": "Mostra nella Cartella",
+  "LocalFile.action.startTopic": "Avvia un nuovo argomento qui",
+  "LocalFile.action.startTopicFailed": "Impossibile avviare un nuovo argomento in questa cartella.",
   "MaxTokenSlider.unlimited": "Illimitato",
   "ModelSelect.featureTag.audio": "Questo modello supporta il riconoscimento dell'input audio.",
   "ModelSelect.featureTag.custom": "Modello personalizzato, supporta per impostazione predefinita sia le chiamate di funzione che il riconoscimento visivo. Verifica la disponibilità delle funzionalità in base alla situazione reale.",

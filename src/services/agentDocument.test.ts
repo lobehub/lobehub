@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 
 import { agentDocumentService, resolveAgentDocumentsContext } from './agentDocument';
@@ -64,12 +65,15 @@ describe('AgentDocumentService', () => {
     });
 
     expect(mutate).toHaveBeenCalledWith(['agent:documents', 'agent-1']);
-    // `documentsList` now revalidates via a prefix matcher so the full list and
-    // the `non-web` variant (and their workspace-scoped keys) refresh together.
-    const listMatcher = vi
+    // `documentsList` revalidates via a prefix matcher so the full list and the
+    // `non-web` variant (and their workspace-scoped keys) refresh together. Pick
+    // the agent-documents matcher out of the list: the notebook branch also
+    // pushes a function matcher (its replica sync key) for `topic-1`.
+    const matchers = vi
       .mocked(mutate)
       .mock.calls.map((call) => call[0])
-      .find((key) => typeof key === 'function') as ((key: unknown) => boolean) | undefined;
+      .filter((key): key is (queryKey: unknown) => boolean => typeof key === 'function');
+    const listMatcher = matchers.find((matcher) => matcher(['agent:documentsList', 'agent-1']));
     expect(listMatcher).toBeDefined();
     expect(listMatcher!(['agent:documentsList', 'agent-1'])).toBe(true);
     expect(listMatcher!(['agent:documentsList', 'agent-1', 'non-web'])).toBe(true);
@@ -80,7 +84,14 @@ describe('AgentDocumentService', () => {
     expect(mutate).toHaveBeenCalledWith(['page:meta', 'page-doc-1']);
     expect(mutate).toHaveBeenCalledWith(['page:detail', 'page-doc-1']);
     expect(mutate).toHaveBeenCalledWith(['page:list']);
-    expect(mutate).toHaveBeenCalledWith(['notebook:documents', 'topic-1']);
+    // The notebook list is a replica now, so `topicId` refreshes its sync key
+    // instead of the removed `notebook:documents` SWR entry.
+    const scope = cacheScope.get();
+    expect(
+      matchers.some((matcher) =>
+        matcher(['replica:sync', 'notebookDocuments', 1, scope, 'topic-1', 'topic-1']),
+      ),
+    ).toBe(true);
   });
 
   it('should revalidate agent documents after updateLoadRule', async () => {

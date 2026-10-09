@@ -2,12 +2,15 @@ import { type InstallPluginMeta } from '@/types/tool/plugin';
 
 import { type ToolStoreState } from '../../initialState';
 
+/** The MCP marketplace rows of the loaded page set (empty while un-loaded). */
+const loadedPluginItems = (s: ToolStoreState) => s.mcpPluginList?.items ?? [];
+
 const mcpPluginList = (s: ToolStoreState) => {
   const installedPluginIds = new Set(s.installedPlugins.map((i) => i.identifier));
   const list =
     s.listType === 'mcp'
-      ? s.mcpPluginItems
-      : s.mcpPluginItems.filter((p) => installedPluginIds.has(p.identifier));
+      ? loadedPluginItems(s)
+      : loadedPluginItems(s).filter((p) => installedPluginIds.has(p.identifier));
 
   return list.map<InstallPluginMeta>((p) => ({
     author: p.author,
@@ -31,10 +34,8 @@ const getMCPInstallProgress = (id: string) => (s: ToolStoreState) => s.mcpInstal
 const isMCPInstalling = (id: string) => (s: ToolStoreState) => !!s.mcpInstallProgress[id];
 
 const getPluginById = (id: string) => (s: ToolStoreState) => {
-  return s.mcpPluginItems.find((i) => i.identifier === id);
+  return loadedPluginItems(s).find((i) => i.identifier === id);
 };
-
-const activeMCPPluginIdentifier = (s: ToolStoreState) => s.activeMCPIdentifier;
 
 const getMCPPluginRequiringConfig = (id: string) => (s: ToolStoreState) =>
   s.mcpInstallProgress[id]?.configSchema;
@@ -60,7 +61,6 @@ const getMCPConnectionTestState = (id: string) => (s: ToolStoreState) => ({
 });
 
 export const mcpStoreSelectors = {
-  activeMCPPluginIdentifier,
   getMCPConnectionTestError,
   getMCPConnectionTestState,
   getMCPInstallProgress,

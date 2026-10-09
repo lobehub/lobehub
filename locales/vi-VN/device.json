@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Đổi tên nhánh",
   "workingDirectory.renameBranchTitle": "Đổi tên nhánh",
   "workingDirectory.renameFailed": "Đổi tên không thành công",
+  "workingDirectory.rollBranchName": "Chuyển sang tên nhánh khác",
   "workingDirectory.searchPlaceholder": "Tìm kiếm thư mục",
   "workingDirectory.selectFolder": "Chọn thư mục",
   "workingDirectory.setDefault": "Đặt làm mặc định",
