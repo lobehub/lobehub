@@ -1046,6 +1046,77 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
   // ────────────────────────────────────────────────────
 
   describe('tool 3-phase persistence', () => {
+    it('persists native Antigravity tools, final reply and resumable conversation identity', async () => {
+      const { store } = await runWithEvents(
+        [
+          { event: 'init', conversation_id: 'agy-conversation', init: { cwd: '/project' } },
+          {
+            event: 'step_update',
+            step_update: {
+              conversation_id: 'agy-conversation',
+              step_index: 1,
+              state: 'DONE',
+              step_type: 'tool',
+              tool_info: { name: 'read_file', parameters: { path: 'hello.txt' }, output: 'hello' },
+            },
+          },
+          {
+            event: 'step_update',
+            step_update: {
+              conversation_id: 'agy-conversation',
+              step_index: 2,
+              state: 'DONE',
+              step_type: 'agent_response',
+              text_delta: 'The file says hello.',
+              usage: { input_tokens: 10, output_tokens: 5 },
+            },
+          },
+          {
+            event: 'result',
+            result: {
+              conversation_id: 'agy-conversation',
+              status: 'SUCCESS',
+              response: 'The file says hello.',
+              usage: { input_tokens: 100, output_tokens: 50 },
+            },
+          },
+        ],
+        { params: { heterogeneousProvider: { command: 'agy', type: 'antigravity' } } },
+      );
+
+      const tool = mockCreateMessage.mock.calls.find(([p]) => p.role === 'tool')?.[0];
+      expect(tool).toMatchObject({
+        parentId: 'ast-initial',
+        plugin: { apiName: 'read_file', identifier: 'antigravity' },
+        tool_call_id: 'agy_agy-conversation_1',
+      });
+      expect(mockUpdateToolMessage).toHaveBeenCalledWith(
+        tool.id,
+        { content: 'hello', pluginError: undefined },
+        { agentId: 'agent-1', topicId: 'topic-1' },
+      );
+      const finalAssistant = mockCreateMessage.mock.calls.find(
+        ([p]) => p.role === 'assistant',
+      )?.[0];
+      expect(finalAssistant).toMatchObject({ parentId: 'ast-initial' });
+      expect(mockUpdateMessage).toHaveBeenCalledWith(
+        finalAssistant.id,
+        expect.objectContaining({
+          content: 'The file says hello.',
+        }),
+        expect.anything(),
+      );
+      expect(mockUpdateMessage).toHaveBeenCalledWith(
+        finalAssistant.id,
+        expect.objectContaining({ usage: expect.objectContaining({ totalTokens: 15 }) }),
+        expect.anything(),
+      );
+      expect(store.updateTopicMetadata).toHaveBeenCalledWith(
+        'topic-1',
+        expect.objectContaining({ heteroSessionId: 'agy-conversation' }),
+      );
+    });
+
     it('should pre-register tools, create tool messages, then backfill result_msg_id', async () => {
       await runWithEvents([
         ccInit(),

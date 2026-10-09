@@ -1,4 +1,5 @@
 export default {
+  'newAntigravityAgent': 'Add Antigravity',
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
   'backgroundActivity.details': 'View details',
@@ -975,6 +976,16 @@ export default {
     "Skill wasn't added. Retry, or create an Agent anyway.",
   'createModal.skillSuggestion.title': 'A Skill may fit better',
   'createModal.title': 'What should this Agent do?',
+  'antigravityInstallGuide.actions.openDocs': 'Open Install Guide',
+  'antigravityInstallGuide.actions.openSystemTools': 'Open System Tools',
+  'antigravityInstallGuide.afterInstall':
+    'After installing, run `agy` and sign in with your Google account, then retry your message or click Re-detect in System Tools.',
+  'antigravityInstallGuide.desc':
+    'Antigravity needs the native agy CLI with stream-json support. Follow the install guide for your operating system and make sure the `agy` command is available.',
+  'antigravityInstallGuide.menuNotification.title': 'Antigravity CLI not found',
+  'antigravityInstallGuide.reason': 'LobeHub could not start Antigravity: {{message}}',
+  'antigravityInstallGuide.title': 'Install Antigravity CLI',
+  'connectAgent.providerDesc.antigravity': 'Google coding agent CLI',
   'ampInstallGuide.actions.openDocs': 'Open Install Guide',
   'ampInstallGuide.actions.openSystemTools': 'Open System Tools',
   'ampInstallGuide.afterInstall':

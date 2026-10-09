@@ -3,6 +3,7 @@ import { HETEROGENEOUS_AGENT_CONFIGS } from '@lobechat/heterogeneous-agents';
 import { DroidIcon } from '@lobechat/heterogeneous-agents/client';
 import {
   Amp,
+  Antigravity,
   ClaudeCode,
   CodeBuddy,
   Codex,
@@ -23,6 +24,10 @@ import {
 } from './types';
 
 const GUIDE_PRESENTATION_CONFIG = {
+  'antigravity': {
+    icon: Antigravity,
+    translationPrefix: 'antigravityInstallGuide',
+  },
   'amp': {
     icon: Amp,
     translationPrefix: 'ampInstallGuide',

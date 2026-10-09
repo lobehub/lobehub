@@ -944,6 +944,59 @@ describe('spawnAgent', () => {
     expect(args[resumeIdx + 1]).toBe('cc-prev-123');
   });
 
+  it('spawns Antigravity, streams native events and preserves the resumed conversation', async () => {
+    const fake = createFakeProc({
+      stdoutChunks: [
+        JSON.stringify({ event: 'init', conversation_id: 'agy-session', init: {} }) + '\n',
+        JSON.stringify({
+          event: 'step_update',
+          step_update: {
+            conversation_id: 'agy-session',
+            step_index: 8,
+            step_type: 'agent_response',
+            state: 'DONE',
+            text_delta: 'continued',
+          },
+        }) + '\n',
+        JSON.stringify({
+          event: 'result',
+          result: { conversation_id: 'agy-session', status: 'SUCCESS', response: 'continued' },
+        }) + '\n',
+      ],
+    });
+    nextFakeProc = fake.proc;
+    const { spawnAgent } = await import('./spawnAgent');
+    const handle = await spawnAgent({
+      agentType: 'antigravity',
+      operationId: 'op-agy',
+      prompt: 'continue',
+      resumeSessionId: 'agy-session',
+    });
+    fake.start();
+    const events = [];
+    for await (const event of handle.events) events.push(event);
+    await handle.exit;
+    expect(spawnCalls[0].command).toBe('agy');
+    expect(spawnCalls[0].options.shell).not.toBe(true);
+    expect(spawnCalls[0].args).toEqual([
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--conversation',
+      'agy-session',
+    ]);
+    expect(JSON.parse(fake.stdinWrites[0])).toEqual({
+      event: 'user',
+      message: { content: 'continue' },
+    });
+    expect(fake.proc.stdin.end).toHaveBeenCalled();
+    expect(
+      events.filter((event) => event.type === 'stream_chunk' && event.data.chunkType === 'text'),
+    ).toHaveLength(1);
+    expect(events.some((event) => event.type === 'error')).toBe(false);
+  });
+
   it('spawns Qoder with its stream-json protocol, permission mode, and resume id', async () => {
     const fake = createFakeProc({ stdoutChunks: [ccInit] });
     nextFakeProc = fake.proc;

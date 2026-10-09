@@ -1,11 +1,9 @@
 import {
-  buildHeterogeneousAgentAuthRequiredError,
   buildHeterogeneousAgentCliNotFoundError,
   HETEROGENEOUS_AGENT_CONFIGS,
-  isHeterogeneousAgentAuthRequired,
   isLocalHeterogeneousType,
 } from '../config';
-import { classifyCliQuotaMessage } from '../errors/cliQuota';
+import { classifyCliMessageError } from '../errors/classifyCliMessageError';
 import type { HeterogeneousTerminalErrorData } from '../types';
 
 /**
@@ -120,30 +118,5 @@ export const classifyHeteroProcessFailure = (
     });
   }
 
-  // Before auth: a CLI can report a spent subscription through its auth layer
-  // (Kimi Code exits with `provider.auth_error: 403 You've reached your weekly
-  // (7-day) usage limit…`). Signing in again never fixes that, so the quota
-  // wording has to win over anything the auth patterns recognize.
-  const quota = classifyCliQuotaMessage(detail);
-  if (detail && quota) {
-    return {
-      agentType,
-      code: 'rate_limit',
-      details: { kind: quota.kind },
-      error: detail,
-      message: detail,
-      ...(quota.rateLimitType
-        ? { rateLimitInfo: { rateLimitType: quota.rateLimitType, status: 'rejected' } }
-        : {}),
-      stderr: detail,
-    };
-  }
-
-  if (detail && isHeterogeneousAgentAuthRequired(agentType, detail)) {
-    return buildHeterogeneousAgentAuthRequiredError({
-      agentType,
-      command,
-      stderr: detail,
-    });
-  }
+  return classifyCliMessageError({ agentType, command, detail });
 };
