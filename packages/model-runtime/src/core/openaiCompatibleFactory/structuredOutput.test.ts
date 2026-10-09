@@ -6,6 +6,8 @@ describe('parseStructuredOutputText', () => {
   it.each([
     '{"ready":true}',
     '```json\n{"ready":true}\n```',
+    '```JSON\n{"ready":true}\n```',
+    '```JsOn\n{"ready":true}\n```',
     'Summary\n```json\r\n{"ready":true}\r\n```\nDone',
     '```\n{"ready":true}\n```',
   ])('reads a single unambiguous JSON value: %s', (text) => {

@@ -35,7 +35,7 @@ export const parseStructuredOutputText = (value: unknown): unknown => {
     const fences = [...value.matchAll(/^[ \t]*```([^\r\n]*)\r?$/gm)];
     if (
       fences.length === 2 &&
-      ['', 'json'].includes(fences[0][1].trim()) &&
+      ['', 'json'].includes(fences[0][1].trim().toLowerCase()) &&
       fences[1][1].trim() === ''
     ) {
       const contents = value.slice(fences[0].index! + fences[0][0].length, fences[1].index);
