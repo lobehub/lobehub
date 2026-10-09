@@ -5,6 +5,7 @@ import {
   DEFAULT_MAX_CONTEXT,
   DEFAULT_THRESHOLD_RATIO,
   getCompressionThreshold,
+  setCompressionTelemetrySink,
   shouldCompress,
 } from './tokenCounter';
 
@@ -162,6 +163,46 @@ describe('tokenCounter', () => {
 
       expect(withTools.needsCompression).toBe(true);
       expect(withTools.currentTokenCount).toBeGreaterThan(withoutTools.currentTokenCount);
+    });
+  });
+
+  describe('telemetry sink', () => {
+    it('should emit one event per shouldCompress call and stop after unset', () => {
+      const events: any[] = [];
+      setCompressionTelemetrySink((event) => events.push(event));
+
+      shouldCompress([mkMsg({ role: 'user', content: 'Hi' })], { maxWindowToken: 100_000 });
+
+      expect(events).toHaveLength(1);
+      expect(events[0].needsCompression).toBe(false);
+      expect(events[0].maxWindowToken).toBe(100_000);
+      expect(events[0].messageCount).toBe(1);
+      expect(events[0].currentTokenCount).toBeGreaterThan(0);
+
+      setCompressionTelemetrySink(undefined);
+      shouldCompress([mkMsg({ role: 'user', content: 'Hi' })]);
+
+      expect(events).toHaveLength(1);
+    });
+
+    it('should report tool definition count and over-threshold state', () => {
+      const events: any[] = [];
+      setCompressionTelemetrySink((event) => events.push(event));
+
+      shouldCompress(
+        [
+          mkMsg({
+            role: 'assistant',
+            metadata: { usage: { totalOutputTokens: 70_000 } as any } as any,
+          }),
+        ],
+        { driftMultiplier: 1, tools: [{ function: { name: 't' }, type: 'function' }] },
+      );
+
+      expect(events[0].toolDefinitionCount).toBe(1);
+      expect(events[0].needsCompression).toBe(true);
+
+      setCompressionTelemetrySink(undefined);
     });
   });
 });

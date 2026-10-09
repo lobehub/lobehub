@@ -30,6 +30,35 @@ export const DEFAULT_MAX_CONTEXT = 128_000;
 export const DEFAULT_THRESHOLD_RATIO = 0.5;
 
 /**
+ * Optional sink for compression-check telemetry. Assigned by the host app so
+ * this shared package never imports a server logger. Called once per
+ * shouldCompress call with a plain object, safe to ignore.
+ */
+export type CompressionTelemetrySink = (event: {
+  /** per-source raw token breakdown */
+  bySource: Record<string, number>;
+  /** estimated tokens before drift multiplier */
+  currentTokenCount: number;
+  /** number of messages in the candidate context */
+  messageCount: number;
+  /** effective maxWindowToken basis (after any budget clamp) */
+  maxWindowToken?: number;
+  /** whether compression will run */
+  needsCompression: boolean;
+  /** raw vs adjusted milestone total */
+  threshold: number;
+  /** count of tool definitions contributing to the estimate */
+  toolDefinitionCount?: number;
+}) => void;
+
+let telemetrySink: CompressionTelemetrySink | undefined;
+
+export function setCompressionTelemetrySink(sink?: CompressionTelemetrySink) {
+  telemetrySink = sink;
+}
+
+
+/**
  * Calculate the compression threshold based on max context window
  */
 export function getCompressionThreshold(options: TokenCountOptions = {}): number {
@@ -75,6 +104,16 @@ export function shouldCompress(
     tools: options.tools,
   });
   const threshold = getCompressionThreshold(options);
+
+  telemetrySink?.({
+    bySource: accounting.bySource,
+    currentTokenCount: accounting.rawTotal,
+    messageCount: messages.length,
+    maxWindowToken: options.maxWindowToken,
+    needsCompression: accounting.adjustedTotal > threshold,
+    threshold,
+    toolDefinitionCount: Array.isArray(options.tools) ? options.tools.length : 0,
+  });
 
   return {
     currentTokenCount: accounting.rawTotal,

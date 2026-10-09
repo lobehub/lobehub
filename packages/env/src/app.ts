@@ -91,6 +91,23 @@ export const getAppConfig = () => {
        */
       enableQueueAgentRuntime: z.boolean().optional(),
       TELEMETRY_DISABLED: z.boolean().optional(),
+      /**
+       * Hard ceiling applied to a model's contextWindowTokens before the
+       * context-compression threshold is computed. Keeps long-window models
+       * (e.g. 1M tokens) from letting prompts grow far past any sane cost
+       * budget before compression fires. Unset = use the catalog window.
+       */
+      CONTEXT_COMPRESSION_MAX_TOKENS: z.number().int().positive().optional(),
+      /**
+       * Overrides the initial compression trigger ratio (raw threshold =
+       * window × ratio). Unset = upstream default (0.5).
+       */
+      CONTEXT_COMPRESSION_THRESHOLD_RATIO: z.number().min(0.01).max(1).optional(),
+      /**
+       * Overrides the recompression ratio applied once a summary exists.
+       * Unset = upstream default (0.65) or thresholdRatio, whichever higher.
+       */
+      CONTEXT_COMPRESSION_RECOMPRESSION_RATIO: z.number().min(0.01).max(1).optional(),
     },
     runtimeEnv: {
       // Sentry
@@ -132,6 +149,15 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
+      CONTEXT_COMPRESSION_MAX_TOKENS: process.env.CONTEXT_COMPRESSION_MAX_TOKENS
+        ? Number(process.env.CONTEXT_COMPRESSION_MAX_TOKENS)
+        : undefined,
+      CONTEXT_COMPRESSION_THRESHOLD_RATIO: process.env.CONTEXT_COMPRESSION_THRESHOLD_RATIO
+        ? Number(process.env.CONTEXT_COMPRESSION_THRESHOLD_RATIO)
+        : undefined,
+      CONTEXT_COMPRESSION_RECOMPRESSION_RATIO: process.env.CONTEXT_COMPRESSION_RECOMPRESSION_RATIO
+        ? Number(process.env.CONTEXT_COMPRESSION_RECOMPRESSION_RATIO)
+        : undefined,
     },
   });
 };

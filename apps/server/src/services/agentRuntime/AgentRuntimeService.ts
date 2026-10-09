@@ -15,6 +15,7 @@ import {
   findInMessages,
   GeneralChatAgent,
   isParkedStatus,
+  setCompressionTelemetrySink,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
@@ -121,6 +122,17 @@ if (process.env.VERCEL) {
 }
 
 const log = debug('lobe-server:agent-runtime-service');
+
+// Per-compression-check telemetry so prompt growth is visible in server logs
+// without touching Langfuse. Gated by CONTEXT_COMPRESSION_LOG=1 so production
+// can opt in without enabling the full debug firehose. Keys stay stable for jq.
+if (process.env.CONTEXT_COMPRESSION_LOG === '1') {
+  setCompressionTelemetrySink((event) => {
+    console.log(
+      `[context-size] tokens=${event.currentTokenCount} threshold=${event.threshold} window=${event.maxWindowToken ?? 'catalog'} messages=${event.messageCount} tools=${event.toolDefinitionCount ?? 0} compress=${event.needsCompression} bySource=${JSON.stringify(event.bySource)}`,
+    );
+  });
+}
 
 /**
  * Base delay before the first `verifyAsyncToolBarrier` re-check fires after a
@@ -4088,12 +4100,22 @@ export class AgentRuntimeService {
     const plan = state?.plan;
     const principal = state?.principal;
 
+    // Cost guard: cap the compression budget below the model's real window
+    // when configured, so long-window models don't defer compression until
+    // prompts are far past any sane cost target.
+    const compressionWindowTokens =
+      appEnv.CONTEXT_COMPRESSION_MAX_TOKENS && contextWindowTokens
+        ? Math.min(contextWindowTokens, appEnv.CONTEXT_COMPRESSION_MAX_TOKENS)
+        : (appEnv.CONTEXT_COMPRESSION_MAX_TOKENS ?? contextWindowTokens);
+
     // Create Agent instance — use custom factory if provided, otherwise default to GeneralChatAgent
     const generalConfig = {
       agentConfig: world?.agent,
       compressionConfig: {
         enabled: world?.agent?.chatConfig?.enableContextCompression ?? true,
-        maxWindowToken: contextWindowTokens ?? undefined,
+        maxWindowToken: compressionWindowTokens ?? undefined,
+        recompressionThresholdRatio: appEnv.CONTEXT_COMPRESSION_RECOMPRESSION_RATIO,
+        thresholdRatio: appEnv.CONTEXT_COMPRESSION_THRESHOLD_RATIO,
       },
       dynamicInterventionAudits,
       modelRuntimeConfig,
