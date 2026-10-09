@@ -31,16 +31,18 @@ export const parseStructuredOutputText = (value: unknown): unknown => {
     return JSON.parse(value);
   } catch {
     // Some compatible providers wrap a valid response in Markdown despite json_schema.
-    // Require exactly one pair of fences so multiple candidates are never silently selected.
-    const parts = value.split('```');
-    if (parts.length === 3) {
-      const block = /^(?:json)?[ \t]*\r?\n([\s\S]*?)\r?\n?$/.exec(parts[1]);
-      if (block) {
-        try {
-          return JSON.parse(block[1]);
-        } catch {
-          // Preserve the same explicit failure and never include private response text.
-        }
+    // Only standalone fence lines delimit blocks; JSON strings may contain backticks.
+    const fences = [...value.matchAll(/^[ \t]*```([^\r\n]*)\r?$/gm)];
+    if (
+      fences.length === 2 &&
+      ['', 'json'].includes(fences[0][1].trim()) &&
+      fences[1][1].trim() === ''
+    ) {
+      const contents = value.slice(fences[0].index! + fences[0][0].length, fences[1].index);
+      try {
+        return JSON.parse(contents);
+      } catch {
+        // Preserve the same explicit failure and never include private response text.
       }
     }
     throw new StructuredOutputError('invalid JSON response text');

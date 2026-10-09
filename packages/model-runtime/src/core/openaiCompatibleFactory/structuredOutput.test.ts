@@ -11,6 +11,11 @@ describe('parseStructuredOutputText', () => {
   ])('reads a single unambiguous JSON value: %s', (text) => {
     expect(parseStructuredOutputText(text)).toEqual({ ready: true });
   });
+  it('preserves fence literals inside JSON strings', () => {
+    expect(parseStructuredOutputText('```json\n{"snippet":"```"}\n```')).toEqual({
+      snippet: '```',
+    });
+  });
   it.each(['[1,2]', 'null', 'true'])('preserves valid JSON schema output %s', (text) => {
     expect(parseStructuredOutputText(text)).toEqual(JSON.parse(text));
   });
