@@ -621,6 +621,98 @@ describe('composio connections replica', () => {
     expect(useToolStore.getState().composioServers[0].status).toBe('active');
   });
 
+  it('discards a connection the server confirms after the identity switched scope', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
+    await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
+
+    let resolveCreate!: (value: unknown) => void;
+    mocks.createConnection.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveCreate = resolve;
+      }),
+    );
+
+    let created!: Promise<unknown>;
+    await act(async () => {
+      created = useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'SLACK', identifier: 'slack', label: 'Slack' });
+    });
+    await waitFor(() => expect(mocks.createConnection).toHaveBeenCalledTimes(1));
+
+    // The user switches identity before the server answers.
+    const nextScope = `composio-user-${randomUUID()}:personal`;
+    useScope(nextScope);
+    await act(async () => {});
+
+    await act(async () => {
+      resolveCreate({
+        authConfigId: 'ac_slack',
+        connectedAccountId: 'ca_slack',
+        identifier: 'slack',
+        redirectUrl: 'https://composio.dev/redirect',
+      });
+      await created;
+    });
+
+    // The completion belongs to the scope that started it: it must not land in
+    // the switched-to list, nor be persisted into that scope's partition.
+    expect(connectionIds()).not.toContain('slack');
+    const persisted = await composioServersResource.storage!.get({
+      queryKey: SERVERS_STORAGE_KEY,
+      scope: nextScope,
+    });
+    expect((persisted?.data ?? []).some((s) => s.connectedAccountId === 'ca_slack')).toBe(false);
+  });
+
+  it('does not let a pending write in one scope drop another scope’s list', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail', { status: 'PENDING' })]);
+    renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
+    await waitFor(() => expect(connectionIds()).toEqual(['gmail']));
+
+    mocks.getConnection.mockResolvedValue({ gmailReadPermission: false, status: 'ACTIVE' });
+    mocks.listActions.mockResolvedValue({
+      tools: [{ description: 'Fetch', inputSchema: { type: 'object' }, name: 'GMAIL_FETCH' }],
+    });
+    let resolveUpdate!: (value: unknown) => void;
+    mocks.updateComposioPlugin.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      }),
+    );
+
+    // Scope A starts a refresh whose server write stays in flight.
+    let refresh!: Promise<void>;
+    await act(async () => {
+      refresh = useToolStore.getState().refreshComposioConnectionStatus('gmail');
+    });
+    await waitFor(() => expect(mocks.updateComposioPlugin).toHaveBeenCalledTimes(1));
+
+    // The user switches scope while A's write is still pending.
+    const nextScope = `composio-user-${randomUUID()}:personal`;
+    useScope(nextScope);
+
+    // B's own list must still load: A's hold is not B's to apply.
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('slack', { status: 'PENDING' })]);
+    const nextSync = renderHook(
+      () => useToolStore((s) => s.useFetchUserComposioConnections)(true),
+      {
+        wrapper,
+      },
+    );
+    await waitFor(() => expect(connectionIds()).toEqual(['slack']));
+
+    await act(async () => {
+      resolveUpdate({ success: true });
+      await refresh;
+    });
+    await act(async () => {
+      await nextSync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual(['slack']);
+  });
+
   it('revalidates through the connections sync mutate without clearing the list', async () => {
     mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail')]);
     const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
