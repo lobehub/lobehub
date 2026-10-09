@@ -3,8 +3,9 @@
  *
  * The connector lists are `@lobechat/replica` resources: the persisted
  * projection paints while the network confirms it, a permission write shows on
- * the row immediately and rolls back when the server rejects it, and the same
- * connector is dropped from every list that holds it in one fan-out.
+ * the row immediately and rolls back when the server rejects it, and a
+ * confirmed delete drops the same connector from every list that holds it in
+ * one fan-out.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -159,7 +160,7 @@ describe('connector slice replica', () => {
     expect(useToolStore.getState().connectors[0].tools[0].permission).toBe('auto');
   });
 
-  it('drops a deleted connector from every list that holds it, and restores on failure', async () => {
+  it('keeps a deleted connector mounted until the server confirms, then drops it everywhere', async () => {
     listQuery.mockResolvedValue([connector('c1')]);
     listAgentBoundQuery.mockResolvedValue([connector('c1')]);
     listByAgentQuery.mockResolvedValue([connector('c1')]);
@@ -174,20 +175,24 @@ describe('connector slice replica', () => {
     let resolveDelete!: (value: unknown) => void;
     deleteMutation.mockImplementation(() => new Promise((resolve) => (resolveDelete = resolve)));
     const operation = useToolStore.getState().deleteConnector('c1');
-    // One fan-out: the row leaves all three views before the server answers.
-    expect(useToolStore.getState().connectors).toHaveLength(0);
-    expect(useToolStore.getState().agentBoundConnectors).toHaveLength(0);
-    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(0);
+    // Still mounted while the request is in flight: the detail pane reads this
+    // row, so an optimistic removal would blank it for the whole delete.
+    expect(useToolStore.getState().connectors).toHaveLength(1);
+    expect(useToolStore.getState().agentBoundConnectors).toHaveLength(1);
+    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
 
     listQuery.mockResolvedValue([]);
     listAgentBoundQuery.mockResolvedValue([]);
+    listByAgentQuery.mockResolvedValue([]);
     resolveDelete(undefined);
     await operation;
+    // Confirmed: one fan-out drops the row from all three views.
     expect(useToolStore.getState().connectors).toHaveLength(0);
+    expect(useToolStore.getState().agentBoundConnectors).toHaveLength(0);
     expect(useToolStore.getState().agentConnectors.a1).toHaveLength(0);
   });
 
-  it('restores a connector in every list when the delete is rejected', async () => {
+  it('keeps a connector in every list when the delete is rejected', async () => {
     listQuery.mockResolvedValue([connector('c1')]);
     listAgentBoundQuery.mockResolvedValue([connector('c1')]);
     listByAgentQuery.mockResolvedValue([connector('c1')]);
