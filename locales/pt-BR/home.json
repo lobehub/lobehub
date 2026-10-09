@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Mostrar atividade",
   "dashboard.scheduledTask.title": "Tarefas agendadas",
   "dashboard.submitFailed": "Não foi possível enviar. Seu rascunho foi mantido.",
+  "dashboard.task.attachmentsNotReady": "Aguarde os anexos terminarem de carregar ou tente novamente os uploads que falharam. Seu rascunho foi mantido.",
   "dashboard.task.created": "Tarefa criada",
   "dashboard.task.createdHint": "Encontre-a em Tarefas recentes.",
   "dashboard.task.empty": "Nenhuma tarefa ainda",

@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Etkinliği göster",
   "dashboard.scheduledTask.title": "Planlanmış görevler",
   "dashboard.submitFailed": "Gönderilemedi. Taslağınız kaydedildi.",
+  "dashboard.task.attachmentsNotReady": "Eklerin yüklenmesinin tamamlanmasını bekleyin veya başarısız yüklemeleri yeniden deneyin. Taslağınız kaydedildi.",
   "dashboard.task.created": "Görev oluşturuldu",
   "dashboard.task.createdHint": "Son görevlerde bulabilirsiniz.",
   "dashboard.task.empty": "Henüz görev yok",

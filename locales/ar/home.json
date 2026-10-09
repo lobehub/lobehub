@@ -111,6 +111,7 @@
   "dashboard.rail.show": "عرض النشاط",
   "dashboard.scheduledTask.title": "المهام المجدولة",
   "dashboard.submitFailed": "تعذر الإرسال. تم الاحتفاظ بمسودتك.",
+  "dashboard.task.attachmentsNotReady": "انتظر حتى يتم تحميل المرفقات، أو أعد محاولة التحميلات الفاشلة. تم الاحتفاظ بمسودتك.",
   "dashboard.task.created": "تم إنشاء المهمة",
   "dashboard.task.createdHint": "يمكنك العثور عليها في المهام الأخيرة.",
   "dashboard.task.empty": "لا توجد مهام حتى الآن",

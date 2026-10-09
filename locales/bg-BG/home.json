@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Покажете активността",
   "dashboard.scheduledTask.title": "Планирани задачи",
   "dashboard.submitFailed": "Неуспешно изпращане. Вашият чернов е запазен.",
+  "dashboard.task.attachmentsNotReady": "Изчакайте прикачените файлове да завършат качването или опитайте отново неуспешните качвания. Вашият чернов е запазен.",
   "dashboard.task.created": "Задачата е създадена",
   "dashboard.task.createdHint": "Намерете я в Последни задачи.",
   "dashboard.task.empty": "Все още няма задачи",

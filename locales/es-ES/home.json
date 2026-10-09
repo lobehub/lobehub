@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Mostrar actividad",
   "dashboard.scheduledTask.title": "Tareas programadas",
   "dashboard.submitFailed": "No se pudo enviar. Tu borrador ha sido guardado.",
+  "dashboard.task.attachmentsNotReady": "Espera a que los archivos adjuntos terminen de cargarse o vuelve a intentar las cargas fallidas. Tu borrador se ha guardado.",
   "dashboard.task.created": "Tarea creada",
   "dashboard.task.createdHint": "Encuéntrala en Tareas recientes.",
   "dashboard.task.empty": "Aún no hay tareas",

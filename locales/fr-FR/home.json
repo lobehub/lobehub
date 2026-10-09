@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Afficher l'activité",
   "dashboard.scheduledTask.title": "Tâches planifiées",
   "dashboard.submitFailed": "Impossible de soumettre. Votre brouillon a été conservé.",
+  "dashboard.task.attachmentsNotReady": "Attendez que les pièces jointes terminent de se télécharger ou réessayez les téléchargements échoués. Votre brouillon a été conservé.",
   "dashboard.task.created": "Tâche créée",
   "dashboard.task.createdHint": "Trouvez-la dans les tâches récentes.",
   "dashboard.task.empty": "Aucune tâche pour le moment",

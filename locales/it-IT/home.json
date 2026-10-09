@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Mostra attività",
   "dashboard.scheduledTask.title": "Compiti programmati",
   "dashboard.submitFailed": "Impossibile inviare. La tua bozza è stata salvata.",
+  "dashboard.task.attachmentsNotReady": "Attendi che gli allegati terminino il caricamento o riprova i caricamenti non riusciti. La tua bozza è stata salvata.",
   "dashboard.task.created": "Attività creata",
   "dashboard.task.createdHint": "Trovala nelle attività recenti.",
   "dashboard.task.empty": "Nessuna attività ancora",

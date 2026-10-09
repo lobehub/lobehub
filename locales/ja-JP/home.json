@@ -111,6 +111,7 @@
   "dashboard.rail.show": "アクティビティを表示",
   "dashboard.scheduledTask.title": "予定されたタスク",
   "dashboard.submitFailed": "送信できませんでした。下書きは保存されています。",
+  "dashboard.task.attachmentsNotReady": "添付ファイルのアップロードが完了するのを待つか、失敗したアップロードを再試行してください。下書きは保存されています。",
   "dashboard.task.created": "タスクが作成されました",
   "dashboard.task.createdHint": "最近のタスクで見つけてください。",
   "dashboard.task.empty": "まだタスクはありません",

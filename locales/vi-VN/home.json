@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Hiển thị hoạt động",
   "dashboard.scheduledTask.title": "Nhiệm vụ đã lên lịch",
   "dashboard.submitFailed": "Không thể gửi. Bản nháp của bạn đã được lưu lại.",
+  "dashboard.task.attachmentsNotReady": "Chờ tệp đính kèm tải lên hoàn tất hoặc thử lại các lần tải lên bị lỗi. Bản nháp của bạn đã được lưu.",
   "dashboard.task.created": "Nhiệm vụ đã được tạo",
   "dashboard.task.createdHint": "Tìm trong Nhiệm vụ gần đây.",
   "dashboard.task.empty": "Chưa có nhiệm vụ nào",

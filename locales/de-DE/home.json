@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Aktivität anzeigen",
   "dashboard.scheduledTask.title": "Geplante Aufgaben",
   "dashboard.submitFailed": "Konnte nicht gesendet werden. Ihr Entwurf wurde gespeichert.",
+  "dashboard.task.attachmentsNotReady": "Warten Sie, bis die Anhänge hochgeladen sind, oder versuchen Sie fehlgeschlagene Uploads erneut. Ihr Entwurf wurde gespeichert.",
   "dashboard.task.created": "Aufgabe erstellt",
   "dashboard.task.createdHint": "Finden Sie es unter Kürzlich erstellte Aufgaben.",
   "dashboard.task.empty": "Noch keine Aufgaben",

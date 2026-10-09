@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Показать активность",
   "dashboard.scheduledTask.title": "Запланированные задачи",
   "dashboard.submitFailed": "Не удалось отправить. Ваш черновик сохранен.",
+  "dashboard.task.attachmentsNotReady": "Дождитесь завершения загрузки вложений или повторите попытку для неудачных загрузок. Ваш черновик сохранен.",
   "dashboard.task.created": "Задача создана",
   "dashboard.task.createdHint": "Найдите её в разделе Недавние задачи.",
   "dashboard.task.empty": "Задач пока нет",

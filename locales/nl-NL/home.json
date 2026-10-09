@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Activiteit tonen",
   "dashboard.scheduledTask.title": "Geplande taken",
   "dashboard.submitFailed": "Kon niet verzenden. Je concept is bewaard.",
+  "dashboard.task.attachmentsNotReady": "Wacht tot de bijlagen klaar zijn met uploaden, of probeer mislukte uploads opnieuw. Je concept is bewaard.",
   "dashboard.task.created": "Taak aangemaakt",
   "dashboard.task.createdHint": "Vind het in Recente taken.",
   "dashboard.task.empty": "Nog geen taken",

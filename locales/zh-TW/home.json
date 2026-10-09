@@ -111,6 +111,7 @@
   "dashboard.rail.show": "顯示活動",
   "dashboard.scheduledTask.title": "已排程任務",
   "dashboard.submitFailed": "無法提交。您的草稿已被保留。",
+  "dashboard.task.attachmentsNotReady": "等待附件上傳完成，或重試失敗的上傳。您的草稿已被保留。",
   "dashboard.task.created": "任務已建立",
   "dashboard.task.createdHint": "在最近的任務中找到它。",
   "dashboard.task.empty": "尚無任務",

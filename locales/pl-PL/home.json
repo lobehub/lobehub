@@ -111,6 +111,7 @@
   "dashboard.rail.show": "Pokaż aktywność",
   "dashboard.scheduledTask.title": "Zaplanowane zadania",
   "dashboard.submitFailed": "Nie udało się wysłać. Twój szkic został zachowany.",
+  "dashboard.task.attachmentsNotReady": "Poczekaj, aż załączniki zakończą przesyłanie, lub spróbuj ponownie przesłać nieudane pliki. Twój szkic został zachowany.",
   "dashboard.task.created": "Zadanie utworzone",
   "dashboard.task.createdHint": "Znajdź je w Ostatnich zadaniach.",
   "dashboard.task.empty": "Brak zadań",

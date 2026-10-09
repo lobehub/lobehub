@@ -111,6 +111,7 @@
   "dashboard.rail.show": "فعالیت را نمایش دهید",
   "dashboard.scheduledTask.title": "وظایف زمان‌بندی‌شده",
   "dashboard.submitFailed": "ارسال نشد. پیش‌نویس شما ذخیره شده است.",
+  "dashboard.task.attachmentsNotReady": "منتظر بمانید تا پیوست‌ها بارگذاری شوند یا بارگذاری‌های ناموفق را دوباره امتحان کنید. پیش‌نویس شما ذخیره شده است.",
   "dashboard.task.created": "وظیفه ایجاد شد",
   "dashboard.task.createdHint": "آن را در وظایف اخیر پیدا کنید.",
   "dashboard.task.empty": "هنوز وظیفه‌ای وجود ندارد",
