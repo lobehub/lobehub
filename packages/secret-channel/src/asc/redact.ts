@@ -49,14 +49,16 @@ export interface SecretRedactor {
   clear: () => void;
   /** Length of the longest registered variant. */
   readonly maxLength: number;
-  /**
-   * Largest prefix length of `text` a streaming caller may finalize: everything before it can be
-   * redacted and dropped without consuming a match that is still open at the cut — neither a
-   * completed match straddling it nor a suffix that is a proper prefix of a longer variant. `0`
-   * means the whole buffer is still ambiguous and must be held back.
-   */
-  finalizablePrefixLength: (text: string) => number;
   redact: (text: string) => string;
+  /**
+   * Redact the decided leading part of `text` and return the raw `carry` re-fed with the next
+   * chunk. Matches resolve left to right, and any suffix a longer variant may still complete from
+   * stays raw, so `carry` is always shorter than the longest variant: a stream buffers at most one
+   * variant's worth, and a match is never split across the boundary or emitted with its own prefix
+   * already redacted. With overlapping variants the result may differ from `redact` on the same
+   * text, but it never re-emits a registered variant.
+   */
+  redactDecided: (text: string) => { carry: string; out: string };
   readonly size: number;
 }
 
@@ -67,6 +69,25 @@ export interface SecretRedactor {
  */
 export const createSecretRedactor = (): SecretRedactor => {
   let patterns: { placeholder: string; variant: string }[] = [];
+  // Variants bucketed by first character so the streaming scan only compares plausible candidates.
+  let byFirst = new Map<string, { placeholder: string; variant: string }[]>();
+
+  const index = () => {
+    byFirst = new Map();
+    for (const pattern of patterns) {
+      const bucket = byFirst.get(pattern.variant[0]);
+      if (bucket) bucket.push(pattern);
+      else byFirst.set(pattern.variant[0], [pattern]);
+    }
+  };
+
+  const redactText = (text: string) => {
+    let out = text;
+    for (const { placeholder, variant } of patterns) {
+      if (out.includes(variant)) out = out.split(variant).join(placeholder);
+    }
+    return out;
+  };
 
   return {
     add(label, value) {
@@ -77,60 +98,43 @@ export const createSecretRedactor = (): SecretRedactor => {
       for (const variant of secretVariants(value)) patterns.push({ placeholder, variant });
       // Longest first so a raw value inside its own longer encoding is handled by the longer match.
       patterns.sort((a, b) => b.variant.length - a.variant.length);
+      index();
     },
     clear() {
       patterns = [];
+      index();
     },
     get maxLength() {
       return patterns[0]?.variant.length ?? 0;
     },
-    finalizablePrefixLength(text) {
+    redact: redactText,
+    redactDecided(text) {
       const length = text.length;
-      // Patterns are sorted longest first, so only the last `longest - 1` characters can be a
-      // proper prefix of a variant.
       const longest = patterns[0]?.variant.length ?? 0;
-      if (longest === 0) return length;
+      if (longest === 0) return { carry: '', out: text };
 
-      // Hold back any trailing run that is a proper prefix of a variant: a longer match may still
-      // complete from it, so redacting it now would consume that match's prefix.
-      let cut = length;
-      for (let start = Math.max(0, length - (longest - 1)); start < length; start++) {
-        const tail = text.slice(start);
-        if (patterns.some((p) => p.variant.length > tail.length && p.variant.startsWith(tail))) {
-          cut = start;
+      let out = '';
+      let decided = 0;
+      let at = 0;
+      while (at < length) {
+        // Only a suffix shorter than the longest variant can still be completed into a match.
+        const remaining = length - at;
+        if (
+          remaining < longest &&
+          patterns.some((p) => p.variant.length > remaining && p.variant.startsWith(text.slice(at)))
+        )
           break;
+        const match = byFirst.get(text[at])?.find((p) => text.startsWith(p.variant, at));
+        if (match) {
+          out += redactText(text.slice(decided, at)) + match.placeholder;
+          at += match.variant.length;
+          decided = at;
+        } else {
+          at += 1;
         }
       }
-
-      // Never cut through a completed match either: a match that starts before the cut and ends
-      // after it would have its start emitted un-redacted (`abcd` then `ef` for a longer `abcdef`).
-      // Move the cut back to the start of any such match until none straddles it.
-      let straddled = true;
-      while (straddled) {
-        straddled = false;
-        for (const { variant } of patterns) {
-          for (
-            let at = text.indexOf(variant);
-            at !== -1 && at < cut;
-            at = text.indexOf(variant, at + 1)
-          ) {
-            if (at + variant.length > cut) {
-              cut = at;
-              straddled = true;
-              break;
-            }
-          }
-          if (straddled) break;
-        }
-      }
-      return cut;
-    },
-    redact(text) {
-      let out = text;
-      for (const { placeholder, variant } of patterns) {
-        if (out.includes(variant)) out = out.split(variant).join(placeholder);
-      }
-      return out;
+      out += redactText(text.slice(decided, at));
+      return { carry: text.slice(at), out };
     },
     get size() {
       return patterns.length;
@@ -139,16 +143,9 @@ export const createSecretRedactor = (): SecretRedactor => {
 };
 
 /**
- * Chunk-boundary-safe wrapper for stdout/stderr streams. It finalizes only the prefix a match can
- * no longer reach, then redacts it, so redaction never consumes raw text a later chunk still needs.
- * Call `flush()` at end of stream.
- *
- * Two naive framings leak and are guarded against here:
- * - redacting `pending + chunk` before keeping the boundary window consumes a shorter variant that
- *   is the prefix of a longer one: `push('abcd')` then `push('ef')` must yield `«secret:long»`,
- *   not `«secret:short»ef`;
- * - cutting at a fixed offset bisects a completed match that overlaps a trailing prefix: with
- *   `abcdef` and `efgh`, `push('abcdefg')` must not emit `abcd` and retain `efg`.
+ * Chunk-boundary-safe wrapper for stdout/stderr streams. It redacts only the prefix whose matches
+ * are already decided and carries the raw suffix into the next chunk, so a secret split across
+ * chunks is still caught and the buffer never exceeds one variant. Call `flush()` at end of stream.
  */
 export const createStreamingRedactor = (redactor: SecretRedactor) => {
   let pending = '';
@@ -159,12 +156,9 @@ export const createStreamingRedactor = (redactor: SecretRedactor) => {
       return out;
     },
     push(chunk: string): string {
-      pending += chunk;
-      const cut = redactor.finalizablePrefixLength(pending);
-      if (cut <= 0) return '';
-      const head = pending.slice(0, cut);
-      pending = pending.slice(cut);
-      return redactor.redact(head);
+      const { carry, out } = redactor.redactDecided(pending + chunk);
+      pending = carry;
+      return out;
     },
   };
 };

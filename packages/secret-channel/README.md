@@ -7,7 +7,7 @@ placeholders.
 `src/asc/` is vendored unchanged from the reference implementation
 (`agent-secret-channel` → `packages/asc-core`): it equals `main` `442ae4d` with the fix branches
 `fix/redact-short-secret-variants` (`e078942`), `fix/fail-closed-suite-and-version` (`5f6f40d`),
-`fix/streaming-redaction-overlap` (`cb7c780`) and `fix/frame-and-expiry-hardening` (`d1ab2d2`)
+`fix/streaming-redaction-overlap` (`854641d`) and `fix/frame-and-expiry-hardening` (`d1ab2d2`)
 applied. `test/vectors/` are the protocol's test vectors, so `test/vectors.test.ts` proves this copy
 is byte-for-byte conformant. Update both together; never edit `src/asc/` here without changing the
 upstream first.
