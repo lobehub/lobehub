@@ -310,13 +310,14 @@ describe('document detail replica', () => {
     expect(useDocumentStore.getState().documents['doc-1']?.content).toBe('# Cached');
   });
 
-  it('drops the previous identity’s document before the next one paints', async () => {
+  it('drops the previous identity’s document, projection and editor state included', async () => {
     vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
     const editor = createEditor();
     const sync = renderDocument('doc-1', editor);
     await waitFor(() =>
       expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeDefined(),
     );
+    expect(useDocumentStore.getState().documents['doc-1']).toBeDefined();
 
     vi.mocked(documentService.getDocumentById).mockImplementation(pending as any);
     useScope(`document-user-${randomUUID()}:personal`);
@@ -325,6 +326,26 @@ describe('document detail replica', () => {
     await waitFor(() =>
       expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeUndefined(),
     );
+    // The editor bucket derived from the previous identity goes with the
+    // projection. `DocumentIdMode` gates "loaded" on `documents[id]`, so leaving
+    // it behind keeps rendering the previous scope's body.
+    expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
+  });
+
+  it('keeps no previous-identity editor state when the new scope’s fetch fails', async () => {
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    const editor = createEditor();
+    const sync = renderDocument('doc-1', editor);
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+
+    // The new identity's read fails: nothing may fall back to the old body.
+    vi.mocked(documentService.getDocumentById).mockRejectedValue(new Error('offline') as any);
+    useScope(`document-user-${randomUUID()}:personal`);
+    sync.rerender();
+
+    await waitFor(() => expect(sync.result.current.error).toBeDefined());
+    expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeUndefined();
+    expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
   });
 
   it('warms the replica for a hover prefetch so the next visit paints from storage', async () => {

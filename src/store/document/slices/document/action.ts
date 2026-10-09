@@ -250,6 +250,28 @@ export class DocumentActionImpl {
   };
 
   /**
+   * Clear the editor state derived from a replica entry that has left the view.
+   *
+   * The only way a loaded entry disappears while this route stays mounted is a
+   * replica scope reset (account / workspace switch), which drops every entry
+   * of the previous identity. The editor state derived from that entry has to
+   * go with it: `DocumentIdMode` treats a present `documents[id]` as "loaded",
+   * so leaving it behind renders the previous identity's body — and, once the
+   * new scope's request fails, keeps rendering it behind an inline error.
+   *
+   * A queued autosave is cancelled rather than flushed: it belongs to the
+   * previous identity and must not be sent under the new one.
+   */
+  #clearDerivedDocument = (documentId: string): void => {
+    if (!this.#get().documents[documentId]) return;
+    this.cancelDebouncedSave(documentId);
+    this.#get().internal_dispatchDocument(
+      { id: documentId, type: 'deleteDocument' },
+      n('clearDerivedDocument'),
+    );
+  };
+
+  /**
    * Fold one server row into the editor's derived state.
    *
    * Called both when the replica view changes (the persisted projection paints
@@ -340,7 +362,13 @@ export class DocumentActionImpl {
       // the skeleton flash a repeat visit is supposed to avoid.
       const adopt = (state: DocumentStore, previous?: DocumentStore) => {
         const next = state.documentDetailMap[documentId];
-        if (!next) return;
+        if (!next) {
+          // The entry left the view: a scope reset dropped the previous
+          // identity's entries. Its derived editor state must not outlive it —
+          // see `#clearDerivedDocument`.
+          if (previous?.documentDetailMap[documentId]) this.#clearDerivedDocument(documentId);
+          return;
+        }
         // Only react to *this* entry changing; every other store write (typing
         // in the editor included) is none of our business.
         if (previous && previous.documentDetailMap[documentId] === next) return;
