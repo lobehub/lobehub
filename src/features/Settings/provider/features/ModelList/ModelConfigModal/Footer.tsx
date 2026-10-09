@@ -1,11 +1,11 @@
 'use client';
 
-import { Button, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
 import { type FormInstance } from '@lobehub/ui/base-ui/form';
-import { memo, useState } from 'react';
+import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { useAiInfraStore } from '@/store/aiInfra';
+import { useModelConfigSave } from './useModelConfigSave';
 
 interface ModelConfigFooterProps {
   formRef: { current?: FormInstance };
@@ -15,35 +15,12 @@ interface ModelConfigFooterProps {
 const ModelConfigFooter = memo<ModelConfigFooterProps>(({ formRef, id }) => {
   const { t } = useTranslation('common');
   const { close } = useModalContext();
-  const [loading, setLoading] = useState(false);
-  const [editingProvider, updateAiModelsConfig] = useAiInfraStore((s) => [
-    s.activeAiProvider!,
-    s.updateAiModelsConfig,
-  ]);
+  const { loading, save } = useModelConfigSave({ formRef, id });
 
   return (
     <ModalFooter>
       <Button onClick={close}>{t('cancel')}</Button>
-      <Button
-        loading={loading}
-        type="primary"
-        onClick={async () => {
-          const form = formRef.current;
-          if (!editingProvider || !id || !form) return;
-          const data = form.getValues();
-
-          setLoading(true);
-          try {
-            await updateAiModelsConfig(id, editingProvider, data);
-            close();
-          } catch (error) {
-            console.error('Failed to save model configuration', error);
-            toast.error(t('operationFailed'));
-          } finally {
-            setLoading(false);
-          }
-        }}
-      >
+      <Button loading={loading} type="primary" onClick={save}>
         {t('ok')}
       </Button>
     </ModalFooter>
