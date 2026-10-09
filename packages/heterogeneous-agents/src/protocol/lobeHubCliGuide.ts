@@ -29,10 +29,15 @@
  *   as "clear the variable", not `env -u`: devices run Windows too, and
  *   `pickAuthSource` only tests `LOBEHUB_JWT` for truthiness, so an empty value
  *   falls through to the stored login in every shell.
- * - **`LOBEHUB_AGENT_ID`.** Only the desktop client-mode path sets it
- *   (`buildLobeHubSessionEnv`); `lh hetero exec` re-exports just the operation
- *   and topic ids, and the `lh connect` daemon strips any ambient agent id so a
- *   dispatched run cannot inherit its launcher's identity.
+ * - **`LOBEHUB_AGENT_ID`.** Desktop client mode sets it through
+ *   `buildLobeHubSessionEnv`. CLI/Desktop dispatch launchers, including
+ *   OpenClaw/Hermes, clear inherited identity and inject the current dispatch's
+ *   agent id when supplied; a missing id must not retain the launcher's identity.
+ *   Gateway-dispatched `lh hetero exec` runs preserve that id through
+ *   `spawnAgent` to the external agent. Auth fallback (clearing `LOBEHUB_JWT`)
+ *   does not change authorship. The id is still not guaranteed on every path:
+ *   `lh task comment` refuses topic/operation contexts with a missing or blank
+ *   agent id rather than attributing Agent output to the user.
  */
 export const lobeHubCliGuide = [
   '## LobeHub CLI (`lh`)',
