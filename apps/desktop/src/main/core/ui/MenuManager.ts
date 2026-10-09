@@ -86,6 +86,10 @@ export class MenuManager {
     return this.platformImpl.buildTrayMenu(snapshot);
   }
 
+  updateDockMenu(snapshot: TrayNavigationSnapshot) {
+    this.platformImpl.updateDockMenu?.(snapshot);
+  }
+
   /**
    * Refresh menus
    */

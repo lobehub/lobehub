@@ -42,7 +42,7 @@ describe('buildTrayMenuTemplate', () => {
     expect(labels).not.toContain('tray.recent');
   });
 
-  it('limits dynamic sections and exposes More actions only on overflow', () => {
+  it('limits dynamic sections and offers More only for agents', () => {
     const { app } = createApp();
     const template = buildTrayMenuTemplate(app, {
       agents: Array.from({ length: 4 }, (_, index) => ({
@@ -65,7 +65,32 @@ describe('buildTrayMenuTemplate', () => {
     expect(labels.filter((label) => String(label).startsWith('Agent '))).toHaveLength(3);
     expect(labels.filter((label) => String(label).startsWith('Recent '))).toHaveLength(5);
     expect(labels).toContain('tray.moreAgents');
-    expect(labels).toContain('tray.more');
+    expect(labels).not.toContain('tray.more');
+  });
+
+  it('lists topics awaiting input before running ones, each capped', () => {
+    const { app } = createApp();
+    const template = buildTrayMenuTemplate(app, {
+      activeTopics: [
+        ...Array.from({ length: 6 }, (_, index) => ({
+          status: 'running' as const,
+          title: `Running ${index}`,
+          url: `/agent/a/running-${index}`,
+        })),
+        { status: 'waitingForHuman', subtitle: 'Researcher', title: 'Deploy', url: '/agent/a/t' },
+      ],
+      agents: [],
+      pinned: [],
+      recent: [],
+    });
+    const labels = template.map((item) => item.label);
+
+    expect(labels.slice(0, 3)).toEqual(['tray.waitingForHuman', 'Deploy', undefined]);
+    expect(labels[3]).toBe('tray.running');
+    expect(labels.filter((label) => String(label).startsWith('Running '))).toHaveLength(5);
+    expect(template.find(({ label }) => label === 'Deploy')).toMatchObject({
+      sublabel: 'Researcher',
+    });
   });
 
   it('opens dynamic routes in the main window', () => {

@@ -6,6 +6,8 @@ import { useTrayMenuSync } from './useTrayMenuSync';
 const mocks = vi.hoisted(() => ({
   agents: [{ id: 'agent-1', title: 'Researcher', updatedAt: '2026-07-11T00:00:00.000Z' }],
   useFetchAgentList: vi.fn(),
+  refreshRecents: vi.fn(),
+  swrKey: vi.fn(),
   updateNavigationSnapshot: vi.fn(),
 }));
 
@@ -15,8 +17,39 @@ vi.mock('@/services/electron/tray', () => ({
   desktopTrayService: { updateNavigationSnapshot: mocks.updateNavigationSnapshot },
 }));
 
+vi.mock('@/store/chat', () => ({
+  useChatStore: vi.fn(() => []),
+}));
+
 vi.mock('@/store/home', () => ({
   useHomeStore: vi.fn(() => mocks.agents),
+}));
+
+vi.mock('@/store/user', () => ({
+  useUserStore: vi.fn(() => true),
+}));
+
+vi.mock('@/libs/swr/useCacheScope', () => ({ useCacheScope: () => 'personal' }));
+
+vi.mock('@/libs/swr', () => ({
+  useClientDataSWR: vi.fn((key) => {
+    mocks.swrKey(key);
+    return {
+      data: [
+        {
+          agentId: 'agent-1',
+          icon: 'topic',
+          id: 'topic-1',
+          routePath: '/agent/agent-1/topic-1',
+          status: null,
+          title: 'Research',
+          type: 'topic',
+          updatedAt: new Date(0),
+        },
+      ],
+      mutate: mocks.refreshRecents,
+    };
+  }),
 }));
 
 vi.mock('@/store/home/slices/agentList/selectors', () => ({
@@ -55,7 +88,10 @@ describe('useTrayMenuSync', () => {
 
     await waitFor(() => expect(mocks.updateNavigationSnapshot).toHaveBeenCalledTimes(1));
     expect(mocks.useFetchAgentList).toHaveBeenCalled();
+    expect(mocks.swrKey).toHaveBeenCalledWith(['recent:trayList', 10, 'personal']);
+    expect(mocks.refreshRecents).not.toHaveBeenCalled();
     expect(mocks.updateNavigationSnapshot).toHaveBeenCalledWith({
+      activeTopics: [],
       agents: [{ id: 'agent-1', title: 'Researcher', url: '/agent/agent-1/topic-1' }],
       pinned: [],
       recent: [{ subtitle: 'Researcher', title: 'Research', url: '/agent/agent-1/topic-1' }],

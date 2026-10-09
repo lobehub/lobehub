@@ -193,6 +193,25 @@ describe('MacOSMenu', () => {
       const dockMenu = (app.dock.setMenu as any).mock.calls[0][0];
       expect(dockMenu.template.some((item: any) => item.label === 'Quick Composer')).toBe(true);
     });
+
+    it('should rebuild the dock menu with active topics and leave out system-provided items', () => {
+      macOSMenu.updateDockMenu({
+        activeTopics: [
+          { status: 'running', subtitle: 'Researcher', title: 'Refactor auth', url: '/agent/a/t1' },
+        ],
+        agents: [{ id: 'a', title: 'Researcher', url: '/agent/a' }],
+        pinned: [],
+        recent: [],
+      });
+
+      const labels = (app.dock.setMenu as any).mock.calls[0][0].template.map(
+        (item: any) => item.label,
+      );
+      expect(labels.slice(0, 2)).toEqual(['Running', 'Refactor auth']);
+      expect(labels).not.toContain('Recent Agents');
+      expect(labels).not.toContain('Quit');
+      expect(labels).not.toContain('Settings');
+    });
   });
 
   describe('refresh', () => {

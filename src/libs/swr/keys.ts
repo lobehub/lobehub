@@ -308,6 +308,11 @@ export const recentKeys = {
     scope,
     view,
   ]),
+  trayList: def('recent:trayList', (limit: number, scope: string) => [
+    'recent:trayList',
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
