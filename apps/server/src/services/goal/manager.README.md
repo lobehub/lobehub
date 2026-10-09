@@ -97,17 +97,21 @@ straight back to the Gate, and terminal verification cannot start while it is
 unfinished. Retiring is the same move the human Gate offers under "Retire task",
 scoped to the single node the turn was invited about and attributed to the Agent.
 
-The terminal acceptance node is excluded from that retirement.
-`decideWithoutFrontier` finds the acceptance task by TITLE regardless of status, so
-retiring it parks the Goal on `no_progress` with neither a Gate nor a verdict;
-failing the Goal belongs to the Gate's own `retire` answer, which is coupled to that
-option rather than to the node's status. A takeover invited for a FAILED terminal
-acceptance does start — the acceptance guard is uninvited-only — but it is accepted
-only as an `escalate`: a corrective task returns to the same failed node and `verify`
-sets `readyForAcceptance` without producing a fresh run, so both would strand.
-Refusing at submit keeps the prompt's offer and the server's answer identical, and
-the prompt names the limit so a turn is not spent discovering it. Letting corrective
-work supersede a failed acceptance is a lifecycle change, not a validation one.
+A failed terminal acceptance can be replaced by corrective work. The transaction
+retires only that obsolete blocking node, retains its failed verdict and evidence
+in `config.acceptance.lifecycle.history`, clears the current acceptance reference
+and `readyForAcceptance`, and installs the corrective tasks and dependencies. Human
+decisions remain authoritative. Correction completion returns to Manager planning;
+only changed immutable Work evidence permits a new independent acceptance round.
+Existing Goals use the legacy title only until the explicit lifecycle is installed.
+
+The Manager receives the unchanged requirement, failed clauses, acceptance node,
+round, operation/evidence identity and remaining cost/round/turn constraints. It may
+plan corrections, wait for useful fresh evidence, ask for independent verification,
+or escalate a necessary human decision. Repair rounds are capped at three and obey
+all existing Goal and Manager budgets. A genuine failed verdict requires remediation;
+a confirmed verifier execution fault follows the existing infrastructure recovery
+path. Exact normalized plan hashes fence duplicate and racing submissions.
 
 Retirement is also refused when something `depends_on` the stuck node: a prerequisite
 counts as met only when it is `resolved`, and the graph has no edge removal, so the

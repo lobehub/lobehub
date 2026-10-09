@@ -16,6 +16,7 @@ import { TopicModel } from '@/database/models/topic';
 import type { LobeChatDatabase } from '@/database/type';
 import { AiAgentService } from '@/server/services/aiAgent';
 import { resolveFailedRunStatus } from '@/server/services/goal/recoveryPolicy';
+import { reserveGoalTaskDispatch } from '@/server/services/goal/reserveTaskDispatch';
 import { TaskLifecycleService } from '@/server/services/taskLifecycle';
 
 import { buildTaskPrompt } from './buildTaskPrompt';
@@ -286,7 +287,20 @@ export class TaskRunnerService {
 
       log('runTask: %s (continue=%s)', taskIdentifier, continueTopicId);
 
+      let goalRunReserved = false;
       const result = await aiAgentService.execAgent({
+        ...(trigger === 'goal' && {
+          onOperationCreated: async (operationId: string) => {
+            goalRunReserved = await reserveGoalTaskDispatch(
+              this.db,
+              this.userId,
+              this.workspaceId,
+              task.id,
+              operationId,
+              continueTopicId,
+            );
+          },
+        }),
         ...(isSlug ? { slug: agentRef } : { agentId: agentRef }),
         additionalPluginIds: pluginIds,
         ...(typeof taskConfig.model === 'string' && { model: taskConfig.model }),
@@ -355,7 +369,7 @@ export class TaskRunnerService {
         // the Task looking in flight — a goal coordinator would even record a
         // `started_run` for it — with nothing left to ever settle it. Keep the
         // attempt visible as a failed run, then fail the kickoff like any other.
-        if (result.topicId && !continueTopicId) {
+        if (result.topicId && !continueTopicId && !goalRunReserved) {
           await this.taskModel.incrementTopicCount(task.id);
           await this.taskModel.updateCurrentTopic(task.id, result.topicId);
           await this.taskTopicModel.add(task.id, result.topicId, {
@@ -389,7 +403,9 @@ export class TaskRunnerService {
           if (!(await taskModel.lockForUpdate(task.id))) return 'deleted' as const;
           const current = await taskModel.findById(task.id);
           if (current?.status === 'canceled') return 'canceled' as const;
-          if (current?.status === 'backlog') return 'withdrawn' as const;
+          if (current?.status === 'backlog' || current?.status === 'paused')
+            return 'withdrawn' as const;
+          if (goalRunReserved) return 'recorded' as const;
           if (continueTopicId) {
             await taskTopicModel.updateStatus(task.id, continueTopicId, 'running');
             await taskTopicModel.updateOperationId(task.id, continueTopicId, result.operationId);

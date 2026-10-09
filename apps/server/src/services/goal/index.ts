@@ -54,6 +54,12 @@ import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
+import { GoalAcceptanceFailureService } from './acceptanceFailure';
+import {
+  acceptanceEvidenceVersion,
+  currentAcceptanceNode,
+  isGoalAcceptanceNode,
+} from './acceptanceLifecycle';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
   compareMetric,
@@ -67,6 +73,7 @@ import {
   NO_FRONTIER_PAUSE_REASON,
   selectFrontier,
   TERMINAL_NODE_STATUSES,
+  VERIFICATION_FAILED_ERROR,
 } from './decideNextMove';
 import { experimentResults, exploreGraph } from './exploreGraph';
 import { classifyGoalFailure, isMachineFailureClass } from './failureClass';
@@ -852,7 +859,7 @@ export class GoalService {
     // snapshots); every later run instantiates from the updated config.
     const graph = await this.graphModel.getGraph(goalId);
     const terminalTaskId = graph?.nodes.find(
-      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && node.taskId,
+      (node) => node.id === currentAcceptanceNode(graph!)?.id && node.taskId,
     )?.taskId;
     if (!terminalTaskId) return;
 
@@ -916,7 +923,7 @@ export class GoalService {
    */
   private requestSignOff = async (graph: GoalGraphSnapshot) => {
     const terminal = graph.nodes.find(
-      (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE && !!node.taskId,
+      (node) => node.id === currentAcceptanceNode(graph)?.id && !!node.taskId,
     );
     if (!terminal) return;
     const acceptance = (await this.collectAcceptances(graph))?.[terminal.id];
@@ -1590,7 +1597,7 @@ export class GoalService {
       }
       // Retiring the terminal acceptance fails the whole Goal; that verdict
       // belongs to its decision gate, not to a graph edit.
-      if (node.title === GOAL_ACCEPTANCE_TASK_TITLE) {
+      if (isGoalAcceptanceNode(graph, node)) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           message: 'The Goal acceptance task cannot be retired',
@@ -1798,7 +1805,7 @@ export class GoalService {
       before.nodes.filter(
         (node) =>
           node.kind === 'task' &&
-          node.title !== GOAL_ACCEPTANCE_TASK_TITLE &&
+          !isGoalAcceptanceNode(before, node) &&
           !isGoalReportNode(before, node),
       ).length >= (goal.config?.exploration?.maxExperiments ?? 0)
     )
@@ -2042,8 +2049,11 @@ export class GoalService {
     }
     // Ending the terminal acceptance ends the Goal: `fail` is a verdict that
     // the Goal failed, `retire` abandons it without one.
-    const terminalAcceptance = source?.title === GOAL_ACCEPTANCE_TASK_TITLE;
-    const terminalEffect = decisionOptionEffect(chosen, source?.title);
+    const terminalAcceptance = !!source && isGoalAcceptanceNode(graph, source);
+    const terminalEffect = decisionOptionEffect(
+      chosen,
+      terminalAcceptance ? GOAL_ACCEPTANCE_TASK_TITLE : source?.title,
+    );
     const nextStatus =
       terminalAcceptance && terminalEffect === 'fail'
         ? 'failed'
@@ -2093,7 +2103,7 @@ export class GoalService {
       (candidate) =>
         candidate.kind === 'task' &&
         candidate.taskId === taskId &&
-        candidate.title === GOAL_ACCEPTANCE_TASK_TITLE,
+        candidate.id === currentAcceptanceNode(graph)?.id,
     );
     if (node?.status !== 'resolved') return undefined;
 
@@ -2519,20 +2529,58 @@ export class GoalService {
     const goalId = graph.goal.id;
 
     if (move.outcome === 'achieved') {
-      // The map must agree with the verdict: only task nodes get resolved as
-      // Tasks complete, so without this the seeded problem nodes would read
-      // "active / unanswered" forever on an achieved goal.
-      for (const node of graph.nodes) {
-        if (node.kind !== 'problem' || TERMINAL_NODE_STATUSES.has(node.status)) continue;
-        await this.coordinatorGraph.updateNodeStatus(goalId, node.id, 'resolved', 'Goal achieved');
-        effects.push({ detail: 'resolved', nodeId: node.id, type: 'node_status' });
-      }
-      // Ask for the sign-off before the goal turns terminal: nothing ticks an
-      // achieved goal again, so a failed write after the transition would lose
-      // the ask for good. Failing here leaves the goal open for the next tick,
-      // and the write is idempotent per acceptance.
-      await this.requestSignOff(graph);
-      await this.transitionStatus(graph.goal, 'achieved', 'Goal-level acceptance passed');
+      const achieved = await this.db.transaction(async (tx) => {
+        const model = new GoalModel(tx, this.userId, this.workspaceId);
+        const current = await model.lockById(goalId);
+        if (!current || !['planning', 'running'].includes(current.status)) return false;
+        const fresh = await new GoalGraphModel(tx, this.userId, this.workspaceId).getGraph(goalId);
+        if (!fresh || fresh.decisions.some((decision) => decision.status === 'pending'))
+          return false;
+        const lifecycle = current.config?.acceptance?.lifecycle;
+        if (current.requirement && currentAcceptanceNode(fresh)?.status !== 'resolved')
+          return false;
+        if (current.requirement) {
+          const taskId = currentAcceptanceNode(fresh)?.taskId;
+          const verdict = taskId
+            ? await new AcceptanceService(
+                tx,
+                this.userId,
+                this.workspaceId,
+              ).acceptanceModel.findBySubject('task', taskId)
+            : undefined;
+          if (verdict?.status !== 'accepted') return false;
+        }
+        if (
+          lifecycle &&
+          (lifecycle.currentNodeId !== graph.goal.config?.acceptance?.lifecycle?.currentNodeId ||
+            lifecycle.round !== graph.goal.config?.acceptance?.lifecycle?.round ||
+            lifecycle.evidenceVersion !== acceptanceEvidenceVersion(fresh))
+        )
+          return false;
+        const blocked = await new GoalService(tx, this.userId, this.workspaceId).evaluateBudget(
+          current,
+          fresh,
+        );
+        if (blocked.costLimitReached || blocked.deadlinePassed || blocked.roundLimitReached)
+          return false;
+        const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
+          id: GOAL_COORDINATOR_ACTOR_ID,
+          type: 'system',
+        });
+        for (const node of fresh.nodes) {
+          if (node.kind === 'problem' && !TERMINAL_NODE_STATUSES.has(node.status))
+            await writer.updateNodeStatus(goalId, node.id, 'resolved', 'Goal achieved');
+        }
+        await new GoalService(tx, this.userId, this.workspaceId).requestSignOff(fresh);
+        await model.update(goalId, { status: 'achieved' });
+        return true;
+      });
+      if (!achieved)
+        return {
+          goalId,
+          message: 'Acceptance snapshot or Goal constraints changed; stale verdict ignored',
+          outcome: 'no_progress',
+        };
       effects.push({ type: 'goal_status', detail: 'achieved' });
       return { goalId, message: move.message, outcome: 'achieved' };
     }
@@ -2546,6 +2594,41 @@ export class GoalService {
     // interruption in between leave the acceptance detached from the work it
     // closes for good. Rolling the node back instead lets the next tick retry.
     const result = await this.db.transaction(async (tx) => {
+      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const currentGoal = await model.lockById(goalId);
+      if (!currentGoal || !['planning', 'running'].includes(currentGoal.status)) return undefined;
+      const reader = new GoalGraphModel(tx, this.userId, this.workspaceId);
+      const currentGraph = await reader.getGraph(goalId);
+      if (!currentGraph || currentGraph.decisions.some((decision) => decision.status === 'pending'))
+        return undefined;
+      if (currentGoal.config?.managerState?.token !== graph.goal.config?.managerState?.token)
+        return undefined;
+      if (
+        currentGraph.nodes.some(
+          (node) =>
+            node.kind === 'task' &&
+            !isGoalReportNode(currentGraph, node) &&
+            !TERMINAL_NODE_STATUSES.has(node.status),
+        )
+      )
+        return undefined;
+      const budget = await new GoalService(tx, this.userId, this.workspaceId).evaluateBudget(
+        currentGoal,
+        currentGraph,
+      );
+      if (budget.costLimitReached || budget.deadlinePassed || budget.roundLimitReached)
+        return undefined;
+      const existing = currentAcceptanceNode(currentGraph);
+      if (existing) return { created: false, node: existing };
+      const lifecycle = currentGoal.config?.acceptance?.lifecycle;
+      const evidenceVersion = acceptanceEvidenceVersion(currentGraph);
+      if (
+        lifecycle &&
+        (lifecycle.round > Math.min(3, Math.max(0, lifecycle.maxRepairRounds ?? 3)) ||
+          lifecycle.evidenceVersion === evidenceVersion)
+      )
+        return undefined;
+      const round = (lifecycle?.round ?? 0) + 1;
       const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
         id: GOAL_COORDINATOR_ACTOR_ID,
         type: 'system',
@@ -2553,6 +2636,7 @@ export class GoalService {
       const created = await writer.createNodeOnce(goalId, {
         description: [
           `Complete and prove the overall Goal acceptance requirement: ${graph.goal.requirement}`,
+          `Independent acceptance round ${round}; evidence snapshot ${evidenceVersion}. Verify the corrected delivery against every original requirement without relaxing any clause.`,
           'Inspect and reuse existing Goal findings, artifacts, metrics, and command results as the primary evidence. Do not repeat expensive or destructive work when the existing evidence is sufficient and still auditable.',
           'Explicitly close every remaining acceptance gap instead of treating completed upstream Tasks as proof that the whole Goal is achieved. Run only the missing or stale checks needed to close those gaps.',
           'Return one auditable final delivery with evidence for every requirement. If a requirement cannot be satisfied, state the exact gap and the minimum next action; do not claim the Goal is complete.',
@@ -2565,9 +2649,19 @@ export class GoalService {
           .join('\n\n'),
         kind: 'task',
         priority: -1,
-        title: GOAL_ACCEPTANCE_TASK_TITLE,
+        title:
+          round === 1
+            ? GOAL_ACCEPTANCE_TASK_TITLE
+            : `${GOAL_ACCEPTANCE_TASK_TITLE} (round ${round})`,
       });
       if (!created?.created) return created;
+      await model.updateAcceptanceLifecycle(goalId, {
+        ...lifecycle,
+        currentNodeId: created.node.id,
+        evidenceVersion,
+        history: lifecycle?.history ?? [],
+        round,
+      });
 
       const problem = graph.nodes.find((node) => node.kind === 'problem');
       if (problem) {
@@ -2670,7 +2764,7 @@ export class GoalService {
       // rows (deterministic checklist) instead of AI-deriving checks from the
       // requirement prose. Ordinary Tasks keep the prose-scoped contract.
       const goalCriteriaIds =
-        frontier.title === GOAL_ACCEPTANCE_TASK_TITLE
+        frontier.id === currentAcceptanceNode(graph)?.id
           ? graph.goal.config?.acceptance?.criteriaIds
           : undefined;
       const acceptance = await this.acceptanceService.ensureForSubject('task', task.id, {
@@ -2682,6 +2776,7 @@ export class GoalService {
           graph,
           frontier.title,
           frontier.description,
+          frontier.id,
         ),
       });
       acceptanceId = acceptance.id;
@@ -2745,6 +2840,47 @@ export class GoalService {
     effects: GoalAdvanceEffect[],
   ): Promise<GoalTickResult> => {
     const goalId = graph.goal.id;
+    if (currentAcceptanceNode(graph)?.id === nodeId && task.error === VERIFICATION_FAILED_ERROR) {
+      await this.db.transaction(async (tx) => {
+        const model = new GoalModel(tx, this.userId, this.workspaceId);
+        const current = await model.lockById(goalId);
+        if (!current || !['planning', 'running'].includes(current.status)) return;
+        const lifecycle = current.config?.acceptance?.lifecycle;
+        if (
+          !lifecycle ||
+          lifecycle.currentNodeId !== nodeId ||
+          lifecycle.round !== graph.goal.config?.acceptance?.lifecycle?.round
+        )
+          return;
+        if (!lifecycle.history.some((entry) => entry.nodeId === nodeId))
+          await model.updateAcceptanceLifecycle(goalId, {
+            ...lifecycle,
+            history: [
+              ...lifecycle.history,
+              {
+                evidenceVersion: lifecycle.evidenceVersion,
+                failureClauses: await new GoalAcceptanceFailureService(
+                  tx,
+                  this.userId,
+                  this.workspaceId,
+                ).capture(task.id, lifecycle.operationId),
+                nodeId,
+                operationId: lifecycle.operationId,
+                reason: task.error ?? undefined,
+                round: lifecycle.round,
+                verdict: 'failed',
+              },
+            ],
+          });
+      });
+      return this.gateOrTakeOver(
+        await this.requireGraph(goalId),
+        nodeId,
+        task.id,
+        `Final independent acceptance failed in round ${graph.goal.config?.acceptance?.lifecycle?.round ?? 1}. Original requirements remain unchanged; corrective work must produce changed evidence before another independent acceptance. ${task.error}`,
+        effects,
+      );
+    }
     const taskIds = graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : []));
     const runs = await this.taskTopicModel.findWithHandoffByTaskIds(taskIds, 10_000);
     const totalCost = runs.reduce((sum, run) => sum + Number(run.totalCost ?? 0), 0);
@@ -2865,6 +3001,23 @@ export class GoalService {
         !currentGraph ||
         currentGoal.status !== 'running' ||
         currentGraph.decisions.some((item) => item.status === 'pending')
+      )
+        return 'stopped' as const;
+      const currentNode = currentGraph.nodes.find((node) => node.id === nodeId);
+      if (
+        !currentNode ||
+        currentNode.taskId !== task.id ||
+        TERMINAL_NODE_STATUSES.has(currentNode.status) ||
+        (isGoalAcceptanceNode(currentGraph, currentNode) &&
+          (currentAcceptanceNode(currentGraph)?.id !== nodeId ||
+            currentGoal.config?.acceptance?.lifecycle?.round !==
+              graph.goal.config?.acceptance?.lifecycle?.round))
+      )
+        return 'stopped' as const;
+      const lifecycle = currentGoal.config?.acceptance?.lifecycle;
+      if (
+        currentAcceptanceNode(currentGraph)?.id === nodeId &&
+        lifecycle?.history.some((entry) => entry.nodeId === nodeId && entry.verdict === 'failed')
       )
         return 'stopped' as const;
       const currentBudget = await new GoalService(tx, this.userId, this.workspaceId).evaluateBudget(
@@ -3695,8 +3848,9 @@ export class GoalService {
     graph: GoalGraphSnapshot,
     title: string,
     description: string | null,
+    nodeId?: string,
   ) => {
-    if (title === GOAL_ACCEPTANCE_TASK_TITLE) {
+    if (nodeId === currentAcceptanceNode(graph)?.id && nodeId !== undefined) {
       return [
         `Terminal Goal acceptance requirement (authoritative): ${graph.goal.requirement ?? graph.goal.title}`,
         description ? `Required delivery: ${description}` : undefined,
@@ -3817,6 +3971,57 @@ export class GoalService {
     taskId: string,
     effects: GoalAdvanceEffect[] = [],
   ): Promise<GoalTickResult> => {
+    return this.db.transaction(async (tx) => {
+      const current = await new GoalModel(tx, this.userId, this.workspaceId).lockById(
+        graph.goal.id,
+      );
+      if (!current || !['planning', 'running'].includes(current.status))
+        return {
+          goalId: graph.goal.id,
+          nodeId,
+          taskId,
+          message: 'Goal stopped; callback ignored',
+          outcome: 'no_progress',
+        };
+      const fresh = await new GoalGraphModel(tx, this.userId, this.workspaceId).getGraph(
+        graph.goal.id,
+      );
+      const node = fresh?.nodes.find((candidate) => candidate.id === nodeId);
+      if (
+        !fresh ||
+        !node ||
+        ['resolved', 'retired'].includes(node.status) ||
+        fresh.goal.config?.acceptance?.lifecycle?.history.some(
+          (entry) => entry.nodeId === nodeId && entry.verdict === 'failed',
+        ) ||
+        node.taskId !== taskId ||
+        (isGoalAcceptanceNode(fresh, node) &&
+          (currentAcceptanceNode(fresh)?.id !== nodeId ||
+            fresh.goal.config?.acceptance?.lifecycle?.round !==
+              graph.goal.config?.acceptance?.lifecycle?.round))
+      )
+        return {
+          goalId: graph.goal.id,
+          nodeId,
+          taskId,
+          message: 'Duplicate or stale callback ignored',
+          outcome: 'no_progress',
+        };
+      return new GoalService(tx, this.userId, this.workspaceId).consumeCompletedTaskLocked(
+        fresh,
+        nodeId,
+        taskId,
+        effects,
+      );
+    });
+  };
+
+  private consumeCompletedTaskLocked = async (
+    graph: GoalGraphSnapshot,
+    nodeId: string,
+    taskId: string,
+    effects: GoalAdvanceEffect[] = [],
+  ): Promise<GoalTickResult> => {
     // `graph` can predate a retirement that landed while this tick ran. A
     // retired node's late output must not enter the Goal as a finding or
     // deliverable (and `updateNodeStatus` refuses to revive the node).
@@ -3828,6 +4033,44 @@ export class GoalService {
         outcome: 'no_progress',
         taskId,
       };
+    }
+    const completedNode = graph.nodes.find((node) => node.id === nodeId);
+    if (!completedNode)
+      return {
+        goalId: graph.goal.id,
+        nodeId,
+        taskId,
+        message: 'Unknown callback node ignored',
+        outcome: 'no_progress',
+      };
+    if (isGoalAcceptanceNode(graph, completedNode)) {
+      const acceptance = await this.acceptanceService.acceptanceModel.findBySubject('task', taskId);
+      if (acceptance?.status !== 'accepted')
+        return {
+          goalId: graph.goal.id,
+          nodeId,
+          taskId,
+          message: 'Independent acceptance has not passed; task completion is insufficient',
+          outcome: 'no_progress',
+        };
+      const fresh = await this.requireGraph(graph.goal.id);
+      if (
+        !['planning', 'running'].includes(fresh.goal.status) ||
+        fresh.decisions.some((decision) => decision.status === 'pending') ||
+        currentAcceptanceNode(fresh)?.id !== nodeId ||
+        fresh.goal.config?.acceptance?.lifecycle?.round !==
+          graph.goal.config?.acceptance?.lifecycle?.round ||
+        (fresh.goal.config?.acceptance?.lifecycle &&
+          fresh.goal.config.acceptance.lifecycle.evidenceVersion !==
+            acceptanceEvidenceVersion(fresh))
+      )
+        return {
+          goalId: graph.goal.id,
+          nodeId,
+          taskId,
+          message: 'Stale or fenced acceptance callback ignored',
+          outcome: 'no_progress',
+        };
     }
     const existingFinding = graph.edges.some(
       (edge) => edge.sourceNodeId === nodeId && edge.kind === 'produces',
@@ -3842,6 +4085,33 @@ export class GoalService {
       recent.find((topic) => topic.status === 'completed' && topic.handoff) ??
       recent.find((topic) => topic.status === 'completed') ??
       recent[0];
+    const lifecycle = graph.goal.config?.acceptance?.lifecycle;
+    if (
+      currentAcceptanceNode(graph)?.id === nodeId &&
+      lifecycle?.operationId &&
+      latest?.operationId !== lifecycle.operationId
+    )
+      return {
+        goalId: graph.goal.id,
+        nodeId,
+        taskId,
+        message: 'Missing or stale acceptance operation ignored',
+        outcome: 'no_progress',
+      };
+    if (
+      currentAcceptanceNode(graph)?.id === nodeId &&
+      lifecycle &&
+      latest?.operationId &&
+      (lifecycle.operationId !== latest.operationId ||
+        recent[0]?.operationId !== latest.operationId)
+    )
+      return {
+        goalId: graph.goal.id,
+        nodeId,
+        taskId,
+        message: 'Stale acceptance operation ignored',
+        outcome: 'no_progress',
+      };
     const completedWork = await this.workModel.registerTask({
       changeType: 'updated',
       rootOperationId: latest?.operationId,
@@ -3909,12 +4179,61 @@ export class GoalService {
         await this.coordinatorGraph.createEdge(graph.goal.id, nodeId, finding.id, 'produces');
       }
     }
-    await this.coordinatorGraph.updateNodeStatus(
-      graph.goal.id,
-      nodeId,
-      'resolved',
-      'Responsible task completed',
-    );
+    const settled = await this.db.transaction(async (tx) => {
+      const model = new GoalModel(tx, this.userId, this.workspaceId);
+      const current = await model.lockById(graph.goal.id);
+      if (!current || !['planning', 'running'].includes(current.status)) return false;
+      const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
+        id: GOAL_COORDINATOR_ACTOR_ID,
+        type: 'system',
+      });
+      const fresh = await writer.getGraph(graph.goal.id);
+      if (!fresh || fresh.decisions.some((decision) => decision.status === 'pending')) return false;
+      const node = fresh.nodes.find((candidate) => candidate.id === nodeId);
+      if (!node || node.status === 'resolved' || node.status === 'retired') return false;
+      if (isGoalAcceptanceNode(fresh, node)) {
+        const budget = await this.evaluateBudget(current, fresh);
+        if (budget.costLimitReached || budget.deadlinePassed || budget.roundLimitReached)
+          return false;
+        const lifecycle = current.config?.acceptance?.lifecycle;
+        if (
+          currentAcceptanceNode(fresh)?.id !== nodeId ||
+          lifecycle?.round !== graph.goal.config?.acceptance?.lifecycle?.round ||
+          (lifecycle && lifecycle.evidenceVersion !== acceptanceEvidenceVersion(fresh))
+        )
+          return false;
+        if (lifecycle)
+          await model.updateAcceptanceLifecycle(graph.goal.id, {
+            ...lifecycle,
+            operationId: latest?.operationId ?? undefined,
+            history: [
+              ...lifecycle.history.filter((entry) => entry.nodeId !== nodeId),
+              {
+                nodeId,
+                round: lifecycle.round,
+                evidenceVersion: lifecycle.evidenceVersion,
+                operationId: latest?.operationId ?? undefined,
+                verdict: 'passed',
+              },
+            ],
+          });
+      }
+      await writer.updateNodeStatus(
+        graph.goal.id,
+        nodeId,
+        'resolved',
+        'Responsible task completed',
+      );
+      return true;
+    });
+    if (!settled)
+      return {
+        goalId: graph.goal.id,
+        nodeId,
+        taskId,
+        message: 'Duplicate or fenced callback ignored',
+        outcome: 'no_progress',
+      };
     await new GoalSupervisorService(this.db, this.userId, this.workspaceId).recordProgress(
       graph,
       taskId,
@@ -4028,9 +4347,8 @@ export class GoalService {
       .map((edge) => graph.nodes.find((node) => node.id === edge.targetNodeId))
       .find((node) => node?.kind === 'decision' && node.status !== 'resolved');
     if (!existingDecisionNode) {
-      const terminalAcceptance =
-        graph.nodes.find((candidate) => candidate.id === nodeId)?.title ===
-        GOAL_ACCEPTANCE_TASK_TITLE;
+      const source = graph.nodes.find((candidate) => candidate.id === nodeId);
+      const terminalAcceptance = !!source && isGoalAcceptanceNode(graph, source);
       // The terminal acceptance gate keeps its own three-way shape: ending the
       // Goal is a verdict even when a machine problem is what stopped it.
       const machine = !!gate.machine && !terminalAcceptance;

@@ -1,7 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
 import {
-  GOAL_ACCEPTANCE_TASK_TITLE,
   GOAL_CLARIFICATION_OPTION,
   GOAL_COORDINATOR_ACTOR_ID,
   GOAL_MANAGER_QUESTION_TITLE,
@@ -33,6 +32,7 @@ import { readDeviceDispatchRoute } from '@/server/services/aiAgent/helpers/heter
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 import { deviceGateway } from '@/server/services/deviceGateway';
 
+import { acceptanceEvidenceVersion, currentAcceptanceNode } from './acceptanceLifecycle';
 import { GoalBriefService } from './goalBriefs';
 import { TERMINAL_GOAL_STATUSES as finishedGoalStatuses } from './goalTraceRecorder';
 import {
@@ -763,6 +763,14 @@ export class GoalManagerService {
     if (waiting) return waiting;
     const state = graph.goal.config?.managerState;
     if (options?.mayStartTurn === false && !state?.replanReason && !state?.wait?.wake) return null;
+    const acceptance = currentAcceptanceNode(graph);
+    if (state?.wait?.wake && acceptance?.taskId && state.problemTaskId === acceptance.taskId)
+      return this.startTurn(graph, {
+        reason:
+          graph.goal.config?.acceptance?.lifecycle?.history.at(-1)?.reason ??
+          'Reassess failed final acceptance after the bounded wait for fresh evidence',
+        taskId: acceptance.taskId,
+      });
     return this.startTurn(graph);
   };
 
@@ -1011,8 +1019,7 @@ export class GoalManagerService {
     // uninvited turn and wrong for a takeover invited BECAUSE the terminal
     // acceptance is the thing that failed.
     if (!problem) {
-      if (state?.readyForAcceptance || nodes.some((n) => n.title === GOAL_ACCEPTANCE_TASK_TITLE))
-        return null;
+      if (state?.readyForAcceptance || !!currentAcceptanceNode(graph)) return null;
       const tasks = await new TaskModel(this.db, this.userId, this.workspaceId).findByIds(
         unfinished.flatMap((n) => (n.taskId ? [n.taskId] : [])),
       );
@@ -1153,6 +1160,12 @@ export class GoalManagerService {
       };
     });
     if (!claimed) return this.wait(goal.id, 'Another advance owns the planning turn');
+    const spend = await new TaskTopicModel(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).sumRunCostByTaskIds(graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : [])));
+    const managementUsage = await this.usage(goal.id, goal.config?.managerState);
     try {
       const result = await new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
@@ -1175,6 +1188,42 @@ export class GoalManagerService {
           omittedFeedback: claimed.omittedFeedback,
           earlierFeedback: claimed.earlierFeedback,
           problem: problem?.reason,
+          acceptanceFailure:
+            problem?.taskId && currentAcceptanceNode(graph)?.taskId === problem.taskId
+              ? {
+                  currentNodeId: currentAcceptanceNode(graph)?.id,
+                  criteriaIds: goal.config?.acceptance?.criteriaIds,
+                  operationId: goal.config?.acceptance?.lifecycle?.operationId,
+                  failureClauses: goal.config?.acceptance?.lifecycle?.history.findLast(
+                    (entry) => entry.nodeId === currentAcceptanceNode(graph)?.id,
+                  )?.failureClauses,
+                  clauses: [
+                    problem.reason,
+                    ...(goal.config?.acceptance?.lifecycle?.history
+                      .filter((entry) => entry.reason)
+                      .map((entry) => entry.reason!) ?? []),
+                  ],
+                  evidenceVersion:
+                    goal.config?.acceptance?.lifecycle?.evidenceVersion ??
+                    acceptanceEvidenceVersion(graph),
+                  maxRepairRounds: Math.min(
+                    3,
+                    Math.max(0, goal.config?.acceptance?.lifecycle?.maxRepairRounds ?? 3),
+                  ),
+                  remainingCost:
+                    goal.maxTotalCost === null
+                      ? null
+                      : Math.max(
+                          0,
+                          Number(goal.maxTotalCost) - spend.totalCost - managementUsage.totalCost,
+                        ),
+                  remainingRounds:
+                    goal.maxRounds === null ? null : Math.max(0, goal.maxRounds - spend.runs),
+                  remainingTurns: (policy.maxTurns ?? DEFAULT_MANAGER_MAX_TURNS) - claimed.turns,
+                  round: goal.config?.acceptance?.lifecycle?.round ?? 1,
+                  taskId: problem.taskId,
+                }
+              : undefined,
           continuation:
             continuation ??
             state?.replanReason ??
@@ -1245,6 +1294,7 @@ export class GoalManagerService {
 
   submit = async (goalId: string, token: string, operationId: string, input: GoalPlan) => {
     const plan = goalPlanSchema.parse(input);
+    const planHash = createHash('sha256').update(JSON.stringify(plan)).digest('hex');
     const armed = plan.action === 'wait' ? GoalWaitService.arm(plan.until) : undefined;
     const result = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
@@ -1277,7 +1327,14 @@ export class GoalManagerService {
           code: 'CONFLICT',
           message: 'Goal stopped or awaiting human decision',
         });
-      if (state.submitted) return { duplicate: true, plan: state.submitted };
+      if (state.submitted) {
+        if (state.operationId !== operationId || state.submitted.planHash !== planHash)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Stale or racing planning submission; no plan applied',
+          });
+        return { duplicate: true, plan: state.submitted };
+      }
       if (
         state.consumed ||
         (op && op.status !== 'running') ||
@@ -1295,27 +1352,25 @@ export class GoalManagerService {
       const unfinished = graph.nodes.filter(
         (n) => n.kind === 'task' && !terminalNodes.has(n.status),
       );
-      // A takeover of the terminal acceptance can only be answered with `escalate`.
-      // The acceptance task is matched by TITLE regardless of status, so a corrective
-      // task returns to that same failed node and `verify` sets `readyForAcceptance`
-      // without producing a fresh run — both end at the Gate. Refusing here keeps the
-      // prompt's offer and the server's answer the same; letting the acceptance be
-      // superseded is a lifecycle change, not a validation one.
-      if (
-        state.problem &&
-        (plan.action === 'tasks' || plan.action === 'verify') &&
-        graph.nodes.some(
-          (n) =>
-            n.kind === 'task' &&
-            n.taskId === state.problemTaskId &&
-            n.title === GOAL_ACCEPTANCE_TASK_TITLE,
+      const acceptance = currentAcceptanceNode(graph);
+      const lifecycle = goal.config.acceptance?.lifecycle;
+      const repairingAcceptance = !!state.problem && acceptance?.taskId === state.problemTaskId;
+      if (repairingAcceptance && (plan.action === 'tasks' || plan.action === 'verify')) {
+        if ((lifecycle?.round ?? 1) > Math.min(3, Math.max(0, lifecycle?.maxRepairRounds ?? 3)))
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Goal acceptance repair round limit exhausted; escalate',
+          });
+        if (
+          plan.action === 'verify' &&
+          acceptanceEvidenceVersion(graph) ===
+            (lifecycle?.evidenceVersion ?? acceptanceEvidenceVersion(graph))
         )
-      )
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message:
-            'A failed Goal acceptance can only be escalated; it cannot be superseded by new work yet',
-        });
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Independent acceptance requires changed evidence; plan corrective work',
+          });
+      }
       // The unfinished-work guard asks whether an UNINVITED turn may plan while
       // work is in flight; it would double-plan the frontier. A takeover turn
       // inherits work that is stuck by definition — the coordinator only handed it
@@ -1332,7 +1387,10 @@ export class GoalManagerService {
           code: 'CONFLICT',
           message: 'Existing work must be delivered before planning or verification',
         });
-      if (plan.action === 'wait' && unfinished.length)
+      if (
+        plan.action === 'wait' &&
+        unfinished.some((node) => !repairingAcceptance || node.id !== acceptance?.id)
+      )
         throw new TRPCError({ code: 'CONFLICT', message: 'Settle existing work before waiting' });
       if (plan.action === 'wait' && Date.parse(plan.until) <= Date.now())
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Wait until must be in the future' });
@@ -1364,8 +1422,50 @@ export class GoalManagerService {
           graph.edges.some(
             (edge) => edge.kind === 'depends_on' && edge.targetNodeId === inherited.id,
           );
+        if (repairingAcceptance && hasDependents)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'Acceptance has dependent work; escalate before replacing it',
+          });
         if (inherited && !hasDependents && !terminalNodes.has(inherited.status))
           await authored.updateNodeStatus(goalId, inherited.id, 'retired', plan.reason);
+        if (repairingAcceptance && inherited && !hasDependents) {
+          const prior = lifecycle ?? {
+            currentNodeId: inherited.id,
+            evidenceVersion: acceptanceEvidenceVersion(graph),
+            history: [],
+            round: 1,
+          };
+          const history = prior.history.some((entry) => entry.nodeId === inherited.id)
+            ? prior.history
+            : [
+                ...prior.history,
+                {
+                  evidenceVersion: prior.evidenceVersion,
+                  nodeId: inherited.id,
+                  reason: state.problem,
+                  round: prior.round,
+                  verdict: 'failed' as const,
+                },
+              ];
+          await db
+            .update(goals)
+            .set({
+              config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{acceptance}', ${JSON.stringify(
+                {
+                  ...goal.config.acceptance,
+                  lifecycle: {
+                    ...prior,
+                    currentNodeId: undefined,
+                    operationId: undefined,
+                    history,
+                  },
+                },
+              )}::jsonb)`,
+              updatedAt: new Date(),
+            })
+            .where(eq(goals.id, goalId));
+        }
       }
       if (plan.action === 'tasks') {
         // Resolve every reference before writing anything, so a bad one rejects
@@ -1497,12 +1597,16 @@ export class GoalManagerService {
         operationId,
         submitted: {
           action: plan.action,
+          planHash,
           reason: plan.reason,
           ...(plan.action === 'retry' ? { taskId: plan.taskId } : {}),
           ...(plan.action === 'escalate' && plan.ask ? { ask: plan.ask } : {}),
         },
         readyForAcceptance: plan.action === 'verify',
-        replanReason: undefined,
+        replanReason:
+          repairingAcceptance && plan.action === 'tasks'
+            ? 'Corrective work must finish before reassessing changed evidence against the unchanged Goal requirement'
+            : undefined,
         wait:
           plan.action === 'wait' && armed
             ? { until: plan.until, event: plan.event, armedUntil: armed.armedUntil }

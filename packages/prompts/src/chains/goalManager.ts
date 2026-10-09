@@ -1,4 +1,5 @@
 import { GOAL_TURN_TAG } from '@lobechat/const';
+import type { GoalAcceptanceFailureClause } from '@lobechat/types';
 
 /**
  * CLI planning contract; v4 adds the takeover turn, where the coordinator hands
@@ -12,8 +13,9 @@ import { GOAL_TURN_TAG } from '@lobechat/const';
  * wall of identical text every turn.
  * v8 lets an escalation carry an `ask` — the owner's question with concrete
  * answers (and, on a takeover, what each answer does to the blocked Task).
+ * v9 binds corrective planning to failed acceptance clauses, immutable evidence and remaining constraints.
  */
-export const GOAL_MANAGER_PROMPT_VERSION = 'v8';
+export const GOAL_MANAGER_PROMPT_VERSION = 'v9.1';
 
 export interface GoalManagerFeedbackNote {
   /** `user`, or `agent <id>` for an agent-written comment. */
@@ -26,6 +28,20 @@ export interface GoalManagerFeedbackNote {
 }
 
 interface GoalManagerPromptInput {
+  acceptanceFailure?: {
+    clauses: string[];
+    failureClauses?: GoalAcceptanceFailureClause[];
+    currentNodeId?: string;
+    criteriaIds?: string[];
+    operationId?: string;
+    evidenceVersion: string;
+    maxRepairRounds: number;
+    remainingCost: number | null;
+    remainingRounds: number | null;
+    remainingTurns: number;
+    round: number;
+    taskId?: string;
+  };
   continuation?: string;
   /** Feedback the previous turn already received, shown as one-line excerpts. */
   earlierFeedback: GoalManagerFeedbackNote[];
@@ -144,7 +160,7 @@ const feedback = (note: GoalManagerFeedbackNote, isNew: boolean) => {
 };
 
 const takeoverRules =
-  'Takeover: without you this Goal stops on a person, so decide what actually moves it: a corrective task that replaces the stuck work, independent verification when the evidence already warrants it, a diagnosed retry (only a transport failure is retryable; anything else will be refused), or — when the block genuinely needs a human — escalate with the specific question they have to answer. Two limits are enforced, so do not spend the turn on them: a FAILED Goal acceptance can only be escalated, not replaced by new work; and stuck work that something else depends on cannot be retired, so escalate that too.';
+  'Takeover: plan corrective tasks for unmet requirements, request fresh independent verification only after evidence changes, use a bounded useful wait for new evidence, or escalate a necessary human decision. Preserve the original requirement. A failed verdict remains historical evidence, never success. A retry requires a confirmed verifier execution fault; disagreement with a verdict is remediation, not infrastructure retry. Repair rounds, remaining turns and Goal budgets are enforced. Stuck work with dependents cannot be retired: escalate that dependency instead.';
 
 const contract = (input: GoalManagerPromptInput) =>
   [
@@ -179,6 +195,9 @@ export const buildGoalManagerPrompt = (input: GoalManagerPromptInput) => {
       version: GOAL_MANAGER_PROMPT_VERSION,
     })}>`,
     ...(input.problem ? [element('problem', {}, input.problem)] : []),
+    ...(input.acceptanceFailure
+      ? [element('acceptanceFailure', {}, JSON.stringify(input.acceptanceFailure))]
+      : []),
     ...(input.continuation ? [element('continuation', {}, input.continuation)] : []),
     ...previousTurn(input),
     ...input.newFeedback.map((note) => feedback(note, true)),

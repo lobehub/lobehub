@@ -28,7 +28,7 @@ describe('buildGoalManagerPrompt', () => {
     'keeps supervision language tied to the goal rather than the English control prompt: %s',
     (requirement) => {
       const prompt = buildGoalManagerPrompt({ ...base, requirement });
-      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v8');
+      expect(GOAL_MANAGER_PROMPT_VERSION).toBe('v9.1');
       expect(cdataOf(prompt, 'requirement')).toBe(requirement);
       expect(prompt).toContain('Use the language of the Goal requirement');
       expect(prompt).toContain(
@@ -55,8 +55,8 @@ describe('buildGoalManagerPrompt', () => {
     });
     expect(prompt).toContain('trigger="takeover"');
     expect(cdataOf(prompt, 'problem')).toBe('Task attempt budget was exhausted');
-    expect(prompt).toContain('this Goal stops on a person');
-    expect(prompt).toContain('escalate with the specific question');
+    expect(prompt).toContain('plan corrective tasks for unmet requirements');
+    expect(prompt).toContain('escalate a necessary human decision');
   });
 
   /**
@@ -120,7 +120,7 @@ describe('buildGoalManagerPrompt', () => {
     });
 
     expect(prompt.split('\n')[0]).toBe(
-      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v8">',
+      '<goalTurn goal="goal_1" maxTurns="12" trigger="settled" turn="3" version="v9.1">',
     );
     expect(prompt.endsWith('</goalTurn>')).toBe(true);
     // CommonMark ends an HTML block at a blank line; the client needs one block.
@@ -184,5 +184,65 @@ describe('buildGoalManagerPrompt', () => {
     expect(prompt.match(/<\/goalTurn>/g)).toHaveLength(1);
     expect(prompt).toContain(']]]]><![CDATA[>');
     expect(prompt).toContain('<]]><![CDATA[/goalTurn>');
+  });
+});
+
+describe('corrective acceptance planning', () => {
+  it('carries failed clauses, round and remaining constraints without changing requirements', () => {
+    const prompt = buildGoalManagerPrompt({
+      earlierFeedback: [],
+      goalId: 'goal_repair',
+      maxTurns: 8,
+      newFeedback: [],
+      omittedFeedback: { earlier: 0, new: 0 },
+      problem: 'Acceptance failed',
+      requirement: 'Deliver all original requirements',
+      token: 'repair-token',
+      turn: 2,
+      acceptanceFailure: {
+        clauses: ['Missing independent evidence'],
+        failureClauses: [
+          {
+            checkItemId: 'check-corrected-proof',
+            criterionId: 'criterion-original',
+            evidence: [
+              { id: 'evidence-immutable', type: 'text', content: 'Observed unchanged output' },
+            ],
+            narrative: {
+              reasoning: 'The corrected behavior is absent',
+              evidence: 'Independent observation',
+            },
+            reason: 'The corrected behavior is absent',
+            required: true,
+            status: 'failed',
+            suggestion: 'Capture the corrected operation',
+            title: 'Corrected independent evidence',
+            verdict: 'failed',
+            verifierOperationId: 'verifier-independent',
+            verifyRunId: 'verify-bound-round',
+          },
+        ],
+        evidenceVersion: 'immutable-evidence-v1',
+        maxRepairRounds: 3,
+        remainingCost: 4,
+        remainingRounds: 2,
+        remainingTurns: 6,
+        round: 1,
+      },
+    });
+    expect(prompt).toContain('<acceptanceFailure>');
+    expect(prompt).toContain('Missing independent evidence');
+    expect(prompt).toContain('immutable-evidence-v1');
+    expect(prompt).toContain('criterion-original');
+    expect(prompt).toContain('check-corrected-proof');
+    expect(prompt).toContain('evidence-immutable');
+    expect(prompt).toContain('Observed unchanged output');
+    expect(prompt).toContain('verify-bound-round');
+    expect(prompt).toContain('verifier-independent');
+    expect(prompt).toContain('The corrected behavior is absent');
+    expect(prompt).toContain('Deliver all original requirements');
+    expect(prompt).toContain('confirmed verifier execution fault');
+    expect(prompt).toContain('failed verdict remains historical evidence');
+    expect(prompt).not.toContain('FAILED Goal acceptance can only be escalated');
   });
 });

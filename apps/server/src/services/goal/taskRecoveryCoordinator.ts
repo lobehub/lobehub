@@ -3,11 +3,14 @@ import debug from 'debug';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
+import { GoalGraphModel } from '@/database/models/goalGraph';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 import { TaskRunnerService } from '@/server/services/taskRunner';
 
+import { currentAcceptanceNode, isGoalAcceptanceNode } from './acceptanceLifecycle';
+import { GoalManagerService } from './manager';
 import {
   countChargedTaskAttempts,
   countUnchargedRuns,
@@ -15,6 +18,7 @@ import {
   resolveTaskAttemptBudget,
   resolveTaskMaxSteps,
 } from './recoveryPolicy';
+import { GoalSupervisorService } from './supervisor';
 import { statusAuthoredByActor } from './supervisor/policy';
 import { claimGoalTask } from './taskClaim';
 
@@ -128,6 +132,40 @@ export class TaskRecoveryCoordinator {
     const claimed = await this.db.transaction(async (tx) => {
       const currentGoal = await new GoalModel(tx, this.userId, this.workspaceId).lockById(goal.id);
       if (!currentGoal || GOAL_FENCED_STATUSES.has(currentGoal.status)) return 'goal-stopped';
+      const graph = await new GoalGraphModel(tx, this.userId, this.workspaceId).getGraph(goal.id);
+      const node = graph?.nodes.find((candidate) => candidate.taskId === task.id);
+      if (
+        !graph ||
+        graph.decisions.some((decision) => decision.status === 'pending') ||
+        !node ||
+        ['resolved', 'retired', 'rejected'].includes(node.status) ||
+        (isGoalAcceptanceNode(graph, node) && currentAcceptanceNode(graph)?.id !== node.id)
+      )
+        return 'goal-stopped';
+      if (
+        currentGoal.config?.schedule?.deadline &&
+        Date.now() >= Date.parse(currentGoal.config.schedule.deadline)
+      )
+        return 'goal-stopped';
+      const spend = await new TaskTopicModel(tx, this.userId, this.workspaceId).sumRunCostByTaskIds(
+        graph.nodes.flatMap((node) => (node.taskId ? [node.taskId] : [])),
+      );
+      const [management, supervision] = await Promise.all([
+        new GoalManagerService(tx, this.userId, this.workspaceId).usage(
+          goal.id,
+          currentGoal.config?.managerState,
+        ),
+        new GoalSupervisorService(tx, this.userId, this.workspaceId).usage(
+          currentGoal.config?.supervisorState,
+        ),
+      ]);
+      if (
+        (currentGoal.maxTotalCost !== null &&
+          spend.totalCost + management.totalCost + supervision.totalCost >=
+            Number(currentGoal.maxTotalCost)) ||
+        (currentGoal.maxRounds !== null && spend.runs >= currentGoal.maxRounds)
+      )
+        return 'goal-stopped';
       return claimGoalTask(
         new TaskModel(tx, this.userId, this.workspaceId),
         { id: task.id, status: 'paused' },

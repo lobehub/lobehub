@@ -7,7 +7,6 @@ import type {
 } from '@lobechat/agent-tracing';
 import {
   ABANDONED_OPERATION_ERROR_PREFIX,
-  GOAL_ACCEPTANCE_TASK_TITLE,
   LEASE_EXPIRED_ERROR,
   VERIFICATION_ERRORED_ERROR,
   VERIFICATION_FAILED_ERROR,
@@ -20,6 +19,7 @@ import type {
 } from '@lobechat/types';
 import { toMetricScale } from '@lobechat/types';
 
+import { currentAcceptanceNode, isGoalAcceptanceNode } from './acceptanceLifecycle';
 import { isGoalReportNode } from './report';
 
 export { GOAL_ACCEPTANCE_TASK_TITLE } from '@lobechat/const/goal';
@@ -464,7 +464,7 @@ const decideWithoutFrontier = (
       graph.goal.config.exploration.checkpoint?.readyForAcceptance &&
       taskNodes.every(
         (node) =>
-          node.title === GOAL_ACCEPTANCE_TASK_TITLE ||
+          isGoalAcceptanceNode(graph, node) ||
           graph.goal.config!.exploration!.checkpoint!.reviewedNodeIds?.includes(node.id),
       )
     )
@@ -494,7 +494,7 @@ const decideWithoutFrontier = (
     };
   }
 
-  const acceptanceTask = taskNodes.find((node) => node.title === GOAL_ACCEPTANCE_TASK_TITLE);
+  const acceptanceTask = currentAcceptanceNode(graph);
 
   if (graph.goal.requirement && !acceptanceTask) {
     return {

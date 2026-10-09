@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { GOAL_CLARIFICATION_TITLE, type GoalStatus } from '@lobechat/const/goal';
 import type {
+  GoalAcceptanceLifecycle,
   GoalDecisionOption,
   GoalNodeStatus,
   GoalSupervisionState,
@@ -212,6 +213,19 @@ export class GoalModel {
     return row ? next : undefined;
   };
 
+  /** Runtime-owned acceptance identity; callers serialize with the Goal row lock. */
+  updateAcceptanceLifecycle = async (id: string, lifecycle: GoalAcceptanceLifecycle) => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{acceptance}',
+          COALESCE(${goals.config}->'acceptance', '{}'::jsonb)
+            || jsonb_build_object('lifecycle', ${JSON.stringify(lifecycle)}::jsonb))`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
   update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
     const [row] = await this.db
       .update(goals)
@@ -222,14 +236,19 @@ export class GoalModel {
         // policy edits cannot replace the concurrently written incident ledger.
         ...(value.config !== undefined
           ? {
-              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt')
+              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'acceptance')
                 || jsonb_strip_nulls(jsonb_build_object(
                   'planningCheckpoint', ${goals.config}->'planningCheckpoint',
                   'planningProtocol', ${goals.config}->'planningProtocol',
                   'supervisorState', ${goals.config}->'supervisorState',
                   'managerState', ${goals.config}->'managerState',
                   'understanding', ${goals.config}->'understanding',
-                  'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt'
+                  'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt',
+                  'acceptance', NULLIF(
+                    (COALESCE(${JSON.stringify(value.config?.acceptance ?? {})}::jsonb, '{}'::jsonb) - 'lifecycle')
+                      || jsonb_strip_nulls(jsonb_build_object('lifecycle', ${goals.config} #> '{acceptance,lifecycle}')),
+                    '{}'::jsonb
+                  )
                 ))`,
             }
           : {}),

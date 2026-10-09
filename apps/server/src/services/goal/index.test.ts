@@ -2665,6 +2665,18 @@ describe('GoalService', () => {
       (node) => node.id === goalAcceptanceCreated.nodeId,
     );
 
+    const boundRound = (await service.graph(graph.goal.id)).goal.config?.acceptance?.lifecycle;
+    expect(boundRound).toMatchObject({
+      currentNodeId: goalAcceptanceCreated.nodeId,
+      round: 1,
+      history: [],
+    });
+    expect(boundRound?.evidenceVersion).toHaveLength(64);
+    // A display-title edit must never change the acceptance role.
+    await serverDB
+      .update(goalNodes)
+      .set({ title: 'Independent review of the corrected delivery' })
+      .where(eq(goalNodes.id, goalAcceptanceCreated.nodeId!));
     const acceptanceTaskCreated = await service.tick(graph.goal.id);
     expect(acceptanceTaskCreated).toMatchObject({ outcome: 'advanced' });
     const acceptanceTask = await taskModel.findById(acceptanceTaskCreated.taskId!);
@@ -2683,6 +2695,7 @@ describe('GoalService', () => {
     expect(acceptanceWork?.description).toContain('Do not repeat expensive or destructive work');
     expect(acceptanceWork?.description).toContain('Run only the missing or stale checks');
 
+    await new AcceptanceModel(serverDB, userId).update(acceptance!.id, { status: 'accepted' });
     await taskModel.updateStatus(acceptanceTaskCreated.taskId!, 'completed');
     expect((await service.tick(graph.goal.id)).outcome).toBe('advanced');
 
@@ -2693,11 +2706,214 @@ describe('GoalService', () => {
     });
     const finalGraph = await service.graph(graph.goal.id);
     expect(finalGraph.goal.status).toBe('achieved');
+    expect(finalGraph.goal.config?.acceptance?.lifecycle?.history).toEqual([
+      expect.objectContaining({
+        nodeId: goalAcceptanceCreated.nodeId,
+        round: 1,
+        verdict: 'passed',
+      }),
+    ]);
     // The verdict closes the map too: the seeded problem node has no other
     // resolution path, and must not read "active" on an achieved goal.
     expect(finalGraph.nodes.find((node) => node.kind === 'problem')).toMatchObject({
       status: 'resolved',
     });
+  });
+
+  it('does not treat final task completion as an independent acceptance verdict', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Independent verdict',
+      title: 'No manual achievement',
+      tasks: ['Delivery'],
+    });
+    const delivery = await service.tick(graph.goal.id);
+    const tasks = new TaskModel(serverDB, userId);
+    await tasks.updateStatus(delivery.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const verification = await service.tick(graph.goal.id);
+    await tasks.updateStatus(verification.taskId!, 'completed');
+    expect((await service.tick(graph.goal.id)).outcome).toBe('no_progress');
+    const after = await service.graph(graph.goal.id);
+    expect(after.goal.status).toBe('running');
+    expect(after.nodes.find((node) => node.id === verification.nodeId)?.status).toBe('active');
+  });
+
+  it('reserves the acceptance operation and visible run before execution can callback', async () => {
+    const agentId = 'agt_goal_dispatch_receipt';
+    await serverDB.insert(agents).values({ id: agentId, userId });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      agentId,
+      title: 'Receipt',
+      requirement: 'Independent proof',
+      tasks: ['Delivery'],
+    });
+    const delivery = await service.tick(graph.goal.id);
+    await new TaskModel(serverDB, userId).updateStatus(delivery.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const acceptanceTask = await service.tick(graph.goal.id);
+    const topicId = 'tpc_dispatch_receipt';
+    const operationId = 'op_dispatch_receipt';
+    vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
+      await serverDB.insert(topics).values({ id: topicId, userId, agentId });
+      await new AgentOperationModel(serverDB, userId).recordStart({
+        operationId,
+        taskId: acceptanceTask.taskId!,
+        topicId,
+        agentId,
+      });
+      await params.onOperationCreated?.(operationId);
+      await params.onOperationCreated?.(operationId);
+      const reserved = await service.graph(graph.goal.id);
+      expect(reserved.goal.config?.acceptance?.lifecycle?.operationId).toBe(operationId);
+      expect(
+        await new TaskTopicModel(serverDB, userId).findByTaskId(acceptanceTask.taskId!),
+      ).toEqual([expect.objectContaining({ operationId, topicId, status: 'running' })]);
+      return { success: true, operationId, topicId } as never;
+    });
+    await new TaskRunnerService(serverDB, userId).runTask({
+      taskId: acceptanceTask.taskId!,
+      trigger: 'goal',
+    });
+    expect(
+      await new TaskTopicModel(serverDB, userId).findByTaskId(acceptanceTask.taskId!),
+    ).toHaveLength(1);
+    expect(
+      (await new TaskModel(serverDB, userId).findById(acceptanceTask.taskId!))?.totalTopics,
+    ).toBe(1);
+  });
+
+  it.each(['paused', 'canceled', 'budget', 'gate'] as const)(
+    'fences Goal dispatch when %s lands after the coordinator claim',
+    async (fence) => {
+      const agentId = 'agt_goal_dispatch_race';
+      await serverDB.insert(agents).values({ id: agentId, userId });
+      const service = new GoalService(serverDB, userId);
+      const graph = await service.create({
+        agentId,
+        title: 'Dispatch fence',
+        tasks: ['Corrective delivery'],
+      });
+      const created = await service.tick(graph.goal.id);
+      const dispatched = vi.fn();
+      vi.spyOn(AiAgentService.prototype, 'execAgent').mockImplementation(async (params) => {
+        if (fence === 'budget')
+          await new GoalModel(serverDB, userId).update(graph.goal.id, { maxTotalCost: '0' });
+        else if (fence === 'gate') {
+          const gate = await new GoalGraphModel(serverDB, userId).createNode(graph.goal.id, {
+            kind: 'decision',
+            title: 'Human approval',
+            status: 'waiting',
+          });
+          await serverDB.insert(goalNodeDecisions).values({
+            authority: 'user',
+            nodeId: gate!.id,
+            question: 'Approve?',
+            options: [],
+            status: 'pending',
+          });
+        } else await new GoalModel(serverDB, userId).update(graph.goal.id, { status: fence });
+        await params.onOperationCreated?.('op_reservation');
+        dispatched();
+        return { operationId: 'op_reservation', success: true } as never;
+      });
+      await expect(
+        new TaskRunnerService(serverDB, userId).runTask({
+          taskId: created.taskId!,
+          trigger: 'goal',
+        }),
+      ).rejects.toThrow('Goal constraints changed before dispatch');
+      expect(dispatched).not.toHaveBeenCalled();
+      expect(await new TaskTopicModel(serverDB, userId).findByTaskId(created.taskId!)).toHaveLength(
+        0,
+      );
+    },
+  );
+
+  it('does not dispatch recovery from an obsolete retired node', async () => {
+    const runSpy = vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Obsolete retry', tasks: ['Superseded work'] });
+    const delivery = await service.tick(graph.goal.id);
+    const model = new TaskModel(serverDB, userId);
+    await model.updateStatus(delivery.taskId!, 'paused', { error: VERIFICATION_ERRORED_ERROR });
+    const stale = (await model.findById(delivery.taskId!))!;
+    await new GoalGraphModel(serverDB, userId).updateNodeStatus(
+      graph.goal.id,
+      delivery.nodeId!,
+      'retired',
+      'Replaced by corrective work',
+    );
+    const result = await new TaskRecoveryCoordinator(serverDB, userId).recover({
+      goal: (await service.graph(graph.goal.id)).goal,
+      task: stale,
+    });
+    expect(result.outcome).toBe('goal-stopped');
+    expect(runSpy).not.toHaveBeenCalled();
+    expect((await model.findById(delivery.taskId!))?.status).toBe('paused');
+  });
+
+  it('ignores duplicate delivery callbacks before creating findings or work versions', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Evidence',
+      title: 'Duplicate fence',
+      tasks: ['Delivery'],
+    });
+    const delivery = await service.tick(graph.goal.id);
+    await new TaskModel(serverDB, userId).updateStatus(delivery.taskId!, 'completed');
+    const stale = await service.graph(graph.goal.id);
+    const consume = (
+      service as unknown as {
+        consumeCompletedTask: (
+          graph: typeof stale,
+          nodeId: string,
+          taskId: string,
+        ) => Promise<{ outcome: string }>;
+      }
+    ).consumeCompletedTask.bind(service);
+    await consume(stale, delivery.nodeId!, delivery.taskId!);
+    const first = await service.graph(graph.goal.id);
+    const duplicate = await consume(stale, delivery.nodeId!, delivery.taskId!);
+    const second = await service.graph(graph.goal.id);
+    expect(duplicate.outcome).toBe('no_progress');
+    expect(second.nodes).toHaveLength(first.nodes.length);
+    expect(second.workVersions).toHaveLength(first.workVersions.length);
+    expect(second.events).toHaveLength(first.events.length);
+  });
+
+  it('rejects final acceptance callbacks after a concurrent pause without resolving the node', async () => {
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      requirement: 'Verified delivery',
+      title: 'Pause fence',
+      tasks: ['Delivery'],
+    });
+    const taskModel = new TaskModel(serverDB, userId);
+    const delivery = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(delivery.taskId!, 'completed');
+    await service.tick(graph.goal.id);
+    await service.tick(graph.goal.id);
+    const verification = await service.tick(graph.goal.id);
+    await taskModel.updateStatus(verification.taskId!, 'completed');
+    const beforePause = await service.graph(graph.goal.id);
+    await new GoalModel(serverDB, userId).update(graph.goal.id, { status: 'paused' });
+    const result = await (
+      service as unknown as {
+        consumeCompletedTask: (
+          graph: typeof beforePause,
+          nodeId: string,
+          taskId: string,
+        ) => Promise<{ outcome: string }>;
+      }
+    ).consumeCompletedTask(beforePause, verification.nodeId!, verification.taskId!);
+    expect(result.outcome).toBe('no_progress');
+    const afterPause = await service.graph(graph.goal.id);
+    expect(afterPause.goal.status).toBe('paused');
+    expect(afterPause.nodes.find((node) => node.id === verification.nodeId)?.status).toBe('active');
   });
 
   it('does not mark a required goal achieved when only its initial Task is complete', async () => {
@@ -3677,6 +3893,11 @@ describe('GoalService', () => {
     await service.tick(graph.goal.id);
     await service.tick(graph.goal.id);
     const acceptance = await service.tick(graph.goal.id);
+    const verdict = await new AcceptanceModel(serverDB, userId).findBySubject(
+      'task',
+      acceptance.taskId!,
+    );
+    await new AcceptanceModel(serverDB, userId).update(verdict!.id, { status: 'accepted' });
     await taskModel.updateStatus(acceptance.taskId!, 'completed');
     await service.tick(graph.goal.id);
     expect((await service.tick(graph.goal.id)).outcome).toBe('achieved');

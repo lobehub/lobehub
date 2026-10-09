@@ -65,6 +65,56 @@ describe('GoalModel', () => {
     });
   });
 
+  describe('acceptance lifecycle ownership', () => {
+    it('preserves current round and failed history across stale policy edits', async () => {
+      const lifecycle = {
+        currentNodeId: 'acceptance-new',
+        round: 2,
+        evidenceVersion: 'corrected-work',
+        history: [
+          {
+            nodeId: 'acceptance-old',
+            round: 1,
+            evidenceVersion: 'old-work',
+            verdict: 'failed' as const,
+          },
+        ],
+      };
+      const goal = await goalModel.create({ title: 'Repair history' });
+      // Runtime writes this namespace under the Goal row lock; editor snapshots
+      // must not be allowed to replace it.
+      await goalModel.updateAcceptanceLifecycle(goal.id, lifecycle);
+      await goalModel.update(goal.id, { config: { acceptance: { criteriaIds: ['new-policy'] } } });
+      expect((await goalModel.findById(goal.id))?.config?.acceptance).toEqual({
+        criteriaIds: ['new-policy'],
+        lifecycle,
+      });
+      await goalModel.update(goal.id, {
+        config: { acceptance: { lifecycle: { ...lifecycle, round: 1, history: [] } } },
+      });
+      expect((await goalModel.findById(goal.id))?.config?.acceptance?.lifecycle).toEqual(lifecycle);
+      await goalModel.update(goal.id, { config: null });
+      expect((await goalModel.findById(goal.id))?.config?.acceptance?.lifecycle).toEqual(lifecycle);
+    });
+  });
+
+  describe('acceptance lifecycle scope', () => {
+    it('keeps policy fields and excludes another owner from runtime writes', async () => {
+      const goal = await goalModel.create({
+        title: 'Owned acceptance',
+        config: { acceptance: { criteriaIds: ['criterion'] } },
+      });
+      const lifecycle = { round: 1, evidenceVersion: 'work', history: [] };
+      await new GoalModel(serverDB, otherUserId).updateAcceptanceLifecycle(goal.id, lifecycle);
+      expect((await goalModel.findById(goal.id))?.config?.acceptance?.lifecycle).toBeUndefined();
+      await goalModel.updateAcceptanceLifecycle(goal.id, lifecycle);
+      expect((await goalModel.findById(goal.id))?.config?.acceptance).toEqual({
+        criteriaIds: ['criterion'],
+        lifecycle,
+      });
+    });
+  });
+
   describe('create', () => {
     it('creates a goal with defaults', async () => {
       const result = await goalModel.create({

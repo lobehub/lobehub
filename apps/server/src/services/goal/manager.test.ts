@@ -4,19 +4,23 @@ import {
   GOAL_COORDINATOR_ACTOR_ID,
   GOAL_MANAGER_QUESTION_TITLE,
 } from '@lobechat/const/goal';
+import type { GoalAcceptanceFailureClause } from '@lobechat/types';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
+import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { MessageModel } from '@/database/models/message';
 import { TaskModel } from '@/database/models/task';
+import { WorkModel } from '@/database/models/work';
 import {
   acceptances,
   agentOperations,
   agents,
+  documents,
   goalEdges,
   goalEvents,
   goalNodeDecisions,
@@ -33,6 +37,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { TopicStartReservationError } from '@/server/services/aiAgent/topicStartReservation';
 
 import { deviceGateway } from '../deviceGateway';
+import { acceptanceEvidenceVersion } from './acceptanceLifecycle';
 import { GoalService } from './index';
 import { decideFailedTurn, GoalManagerService, MAX_FAILED_MANAGER_TURNS } from './manager';
 import * as scheduler from './scheduler';
@@ -97,6 +102,7 @@ afterEach(async () => {
     goalNodes,
     goals,
     acceptances,
+    documents,
     agentOperations,
     messages,
     taskTopics,
@@ -154,7 +160,7 @@ describe('CLI main Agent planning', () => {
     await expect(
       caller.submitOperationPlan({ id, operationId: op.id, token: state.token, plan: taskPlan }),
     ).resolves.toMatchObject({ success: true });
-    expect((await model().findById(id))!.config!.managerState!.submitted).toEqual({
+    expect((await model().findById(id))!.config!.managerState!.submitted).toMatchObject({
       action: taskPlan.action,
       reason: taskPlan.reason,
     });
@@ -280,12 +286,16 @@ describe('CLI main Agent planning', () => {
       recorded: true,
       action: 'tasks',
     });
-    expect(
-      await manager().submit(id, state.token, op.id, {
+    await expect(
+      manager().submit(id, state.token, op.id, {
         action: 'verify',
         reason: 'duplicate replacement',
       }),
-    ).toMatchObject({ duplicate: true, plan: { action: 'tasks' } });
+    ).rejects.toThrow('Stale or racing');
+    expect(await manager().submit(id, state.token, op.id, taskPlan)).toMatchObject({
+      duplicate: true,
+      plan: { action: 'tasks' },
+    });
     expect((await service().graph(id)).nodes.filter((n) => n.kind === 'task')).toHaveLength(1);
     expect((await service().tick(id)).outcome).toBe('waiting_external');
     await ops().recordCompletion(op.id, { status: 'done' });
@@ -1909,10 +1919,16 @@ describe('escalations that ask a real question', () => {
  * start and the Goal still reached a bare Gate with a main Agent idle.
  */
 describe('takeover on a failed terminal acceptance', () => {
-  const failedAcceptance = async () => {
+  const failedAcceptance = async (
+    round?: number,
+    failureClauses?: GoalAcceptanceFailureClause[],
+    exploration = true,
+  ) => {
     const graph = await service().create({
       config: {
-        exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        ...(exploration && {
+          exploration: { instruction: 'Follow the pre-registered branches', maxExperiments: 4 },
+        }),
         manager: { maxTurns: 4 },
         recovery: { maxAttemptsPerTask: 1 },
       },
@@ -1923,11 +1939,42 @@ describe('takeover on a failed terminal acceptance', () => {
     });
     const created = await service().tick(graph.goal.id);
     const taskModel = new TaskModel(db, userId);
+    if (round !== undefined) {
+      const current = await service().graph(graph.goal.id);
+      await db
+        .update(goals)
+        .set({
+          config: {
+            ...current.goal.config,
+            acceptance: {
+              lifecycle: {
+                currentNodeId: current.nodes.find((node) => node.taskId === created.taskId)!.id,
+                evidenceVersion: 'failed-evidence',
+                history: failureClauses
+                  ? [
+                      {
+                        nodeId: current.nodes.find((node) => node.taskId === created.taskId)!.id,
+                        round,
+                        evidenceVersion: 'failed-evidence',
+                        verdict: 'failed',
+                        failureClauses,
+                      },
+                    ]
+                  : [],
+                round,
+                maxRepairRounds: 3,
+              },
+            },
+          },
+        })
+        .where(eq(goals.id, graph.goal.id));
+    }
     await taskModel.update(created.taskId!, { totalTopics: 1 });
     await taskModel.updateStatus(created.taskId!, 'paused', {
       error: 'Delivery did not pass verification.',
     });
     await service().tick(graph.goal.id);
+    if (round !== undefined) await service().tick(graph.goal.id);
     return { goalId: graph.goal.id, taskId: created.taskId! };
   };
 
@@ -1939,14 +1986,199 @@ describe('takeover on a failed terminal acceptance', () => {
     expect((await service().graph(goalId)).decisions).toHaveLength(0);
   });
 
-  /**
-   * A failed acceptance cannot be superseded: the acceptance task is matched by TITLE
-   * regardless of status, so a corrective task returns to that same failed node and
-   * `verify` sets `readyForAcceptance` without producing a fresh run. Refusing keeps
-   * the prompt's offer and the server's answer identical instead of accepting a plan
-   * that strands.
-   */
-  it('accepts only an escalation for a failed acceptance', async () => {
+  it('supplies actual failed criterion verdicts and evidence to corrective Manager planning', async () => {
+    await failedAcceptance(1, [
+      {
+        checkItemId: 'failed-current-check',
+        criterionId: 'unchanged-requirement-clause',
+        title: 'Independent corrected behavior',
+        required: true,
+        status: 'failed',
+        verdict: 'failed',
+        verifyRunId: 'current-verify-run',
+        verifierOperationId: 'independent-verifier-operation',
+        reason: 'Captured evidence shows the old behavior',
+        evidence: [{ id: 'captured-evidence', type: 'text', content: 'Observed old output' }],
+      },
+    ]);
+    const prompt = vi.mocked(AiAgentService.prototype.execAgent).mock.calls.at(-1)![0].prompt;
+    expect(prompt).toContain('unchanged-requirement-clause');
+    expect(prompt).toContain('failed-current-check');
+    expect(prompt).toContain('current-verify-run');
+    expect(prompt).toContain('captured-evidence');
+    expect(prompt).toContain('Observed old output');
+    expect(prompt).toContain('Captured evidence shows the old behavior');
+  });
+
+  it('bounds repeated acceptance repairs without spending another corrective task', async () => {
+    const { goalId } = await failedAcceptance(4);
+    const state = (await model().findById(goalId))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    await expect(manager().submit(goalId, state.token, turn!.id, taskPlan)).rejects.toThrow(
+      'repair round limit exhausted',
+    );
+    expect(
+      (await service().graph(goalId)).nodes.filter((node) => node.title === 'Audit'),
+    ).toHaveLength(0);
+  });
+
+  it('resumes corrective planning after a bounded failed-acceptance wait', async () => {
+    const { goalId } = await failedAcceptance();
+    const state = (await model().findById(goalId))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    await manager().submit(goalId, state.token, turn!.id, {
+      action: 'wait',
+      reason: 'Await newly captured evidence',
+      until: new Date(Date.now() + 60_000).toISOString(),
+      event: { type: 'acceptance.evidence', key: 'fresh-capture' },
+    });
+    await ops().recordCompletion(turn!.id, { status: 'done' });
+    await service().tick(goalId);
+    expect(
+      await new GoalWaitService(db, userId).deliver(goalId, {
+        type: 'acceptance.evidence',
+        key: 'fresh-capture',
+        eventId: 'capture-1',
+        waitToken: state.token,
+      }),
+    ).toMatchObject({ accepted: true });
+    await service().tick(goalId);
+    const next = (await model().findById(goalId))!.config!.managerState!;
+    expect(next.token).not.toBe(state.token);
+    expect(next.turns).toBe(state.turns + 1);
+    expect((await service().graph(goalId)).decisions).toHaveLength(0);
+  });
+
+  it('refuses a new independent acceptance for identical failed evidence', async () => {
+    const { goalId } = await failedAcceptance();
+    const state = (await model().findById(goalId))!.config!.managerState!;
+    const turn = await ops().findByTopicSourceMessage(
+      state.topicId,
+      `msg_goal_manager_${state.token}`,
+    );
+    await expect(
+      manager().submit(goalId, state.token, turn!.id, {
+        action: 'verify',
+        reason: 'Try the same evidence again',
+      }),
+    ).rejects.toThrow('requires changed evidence');
+    expect((await service().graph(goalId)).goal.config!.managerState!.submitted).toBeUndefined();
+  });
+
+  it('never overwrites a recorded failed round with a late accepted callback', async () => {
+    const { goalId, taskId } = await failedAcceptance(1);
+    const graph = await service().graph(goalId);
+    const lifecycle = graph.goal.config!.acceptance!.lifecycle!;
+    await model().updateAcceptanceLifecycle(goalId, {
+      ...lifecycle,
+      evidenceVersion: acceptanceEvidenceVersion(graph),
+    });
+    const verdicts = new AcceptanceModel(db, userId);
+    const acceptance = await verdicts.findBySubject('task', taskId);
+    await verdicts.update(acceptance!.id, { status: 'accepted' });
+    await new TaskModel(db, userId).updateStatus(taskId, 'completed');
+    const fresh = await service().graph(goalId);
+    const result = await (
+      service() as unknown as {
+        consumeCompletedTask: (
+          graph: typeof fresh,
+          nodeId: string,
+          taskId: string,
+        ) => Promise<{ outcome: string }>;
+      }
+    ).consumeCompletedTask(fresh, lifecycle.currentNodeId!, taskId);
+    expect(result.outcome).toBe('no_progress');
+    const after = await service().graph(goalId);
+    expect(after.goal.config!.acceptance!.lifecycle!.history).toEqual(lifecycle.history);
+    expect(after.nodes.find((node) => node.id === lifecycle.currentNodeId)!.status).not.toBe(
+      'resolved',
+    );
+  });
+
+  it('repairs failed acceptance and independently passes changed evidence in a new round', async () => {
+    const { goalId, taskId } = await failedAcceptance(undefined, undefined, false);
+    const first = (await model().findById(goalId))!.config!.managerState!;
+    await manager().submit(goalId, first.token, first.operationId!, taskPlan);
+    await ops().recordCompletion(first.operationId!, { status: 'done' });
+    await service().tick(goalId);
+    const repair = await service().tick(goalId);
+    expect(repair.taskId).toBeDefined();
+    const [document] = await db
+      .insert(documents)
+      .values({
+        content: 'Corrected evidence satisfies the unchanged requirement',
+        fileType: 'markdown',
+        filename: 'repair.md',
+        source: 'notebook',
+        sourceType: 'api',
+        title: 'Changed evidence',
+        totalCharCount: 54,
+        totalLineCount: 1,
+        userId,
+      })
+      .returning();
+    const work = await new WorkModel(db, userId).registerDocument({
+      changeType: 'created',
+      documentId: document.id,
+      rootOperationId: 'op-repair-evidence',
+      toolIdentifier: 'lobe-agent-documents',
+      toolName: 'createDocument',
+    });
+    const [version] = await new WorkModel(db, userId).listVersions(work!.id);
+    await new GoalGraphModel(db, userId).attachWorkVersion(
+      goalId,
+      repair.nodeId!,
+      version.id,
+      'produced',
+    );
+    await new TaskModel(db, userId).updateStatus(repair.taskId!, 'completed');
+    await service().tick(goalId);
+    await service().tick(goalId);
+    const next = (await model().findById(goalId))!.config!.managerState!;
+    expect(next.token).not.toBe(first.token);
+    await manager().submit(goalId, next.token, next.operationId!, {
+      action: 'verify',
+      reason: 'Verify corrected evidence independently',
+    });
+    await ops().recordCompletion(next.operationId!, { status: 'done' });
+    let verification;
+    for (let i = 0; i < 6 && !verification; i++) {
+      const tick = await service().tick(goalId);
+      if (tick.taskId && tick.taskId !== taskId && tick.taskId !== repair.taskId)
+        verification = tick;
+    }
+    expect(verification?.taskId).toBeDefined();
+    const bound = (await service().graph(goalId)).goal.config!.acceptance!.lifecycle!;
+    expect(bound.round).toBe(2);
+    expect(bound.history).toContainEqual(expect.objectContaining({ verdict: 'failed', round: 1 }));
+    // Test boundary stands in for independent verifier completion, never just Task completion.
+    const verdicts = new AcceptanceModel(db, userId);
+    const acceptance = await verdicts.findBySubject('task', verification!.taskId!);
+    await verdicts.update(acceptance!.id, { status: 'accepted' });
+    await new TaskModel(db, userId).updateStatus(verification!.taskId!, 'completed');
+    await service().tick(goalId);
+    await service().tick(goalId);
+    const final = await service().graph(goalId);
+    expect(final.goal.status).toBe('achieved');
+    expect(final.goal.requirement).toBe('Return a defensible training recommendation.');
+    expect(
+      final.goal.config!.acceptance!.lifecycle!.history.map(({ round, verdict }) => ({
+        round,
+        verdict,
+      })),
+    ).toEqual([
+      { round: 1, verdict: 'failed' },
+      { round: 2, verdict: 'passed' },
+    ]);
+  });
+
+  it('atomically retires failed acceptance while preserving failed history and installing corrective work', async () => {
     const { goalId, taskId } = await failedAcceptance();
     const state = (await model().findById(goalId))!.config!.managerState!;
     const turn = await ops().findByTopicSourceMessage(
@@ -1954,29 +2186,31 @@ describe('takeover on a failed terminal acceptance', () => {
       `msg_goal_manager_${state.token}`,
     );
     const caller = operationCaller(turn!.id);
-    await expect(
-      caller.submitOperationPlan({
-        id: goalId,
-        operationId: turn!.id,
-        plan: {
-          action: 'tasks',
-          reason: 'The judge read evidence it was never shown',
-          tasks: [{ description: 'Recapture the evidence and redeliver', title: 'Recapture' }],
-        },
-        token: state.token,
-      }),
-    ).rejects.toThrow('can only be escalated');
-    await expect(
-      caller.submitOperationPlan({
-        id: goalId,
-        operationId: turn!.id,
-        plan: { action: 'escalate', reason: 'The judge read evidence it was never shown' },
-        token: state.token,
-      }),
-    ).resolves.toMatchObject({ success: true });
+    const input = {
+      id: goalId,
+      operationId: turn!.id,
+      plan: {
+        action: 'tasks' as const,
+        reason: 'The unchanged requirement needs fresh captured evidence',
+        tasks: [{ description: 'Recapture the evidence and redeliver', title: 'Recapture' }],
+      },
+      token: state.token,
+    };
+    await expect(caller.submitOperationPlan(input)).resolves.toMatchObject({ success: true });
+    const graph = await service().graph(goalId);
+    const failed = graph.nodes.find((node) => node.taskId === taskId)!;
+    expect(failed.status).toBe('retired');
+    expect(graph.nodes.filter((node) => node.title === 'Recapture')).toHaveLength(1);
+    expect(graph.goal.config!.acceptance!.lifecycle).toMatchObject({
+      round: 1,
+      history: [expect.objectContaining({ nodeId: failed.id, verdict: 'failed' })],
+    });
+    expect(graph.goal.config!.acceptance!.lifecycle!.currentNodeId).toBeUndefined();
+    expect(graph.goal.config!.managerState!.readyForAcceptance).toBe(false);
+    await caller.submitOperationPlan(input);
     expect(
-      (await service().graph(goalId)).nodes.find((node) => node.taskId === taskId)!.status,
-    ).not.toBe('retired');
+      (await service().graph(goalId)).nodes.filter((node) => node.title === 'Recapture'),
+    ).toHaveLength(1);
   });
 });
 

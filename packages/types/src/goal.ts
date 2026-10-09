@@ -1,6 +1,13 @@
 import type { GoalReportDispatch, GoalReportState } from './goalReport';
 import type { InitialGoalOverviewContext } from './stepContext';
-import type { AcceptanceStatus, VerifyCheckTally } from './verify';
+import type {
+  AcceptanceStatus,
+  ToulminVerdict,
+  VerifyCheckResultStatus,
+  VerifyCheckTally,
+  VerifyEvidenceType,
+  VerifyVerdict,
+} from './verify';
 import type { WorkType } from './work';
 
 // ============================================
@@ -85,8 +92,51 @@ export interface GoalMetricCriterion {
  */
 export const MAX_GOAL_METRIC_CRITERIA = 20;
 
+/** Frozen independent-verifier clause and evidence provenance for corrective planning. */
+export interface GoalAcceptanceFailureClause {
+  checkItemId: string;
+  criterionId?: string;
+  evidence: {
+    content?: string;
+    description?: string;
+    documentId?: string;
+    fileId?: string;
+    id: string;
+    type: VerifyEvidenceType;
+  }[];
+  narrative?: ToulminVerdict;
+  reason?: string;
+  required: boolean;
+  status: VerifyCheckResultStatus;
+  suggestion?: string;
+  title: string;
+  verdict?: VerifyVerdict;
+  verifierOperationId?: string;
+  verifyRunId: string;
+}
+
+/** Coordinator-owned immutable verdict identities; policy edits cannot replace this ledger. */
+export interface GoalAcceptanceLifecycle {
+  currentNodeId?: string;
+  evidenceVersion: string;
+  history: {
+    failureClauses?: GoalAcceptanceFailureClause[];
+    evidenceVersion: string;
+    nodeId: string;
+    operationId?: string;
+    reason?: string;
+    round: number;
+    verdict?: 'failed' | 'passed' | 'execution_fault';
+  }[];
+  maxRepairRounds?: number;
+  operationId?: string;
+  round: number;
+}
+
 export interface GoalAcceptancePolicy {
   criteriaIds?: string[];
+  /** Server-owned current independent acceptance and retained historical verdicts. */
+  lifecycle?: GoalAcceptanceLifecycle;
   /**
    * Measured clauses that gate acceptance. Every one must hold before the
    * Goal-level delivery acceptance is even attempted: an unmet number is not
@@ -328,6 +378,8 @@ export interface GoalManagerState {
   startedAt: string;
   submitted?: {
     action: 'tasks' | 'verify' | 'retry' | 'escalate' | 'wait';
+    /** Exact normalized plan identity for idempotent submissions. */
+    planHash?: string;
     /**
      * The question an `escalate` puts to the owner, with the answers it offers.
      * Without it the gate could only ask "retry or retire?" while the real
