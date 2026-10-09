@@ -88,7 +88,10 @@ const GroupItem = memo<GroupItemComponentProps>(({ group }) => {
         <Flexbox gap={1} paddingBlock={1}>
           {children.map((topic) => (
             <TopicItem
+              // The group header already names the owning agent — the row
+              // must not repeat the avatar at its leading position.
               showWorkingDirectory
+              suppressAgentAvatar
               fav={topic.favorite}
               id={topic.id}
               key={topic.id}

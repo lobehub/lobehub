@@ -22,7 +22,6 @@ import RingLoadingIcon from '@/components/RingLoading';
 import UnreadDot from '@/components/UnreadDot';
 import { useCommitWorkingDirectory } from '@/features/ChatInput/ControlBar/useCommitWorkingDirectory';
 import { AgentDirectoryActions } from '@/features/Projects/WorkingDirectories/AgentDirectoryActions';
-import { openProjectTopicModal } from '@/features/Projects/WorkingDirectories/StartDirectoryModal';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useActiveLocation } from '@/hooks/useActiveLocation';
@@ -229,26 +228,22 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
     activeWorkspaceSlug,
   ]);
 
+  // A merged project group may span several machines. It opens the plain new
+  // topic composer — no directory is pre-committed and no chooser modal pops;
+  // the user picks the machine/directory in the composer control bar, the
+  // same habit as the header's new-topic action. Single-directory groups keep
+  // the legacy direct start above.
+  const handleStartPlain = useCallback(() => {
+    if (!currentAgentId || !targetAgentId) return;
+    useChatStore.getState().switchTopic(null, { skipRefreshMessage: true });
+    router.push(
+      buildPrefixedAgentRoutePath(AGENT_CHAT_URL(targetAgentId), agentRoute, activeWorkspaceSlug),
+    );
+  }, [currentAgentId, targetAgentId, router, agentRoute, activeWorkspaceSlug]);
+
   const canAddTopic = !scope && !!currentAgentId && !!workingDirectory;
-  // A merged project group may span several machines. Starting work from it
-  // must let the user pick the execution context (this machine / another
-  // computer / conversation only) instead of silently taking the most recent
-  // directory's device; single-directory groups keep the direct start.
-  const needsStartChooser = !!projectId && projectDirectories.length > 1;
-  const directoriesRequest = useProjectDirectoryStore((s) => s.useFetchDirectories)(
-    undefined,
-    needsStartChooser,
-  );
+  const needsPlainStart = !!projectId && projectDirectories.length > 1;
   const { t: tProject } = useTranslation('project');
-  const openStartChooser = useCallback(() => {
-    if (!projectId || !currentAgentId) return;
-    openProjectTopicModal({
-      title: tProject('sidebar.newConversation'),
-      coordinatorAgentId: currentAgentId,
-      directories: projectDirectories,
-      projectId,
-    });
-  }, [projectId, currentAgentId, projectDirectories, tProject]);
 
   const statusCounts = useChatStore(
     (s) => getProjectTopicStatusCounts(children, operationSelectors.visiblyRunningTopicIds(s)),
@@ -267,7 +262,7 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
         {hasCollapsedUnread && <CollapsedUnreadDot count={unreadCount} />}
         {canAddTopic && (
           <span className={hasCollapsedIndicators ? styles.addTopicAction : undefined}>
-            {needsStartChooser ? (
+            {needsPlainStart ? (
               <>
                 <AgentDirectoryActions
                   hideStartAction
@@ -277,13 +272,12 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
                   onLegacyStart={handleAddTopic}
                 />
                 <ActionIcon
-                  disabled={!directoriesRequest.hasData || !!directoriesRequest.error}
                   icon={PlusIcon}
                   size={'small'}
                   title={tProject('directories.start')}
                   onClick={(e) => {
                     e.stopPropagation();
-                    openStartChooser();
+                    handleStartPlain();
                   }}
                 />
               </>

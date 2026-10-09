@@ -367,13 +367,16 @@ it('resolves a merged project group through any directory of that project', () =
   expect(routerPushMock).toHaveBeenCalledWith('/project/lobehub');
 });
 
-it('opens the execution-context chooser when a merged project group spans multiple directories', () => {
-  // ROOT CAUSE: the merged project-id group used to start work silently in
-  // the most recent directory's device. With several machines bound to one
-  // project, the "+" must open the chooser (this machine / another computer /
-  // conversation only) instead of guessing.
+it('opens the plain new-topic composer when a merged project group spans multiple directories', () => {
+  // ROOT CAUSE: the first fix opened a chooser modal here, but the expected
+  // habit is the plain new-topic composer — the user picks the machine in the
+  // composer control bar, so no modal may pop and no directory default may be
+  // pre-committed for a multi-machine merged group.
   directoryRows.length = 0;
   openProjectTopicModalMock.mockClear();
+  commitAgentDefaultMock.mockClear();
+  switchTopicMock.mockClear();
+  routerPushMock.mockClear();
   directoryRows.push(
     {
       id: 'binding-multi-a',
@@ -422,14 +425,10 @@ it('opens the execution-context chooser when a merged project group spans multip
     </AccordionRoot>,
   );
   fireEvent.click(screen.getByRole('button', { name: 'directories.start' }));
-  expect(openProjectTopicModalMock).toHaveBeenCalledTimes(1);
-  expect(openProjectTopicModalMock).toHaveBeenCalledWith(
-    expect.objectContaining({
-      projectId: 'prj-multi',
-      coordinatorAgentId: 'agent-1',
-      title: 'sidebar.newConversation',
-    }),
-  );
+  expect(openProjectTopicModalMock).not.toHaveBeenCalled();
+  expect(commitAgentDefaultMock).not.toHaveBeenCalled();
+  expect(switchTopicMock).toHaveBeenCalledWith(null, { skipRefreshMessage: true });
+  expect(routerPushMock).toHaveBeenCalledWith('/agent/agent-1');
 });
 
 it('keeps the direct start action when a merged project group has a single directory', () => {

@@ -225,6 +225,12 @@ interface TopicItemProps {
    */
   showWorkingDirectory?: boolean;
   status?: ChatTopicStatus | null;
+  /**
+   * Group headers that already identify the owning agent (the by-agent
+   * grouping) suppress the row's leading agent avatar — the identity lives in
+   * the header, and the row keeps its status/identity icons instead.
+   */
+  suppressAgentAvatar?: boolean;
   title: string;
   /** Creator of the topic; drives the workspace creator avatar. */
   userId?: string;
@@ -257,6 +263,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
     isTopicActive,
     navRef,
     showThreadList,
+    suppressAgentAvatar,
   }) => {
     const scopedTopic = useScopedTopic(id);
     const scope = useTopicListScope();
@@ -553,21 +560,22 @@ const TopicItemRow = memo<TopicItemRowProps>(
     // shrinks into a bottom-right corner badge. Personal mode keeps the
     // original layout untouched.
     const ownIconNode = statusIconNode ?? identityIconNode;
-    const leadingIconNode = scopedTopic ? (
-      <Avatar
-        name={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
-        size={20}
-        title={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
-        avatar={
-          scopedTopic.agentAvatar ||
-          (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)
-        }
-      />
-    ) : author ? (
-      <TopicCreatorAvatar corner={ownIconNode} userId={userId} />
-    ) : (
-      (ownIconNode ?? idleIconPlaceholder)
-    );
+    const leadingIconNode =
+      scopedTopic && !suppressAgentAvatar ? (
+        <Avatar
+          name={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
+          size={20}
+          title={scopedTopic.agentName || scopedTopic.agentTitle || undefined}
+          avatar={
+            scopedTopic.agentAvatar ||
+            (activeAgentId === inboxId ? DEFAULT_INBOX_AVATAR : DEFAULT_AVATAR)
+          }
+        />
+      ) : author ? (
+        <TopicCreatorAvatar corner={ownIconNode} userId={userId} />
+      ) : (
+        (ownIconNode ?? idleIconPlaceholder)
+      );
 
     const navItem = (
       <TopicItemContextMenu fav={fav} id={id} status={status} title={title}>
@@ -583,7 +591,7 @@ const TopicItemRow = memo<TopicItemRowProps>(
           titleColor={cssVar.colorText}
           extra={
             <>
-              {scopedTopic && ownIconNode}
+              {scopedTopic && !suppressAgentAvatar && ownIconNode}
               <TopicMigrationIndicator agentId={activeAgentId} topicId={id} />
               {/* Gated on the SAME boolean that draws the running ring: both say
                   "this row is visibly running", and a row that stopped spinning
