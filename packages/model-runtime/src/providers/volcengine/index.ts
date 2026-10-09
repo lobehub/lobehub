@@ -68,18 +68,24 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   baseURL: 'https://ark.cn-beijing.volces.com/api/v3',
   chatCompletion: {
     handlePayload: (payload) => {
-      const { enabledSearch, thinking, reasoning_effort, ...rest } = payload;
+      // Ark addresses models by their catalog (deployment) name, not the
+      // logical id the builtin cards ship with (`deepseek-v4-pro-ga` vs
+      // `deepseek-v4-pro-ga-260813`): sending the bare id 404s with
+      // InvalidEndpointOrModel.NotFound. Same pattern as spark/azureOpenai.
+      const { deploymentName, enabledSearch, model, thinking, reasoning_effort, ...rest } = payload;
+      const requestModel = deploymentName ?? model;
 
       if (enabledSearch) {
         return {
           ...rest,
+          model: requestModel,
           apiMode: 'responses',
           enabledSearch,
         } as ChatStreamPayload;
       }
 
       const params = resolveVolcengineReasoningParams(
-        payload.model,
+        requestModel,
         thinking,
         reasoning_effort,
         false,
@@ -87,6 +93,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
+        model: requestModel,
         ...(params.thinking?.type && { thinking: { type: params.thinking.type } }),
         ...(params.reasoning_effort && { reasoning_effort: params.reasoning_effort }),
       } as any;
@@ -102,9 +109,11 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
   provider: ModelProvider.Volcengine,
   responses: {
     handlePayload: (payload) => {
-      const { enabledSearch, tools, thinking, reasoning_effort, ...rest } = payload;
+      const { deploymentName, enabledSearch, model, tools, thinking, reasoning_effort, ...rest } =
+        payload;
+      const requestModel = deploymentName ?? model;
       const params = resolveVolcengineReasoningParams(
-        payload.model,
+        requestModel,
         thinking,
         reasoning_effort,
         true,
@@ -124,6 +133,7 @@ export const LobeVolcengineAI = createOpenAICompatibleRuntime({
 
       return {
         ...rest,
+        model: requestModel,
         tools: volcengineTools,
         ...(params.thinking?.type && { thinking: { type: params.thinking.type } }),
         ...(params.reasoning_effort && { reasoning_effort: params.reasoning_effort }),

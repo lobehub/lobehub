@@ -502,6 +502,15 @@ export class ServerLLMTransport implements LLMTransport {
     if (!resolved) throw new Error('Resolved tools are required for a server LLM attempt');
 
     const tools = resolved.tools.length > 0 ? resolved.tools : undefined;
+    // Providers that address models by a deployment/catalog name (Azure,
+    // Volcengine Ark, Spark) resolve the request model from the card's
+    // `config.deploymentName`. The run froze the matching card at operation
+    // creation, so the mapping needs no bank or DB read per attempt.
+    const frozenCard = input.state.modelRuntimeConfig?.modelFacts?.cards.find(
+      (card) =>
+        card.providerId === input.provider &&
+        (card.id === input.model || card.deploymentName === input.model),
+    );
     const chatPayload = {
       messages: input.context.messages as ChatStreamPayload['messages'],
       model: input.model,
@@ -511,6 +520,7 @@ export class ServerLLMTransport implements LLMTransport {
       ...(typeof input.context.preserveThinking === 'boolean' && {
         preserveThinking: input.context.preserveThinking,
       }),
+      ...(frozenCard?.deploymentName && { deploymentName: frozenCard.deploymentName }),
     };
     const operationLogId = `${this.ctx.operationId}:${this.ctx.stepIndex}`;
     const attempt = createServerCallLlmAttempt({
