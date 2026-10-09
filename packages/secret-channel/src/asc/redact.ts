@@ -13,12 +13,13 @@ export const sanitizeSecretLabel = (label: string): string =>
 export const formatSecretPlaceholder = (label: string) => `«secret:${sanitizeSecretLabel(label)}»`;
 
 /**
- * Break a placeholder up with `separator` between every pair of adjacent characters. With a
- * separator that appears in none of the Run's variants no length-2-or-more substring of the result
- * can match one, so an escaped placeholder can never carry a secret (spec §7.4, [ASC-L3-09]).
+ * Wrap a placeholder in `separator`, between every pair of adjacent characters and around both
+ * ends. With a separator that appears in none of the Run's variants no variant can appear inside
+ * the result, and none can cross from the neighbouring text into it either (spec §7.4,
+ * [ASC-L3-09]).
  */
-const escapePlaceholder = (placeholder: string, separator: string): string =>
-  [...placeholder].join(separator);
+const wrapPlaceholder = (placeholder: string, separator: string): string =>
+  `${separator}${[...placeholder].join(separator)}${separator}`;
 
 const toHex = (bytes: Uint8Array) =>
   [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -103,16 +104,19 @@ export const createSecretRedactor = (): SecretRedactor => {
   };
 
   /**
-   * A placeholder must not contain a delivered secret, or the redacted output would carry it
-   * verbatim. Reachable only when a secret is a substring of `secret` or of its own label, for
-   * example the secret `secret` itself; unrelated labels keep the plain §7.4 form.
+   * A placeholder must not carry a delivered secret: neither inside itself (a secret equal to, or
+   * inside, `secret` or the label) nor composed with the text beside it (a secret like `»abcdef`
+   * formed by the closing `»` and the `abcdef` that follows the placeholder). The plain §7.4 form
+   * is kept while neither can happen; otherwise the same characters are wrapped in a separator that
+   * appears in none of the Run's variants, which no variant can contain or cross.
    */
   const refreshPlaceholders = () => {
     placeholders = new Map();
+    const edges = patterns.some((p) => p.variant.includes('«') || p.variant.includes('»'));
     for (const { label } of patterns) {
       const plain = formatSecretPlaceholder(label);
-      const collides = patterns.some((p) => plain.includes(p.variant));
-      placeholders.set(label, collides ? escapePlaceholder(plain, pickSeparator()) : plain);
+      const collides = edges || patterns.some((p) => plain.includes(p.variant));
+      placeholders.set(label, collides ? wrapPlaceholder(plain, pickSeparator()) : plain);
     }
   };
 

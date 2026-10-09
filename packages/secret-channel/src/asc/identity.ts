@@ -57,7 +57,16 @@ export const verifyRequest = (request: AscBindableRequest, { pinnedFingerprint }
 
   const { identityPublicKey, identityKeyFp, sig } = request.executor;
 
-  if (fingerprintIdentityKey(identityPublicKey) !== identityKeyFp)
+  // A malformed key cannot match any fingerprint: classify it as a mismatch instead of letting the
+  // base64url decode raise a raw `TypeError` at callers that route failures through `AscError`
+  // ([ASC-L2-28]).
+  let actualFingerprint: string;
+  try {
+    actualFingerprint = fingerprintIdentityKey(identityPublicKey);
+  } catch {
+    throw new AscError('FINGERPRINT_MISMATCH', 'identity key is not valid base64url');
+  }
+  if (actualFingerprint !== identityKeyFp)
     throw new AscError('FINGERPRINT_MISMATCH', 'identityKeyFp does not match identity key');
 
   if (

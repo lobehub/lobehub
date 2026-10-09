@@ -83,6 +83,17 @@ describe('fail closed', () => {
     );
   });
 
+  it('[ASC-L2-28] maps a malformed identity key to FINGERPRINT_MISMATCH, not a decode error', () => {
+    const request = build({ kind: 'password', targetKind: 'sudo' });
+
+    // Relay-supplied metadata: a key that is not valid base64url must fail as an ASC error, since
+    // callers classify failures through `AscError`.
+    for (const identityPublicKey of ['!', 'abc!', 'AAAAA', ''])
+      expect(() =>
+        verifyRequest({ ...request, executor: { ...request.executor, identityPublicKey } }),
+      ).toThrowError(expect.objectContaining({ code: 'FINGERPRINT_MISMATCH' }));
+  });
+
   it('[ASC-L2-02] refuses an unrecognised Request suite label instead of opening it in Base mode', async () => {
     const recipient = await EphemeralRecipient.create();
     const request = build({ ephPub: recipient.publicKey, kind: 'password', targetKind: 'sudo' });
