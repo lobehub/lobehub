@@ -148,7 +148,7 @@
   "updater.checkingUpdateDesc": "正在获取版本信息…",
   "updater.confirmReloadContinue": "仍然继续",
   "updater.confirmReloadDescription": "页面可能有未保存的内容或正在进行的操作，继续可能导致这些内容丢失。",
-  "updater.confirmReloadTitle": "要刷新当前页面吗？",
+  "updater.confirmReloadTitle": "要离开当前页面吗？",
   "updater.downloadNewVersion": "下载新版本",
   "updater.downloadingUpdate": "正在下载更新",
   "updater.downloadingUpdateDesc": "更新正在下载中，请稍候…",

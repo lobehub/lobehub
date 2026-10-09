@@ -89,7 +89,8 @@ export default class Browser {
   private hasPresentedFirstFrame = false;
   private ignoreNextPreventUnload = false;
   private promptBeforeUnload = true;
-  private pendingUnloadConfirmation: { ota: boolean } | null = null;
+  private unloadOperation: (() => void) | null = null;
+  private pendingUnloadConfirmation: { ota: boolean; resume: () => void } | null = null;
   private resolveFirstFrame!: () => void;
   private readonly firstFramePromise = new Promise<void>((resolve) => {
     this.resolveFirstFrame = resolve;
@@ -110,12 +111,26 @@ export default class Browser {
   }
 
   reloadIgnoringCache = (ignoreBeforeUnload = false, promptBeforeUnload = true) => {
+    this.runWithUnloadConfirmation(
+      () => this.browserWindow.webContents.reloadIgnoringCache(),
+      promptBeforeUnload,
+      ignoreBeforeUnload,
+    );
+  };
+
+  runWithUnloadConfirmation = (
+    operation: () => void,
+    promptBeforeUnload = true,
+    ignoreBeforeUnload = false,
+  ) => {
+    if (this.pendingUnloadConfirmation) return;
+    this.unloadOperation = operation;
     this.promptBeforeUnload = promptBeforeUnload;
-    const webContents = this.browserWindow.webContents;
     this.ignoreNextPreventUnload = ignoreBeforeUnload;
     try {
-      webContents.reloadIgnoringCache();
+      operation();
     } catch (error) {
+      this.unloadOperation = null;
       this.ignoreNextPreventUnload = false;
       this.promptBeforeUnload = true;
       throw error;
@@ -140,7 +155,7 @@ export default class Browser {
       )
     )
       return;
-    if (proceed) this.reloadIgnoringCache(true);
+    if (proceed) this.runWithUnloadConfirmation(pending.resume, true, true);
   };
 
   // ==================== Constructor ====================
@@ -361,7 +376,9 @@ export default class Browser {
 
   private setupWillPreventUnloadListener(browserWindow: BrowserWindow): void {
     logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
-    browserWindow.webContents.on('did-start-loading', () => {
+    // Loading starts before beforeunload; clear approval only after navigation commits.
+    browserWindow.webContents.on('did-navigate', () => {
+      this.unloadOperation = null;
       this.ignoreNextPreventUnload = false;
       this.promptBeforeUnload = true;
     });
@@ -369,6 +386,8 @@ export default class Browser {
       logger.debug(
         `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
       );
+      const resume = this.unloadOperation;
+      this.unloadOperation = null;
       const promptBeforeUnload = this.promptBeforeUnload;
       this.promptBeforeUnload = true;
       const ignorePreventUnload = this.ignoreNextPreventUnload;
@@ -379,8 +398,11 @@ export default class Browser {
         return;
       }
       if (promptBeforeUnload) {
+        // An unload event has no continuation; only replay operations captured at their source.
+        if (!resume) return;
         if (!this.pendingUnloadConfirmation) {
           this.pendingUnloadConfirmation = {
+            resume,
             ota: this.app.coreUpdateManager.pauseForUnloadConfirmation(
               browserWindow.webContents.id,
             ),
@@ -421,7 +443,16 @@ export default class Browser {
       onCleanup: () => this.themeManager.cleanup(),
       onHide: () => this.hide(),
     });
-    browserWindow.on('close', closeHandler);
+    browserWindow.on('close', (event) => {
+      if (this.pendingUnloadConfirmation && !this.app.isQuiting) {
+        event.preventDefault();
+        return;
+      }
+      closeHandler(event);
+      if (!event.defaultPrevented && !this.options.keepAlive) {
+        this.unloadOperation = () => browserWindow.close();
+      }
+    });
   }
 
   private setupFocusListener(browserWindow: BrowserWindow): void {
