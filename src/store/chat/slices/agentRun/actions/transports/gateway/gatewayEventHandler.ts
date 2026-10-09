@@ -1006,14 +1006,23 @@ export const createGatewayEventHandler = (
         // A modern submit response is a producer-delivery leg, not completion.
         // Keep the topic/card waiting until the producer echoes producerAck.
         // Older responses had no request id and remain terminal-compatible.
+        // Only native callbacks (Codex) carry interventionId and can reuse one
+        // tool item. Responses without it keep the original synchronous order.
+        const callbackScoped = !!data.interventionId;
         if (data.resolutionRequestId && data.producerAck !== true) {
+          if (!callbackScoped) {
+            pendingInterventionToolCallIds.set(data.toolCallId, undefined);
+            writeTopicStatus('waitingForHuman');
+          }
           enqueue(async () => {
             if (!isCurrentCallback()) return;
             const toolMessage = getToolMessageByCallId(data.toolCallId);
             if (!toolMessage) return;
-            if (data.interventionId && toolMessage.pluginIntervention?.status !== 'pending') return;
-            pendingInterventionToolCallIds.set(data.toolCallId, data.interventionId);
-            writeTopicStatus('waitingForHuman');
+            if (callbackScoped) {
+              if (toolMessage.pluginIntervention?.status !== 'pending') return;
+              pendingInterventionToolCallIds.set(data.toolCallId, data.interventionId);
+              writeTopicStatus('waitingForHuman');
+            }
             const intervention = {
               ...toolMessage.pluginIntervention,
               resolving: true,
@@ -1049,14 +1058,17 @@ export const createGatewayEventHandler = (
           break;
         }
 
+        if (!callbackScoped) pendingInterventionToolCallIds.delete(data.toolCallId);
         enqueue(async () => {
-          if (!isCurrentCallback()) return;
+          if (callbackScoped && !isCurrentCallback()) return;
           // Successful Web submits, explicit cancellation, producer timeout,
           // and session teardown all converge on the durable tool row before
           // this refresh. Do not infer the terminal state from identifier.
           await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
-          if (!isCurrentCallback()) return;
-          pendingInterventionToolCallIds.delete(data.toolCallId);
+          if (callbackScoped) {
+            if (!isCurrentCallback()) return;
+            pendingInterventionToolCallIds.delete(data.toolCallId);
+          }
           if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
         });
         break;

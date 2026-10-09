@@ -84,8 +84,11 @@ export const createCodexAgentHandle = async (
       processes.register(child, process.platform !== 'win32', { label: options.operationId }),
   });
   const unsubscribeStderr = client.onStderr(bridge.onStderr);
+  let interrupted = false;
   const onEvents = (events: AgentStreamEvent[]) => {
     for (const event of events) {
+      if (event.type === 'agent_runtime_end' && event.data.reason === 'interrupted')
+        interrupted = true;
       const { interventionId, toolCallId } = event.data;
       if (typeof interventionId !== 'string' || typeof toolCallId !== 'string') continue;
       if (
@@ -131,7 +134,7 @@ export const createCodexAgentHandle = async (
     // Use the existing tree-aware shutdown to wait for actual exit and kill TERM-ignoring descendants.
     await processes.shutdown(0);
   };
-  const { exit, interrupt, kill } = bridge.attach({
+  const attached = bridge.attach({
     close: () => {
       void close().catch((error: unknown) =>
         bridge.onStderr(`Codex shutdown failed: ${String(error)}\n`),
@@ -162,6 +165,12 @@ export const createCodexAgentHandle = async (
         operationId: options.operationId,
       }),
   });
+  const { interrupt, kill } = attached;
+  // A native interruption (Stop this turn, approval timeout) ends run() normally,
+  // but the wrapper must never report it as a clean exit. ACP bridges keep code 0.
+  const exit = attached.exit.then((result) =>
+    result.code === 0 && interrupted ? { code: 1, signal: null } : result,
+  );
   return {
     events: bridge.events,
     exit,

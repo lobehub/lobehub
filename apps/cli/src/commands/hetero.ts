@@ -1294,9 +1294,11 @@ const exec = async (options: ExecOptions): Promise<void> => {
     try {
       await sink.finish({
         error: finishError,
-        // The native process and event drain have ended. Unlike a Desktop stop
-        // signal, this is the only terminal receipt the device wrapper sends.
-        finalCancellation: runResult === 'cancelled' || undefined,
+        // A native Codex cancellation (Stop this turn, approval timeout) is not
+        // preceded by a server-side interruptTask, so this receipt must settle
+        // the operation. Other agents keep the legacy intermediate semantics.
+        finalCancellation:
+          (runResult === 'cancelled' && !!options.codexPermissionMode) || undefined,
         resumeSessionInvalidated: first.resumeNotFound || undefined,
         result: runResult,
         sessionId,

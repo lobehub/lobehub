@@ -415,7 +415,8 @@ const reduceInterventionResponse = (state: MainAgentRunState, data: any): Reduce
         : 'cancelled';
   const intervention: MainAgentInterventionState = {
     intervention: {
-      ...existing?.intervention,
+      // Native callbacks keep their sealed review fields; other providers are replaced as before.
+      ...(existing?.request?.interventionId ? existing.intervention : undefined),
       ...(data.cancelled ||
       (existing?.request?.provider === 'codex' && isCodexDenyDecision(data.result?.decision))
         ? { rejectedReason: data.cancelReason ?? 'user_cancelled', status: 'rejected' as const }

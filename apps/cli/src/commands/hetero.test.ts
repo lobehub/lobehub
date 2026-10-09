@@ -1326,6 +1326,8 @@ describe('hetero exec command', () => {
     expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
       expect.objectContaining({ error: undefined, result: 'cancelled' }),
     );
+    /** @example A legacy (non-native-permission) cancellation keeps intermediate semantics. */
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).not.toHaveProperty('finalCancellation', true);
   });
 
   it('combines --prompt + --image into mixed content blocks', async () => {

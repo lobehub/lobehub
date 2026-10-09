@@ -34,7 +34,6 @@ export const createAgentSpawnBridge = () => {
   const stderr = new PassThrough();
   const queue: AgentStreamEvent[] = [];
   let emittedTerminalError = false;
-  let emittedInterruption = false;
   let hostSignal: NodeJS.Signals | null = null;
   let streamEnded = false;
   let streamError: Error | undefined;
@@ -50,10 +49,6 @@ export const createAgentSpawnBridge = () => {
 
   const onEvents = (events: AgentStreamEvent[]): void => {
     if (events.some(({ type }) => type === 'error')) emittedTerminalError = true;
-    if (
-      events.some(({ type, data }) => type === 'agent_runtime_end' && data.reason === 'interrupted')
-    )
-      emittedInterruption = true;
     queue.push(...events);
     wake();
   };
@@ -88,7 +83,7 @@ export const createAgentSpawnBridge = () => {
   }): Pick<SpawnAgentHandle, 'exit' | 'interrupt' | 'kill'> => {
     const exit: SpawnAgentHandle['exit'] = session
       .run()
-      .then(() => getHostExit() ?? { code: emittedInterruption ? 1 : 0, signal: null })
+      .then(() => getHostExit() ?? { code: 0, signal: null })
       .catch((error) => {
         const hostExit = getHostExit();
         if (hostExit) return hostExit;
