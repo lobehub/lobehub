@@ -150,6 +150,90 @@ describe('DeviceGateway', () => {
     );
   });
 
+  /** @example Dispatch does not pay a serial capability RPC per label on every run. */
+  describe('provider-binding capability probe', () => {
+    const probeCalls = () =>
+      mockClient.invokeRpc.mock.calls.filter(
+        ([, request]) => request.method === 'getProviderBoundAgentRunCapability',
+      );
+    const deviceWith = (channels: Array<{ channel: string; connectionId: string }>) => [
+      {
+        connectedAt: Date.now(),
+        deviceId: 'device-1',
+        channels: channels.map((channel) => ({ ...channel, connectedAt: Date.now() })),
+      },
+    ];
+
+    beforeEach(() => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    });
+
+    it('probes a live connection once and re-probes after it reconnects', async () => {
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { available: true, version: 1 },
+        success: true,
+      });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectionId: 'conn-1' }]),
+      );
+      const gateway = new DeviceGateway();
+
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      expect(probeCalls()).toHaveLength(1);
+
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectionId: 'conn-2' }]),
+      );
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      expect(probeCalls()).toHaveLength(2);
+    });
+
+    it('does not remember a failed probe, which may be a timeout', async () => {
+      mockClient.invokeRpc.mockResolvedValueOnce({ error: 'timeout', success: false });
+      mockClient.invokeRpc.mockResolvedValueOnce({
+        data: { available: true, version: 1 },
+        success: true,
+      });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectionId: 'conn-1' }]),
+      );
+      const gateway = new DeviceGateway();
+
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe(
+        undefined,
+      );
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+    });
+
+    it('probes every label concurrently instead of one timeout after another', async () => {
+      const pending: Array<() => void> = [];
+      mockClient.invokeRpc.mockImplementation(
+        (target: { channel?: string }) =>
+          new Promise((resolve) => {
+            pending.push(() =>
+              resolve({
+                data: { available: target.channel === 'cli', version: 1 },
+                success: true,
+              }),
+            );
+          }),
+      );
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([
+          { channel: 'desktop', connectionId: 'desktop-1' },
+          { channel: 'cli', connectionId: 'cli-1' },
+        ]),
+      );
+
+      const result = new DeviceGateway().findProviderBindingChannel('user-1', 'device-1');
+      await vi.waitFor(() => expect(probeCalls()).toHaveLength(2));
+      for (const resolve of pending) resolve();
+      await expect(result).resolves.toBe('cli');
+    });
+  });
+
   describe('remote app update', () => {
     const configure = () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';

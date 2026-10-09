@@ -171,7 +171,13 @@ interface TerminalRpcScope {
 type TerminalRpcMethod =
   'closeTerminal' | 'createTerminalSession' | 'readTerminal' | 'resizeTerminal' | 'writeTerminal';
 
+/** Live connections whose provider-binding probe answered, bounded per server instance. */
+const PROVIDER_BINDING_CAPABILITY_CACHE_LIMIT = 1024;
+
 export class DeviceGateway {
+  /** Probe answers per live connection set; see {@link findProviderBindingChannel}. */
+  private readonly providerBindingCapability = new Map<string, boolean>();
+
   private client: GatewayHttpClient | null = null;
 
   /**
@@ -1914,23 +1920,64 @@ export class DeviceGateway {
     if (!client) return;
     const devices = await this.queryDeviceList(userId);
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
-    const channels = [...new Set(device?.channels?.map((connection) => connection.channel))];
-    for (const channel of channels) {
-      if (!channel) continue;
-      try {
-        // Probe each distinct live label, rather than guessing client capabilities
-        // from names such as cli-dev. Old clients reject this read-only RPC.
-        const result = await client.invokeRpc<{ available?: boolean; version?: number }>(
-          { channel, deviceId, userId, timeout: 3_000 },
-          { method: PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD, params: {} },
-        );
-        if (result.success && result.data?.available === true && result.data.version === 1) {
-          return channel;
-        }
-      } catch {
-        // One stale socket must not hide another compatible live connection.
-      }
+
+    // Labels are freeform and several connections can share one, so a label is
+    // identified by the live connections behind it. A connector's protocol cannot
+    // change while it stays connected; a reconnect yields new connection IDs.
+    const connectionsByChannel = new Map<string, Array<string | undefined>>();
+    for (const connection of device?.channels ?? []) {
+      if (!connection.channel) continue;
+      const ids = connectionsByChannel.get(connection.channel) ?? [];
+      ids.push(connection.connectionId);
+      connectionsByChannel.set(connection.channel, ids);
     }
+    const candidates = [...connectionsByChannel].map(([channel, ids]) => ({
+      channel,
+      cacheKey: ids.every(Boolean)
+        ? [userId, deviceId, channel, ...(ids as string[]).sort()].join('\0')
+        : undefined,
+    }));
+
+    const cached = candidates.find(
+      (candidate) =>
+        candidate.cacheKey && this.providerBindingCapability.get(candidate.cacheKey) === true,
+    );
+    if (cached) return cached.channel;
+
+    // Probe every unknown label at once, so one silent socket costs one timeout
+    // rather than one per label. Old clients reject this read-only RPC.
+    const available = await Promise.all(
+      candidates.map(async ({ cacheKey, channel }) => {
+        if (cacheKey && this.providerBindingCapability.has(cacheKey)) {
+          return this.providerBindingCapability.get(cacheKey) === true;
+        }
+        try {
+          const result = await client.invokeRpc<{ available?: boolean; version?: number }>(
+            { channel, deviceId, userId, timeout: 3_000 },
+            { method: PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD, params: {} },
+          );
+          const supported =
+            result.success && result.data?.available === true && result.data.version === 1;
+          // Only a connector's own answer is final; a failed call may be a timeout.
+          if (cacheKey && result.success)
+            this.rememberProviderBindingCapability(cacheKey, supported);
+          return supported;
+        } catch {
+          // One stale socket must not hide another compatible live connection.
+          return false;
+        }
+      }),
+    );
+    // Channels arrive newest-first; prefer the newest compatible connection.
+    return candidates.find((_, index) => available[index])?.channel;
+  }
+
+  private rememberProviderBindingCapability(cacheKey: string, supported: boolean) {
+    if (this.providerBindingCapability.size >= PROVIDER_BINDING_CAPABILITY_CACHE_LIMIT) {
+      const oldest = this.providerBindingCapability.keys().next().value;
+      if (oldest !== undefined) this.providerBindingCapability.delete(oldest);
+    }
+    this.providerBindingCapability.set(cacheKey, supported);
   }
 
   /**
