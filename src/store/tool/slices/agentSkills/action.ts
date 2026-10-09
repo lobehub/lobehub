@@ -93,22 +93,36 @@ export class AgentSkillsActionImpl {
     return { resourceTree, skillDetail };
   };
 
+  /** The replica scope a request starts under; its result may only land there. */
+  #captureScope = (): string => this.#list.resource.scope.get();
+
+  /** Whether the identity a request started under is still the active one. */
+  #isCurrentScope = (scope: string): boolean => this.#list.resource.scope.get() === scope;
+
   /**
    * Fetch the list and write it straight into the replica. `refreshAgentSkills`
    * is also called from flows where the list hook is not mounted (installing a
    * suggested skill from the create-agent modal), and it must populate the
    * store regardless, so this does not just revalidate the SWR entry.
+   *
+   * The scope is captured before the request and passed to `replace`, so a
+   * response that resolves after an identity switch is dropped instead of being
+   * written (and persisted) into the next scope's partition.
    */
   #refreshList = async (): Promise<void> => {
+    const scope = this.#captureScope();
     const response = await agentSkillService.list();
-    this.#list.replace(LIST_PARAMS, response);
+    this.#list.replace(LIST_PARAMS, response, scope);
   };
 
   createAgentSkill = async (
     params: CreateSkillInput,
   ): Promise<AgentSkillDetailItem | undefined> => {
+    const scope = this.#captureScope();
     const result = await agentSkillService.createSkill(params);
-    if (result) {
+    // A created skill belongs to the scope that started the create; never
+    // splice it into a list the identity has since switched to.
+    if (result && this.#isCurrentScope(scope)) {
       this.#list.update(AGENT_SKILL_LIST_KEY, (items) =>
         items && !items.some((item) => item.id === result.id) ? [result, ...items] : items,
       );
@@ -118,9 +132,10 @@ export class AgentSkillsActionImpl {
   };
 
   deleteAgentSkill = async (id: string): Promise<void> => {
+    const scope = this.#captureScope();
     await agentSkillService.deleteSkill(id);
     // Drops the list row and the loaded detail entry in one fan-out.
-    this.#skill.remove(id);
+    if (this.#isCurrentScope(scope)) this.#skill.remove(id);
     await this.#refreshList();
   };
 
@@ -155,6 +170,7 @@ export class AgentSkillsActionImpl {
   updateAgentSkill = async (
     params: UpdateSkillInput,
   ): Promise<AgentSkillDetailItem | undefined> => {
+    const scope = this.#captureScope();
     const result = await this.#skill.optimistic(
       params.id,
       (skill) => ({
@@ -165,8 +181,11 @@ export class AgentSkillsActionImpl {
       }),
       () => agentSkillService.updateSkill(params),
     );
-    // The detail holds the full skill (content, resources); take the server value.
-    this.#detail.update(params.id, (data) => (data ? { ...data, skillDetail: result } : data));
+    // The detail holds the full skill (content, resources); take the server
+    // value — but only while the identity that started the edit is still active.
+    if (this.#isCurrentScope(scope)) {
+      this.#detail.update(params.id, (data) => (data ? { ...data, skillDetail: result } : data));
+    }
     await this.#refreshList();
     return result;
   };

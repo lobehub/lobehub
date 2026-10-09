@@ -297,5 +297,25 @@ describe('agentSkills replicas', () => {
 
       expect(useToolStore.getState().agentSkillListMap[AGENT_SKILL_LIST_KEY]?.[0]?.id).toBe('db-9');
     });
+
+    it('drops a refresh response that resolves after the scope switched', async () => {
+      let resolveList!: (value: unknown) => void;
+      vi.mocked(agentSkillService.list).mockImplementation(
+        () => new Promise((resolve) => (resolveList = resolve)) as any,
+      );
+
+      const operation = useToolStore.getState().refreshAgentSkills();
+
+      // The identity switches before the in-flight request resolves: the
+      // response belongs to the previous scope and must not be written (or
+      // persisted) into the next scope's partition.
+      useScope(`skill-user-${randomUUID()}:personal`);
+      await act(async () => {
+        resolveList({ data: [skill('db-1', 'A workspace')], total: 1 });
+        await operation;
+      });
+
+      expect(useToolStore.getState().agentSkillListMap[AGENT_SKILL_LIST_KEY]).toBeUndefined();
+    });
   });
 });
