@@ -1,7 +1,9 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { useEffect } from 'react';
+import { confirmModal } from '@lobehub/ui/base-ui';
+import { useEffect, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useMacWindowFullscreen } from '@/features/Electron/system/useMacWindowFullscreen';
 import { rendererOtaService } from '@/services/electron/rendererOta';
@@ -20,6 +22,48 @@ import { useElectronStore } from '@/store/electron';
  */
 const ElectronAppStateSync = () => {
   useMacWindowFullscreen();
+  const { t: tElectron } = useTranslation('electron');
+  const { t } = useTranslation('common');
+  const dismissConfirmation = useRef<(() => void) | null>(null);
+  useWatchBroadcast('reloadConfirmationRequested', () => {
+    dismissConfirmation.current?.();
+    let resolved = false;
+    const resolve = (proceed: boolean) => {
+      if (resolved) return;
+      resolved = true;
+      return rendererOtaService.resolveUnloadConfirmation(proceed).catch(console.error);
+    };
+    const modal = confirmModal({
+      title: tElectron('updater.confirmReloadTitle'),
+      content: tElectron('updater.confirmReloadDescription'),
+      cancelText: t('cancel', { ns: 'common' }),
+      okText: tElectron('updater.confirmReloadContinue'),
+      onCancel: () => {
+        void resolve(false);
+      },
+      onOk: () => resolve(true),
+    });
+    dismissConfirmation.current = () => {
+      resolved = true;
+      modal.close();
+    };
+    modal.update({
+      onOpenChange: (open) => {
+        if (!open) void resolve(false);
+      },
+    });
+  });
+
+  useWatchBroadcast('reloadConfirmationCancelled', () => {
+    dismissConfirmation.current?.();
+    dismissConfirmation.current = null;
+  });
+  useEffect(
+    () => () => {
+      dismissConfirmation.current?.();
+    },
+    [],
+  );
 
   const [useInitElectronAppState, updateElectronAppState] = useElectronStore((s) => [
     s.useInitElectronAppState,

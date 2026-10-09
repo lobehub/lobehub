@@ -209,6 +209,12 @@ describe('Browser', () => {
     };
 
     mockApp = {
+      i18n: { ns: () => (key: string) => key },
+      coreUpdateManager: {
+        pauseForUnloadConfirmation: vi.fn(() => false),
+        resolveUnloadConfirmation: vi.fn(() => true),
+        handleUnloadPrevented: vi.fn(),
+      },
       browserManager: {
         retrieveByIdentifier: vi.fn(),
       },
@@ -942,6 +948,62 @@ describe('Browser', () => {
       willPreventUnloadHandler(mockEvent);
 
       expect(mockEvent.preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('requests one UI confirmation and retries only after approval', () => {
+      const event = { preventDefault: vi.fn() };
+      willPreventUnloadHandler(event);
+      willPreventUnloadHandler(event);
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(
+        mockBrowserWindow.webContents.send.mock.calls.filter(
+          ([name]) => name === 'reloadConfirmationRequested',
+        ),
+      ).toHaveLength(1);
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementationOnce(() =>
+        willPreventUnloadHandler(event),
+      );
+      browser.resolveUnloadConfirmation(true);
+      expect(event.preventDefault).toHaveBeenCalledOnce();
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledOnce();
+    });
+
+    it('cancels a stale prompt and registers a fresh confirmation on retry', () => {
+      mockApp.coreUpdateManager.pauseForUnloadConfirmation = vi.fn(() => true);
+      const event = { preventDefault: vi.fn() };
+      willPreventUnloadHandler(event);
+      browser.cancelUnloadConfirmation();
+      expect(mockBrowserWindow.webContents.send).toHaveBeenCalledWith(
+        'reloadConfirmationCancelled',
+        undefined,
+      );
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).not.toHaveBeenCalled();
+      willPreventUnloadHandler(event);
+      expect(mockApp.coreUpdateManager.pauseForUnloadConfirmation).toHaveBeenCalledTimes(2);
+      browser.resolveUnloadConfirmation(true);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).toHaveBeenCalledOnce();
+    });
+
+    it('keeps the page when the confirmation is dismissed', () => {
+      willPreventUnloadHandler({ preventDefault: vi.fn() });
+      browser.resolveUnloadConfirmation(false);
+      expect(mockBrowserWindow.webContents.reloadIgnoringCache).not.toHaveBeenCalled();
+    });
+
+    it('silently defers automatic reloads without requesting a modal', () => {
+      const event = { preventDefault: vi.fn() };
+      mockBrowserWindow.webContents.reloadIgnoringCache.mockImplementationOnce(() =>
+        willPreventUnloadHandler(event),
+      );
+      browser.reloadIgnoringCache(false, false);
+      expect(mockBrowserWindow.webContents.send).not.toHaveBeenCalledWith(
+        'reloadConfirmationRequested',
+        undefined,
+      );
+      expect(event.preventDefault).not.toHaveBeenCalled();
+      expect(mockApp.coreUpdateManager.handleUnloadPrevented).toHaveBeenCalledOnce();
     });
 
     it('should bypass beforeunload once for a renderer OTA reload', () => {

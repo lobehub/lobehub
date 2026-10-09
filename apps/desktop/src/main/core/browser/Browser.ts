@@ -88,6 +88,8 @@ export default class Browser {
   private _browserWindow?: BrowserWindow;
   private hasPresentedFirstFrame = false;
   private ignoreNextPreventUnload = false;
+  private promptBeforeUnload = true;
+  private pendingUnloadConfirmation: { ota: boolean } | null = null;
   private resolveFirstFrame!: () => void;
   private readonly firstFramePromise = new Promise<void>((resolve) => {
     this.resolveFirstFrame = resolve;
@@ -107,15 +109,38 @@ export default class Browser {
     return this._browserWindow?.webContents ?? null;
   }
 
-  reloadIgnoringCache = (ignoreBeforeUnload = false) => {
+  reloadIgnoringCache = (ignoreBeforeUnload = false, promptBeforeUnload = true) => {
+    this.promptBeforeUnload = promptBeforeUnload;
     const webContents = this.browserWindow.webContents;
     this.ignoreNextPreventUnload = ignoreBeforeUnload;
     try {
       webContents.reloadIgnoringCache();
     } catch (error) {
       this.ignoreNextPreventUnload = false;
+      this.promptBeforeUnload = true;
       throw error;
     }
+  };
+
+  cancelUnloadConfirmation = () => {
+    if (!this.pendingUnloadConfirmation) return;
+    this.pendingUnloadConfirmation = null;
+    this.broadcast('reloadConfirmationCancelled');
+  };
+
+  resolveUnloadConfirmation = (proceed: boolean) => {
+    const pending = this.pendingUnloadConfirmation;
+    this.pendingUnloadConfirmation = null;
+    if (!pending) return;
+    if (
+      pending.ota &&
+      !this.app.coreUpdateManager.resolveUnloadConfirmation(
+        this.browserWindow.webContents.id,
+        proceed,
+      )
+    )
+      return;
+    if (proceed) this.reloadIgnoringCache(true);
   };
 
   // ==================== Constructor ====================
@@ -338,17 +363,33 @@ export default class Browser {
     logger.debug(`[${this.identifier}] Setting up 'will-prevent-unload' event listener.`);
     browserWindow.webContents.on('did-start-loading', () => {
       this.ignoreNextPreventUnload = false;
+      this.promptBeforeUnload = true;
     });
     browserWindow.webContents.on('will-prevent-unload', (event) => {
       logger.debug(
         `[${this.identifier}] 'will-prevent-unload' fired. isQuiting: ${this.app.isQuiting}`,
       );
+      const promptBeforeUnload = this.promptBeforeUnload;
+      this.promptBeforeUnload = true;
       const ignorePreventUnload = this.ignoreNextPreventUnload;
       this.ignoreNextPreventUnload = false;
       if (this.app.isQuiting || ignorePreventUnload) {
         logger.info(`[${this.identifier}] Ignoring beforeunload cancellation.`);
         event.preventDefault();
+        return;
       }
+      if (promptBeforeUnload) {
+        if (!this.pendingUnloadConfirmation) {
+          this.pendingUnloadConfirmation = {
+            ota: this.app.coreUpdateManager.pauseForUnloadConfirmation(
+              browserWindow.webContents.id,
+            ),
+          };
+          this.broadcast('reloadConfirmationRequested');
+        }
+        return;
+      }
+      this.app.coreUpdateManager.handleUnloadPrevented();
     });
   }
 

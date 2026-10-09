@@ -176,8 +176,8 @@ export class App {
       webContents.on('render-process-gone', () => {
         this.coreUpdateManager.handleRendererCrash();
       });
-      webContents.on('will-prevent-unload', () => {
-        this.coreUpdateManager.handleUnloadPrevented();
+      webContents.on('destroyed', () => {
+        this.coreUpdateManager.handleRendererDestroyed(webContents.id);
       });
     });
 

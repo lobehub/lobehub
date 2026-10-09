@@ -11,6 +11,10 @@ class RendererOtaService {
     return ensureElectronIpc().rendererOta.applyNow();
   };
 
+  resolveUnloadConfirmation = async (proceed: boolean) => {
+    return ensureElectronIpc().rendererOta.resolveUnloadConfirmation(proceed);
+  };
+
   getStatus = async (): Promise<CoreUpdateStatus> => {
     return ensureElectronIpc().rendererOta.getStatus();
   };
