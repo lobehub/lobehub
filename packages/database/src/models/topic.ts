@@ -1602,6 +1602,13 @@ export class TopicModel {
         throw new Error(`Topic with id ${topicId} not found`);
       }
 
+      // A copy is a brand-new topic: stamp its own timestamps instead of
+      // inheriting the source's. The sidebar sorts and groups by the latest
+      // activity time (`topicActivityAt`, i.e. the newest message), so a copy
+      // that kept the source's date would re-file itself under the source's
+      // original day instead of showing up as what it is — activity now.
+      const copiedAt = new Date();
+
       // copy topic
       const [duplicatedTopic] = await tx
         .insert(topics)
@@ -1612,8 +1619,10 @@ export class TopicModel {
               ...originalTopic,
               ...COPIED_TOPIC_USAGE_RESET,
               clientId: null,
+              createdAt: copiedAt,
               id: this.genId(),
               title: newTitle || originalTopic?.title,
+              updatedAt: copiedAt,
             },
           ),
         )
@@ -1678,9 +1687,15 @@ export class TopicModel {
 
       // copy messages sequentially to respect foreign key constraints
       const duplicatedMessages: DBMessageItem[] = [];
-      for (const message of originalMessages) {
+      for (const [index, message] of originalMessages.entries()) {
         const newId = idMap.get(message.id)!;
         const newParentId = message.parentId ? idMap.get(message.parentId) || null : null;
+
+        // Retime the copy to the copy moment while preserving its internal
+        // order (monotonic, 1ms apart, ending at `copiedAt`). The sidebar's
+        // activity key is the newest message time, so carrying the source's
+        // timestamps would keep the new topic in the source's date group.
+        const messageAt = new Date(copiedAt.getTime() - (originalMessages.length - 1 - index));
 
         // Update tool IDs in tools array
         let newTools = message.tools;
@@ -1696,6 +1711,7 @@ export class TopicModel {
           .values({
             ...message,
             clientId: null,
+            createdAt: messageAt,
             id: newId,
             // A duplicate consumed no tokens: mark it so usage reports do not
             // count the source's generation twice (the figures themselves stay
@@ -1704,6 +1720,7 @@ export class TopicModel {
             parentId: newParentId,
             tools: newTools,
             topicId: duplicatedTopic.id,
+            updatedAt: messageAt,
           })
           .returning()) as DBMessageItem[];
 

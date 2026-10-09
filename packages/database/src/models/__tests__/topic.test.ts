@@ -1715,6 +1715,59 @@ describe('TopicModel', () => {
         topicModel.duplicate(topic.id, 'forked', { upToMessageId: 'missing' }),
       ).rejects.toThrow('not found in topic');
     });
+
+    it('stamps the copy with fresh activity time instead of inheriting the source date', async () => {
+      const sourceDate = new Date('2020-01-02T03:04:05Z');
+      const topic = await topicModel.create({ title: 'stale source' });
+      await serverDB.insert(messages).values([
+        {
+          content: 'old q',
+          createdAt: sourceDate,
+          id: 'stale-m1',
+          role: 'user',
+          topicId: topic.id,
+          updatedAt: sourceDate,
+          userId,
+        },
+        {
+          content: 'old a',
+          createdAt: new Date(sourceDate.getTime() + 1000),
+          id: 'stale-m2',
+          parentId: 'stale-m1',
+          role: 'assistant',
+          topicId: topic.id,
+          updatedAt: new Date(sourceDate.getTime() + 1000),
+          userId,
+        },
+      ]);
+
+      const before = Date.now();
+      const { topic: cloned, messages: clonedMessages } = await topicModel.duplicate(
+        topic.id,
+        'fresh copy',
+        { upToMessageId: 'stale-m2' },
+      );
+
+      // A copy is new activity: its own row and every copied message carry the
+      // copy moment. The sidebar keys topics by the newest message activity, so
+      // inheriting the source's 2020 timestamps would re-file the copy under the
+      // source's date group instead of today.
+      expect(new Date(cloned.createdAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+      for (const message of clonedMessages) {
+        expect(new Date(message.updatedAt).getTime()).toBeGreaterThanOrEqual(before - 1000);
+      }
+
+      // The retained order survives retiming: rows still increase root → leaf.
+      const [root, child] = clonedMessages;
+      expect(new Date(root.createdAt).getTime()).toBeLessThan(new Date(child.createdAt).getTime());
+
+      // The source keeps its own timestamps untouched.
+      const sourceMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, topic.id));
+      expect(sourceMessages.every((m) => new Date(m.updatedAt).getTime() < before)).toBe(true);
+    });
   });
 
   describe('batchMoveToAgent', () => {
