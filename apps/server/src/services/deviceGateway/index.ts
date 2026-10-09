@@ -273,8 +273,12 @@ export class DeviceGateway {
    * The device's system info, preferring the desktop app's answer: its
    * `supportedTools` gate desktop-only tools, and when `lh connect` is up on the
    * same device an unconstrained read is answered by the CLI, which reports
-   * none. A device without the desktop app still answers from whichever client
-   * it has. A gateway that predates `clientKinds` answers the first read as before.
+   * none. When the desktop read fails for any reason, ask whichever client the
+   * device has: a device without the desktop app answers `NO_CAPABLE_CONNECTION`,
+   * and a desktop that timed out or whose socket is closing (`TIMEOUT`,
+   * `DEVICE_OFFLINE`) may still sit beside a live `lh connect`, which is the
+   * answer canary got. A gateway that predates `clientKinds` answers the first
+   * read as before.
    */
   async queryDeviceSystemInfo(
     userId: string,
@@ -285,7 +289,6 @@ export class DeviceGateway {
       clientKinds: ['desktop'],
     });
     if (desktop.ok) return desktop.systemInfo;
-    if (desktop.reason !== 'NO_CAPABLE_CONNECTION') return undefined;
 
     const any = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
     return any.ok ? any.systemInfo : undefined;

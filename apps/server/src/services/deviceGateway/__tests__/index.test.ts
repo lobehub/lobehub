@@ -473,14 +473,51 @@ describe('DeviceGateway', () => {
       );
     });
 
-    it('does not ask again when the desktop read failed for another reason', async () => {
+    it.each(['TIMEOUT', 'DEVICE_OFFLINE'])(
+      'asks any client when the desktop read fails with %s',
+      async (error) => {
+        configure();
+        const systemInfo = { arch: 'arm64', userDataPath: '/home/u/.lobehub' };
+        mockClient.getDeviceSystemInfo
+          .mockResolvedValueOnce({ error, success: false })
+          .mockResolvedValueOnce({ success: true, systemInfo });
+
+        const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+        expect(result).toEqual(systemInfo);
+        expect(mockClient.getDeviceSystemInfo).toHaveBeenNthCalledWith(
+          2,
+          'user-1',
+          'dev-1',
+          undefined,
+          undefined,
+        );
+      },
+    );
+
+    it('asks any client when the desktop read throws', async () => {
       configure();
-      mockClient.getDeviceSystemInfo.mockResolvedValueOnce({ error: 'TIMEOUT', success: false });
+      const systemInfo = { arch: 'arm64' };
+      mockClient.getDeviceSystemInfo
+        .mockRejectedValueOnce(new Error('fetch failed'))
+        .mockResolvedValueOnce({ success: true, systemInfo });
+
+      const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(result).toEqual(systemInfo);
+    });
+
+    it('returns undefined when neither read is answered', async () => {
+      configure();
+      mockClient.getDeviceSystemInfo.mockResolvedValue({
+        error: 'DEVICE_NOT_FOUND',
+        success: false,
+      });
 
       const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
-      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledTimes(1);
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledTimes(2);
     });
   });
 
