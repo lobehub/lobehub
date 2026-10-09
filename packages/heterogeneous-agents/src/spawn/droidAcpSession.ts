@@ -349,6 +349,11 @@ export class DroidAcpSession extends AcpAgentSession<
     await this.emitEvents(await this.pipeline.flush());
   }
 
+  protected async onRunCancelled(): Promise<void> {
+    this.options.askUserBridge?.cancelAll('session_ended');
+    await this.pushToPipeline({ stopReason: 'cancelled', type: 'droid_prompt_completed' });
+  }
+
   protected onHostClose(): void {
     this.options.askUserBridge?.cancelAll('session_ended');
     this.modelDiscovery?.close();

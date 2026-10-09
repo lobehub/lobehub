@@ -6,6 +6,8 @@
  * desktop wiring can pass its own IPC-typed implementations directly.
  */
 
+import type { DeviceCliRestartParams, DeviceCliUpdateState } from '@lobechat/types';
+
 // ─── Workspace scan ───
 
 export type ProjectSkillScope = 'device' | 'project';
@@ -61,6 +63,7 @@ export interface ListProjectSkillsResult {
 export interface StatPathResult {
   exists: boolean;
   isDirectory: boolean;
+  repositoryUrl?: string;
   repoType?: 'git' | 'github';
 }
 
@@ -301,6 +304,7 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
    * handlers and the dispatcher fails the RPC with a stable reason.
    */
   checkAppUpdate?: () => Promise<AppUpdateState>;
+  checkCliUpdate?: () => Promise<DeviceCliUpdateState>;
   /** Copy a publish asset (possibly outside the workspace) to a path inside the workspace. */
   copyAssetForPublish?: (params: CopyAssetForPublishParams) => Promise<CopyAssetForPublishResult>;
   /**
@@ -315,6 +319,7 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   enrollWorkspace?: (params: EnrollWorkspaceParams) => Promise<EnrollWorkspaceResult>;
   /** Where this client's app update stands: current version, stage, progress. */
   getAppUpdateState?: () => Promise<AppUpdateState>;
+  getCliUpdateState?: () => Promise<DeviceCliUpdateState>;
   /** Read a local file preview (host-gated on desktop; disk read on CLI). */
   getLocalFilePreview: (params: LocalFilePreviewUrlParams) => Promise<LocalFilePreviewResult>;
   /** Build the project file index. */
@@ -332,6 +337,7 @@ export interface DeviceControlDeps extends SkillDirectoryDeps, WorkspaceScanDeps
   readExternalAssetForPublish?: (
     params: ExternalAssetForPublishParams,
   ) => Promise<ExternalAssetForPublishResult>;
+  restartCli?: (params: DeviceCliRestartParams) => Promise<DeviceCliUpdateState>;
   /** Search project files without shipping the whole index to the caller. */
   searchProjectFiles: (params: ProjectFileSearchParams) => Promise<ProjectFileSearchResult>;
   /**

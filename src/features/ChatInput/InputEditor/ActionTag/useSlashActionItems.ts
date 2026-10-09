@@ -95,10 +95,11 @@ export const useSlashActionItems = (): SlashOptions['items'] => {
   const projectSkills = projectSkillsData?.skills;
 
   // Agent-document skill bundles (the "Agent skills" group in the working
-  // sidebar). Share the SWR key with the sidebar fetch so we don't double-fetch.
+  // sidebar). The registry is a per-agent replica, so a switch paints the
+  // cached bundles at once.
   useToolStore((s) => s.useFetchAgentDocumentSkills)(agentId);
   const agentDocumentSkills = useToolStore(
-    agentDocumentSkillsSelectors.getAgentDocumentSkills,
+    agentDocumentSkillsSelectors.getAgentDocumentSkills(agentId),
     isEqual,
   );
 

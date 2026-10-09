@@ -45,7 +45,10 @@ interface ProjectStore extends ProjectStoreState {
   }) => Promise<ProjectListItem>;
   deleteProject: (id: string) => Promise<void>;
   refreshProjectList: () => Promise<void>;
-  updateProject: (id: string, input: { name: string }) => Promise<ProjectListItem>;
+  updateProject: (
+    id: string,
+    input: Parameters<typeof projectService.update>[1],
+  ) => Promise<ProjectListItem>;
   /** Fetch orchestration only; read the value with `useCurrentProjectDetail`. */
   useFetchProjectDetail: (idOrSlug?: string) => ReplicaSyncResult;
   /** Fetch orchestration only; read the rows with `useCurrentProjectList`. */

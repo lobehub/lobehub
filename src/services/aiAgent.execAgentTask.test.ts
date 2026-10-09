@@ -17,14 +17,14 @@ describe('aiAgentService.execAgentTask', () => {
 
   // The server renames a mirrored group member terminal to `member_runtime_end`
   // only for a client that declares it handles the new event.
-  it('declares that this client handles member_runtime_end', async () => {
+  it('declares the stream features this client handles', async () => {
     mocks.execAgent.mockResolvedValueOnce({ success: true });
     const signal = new AbortController().signal;
 
     await aiAgentService.execAgentTask({ agentId: 'agt-1', prompt: 'hi' }, { signal });
 
     expect(mocks.execAgent).toHaveBeenCalledWith(
-      { agentId: 'agt-1', prompt: 'hi', streamFeatures: ['member_runtime_end'] },
+      { agentId: 'agt-1', prompt: 'hi', streamFeatures: ['file_works', 'member_runtime_end'] },
       { signal },
     );
   });

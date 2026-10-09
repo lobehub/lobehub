@@ -420,6 +420,13 @@ export interface ExecGroupMemberResult {
 
 export interface OperationCreationParams {
   /**
+   * The client starting this run renders `file` Works (declared via
+   * `aiAgent.execAgent`'s `streamFeatures`). Stored on
+   * `state.host.acceptsFileWorks`; a group member run streaming on its
+   * supervisor's channel inherits the supervisor's when it declares none.
+   */
+  acceptsFileWorks?: boolean;
+  /**
    * The client starting this run handles `member_runtime_end` (declared via
    * `aiAgent.execAgent`'s `streamFeatures`). Persisted on the op's metadata so
    * the Gateway stream notifier renames the group member terminals it mirrors

@@ -1,5 +1,7 @@
+import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
+import { agentDocumentSkillsResource } from '@/store/tool/slices/agentDocumentSkills/projection';
 
 import { agentDocumentSWRKeys, documentSWRKeys, notebookSWRKeys } from './swrKeys';
 
@@ -48,13 +50,17 @@ export const invalidateDocumentMutation = async (
 
   if (agentId) {
     revalidations.push(mutate(agentDocumentSWRKeys.documents(agentId)));
-    // Prefix match so every `agent:documentsList` variant (full list + the
-    // `non-web` hot-path variant, in both personal and workspace scope where the
-    // workspace id is appended) revalidates together. The scoped `mutate` passes
-    // function keys through untouched, so this predicate sees the real cache key.
+    // Prefix match so every `agent:documentsList` variant (full list + any
+    // hot-path variant, in both personal and workspace scope where the workspace
+    // id is appended) revalidates together. The scoped `mutate` passes function
+    // keys through untouched, so this predicate sees the real cache key.
     revalidations.push(
       mutate((key) => Array.isArray(key) && key[0] === 'agent:documentsList' && key[1] === agentId),
     );
+    // The slash-menu skill registry is a replica, so its sync lives outside the
+    // `agent:documentsList` SWR cache. Refresh it here too: a create / delete /
+    // convert-to-skill must reach the menu without waiting for a remount.
+    revalidations.push(revalidateReplica(agentDocumentSkillsResource, agentId));
   }
 
   if (agentId && agentDocumentId) {

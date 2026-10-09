@@ -307,41 +307,50 @@ const displayTopicsForSidebar =
     const topics = currentTopicsWithoutSystemTriggers(s);
     if (!topics) return undefined;
 
-    const visibleTopics = includeCompleted
-      ? topics
-      : topics.filter((topic) => topic.status !== 'completed');
+    return selectSidebarTopics(topics, pageSize, sortBy, includeCompleted, currentActiveTopic(s));
+  };
 
-    // Favorites first, then sorted by the chosen timestamp, then page-sliced
-    const favTopics = visibleTopics.filter((t) => t.favorite);
-    const rest = visibleTopics.filter((t) => !t.favorite);
-    const pagedTopics = [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(
-      0,
-      pageSize,
-    );
-    const activeTopic = currentActiveTopic(s);
+export const selectSidebarTopics = (
+  topics: ChatTopic[],
+  pageSize: number,
+  sortBy: TopicSortBy = 'updatedAt',
+  includeCompleted = true,
+  activeTopic?: ChatTopic,
+): ChatTopic[] => {
+  const visibleTopics = includeCompleted
+    ? topics
+    : topics.filter((topic) => topic.status !== 'completed');
 
-    // A search result or direct URL can open a topic outside the sidebar's
-    // first page (or an archived topic excluded by the completed filter). Keep
-    // the configured page intact and add that one active row so selection never
-    // disappears merely because the route target was filtered out. An injected
-    // favorite stays in the favorite prefix instead of falling below regular rows.
-    if (
-      activeTopic &&
-      activeTopic.trigger !== 'cron' &&
-      !pagedTopics.some((topic) => topic.id === activeTopic.id)
-    ) {
-      if (activeTopic.favorite) {
-        const pagedFavorites = pagedTopics.filter((topic) => topic.favorite);
-        const pagedRest = pagedTopics.filter((topic) => !topic.favorite);
+  // Favorites first, then sorted by the chosen timestamp, then page-sliced
+  const favTopics = visibleTopics.filter((t) => t.favorite);
+  const rest = visibleTopics.filter((t) => !t.favorite);
+  const pagedTopics = [...sortTopics(favTopics, sortBy), ...sortTopics(rest, sortBy)].slice(
+    0,
+    pageSize,
+  );
 
-        return [...sortTopics([...pagedFavorites, activeTopic], sortBy), ...pagedRest];
-      }
+  // A search result or direct URL can open a topic outside the sidebar's
+  // first page (or an archived topic excluded by the completed filter). Keep
+  // the configured page intact and add that one active row so selection never
+  // disappears merely because the route target was filtered out. An injected
+  // favorite stays in the favorite prefix instead of falling below regular rows.
+  if (
+    activeTopic &&
+    activeTopic.trigger !== 'cron' &&
+    !pagedTopics.some((topic) => topic.id === activeTopic.id)
+  ) {
+    if (activeTopic.favorite) {
+      const pagedFavorites = pagedTopics.filter((topic) => topic.favorite);
+      const pagedRest = pagedTopics.filter((topic) => !topic.favorite);
 
-      return [...pagedTopics, activeTopic];
+      return [...sortTopics([...pagedFavorites, activeTopic], sortBy), ...pagedRest];
     }
 
-    return pagedTopics;
-  };
+    return [...pagedTopics, activeTopic];
+  }
+
+  return pagedTopics;
+};
 
 const getGroupFn = (
   groupMode: TopicGroupMode,
@@ -392,6 +401,13 @@ const buildGroupedTopics = (
     : groupFn(topics);
 };
 
+export const groupSidebarTopics = (
+  topics: ChatTopic[],
+  groupMode: TopicGroupMode,
+  sortBy: TopicSortBy,
+  loadingTopicIds?: ReadonlySet<string>,
+) => buildGroupedTopics(topics, getGroupFn(groupMode, sortBy, loadingTopicIds));
+
 const groupedTopicsSelector =
   (groupFn: typeof groupTopicsByTime = groupTopicsByTime) =>
   (s: ChatStoreState): GroupedTopic[] => {
@@ -416,7 +432,7 @@ const groupedTopicsForSidebar =
     // buckets straight from `topic.status`.
     const loadingTopicIds =
       groupMode === 'byStatus' ? operationSelectors.visiblyRunningTopicIds(s) : undefined;
-    return buildGroupedTopics(limitedTopics, getGroupFn(groupMode, sortBy, loadingTopicIds));
+    return groupSidebarTopics(limitedTopics, groupMode, sortBy, loadingTopicIds);
   };
 
 const hasMoreTopics = (s: ChatStoreState): boolean => {

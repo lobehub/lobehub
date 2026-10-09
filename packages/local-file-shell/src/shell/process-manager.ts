@@ -111,6 +111,18 @@ export class ShellProcessManager {
 
   private processes = new Map<string, ShellProcess>();
 
+  /** Includes commands whose observation window ended but whose process is still running. */
+  get activeCount(): number {
+    return [...this.processes.values()].filter(
+      (entry) =>
+        entry.process.exitCode === null &&
+        entry.exitCode === null &&
+        !entry.process.signalCode &&
+        !entry.spawnError &&
+        entry.closedAt === undefined,
+    ).length;
+  }
+
   constructor(outputRoot?: string, backend: ShellBackend = new ChildProcessBackend()) {
     this.backend = backend;
     const date = new Date();

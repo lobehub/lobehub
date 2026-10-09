@@ -95,7 +95,10 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
-import { stateHasEntityFileEdits } from '@/server/services/workRegistration';
+import {
+  resolveRunWorkAccessScope,
+  stateHasEntityFileEdits,
+} from '@/server/services/workRegistration';
 
 import { resolveMessageFileUrls } from '../message/resolveMessageFileUrls';
 import { isAbortError, throwIfAborted } from './abort';
@@ -831,6 +834,21 @@ export class AgentRuntimeService {
   }
 
   /**
+   * Whether the client that started this operation declared it renders `file`
+   * Works. An unknown or expired operation reads as `false`, so a continuation
+   * then keeps the pushed snapshot every client can render.
+   */
+  async acceptsFileWorks(operationId: string): Promise<boolean> {
+    try {
+      const state = await this.coordinator.loadAgentState(operationId);
+      return state?.host?.acceptsFileWorks === true;
+    } catch (error) {
+      log('[%s] Failed to read the file Works declaration: %O', operationId, error);
+      return false;
+    }
+  }
+
+  /**
    * Whether the client that started this operation declared it handles
    * `member_runtime_end`. An unknown or expired operation reads as `false`, so
    * a continuation then keeps the verbatim terminal every client understands.
@@ -1153,6 +1171,7 @@ export class AgentRuntimeService {
    */
   async createOperation(params: OperationCreationParams): Promise<OperationCreationResult> {
     const {
+      acceptsFileWorks,
       acceptsMemberRuntimeEnd,
       activeDeviceId,
       activeDeviceScope,
@@ -1312,6 +1331,13 @@ export class AgentRuntimeService {
         parentOperationId,
         appContext?.orchestrationRole === 'member',
       );
+      // A member's pushes reach the supervisor's client, so it renders what
+      // that client declared.
+      const fileWorksAccepted =
+        acceptsFileWorks ??
+        (parentOperationId && appContext?.orchestrationRole === 'member'
+          ? await this.acceptsFileWorks(parentOperationId)
+          : undefined);
 
       const initialState = {
         activatedStepTools,
@@ -1334,6 +1360,7 @@ export class AgentRuntimeService {
         // What the host needs to deliver and retry the run. Hooks are stamped
         // right after creation once the dispatcher has serialized them.
         host: {
+          ...(fileWorksAccepted === true && { acceptsFileWorks: true }),
           ...(params.clientProtocol === 2 && { clientProtocol: 2 as const }),
           ...(params.includeFinalState === true && { includeFinalState: true }),
           ...(llmExecutor && { llmExecutor }),
@@ -1625,11 +1652,27 @@ export class AgentRuntimeService {
     const threadId: string | undefined = agentState?.origin?.threadId ?? undefined;
     if (!agentId || !topicId) return undefined;
 
+    // A share visitor's Works are registered under the visitor's share scope
+    // (`registerFileWorks`), which the ordinary scope never resolves — without
+    // it the terminal snapshot carries no Work card and the visitor only sees
+    // it after a reload through `shareChat.getMessages`. The visitor surface
+    // always opts in to file Works on that read path, and visitor runs never
+    // use message patches, so this snapshot only ever reaches that client.
+    const workAccessScope = resolveRunWorkAccessScope({
+      shareVisitor: agentState?.principal?.actor?.shareVisitor,
+      topicId,
+    });
+    const isShareVisitorRun = !!workAccessScope;
+    // `file` Works stay out of the push unless the receiving client declared
+    // it renders them: released desktop builds crash on the unknown type.
+    const includeFileWorks = isShareVisitorRun || agentState?.host?.acceptsFileWorks === true;
+
     try {
       return await this.messageService.queryMessages(
         {
           agentId,
           groupId,
+          ...(includeFileWorks && { includeFileWorks: true }),
           skipWorks: options?.skipWorks,
           threadId,
           topicId,
@@ -1641,7 +1684,7 @@ export class AgentRuntimeService {
         // terminal Source of Truth — wiping the conversation the run just
         // produced. Visitor-facing redaction of the pushed snapshot happens in
         // `GatewayStreamNotifier`.
-        { allowShareVisitor: true },
+        { allowShareVisitor: true, ...(workAccessScope && { workAccessScope }) },
       );
     } catch (error) {
       // Stream events must never fail the step. If the DB hiccups, fall back

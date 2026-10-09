@@ -15,7 +15,7 @@ export const SkillsApiName = {
  *
  * The exec-class APIs (`runCommand` / `execScript`) stay excluded even though
  * share runs now honor the visitor's approval flow: opening skill script
- * execution to visitors is a separate decision (LOBE-14296). `exportFile` is
+ * execution to visitors is a separate decision. `exportFile` is
  * excluded because its only purpose is pulling artifacts out of an execution
  * those APIs would have started.
  *

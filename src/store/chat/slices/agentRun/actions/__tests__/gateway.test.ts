@@ -31,6 +31,7 @@ vi.mock('@/services/aiAgent', () => ({
 vi.mock('@/services/shareChat', () => ({
   shareChatService: {
     execAgentTask: vi.fn(),
+    getTopics: vi.fn().mockResolvedValue([]),
     interruptTask: vi.fn(),
     refreshGatewayToken: vi.fn(),
   },
@@ -44,6 +45,9 @@ vi.mock('@/services/message', () => ({
 
 vi.mock('@/services/topic', () => ({
   topicService: {
+    // Defaults to "no detail readable" so the silent-end reconcile stays
+    // fail-safe unless a test opts in by returning a row.
+    getTopicDetail: vi.fn().mockResolvedValue(null),
     settleRunningOperation: vi.fn().mockResolvedValue(undefined),
     updateTopicMetadata: vi.fn().mockResolvedValue(undefined),
   },
@@ -186,6 +190,7 @@ function createTestAction() {
 describe('GatewayActionImpl', () => {
   beforeEach(() => {
     moveChatContextSelections.mockClear();
+    vi.mocked(topicService.getTopicDetail).mockResolvedValue(null as never);
     vi.mocked(topicService.settleRunningOperation).mockResolvedValue(undefined as never);
     mockAgentStore.state = { activeAgentId: undefined, agentMap: {} };
     mockUserDefaultConfig.disableGatewayMode = undefined;
@@ -358,6 +363,283 @@ describe('GatewayActionImpl', () => {
 
       mockClient.emitEvent('disconnected');
       expect(state.gatewayConnections['op-1']).toBeUndefined();
+    });
+
+    // A socket that ends without the op's terminal frame is the one end the
+    // transport cannot read: the run may still be alive (a drop that will
+    // reconnect) or already over with its terminal lost. Completing the op
+    // unconditionally would settle live runs; doing nothing left the local
+    // operation stuck `running` forever. So the transport defers to the caller.
+    describe('silent end (disconnected without a terminal frame)', () => {
+      it('leaves the op running while the caller reports the run still alive', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('disconnected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        expect(onComplete).not.toHaveBeenCalled();
+      });
+
+      it('fires the terminal-missing onSessionComplete once the caller proves the run is over', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd: () => true,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('disconnected');
+
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith({
+            authFailed: false,
+            completion: undefined,
+            succeeded: false,
+            terminalReceived: false,
+          }),
+        );
+      });
+
+      it('keeps waiting when the reconcile itself fails', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const onSilentEnd = vi.fn(() => {
+          throw new Error('read failed');
+        });
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('disconnected');
+        await vi.waitFor(() => expect(consoleError).toHaveBeenCalled());
+
+        expect(onComplete).not.toHaveBeenCalled();
+      });
+
+      it('skips the reconcile when the terminal frame already arrived', () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('agent_event', {
+          data: { reason: 'done' },
+          operationId: 'op-1',
+          stepIndex: 0,
+          timestamp: Date.now(),
+          type: 'agent_runtime_end',
+        } satisfies AgentStreamEvent);
+        mockClient.emitEvent('disconnected');
+
+        expect(onSilentEnd).not.toHaveBeenCalled();
+        expect(onComplete).toHaveBeenCalledWith(
+          expect.objectContaining({ terminalReceived: true }),
+        );
+      });
+
+      // A per-op `disconnected` follows terminal completion, auth failure or an
+      // explicit unsubscribe — never an unintentional socket loss. v1 takes its
+      // `reconnecting` branch on a close and the mux only broadcasts a per-op
+      // `reconnecting` / `status_changed` while it backs off, so hooking
+      // `disconnected` alone left the reconcile unreachable for every case the
+      // fix targets: the local op stayed `running` forever.
+      it('reconciles on the `reconnecting` signal an unintentional socket loss emits', async () => {
+        const { action, mockClient, state } = createTestAction();
+        const onComplete = vi.fn();
+        const onEvent = vi.fn();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onEvent,
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ succeeded: false, terminalReceived: false }),
+          ),
+        );
+
+        // The missed terminal is the path that applies the run's final state, so
+        // the retire must ask the handler to re-read the DB — otherwise the last
+        // text/tool state stays stale, and the teardown below cancels the reconnect
+        // that could have replayed it.
+        expect(onEvent).toHaveBeenCalledWith(
+          expect.objectContaining({ data: { reason: 'silent_end' }, type: 'notify_update' }),
+        );
+
+        // A retired run must not leave its transport running: dropping the store
+        // handle alone leaves a v1 reconnect timer opening sockets and a mux
+        // operation subscribed for a run nobody will ever read.
+        await vi.waitFor(() => expect(mockClient.disconnect).toHaveBeenCalled());
+        expect(state.gatewayConnections['op-1']).toBeUndefined();
+      });
+
+      it('reconciles when the mux broadcasts a per-op status_changed(disconnected)', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        // A redial in progress is not yet the end.
+        mockClient.emitEvent('status_changed', 'reconnecting');
+        expect(onSilentEnd).not.toHaveBeenCalled();
+        expect(mockClient.disconnect).not.toHaveBeenCalled();
+
+        mockClient.emitEvent('status_changed', 'disconnected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+        // The caller answered "still running", so the transport stays up.
+        expect(mockClient.disconnect).not.toHaveBeenCalled();
+      });
+
+      it('stops reconciling once the run has been retired', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        mockClient.emitEvent('reconnecting', 2000);
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(onSilentEnd).toHaveBeenCalledOnce();
+      });
+
+      // A loss-time read can fail outright (offline while the dial backs off), and
+      // the dial that then succeeds emits no further loss signal — so nothing else
+      // would ever re-check and the op would stay `running`.
+      it('re-checks once the transport reconnects after a "not over" answer', async () => {
+        const { action, mockClient } = createTestAction();
+        const onComplete = vi.fn();
+        const onSilentEnd = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: onComplete,
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledTimes(1));
+
+        mockClient.emitEvent('connected');
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledTimes(2));
+        await vi.waitFor(() =>
+          expect(onComplete).toHaveBeenCalledWith(
+            expect.objectContaining({ terminalReceived: false }),
+          ),
+        );
+      });
+
+      it('does not read the topic on a plain initial connect', async () => {
+        const { action, mockClient } = createTestAction();
+        const onSilentEnd = vi.fn(() => false);
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('connected');
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        expect(onSilentEnd).not.toHaveBeenCalled();
+      });
+
+      it('leaves a replacement transport alone when a stale reconcile resolves', async () => {
+        const { action, mockClient, set, state } = createTestAction();
+        let resolveRunOver: ((value: boolean) => void) | undefined;
+        const onSilentEnd = vi.fn(
+          () =>
+            new Promise<boolean>((resolve) => {
+              resolveRunOver = resolve;
+            }),
+        );
+
+        action.connectToGateway({
+          gatewayUrl: 'https://gateway.test.com',
+          onSessionComplete: vi.fn(),
+          onSilentEnd,
+          operationId: 'op-1',
+          token: 'test-token',
+          topicId: TEST_TOPIC_ID,
+        });
+
+        mockClient.emitEvent('reconnecting', 1000);
+        await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+
+        // The mux → v1 fallback re-enters `connectToGateway` under the SAME
+        // operation id while this read is still in flight.
+        const replacement = createMockClient();
+        set({ gatewayConnections: { 'op-1': { client: replacement, status: 'connecting' } } });
+
+        resolveRunOver!(true);
+        await vi.waitFor(() => expect(mockClient.disconnect).toHaveBeenCalled());
+
+        expect(state.gatewayConnections['op-1']?.client).toBe(replacement);
+      });
     });
 
     it('should cleanup on auth_failed', () => {
@@ -3474,6 +3756,10 @@ describe('GatewayActionImpl', () => {
         return { action, connectToGateway, getCancelHandler: () => cancelHandler, startOperation };
       }
 
+      beforeEach(() => {
+        vi.mocked(shareChatService.getTopics).mockReset().mockResolvedValue([]);
+      });
+
       afterEach(() => {
         delete (globalThis as any).window;
       });
@@ -3539,6 +3825,68 @@ describe('GatewayActionImpl', () => {
           'server-op-1',
         );
         expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+      });
+
+      // The silent-end reconcile must read the topic through the share surface
+      // too: `topic.getTopicDetail` resolves with `findOwnTopicById`, so a
+      // visitor's read cannot see the creator-owned row and the reconcile would
+      // always answer "still running" — leaving a terminal-less share run stuck
+      // exactly like the owner path this fix repairs.
+      async function runSilentEnd(action: GatewayActionImpl, connectToGateway: any) {
+        await action.reconnectToGatewayOperation({
+          agentShareId: 'share-1',
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        return connectToGateway.mock.calls[0]![0].onSilentEnd as () => Promise<boolean>;
+      }
+
+      it('reads the visitor topic through the share-authorized list, not the owner-scoped read', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(topicService.getTopicDetail).mockClear();
+        vi.mocked(shareChatService.getTopics).mockResolvedValue([
+          { id: 'topic-1', runningOperation: null },
+        ] as any);
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(true);
+        expect(shareChatService.getTopics).toHaveBeenCalledWith('share-1');
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      it('keeps waiting while the share projection still names a run on the topic', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        vi.mocked(shareChatService.getTopics).mockResolvedValue([
+          { id: 'topic-1', runningOperation: { operationId: 'server-op-1' } },
+        ] as any);
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(false);
+      });
+
+      it('keeps waiting when the share read itself fails', async () => {
+        const { action, connectToGateway } = createShareReconnectTestAction({
+          createdAt: 1,
+          id: 'ast-1',
+        });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(shareChatService.getTopics).mockRejectedValue(new Error('offline'));
+
+        const onSilentEnd = await runSilentEnd(action, connectToGateway);
+
+        await expect(onSilentEnd()).resolves.toBe(false);
+        expect(consoleError).toHaveBeenCalled();
       });
     });
 
@@ -3839,9 +4187,13 @@ describe('GatewayActionImpl', () => {
     // internal_dispatchTopic + connectToGateway capture, so we can assert the local
     // store clear on both the NOT_FOUND refresh path and onSessionComplete.
     function createSeededReconnectHarness() {
-      const captured: { onSessionComplete?: (p: any) => void } = {};
+      const captured: {
+        onSessionComplete?: (p: any) => void;
+        onSilentEnd?: () => boolean | Promise<boolean>;
+      } = {};
       const connectToGateway = vi.fn((params: any) => {
         captured.onSessionComplete = params.onSessionComplete;
+        captured.onSilentEnd = params.onSilentEnd;
       });
       const internalDispatchTopic = vi.fn();
       const completeOperation = vi.fn();
@@ -3899,6 +4251,7 @@ describe('GatewayActionImpl', () => {
         connectToGateway,
         internalDispatchTopic,
         startOperation,
+        state,
       };
     }
 
@@ -4043,6 +4396,182 @@ describe('GatewayActionImpl', () => {
       });
 
       expect(internalDispatchTopic).not.toHaveBeenCalled();
+    });
+
+    // ─── Silent-end reconcile ───
+    //
+    // `disconnected` without the run's terminal frame is the one end the
+    // transport cannot read. These pin the decision the reconnect hands back:
+    // retire the op only when the server's own reservation of the topic proves
+    // the run is over, and otherwise keep waiting (never guess from silence).
+    describe('silent-end reconcile', () => {
+      const readSilentEnd = (captured: { onSilentEnd?: any }) => captured.onSilentEnd!();
+
+      it('reports the run over once the server no longer reserves the topic for it', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: { runningOperation: null },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      it('keeps the run alive while the server still reserves the topic for it', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-1', operationId: 'server-op-1' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+      });
+
+      // A newer run replacing the marker means THIS run no longer owns the topic —
+      // it is over, and its spinner must not outlive the newer run's.
+      it('reports the run over once a newer operation owns the topic', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-2', operationId: 'server-op-2' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      // Regression: this branch used to return early whenever a newer turn in the
+      // same tab owned the topic, skipping the authoritative read — and the
+      // transport is torn down right after, so no later loss signal ever retried
+      // and the superseded operation stayed locally `running` forever. The
+      // completion path is ownership-guarded, so the read must still run.
+      it('still reads the server row when a newer local turn owns the topic', async () => {
+        const { action, captured, state } = createSeededReconnectHarness();
+        state.operations = {
+          'op-newer': {
+            context: { topicId: 'topic-1' },
+            metadata: {},
+            status: 'running',
+            type: 'execServerAgentRuntime',
+          },
+        };
+        state.operationsByType = { execServerAgentRuntime: ['op-newer'] };
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: { assistantMessageId: 'ast-2', operationId: 'server-op-2' },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(true);
+      });
+
+      it('keeps waiting when the topic read fails', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        vi.mocked(topicService.getTopicDetail).mockRejectedValueOnce(new Error('network down'));
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+        expect(consoleError).toHaveBeenCalled();
+      });
+
+      // An external hetero producer's output never travelled over this socket, so
+      // no transport observation can prove it stopped — same guard as the
+      // terminal path, and it must not even read the topic.
+      it('never reconciles a heterogeneous producer', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: 'claude-code',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      // An older server that omits `heteroType` cannot be told apart from a hetero
+      // producer, so the rolling-deploy fallback stays fail-safe.
+      it('keeps waiting when the marker omits heteroType', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: { runningOperation: null },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+        expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      });
+
+      // A member continuation rides the supervisor's root marker instead of owning
+      // one, so a root marker naming another op is not proof that this member ended.
+      it('keeps the run alive while the supervisor still lists it as a child operation', async () => {
+        const { action, captured } = createSeededReconnectHarness();
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: {
+            runningOperation: {
+              childOperations: [{ operationId: 'server-op-1' }],
+              operationId: 'server-op-root',
+            },
+          },
+        } as never);
+
+        await action.reconnectToGatewayOperation({
+          assistantMessageId: 'ast-1',
+          heteroType: null,
+          operationId: 'server-op-1',
+          topicId: 'topic-1',
+        });
+
+        await expect(readSilentEnd(captured)).resolves.toBe(false);
+      });
     });
   });
 });

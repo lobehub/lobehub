@@ -647,12 +647,13 @@ export class AgentDocumentsService {
     }
 
     // The caller's explicit title wins; a leading H1 only names untitled documents.
-    // The H1 is stripped from the body only when it duplicates the chosen title.
-    const { title: extractedTitle, content: strippedContent } = extractMarkdownH1Title(content);
+    // The leading H1 is always dropped from the body: the document title renders
+    // as the page header on share/editor surfaces, so that first heading would
+    // read as a second page title. Deeper body headings are left alone.
+    const { title: extractedTitle, content: finalContent } = extractMarkdownH1Title(content);
     // Tool callers do not always send `title` even though the schema asks for it.
     const requestedTitle = typeof title === 'string' ? title.trim() : '';
     const finalTitle = requestedTitle || extractedTitle || '';
-    const finalContent = extractedTitle === finalTitle ? strippedContent : content;
     const metadata = options.hintIsSkill
       ? {
           agentSignal: {
@@ -882,7 +883,11 @@ export class AgentDocumentsService {
   async replaceDocumentContentById(documentId: string, content: string, expectedAgentId?: string) {
     const doc = await this.getDocumentByIdInAgent(documentId, expectedAgentId);
     if (!doc) return undefined;
-    const snapshot = await createAgentMarkdownSnapshot(content);
+
+    // Mirror createDocument: the document title renders as the page header, so
+    // a leading H1 would show it a second time; deeper headings are kept.
+    const { content: finalContent } = extractMarkdownH1Title(content);
+    const snapshot = await createAgentMarkdownSnapshot(finalContent);
 
     if (doc.content !== snapshot.content) {
       await this.documentService.trySaveCurrentDocumentHistory(doc.documentId, 'llm_call');

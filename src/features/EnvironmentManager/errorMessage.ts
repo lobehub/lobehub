@@ -1,3 +1,5 @@
+import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
+
 /**
  * What a failed environment action should say to the person.
  *
@@ -27,24 +29,6 @@ const CODE_KEYS: Record<string, string> = {
  */
 const isUntranslatedCode = (message: string): boolean => /^[A-Z][\dA-Z_]{2,}$/.test(message);
 
-/**
- * A message the server never wrote for anyone to read.
- *
- * Drizzle raises a failed insert with the whole statement and its parameters in
- * `message`, and tRPC forwards that verbatim, so a missing column surfaced in a
- * dialog as a screenful of SQL — with the row's values in it. Anything of that
- * shape is dropped in favour of the caller's own line, which at least says
- * which action failed.
- *
- * Matched narrowly on purpose. The fallthrough below exists so that refusals
- * written as sentences still reach the person, and widening this to "anything
- * long" would swallow those too.
- */
-const isMachineMessage = (message: string): boolean =>
-  message.startsWith('Failed query:') ||
-  // A stack trace that came along for the ride.
-  /\n\s+at\s/.test(message);
-
 const readIssues = (message: string): string[] | undefined => {
   if (!message.startsWith('[')) return;
   try {
@@ -72,7 +56,7 @@ export const describeError = (
   const key = CODE_KEYS[message];
   if (key) return t(key);
 
-  if (isMachineMessage(message) || isUntranslatedCode(message)) return fallback;
+  if (isMachineErrorMessage(message) || isUntranslatedCode(message)) return fallback;
 
   const issues = readIssues(message);
   if (issues) {

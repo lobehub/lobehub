@@ -278,6 +278,32 @@ export class TaskDetailSliceActionImpl {
       );
     }
 
+    // Reconcile at the server-read boundary, even when the live chat panel has
+    // unmounted. A missing running marker alone is not proof of completion.
+    const terminalActivities = detail.activities?.filter(
+      (activity) =>
+        activity.type === 'topic' &&
+        activity.id &&
+        activity.operationId &&
+        ['completed', 'failed', 'canceled', 'timeout'].includes(activity.status ?? '') &&
+        activity.runningOperation?.operationId !== activity.operationId,
+    );
+    if (terminalActivities?.length) {
+      const { getChatStoreState } = await import('@/store/chat');
+      for (const activity of terminalActivities) {
+        getChatStoreState().reconcileServerOperation({
+          operationId: activity.operationId!,
+          status:
+            activity.status === 'completed'
+              ? 'completed'
+              : activity.status === 'canceled'
+                ? 'cancelled'
+                : 'failed',
+          topicId: activity.id!,
+        });
+      }
+    }
+
     return detail;
   };
 

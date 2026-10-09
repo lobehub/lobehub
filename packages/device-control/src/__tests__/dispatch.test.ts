@@ -6,6 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import {
   APP_UPDATE_UNSUPPORTED_MESSAGE,
+  CLI_UPDATE_UNSUPPORTED_MESSAGE,
   DEVICE_RPC_METHODS,
   executeDeviceRpc,
   TRASH_UNSUPPORTED_MESSAGE,
@@ -59,6 +60,36 @@ const makeDeps = (): DeviceControlDeps => ({
 });
 
 describe('executeDeviceRpc', () => {
+  it.each(['getCliUpdateState', 'checkCliUpdate', 'restartCli'])(
+    'rejects missing CLI handler %s with a stable reason',
+    async (method) => {
+      await expect(executeDeviceRpc(method, {}, makeDeps())).rejects.toThrow(
+        CLI_UPDATE_UNSUPPORTED_MESSAGE,
+      );
+      expect(DEVICE_RPC_METHODS).toContain(method);
+    },
+  );
+
+  it('dispatches CLI maintenance and preserves the restart idempotency key', async () => {
+    const state = {
+      activeTasks: 0,
+      currentVersion: '1.0.0',
+      instanceId: 'instance',
+      supported: true,
+    };
+    const restart = { requestId: '89d177cf-52e5-4d55-b71c-13deef4ea366', update: true };
+    const deps = {
+      ...makeDeps(),
+      checkCliUpdate: vi.fn(async () => state),
+      getCliUpdateState: vi.fn(async () => state),
+      restartCli: vi.fn(async () => state),
+    };
+    for (const method of ['getCliUpdateState', 'checkCliUpdate', 'restartCli']) {
+      await expect(executeDeviceRpc(method, restart, deps)).resolves.toEqual(state);
+    }
+    expect(deps.restartCli).toHaveBeenCalledWith(restart);
+  });
+
   it('throws on an unknown method', async () => {
     await expect(executeDeviceRpc('nope', {}, makeDeps())).rejects.toThrow(
       'Unknown device RPC method: nope',

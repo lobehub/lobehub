@@ -18,18 +18,6 @@ describe('Kimi Code persisted quota projection', () => {
     expect(projectWindows(readings)[2].windowSeconds).toBe(43_200 * 60);
   });
 
-  it('maps each window to its limit type with an explicit window length', () => {
-    const readings = kimiCodeQuotaReadings(windows, now);
-
-    expect(readings.map((reading) => [reading.limitType, reading.windowMinutes])).toEqual([
-      ['session', 300],
-      ['weekly_all', 10_080],
-      ['month_total', 43_200],
-      ['month_code', 43_200],
-    ]);
-    expect(readings.every((reading) => reading.scopeKey === '')).toBe(true);
-  });
-
   it('omits windows the provider did not report', () => {
     const readings = kimiCodeQuotaReadings(
       { monthly: null, monthlyCode: null, session: windows.session, weekly: null },

@@ -38,7 +38,7 @@ describe('aiAgentService.resolveAgentInterventionBySource', () => {
 
     expect(mocks.resolveAgentInterventionBySource).toHaveBeenCalledWith({
       ...params,
-      streamFeatures: ['member_runtime_end'],
+      streamFeatures: ['file_works', 'member_runtime_end'],
     });
   });
 

@@ -190,6 +190,12 @@ export class GrokAcpSession extends AcpAgentSession<AcpInitializeResult, GrokAcp
     };
   }
 
+  protected async onRunCancelled(): Promise<void> {
+    // Same shape a cancelled `session/prompt` response carries — the adapter
+    // turns it into the `reason: 'cancelled'` agent_runtime_end terminal.
+    await this.pushToPipeline({ result: { stopReason: 'cancelled' } });
+  }
+
   protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
     if (isAcpReplayMessage(message)) return;
     await this.pushToPipeline(message);

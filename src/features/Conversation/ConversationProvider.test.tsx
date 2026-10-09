@@ -77,6 +77,11 @@ vi.mock('@/libs/swr', () => ({
 
 vi.mock('@/libs/swr/useCacheScope', () => ({
   getCacheScope: () => 'user-1:personal',
+  // `@/services/document/invalidation` (reached through the Portal document
+  // hooks) now imports `@/libs/replica`, whose module init builds the SWR-backed
+  // replica scope and therefore reads all three helpers.
+  isScopeTrusted: () => true,
+  useCacheScope: () => 'user-1:personal',
 }));
 
 vi.mock('@/store/agent', () => ({

@@ -100,6 +100,15 @@ vi.mock('@/database/models/topic', () => ({
   }),
 }));
 
+const { mockResolveProjectDirectoryForTopic } = vi.hoisted(() => ({
+  mockResolveProjectDirectoryForTopic: vi.fn().mockResolvedValue(undefined),
+}));
+vi.mock('@/database/models/projectWorkingDirectory', () => ({
+  ProjectWorkingDirectoryModel: vi.fn().mockImplementation(function () {
+    return { resolveForTopic: mockResolveProjectDirectoryForTopic };
+  }),
+}));
+
 vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(function () {
     return {
@@ -695,6 +704,52 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         }),
         undefined,
       );
+    });
+  });
+
+  describe('project directory binding', () => {
+    it('rejects a project topic whose directory binding was deleted instead of following its pinned device', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      // Deleting the directory row nulls the FK but keeps projectId + the pinned device.
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001', workingDirectory: '/repo' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: null,
+      });
+      mockResolveProjectDirectoryForTopic.mockRejectedValueOnce(
+        new Error('Project directory binding no longer exists'),
+      );
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          prompt: 'Keep working',
+          appContext: { topicId: 'topic-1' },
+        }),
+      ).rejects.toThrow('Project directory binding no longer exists');
+
+      expect(mockResolveProjectDirectoryForTopic).toHaveBeenCalledWith('topic-1');
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+    });
+
+    it('does not consult the project resolver for plain device-bound topics', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001' },
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Keep working',
+        appContext: { topicId: 'topic-1' },
+      });
+
+      expect(mockResolveProjectDirectoryForTopic).not.toHaveBeenCalled();
+      expect(mockCreateOperation).toHaveBeenCalled();
     });
   });
 

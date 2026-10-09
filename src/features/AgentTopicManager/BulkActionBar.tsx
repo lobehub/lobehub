@@ -3,11 +3,13 @@
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
-import { Archive, Star, Trash2, X } from 'lucide-react';
+import { Archive, FolderInput, Star, Trash2, X } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { confirmRemoveTopic } from '@/features/DeleteTopicConfirm';
+import { openAssociateTopicModal } from '@/features/Projects/WorkingDirectories/AssociateTopicModal';
+import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 
 import MoveToAgentButton from './MoveToAgentButton';
@@ -47,6 +49,8 @@ const styles = createStaticStyles(({ css }) => ({
 const BulkActionBar = memo(() => {
   const { t } = useTranslation('topic');
 
+  const { allowed: canEditTopic } = usePermission('edit_own_content');
+  const activeAgentId = useChatStore((s) => s.activeAgentId);
   const selectedIds = useTopicsViewStore((s) => s.selectedIds);
   const exitSelectMode = useTopicsViewStore((s) => s.exitSelectMode);
 
@@ -106,6 +110,15 @@ const BulkActionBar = memo(() => {
           onClick={handleBatchArchive}
         />
         <MoveToAgentButton />
+        {selectedIds.length === 1 && canEditTopic && (
+          <ActionIcon
+            aria-label={t('directories.bind', { ns: 'project' })}
+            icon={FolderInput}
+            size="small"
+            title={t('directories.bind', { ns: 'project' })}
+            onClick={() => openAssociateTopicModal(selectedIds[0], activeAgentId)}
+          />
+        )}
         <ActionIcon
           icon={Trash2}
           size={'small'}

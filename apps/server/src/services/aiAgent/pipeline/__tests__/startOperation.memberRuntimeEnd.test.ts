@@ -11,6 +11,7 @@ const sourceExecutor = { capabilities: ['llm_relay@1'], clientId: 'tab-a', provi
 const setup = (sourceAccepts: boolean) => {
   const calls: string[] = [];
   const agentRuntimeService = {
+    acceptsFileWorks: vi.fn(async () => sourceAccepts),
     acceptsMemberRuntimeEnd: vi.fn(async () => {
       calls.push('read-source');
       return sourceAccepts;
@@ -143,6 +144,34 @@ describe('startOperation › relay executor', () => {
     expect(agentRuntimeService.getLlmExecutor).not.toHaveBeenCalled();
     expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
       expect.objectContaining({ llmExecutor: declared }),
+    );
+  });
+});
+
+describe('startOperation › file_works declaration', () => {
+  it('carries the parked operation declaration over to an approval continuation', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(true);
+
+    await startOperation(deps, ctx, input({ approvalSourceOperationId: 'op-parked' }));
+
+    expect(agentRuntimeService.acceptsFileWorks).toHaveBeenCalledWith('op-parked');
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptsFileWorks: true }),
+    );
+  });
+
+  it('keeps a resuming client explicit false over the parked operation declaration', async () => {
+    const { agentRuntimeService, ctx, deps, input } = setup(true);
+
+    await startOperation(
+      deps,
+      ctx,
+      input({ acceptsFileWorks: false, approvalSourceOperationId: 'op-parked' }),
+    );
+
+    expect(agentRuntimeService.acceptsFileWorks).not.toHaveBeenCalled();
+    expect(agentRuntimeService.createOperation).toHaveBeenCalledWith(
+      expect.objectContaining({ acceptsFileWorks: false }),
     );
   });
 });

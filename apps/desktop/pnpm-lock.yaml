@@ -709,6 +709,9 @@ importers:
       file-type:
         specifier: ^21.3.4
         version: 21.3.4(supports-color@9.4.0)
+      gpt-tokenizer:
+        specifier: ^3.4.0
+        version: 3.4.0
       mime:
         specifier: ^4.1.0
         version: 4.1.0

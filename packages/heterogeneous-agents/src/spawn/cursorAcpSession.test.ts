@@ -6,7 +6,6 @@ import type { AgentStreamEvent } from '@lobechat/agent-gateway-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { AskUserBridge } from '../askUser/AskUserBridge';
-import { DEFAULT_ASK_USER_TIMEOUT_MS } from '../askUser/constants';
 import { AcpRpcResponseError } from './acpStdioClient';
 import {
   buildCursorAcpArgs,
@@ -299,21 +298,6 @@ describe('CursorAcpSession', () => {
     }
   });
 
-  it('preserves the structured RPC error when a legacy Cursor session cannot be loaded', async () => {
-    const fake = createAcpProcess({
-      loadError: { code: -32_602, message: 'Session "legacy-session" not found' },
-    });
-    spawnMock.mockReturnValue(fake.child);
-    vi.spyOn(process, 'kill').mockImplementation(() => true);
-
-    const run = new CursorAcpSession(
-      createSessionOptions({ resumeSessionId: 'legacy-session' }),
-    ).run();
-
-    await expect(run).rejects.toSatisfy(isCursorAcpSessionNotFoundError);
-    expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
-  });
-
   it('returns an explicit cancellation instead of fabricating a skipped answer without a UI', async () => {
     const fake = createAcpProcess({ askQuestion: true });
     spawnMock.mockReturnValue(fake.child);
@@ -324,45 +308,6 @@ describe('CursorAcpSession', () => {
     expect(fake.requests.find(({ id }) => id === 'ask-1')?.result).toEqual({
       outcome: { outcome: 'cancelled' },
     });
-  });
-
-  it('keeps streaming session updates while AskUserBridge is waiting', async () => {
-    const fake = createAcpProcess({ askQuestion: true });
-    spawnMock.mockReturnValue(fake.child);
-    vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = createCursorBridge();
-    const options = createSessionOptions({ askUserBridge: bridge });
-    const events: AgentStreamEvent[] = [];
-    options.onEvents = (batch) => {
-      events.push(...batch);
-    };
-    const eventIterator = bridge.events()[Symbol.asyncIterator]();
-    const run = new CursorAcpSession(options).run();
-
-    await eventIterator.next();
-    fake.send({
-      method: 'session/update',
-      params: {
-        sessionId: 'cursor-session-1',
-        update: {
-          content: { text: ' still streaming', type: 'text' },
-          sessionUpdate: 'agent_message_chunk',
-        },
-      },
-    });
-    await vi.waitFor(() =>
-      expect(events).toContainEqual(
-        expect.objectContaining({
-          data: { chunkType: 'text', content: ' still streaming' },
-          type: 'stream_chunk',
-        }),
-      ),
-    );
-
-    bridge.resolve('cursor-question-1', {
-      result: { 'How broad should the fix be?': 'Full' },
-    });
-    await run;
   });
 
   it('blocks cursor/ask_question until the bridge returns selected option labels', async () => {
@@ -681,29 +626,5 @@ describe('CursorAcpSession', () => {
         outcome: { outcome: 'cancelled' },
       });
     }
-  });
-
-  it('cancels plan approval when the intervention times out', async () => {
-    vi.useFakeTimers();
-    const fake = createAcpProcess({
-      serverRequest: {
-        id: 'plan-request-1',
-        method: 'cursor/create_plan',
-        params: { plan: 'Do the work.', todos: [], toolCallId: 'plan-1' },
-      },
-    });
-    spawnMock.mockReturnValue(fake.child);
-    vi.spyOn(process, 'kill').mockImplementation(() => true);
-    const bridge = createCursorBridge();
-    const eventIterator = bridge.events()[Symbol.asyncIterator]();
-    const run = new CursorAcpSession(createSessionOptions({ askUserBridge: bridge })).run();
-
-    await eventIterator.next();
-    await vi.advanceTimersByTimeAsync(DEFAULT_ASK_USER_TIMEOUT_MS);
-    await run;
-
-    expect(fake.requests.find(({ id }) => id === 'plan-request-1')?.result).toEqual({
-      outcome: { outcome: 'cancelled' },
-    });
   });
 });

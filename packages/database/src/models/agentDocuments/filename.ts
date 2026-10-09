@@ -28,8 +28,10 @@ export const buildDocumentFilename = (title: string): string => {
  * the remaining content with that heading stripped.
  *
  * Only matches a `# ` heading that appears at the top of the document
- * (optionally preceded by blank lines). Setext-style (`===`) and indented
- * headings are not recognised.
+ * (optionally preceded by blank lines), with up to 3 leading spaces per
+ * CommonMark. Deeper indentation (a tab or 4 spaces) is an indented code
+ * block and is not recognised, so a code line such as `    # install` stays
+ * untouched. Setext-style (`===`) headings are not recognised either.
  */
 export const extractMarkdownH1Title = (content: string): { content: string; title?: string } => {
   const lines = content.split(/\r?\n/);
@@ -38,7 +40,7 @@ export const extractMarkdownH1Title = (content: string): { content: string; titl
   while (i < lines.length && lines[i].trim() === '') i += 1;
   if (i >= lines.length) return { content };
 
-  const headingMatch = lines[i].match(/^[ \t]*#[ \t]+(\S.*)$/);
+  const headingMatch = lines[i].match(/^ {0,3}#[ \t]+(\S.*)$/);
   if (!headingMatch) return { content };
 
   const title = headingMatch[1].trim();
