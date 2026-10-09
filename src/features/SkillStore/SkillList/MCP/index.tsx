@@ -1,12 +1,13 @@
 'use client';
 
-import { Center, Icon } from '@lobehub/ui';
+import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { ServerCrash } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VirtuosoGrid } from 'react-virtuoso';
 
+import AsyncError from '@/components/AsyncError';
 import { useToolStore } from '@/store/tool';
 
 import Item from '../Community/Item';
@@ -15,6 +16,7 @@ import Loading from '../Loading';
 import { virtuosoGridStyles } from '../style';
 import VirtuosoLoading from '../VirtuosoLoading';
 import WantMoreSkills from '../WantMoreSkills';
+import { canAutoLoadMore, resolveMCPListFooter } from './utils';
 
 export const MCPList = memo(() => {
   const { t } = useTranslation('setting');
@@ -58,22 +60,48 @@ export const MCPList = memo(() => {
   if (allItems.length === 0) return <Empty search={hasSearchKeywords} />;
 
   const renderFooter = () => {
-    if (list.isLoadingMore) return <VirtuosoLoading />;
-    if (!list.hasMore) return <WantMoreSkills />;
-    return <div style={{ height: 16 }} />;
+    switch (resolveMCPListFooter(list)) {
+      case 'loading': {
+        return <VirtuosoLoading />;
+      }
+      case 'error': {
+        return (
+          <Flexbox align={'center'} paddingBlock={12}>
+            <AsyncError
+              error={list.loadMoreError}
+              variant={'inline'}
+              onRetry={() => {
+                void loadMoreMCPPlugins();
+              }}
+            />
+          </Flexbox>
+        );
+      }
+      case 'exhausted': {
+        return <WantMoreSkills />;
+      }
+      default: {
+        return <div style={{ height: 16 }} />;
+      }
+    }
   };
 
   return (
     <VirtuosoGrid
       components={{ Footer: renderFooter }}
       data={allItems}
-      endReached={loadMoreMCPPlugins}
       increaseViewportBy={typeof window !== 'undefined' ? window.innerHeight : 0}
       itemClassName={virtuosoGridStyles.item}
       itemContent={(_, item) => <Item {...item} />}
       listClassName={virtuosoGridStyles.list}
       overscan={24}
       style={{ height: '60vh', width: '100%' }}
+      endReached={() => {
+        // While a page is failing, paging waits for the explicit retry above
+        // instead of hammering the endpoint on every scroll.
+        if (!canAutoLoadMore(list)) return;
+        void loadMoreMCPPlugins();
+      }}
     />
   );
 });
