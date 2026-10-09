@@ -34,8 +34,13 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface AgentSenderSourceLinkProps {
-  /** Sending agent whose topic this turn was launched from. */
-  agentId: string;
+  /**
+   * The agent that OWNS the source topic — the link's `/agent/<id>/` segment.
+   * Not necessarily the sending agent: a heterogeneous `callSubAgent` child runs
+   * on its spawner's topic, and only the topic's own agent holds that
+   * conversation, so the sender must not become this segment.
+   */
+  topicAgentId: string;
   /** The source topic id. */
   topicId: string;
   /**
@@ -46,7 +51,7 @@ interface AgentSenderSourceLinkProps {
 }
 
 /**
- * Jump-back to the topic an agent → agent turn was launched from. Sits after the
+ * Jump-back to the topic an agent → agent turn was launched from. Sits before the
  * sending agent's name so the authorship and its origin read as one cluster.
  *
  * Labels itself with the topic's OWN name rather than a generic "source topic"
@@ -56,7 +61,7 @@ interface AgentSenderSourceLinkProps {
  * explains itself without occupying the row.
  */
 const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(
-  ({ agentId, topicId, topicTitle }) => {
+  ({ topicAgentId, topicId, topicTitle }) => {
     const { t } = useTranslation('chat');
     const caption = t('agentSender.sourceTopic');
     const name = topicTitle?.trim();
@@ -66,7 +71,7 @@ const AgentSenderSourceLink = memo<AgentSenderSourceLinkProps>(
         {/* `WorkspaceLink`, not the bare router `Link`: `/agent/...` is mirrored
             under `/:workspaceSlug`, so an unprefixed href would drop a workspace
             reader into their personal route and the source topic would not load. */}
-        <WorkspaceLink className={styles.link} to={AGENT_CHAT_TOPIC_URL(agentId, topicId)}>
+        <WorkspaceLink className={styles.link} to={AGENT_CHAT_TOPIC_URL(topicAgentId, topicId)}>
           <Icon icon={Link2} size={12} />
           <span className={styles.label}>{name || caption}</span>
         </WorkspaceLink>

@@ -8,20 +8,47 @@ import {
 
 import { parseSpeakerTag } from '@/store/chat/utils/parseSpeakerTag';
 
+/** The shape of a user row this resolver needs — the server-written blocks live on it. */
+export interface SenderIdentitySource {
+  content?: null | string;
+  metadata?: null | {
+    agentSender?: AgentSenderMetadata | null;
+    botSender?: BotSenderMetadata | null;
+    trigger?: RequestTrigger;
+  };
+}
+
+/**
+ * Agent sender for a user message: the structured block the server wrote for an
+ * agent → agent turn. Every render path that can show such a row must read it
+ * through here — a path that resolves the sender without it falls back to the
+ * human owner the row was persisted under, i.e. it misattributes the message.
+ */
+export const getAgentSender = (message: {
+  metadata?: { agentSender?: AgentSenderMetadata | null } | null;
+}): AgentSenderMetadata | undefined => message.metadata?.agentSender ?? undefined;
+
+/**
+ * Bot-channel sender for a user message: the structured block written by the
+ * server, falling back to the `<speaker>` tag older rows still carry inline.
+ */
+export const getBotSender = (message: {
+  content?: string | null;
+  metadata?: { botSender?: BotSenderMetadata | null; trigger?: RequestTrigger } | null;
+}): BotSenderMetadata | undefined =>
+  message.metadata?.botSender ??
+  (message.metadata?.trigger === RequestTrigger.Bot ? parseSpeakerTag(message.content) : undefined);
+
 interface ResolveSenderIdentityOptions {
-  /**
-   * Sending agent of an agent → agent turn (a sibling agent's `lh agent run`).
-   * Wins over `sender`, which for such rows is the human OWNER the run was
-   * persisted under rather than who actually sent it.
-   */
-  agentSender?: AgentSenderMetadata | null;
-  /**
-   * Real platform author of a bot-channel message. Wins over `sender`, which
-   * for such rows is the bot OWNER's account rather than who actually typed.
-   */
-  botSender?: BotSenderMetadata | null;
   /** Viewer's user id, used to detect their own messages. */
-  currentUserId?: string | null;
+  currentUserId?: null | string;
+  /**
+   * The user row being rendered. The server-written sender blocks are read off
+   * it here rather than passed in, so a renderer cannot resolve an identity
+   * while silently dropping one of them — the compressed group re-renders user
+   * rows through a second path that has to agree with this one.
+   */
+  message: SenderIdentitySource;
   /** Viewer's avatar, applied only to their own messages. */
   selfAvatar: string;
   /** Viewer's display name, applied only to their own messages. */
@@ -41,14 +68,16 @@ interface ResolveSenderIdentityOptions {
  * misattribute their messages to whoever is looking.
  */
 export const resolveSenderIdentity = ({
-  agentSender,
-  botSender,
   currentUserId,
+  message,
   selfAvatar,
   selfTitle,
   sender,
   unknownLabel,
 }: ResolveSenderIdentityOptions) => {
+  const agentSender = getAgentSender(message);
+  const botSender = getBotSender(message);
+
   // Another agent sent this turn. It is never the viewer's own message, and the
   // label follows the product-wide agent naming rule (personal name over role).
   if (agentSender) {
@@ -77,14 +106,3 @@ export const resolveSenderIdentity = ({
 
   return { avatar, isOwn, title };
 };
-
-/**
- * Bot-channel sender for a user message: the structured block written by the
- * server, falling back to the `<speaker>` tag older rows still carry inline.
- */
-export const getBotSender = (message: {
-  content?: string | null;
-  metadata?: { botSender?: BotSenderMetadata | null; trigger?: RequestTrigger } | null;
-}): BotSenderMetadata | undefined =>
-  message.metadata?.botSender ??
-  (message.metadata?.trigger === RequestTrigger.Bot ? parseSpeakerTag(message.content) : undefined);

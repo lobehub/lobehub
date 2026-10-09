@@ -6,7 +6,8 @@ const CALLER = 'user-1';
 
 const buildDeps = (overrides?: {
   agentConfig?: unknown;
-  operation?: null | undefined | { topicId?: null | string; userId: string };
+  operation?:
+    null | undefined | { agentId?: null | string; topicId?: null | string; userId: string };
   topic?: null | undefined | { agentId?: null | string; title?: null | string };
 }) => ({
   findAgentConfig: vi.fn().mockResolvedValue(overrides?.agentConfig ?? undefined),
@@ -71,7 +72,7 @@ describe('resolveAgentSenderFromOperation', () => {
   it("reads the topic and agent from the caller's own operation row", async () => {
     const deps = buildDeps({
       agentConfig: { avatar: '🐶', name: 'Coco', title: 'Product Assistant' },
-      operation: { topicId: 'tpc-source', userId: CALLER },
+      operation: { agentId: 'agt-coco', topicId: 'tpc-source', userId: CALLER },
       topic: { agentId: 'agt-coco', title: '帮我评估本周发布的风险' },
     });
 
@@ -80,21 +81,61 @@ describe('resolveAgentSenderFromOperation', () => {
       avatar: '🐶',
       name: 'Coco',
       title: 'Product Assistant',
+      topicAgentId: 'agt-coco',
       topicId: 'tpc-source',
       topicTitle: '帮我评估本周发布的风险',
     });
     expect(deps.findTopic).toHaveBeenCalledWith('tpc-source');
   });
 
+  /**
+   * A heterogeneous `callSubAgent` child executes in an isolation thread on its
+   * SPAWNER's topic, so the operation's agent and the topic's owner differ. The
+   * child sent the turn; the parent owns the conversation the link points at.
+   */
+  it("attributes a sub-agent child, and links back to the topic's own agent", async () => {
+    const deps = buildDeps({
+      agentConfig: { avatar: '🤖', name: 'Release Bot', title: 'Release Bot' },
+      operation: { agentId: 'agt-child', topicId: 'tpc-parent', userId: CALLER },
+      topic: { agentId: 'agt-parent', title: 'Parent thread' },
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
+      agentId: 'agt-child',
+      avatar: '🤖',
+      name: 'Release Bot',
+      title: 'Release Bot',
+      topicAgentId: 'agt-parent',
+      topicId: 'tpc-parent',
+      topicTitle: 'Parent thread',
+    });
+    expect(deps.findAgentConfig).toHaveBeenCalledWith('agt-child');
+  });
+
+  it("falls back to the topic's owner when the operation names no agent", async () => {
+    const deps = buildDeps({
+      operation: { agentId: null, topicId: 'tpc-source', userId: CALLER },
+      topic: { agentId: 'agt-coco', title: 'Source' },
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
+      agentId: 'agt-coco',
+      topicAgentId: 'agt-coco',
+      topicId: 'tpc-source',
+      topicTitle: 'Source',
+    });
+  });
+
   it('degrades to the bare ids when the sender config cannot be read', async () => {
     const deps = buildDeps({
-      operation: { topicId: 'tpc-source', userId: CALLER },
+      operation: { agentId: 'agt-coco', topicId: 'tpc-source', userId: CALLER },
       topic: { agentId: 'agt-coco', title: 'Source' },
     });
     deps.findAgentConfig.mockRejectedValue(new Error('agent deleted'));
 
     await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
       agentId: 'agt-coco',
+      topicAgentId: 'agt-coco',
       topicId: 'tpc-source',
       topicTitle: 'Source',
     });

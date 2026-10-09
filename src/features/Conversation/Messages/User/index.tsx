@@ -27,7 +27,7 @@ import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
 import { UserMessageExtra } from './Extra';
-import { getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
+import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
@@ -43,7 +43,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // An agent → agent turn (a sibling agent's `lh agent run`): the row belongs to
   // the receiving agent's topic, so the sending agent — not the human owner —
   // is who the bubble must be attributed to.
-  const agentSender = metadata?.agentSender;
+  const agentSender = getAgentSender(item);
   // A wake-up message from the SCM integration is authored by the pull
   // request, so GitHub takes the sender slot instead of the card's header.
   const scmSource = useMemo(() => getScmEventSource(content), [content]);
@@ -63,9 +63,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const showSender = Boolean(activeWorkspaceId) || !!botSender || !!scmSource || !!agentSender;
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { avatar, title } = resolveSenderIdentity({
-    agentSender,
-    botSender,
     currentUserId,
+    message: item,
     selfAvatar,
     selfTitle,
     sender,
@@ -151,7 +150,7 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
             {dmIndicator}
             {agentSender?.topicId && (
               <AgentSenderSourceLink
-                agentId={agentSender.agentId}
+                topicAgentId={agentSender.topicAgentId ?? agentSender.agentId}
                 topicId={agentSender.topicId}
                 topicTitle={agentSender.topicTitle}
               />

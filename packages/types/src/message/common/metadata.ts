@@ -208,12 +208,17 @@ export interface AgentDispatchMetadata {
  * dispatch: a sibling agent calling `lh agent run`). Such rows are persisted
  * inside the RECEIVING agent's conversation, where the joined `sender` is the
  * human owner — so without this block the bubble reads as if the user typed it
- * themselves. The server resolves this from the launching topic (a launcher's
- * environment carries its topic id, never its agent id), and the UI shows it as
- * the author, using `topicId` to jump back to where the run was launched.
+ * themselves. The server reads it from the OPERATION that launched the run, and
+ * the UI shows it as the author, using `topicAgentId` + `topicId` to jump back
+ * to where the run was launched.
  */
 export interface AgentSenderMetadata {
-  /** Sending agent's id, resolved from the source topic's owning agent. */
+  /**
+   * The agent that ran the launching turn — the AUTHOR of this message. Taken
+   * from the operation's own agent, which is not always the topic's owner: a
+   * heterogeneous `callSubAgent` child executes in an isolation thread **on its
+   * spawner's topic**, so the child sends while the topic belongs to the parent.
+   */
   agentId: string;
   /** Sending agent's avatar at send time; snapshotted so a later delete can't blank the bubble. */
   avatar?: string;
@@ -221,6 +226,12 @@ export interface AgentSenderMetadata {
   name?: string;
   /** Sending agent's role title at send time; the fallback label when it has no name. */
   title?: string;
+  /**
+   * The agent that OWNS `topicId`, when it is not `agentId`. The jump-back link
+   * targets `/agent/<topicAgentId>/<topicId>` — only the topic's own agent has
+   * that conversation, so a sub-agent sender must not become the link's segment.
+   */
+  topicAgentId?: string;
   /** The topic the run was launched from, for jumping back. */
   topicId?: string;
   /**
@@ -236,6 +247,7 @@ export const AgentSenderMetadataSchema = z.object({
   avatar: z.string().optional(),
   name: z.string().optional(),
   title: z.string().optional(),
+  topicAgentId: z.string().optional(),
   topicId: z.string().optional(),
   topicTitle: z.string().optional(),
 });
