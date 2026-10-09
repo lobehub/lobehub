@@ -256,6 +256,8 @@ export interface AgentRunRequestMessage {
   /** Seed assistant message that receives terminal state from the CLI run. */
   assistantMessageId?: string;
   cwd?: string;
+  /** Explicit history boundary; a device must ignore native resume when present. */
+  freshSession?: { historyBoundaryMessageId: string };
   /**
    * Image attachments from the user message, as URLs the device can fetch
    * (signed S3 URLs). Appended as image content blocks after the prompt so

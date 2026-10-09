@@ -15,6 +15,7 @@ const {
   mockInterruptOperation,
   mockGetHeterogeneousResumeSessionId,
   mockMessageCreate,
+  mockMessageFindById,
   mockMessageQuery,
   mockMessageUpdate,
   mockResolveAttachmentsByFileIds,
@@ -33,6 +34,7 @@ const {
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
   mockIngestAttachment: vi.fn(),
   mockMessageCreate: vi.fn(),
+  mockMessageFindById: vi.fn(),
   mockMessageQuery: vi.fn(),
   mockMessageUpdate: vi.fn().mockResolvedValue({}),
   mockPublishAgentRuntimeEnd: vi.fn().mockResolvedValue('end-event-id'),
@@ -93,6 +95,7 @@ vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
       create: mockMessageCreate,
+      findById: mockMessageFindById,
       getLatestNonToolMessageId: vi.fn().mockResolvedValue(undefined),
       getLatestSpineMessageId: vi.fn().mockResolvedValue(undefined),
       query: mockMessageQuery,
@@ -269,6 +272,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     topicMock.tryReserveTaskCallback.mockResolvedValue(true);
     topicMock.updateMetadata.mockResolvedValue(undefined);
     mockMessageCreate.mockResolvedValue({ id: 'msg-1' });
+    mockMessageFindById.mockResolvedValue(undefined);
     mockMessageQuery.mockResolvedValue([]);
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
@@ -940,6 +944,94 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       }),
     );
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  /** @example Regenerating A starts fresh with selected ancestors, even after B/C ran. */
+  it('honors an explicit device history boundary without reading the latest transcript', async () => {
+    // ROOT CAUSE:
+    // Device dispatch always resumed the topic's latest native transcript and
+    // loaded recent rows for recovery, so regenerating A could still see B/C.
+    // Explicit fresh-session intent must suppress both sources of later history.
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-after-C');
+    mockMessageFindById.mockResolvedValue({
+      content: 'Prompt A',
+      id: 'user-A',
+      role: 'user',
+      topicId: 'topic-1',
+    });
+    mockMessageQuery.mockResolvedValue([
+      { content: 'LATER-B', id: 'user-B', role: 'user' },
+      { content: 'LATER-C', id: 'user-C', role: 'user' },
+    ]);
+    Object.assign(heteroAgentConfig, {
+      agencyConfig: {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { systemContext: 'Agent instructions', type: 'codex' },
+      },
+      model: 'codex',
+      provider: 'codex',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      heterogeneousFreshSession: {
+        historyBoundaryMessageId: 'user-A',
+        systemContext: 'Selected EARLY-CODE history',
+      },
+      parentMessageId: 'user-A',
+      prompt: 'Prompt A',
+      resume: true,
+    });
+
+    /** @example Neither native resume nor latest-row recovery may reintroduce B/C. */
+    expect(mockGetHeterogeneousResumeSessionId).not.toHaveBeenCalled();
+    expect(mockMessageQuery).not.toHaveBeenCalled();
+    expect(mockBuildRemoteDeviceHeteroContext).toHaveBeenCalledWith({
+      agentSystemContext: 'Agent instructions\n\nSelected EARLY-CODE history',
+      conversationHistory: undefined,
+    });
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        freshSession: { historyBoundaryMessageId: 'user-A' },
+        resumeFallbackSystemContext: undefined,
+        resumeSessionId: undefined,
+      }),
+    );
+  });
+
+  /** @example A fresh-session request cannot inject context outside a Codex user-turn regenerate. */
+  it.each([
+    ['a non-Codex agent', 'claude-code', 'user-A', 'user'],
+    ['a boundary other than the resumed parent', 'codex', 'user-B', 'user'],
+    ['an assistant boundary', 'codex', 'user-A', 'assistant'],
+  ])('rejects a fresh session for %s', async (_label, type, boundary, role) => {
+    mockMessageFindById.mockResolvedValue({
+      content: 'Prompt A',
+      id: 'user-A',
+      role,
+      topicId: 'topic-1',
+    });
+    Object.assign(heteroAgentConfig, {
+      agencyConfig: {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: { type },
+      },
+    });
+
+    await expect(
+      service.execAgent({
+        agentId: 'agent-1',
+        appContext: { topicId: 'topic-1' },
+        heterogeneousFreshSession: { historyBoundaryMessageId: boundary, systemContext: 'x' },
+        parentMessageId: 'user-A',
+        prompt: 'Prompt A',
+        resume: true,
+      }),
+    ).rejects.toThrow('Fresh heterogeneous session requires a Codex user-message boundary');
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
   });
 
   it('resumes a native device session with device-specific context', async () => {

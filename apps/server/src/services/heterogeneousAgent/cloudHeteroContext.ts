@@ -1,9 +1,7 @@
 import type { SandboxMode } from '@lobechat/builtin-tool-cloud-sandbox';
+import { type ConversationHistoryEntry, formatPreviousConversation } from '@lobechat/prompts';
 
-export interface ConversationHistoryEntry {
-  content: string;
-  role: 'assistant' | 'user';
-}
+export type { ConversationHistoryEntry } from '@lobechat/prompts';
 
 /**
  * Builds the system context injected before every user prompt for cloud Claude Code runs.
@@ -189,22 +187,8 @@ export function buildCloudHeteroContext(params: {
   parts.push(workspaceLines.join('\n'));
 
   // --- Previous conversation context (injected when session was reset) ---
-  // Truncate per-message to avoid ballooning the system context:
-  //   user turns    → 1 KB (prompts are usually short)
-  //   assistant turns → 2 KB (responses may be longer but we want the gist)
-  if (conversationHistory && conversationHistory.length > 0) {
-    const USER_MAX = 1024;
-    const ASST_MAX = 2048;
-    const entries = conversationHistory.map((entry) => {
-      const limit = entry.role === 'user' ? USER_MAX : ASST_MAX;
-      const body =
-        entry.content.length > limit
-          ? `${entry.content.slice(0, limit)}… [truncated]`
-          : entry.content;
-      return `<${entry.role}>\n${body}\n</${entry.role}>`;
-    });
-    parts.push(`<previous_conversation>\n${entries.join('\n')}\n</previous_conversation>`);
-  }
+  const previousConversation = formatPreviousConversation(conversationHistory ?? []);
+  if (previousConversation) parts.push(previousConversation);
 
   return parts.join('\n\n');
 }

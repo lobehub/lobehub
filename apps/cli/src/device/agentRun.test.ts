@@ -128,6 +128,29 @@ describe('spawnHeteroAgentRun', () => {
     expect(child.stdin.end).toHaveBeenCalledTimes(1);
   });
 
+  /** @example A historical boundary overrides a stale native-session hint at the device. */
+  it('starts fresh at an explicit history boundary despite stale resume fields', async () => {
+    // ROOT CAUSE:
+    // Device execution trusted resumeSessionId even when the caller selected
+    // an earlier history boundary. Neither native resume nor its fallback may survive that intent.
+    const child = makeFakeChild();
+    spawnMock.mockReturnValue(child);
+    const ack = spawnHeteroAgentRun({
+      ...baseParams,
+      agentType: 'codex',
+      freshSession: { historyBoundaryMessageId: 'user-A' },
+      resumeSessionId: 'native-after-C',
+      resumeFallbackSystemContext: 'LATER-C',
+      systemContext: 'Selected EARLY-ORCHID history',
+    });
+    child.emit('spawn');
+    await ack;
+    /** @example The spawned process has no --resume and consumes only selected replay. */
+    expect(spawnMock.mock.calls[0][1]).not.toContain('--resume');
+    expect(child.stdin.write.mock.calls[0][0]).toContain('EARLY-ORCHID');
+    expect(child.stdin.write.mock.calls[0][0]).not.toContain('LATER-C');
+  });
+
   it.each([undefined, 'agt_dispatched'])(
     'replaces the launcher conversation context with dispatched agent %s',
     async (agentId) => {

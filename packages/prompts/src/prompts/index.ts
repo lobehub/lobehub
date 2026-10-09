@@ -17,6 +17,7 @@ export * from './knowledgeBaseQA';
 export * from './messagesToText';
 export * from './planTodo';
 export * from './plugin';
+export * from './previousConversation';
 export * from './remoteDevice';
 export * from './search';
 export * from './skills';

@@ -923,6 +923,7 @@ export class AiAgentService {
       botPlatformContext,
       discordContext,
       existingMessageIds = [],
+      heterogeneousFreshSession,
       fileIds: attachedFileIds,
       files,
       functionTools,
@@ -1141,6 +1142,18 @@ export class AiAgentService {
       }
     }
 
+    // A native-history reset is a Codex user-turn regeneration, not a general
+    // instruction override. The parent lookup above already enforces topic scope.
+    if (
+      heterogeneousFreshSession &&
+      (!resume ||
+        resumeParentMessage?.role !== 'user' ||
+        heterogeneousFreshSession.historyBoundaryMessageId !== parentMessageId ||
+        agentConfig.agencyConfig?.heterogeneousProvider?.type !== 'codex')
+    ) {
+      throw new Error('Fresh heterogeneous session requires a Codex user-message boundary');
+    }
+
     // Stages 2.6–2.7 — claim the human decision(s) before anything below reads
     // message history (see `pipeline/approvalResume`).
     const {
@@ -1321,6 +1334,7 @@ export class AiAgentService {
         {
           canManageAgent,
           effectiveRequestedDeviceId: turn.effectiveRequestedDeviceId,
+          heterogeneousFreshSession,
           heteroType: turn.heteroType,
           heterogeneousProvider: turn.heterogeneousProvider,
           hooks,

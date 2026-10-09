@@ -1,4 +1,4 @@
-import type { ConversationHistoryEntry } from './cloudHeteroContext';
+import { type ConversationHistoryEntry, formatPreviousConversation } from '@lobechat/prompts';
 
 /**
  * Builds the system context injected before every user prompt for hetero runs
@@ -37,20 +37,8 @@ export function buildRemoteDeviceHeteroContext(params: {
   }
 
   // --- Previous conversation context (injected when session was reset) ---
-  // Mirrors buildCloudHeteroContext truncation: user 1 KB, assistant 2 KB.
-  if (conversationHistory && conversationHistory.length > 0) {
-    const USER_MAX = 1024;
-    const ASST_MAX = 2048;
-    const entries = conversationHistory.map((entry) => {
-      const limit = entry.role === 'user' ? USER_MAX : ASST_MAX;
-      const body =
-        entry.content.length > limit
-          ? `${entry.content.slice(0, limit)}… [truncated]`
-          : entry.content;
-      return `<${entry.role}>\n${body}\n</${entry.role}>`;
-    });
-    parts.push(`<previous_conversation>\n${entries.join('\n')}\n</previous_conversation>`);
-  }
+  const previousConversation = formatPreviousConversation(conversationHistory ?? []);
+  if (previousConversation) parts.push(previousConversation);
 
   return parts.length > 0 ? parts.join('\n\n') : undefined;
 }
