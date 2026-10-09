@@ -68,6 +68,16 @@ export class FollowUpActionImpl {
    */
   #ensureActiveScope = (): string => {
     const scope = cacheScope.get();
+    const { slots, slotsReplica } = this.#get();
+
+    // Leaving an identity: abort its in-flight extractions first. The reset
+    // below drops the only reference to their controllers, so an ownerless
+    // request would otherwise run on to completion (or its 20s timeout) while
+    // the new identity already starts its own.
+    if (slotsReplica.scope !== undefined && slotsReplica.scope !== scope) {
+      for (const slot of Object.values(slots)) slot.abortController?.abort();
+    }
+
     this.#slots.ensureScope(scope);
     return scope;
   };

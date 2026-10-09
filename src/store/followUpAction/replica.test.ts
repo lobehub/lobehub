@@ -116,6 +116,24 @@ describe('followUpAction replica', () => {
     expect(useFollowUpActionStore.getState().slotsReplica.scope).toBe('u2:personal');
   });
 
+  it('aborts the outgoing identity’s in-flight extraction before dropping its slot', async () => {
+    let signal: AbortSignal | undefined;
+    vi.mocked(followUpActionService.extract).mockImplementation(((_input, outgoing) => {
+      signal = outgoing as AbortSignal;
+      return new Promise(() => {}) as never;
+    }) as never);
+
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, params('topic-a'));
+    expect(signal?.aborted).toBe(false);
+
+    useScope('u2:personal');
+    vi.mocked(followUpActionService.extract).mockResolvedValue({ chips: [], messageId: MSG });
+    await useFollowUpActionStore.getState().fetchFor(KEY_B, params('topic-b'));
+
+    // The outgoing request is cancelled instead of running on to completion.
+    expect(signal?.aborted).toBe(true);
+  });
+
   it('drops an extraction that lands after the identity switched', async () => {
     const resolvers: Array<(value: unknown) => void> = [];
     vi.mocked(followUpActionService.extract).mockImplementation(
