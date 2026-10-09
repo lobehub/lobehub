@@ -40,6 +40,8 @@ describe('resolveDeviceClientKinds', () => {
     expect(resolveDeviceClientKinds({ kind: 'rpc', method: 'installAppUpdate' })).toEqual([
       'desktop',
     ]);
+    for (const method of ['getCliUpdateState', 'checkCliUpdate', 'restartCli'])
+      expect(resolveDeviceClientKinds({ kind: 'rpc', method })).toEqual(['cli']);
     expect(resolveDeviceClientKinds({ kind: 'rpc', method: 'getGitBranch' })).toBeUndefined();
   });
 });

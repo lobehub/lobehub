@@ -692,7 +692,12 @@ describe('executeDeviceRpc', () => {
 });
 
 describe('deviceRpcClients', () => {
-  const desktopOnly = ['trashLocalFiles', 'getAppUpdateState', 'checkAppUpdate', 'installAppUpdate'];
+  const desktopOnly = [
+    'trashLocalFiles',
+    'getAppUpdateState',
+    'checkAppUpdate',
+    'installAppUpdate',
+  ];
   const cliOnly = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'];
 
   it.each(desktopOnly)('routes %s, which the CLI rejects, to the desktop', (method) => {
