@@ -378,6 +378,41 @@ describe('resourceList replica', () => {
     await waitFor(() => expect(ids()).toEqual(['cached-sorted']));
   });
 
+  it('does not carry a pending create into the folder the user navigates to', async () => {
+    const paramsB = normalizeResourceListParams({ parentId: 'folder-b' })!;
+    await seedPersisted(paramsB, [row('cached-b')]);
+    querySpy.mockImplementation((params) =>
+      params.parentId === 'folder-a' ? Promise.resolve(page([row('a-1')], 1)) : pending(),
+    );
+    // The create never settles: its overlay stays in flight across the switch.
+    const createSpy = vi.spyOn(resourceService, 'createResource').mockImplementation(pending);
+
+    const hook = renderHook(
+      (props: { parentId: string | null }) =>
+        useFileStore((s) => s.useFetchResources)({ parentId: props.parentId }),
+      { initialProps: { parentId: 'folder-a' as string | null }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['a-1']));
+
+    act(() => {
+      void useFileStore.getState().createResourceAndSync({
+        fileType: 'text/plain',
+        name: 'New',
+        parentId: 'folder-a',
+        sourceType: 'file',
+        url: '',
+      });
+    });
+    expect(ids()[0].startsWith('temp-resource-')).toBe(true);
+
+    hook.rerender({ parentId: 'folder-b' });
+
+    // Folder B's cached page paints and the overlay from folder A stays out.
+    await waitFor(() => expect(ids()).toEqual(['cached-b']));
+    expect(createSpy).toHaveBeenCalledTimes(1);
+  });
+
   it('confirms the page with the server after removing rows from a knowledge base view', async () => {
     querySpy.mockResolvedValueOnce(page(rows(50), 60)).mockResolvedValueOnce(page(rows(50, 1), 59));
 

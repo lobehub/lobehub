@@ -368,7 +368,9 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   ): ReplicaOptimisticToken<TData> => {
     const scope = resource.scope.get();
     const id = ++mutationSeq;
-    dispatch({ apply, id, key, scope, type: 'optimistic' });
+    // Tag the overlay with the query it describes: the entry may move on to
+    // another query (or another query may reuse the key) before it settles.
+    dispatch({ apply, id, key, query: getSlot().entries[key]?.query, scope, type: 'optimistic' });
     return {
       commit: (confirm) => {
         dispatch({ confirm, id, key, scope, type: 'commit' });
