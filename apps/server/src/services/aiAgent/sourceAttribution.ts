@@ -21,6 +21,7 @@ export interface SourceOperationRow {
 export interface SourceTopicRow {
   agentId?: null | string;
   title?: null | string;
+  workspaceId?: null | string;
 }
 
 /** The slice of the sending agent's row that is snapshotted for display. */
@@ -31,12 +32,42 @@ export interface SourceAgentDisplayRow {
 }
 
 export interface SourceAttributionDeps {
+  /** The agent whose conversation will host the message. */
+  destinationAgentId: string;
   findAgentDisplayFields: (agentId: string) => Promise<SourceAgentDisplayRow | null | undefined>;
+  findAgentVisibility: (agentId: string) => Promise<'private' | 'public' | null>;
   findOperation: (operationId: string) => Promise<null | SourceOperationRow | undefined>;
   findTopic: (topicId: string) => Promise<null | SourceTopicRow | undefined>;
   /** The authenticated caller — attribution may only rest on THEIR OWN work. */
   userId: string;
+  /** The caller's active workspace; undefined in personal scope. */
+  workspaceId?: string;
 }
+
+/**
+ * Whether the source conversation may be named (and linked) in the destination
+ * bubble.
+ *
+ * A workspace-shared agent's conversation is readable by every member; a private
+ * one only by its owner, who is the caller. So the origin is snapshotted only
+ * when the same people can open it — otherwise a private topic's name, which is
+ * frequently derived from the user's own prompt, lands in a conversation other
+ * members read. The authorship itself is never dropped; the inaccessible origin
+ * is.
+ */
+const isSourceShareableWithDestination = async (
+  deps: Pick<SourceAttributionDeps, 'destinationAgentId' | 'findAgentVisibility' | 'workspaceId'>,
+  source: { sourceAgentId: string; sourceWorkspaceId: null | string },
+): Promise<boolean> => {
+  const destinationVisibility = await deps.findAgentVisibility(deps.destinationAgentId);
+  const sharedDestination = Boolean(deps.workspaceId) && destinationVisibility === 'public';
+  // Personal scope: the bubble is readable by the caller alone, who ran the source.
+  if (!sharedDestination) return true;
+
+  const sourceVisibility = await deps.findAgentVisibility(source.sourceAgentId);
+
+  return sourceVisibility === 'public' && source.sourceWorkspaceId === deps.workspaceId;
+};
 
 /**
  * Resolve the agent that launched an agent → agent run into the snapshot the UI
@@ -78,14 +109,27 @@ export const resolveAgentSenderFromOperation = async (
   if (!operation.status || !isAgentOperationInFlight(operation.status)) return undefined;
 
   const topic = await deps.findTopic(operation.topicId);
-  if (!topic?.agentId) return undefined;
+  // A group topic may legitimately have no owning agent (legacy or API-created
+  // rows) while the operation still names the agent that ran. The group route
+  // needs no topic agent, so only a one-to-one topic has to resolve one.
+  if (!operation.chatGroupId && !topic?.agentId) return undefined;
 
   // The AUTHOR is whoever ran the operation, which is not always the topic's
   // owner: a heterogeneous `callSubAgent` child executes in an isolation thread
   // on its SPAWNER's topic, so the child sends while the topic belongs to the
   // parent. The topic's owner is kept separately, because the jump-back link has
   // to target the conversation the topic actually lives in.
-  const senderAgentId = operation.agentId ?? topic.agentId;
+  const senderAgentId = operation.agentId ?? topic?.agentId;
+  if (!senderAgentId) return undefined;
+
+  // The source may be private while the destination is workspace-shared: the
+  // topic's name is often prompt-derived, so snapshotting it into a bubble every
+  // member can read would leak the source to people who cannot open it. Keep the
+  // authorship, drop the origin they have no access to.
+  const shareable = await isSourceShareableWithDestination(deps, {
+    sourceAgentId: senderAgentId,
+    sourceWorkspaceId: topic?.workspaceId ?? operation.workspaceId ?? null,
+  });
 
   const base: AgentSenderMetadata = {
     agentId: senderAgentId,
@@ -94,9 +138,9 @@ export const resolveAgentSenderFromOperation = async (
     // main transcript instead of the thread.
     chatGroupId: operation.chatGroupId ?? undefined,
     threadId: operation.threadId ?? undefined,
-    topicAgentId: topic.agentId,
-    topicId: operation.topicId,
-    topicTitle: topic.title ?? undefined,
+    topicAgentId: topic?.agentId ?? undefined,
+    topicId: shareable ? operation.topicId : undefined,
+    topicTitle: shareable ? (topic?.title ?? undefined) : undefined,
   };
 
   try {

@@ -86,6 +86,7 @@ const withLhPreprocessing = (
       resolve.userId,
       workspaceId,
       resolve.isShareVisitor,
+      context.operationId,
     );
 
     if (result.error) {

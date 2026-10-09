@@ -7,18 +7,36 @@ const CALLER = 'user-1';
 
 const buildDeps = (overrides?: {
   agentDisplay?: unknown;
+  /**
+   * Visibility per agent id — a scalar for "everything is the same", a record
+   * when the source and the destination differ.
+   */
+  agentVisibility?: 'private' | 'public' | Record<string, 'private' | 'public' | null>;
   operation?:
     | null
     | undefined
     | {
         agentId?: null | string;
+        chatGroupId?: null | string;
         status?: AgentOperationStatus;
+        threadId?: null | string;
         topicId?: null | string;
         userId: string;
+        workspaceId?: null | string;
       };
-  topic?: null | undefined | { agentId?: null | string; title?: null | string };
+  topic?:
+    | null
+    | undefined
+    | { agentId?: null | string; title?: null | string; workspaceId?: null | string };
+  workspaceId?: string;
 }) => ({
+  destinationAgentId: 'agt-destination',
   findAgentDisplayFields: vi.fn().mockResolvedValue(overrides?.agentDisplay ?? undefined),
+  findAgentVisibility: vi.fn().mockImplementation(async (agentId: string) => {
+    const visibility = overrides?.agentVisibility;
+    if (!visibility) return null;
+    return typeof visibility === 'string' ? visibility : (visibility[agentId] ?? null);
+  }),
   findOperation: vi.fn().mockResolvedValue(
     overrides?.operation === undefined || overrides.operation === null
       ? null
@@ -27,6 +45,7 @@ const buildDeps = (overrides?: {
   ),
   findTopic: vi.fn().mockResolvedValue(overrides?.topic === undefined ? null : overrides.topic),
   userId: CALLER,
+  workspaceId: overrides?.workspaceId,
 });
 
 describe('resolveAgentSenderFromOperation', () => {
@@ -102,6 +121,101 @@ describe('resolveAgentSenderFromOperation', () => {
     // The link is built from these: without them a group source opens the
     // supervisor's conversation and a thread source opens the main transcript.
     expect(result).toMatchObject({ chatGroupId: 'grp_1', threadId: 'thd_1' });
+  });
+
+  /**
+   * A group topic may carry no owning agent (legacy or API-created rows) while
+   * the operation still names the agent that ran — the group route needs no topic
+   * agent, so refusing outright would drop those launches.
+   */
+  it('attributes a group topic that carries no owning agent', async () => {
+    const deps = buildDeps({
+      operation: {
+        agentId: 'agt-coco',
+        chatGroupId: 'grp_1',
+        topicId: 'tpc-group',
+        userId: CALLER,
+      },
+      topic: { agentId: null, title: 'Group topic' },
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+      agentId: 'agt-coco',
+      chatGroupId: 'grp_1',
+      topicId: 'tpc-group',
+      topicTitle: 'Group topic',
+    });
+  });
+
+  it('still refuses a one-to-one topic that resolves no owning agent', async () => {
+    // The agent route would be invalid, so there is no destination to offer.
+    const deps = buildDeps({
+      operation: { agentId: 'agt-coco', topicId: 'tpc-1', userId: CALLER },
+      topic: { agentId: null, title: 'Orphan' },
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toBeUndefined();
+  });
+
+  it('keeps the origin when the destination is personal', async () => {
+    const deps = buildDeps({
+      operation: { agentId: 'agt-coco', topicId: 'tpc-1', userId: CALLER },
+      topic: { agentId: 'agt-coco', title: 'Private topic' },
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+      topicId: 'tpc-1',
+      topicTitle: 'Private topic',
+    });
+  });
+
+  it('keeps the origin when a shared destination can read the source too', async () => {
+    const deps = buildDeps({
+      agentVisibility: { 'agt-coco': 'public', 'agt-destination': 'public' },
+      operation: { agentId: 'agt-coco', topicId: 'tpc-1', userId: CALLER, workspaceId: 'ws_1' },
+      topic: { agentId: 'agt-coco', title: 'Shared topic', workspaceId: 'ws_1' },
+      workspaceId: 'ws_1',
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+      topicId: 'tpc-1',
+      topicTitle: 'Shared topic',
+    });
+  });
+
+  /**
+   * The leak this guards: a workspace-shared agent's bubble is readable by every
+   * member, and a topic's name is frequently derived from the user's own prompt —
+   * so a private source must not be named there. The authorship stays.
+   */
+  it('drops the origin when a shared destination cannot read the private source', async () => {
+    const deps = buildDeps({
+      agentVisibility: { 'agt-coco': 'private', 'agt-destination': 'public' },
+      operation: { agentId: 'agt-coco', topicId: 'tpc-1', userId: CALLER, workspaceId: 'ws_1' },
+      topic: { agentId: 'agt-coco', title: 'Private prompt title', workspaceId: 'ws_1' },
+      workspaceId: 'ws_1',
+    });
+
+    const result = await resolveAgentSenderFromOperation('op-1', deps);
+
+    expect(result).toMatchObject({ agentId: 'agt-coco' });
+    expect(result?.topicId).toBeUndefined();
+    expect(result?.topicTitle).toBeUndefined();
+  });
+
+  it("drops the origin when the source lives outside the destination's workspace", async () => {
+    const deps = buildDeps({
+      agentVisibility: 'public',
+      operation: { agentId: 'agt-coco', topicId: 'tpc-1', userId: CALLER, workspaceId: null },
+      topic: { agentId: 'agt-coco', title: 'Personal topic', workspaceId: null },
+      workspaceId: 'ws_1',
+    });
+
+    await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+      agentId: 'agt-coco',
+      topicId: undefined,
+      topicTitle: undefined,
+    });
   });
 
   it('stamps nothing for an operation that has already settled', async () => {

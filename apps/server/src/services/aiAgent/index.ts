@@ -1216,7 +1216,10 @@ export class AiAgentService {
     // Agent → agent attribution: resolve the launching run's agent into a
     // display snapshot once, before the turn rows exist, so the persisted user
     // message carries a self-contained sender block.
-    const agentSender = await this.resolveSourceAgentSnapshot(params.sourceOperationId);
+    const agentSender = await this.resolveSourceAgentSnapshot(
+      params.agentId,
+      params.sourceOperationId,
+    );
 
     // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
     // model), device-access policy, hetero detection, attachment ingestion, and
@@ -1692,13 +1695,17 @@ export class AiAgentService {
    * caller's own, not merely visible to them).
    */
   private resolveSourceAgentSnapshot = (
+    destinationAgentId: string,
     sourceOperationId?: string,
   ): Promise<AgentSenderMetadata | undefined> =>
     resolveAgentSenderFromOperation(sourceOperationId, {
+      destinationAgentId,
       findAgentDisplayFields: (agentId) => this.agentModel.getAgentDisplayFields(agentId),
+      findAgentVisibility: (agentId) => this.agentModel.getAgentVisibility(agentId),
       findOperation: (operationId) => this.agentOperationModel.findById(operationId),
       findTopic: (topicId) => this.topicModel.findById(topicId),
       userId: this.userId,
+      workspaceId: this.workspaceId,
     });
 
   /**

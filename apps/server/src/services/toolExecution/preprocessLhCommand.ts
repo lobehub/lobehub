@@ -192,6 +192,14 @@ export const preprocessLhCommand = async (
    * remembering to keep re-checking it.
    */
   shareVisitorBlocked = false,
+  /**
+   * The run this command belongs to (`context.operationId`). Every other runtime
+   * hands its process its own `LOBEHUB_OPERATION_ID`; without it here, an agent
+   * running in the sandbox that reaches another agent through `lh agent run`
+   * cannot be attributed as the sender, and the feature silently works only on
+   * the device and heterogeneous runtimes.
+   */
+  operationId?: string,
 ): Promise<PreprocessResult> => {
   if (!isLhCommand(command)) {
     return { command, isLhCommand: false, skipSkillLookup: false };
@@ -223,6 +231,7 @@ export const preprocessLhCommand = async (
       `LOBEHUB_JWT=${shellSingleQuote(jwt)}`,
       `LOBEHUB_SERVER=${shellSingleQuote(serverUrl)}`,
       ...(workspaceId ? [`LOBEHUB_WORKSPACE_ID=${shellSingleQuote(workspaceId)}`] : []),
+      ...(operationId ? [`LOBEHUB_OPERATION_ID=${shellSingleQuote(operationId)}`] : []),
     ].join(' ');
 
     const dir = `"$${LH_SHIM_DIR_VAR}"`;
