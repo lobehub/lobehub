@@ -364,6 +364,40 @@ export const getHeterogeneousTaskModelProvider = (
   return resolveHeterogeneousProviderTopicModel(config)?.provider || null;
 };
 
+/**
+ * Narrows a per-run model override (a Task's `model`/`provider`) to one the
+ * external runtime can execute.
+ *
+ * Use when:
+ * - Applying a Task override to a heterogeneous Agent before dispatch or display.
+ *
+ * Expects:
+ * - The Agent's heterogeneous provider and the raw override pair.
+ *
+ * Returns:
+ * - The pair to apply: the runtime's own provider under subscription/local auth,
+ *   or the Agent's current personal API binding under API auth.
+ * - Undefined for anything else. Agent rows keep a wrapper `model`/`provider`
+ *   (a runtime ID such as `codex/openai`, or an ordinary chat model from an
+ *   earlier configuration). Neither names a CLI model, so it must not become
+ *   `--model` or replace an API binding.
+ */
+export const resolveHeterogeneousModelOverride = (
+  config: HeterogeneousProviderConfig,
+  override: { model?: string | null; provider?: string | null },
+): HeterogeneousTopicModel | undefined => {
+  const model = override.model?.trim();
+  if (!model || HETEROGENEOUS_AGENT_TYPES.has(model)) return undefined;
+  const provider = override.provider || undefined;
+
+  if (config.authMode === 'api') {
+    const binding = resolveHeterogeneousProviderTopicModel(config);
+    return binding && provider === binding.provider ? { model, provider } : undefined;
+  }
+
+  return !provider || provider === config.type ? { model, provider: config.type } : undefined;
+};
+
 const applyTopicModelPin = (
   config: HeterogeneousProviderConfig,
   topicModel: HeterogeneousTopicPin | undefined,

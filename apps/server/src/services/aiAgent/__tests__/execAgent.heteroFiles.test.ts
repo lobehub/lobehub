@@ -442,6 +442,44 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     taskResolveSpy.mockRestore();
   });
 
+  // A Codex Agent row can still hold an ordinary chat model (e.g. an Agent
+  // converted from a chat Agent). TaskRunner forwards that snapshot; it must
+  // neither replace the Topic's native pin nor reach the CLI as `--model`.
+  it('keeps the Topic native model when a Task sends an ordinary chat-model snapshot', async () => {
+    const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
+      id: 'task-1',
+    } as NonNullable<Awaited<ReturnType<TaskModel['resolve']>>>);
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { model: 'gpt-5.5', type: 'codex' },
+    });
+    topicMock.findById.mockResolvedValue({
+      agentId: 'agent-1',
+      id: 'topic-1',
+      metadata: {},
+      model: 'gpt-5.4',
+      provider: 'codex',
+    });
+
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      model: 'gpt-4o-mini',
+      prompt: 'Continue',
+      provider: 'openai',
+      taskId: 'task-1',
+    });
+
+    const args = mockDispatchAgentRun.mock.calls[0][0].args;
+    expect(args.slice(0, 2)).toEqual(['--model', 'gpt-5.4']);
+    expect(args).not.toContain('gpt-4o-mini');
+    expect(
+      recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig?.fields,
+    ).toContainEqual({ key: 'model', source: 'topic', value: 'gpt-5.4' });
+    taskResolveSpy.mockRestore();
+  });
+
   it('refreshes the effective configuration when a Task Topic continues without taskId', async () => {
     const taskResolveSpy = vi.spyOn(TaskModel.prototype, 'resolve').mockResolvedValue({
       id: 'task-1',

@@ -1,4 +1,4 @@
-import { isHeterogeneousAgentModelId, resolveSubAgentChatConfig } from '@lobechat/const';
+import { resolveSubAgentChatConfig } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
 import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from '@lobechat/types';
@@ -6,6 +6,7 @@ import {
   applyTopicModelToHeterogeneousProvider,
   getDisabledPluginIds,
   resolveAgentAgencyConfig,
+  resolveHeterogeneousModelOverride,
 } from '@lobechat/types';
 import debug from 'debug';
 
@@ -246,16 +247,24 @@ export const resolveRunAgentConfig = async (
 
   // Task overrides must reach the external runtime before topic snapshotting.
   // Updating only agentConfig.model leaves the CLI using the assignee's model.
-  // A runtime identity (the Task snapshot `codex/openai`) is not a native model;
-  // applying it would rewrite an API binding to that pair.
+  // An Agent-row wrapper snapshot (a runtime ID such as `codex/openai`, or an
+  // ordinary chat model) is not a CLI model; applying it would force `--model`
+  // or rewrite an API binding, so only a runtime-compatible pair applies.
   const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
-  if (heterogeneousProvider && modelOverride && !isHeterogeneousAgentModelId(modelOverride)) {
+  const heterogeneousModelOverride =
+    heterogeneousProvider && modelOverride
+      ? resolveHeterogeneousModelOverride(heterogeneousProvider, {
+          model: modelOverride,
+          provider: providerOverride,
+        })
+      : undefined;
+  if (heterogeneousProvider && heterogeneousModelOverride) {
     agentConfig.agencyConfig = {
       ...agentConfig.agencyConfig,
-      heterogeneousProvider: applyTopicModelToHeterogeneousProvider(heterogeneousProvider, {
-        model: modelOverride,
-        provider: providerOverride ?? heterogeneousProvider.type,
-      }),
+      heterogeneousProvider: applyTopicModelToHeterogeneousProvider(
+        heterogeneousProvider,
+        heterogeneousModelOverride,
+      ),
     };
   }
 

@@ -1,5 +1,8 @@
 import type { HeterogeneousProviderConfig, HeterogeneousTopicPin } from './agencyConfig';
-import { applyTopicModelToHeterogeneousProvider } from './agencyConfig';
+import {
+  applyTopicModelToHeterogeneousProvider,
+  resolveHeterogeneousModelOverride,
+} from './agencyConfig';
 import {
   getHeteroSelectorCapability,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
@@ -50,11 +53,16 @@ export const resolveHeterogeneousRuntimeConfig = (
     typeof pinSource === 'string'
       ? { effort: pinSource, model: pinSource, speed: pinSource }
       : pinSource;
-  // Connected Tasks may store only a model; no ordinary Agent provider exists
-  // to backfill it. Topic pins retain their stricter stored-provider semantics.
+  // A Task model goes through the same narrowing as dispatch, so an Agent-row
+  // wrapper snapshot is neither displayed nor run as the Task's model. Topic
+  // pins retain their stricter stored-provider semantics.
+  const taskModel =
+    sources.model === 'task' && pin?.model
+      ? resolveHeterogeneousModelOverride(provider, pin)
+      : undefined;
   const effectivePin =
     sources.model === 'task' && pin?.model
-      ? { ...pin, provider: pin.provider ?? provider.type }
+      ? { ...pin, model: taskModel?.model, provider: taskModel?.provider }
       : pin;
   const withModel = applyTopicModelToHeterogeneousProvider(
     provider,

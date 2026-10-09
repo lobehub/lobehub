@@ -16,6 +16,7 @@ import {
   ChatErrorType,
   ordinaryFileAccessScope,
   RequestTrigger,
+  resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
   resolveHeterogeneousTopicRuntimeSnapshot,
 } from '@lobechat/types';
@@ -483,13 +484,22 @@ export const setupTurn = async (
   let pinnedHeterogeneousTopicModel: HeterogeneousTopicPin | undefined;
   let pinnedHeterogeneousTopicSources: HeterogeneousRuntimePinSources | undefined;
   // TaskRunner forwards the Task's model snapshot on every run. For a
-  // heterogeneous agent that snapshot is usually the runtime identity (e.g.
-  // codex/openai), not a native model, so it must not replace a topic pin.
-  const nativeModelOverride =
-    heterogeneousProvider && modelOverride && isHeterogeneousAgentModelId(modelOverride)
-      ? undefined
-      : modelOverride;
-  const nativeProviderOverride = nativeModelOverride ? providerOverride : undefined;
+  // heterogeneous agent that snapshot is often the Agent row's wrapper pair (a
+  // runtime ID such as codex/openai, or an ordinary chat model), not a CLI
+  // model, so only a runtime-compatible override may replace a topic pin.
+  const heterogeneousModelOverride =
+    heterogeneousProvider && modelOverride
+      ? resolveHeterogeneousModelOverride(heterogeneousProvider, {
+          model: modelOverride,
+          provider: providerOverride,
+        })
+      : undefined;
+  const nativeModelOverride = heterogeneousProvider
+    ? heterogeneousModelOverride?.model
+    : modelOverride;
+  const nativeProviderOverride = heterogeneousProvider
+    ? heterogeneousModelOverride?.provider
+    : providerOverride;
   let topicEditingGroupId: string | undefined;
 
   // Share-visitor fail-closed gate — reject a heterogeneous (Claude Code /

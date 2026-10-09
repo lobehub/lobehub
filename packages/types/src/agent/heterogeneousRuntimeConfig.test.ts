@@ -84,6 +84,23 @@ describe('resolveHeterogeneousRuntimeConfig', () => {
     });
   });
 
+  it('does not display a chat-model Task snapshot as the API binding', () => {
+    const api: HeterogeneousProviderConfig = {
+      apiConfig: { model: 'deepseek-v4-pro', providerId: 'deepseek' },
+      authMode: 'api',
+      type: 'codex',
+    };
+    expect(
+      resolveHeterogeneousRuntimeConfig(api, { model: 'gpt-4o-mini', provider: 'openai' })[1],
+    ).toEqual({ key: 'model', source: 'agent', value: 'deepseek-v4-pro' });
+    expect(
+      resolveHeterogeneousRuntimeConfig(api, {
+        model: 'deepseek-v4-flash',
+        provider: 'deepseek',
+      })[1],
+    ).toEqual({ key: 'model', source: 'task', value: 'deepseek-v4-flash' });
+  });
+
   it('preserves server-default API model ownership', () => {
     expect(
       resolveHeterogeneousRuntimeConfig(

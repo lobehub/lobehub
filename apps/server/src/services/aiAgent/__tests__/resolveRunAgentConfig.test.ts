@@ -194,6 +194,31 @@ describe('Codex Task model overrides', () => {
 
     expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual(apiConfig);
   });
+  // An Agent row's chat-model snapshot is not an API binding: it must neither
+  // replace the configured binding nor manufacture one when none exists.
+  it.each([[{ model: 'deepseek-v4-pro', providerId: 'deepseek' }], [undefined]])(
+    'ignores a Task chat-model snapshot on an API binding (%o)',
+    async (apiConfig) => {
+      const row: AgentConfigWithId = {
+        ...(webOnboardingRow() as AgentConfigWithId),
+        agencyConfig: { heterogeneousProvider: { apiConfig, authMode: 'api', type: 'codex' } },
+        id: 'agent-codex-api',
+        slug: null,
+      };
+      const { agentConfig } = await resolveRunAgentConfig(
+        { ...deps, resolveAgentConfigOrThrow: async () => row },
+        {
+          identifier: row.id,
+          modelOverride: 'gpt-4o-mini',
+          providerOverride: 'openai',
+          throwIfExecutionAborted: async () => {},
+        },
+      );
+
+      expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual(apiConfig);
+    },
+  );
+
   // ROOT CAUSE:
   // Model-only backfill previously paired a native/API model with the row's
   // wrapper provider, which the execution resolver treated as a new API binding.
