@@ -2678,6 +2678,69 @@ describe('ConversationLifecycle actions', () => {
         });
 
         // ROOT CAUSE:
+        // The send path read resume metadata from any thread in `threadMaps`, so an ordinary
+        // (non-Fork) thread run stopped sharing its topic's native session. Only a Codex Fork
+        // thread owns a separate binding.
+        /** @example An ordinary thread does not resume a session stored on the thread row. */
+        it('ignores thread-level resume metadata outside a Codex Fork thread', async () => {
+          const sendSpy = setupHeteroRun({
+            workingDirByDevice: { [HETERO_DEVICE_ID]: { path: '/work/project' } },
+          });
+          const topicId = TEST_IDS.TOPIC_ID;
+          const threadId = 'ordinary-thread';
+          const user = createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', threadId });
+          sendSpy.mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: false,
+            messages: [
+              user,
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: user.id,
+                role: 'assistant',
+                threadId,
+              }),
+            ],
+            topicId,
+            userMessageId: user.id,
+          });
+          act(() => {
+            useChatStore.setState({
+              threadMaps: {
+                [topicId]: [
+                  {
+                    id: threadId,
+                    topicId,
+                    title: 'ordinary',
+                    type: 'continuation',
+                    status: ThreadStatus.Active,
+                    userId: 'user-1',
+                    createdAt: new Date(0),
+                    lastActiveAt: new Date(0),
+                    updatedAt: new Date(0),
+                    metadata: {
+                      heteroSessionId: 'thread-row-session',
+                      workingDirectory: '/work/project',
+                    },
+                  },
+                ],
+              },
+            });
+          });
+          await act(async () => {
+            await useChatStore.getState().sendMessage({
+              context: { agentId: TEST_IDS.SESSION_ID, scope: 'thread', threadId, topicId },
+              message: 'Continue in the thread',
+            });
+          });
+          /** @example The thread row's session is not used as this run's resume token. */
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.not.objectContaining({ resumeSessionId: 'thread-row-session' }),
+          );
+        });
+
+        // ROOT CAUSE:
         // When the child's thread binding and its message provenance were both lost, reload
         // left only the source target, so the next send forked the source again and the
         // native branch silently dropped the answer the UI still showed.

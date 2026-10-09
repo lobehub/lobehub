@@ -11,6 +11,10 @@ interface EventQueue {
  *
  * Use when:
  * - A native RPC session pushes events into the CLI's pull-based ingest loop.
+ *
+ * NOTICE:
+ * `rpc/piRpcAgentHandle.ts` keeps an identical private queue. Sharing this one is a
+ * separate refactor so this change cannot alter the pi runtime.
  * Expects:
  * - Producers close the queue after their final event.
  * Returns:

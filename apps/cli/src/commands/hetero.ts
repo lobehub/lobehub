@@ -127,7 +127,7 @@ const spawnAgentOrRuntime = (
   spawnOpts: Parameters<typeof spawnAgent>[0],
   onRawStdout?: (chunk: Buffer) => void,
   onStartupControl?: (control: PiRpcStartupControl) => void,
-  nativeCodex?: { forkTarget?: CodexForkTarget },
+  nativeCodex?: { forkTarget?: CodexForkTarget; strictHistory: boolean },
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
   if (nativeCodex)
     return createCodexAgentHandle({
@@ -142,6 +142,7 @@ const spawnAgentOrRuntime = (
       operationId: spawnOpts.operationId,
       prompt: spawnOpts.prompt,
       resumeSessionId: spawnOpts.resumeSessionId,
+      strictHistory: nativeCodex.strictHistory,
     });
   const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
   if (runtimeFactory) return runtimeFactory(spawnOpts, { onRawStdout, onStartupControl });
@@ -172,6 +173,9 @@ const RESUME_RETRY_PATTERNS = [
   /session.*not found/i,
   /conversation.*not found/i,
   /resume.*not found/i,
+  // Codex reports a missing saved thread (exec and app-server alike) as
+  // "thread/resume failed: no rollout found for thread id <id>".
+  /no rollout found/i,
   // Context overflow — API rejected the resumed session's accumulated history
   /prompt.*too long/i,
   /context.*too long/i,
@@ -195,6 +199,8 @@ interface ExecOptions {
   codexAppServer?: boolean;
   /** JSON-encoded, persisted native history boundary. */
   codexForkTarget?: string;
+  /** Fork branches: a missing native session fails instead of restarting fresh. */
+  codexStrictHistory?: boolean;
   command?: string;
   cwd?: string;
   effort?: string;
@@ -494,12 +500,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     process.exit(2);
   }
 
-  if ((options.codexAppServer || options.codexForkTarget) && options.type !== 'codex') {
+  if (
+    (options.codexAppServer || options.codexForkTarget || options.codexStrictHistory) &&
+    options.type !== 'codex'
+  ) {
     throw new Error('Native Codex options require --type codex');
   }
-  if (options.codexForkTarget && !options.codexAppServer) {
+  if ((options.codexForkTarget || options.codexStrictHistory) && !options.codexAppServer) {
     throw new Error('Native Fork requires --codex-app-server');
   }
+  // A Fork branch's history exists only natively. Ordinary app-server topics keep the
+  // same transcript recovery as `codex exec`: retry fresh with the fallback prompt.
+  const strictNativeHistory = Boolean(options.codexStrictHistory || options.codexForkTarget);
   const codexForkTarget = options.codexForkTarget
     ? CodexForkTargetSchema.parse(JSON.parse(options.codexForkTarget))
     : undefined;
@@ -913,7 +925,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
           // when the process group already delivered the signal itself.
           if (cancellationSignal) cancelStartup(control, cancellationSignal);
         },
-        options.codexAppServer ? { forkTarget: codexForkTarget } : undefined,
+        options.codexAppServer
+          ? { forkTarget: codexForkTarget, strictHistory: strictNativeHistory }
+          : undefined,
       );
       if (cancellationSignal && !startupControl) {
         // Same split as `applyCancellation`: when the wrapper does not own
@@ -1114,7 +1128,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   // ─── First run (with --resume if provided) ───────────────────────────────
 
-  const interceptResume = !!options.resume && !options.codexAppServer;
+  const interceptResume = !!options.resume && !strictNativeHistory;
   const extraArgs = [
     ...(buildExtraArgs(options) ?? []),
     // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
@@ -1178,7 +1192,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (!options.codexAppServer && !first.cancelled && !first.ingestError && first.resumeNotFound) {
+  if (!strictNativeHistory && !first.cancelled && !first.ingestError && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {
@@ -1334,6 +1348,10 @@ export function registerHeteroCommand(program: Command) {
     )
     .option('--codex-app-server', 'Use native Codex app-server with strict history continuity')
     .option('--codex-fork-target <json>', 'Fork at the saved native Codex thread/turn boundary')
+    .option(
+      '--codex-strict-history',
+      'Fail instead of starting a fresh session when the native Codex history is missing',
+    )
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
     .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')

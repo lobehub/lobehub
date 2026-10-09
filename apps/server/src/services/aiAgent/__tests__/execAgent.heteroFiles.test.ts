@@ -1,11 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import type * as UserModelModule from '@/database/models/user';
 import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLifecycle';
 
 import { AiAgentService } from '../index';
 
 const {
+  mockGetUserPreference,
   mockQueryDeviceSystemInfo,
   mockGetCodexBranchRun,
   mockThreadFindById,
@@ -26,6 +28,7 @@ const {
   mockPublishAgentRuntimeInit,
   mockPublishAgentRuntimeEnd,
 } = vi.hoisted(() => ({
+  mockGetUserPreference: vi.fn(),
   mockQueryDeviceSystemInfo: vi.fn(),
   mockGetCodexBranchRun: vi.fn(),
   mockThreadFindById: vi.fn(),
@@ -197,10 +200,24 @@ vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
     return {
       getCodexBranchRun: mockGetCodexBranchRun,
+      // Mirrors the real lookup: only a Codex Fork thread of this topic owns its session.
+      getCodexForkThread: async (topicId: string, threadId: string) => {
+        const thread = await mockThreadFindById(threadId);
+        return thread?.topicId === topicId && thread.metadata?.codexForkTarget ? thread : undefined;
+      },
       getHeterogeneousResumeSessionId: mockGetHeterogeneousResumeSessionId,
     };
   }),
 }));
+
+// Only the Lab preference read is replaced; the rest of UserModel stays real.
+vi.mock('@/database/models/user', async (importOriginal) => {
+  const actual = await importOriginal<typeof UserModelModule>();
+  class UserModel extends actual.UserModel {
+    getUserPreference = mockGetUserPreference;
+  }
+  return { ...actual, UserModel };
+});
 
 vi.mock('@/server/services/heterogeneousAgent/sandboxRunner', () => ({
   spawnHeteroSandbox: mockSpawnHeteroSandbox,
@@ -284,6 +301,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
     mockQueryDeviceSystemInfo.mockResolvedValue(undefined);
+    mockGetUserPreference.mockResolvedValue(undefined);
     mockGetCodexBranchRun.mockResolvedValue({});
     mockThreadFindById.mockResolvedValue(undefined);
     mockMessageQuery.mockResolvedValue([]);
@@ -882,6 +900,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       executionTarget: 'device',
       heterogeneousProvider: { type: 'codex' },
     });
+    mockGetUserPreference.mockResolvedValue({ lab: { enableCodexAppServer: true } });
     await service.execAgent({ agentId: 'agent-1', prompt: 'ordinary device turn' });
     /** @example No unsupported native wrapper option reaches the old process. */
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(expect.objectContaining({ args: undefined }));
@@ -889,7 +908,92 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'device-1', undefined);
   });
 
+  // ROOT CAUSE:
+  // Every Codex device run switched to app-server once the CLI advertised it, so the
+  // whole device population changed runtime and each dispatch paid a live capability query.
+  // The app-server runtime is opt-in through the existing Labs preference.
+  /** @example Without the Labs opt-in, an ordinary Codex send stays on codex exec. */
+  it('keeps ordinary Codex sends on exec unless the app-server Lab is enabled', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    mockQueryDeviceSystemInfo.mockResolvedValue({
+      supportedAgentRuntimes: ['codex-app-server-v1'],
+    });
+    await service.execAgent({ agentId: 'agent-1', prompt: 'ordinary device turn' });
+    /** @example A capable device still receives the existing exec arguments. */
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(expect.objectContaining({ args: undefined }));
+    /** @example The ordinary path does not query live device capabilities. */
+    expect(mockQueryDeviceSystemInfo).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  // App-server device runs dropped `conversationHistory` and the resume fallback for every
+  // topic, so an ordinary topic whose native session was lost restarted with no context.
+  // Only Fork branches need strict native history.
+  /** @example An ordinary app-server topic keeps its transcript recovery. */
+  it('keeps transcript recovery for ordinary app-server Codex topics', async () => {
+    mockGetHeterogeneousResumeSessionId.mockResolvedValue('native-session-existing');
+    mockGetUserPreference.mockResolvedValue({ lab: { enableCodexAppServer: true } });
+    mockQueryDeviceSystemInfo.mockResolvedValue({
+      supportedAgentRuntimes: ['codex-app-server-v1'],
+    });
+    mockMessageQuery.mockResolvedValue([
+      { content: 'Earlier question', id: 'old-user', role: 'user' },
+      { content: 'Earlier answer', id: 'old-assistant', role: 'assistant' },
+      { content: 'Continue on my device', id: 'msg-1', role: 'user' },
+    ]);
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Continue on my device' });
+
+    /** @example The native runtime is selected without strict history. */
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--codex-app-server'],
+        resumeFallbackSystemContext: 'device recovery context',
+        resumeSessionId: 'native-session-existing',
+        systemContext: 'device context',
+      }),
+    );
+  });
+
+  /** @example A fresh ordinary app-server topic still receives its prior turns. */
+  it('injects topic history into a fresh ordinary app-server Codex run', async () => {
+    mockGetUserPreference.mockResolvedValue({ lab: { enableCodexAppServer: true } });
+    mockQueryDeviceSystemInfo.mockResolvedValue({
+      supportedAgentRuntimes: ['codex-app-server-v1'],
+    });
+    mockMessageQuery.mockResolvedValue([
+      { content: 'Create the GPU pod', id: 'old-user', role: 'user' },
+      { content: 'The pod is electron-gpu-shell', id: 'old-assistant', role: 'assistant' },
+      { content: 'Delete it', id: 'msg-1', role: 'user' },
+    ]);
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Delete it' });
+
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--codex-app-server'],
+        resumeSessionId: undefined,
+        systemContext: 'device recovery context',
+      }),
+    );
+  });
+
   /** @example Native turn/branch parameters only reach a connection advertising their protocol. */
+  // The Labs preference stays unset here: a Fork branch always runs natively.
   it('dispatches the exact native Fork boundary to a capable connection', async () => {
     Object.assign(heteroAgentConfig.agencyConfig, {
       boundDeviceId: 'device-1',
@@ -900,6 +1004,10 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockQueryDeviceSystemInfo.mockResolvedValue({
       supportedAgentRuntimes: ['codex-app-server-v1'],
     });
+    mockMessageQuery.mockResolvedValue([
+      { content: 'Earlier question', id: 'old-user', role: 'user' },
+      { content: 'Earlier answer', id: 'old-assistant', role: 'assistant' },
+    ]);
     mockThreadFindById.mockResolvedValue({
       id: 'branch',
       topicId: 'topic-1',
@@ -918,9 +1026,15 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     /** @example The protocol carries the original native boundary, without a text replay fallback. */
     expect(mockDispatchAgentRun).toHaveBeenCalledWith(
       expect.objectContaining({
-        args: ['--codex-app-server', '--codex-fork-target', JSON.stringify(target)],
+        args: [
+          '--codex-app-server',
+          '--codex-strict-history',
+          '--codex-fork-target',
+          JSON.stringify(target),
+        ],
         resumeSessionId: 'source-native',
         resumeFallbackSystemContext: undefined,
+        systemContext: 'device context',
       }),
     );
   });

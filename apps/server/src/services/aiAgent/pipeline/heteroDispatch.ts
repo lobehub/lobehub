@@ -27,8 +27,8 @@ import debug from 'debug';
 import { AgentOperationModel } from '@/database/models/agentOperation';
 import { DeviceModel } from '@/database/models/device';
 import type { MessageModel } from '@/database/models/message';
-import { ThreadModel } from '@/database/models/thread';
 import type { TopicModel } from '@/database/models/topic';
+import { UserModel } from '@/database/models/user';
 import { resolveExecutionPlan, resolveWorkspaceScoped } from '@/helpers/executionTarget';
 import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJwt';
 import {
@@ -44,7 +44,6 @@ import { HeterogeneousAgentService } from '@/server/services/heterogeneousAgent'
 import type { ConversationHistoryEntry } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildCloudHeteroContext } from '@/server/services/heterogeneousAgent/cloudHeteroContext';
 import { buildRemoteDeviceHeteroContext } from '@/server/services/heterogeneousAgent/remoteDeviceHeteroContext';
-import { spawnHeteroSandbox } from '@/server/services/heterogeneousAgent/sandboxRunner';
 import type { MarketService } from '@/server/services/market';
 import {
   resolveSandboxSessionConfig,
@@ -64,6 +63,7 @@ import type {
   ExecRunContext,
   InternalExecAgentParams,
 } from '../types';
+import { type CodexDeviceRuntime, resolveCodexDeviceRuntime } from './codexDeviceRuntime';
 import { heteroOperationCapabilities } from './heteroOperationCapabilities';
 
 const log = debug('lobe-server:ai-agent-service');
@@ -400,10 +400,15 @@ export const dispatchHeteroAgent = async (
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
   });
-  const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(
-    topicId,
-    appContext?.threadId ?? undefined,
-  );
+  // A Codex Fork thread owns its native child session; every other run (including other
+  // thread runs) keeps the topic-scoped binding.
+  const codexForkThread =
+    heteroType === 'codex' && appContext?.threadId
+      ? await heteroService.getCodexForkThread(topicId, appContext.threadId)
+      : undefined;
+  const resumeSessionId = codexForkThread
+    ? codexForkThread.metadata?.heteroSessionId
+    : await heteroService.getHeterogeneousResumeSessionId(topicId);
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
   let operationJwt: string;
@@ -972,341 +977,348 @@ export const dispatchHeteroAgent = async (
       log('execAgent: failed to init stream for local hetero: %O', err);
     }
 
-    try {
-      const heteroPlan = deviceHeteroPlan!;
+    const heteroPlan = deviceHeteroPlan!;
 
-      if (heteroPlan.kind !== 'sandbox') {
-        const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
-        if (!dispatchDeviceId) {
-          log('execAgent: hetero executionTarget=device but no boundDeviceId set');
-          const terminalReported = await finalizeHeteroDispatchError(deps, {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            detail: !supportsCloudHeterogeneousSandbox(heteroType)
-              ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
-              : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
-            message: 'No bound device for hetero agent',
-            operationId,
-            topicId,
-          });
-          return {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            autoStarted: false,
-            createdAt: new Date().toISOString(),
-            error: 'No bound device',
-            message: 'Hetero agent requires a bound device',
-            operationId,
-            status: 'error',
-            success: false,
-            terminalReported,
-            timestamp: new Date().toISOString(),
-            topicId,
-            userMessageId: userMessageId ?? parentMessageId ?? '',
-          };
-        }
-        const runThread = appContext?.threadId
-          ? await new ThreadModel(deps.db, deps.userId, deps.workspaceId).findById(
-              appContext.threadId,
-            )
-          : undefined;
-        const nativeFork = Boolean(runThread?.metadata?.codexForkTarget);
-        const nativeCodexAuth = heteroType === 'codex' && heterogeneousProvider?.authMode !== 'api';
-        // Query the live connection, not merged DB metadata: downgrade/reconnect must revoke capabilities.
-        const deviceInfo = nativeCodexAuth
-          ? await deviceGateway.queryDeviceSystemInfo(
-              deps.userId,
-              dispatchDeviceId,
-              cliDeviceWorkspaceId,
-            )
-          : undefined;
-        const nativeCodex =
-          nativeCodexAuth &&
-          Boolean(deviceInfo?.supportedAgentRuntimes?.includes('codex-app-server-v1'));
-        if (nativeFork && !nativeCodex) {
-          throw new Error(
-            'Native Codex Fork requires native authentication and a connected CLI supporting codex-app-server-v1. Update and reconnect that device.',
-          );
-        }
-        const branchRun = nativeCodex
-          ? await heteroService.getCodexBranchRun(
-              topicId,
-              userMessageId ?? parentMessageId ?? '',
-              appContext?.threadId ?? undefined,
-            )
-          : { resumeSessionId };
-        if (branchRun.codexBranchError) throw new Error(branchRun.codexBranchError);
-        const workingDirectoryMetadata = runThread?.metadata ?? topic?.metadata;
-        // Resolve the working directory for the run: a topic-level override
-        // wins, else the device's user-configured defaultCwd. The device row
-        // lives in the DB (the gateway only knows live connections), so read
-        // it directly rather than via deviceGateway.
-        // The bound device may be personal (userId-scoped) or a workspace
-        // device (workspace-scoped) — look up both so its defaultCwd resolves.
-        const deviceModelForCwd = new DeviceModel(deps.db, deps.userId, deps.workspaceId);
-        const boundDevice =
-          (await deviceModelForCwd.findByDeviceId(dispatchDeviceId)) ??
-          (await deviceModelForCwd.findWorkspaceDeviceById(dispatchDeviceId));
-        const dispatchWorkspaceId = cliDeviceWorkspaceId;
-        // Resolve via the shared precedence helper so dispatch, workspace-init,
-        // and the new-topic backfill below all agree on the cwd.
-        const deviceCwdConfig = resolveDeviceWorkingDirectoryConfig({
-          deviceDefaultCwd: boundDevice?.defaultCwd,
-          deviceId: dispatchDeviceId,
-          devicePlatform: boundDevice?.platform,
-          initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
-          initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
-          // The run's repos, so a directory that IS one of them is skipped: this
-          // device cannot have it (`owner/repo` is a cloud repo identifier).
-          repos: topicRepos,
-          topicDeviceId: topic?.metadata?.boundDeviceId,
-          topicWorkingDirectory: workingDirectoryMetadata?.workingDirectory,
-          topicWorkingDirectoryConfig: workingDirectoryMetadata?.workingDirectoryConfig,
-          workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
+    if (heteroPlan.kind !== 'sandbox') {
+      const dispatchDeviceId = heteroPlan.kind === 'device' ? heteroPlan.deviceId : undefined;
+      if (!dispatchDeviceId) {
+        log('execAgent: hetero executionTarget=device but no boundDeviceId set');
+        const terminalReported = await finalizeHeteroDispatchError(deps, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          detail: !supportsCloudHeterogeneousSandbox(heteroType)
+            ? 'No device bound. Pick a local or connected device in the Execution Device switcher.'
+            : 'No device bound. Pick a device in the Execution Device switcher, or switch to Cloud sandbox.',
+          message: 'No bound device for hetero agent',
+          operationId,
+          topicId,
         });
-        const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
-
-        // An unbound topic has no pinned cwd yet: the directory was only
-        // recorded at agent level (`workingDirByDevice`) when no topic existed.
-        // Persist the resolved cwd onto the topic so the sidebar groups it
-        // under the right project and the next turn reuses the same directory.
-        if (!appContext?.threadId)
-          await deps.bindTopicWorkingDirectory({
-            config: deviceCwdConfig,
-            currentDeviceId: topic?.metadata?.boundDeviceId,
-            currentWorkingDirectory: topic?.metadata?.workingDirectory,
-            deviceId: dispatchDeviceId,
-            topicId,
-          });
-
-        // Build only device-relevant context instead of reusing the cloud-sandbox one
-        // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
-        // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
-        const deviceSystemContext = buildRemoteDeviceHeteroContext({
-          agentSystemContext,
-          conversationHistory: nativeCodex || resumeSessionId ? undefined : conversationHistory,
-        });
-        const deviceResumeFallbackSystemContext =
-          !nativeCodex && resumeSessionId && conversationHistory
-            ? buildRemoteDeviceHeteroContext({
-                agentSystemContext,
-                conversationHistory,
-              })
-            : undefined;
-
-        const authorizationError = await resolveDeviceDispatchAuthorizationFailure(
-          deps.db,
-          deps.userId,
-          dispatchDeviceId,
-          dispatchWorkspaceId,
-        );
-        const result = authorizationError
-          ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
-          : await deviceGateway.dispatchAgentRun({
-              ...heteroParams,
-              agentId: resolvedAgentId,
-              // Only a live client advertising the native protocol receives these wrapper flags.
-              args: nativeCodex
-                ? [
-                    ...(heteroExecArgs ?? []),
-                    '--codex-app-server',
-                    ...(branchRun.codexForkTarget
-                      ? ['--codex-fork-target', JSON.stringify(branchRun.codexForkTarget)]
-                      : []),
-                  ]
-                : heteroExecArgs,
-              resumeSessionId: branchRun.resumeSessionId,
-              cwd: deviceCwd,
-              deviceId: dispatchDeviceId,
-              resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
-              systemContext: deviceSystemContext,
-              // Route to the workspace pool when this is a workspace device; the
-              // operation JWT stays member-scoped (the run belongs to the member).
-              workspaceId: dispatchWorkspaceId,
-              // Topic scope for device-side heteroIngest/heteroFinish. Distinct
-              // from the routing workspace above: a workspace topic on a personal
-              // device still has to write back under `deps.workspaceId`.
-              ingestWorkspaceId: deps.workspaceId,
-            });
-        if (!result.success) {
-          log('execAgent: hetero device dispatch failed: %s', result.error);
-          const terminalReported = await finalizeHeteroDispatchError(deps, {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            detail: result.error ?? 'Device dispatch failed',
-            deviceRoute: {
-              deviceId: dispatchDeviceId,
-              userId: deps.userId,
-              ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
-            },
-            errorData: result.errorData,
-            errorType: resolveHeteroDispatchErrorType(result.error),
-            message: humanizeHeteroDispatchError(result.error),
-            operationId,
-            topicId,
-          });
-          return {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            autoStarted: false,
-            createdAt: new Date().toISOString(),
-            error: result.error,
-            errorData: result.errorData,
-            message: 'Hetero agent device dispatch failed',
-            operationId,
-            status: 'error',
-            success: false,
-            terminalReported,
-            timestamp: new Date().toISOString(),
-            topicId,
-            userMessageId: userMessageId ?? parentMessageId ?? '',
-          };
-        }
-
-        // Local CLI hetero agents dispatch to a device just like remote platform
-        // agents, so persist the device route after the dispatch is accepted.
-        // interruptTask uses these fields to find and stop the native process.
-        try {
-          const patched = await deps.topicModel.patchRunningOperation(topicId, operationId, {
-            deviceId: dispatchDeviceId,
-            deviceWorkspaceId: dispatchWorkspaceId,
-            heteroType,
-          });
-          log(
-            'execAgent: patch runningOperation device info=%s deviceId=%s heteroType=%s op=%s',
-            patched,
-            dispatchDeviceId,
-            heteroType,
-            operationId,
-          );
-        } catch (err) {
-          log('execAgent: failed to patch runningOperation with device info: %O', err);
-        }
-      } else {
-        if (heteroType === 'codex' && appContext?.threadId) {
-          const thread = await new ThreadModel(deps.db, deps.userId, deps.workspaceId).findById(
-            appContext.threadId,
-          );
-          // An established child still belongs to its device's native history, even after handoff.
-          if (thread?.metadata?.codexForkTarget) {
-            throw new Error(
-              'Native Codex Fork requires the connected device holding its native history',
-            );
-          }
-        }
-        if (!supportsCloudHeterogeneousSandbox(heteroType)) {
-          const message = `${getHeterogeneousAgentTitle(heteroType)} requires a local or connected device; cloud sandbox execution is not supported.`;
-          const terminalReported = await finalizeHeteroDispatchError(deps, {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            detail: message,
-            message,
-            operationId,
-            topicId,
-          });
-          return {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            autoStarted: false,
-            createdAt: new Date().toISOString(),
-            error: message,
-            message,
-            operationId,
-            status: 'error',
-            success: false,
-            terminalReported,
-            timestamp: new Date().toISOString(),
-            topicId,
-            userMessageId: userMessageId ?? parentMessageId ?? '',
-          };
-        }
-
-        // Cloud sandbox path — only for sandbox-provisioned local CLI agents.
-        // Remote agents (openclaw / hermes) always require a bound device.
-        // The previous lazy-load comment described sandbox-service module initialization.
-        // Keep the dependency static so build and circular-dependency checks can validate it;
-        // sandbox creation still happens only in this cloud-CLI branch.
-        // The entitlement rides on the trust token; without it the execution
-        // plane routes to the ephemeral sandbox whatever the request says.
-        const marketService = await deps.getMarketService(
-          sandbox?.claim ? { sandboxStorage: sandbox.claim } : undefined,
-        );
-        // The sandbox authenticates its nested `lh` calls with this JWT. The
-        // narrow `hetero-operation` token (used for the device-dispatch path
-        // above) is rejected by `oidcAuth`, so CC capabilities that hit
-        // user-scoped endpoints — e.g. uploading a `Read`-on-image result to
-        // the file store for thumbnail echo — would 401 and silently drop.
-        // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
-        // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
-        // so it outlives a multi-hour run.
-        const sandboxJwt = await signUserJWT(deps.userId, '4h');
-        spawnHeteroSandbox({
-          ...heteroParams,
-          agentType: heteroType as 'claude-code' | 'codex',
-          args: heteroExecArgs,
-          jwt: sandboxJwt,
-          marketService,
-          sandbox: sandbox && {
-            cwd: sandbox.cwd,
-            environment: sandbox.environment,
-            mode: sandbox.mode,
-            // The environment's variables, network access, maintenance command
-            // and sources all ride here; dropping it starts the run with none
-            // of them, and nothing reports that they were ignored.
-            specification: sandbox.specification,
-            workingDir: sandbox.workingDir,
-          },
-          workspaceId: deps.workspaceId,
-        }).catch(async (err) => {
-          // Fire-and-forget: execAgent has already returned `autoStarted`, and
-          // the sandbox never reached the point of calling heteroFinish. Drive
-          // the same terminal funnel so the stranded run surfaces an error and
-          // its task is marked failed instead of hanging in `running`.
-          log('execAgent: hetero sandbox spawn failed: %O', err);
-
-          // ...unless the run is demonstrably alive or already finished. This
-          // call is the only dispatch failure that can land AFTER the agent
-          // started, so a rejection here is not by itself evidence that nothing
-          // ran — see `hasHeteroRunStarted`.
-          if (await hasHeteroRunStarted(deps, { operationId, topicId })) return;
-
-          await finalizeHeteroDispatchError(deps, {
-            agentId: resolvedAgentId,
-            assistantMessageId,
-            detail: err instanceof Error ? err.message : String(err),
-            message: 'Hetero sandbox spawn failed',
-            operationId,
-            topicId,
-          }).catch((finalizeErr) =>
-            log('execAgent: sandbox-failure finalize failed: %O', finalizeErr),
-          );
-        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: 'No bound device',
+          message: 'Hetero agent requires a bound device',
+          operationId,
+          status: 'error',
+          success: false,
+          terminalReported,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageId ?? parentMessageId ?? '',
+        };
       }
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      const terminalReported = await finalizeHeteroDispatchError(deps, {
-        agentId: resolvedAgentId,
-        assistantMessageId,
-        detail,
-        message: 'Heterogeneous agent dispatch failed',
-        operationId,
-        topicId,
+      let codexRuntime: CodexDeviceRuntime;
+      try {
+        codexRuntime = await resolveCodexDeviceRuntime({
+          authMode: heterogeneousProvider?.authMode,
+          forkThread: codexForkThread,
+          heteroType,
+          isAppServerLabEnabled: async () => {
+            try {
+              const preference = await new UserModel(deps.db, deps.userId).getUserPreference();
+              return preference?.lab?.enableCodexAppServer === true;
+            } catch (err) {
+              log('execAgent: failed to read Codex app-server Lab preference: %O', err);
+              return false;
+            }
+          },
+          // Query the live connection, not merged DB metadata: downgrade/reconnect must revoke it.
+          querySupportedRuntimes: async () =>
+            (
+              await deviceGateway.queryDeviceSystemInfo(
+                deps.userId,
+                dispatchDeviceId,
+                cliDeviceWorkspaceId,
+              )
+            )?.supportedAgentRuntimes,
+          resolveBranchRun: () =>
+            heteroService.getCodexBranchRun(
+              codexForkThread!,
+              userMessageId ?? parentMessageId ?? '',
+            ),
+          resumeSessionId,
+        });
+      } catch (err) {
+        codexRuntime = {
+          kind: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+      if (codexRuntime.kind === 'error') {
+        log('execAgent: native Codex dispatch rejected: %s', codexRuntime.message);
+        const terminalReported = await finalizeHeteroDispatchError(deps, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          detail: codexRuntime.message,
+          message: 'Native Codex dispatch rejected',
+          operationId,
+          topicId,
+        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: codexRuntime.message,
+          message: codexRuntime.message,
+          operationId,
+          status: 'error',
+          success: false,
+          terminalReported,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageId ?? parentMessageId ?? '',
+        };
+      }
+      const nativeCodex = codexRuntime.kind === 'native' ? codexRuntime : undefined;
+      // A Fork branch keeps the working directory captured from its source.
+      const cwdMetadata =
+        codexForkThread?.metadata?.workingDirectory ||
+        codexForkThread?.metadata?.workingDirectoryConfig
+          ? codexForkThread.metadata
+          : topic?.metadata;
+
+      // Resolve the working directory for the run: a topic-level override
+      // wins, else the device's user-configured defaultCwd. The device row
+      // lives in the DB (the gateway only knows live connections), so read
+      // it directly rather than via deviceGateway.
+      // The bound device may be personal (userId-scoped) or a workspace
+      // device (workspace-scoped) — look up both so its defaultCwd resolves.
+      const deviceModelForCwd = new DeviceModel(deps.db, deps.userId, deps.workspaceId);
+      const boundDevice =
+        (await deviceModelForCwd.findByDeviceId(dispatchDeviceId)) ??
+        (await deviceModelForCwd.findWorkspaceDeviceById(dispatchDeviceId));
+      const dispatchWorkspaceId = cliDeviceWorkspaceId;
+      // Resolve via the shared precedence helper so dispatch, workspace-init,
+      // and the new-topic backfill below all agree on the cwd.
+      const deviceCwdConfig = resolveDeviceWorkingDirectoryConfig({
+        deviceDefaultCwd: boundDevice?.defaultCwd,
+        deviceId: dispatchDeviceId,
+        devicePlatform: boundDevice?.platform,
+        initialWorkingDirectory: appContext?.initialTopicMetadata?.workingDirectory,
+        initialWorkingDirectoryConfig: appContext?.initialTopicMetadata?.workingDirectoryConfig,
+        // The run's repos, so a directory that IS one of them is skipped: this
+        // device cannot have it (`owner/repo` is a cloud repo identifier).
+        repos: topicRepos,
+        topicDeviceId: topic?.metadata?.boundDeviceId,
+        topicWorkingDirectory: cwdMetadata?.workingDirectory,
+        topicWorkingDirectoryConfig: cwdMetadata?.workingDirectoryConfig,
+        workingDirByDevice: agentConfig.agencyConfig?.workingDirByDevice,
       });
-      return {
-        agentId: resolvedAgentId,
-        assistantMessageId,
-        autoStarted: false,
-        createdAt: new Date().toISOString(),
-        error: detail,
-        message: detail,
-        operationId,
-        status: 'error',
-        success: false,
-        terminalReported,
-        timestamp: new Date().toISOString(),
-        topicId,
-        userMessageId: userMessageId ?? parentMessageId ?? '',
-      };
+      const deviceCwd = getWorkingDirEffectivePath(deviceCwdConfig);
+
+      // An unbound topic has no pinned cwd yet: the directory was only
+      // recorded at agent level (`workingDirByDevice`) when no topic existed.
+      // Persist the resolved cwd onto the topic so the sidebar groups it
+      // under the right project and the next turn reuses the same directory.
+      // A Fork branch runs in its source's directory and never re-pins the topic.
+      if (!codexForkThread)
+        await deps.bindTopicWorkingDirectory({
+          config: deviceCwdConfig,
+          currentDeviceId: topic?.metadata?.boundDeviceId,
+          currentWorkingDirectory: topic?.metadata?.workingDirectory,
+          deviceId: dispatchDeviceId,
+          topicId,
+        });
+
+      // Build only device-relevant context instead of reusing the cloud-sandbox one
+      // (which describes an ephemeral /workspace + pre-cloned repos and would mislead
+      // the agent). The spawned CLI already receives deviceCwd as its actual cwd.
+      // A Fork branch's history is its native thread; a serialized topic transcript
+      // would describe the wrong conversation, so strict runs never receive one.
+      const strictNativeHistory = nativeCodex?.strictHistory === true;
+      const deviceSystemContext = buildRemoteDeviceHeteroContext({
+        agentSystemContext,
+        conversationHistory:
+          strictNativeHistory || resumeSessionId ? undefined : conversationHistory,
+      });
+      const deviceResumeFallbackSystemContext =
+        !strictNativeHistory && resumeSessionId && conversationHistory
+          ? buildRemoteDeviceHeteroContext({
+              agentSystemContext,
+              conversationHistory,
+            })
+          : undefined;
+
+      const authorizationError = await resolveDeviceDispatchAuthorizationFailure(
+        deps.db,
+        deps.userId,
+        dispatchDeviceId,
+        dispatchWorkspaceId,
+      );
+      const result = authorizationError
+        ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
+        : await deviceGateway.dispatchAgentRun({
+            ...heteroParams,
+            agentId: resolvedAgentId,
+            // Only a live client advertising the native protocol receives these wrapper flags.
+            args: nativeCodex ? [...(heteroExecArgs ?? []), ...nativeCodex.args] : heteroExecArgs,
+            cwd: deviceCwd,
+            deviceId: dispatchDeviceId,
+            resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
+            resumeSessionId: nativeCodex ? nativeCodex.resumeSessionId : resumeSessionId,
+            systemContext: deviceSystemContext,
+            // Route to the workspace pool when this is a workspace device; the
+            // operation JWT stays member-scoped (the run belongs to the member).
+            workspaceId: dispatchWorkspaceId,
+            // Topic scope for device-side heteroIngest/heteroFinish. Distinct
+            // from the routing workspace above: a workspace topic on a personal
+            // device still has to write back under `deps.workspaceId`.
+            ingestWorkspaceId: deps.workspaceId,
+          });
+      if (!result.success) {
+        log('execAgent: hetero device dispatch failed: %s', result.error);
+        const terminalReported = await finalizeHeteroDispatchError(deps, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          detail: result.error ?? 'Device dispatch failed',
+          deviceRoute: {
+            deviceId: dispatchDeviceId,
+            userId: deps.userId,
+            ...(dispatchWorkspaceId ? { workspaceId: dispatchWorkspaceId } : {}),
+          },
+          errorData: result.errorData,
+          errorType: resolveHeteroDispatchErrorType(result.error),
+          message: humanizeHeteroDispatchError(result.error),
+          operationId,
+          topicId,
+        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: result.error,
+          errorData: result.errorData,
+          message: 'Hetero agent device dispatch failed',
+          operationId,
+          status: 'error',
+          success: false,
+          terminalReported,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageId ?? parentMessageId ?? '',
+        };
+      }
+
+      // Local CLI hetero agents dispatch to a device just like remote platform
+      // agents, so persist the device route after the dispatch is accepted.
+      // interruptTask uses these fields to find and stop the native process.
+      try {
+        const patched = await deps.topicModel.patchRunningOperation(topicId, operationId, {
+          deviceId: dispatchDeviceId,
+          deviceWorkspaceId: dispatchWorkspaceId,
+          heteroType,
+        });
+        log(
+          'execAgent: patch runningOperation device info=%s deviceId=%s heteroType=%s op=%s',
+          patched,
+          dispatchDeviceId,
+          heteroType,
+          operationId,
+        );
+      } catch (err) {
+        log('execAgent: failed to patch runningOperation with device info: %O', err);
+      }
+    } else {
+      // An established Fork child belongs to the device holding its native history.
+      const sandboxUnsupported = codexForkThread
+        ? 'Native Codex Fork requires the connected device holding its native history'
+        : !supportsCloudHeterogeneousSandbox(heteroType)
+          ? `${getHeterogeneousAgentTitle(heteroType)} requires a local or connected device; cloud sandbox execution is not supported.`
+          : undefined;
+      if (sandboxUnsupported) {
+        const message = sandboxUnsupported;
+        const terminalReported = await finalizeHeteroDispatchError(deps, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          detail: message,
+          message,
+          operationId,
+          topicId,
+        });
+        return {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          autoStarted: false,
+          createdAt: new Date().toISOString(),
+          error: message,
+          message,
+          operationId,
+          status: 'error',
+          success: false,
+          terminalReported,
+          timestamp: new Date().toISOString(),
+          topicId,
+          userMessageId: userMessageId ?? parentMessageId ?? '',
+        };
+      }
+
+      // Cloud sandbox path — only for sandbox-provisioned local CLI agents.
+      // Remote agents (openclaw / hermes) always require a bound device.
+      // Lazy-loaded on purpose: `sandboxRunner` pulls the sandbox-service graph
+      // (which eagerly touches server-only ModelRuntime env at module init), so
+      // importing it statically would couple that whole subsystem into every
+      // `aiAgent` import. Only this cloud-CLI branch needs it.
+      const { spawnHeteroSandbox } =
+        await import('@/server/services/heterogeneousAgent/sandboxRunner');
+      // The entitlement rides on the trust token; without it the execution
+      // plane routes to the ephemeral sandbox whatever the request says.
+      const marketService = await deps.getMarketService(
+        sandbox?.claim ? { sandboxStorage: sandbox.claim } : undefined,
+      );
+      // The sandbox authenticates its nested `lh` calls with this JWT. The
+      // narrow `hetero-operation` token (used for the device-dispatch path
+      // above) is rejected by `oidcAuth`, so CC capabilities that hit
+      // user-scoped endpoints — e.g. uploading a `Read`-on-image result to
+      // the file store for thumbnail echo — would 401 and silently drop.
+      // Mint a user-scoped `cli-sandbox` token instead (still `sub: userId`,
+      // ownership-gated on heteroIngest/heteroFinish) with a run-length TTL
+      // so it outlives a multi-hour run.
+      const sandboxJwt = await signUserJWT(deps.userId, '4h');
+      spawnHeteroSandbox({
+        ...heteroParams,
+        agentType: heteroType as 'claude-code' | 'codex',
+        args: heteroExecArgs,
+        jwt: sandboxJwt,
+        marketService,
+        sandbox: sandbox && {
+          cwd: sandbox.cwd,
+          environment: sandbox.environment,
+          mode: sandbox.mode,
+          // The environment's variables, network access, maintenance command
+          // and sources all ride here; dropping it starts the run with none
+          // of them, and nothing reports that they were ignored.
+          specification: sandbox.specification,
+          workingDir: sandbox.workingDir,
+        },
+        workspaceId: deps.workspaceId,
+      }).catch(async (err) => {
+        // Fire-and-forget: execAgent has already returned `autoStarted`, and
+        // the sandbox never reached the point of calling heteroFinish. Drive
+        // the same terminal funnel so the stranded run surfaces an error and
+        // its task is marked failed instead of hanging in `running`.
+        log('execAgent: hetero sandbox spawn failed: %O', err);
+
+        // ...unless the run is demonstrably alive or already finished. This
+        // call is the only dispatch failure that can land AFTER the agent
+        // started, so a rejection here is not by itself evidence that nothing
+        // ran — see `hasHeteroRunStarted`.
+        if (await hasHeteroRunStarted(deps, { operationId, topicId })) return;
+
+        await finalizeHeteroDispatchError(deps, {
+          agentId: resolvedAgentId,
+          assistantMessageId,
+          detail: err instanceof Error ? err.message : String(err),
+          message: 'Hetero sandbox spawn failed',
+          operationId,
+          topicId,
+        }).catch((finalizeErr) =>
+          log('execAgent: sandbox-failure finalize failed: %O', finalizeErr),
+        );
+      });
     }
   }
 

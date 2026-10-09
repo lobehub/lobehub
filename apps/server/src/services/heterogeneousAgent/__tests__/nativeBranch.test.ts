@@ -12,6 +12,8 @@ import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLi
 import { HeterogeneousAgentService } from '..';
 import { HeterogeneousPersistenceHandler } from '../HeterogeneousPersistenceHandler';
 
+const origin = { position: 'after' as const, threadId: 'source-native', turnId: 'source-turn' };
+
 /** @example Device continuation selects the child binding even when the source topic has a token. */
 describe('native branch resume binding', () => {
   afterEach(() => vi.restoreAllMocks());
@@ -32,7 +34,7 @@ describe('native branch resume binding', () => {
     vi.spyOn(threadModel, 'findById').mockResolvedValue({
       id: 'branch',
       topicId: 'source-topic',
-      metadata: { heteroSessionId: 'child-native' },
+      metadata: { codexForkTarget: origin, heteroSessionId: 'child-native' },
     } as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>);
     const service = new HeterogeneousAgentService(db, 'test-user', {
       snapshotStore: null,
@@ -59,7 +61,7 @@ describe('native branch resume binding', () => {
     vi.spyOn(threadModel, 'findById').mockResolvedValue({
       id: 'branch',
       topicId: 'source-topic',
-      metadata: {},
+      metadata: { codexForkTarget: origin },
     } as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>);
     const service = new HeterogeneousAgentService(db, 'test-user', {
       snapshotStore: null,
@@ -71,7 +73,7 @@ describe('native branch resume binding', () => {
   });
 
   /** @example A thread from another topic cannot be used to read native history. */
-  it('rejects a thread outside the requested topic', async () => {
+  it('ignores a Fork thread outside the requested topic', async () => {
     const db = {} as LobeChatDatabase;
     const topicModel = new TopicModel(db, 'test-user');
     const threadModel = new ThreadModel(db, 'test-user');
@@ -79,16 +81,41 @@ describe('native branch resume binding', () => {
     vi.spyOn(threadModel, 'findById').mockResolvedValue({
       id: 'branch',
       topicId: 'different-topic',
-      metadata: { heteroSessionId: 'other-native' },
+      metadata: { codexForkTarget: origin, heteroSessionId: 'other-native' },
     } as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>);
     const service = new HeterogeneousAgentService(db, 'test-user', {
       snapshotStore: null,
       threadModel,
       topicModel,
     });
-    /** @example Scope mismatch is a terminal dispatch error. */
-    await expect(service.getHeterogeneousResumeSessionId('source-topic', 'branch')).rejects.toThrow(
-      'unavailable',
+    /** @example Another topic's child session never becomes this run's resume token. */
+    expect(await service.getHeterogeneousResumeSessionId('source-topic', 'branch')).toBeUndefined();
+  });
+
+  // ROOT CAUSE:
+  // Thread-scoped bindings applied to every thread run, so a Claude Code (or other) run in an
+  // ordinary thread lost the topic session it resumed on canary. Only Fork threads own one.
+  /** @example An ordinary thread keeps resuming its topic's native session. */
+  it('keeps the topic binding for a thread that is not a Codex Fork', async () => {
+    const db = {} as LobeChatDatabase;
+    const topicModel = new TopicModel(db, 'test-user');
+    const threadModel = new ThreadModel(db, 'test-user');
+    vi.spyOn(topicModel, 'findById').mockResolvedValue({
+      id: 'source-topic',
+      metadata: { heteroSessionId: 'topic-native' },
+    } as NonNullable<Awaited<ReturnType<TopicModel['findById']>>>);
+    vi.spyOn(threadModel, 'findById').mockResolvedValue({
+      id: 'ordinary',
+      topicId: 'source-topic',
+      metadata: {},
+    } as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>);
+    const service = new HeterogeneousAgentService(db, 'test-user', {
+      snapshotStore: null,
+      threadModel,
+      topicModel,
+    });
+    expect(await service.getHeterogeneousResumeSessionId('source-topic', 'ordinary')).toBe(
+      'topic-native',
     );
   });
   /** @example Tool execution without assistant text still makes a branch used. */
@@ -102,12 +129,11 @@ describe('native branch resume binding', () => {
     const db = {} as LobeChatDatabase;
     const messageModel = new MessageModel(db, 'test-user');
     const threadModel = new ThreadModel(db, 'test-user');
-    const origin = { position: 'after' as const, threadId: 'source-native', turnId: 'source-turn' };
-    vi.spyOn(threadModel, 'findById').mockResolvedValue({
+    const forkThread = {
       id: 'child-thread',
       topicId: 'source-topic',
       metadata: { codexForkTarget: origin },
-    } as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>);
+    } as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>;
     vi.spyOn(messageModel, 'findById').mockImplementation(
       async (id) =>
         ({
@@ -131,13 +157,13 @@ describe('native branch resume binding', () => {
       snapshotStore: null,
     });
     /** @example No source resume or Fork target escapes the lost-child guard. */
-    expect(await service.getCodexBranchRun('source-topic', 'follow-up', 'child-thread')).toEqual({
+    expect(await service.getCodexBranchRun(forkThread, 'follow-up')).toEqual({
       codexBranchError:
         'This Codex branch lost its native session. Fork again from the original message.',
     });
     recoveredSession.id = 'child-native';
     /** @example Restoring the child's own provenance recovers it without replaying tools. */
-    expect(await service.getCodexBranchRun('source-topic', 'follow-up', 'child-thread')).toEqual({
+    expect(await service.getCodexBranchRun(forkThread, 'follow-up')).toEqual({
       resumeSessionId: 'child-native',
     });
   });
@@ -157,7 +183,7 @@ describe('native branch resume binding', () => {
       topicId: 'source-topic',
       type: 'continuation',
       sourceMessageId: 'source-assistant',
-      metadata: {},
+      metadata: { codexForkTarget: origin },
     };
     vi.spyOn(threadModel, 'findById').mockResolvedValue(
       thread as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>,
@@ -209,5 +235,66 @@ describe('native branch resume binding', () => {
     expect(messageWrite.mock.calls.some(([id]) => id === 'source-assistant')).toBe(false);
     /** @example Continuations are not finalized as one-shot isolation tasks. */
     expect(threadUpdate).not.toHaveBeenCalled();
+  });
+
+  /** @example A run in an ordinary thread still records its session on the topic. */
+  it('keeps the topic binding when an ordinary thread run finishes', async () => {
+    const db = {} as LobeChatDatabase;
+    const messageModel = new MessageModel(db, 'test-user');
+    const threadModel = new ThreadModel(db, 'test-user');
+    const topicModel = new TopicModel(db, 'test-user');
+    const agentOperationModel = new AgentOperationModel(db, 'test-user');
+    const thread = {
+      id: 'child-thread',
+      topicId: 'source-topic',
+      type: 'continuation',
+      sourceMessageId: 'source-assistant',
+      metadata: {},
+    };
+    vi.spyOn(threadModel, 'findById').mockResolvedValue(
+      thread as NonNullable<Awaited<ReturnType<ThreadModel['findById']>>>,
+    );
+    const threadBinding = vi
+      .spyOn(threadModel, 'updateMetadata')
+      .mockResolvedValue({ id: 'child-thread' });
+    vi.spyOn(threadModel, 'update').mockResolvedValue(undefined);
+    const sourceBinding = vi.spyOn(topicModel, 'updateMetadata').mockResolvedValue(undefined);
+    vi.spyOn(topicModel, 'settleRunningOperation').mockResolvedValue({
+      status: 'settled',
+      assistantMessageId: 'child-assistant',
+      threadId: 'child-thread',
+    } as Awaited<ReturnType<TopicModel['settleRunningOperation']>>);
+    vi.spyOn(agentOperationModel, 'findById').mockResolvedValue({
+      id: 'child-operation',
+      threadId: 'child-thread',
+      metadata: { assistantMessageId: 'child-assistant' },
+    } as NonNullable<Awaited<ReturnType<AgentOperationModel['findById']>>>);
+    vi.spyOn(messageModel, 'findById').mockResolvedValue({
+      id: 'child-assistant',
+      content: 'private child answer',
+    } as NonNullable<Awaited<ReturnType<MessageModel['findById']>>>);
+    vi.spyOn(messageModel, 'update').mockResolvedValue({ success: true });
+    vi.spyOn(HeterogeneousPersistenceHandler.prototype, 'finish').mockResolvedValue(undefined);
+    vi.spyOn(CompletionLifecycle.prototype, 'completeOperation').mockResolvedValue(undefined);
+    const service = new HeterogeneousAgentService(db, 'test-user', {
+      agentOperationModel,
+      messageModel,
+      threadModel,
+      topicModel,
+      snapshotStore: null,
+      streamEventManager: {
+        publishStreamEvent: vi.fn(async () => 'event-id'),
+      } as IStreamEventManager,
+    });
+    await service.heteroFinish({
+      agentType: 'codex',
+      operationId: 'child-operation',
+      topicId: 'source-topic',
+      result: 'error',
+      sessionId: 'child-native',
+    });
+    /** @example The ordinary thread keeps canary's topic-scoped binding. */
+    expect(sourceBinding).toHaveBeenCalledWith('source-topic', { heteroSessionId: 'child-native' });
+    expect(threadBinding).not.toHaveBeenCalled();
   });
 });

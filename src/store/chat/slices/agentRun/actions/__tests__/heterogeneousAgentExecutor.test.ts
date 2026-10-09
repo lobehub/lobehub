@@ -3263,6 +3263,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         topicId: 'topic-1',
         type: 'continuation',
         metadata: {
+          codexForkTarget: { position: 'after', threadId: 'native-source', turnId: 'turn-1' },
           heteroSessionId: 'missing-child',
           heteroSessionIdByWorkingDirectory: { '/work/project': 'missing-child' },
           workingDirectory: '/work/project',

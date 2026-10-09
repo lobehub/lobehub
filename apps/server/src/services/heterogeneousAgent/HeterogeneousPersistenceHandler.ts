@@ -531,10 +531,13 @@ export class HeterogeneousPersistenceHandler {
    */
   private async persistSessionId(state: OperationState, sessionId: string): Promise<void> {
     const { topicId, threadId } = state;
-    if (threadId) {
-      const thread = await this.deps.threadModel.findById(threadId);
-      if (!thread || thread.topicId !== topicId) throw new Error('Native branch is unavailable');
-      const updated = await this.deps.threadModel.updateMetadata(threadId, {
+    // Only a Codex Fork thread owns a native session; every other run (including other
+    // thread runs) keeps the topic-scoped, non-fatal binding below.
+    const thread = threadId ? await this.deps.threadModel.findById(threadId) : undefined;
+    if (thread?.metadata?.codexForkTarget) {
+      if (thread.topicId !== topicId) throw new Error('Native branch is unavailable');
+      // The child handoff must be durable: a failed write is retried by the next ingest.
+      const updated = await this.deps.threadModel.updateMetadata(thread.id, {
         heteroSessionId: sessionId,
       });
       if (updated.length === 0) throw new Error('Native child binding could not be saved');

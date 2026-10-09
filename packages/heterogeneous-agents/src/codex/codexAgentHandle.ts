@@ -36,8 +36,13 @@ export interface CodexAgentHandleOptions {
   operationId: string;
   /** Current user input and attachments; native history is never reconstructed from text. */
   prompt: AgentPromptInput;
-  /** Native session to resume. A missing session is a terminal error. */
+  /** Native session to resume. A missing session fails this attempt. */
   resumeSessionId?: string;
+  /**
+   * Fork branches: the caller must not restart or replay a missing native history.
+   * Ordinary topics leave this unset so the caller can retry with its transcript fallback.
+   */
+  strictHistory?: boolean;
 }
 
 /**
@@ -147,7 +152,7 @@ export const createCodexAgentHandle = async (
       (error: unknown) => {
         const detail = error instanceof Error ? error.message : String(error);
         stderr.write(
-          `${options.resumeSessionId || options.forkTarget ? 'Native Codex history is unavailable; refusing to restart or replay the branch. ' : ''}${detail}\n`,
+          `${options.strictHistory && (options.resumeSessionId || options.forkTarget) ? 'Native Codex history is unavailable; refusing to restart or replay the branch. ' : ''}${detail}\n`,
         );
         return { code: cancelledSignal ? null : 1, signal: cancelledSignal ?? null };
       },

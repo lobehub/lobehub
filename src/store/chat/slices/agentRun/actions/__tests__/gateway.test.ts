@@ -1125,6 +1125,17 @@ describe('GatewayActionImpl', () => {
     // A native child refusal persists an error and returns success=false before
     // a gateway token exists. Subscribing anyway left the optimistic assistant
     // blank until a page reload. Reconcile the persisted turn before returning.
+    const codexForkThreadMaps = {
+      'topic-1': [
+        {
+          id: 'child-1',
+          metadata: {
+            codexForkTarget: { position: 'after', threadId: 'source-native', turnId: 'turn-1' },
+          },
+        },
+      ],
+    };
+
     /** @example A lost child shows its persisted error without a gateway event. */
     it('reconciles a rejected native branch without opening a gateway session', async () => {
       const {
@@ -1138,6 +1149,7 @@ describe('GatewayActionImpl', () => {
       const completeOperation = vi.fn();
       state.completeOperation = completeOperation;
       state.getOperationAbortSignal = vi.fn();
+      state.threadMaps = codexForkThreadMaps;
       const context = {
         agentId: 'agent-1',
         scope: 'thread' as const,
@@ -1181,12 +1193,42 @@ describe('GatewayActionImpl', () => {
       expect(result).toBe(failure);
     });
 
+    /** @example Failed dispatches outside a Codex Fork keep the existing gateway path. */
+    it('keeps the gateway path for a failed dispatch outside a Codex Fork thread', async () => {
+      const { action, connectToGateway, state } = createExecuteTestAction();
+      state.completeOperation = vi.fn();
+      state.getOperationAbortSignal = vi.fn();
+      state.threadMaps = { 'topic-1': [{ id: 'ordinary-thread', metadata: {} }] };
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValueOnce({
+        ...precreatedInterventionResult,
+        autoStarted: false,
+        status: 'error',
+        success: false,
+      });
+
+      await action.executeGatewayAgent({
+        context: {
+          agentId: 'agent-1',
+          scope: 'thread',
+          threadId: 'ordinary-thread',
+          topicId: 'topic-1',
+        },
+        message: 'Continue',
+        parentOperationId: 'parent-send',
+      });
+
+      /** @example The Fork-only reconciliation does not read messages for other runs. */
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
     /** @example A failed reconciliation still releases the caller's loading state. */
     it('settles a rejected branch when reading its persisted error fails', async () => {
       const { action, connectToGateway, state } = createExecuteTestAction();
       const completeOperation = vi.fn();
       state.completeOperation = completeOperation;
       state.getOperationAbortSignal = vi.fn();
+      state.threadMaps = codexForkThreadMaps;
       vi.mocked(aiAgentService.execAgentTask).mockResolvedValueOnce({
         ...precreatedInterventionResult,
         autoStarted: false,

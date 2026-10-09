@@ -517,11 +517,12 @@ export class HeterogeneousAgentService {
         // Only the producer can distinguish a missing native session from a
         // transient pre-init error such as Codex's "already has an active writer".
         // Clearing every error without a new id would fork the next turn empty.
-        if (isolationThreadId) {
-          const thread = await this.threadModel.findById(isolationThreadId);
-          if (!thread || thread.topicId !== topicId)
-            throw new Error('Native branch is unavailable');
-          await this.threadModel.updateMetadata(isolationThreadId, resumeBindingUpdate);
+        // Only a Codex Fork branch owns a native session separate from its topic.
+        const forkThread = isolationThreadId
+          ? await this.getCodexForkThread(topicId, isolationThreadId)
+          : undefined;
+        if (forkThread) {
+          await this.threadModel.updateMetadata(forkThread.id, resumeBindingUpdate);
         } else {
           await this.topicModel.updateMetadata(topicId, resumeBindingUpdate);
         }
@@ -732,13 +733,27 @@ export class HeterogeneousAgentService {
     topicId: string,
     threadId?: string,
   ): Promise<string | undefined> {
-    if (threadId) {
-      const thread = await this.threadModel.findById(threadId);
-      if (!thread || thread.topicId !== topicId) throw new Error('Native branch is unavailable');
-      return thread.metadata?.heteroSessionId;
-    }
+    const forkThread = threadId ? await this.getCodexForkThread(topicId, threadId) : undefined;
+    if (forkThread) return forkThread.metadata?.heteroSessionId;
     const topic = await this.topicModel.findById(topicId);
     return topic?.metadata?.heteroSessionId;
+  }
+
+  /**
+   * Finds the Codex Fork branch that owns a thread-scoped run.
+   *
+   * Use when:
+   * - Deciding whether a run's native session belongs to its thread instead of its topic.
+   * Expects:
+   * - The run's topic and thread identifiers.
+   * Returns:
+   * - The thread when it is a Codex Fork branch of this topic; undefined for every other
+   *   thread, which keeps the topic-scoped session binding.
+   */
+  async getCodexForkThread(topicId: string, threadId: string) {
+    const thread = await this.threadModel.findById(threadId);
+    if (!thread || thread.topicId !== topicId || !thread.metadata?.codexForkTarget) return;
+    return thread;
   }
   /**
    * Resolves a device branch from its durable origin and its own message ancestry.
@@ -746,7 +761,8 @@ export class HeterogeneousAgentService {
    * Use when:
    * - Dispatching the first native Fork or continuing a saved child after refresh/reconnect.
    * Expects:
-   * - The authenticated operation's topic, thread and current user message identifiers.
+   * - A Codex Fork thread from {@link HeterogeneousAgentService.getCodexForkThread} and the
+   *   current user message identifier.
    * Returns:
    * - An exact native boundary/resume token, or an explicit lost-child rejection.
    *
@@ -757,15 +773,12 @@ export class HeterogeneousAgentService {
    *     -> {@link resolveCodexBranchRun}
    */
   async getCodexBranchRun(
-    topicId: string,
+    thread: NonNullable<Awaited<ReturnType<HeterogeneousAgentService['getCodexForkThread']>>>,
     messageId: string,
-    threadId?: string,
   ): Promise<CodexBranchRun> {
-    const resumeSessionId = await this.getHeterogeneousResumeSessionId(topicId, threadId);
-    if (!threadId) return { resumeSessionId };
-    const thread = await this.threadModel.findById(threadId);
-    if (!thread || thread.topicId !== topicId) throw new Error('Native branch is unavailable');
-    if (!thread.metadata?.codexForkTarget) return { resumeSessionId };
+    const { id: threadId, topicId } = thread;
+    const origin = thread.metadata?.codexForkTarget;
+    if (!origin) return { codexBranchError: 'Native branch is unavailable' };
     // Read the actual ancestry rather than a paginated transcript, which can omit the durable child handoff.
     const messages: Parameters<typeof resolveCodexBranchRun>[0]['messages'][number][] = [];
     const visited = new Set<string>();
@@ -785,17 +798,14 @@ export class HeterogeneousAgentService {
         // A tool-only answer has already used the branch even without assistant text.
         tools: Array.isArray(message.tools) ? message.tools : undefined,
       });
-      if (
-        message.metadata?.heteroSessionId &&
-        message.metadata.heteroSessionId !== thread.metadata.codexForkTarget.threadId
-      )
+      if (message.metadata?.heteroSessionId && message.metadata.heteroSessionId !== origin.threadId)
         break;
       currentId = message.parentId;
     }
     return resolveCodexBranchRun({
       messageId,
       messages,
-      resumeSessionId,
+      resumeSessionId: thread.metadata?.heteroSessionId,
       thread: { id: threadId, metadata: thread.metadata },
     });
   }

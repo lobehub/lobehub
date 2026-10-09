@@ -71,7 +71,10 @@ import {
   topicSelectors,
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
-import { resolveCodexBranchRun } from '@/store/chat/slices/agentRun/actions/dispatch/codexForkTarget';
+import {
+  findCodexForkThread,
+  resolveCodexBranchRun,
+} from '@/store/chat/slices/agentRun/actions/dispatch/codexForkTarget';
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
@@ -1281,12 +1284,12 @@ export class ConversationLifecycleActionImpl {
     // on — never hand another machine's path to this run (mirrors the server's
     // `topicPinFitsDevice`).
     const topicDeviceId = existingTopic?.metadata?.boundDeviceId;
-    const threadMetadata =
-      operationContext.topicId && operationContext.threadId
-        ? this.#get().threadMaps[operationContext.topicId]?.find(
-            (thread) => thread.id === operationContext.threadId,
-          )?.metadata
-        : undefined;
+    // A Codex Fork runs in its source's directory; other threads keep the topic's.
+    const threadMetadata = findCodexForkThread(
+      this.#get().threadMaps,
+      operationContext.topicId,
+      operationContext.threadId,
+    )?.metadata;
     const topicCwdMetadata =
       topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
         ? undefined
@@ -1767,10 +1770,13 @@ export class ConversationLifecycleActionImpl {
           (heteroContext.topicId
             ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
             : undefined) ?? existingTopic;
+        // Only a Codex Fork thread owns its native session; other threads resume the topic's.
         const thread =
-          heteroContext.topicId && heteroContext.threadId
-            ? this.#get().threadMaps[heteroContext.topicId]?.find(
-                (item) => item.id === heteroContext.threadId,
+          heterogeneousProvider.type === 'codex'
+            ? findCodexForkThread(
+                this.#get().threadMaps,
+                heteroContext.topicId,
+                heteroContext.threadId,
               )
             : undefined;
         const resumeMetadata = (thread?.metadata ?? topic?.metadata) as

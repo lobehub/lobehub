@@ -2358,6 +2358,9 @@ describe('native device fork provenance', () => {
       topicId: 'source-topic',
       threadId: 'child',
     });
+    h.threads.get('child')!.metadata = {
+      codexForkTarget: { position: 'after', threadId: 'native-source', turnId: 'source-turn' },
+    };
     const source: FakeMessage = {
       id: 'source-user',
       agentId: null,
@@ -2411,5 +2414,35 @@ describe('native device fork provenance', () => {
       'source-topic',
       expect.objectContaining({ heteroSessionId: 'native-child' }),
     );
+  });
+
+  // ROOT CAUSE:
+  // The session binding moved to the thread for every thread run, so a run in an ordinary
+  // thread stopped updating its topic's resume token. Only a Codex Fork owns its session.
+  /** @example An ordinary thread run still records its native session on the topic. */
+  it('keeps the topic binding for a run in an ordinary thread', async () => {
+    const h = createHarness({
+      assistantMessageId: 'thread-answer',
+      operationId: 'thread-op',
+      topicId: 'source-topic',
+      threadId: 'ordinary',
+    });
+    await h.handler.ingest({
+      topicId: 'source-topic',
+      operationId: 'thread-op',
+      events: [
+        {
+          operationId: 'thread-op',
+          timestamp: 1,
+          stepIndex: 0,
+          type: 'stream_start',
+          data: { sessionId: 'native-session' },
+        },
+      ],
+    });
+    expect(h.topicModel.updateMetadata).toHaveBeenCalledWith('source-topic', {
+      heteroSessionId: 'native-session',
+    });
+    expect(h.threadModel.updateMetadata).not.toHaveBeenCalled();
   });
 });

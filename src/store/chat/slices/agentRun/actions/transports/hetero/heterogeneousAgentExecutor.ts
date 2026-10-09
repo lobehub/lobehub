@@ -87,6 +87,7 @@ import { getElectronStoreState } from '@/store/electron';
 import { getUserStoreState, useUserStore } from '@/store/user';
 import { labPreferSelectors, userProfileSelectors } from '@/store/user/selectors';
 
+import { findCodexForkThread } from '../../dispatch/codexForkTarget';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from '../gateway/gatewayEventHandler';
@@ -904,6 +905,11 @@ export const executeHeterogeneousAgent = async (
    * Returns:
    * - A settled write with the same metadata available to queued follow-ups.
    */
+  // Only a Codex Fork thread owns a native session; other thread runs keep the topic binding.
+  const codexForkThread =
+    adapterType === 'codex'
+      ? findCodexForkThread(get().threadMaps, context.topicId, context.threadId)
+      : undefined;
   const persistThreadResumeMetadata = async (metadata: ThreadMetadata): Promise<void> => {
     const { threadId, topicId } = context;
     if (!threadId || !topicId) return;
@@ -921,10 +927,10 @@ export const executeHeterogeneousAgent = async (
     if (!context.topicId) return;
 
     const topicMetadata = getTopicMetadataById(get(), context.topicId);
-    const thread = context.threadId
-      ? get().threadMaps[context.topicId]?.find((item) => item.id === context.threadId)
+    const thread = codexForkThread
+      ? get().threadMaps[context.topicId]?.find((item) => item.id === codexForkThread.id)
       : undefined;
-    const currentMetadata = context.threadId ? thread?.metadata : topicMetadata;
+    const currentMetadata = codexForkThread ? thread?.metadata : topicMetadata;
     const clearedMetadata = {
       heteroSessionBindingKey: undefined,
       heteroSessionBindingKeyByWorkingDirectory: removeHeteroSessionBindingKeyForWorkingDirectory(
@@ -939,7 +945,7 @@ export const executeHeterogeneousAgent = async (
       workingDirectory: workingDirectory ?? '',
       workingDirectoryConfig: getPersistedWorkingDirectoryConfig(currentMetadata),
     };
-    if (context.threadId) {
+    if (codexForkThread) {
       await persistThreadResumeMetadata({ ...thread?.metadata, ...clearedMetadata });
       return;
     }
@@ -951,7 +957,7 @@ export const executeHeterogeneousAgent = async (
   let resumeSessionPersistQueue: Promise<void> = Promise.resolve();
   const persistResumeSessionId = (sessionId: string, source: string): Promise<void> => {
     const topicId = context.topicId ?? undefined;
-    if (!topicId || (!context.threadId && !updateTopicMetadata)) return resumeSessionPersistQueue;
+    if (!topicId || (!codexForkThread && !updateTopicMetadata)) return resumeSessionPersistQueue;
     if (sessionId === persistedResumeSessionId || sessionId === pendingResumeSessionId) {
       return resumeSessionPersistQueue;
     }
@@ -961,10 +967,10 @@ export const executeHeterogeneousAgent = async (
       .catch(() => {})
       .then(async () => {
         const topicMetadata = getTopicMetadataById(get(), topicId);
-        const thread = context.threadId
-          ? get().threadMaps[topicId]?.find((item) => item.id === context.threadId)
+        const thread = codexForkThread
+          ? get().threadMaps[topicId]?.find((item) => item.id === codexForkThread.id)
           : undefined;
-        const currentMetadata = context.threadId ? thread?.metadata : topicMetadata;
+        const currentMetadata = codexForkThread ? thread?.metadata : topicMetadata;
         const nextMetadata = {
           ...currentMetadata,
           heteroSessionBindingKey: activeSessionBindingKey,
@@ -982,7 +988,7 @@ export const executeHeterogeneousAgent = async (
           workingDirectory: workingDirectory ?? '',
           workingDirectoryConfig: getPersistedWorkingDirectoryConfig(currentMetadata),
         };
-        if (context.threadId) {
+        if (codexForkThread) {
           await persistThreadResumeMetadata(nextMetadata);
           persistedResumeSessionId = sessionId;
           return;
@@ -2169,11 +2175,7 @@ export const executeHeterogeneousAgent = async (
 
     // The immutable origin survives child binding and renderer reloads. Native branches
     // must keep turn provenance even after the user disables the app-server Labs preference.
-    const branchOrigin =
-      context.topicId && context.threadId
-        ? get().threadMaps[context.topicId]?.find((thread) => thread.id === context.threadId)
-            ?.metadata?.codexForkTarget
-        : undefined;
+    const branchOrigin = codexForkThread?.metadata?.codexForkTarget;
 
     // Start session (pass resumeSessionId for multi-turn --resume)
     const result = await heterogeneousAgentService.startSession({

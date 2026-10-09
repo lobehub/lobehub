@@ -127,14 +127,20 @@ network budget explicitly; this does not change unit-test timeouts or enable ret
 ### Native Codex Fork on a connected device
 
 A current CLI advertises `codex-app-server-v1` only after its resolved Codex binary
-completes a native app-server handshake. `lh connect capabilities` reports that same
-capability as JSON without logging in, connecting a device, or creating a conversation.
-Desktop gateway connections invoke this command through their bundled CLI, so an
-unrelated global CLI cannot determine support. Missing, incompatible, or timed-out
-binaries do not advertise native support.
-The server then runs native Codex turns through app-server and persists each message's
-native session and turn IDs. Older connected CLIs keep the ordinary `codex exec` path;
-Fork requires a capable connection and never silently replays history as text.
+completes a native app-server handshake. The probe runs once per gateway connection
+(and again after 10 minutes), not once per system-info request. `lh connect capabilities`
+reports that same capability as JSON without logging in, connecting a device, or creating
+a conversation. Desktop gateway connections invoke this command through their bundled
+CLI, so an unrelated global CLI cannot determine support. Missing, incompatible, or
+timed-out binaries do not advertise native support.
+
+Ordinary Codex topics run through `codex exec` unless the user enables the
+**Codex App Server Runtime** Lab. With the Lab on and a capable connection, the server
+runs them through app-server and persists each message's native session and turn IDs,
+which is what makes a message forkable. Those ordinary topics keep the `codex exec`
+recovery: a missing native session is retried fresh with the topic transcript. Fork
+branches always use app-server, require a capable connection, and never silently replay
+history as text.
 
 In the product, select that device and use Fork on a user or assistant message. User
 Fork resends the selected user input and its attachments before that native turn;
@@ -146,6 +152,7 @@ files back.
 
 The internal `lh hetero exec --codex-app-server` transport accepts an optional
 `--codex-fork-target` JSON object with `threadId`, `turnId`, and `position` (`before`
-or `after`). A per-operation process owns cancellation and shell identity. This
+or `after`). `--codex-strict-history` (implied by `--codex-fork-target`) marks a Fork
+branch: a missing native session fails instead of restarting fresh. A per-operation process owns cancellation and shell identity. This
 transport rejects unsupported approval or sandbox arguments instead of weakening
 permissions. The richer permission bridge is maintained separately.
