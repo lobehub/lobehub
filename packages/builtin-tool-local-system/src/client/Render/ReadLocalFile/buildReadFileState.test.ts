@@ -8,6 +8,17 @@ import {
 } from './buildReadFileState';
 
 describe('buildReadFileState', () => {
+  it('keeps the card for an empty Devin read confirmed by the final result state', () => {
+    const state = buildReadFileState({
+      args: { file_path: '/repo/empty.txt' },
+      identifier: 'devin',
+      parsedContent: { content: '' },
+      pluginState: { content: '' },
+    });
+
+    expect(state).toMatchObject({ charCount: 0, content: '', path: '/repo/empty.txt' });
+  });
+
   it('keeps the card for a successful builtin read of an empty file', () => {
     const state = buildReadFileState({
       args: { path: '/repo/empty.txt' },
