@@ -780,6 +780,18 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     );
   });
 
+  it('does not snapshot a speed when the Agent leaves it to the CLI config', async () => {
+    heteroAgentConfig.agencyConfig.heterogeneousProvider = {
+      model: 'gpt-5.5',
+      type: 'codex',
+    } as any;
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Start a topic' });
+
+    const metadata = topicMock.create.mock.calls[0][0].metadata;
+    expect(metadata?.heteroSpeed).toBeUndefined();
+  });
+
   it("applies an existing topic's Standard speed over the Agent's Fast default", async () => {
     heteroAgentConfig.agencyConfig.heterogeneousProvider = {
       model: 'gpt-5.5',

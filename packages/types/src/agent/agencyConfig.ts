@@ -294,12 +294,25 @@ export interface HeterogeneousTopicPin extends Partial<HeterogeneousTopicModel> 
  * The effort and speed a newly created topic snapshots from the agent, so later
  * agent edits do not change a running conversation. Speed is resolved through
  * the selector capability, which also reads legacy `service_tier` CLI args.
+ *
+ * Like effort, speed is snapshotted only when the agent sets it explicitly. An
+ * agent without a speed emits no CLI flag, so the CLI's own config (for Codex,
+ * `service_tier` in `~/.codex/config.toml`) decides; pinning a resolved
+ * Standard there would claim a choice that never reaches the CLI.
  */
 export const resolveHeterogeneousTopicRuntimeSnapshot = (
   config: HeterogeneousProviderConfig | undefined,
 ): { heteroEffort?: HeterogeneousReasoningEffort; heteroSpeed?: HeterogeneousSpeedMode } => {
   if (!config) return {};
-  const speed = getHeteroSelectorCapability(config.type)?.speed?.resolve(config);
+  const speedCapability = getHeteroSelectorCapability(config.type)?.speed;
+  const hasExplicitSpeed =
+    config.speed !== undefined ||
+    !!speedCapability?.encodings.some((encoding) =>
+      encoding.kind === 'flag'
+        ? hasAnyCliFlag(config.args ?? [], encoding.flags)
+        : hasCliConfigKey(config.args ?? [], encoding.key),
+    );
+  const speed = hasExplicitSpeed ? speedCapability?.resolve(config) : undefined;
   return {
     ...(config.effort === undefined ? {} : { heteroEffort: config.effort }),
     ...(speed === undefined ? {} : { heteroSpeed: speed }),

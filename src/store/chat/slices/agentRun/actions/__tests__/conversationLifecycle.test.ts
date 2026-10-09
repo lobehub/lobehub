@@ -2630,7 +2630,6 @@ describe('ConversationLifecycle actions', () => {
               newTopic: expect.objectContaining({
                 metadata: {
                   boundDeviceId: HETERO_DEVICE_ID,
-                  heteroSpeed: 'default',
                   workingDirectory: '/repo/device-default',
                   workingDirectoryConfig: { path: '/repo/device-default' },
                 },

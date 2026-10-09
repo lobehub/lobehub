@@ -15,6 +15,7 @@ import {
   resolveAgentAgencyConfig,
   resolveAgentTopicSharePolicy,
   resolveHeterogeneousProviderTopicModel,
+  resolveHeterogeneousTopicRuntimeSnapshot,
   unwrapServerDefaultHeterogeneousModel,
 } from './agencyConfig';
 import {
@@ -1276,6 +1277,30 @@ describe('applyTopicModelToHeterogeneousProvider - effort pin', () => {
     const config = { model: 'global-model', type: 'cursor' } as const;
 
     expect(applyTopicModelToHeterogeneousProvider(config, { effort: 'high' })).toBe(config);
+  });
+});
+
+describe('resolveHeterogeneousTopicRuntimeSnapshot', () => {
+  it('snapshots an explicit speed, including a legacy service_tier arg', () => {
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ speed: 'fast', type: 'codex' })).toEqual({
+      heteroSpeed: 'fast',
+    });
+    expect(
+      resolveHeterogeneousTopicRuntimeSnapshot({
+        args: ['-c', 'service_tier="fast"'],
+        type: 'codex',
+      }),
+    ).toEqual({ heteroSpeed: 'fast' });
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ speed: 'default', type: 'codex' })).toEqual({
+      heteroSpeed: 'default',
+    });
+  });
+
+  it('leaves speed unpinned when the Agent sets none, so the CLI config still applies', () => {
+    expect(
+      resolveHeterogeneousTopicRuntimeSnapshot({ effort: 'high', model: 'gpt-5.5', type: 'codex' }),
+    ).toEqual({ heteroEffort: 'high' });
+    expect(resolveHeterogeneousTopicRuntimeSnapshot({ type: 'codex' })).toEqual({});
   });
 });
 

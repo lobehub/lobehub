@@ -148,18 +148,24 @@ describe('snapshotAgentReasoning', () => {
     expect(await snapshotAgentReasoning(without, {})).toBeUndefined();
   });
 
-  it("pins a Codex agent's resolved speed, including Standard", async () => {
+  it("pins a Codex agent's explicit speed only", async () => {
     const fast = seedAgent('codex-fast', {
       agencyConfig: {
         heterogeneousProvider: { args: ['-c', 'service_tier="fast"'], type: 'codex' },
       },
     });
     const standard = seedAgent('codex-standard', {
+      agencyConfig: { heterogeneousProvider: { speed: 'default', type: 'codex' } },
+    });
+    const unset = seedAgent('codex-unset', {
       agencyConfig: { heterogeneousProvider: { type: 'codex' } },
     });
 
     expect(await snapshotAgentReasoning(fast, {})).toEqual({ heteroSpeed: 'fast' });
     expect(await snapshotAgentReasoning(standard, {})).toEqual({ heteroSpeed: 'default' });
+    // No Agent speed means no CLI flag, so the CLI's own config decides; a
+    // Standard pin here would claim a choice that never reaches the CLI.
+    expect(await snapshotAgentReasoning(unset, {})).toBeUndefined();
   });
 
   it('skips models without reasoning extend params', async () => {
