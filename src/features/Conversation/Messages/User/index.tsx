@@ -150,6 +150,8 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
             {dmIndicator}
             {agentSender?.topicId && (
               <AgentSenderSourceLink
+                chatGroupId={agentSender.chatGroupId}
+                threadId={agentSender.threadId}
                 topicAgentId={agentSender.topicAgentId ?? agentSender.agentId}
                 topicId={agentSender.topicId}
                 topicTitle={agentSender.topicTitle}

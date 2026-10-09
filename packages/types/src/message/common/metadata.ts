@@ -222,8 +222,21 @@ export interface AgentSenderMetadata {
   agentId: string;
   /** Sending agent's avatar at send time; snapshotted so a later delete can't blank the bubble. */
   avatar?: string;
+  /**
+   * The group conversation the launching turn ran in, when it ran in one rather
+   * than in a one-to-one topic. A group's turns are routed under
+   * `/group/<chatGroupId>/<topicId>`; the agent route would open the supervisor's
+   * own conversation instead of the group the turn actually came from.
+   */
+  chatGroupId?: string;
   /** Sending agent's personal name at send time; resolve the label with `agentDisplayName`. */
   name?: string;
+  /**
+   * The thread the launching turn ran in, reopened with `?portalThread=<id>`.
+   * Without it the link lands on the topic's main transcript, which is not where
+   * the turn happened.
+   */
+  threadId?: string;
   /** Sending agent's role title at send time; the fallback label when it has no name. */
   title?: string;
   /**
@@ -245,7 +258,9 @@ export interface AgentSenderMetadata {
 export const AgentSenderMetadataSchema = z.object({
   agentId: z.string(),
   avatar: z.string().optional(),
+  chatGroupId: z.string().optional(),
   name: z.string().optional(),
+  threadId: z.string().optional(),
   title: z.string().optional(),
   topicAgentId: z.string().optional(),
   topicId: z.string().optional(),

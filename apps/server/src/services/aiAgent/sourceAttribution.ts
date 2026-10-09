@@ -8,7 +8,11 @@ const log = debug('lobe-server:ai-agent-source-attribution');
 export interface SourceOperationRow {
   /** The agent that RAN the operation — the sender, which is not always the topic's owner. */
   agentId?: null | string;
+  /** Set when the turn ran in a group conversation rather than a one-to-one topic. */
+  chatGroupId?: null | string;
   status?: AgentOperationStatus | null;
+  /** Set when the turn ran inside a thread; the link reopens it. */
+  threadId?: null | string;
   topicId?: null | string;
   userId: string;
 }
@@ -85,6 +89,11 @@ export const resolveAgentSenderFromOperation = async (
 
   const base: AgentSenderMetadata = {
     agentId: senderAgentId,
+    // Group and thread are where the turn actually happened: without them the
+    // jump-back opens the agent's own topic instead of the group, or the topic's
+    // main transcript instead of the thread.
+    chatGroupId: operation.chatGroupId ?? undefined,
+    threadId: operation.threadId ?? undefined,
     topicAgentId: topic.agentId,
     topicId: operation.topicId,
     topicTitle: topic.title ?? undefined,

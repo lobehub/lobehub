@@ -85,6 +85,25 @@ describe('resolveAgentSenderFromOperation', () => {
    * process, keeps it after its run finishes, and the public API can replay any
    * prior id. A settled run must therefore stop granting authorship.
    */
+  it('carries the group and thread the launching turn actually ran in', async () => {
+    const deps = buildDeps({
+      operation: {
+        agentId: 'agt-coco',
+        chatGroupId: 'grp_1',
+        threadId: 'thd_1',
+        topicId: 'tpc-source',
+        userId: CALLER,
+      },
+      topic: { agentId: 'agt-coco', title: 'Source' },
+    });
+
+    const result = await resolveAgentSenderFromOperation('op-1', deps);
+
+    // The link is built from these: without them a group source opens the
+    // supervisor's conversation and a thread source opens the main transcript.
+    expect(result).toMatchObject({ chatGroupId: 'grp_1', threadId: 'thd_1' });
+  });
+
   it('stamps nothing for an operation that has already settled', async () => {
     for (const status of ['abandoned', 'done', 'error', 'interrupted'] as const) {
       const deps = buildDeps({
