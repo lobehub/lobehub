@@ -30,7 +30,7 @@ export interface RuntimeExecutorContext {
    * its presence alone is the signal every per-step consumer keys off. Forwarded
    * into `ToolExecutionContext.agentShareVisitor` so
    * `BuiltinToolsExecutor.execute` can re-check the visitor's grants right
-   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate.ts`.
+   * before dispatch — see `isShareBlockedDataToolCall` in `shareGate/dispatch.ts`.
    */
   agentShareVisitor?: AgentShareVisitorContext;
   /**

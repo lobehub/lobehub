@@ -192,7 +192,7 @@ export const runtimeManagedToolIds = [
  * touch, at BOTH the tool-set-assembly layer (server
  * `applyShareGateToToolSet`) and the dispatch layer (server
  * `isShareBlockedDataToolCall`) — see
- * `apps/server/src/services/aiAgent/shareGate.ts`. Also the single source of
+ * `apps/server/src/services/aiAgent/shareGate/`. Also the single source of
  * truth for the agent-owner-facing share settings tool picker, which must
  * show a builtin tool as unavailable-to-visitors rather than let the owner
  * select (and the UI silently confirm) a grant the server gate can never
@@ -229,8 +229,8 @@ export const runtimeManagedToolIds = [
  * `lobe-user-interaction`, `lobe-activator`,
  * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
  * `lobe-topic-reference`, and the hidden system-only self-iteration tools),
- * see the denied-bucket doc block at the bottom of
- * `apps/server/src/services/aiAgent/shareGate.ts`.
+ * see the denied-builtins section of
+ * `apps/server/src/services/aiAgent/shareGate/README.md`.
  */
 export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   CalculatorManifest.identifier,
@@ -248,11 +248,11 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   // is skipped for visitor runs (see `cloudSandbox.ts` /
   // `preprocessLhCommand.ts`), and `lobe-creds` stays denied so
   // `~/.creds/env` is never written into that session either. See the
-  // positive-evidence doc block in `shareGate.ts` for the full rationale.
+  // allowed-builtins section of `shareGate/README.md` for the full rationale.
   CloudSandboxManifest.identifier,
   // Data-bearing tools whose whole-identifier grant AND per-API write/always-
   // blocked surface is further narrowed server-side by
-  // `DATA_TOOL_ACCESS_RULES` in `shareGate.ts` — being on this allowlist only
+  // `DATA_TOOL_ACCESS_RULES` in `shareGate/dataToolRules.ts` — being on this allowlist only
   // lets them survive to that narrower gate, it does not itself grant read or
   // write access.
   KnowledgeBaseManifest.identifier,
@@ -264,8 +264,8 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   // `activateSkill` / `readReference` on skills the creator explicitly listed
   // in `shareConfig.skillGrants`, enforced again at load time in the server
   // runtime so the model cannot name a skill outside that list. Every other
-  // API of the tool is blocked. See the positive-evidence doc block in
-  // `shareGate.ts`.
+  // API of the tool is blocked. See the allowed-builtins section of
+  // `shareGate/README.md`.
   SkillsManifest.identifier,
 ]);
 
@@ -273,7 +273,7 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  * Subset of {@link AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS} whose server-side
  * data grant is UNCONDITIONALLY `none` — surviving the master allowlist only
  * to be blocked outright by `DATA_TOOL_ACCESS_RULES` in
- * `apps/server/src/services/aiAgent/shareGate.ts`, for every API and no matter
+ * `apps/server/src/services/aiAgent/shareGate/dataToolRules.ts`, for every API and no matter
  * what the share config says. There is no knowledge-base or agent-file grant
  * in `AgentShareConfig` at all (see `applyShareGateToAgentConfig`), so a
  * visitor run can never reach the knowledge-base store. Agent Documents is
@@ -285,7 +285,7 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
  *
  * Exists so the owner-facing share settings tool picker can render these as
  * permanently unavailable instead of offering a toggle the server will always
- * ignore. `shareGate.test.ts` asserts this set stays exactly the set of
+ * ignore. `shareGate/dispatch.test.ts` asserts this set stays exactly the set of
  * identifiers `isShareBlockedDataToolCall` blocks under maximal permissions,
  * so relaxing a grant server-side without updating this list fails there
  * rather than silently lying in the UI.
@@ -627,7 +627,7 @@ export const isBuiltinToolIdentifier = (identifier: string): boolean =>
  * governed builtin identifier, true only when it is explicitly listed in
  * {@link AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS}.
  *
- * Shared by the server gate (`shareGate.ts`) and the owner-facing tool picker
+ * Shared by the server gate (`apps/server/src/services/aiAgent/shareGate/`) and the owner-facing tool picker
  * so both sides agree on exactly which builtin tools a share visitor's run
  * can ever reach.
  */
