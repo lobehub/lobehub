@@ -1,7 +1,8 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { Flexbox } from '@lobehub/ui';
+import { Button, createModal } from '@lobehub/ui/base-ui';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -33,25 +34,38 @@ const ElectronAppStateSync = () => {
       resolved = true;
       return rendererOtaService.resolveUnloadConfirmation(proceed).catch(console.error);
     };
-    const modal = confirmModal({
+    const modal = createModal({
       title: tElectron('updater.confirmReloadTitle'),
       content: tElectron('updater.confirmReloadDescription'),
-      cancelText: t('cancel', { ns: 'common' }),
-      okText: tElectron('updater.confirmReloadContinue'),
-      onCancel: () => {
-        void resolve(false);
+      footer: (
+        <Flexbox horizontal gap={8} justify={'flex-end'}>
+          <Button
+            onClick={() => {
+              void resolve(false);
+              modal.close();
+            }}
+          >
+            {t('cancel')}
+          </Button>
+          <Button
+            type={'primary'}
+            onClick={() => {
+              void resolve(true);
+              modal.close();
+            }}
+          >
+            {tElectron('updater.confirmReloadContinue')}
+          </Button>
+        </Flexbox>
+      ),
+      onOpenChange: (open) => {
+        if (!open) void resolve(false);
       },
-      onOk: () => resolve(true),
     });
     dismissConfirmation.current = () => {
       resolved = true;
       modal.close();
     };
-    modal.update({
-      onOpenChange: (open) => {
-        if (!open) void resolve(false);
-      },
-    });
   });
 
   useWatchBroadcast('reloadConfirmationCancelled', () => {

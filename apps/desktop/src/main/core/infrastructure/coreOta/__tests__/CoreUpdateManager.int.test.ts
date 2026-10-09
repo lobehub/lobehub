@@ -78,7 +78,9 @@ const makeApp = () => ({
         {
           browserWindow: { webContents: { id: 1, reloadIgnoringCache: vi.fn() } },
           cancelUnloadConfirmation: vi.fn(),
-          reloadIgnoringCache: vi.fn(function () {
+          reloadIgnoringCache: vi.fn(function (this: {
+            browserWindow: { webContents: { reloadIgnoringCache: () => void } };
+          }) {
             this.browserWindow.webContents.reloadIgnoringCache();
           }),
         },
@@ -918,7 +920,9 @@ describe('CoreUpdateManager checkForUpdates', () => {
     app.browserManager.browsers.set('second', {
       browserWindow: { webContents: { id: 2, reloadIgnoringCache: vi.fn() } },
       cancelUnloadConfirmation: vi.fn(),
-      reloadIgnoringCache: vi.fn(function () {
+      reloadIgnoringCache: vi.fn(function (this: {
+        browserWindow: { webContents: { reloadIgnoringCache: () => void } };
+      }) {
         this.browserWindow.webContents.reloadIgnoringCache();
       }),
     });
@@ -948,7 +952,9 @@ describe('CoreUpdateManager checkForUpdates', () => {
     app.browserManager.browsers.set('second', {
       browserWindow: { webContents: { id: 2, reloadIgnoringCache: vi.fn() } },
       cancelUnloadConfirmation: vi.fn(),
-      reloadIgnoringCache: vi.fn(function () {
+      reloadIgnoringCache: vi.fn(function (this: {
+        browserWindow: { webContents: { reloadIgnoringCache: () => void } };
+      }) {
         this.browserWindow.webContents.reloadIgnoringCache();
       }),
     });
