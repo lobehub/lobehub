@@ -501,6 +501,24 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
 ];
 
 /**
+ * Operation types whose in-flight state pins a topic row's `running` ring and
+ * elapsed clock. Single source of truth for BOTH sides of that signal:
+ *
+ * - the row reads it (`operationSelectors.isTopicVisiblyRunning` /
+ *   `visiblyRunningTopicIds`), and
+ * - the stale-run sweeps that retire a leaked op must scan the same set
+ *   (`ChatAgentRunGatewayAction.settleAllUnbackedTopicRuns`).
+ *
+ * Anything that can pin the row but falls outside a sweeper's filter strands
+ * the row spinning and counting over a finished topic until a full reload.
+ * That is exactly what an intervention continuation's interim op
+ * (`approveToolCalling` / `submitToolInteraction` / `skipToolInteraction`) did
+ * while the sweeps only looked at {@link AI_RUNTIME_OPERATION_TYPES}. Keep both
+ * sides on this one list.
+ */
+export const TOPIC_VISIBLY_RUNNING_OPERATION_TYPES: OperationType[] = INPUT_LOADING_OPERATION_TYPES;
+
+/**
  * Operation types that block a fresh `sendMessage`: a send fired while one of
  * these runs enqueues behind it instead of starting a concurrent run.
  *

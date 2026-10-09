@@ -17,6 +17,8 @@ import { topicService } from '@/services/topic';
 import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
+import { TOPIC_VISIBLY_RUNNING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -2936,6 +2938,179 @@ describe('topic action', () => {
 
       expect(cleaned).toBe(0);
       expect(topicService.updateTopic).not.toHaveBeenCalledWith(topicId, { status: 'active' });
+    });
+  });
+
+  // A run whose terminal frame never landed (lost socket, hibernated DO buffer,
+  // or an intervention continuation dispatched on a new operation) leaves this
+  // tab holding a `running` op while the server has already retired the topic.
+  // The row reads that op for BOTH its spinner and its elapsed clock, so it spins
+  // and counts over a finished topic forever unless something retires the op.
+  describe('settleAllUnbackedTopicRuns', () => {
+    const agentId = 'leak-agent';
+    const topicId = 'leak-topic';
+    const serverOperationId = 'server-op-1';
+
+    /**
+     * The client's copy of the row as it looks after the leak: it still claims a
+     * live run (`running` + a `runningOperation` marker) long after the server
+     * has moved on. Returns the idle row the server would report for the same
+     * topic, which is what the sweep must trust.
+     */
+    const seedLeakedRow = () => {
+      const key = topicMapKey({ agentId });
+      const localTopic = {
+        agentId,
+        id: topicId,
+        metadata: {
+          runningOperation: { assistantMessageId: 'assistant-1', operationId: serverOperationId },
+        },
+        sessionId: agentId,
+        status: 'running',
+        title: 'Leaked running topic',
+        updatedAt: Date.now(),
+      } as ChatTopic & { agentId: string };
+
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: agentId,
+          messageOperationMap: {},
+          operations: {},
+          operationsByContext: {},
+          operationsByMessage: {},
+          topicDataMap: {
+            [key]: {
+              currentPage: 0,
+              hasMore: false,
+              items: [localTopic],
+              pageSize: 20,
+              total: 1,
+            },
+          },
+        });
+      });
+
+      return {
+        key,
+        // The server's answer: no runningOperation, status outside running /
+        // waitingForHuman — i.e. the run is over.
+        serverRow: {
+          agentId,
+          id: topicId,
+          metadata: {},
+          sessionId: agentId,
+          status: 'active',
+          title: 'Leaked running topic',
+          updatedAt: Date.now(),
+        } as unknown as ChatTopic,
+      };
+    };
+
+    /** The leaked op itself: started, still `running`, old enough to settle. */
+    const seedLeakedOp = (type: (typeof TOPIC_VISIBLY_RUNNING_OPERATION_TYPES)[number]) => {
+      let operationId = '';
+      act(() => {
+        operationId = useChatStore.getState().startOperation({
+          context: { agentId, topicId },
+          metadata: { serverOperationId },
+          type,
+        }).operationId;
+      });
+
+      const operation = useChatStore.getState().operations[operationId];
+      useChatStore.setState({
+        operations: {
+          ...useChatStore.getState().operations,
+          [operationId]: {
+            ...operation,
+            // Past LOCAL_RUN_SETTLE_MIN_AGE_MS, so the dispatch window's guard
+            // does not mask the leak.
+            metadata: { ...operation.metadata, startTime: Date.now() - 60_000 },
+          },
+        },
+      });
+
+      return operationId;
+    };
+
+    // Parametrized over the exact set the row reads, so a type that can pin the
+    // row while sitting outside the sweep's filter fails here instead of leaking
+    // a permanently-spinning row. The interim types are the ones an intervention
+    // continuation leaves behind (see TOPIC_VISIBLY_RUNNING_OPERATION_TYPES).
+    it.each(TOPIC_VISIBLY_RUNNING_OPERATION_TYPES)(
+      'retires a leaked %s op once the server reports the run is over',
+      async (type) => {
+        const { key, serverRow } = seedLeakedRow();
+        const operationId = seedLeakedOp(type);
+        vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+        const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+        const state = useChatStore.getState();
+        expect(settled).toBe(1);
+        // The op no longer keeps the sidebar spinner and elapsed clock alive.
+        expect(state.operations[operationId].status).toBe('completed');
+        expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(false);
+        // …and the row's own copy is retired with it, marker included.
+        expect(state.topicDataMap[key].items[0]).toMatchObject({
+          metadata: { runningOperation: null },
+          status: 'active',
+        });
+      },
+    );
+
+    it('leaves a genuinely running op alone while the server reports a live run', async () => {
+      const { key } = seedLeakedRow();
+      const operationId = seedLeakedOp('submitToolInteraction');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        ...useChatStore.getState().topicDataMap[key].items[0],
+      } as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      const state = useChatStore.getState();
+      expect(settled).toBe(0);
+      expect(state.operations[operationId].status).toBe('running');
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(true);
+      expect(state.topicDataMap[key].items[0].status).toBe('running');
+    });
+
+    it('reads no server row at all when there is no local candidate', async () => {
+      seedLeakedRow();
+      const detail = vi.spyOn(topicService, 'getTopicDetail');
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(0);
+      expect(detail).not.toHaveBeenCalled();
+    });
+
+    // The user-visible contract: opening the sidebar runs the watchdog, and the
+    // watchdog must retire a leak the server cannot see. Before the mirror sweep
+    // existed this test hung on a `running` op forever — the spinner and elapsed
+    // clock the user reported.
+    it('retires a local-only leak through cleanupStaleRunningTopics', async () => {
+      const { key, serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('submitToolInteraction');
+      // Nothing is `running` on the SERVER: the topic was already retired, so it
+      // never appears in the watchdog's own `statuses: ['running']` query.
+      vi.spyOn(topicService, 'queryTopics').mockResolvedValue([]);
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      await act(async () => {
+        await useChatStore.getState().cleanupStaleRunningTopics();
+      });
+
+      await waitFor(() => {
+        expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      });
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(useChatStore.getState())).toBe(
+        false,
+      );
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'active',
+      });
     });
   });
 

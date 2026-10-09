@@ -1181,6 +1181,19 @@ export class ChatTopicActionImpl {
         }),
       );
 
+      // Mirror sweep: a run the SERVER has already retired can still leave this
+      // tab holding a `running` local op — its terminal frame never landed (a
+      // lost socket, a hibernated DO buffer, or an intervention continuation
+      // dispatched on a new operation). Such a topic is idle on the server, so it
+      // never appears in the `statuses: ['running']` query above; derive the
+      // candidates from the local op map instead. Fire-and-forget: the sidebar
+      // should not wait on a per-topic server read.
+      void this.#get()
+        .settleAllUnbackedTopicRuns()
+        .catch((err) =>
+          console.error('[cleanupStaleRunningTopics] unbacked local run sweep failed:', err),
+        );
+
       const cleanedCount = cleanedResults.filter(Boolean).length;
 
       if (cleanedCount > 0) {

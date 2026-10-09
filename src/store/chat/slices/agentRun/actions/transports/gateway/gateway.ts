@@ -56,8 +56,9 @@ import {
 } from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
-import { INPUT_LOADING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { TOPIC_VISIBLY_RUNNING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
+import { isInterventionRunActive } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { getElectronStoreState } from '@/store/electron';
@@ -2272,6 +2273,124 @@ export class GatewayActionImpl {
   };
 
   /**
+   * Retire the local topic-run ops whose run the server no longer considers live.
+   *
+   * A gateway op normally settles on its terminal frame, but that frame can be
+   * lost: the socket resubscribes mid-run, the op's DO event buffer hibernates
+   * away, or — the case this exists for — an intervention continuation is
+   * dispatched out-of-band on a NEW operation whose stream delivers neither a
+   * terminal nor a disconnect, so the terminal-missing fallback never fires. The
+   * run is over on the server either way, and the leaked op is exactly what the
+   * topic row reads: `isTopicVisiblyRunning` drives the sidebar spinner and
+   * `getVisibleAgentRuntimeStartTimeByContext` its elapsed clock, so the row
+   * keeps spinning and counting over a finished topic. `cleanupStaleRunningTopics`
+   * cannot help on its own: the topic is idle on the server, so it never shows up
+   * in that watchdog's `statuses: ['running']` query.
+   *
+   * Liveness is read from the SERVER, never guessed from a local timer: the row
+   * must report no live run at all (`isInterventionRunActive` — no
+   * `runningOperation`, no task reservation, and a status outside
+   * running / waitingForHuman). A local run op still running on such a topic is
+   * unbacked by definition.
+   */
+  settleUnbackedTopicRuns = async (params: {
+    agentId?: string;
+    groupId?: string;
+    topicId: string;
+  }): Promise<number> => {
+    const { topicId } = params;
+    if (!topicId) return 0;
+
+    // Cheap local pre-check first: without a candidate there is nothing to
+    // settle, and no reason to pay for a server read.
+    const candidates = this.#getSettleableLocalRuntimeOps(topicId);
+    if (candidates.length === 0) return 0;
+
+    // A missing / unreadable row is not evidence the run ended — leave the ops
+    // alone rather than settling them on an absent answer.
+    const topic = await topicService.getTopicDetail(topicId).catch(() => undefined);
+    if (!topic || isInterventionRunActive(topic)) return 0;
+
+    let settled = 0;
+    for (const op of candidates) {
+      // A terminal frame may have landed while the read was in flight.
+      if (this.#get().operations[op.id]?.status !== 'running') continue;
+
+      // Complete the op itself first: it is what every "a run is in flight"
+      // surface reads (sidebar spinner, elapsed clock, stop button).
+      this.#get().completeOperation(op.id);
+      this.clearLocalRunningOperation({
+        agentId: params.agentId,
+        groupId: params.groupId,
+        operationId: op.metadata.serverOperationId ?? op.id,
+        status: 'active',
+        topicId,
+      });
+      settled++;
+    }
+
+    return settled;
+  };
+
+  /**
+   * {@link settleUnbackedTopicRuns} across every topic this tab still holds a
+   * visibly-running op for.
+   *
+   * Backs the sidebar's stale-run sweep, where the topic ids come from the local
+   * op map instead of a server query: a topic the server already retired is idle,
+   * so it never appears in the `statuses: ['running']` query that drives
+   * `cleanupStaleRunningTopics`. Costs nothing without a candidate, so it is safe
+   * to call opportunistically (e.g. on a sidebar interval).
+   */
+  settleAllUnbackedTopicRuns = async (): Promise<number> => {
+    const topicIds = new Set(
+      Object.values(this.#get().operations)
+        .filter((op) => this.#isLiveLocalRuntimeOp(op))
+        .map((op) => op.context.topicId)
+        .filter((id): id is string => !!id),
+    );
+    if (topicIds.size === 0) return 0;
+
+    const settled = await Promise.all(
+      [...topicIds].map((topicId) => this.settleUnbackedTopicRuns({ topicId })),
+    );
+
+    return settled.reduce((sum, count) => sum + count, 0);
+  };
+
+  /**
+   * Live topic-run ops this tab still holds for `topicId`, filtered to the ones
+   * old enough to settle.
+   *
+   * `LOCAL_RUN_SETTLE_MIN_AGE_MS` covers the dispatch window where this tab's op
+   * already exists but the server's own `runningOperation` / `running` status has
+   * not been read back yet — without it a just-started run could be retired
+   * against a stale read.
+   */
+  #getSettleableLocalRuntimeOps = (topicId: string) => {
+    const now = Date.now();
+
+    return Object.values(this.#get().operations).filter(
+      (op) =>
+        this.#isLiveLocalRuntimeOp(op) &&
+        op.context.topicId === topicId &&
+        typeof op.metadata.startTime === 'number' &&
+        now - op.metadata.startTime >= LOCAL_RUN_SETTLE_MIN_AGE_MS,
+    );
+  };
+
+  /**
+   * Whether `op` is one the topic row reports as running — the exact set the row
+   * reads ({@link TOPIC_VISIBLY_RUNNING_OPERATION_TYPES}). Using anything
+   * narrower here leaks: an op that pins the row but sits outside this filter can
+   * never be retired by the sweep, so the row spins until a reload.
+   */
+  #isLiveLocalRuntimeOp = (op: ChatStore['operations'][string]): boolean =>
+    TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.includes(op.type) &&
+    op.status === 'running' &&
+    !op.metadata.isAborting;
+
+  /**
    * Whether this tab has a live turn on `topicId` that belongs to a run other
    * than `serverOperationId` — e.g. a follow-up (or queued message) already sent
    * after this run ended. Operations of this run itself (its runtime op and its
@@ -2289,7 +2408,7 @@ export class GatewayActionImpl {
       return false;
     };
 
-    return INPUT_LOADING_OPERATION_TYPES.some((type) =>
+    return TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.some((type) =>
       (operationsByType?.[type] ?? []).some((id) => {
         const op = operations?.[id];
         return (
@@ -2412,6 +2531,13 @@ export class GatewayActionImpl {
 }
 
 export type GatewayAction = Pick<GatewayActionImpl, keyof GatewayActionImpl>;
+
+/**
+ * Grace period before an unbacked local run op may be retired. Covers the
+ * dispatch window where this tab's op exists but the server has not yet
+ * published its own `runningOperation` / `running` status.
+ */
+const LOCAL_RUN_SETTLE_MIN_AGE_MS = 30_000;
 
 const GATEWAY_CONNECT_WAIT_MS = 5000;
 
