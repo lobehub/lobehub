@@ -8,7 +8,7 @@ import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } fro
 import {
   applyWorkingDirByDevicePatch,
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
-  getHeterogeneousNativeModelProvider,
+  getHeterogeneousTaskModelProvider,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
@@ -598,14 +598,14 @@ export class AgentModel {
    * - An Agent ID or slug within the caller's visibility scope.
    *
    * Returns:
-   * - The unchanged runtime snapshot and visibility, plus the native model provider
-   *   when subscription/local authentication permits native model overrides.
+   * - The unchanged runtime snapshot and visibility, plus the model override provider
+   *   for native or personal API Tasks. Null preserves missing/server-default API bindings.
    */
   getAgentSnapshotForTaskCreate = async (
     idOrSlug: string,
   ): Promise<{
-    /** Native provider for explicit model-only Tasks; absent for API authentication. */
-    nativeModelProvider?: string;
+    /** Provider for model-only Tasks; null rejects inferred API bindings, absent for regular Agents. */
+    modelOverrideProvider?: string | null;
     snapshot: { model: string; provider: string } | null;
     visibility: 'private' | 'public';
   } | null> => {
@@ -624,11 +624,11 @@ export class AgentModel {
     if (!row) return null;
     const snapshot =
       row.model && row.provider ? { model: row.model, provider: row.provider } : null;
-    const nativeModelProvider = getHeterogeneousNativeModelProvider(
+    const modelOverrideProvider = getHeterogeneousTaskModelProvider(
       row.agencyConfig?.heterogeneousProvider,
     );
     return {
-      ...(nativeModelProvider ? { nativeModelProvider } : {}),
+      ...(modelOverrideProvider !== undefined ? { modelOverrideProvider } : {}),
       snapshot,
       visibility: row.visibility as 'private' | 'public',
     };

@@ -3,7 +3,7 @@ import { AcceptanceEvidenceIdentifier } from '@lobechat/builtin-tool-acceptance-
 import { BriefIdentifier } from '@lobechat/builtin-tool-brief';
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import type { ExecAgentResult, TaskItem, TaskRunTrigger } from '@lobechat/types';
-import { getHeterogeneousNativeModelProvider, readTaskExecutionConfig } from '@lobechat/types';
+import { getHeterogeneousTaskModelProvider, readTaskExecutionConfig } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -257,7 +257,7 @@ export class TaskRunnerService {
           const missing = resolveMissingTaskModelConfig(
             taskConfig,
             snapshot,
-            getHeterogeneousNativeModelProvider(agencyConfig?.heterogeneousProvider),
+            getHeterogeneousTaskModelProvider(agencyConfig?.heterogeneousProvider),
           );
           await this.taskModel.updateTaskConfig(task.id, missing);
           Object.assign(taskConfig, missing);

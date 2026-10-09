@@ -184,7 +184,7 @@ describe('TaskService', () => {
   describe('createTask native model snapshots', () => {
     beforeEach(() => {
       mockAgentModel.getAgentSnapshotForTaskCreate.mockResolvedValueOnce({
-        nativeModelProvider: 'codex',
+        modelOverrideProvider: 'codex',
         snapshot: { model: 'codex', provider: 'openai' },
         visibility: 'private',
       });
@@ -230,6 +230,31 @@ describe('TaskService', () => {
       });
       expect(task.config).toEqual({ model: 'gpt-4o', provider: 'openai' });
     });
+  });
+
+  // ROOT CAUSE:
+  // A model-only API Task used the wrapper provider from the Agent row instead
+  // of the binding provider, which changed credentials during later resolution.
+  /** @example Task creation preserves the personal API provider with an explicit model. */
+  it('creates an API model-only Task with its binding provider', async () => {
+    mockAgentModel.getAgentSnapshotForTaskCreate.mockResolvedValueOnce({
+      modelOverrideProvider: 'personal-provider',
+      snapshot: { model: 'codex', provider: 'openai' },
+      visibility: 'private',
+    });
+    mockTaskModel.create.mockImplementation(async (data: Parameters<TaskModel['create']>[0]) => ({
+      ...data,
+      id: 'task-api-model',
+      identifier: 'T-1',
+      seq: 1,
+    }));
+    const task = await new TaskService(db, userId).createTask({
+      assigneeAgentId: 'agent-codex',
+      config: { model: 'gpt-5.4-mini' },
+      instruction: 'Use the requested model with the same provider',
+    });
+    /** @example The persisted provider is the API binding ID, not codex/openai. */
+    expect(task.config).toEqual({ model: 'gpt-5.4-mini', provider: 'personal-provider' });
   });
 
   describe('assertAssigneeUserAssignable', () => {

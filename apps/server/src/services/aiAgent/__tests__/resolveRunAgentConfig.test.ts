@@ -1,7 +1,8 @@
-import { buildHeteroExecArgs } from '@lobechat/types';
+import { buildHeteroExecArgs, getHeterogeneousTaskModelProvider } from '@lobechat/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentConfigWithId } from '@/server/services/agent';
+import { resolveMissingTaskModelConfig } from '@/server/services/task/modelSnapshot';
 
 import { resolveRunAgentConfig } from '../pipeline/resolveRunAgentConfig';
 
@@ -192,5 +193,68 @@ describe('Codex Task model overrides', () => {
     );
 
     expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual(apiConfig);
+  });
+  // ROOT CAUSE:
+  // Model-only backfill previously paired a native/API model with the row's
+  // wrapper provider, which the execution resolver treated as a new API binding.
+  /** @example Backfilled personal API Tasks retain the binding during execution resolution. */
+  it('applies model-only backfill without replacing the personal API provider', async () => {
+    const row: AgentConfigWithId = {
+      ...(webOnboardingRow() as AgentConfigWithId),
+      agencyConfig: {
+        heterogeneousProvider: {
+          authMode: 'api',
+          type: 'codex',
+          apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+        },
+      },
+      id: 'agent-codex-api',
+      slug: null,
+    };
+    const missing = resolveMissingTaskModelConfig(
+      { model: 'gpt-5.4-mini' },
+      { model: 'codex', provider: 'openai' },
+      getHeterogeneousTaskModelProvider(row.agencyConfig?.heterogeneousProvider),
+    );
+    const { agentConfig } = await resolveRunAgentConfig(
+      { ...deps, resolveAgentConfigOrThrow: async () => row },
+      {
+        identifier: row.id,
+        modelOverride: 'gpt-5.4-mini',
+        providerOverride: missing.provider,
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    /** @example The requested model and original provider reach the same binding. */
+    expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+      model: 'gpt-5.4-mini',
+      providerId: 'personal-provider',
+    });
+  });
+
+  /** @example Incomplete API configuration cannot be manufactured from the wrapper snapshot. */
+  it('keeps missing API configuration missing after model-only backfill', async () => {
+    const row: AgentConfigWithId = {
+      ...(webOnboardingRow() as AgentConfigWithId),
+      agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'codex' } },
+      id: 'agent-codex-api',
+      slug: null,
+    };
+    const missing = resolveMissingTaskModelConfig(
+      { model: 'gpt-5.4-mini' },
+      { model: 'codex', provider: 'openai' },
+      getHeterogeneousTaskModelProvider(row.agencyConfig?.heterogeneousProvider),
+    );
+    const { agentConfig } = await resolveRunAgentConfig(
+      { ...deps, resolveAgentConfigOrThrow: async () => row },
+      {
+        identifier: row.id,
+        modelOverride: 'gpt-5.4-mini',
+        providerOverride: missing.provider,
+        throwIfExecutionAborted: async () => {},
+      },
+    );
+    /** @example The dispatch guard still sees an unconfigured binding. */
+    expect(agentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toBeUndefined();
   });
 });

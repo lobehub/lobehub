@@ -369,7 +369,31 @@ describe('AgentModel', () => {
         userId,
       });
       expect(await agentModel.getAgentSnapshotForTaskCreate('native-task-snapshot')).toMatchObject({
-        nativeModelProvider: 'codex',
+        modelOverrideProvider: 'codex',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    /** @example A Task snapshot exposes its personal binding without rewriting runtime identity. */
+    it('reports the API binding provider for model-only Task creation', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          heterogeneousProvider: {
+            authMode: 'api',
+            type: 'codex',
+            apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+          },
+        },
+        id: 'api-bound-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      /** @example Provider inference and inherited runtime snapshots remain distinct. */
+      expect(
+        await agentModel.getAgentSnapshotForTaskCreate('api-bound-task-snapshot'),
+      ).toMatchObject({
+        modelOverrideProvider: 'personal-provider',
         snapshot: { model: 'codex', provider: 'openai' },
       });
     });
@@ -382,9 +406,9 @@ describe('AgentModel', () => {
         provider: 'openai',
         userId,
       });
-      expect(
-        await agentModel.getAgentSnapshotForTaskCreate('api-task-snapshot'),
-      ).not.toHaveProperty('nativeModelProvider');
+      expect(await agentModel.getAgentSnapshotForTaskCreate('api-task-snapshot')).toMatchObject({
+        modelOverrideProvider: null,
+      });
     });
 
     it('returns model/provider snapshot + visibility in one call', async () => {

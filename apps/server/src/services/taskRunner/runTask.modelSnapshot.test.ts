@@ -108,4 +108,45 @@ describe('TaskRunnerService.runTask model snapshot backfill', () => {
       expect.objectContaining({ model: 'codex', provider: 'openai' }),
     );
   });
+  // ROOT CAUSE:
+  // API auth has no native provider; falling back to codex/openai's wrapper
+  // provider makes resolveRunAgentConfig replace the personal API binding.
+  /** @example A legacy API model-only Task retains its personal provider ID. */
+  it('backfills an API model-only Task with the configured personal binding', async () => {
+    setupTask({ model: 'gpt-5.4-mini' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({
+      heterogeneousProvider: {
+        authMode: 'api',
+        type: 'codex',
+        apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+      },
+    });
+    await new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' });
+    /** @example Backfill never introduces the wrapper provider as a binding ID. */
+    expect(taskModel.updateTaskConfig).toHaveBeenCalledWith('task-1', {
+      provider: 'personal-provider',
+    });
+    /** @example The run receives the requested model and the original binding together. */
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        model: 'gpt-5.4-mini',
+        provider: 'personal-provider',
+      }),
+    );
+  });
+
+  /** @example Missing API configuration remains missing rather than becoming an openai binding. */
+  it('does not manufacture a personal provider when API configuration is absent', async () => {
+    setupTask({ model: 'gpt-5.4-mini' });
+    mocks.getAgentAgencyConfig.mockResolvedValue({
+      heterogeneousProvider: { authMode: 'api', type: 'codex' },
+    });
+    await new TaskRunnerService(db, 'user-1').runTask({ taskId: 'T-1' });
+    /** @example The resolver receives no inferred provider and leaves the invalid binding to its guard. */
+    expect(mocks.execAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.4-mini' }),
+    );
+    /** @example No wrapper provider is attached to the dispatched call. */
+    expect(mocks.execAgent.mock.calls[0][0]).not.toHaveProperty('provider');
+  });
 });

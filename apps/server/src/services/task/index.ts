@@ -189,7 +189,7 @@ export class TaskService {
             ...resolveMissingTaskModelConfig(
               createData.config,
               agentInfo.snapshot,
-              agentInfo.nativeModelProvider,
+              agentInfo.modelOverrideProvider,
             ),
           };
         }

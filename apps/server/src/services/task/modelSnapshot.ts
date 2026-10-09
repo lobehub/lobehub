@@ -1,15 +1,29 @@
 import { isHeterogeneousAgentModelId } from '@lobechat/const';
 
 /**
- * The model/provider fields a Task config is missing, filled from the assignee
- * Agent's snapshot. An explicit model is never replaced. A native model-only
- * override takes the runtime's provider instead of the snapshot's wrapper
- * provider (e.g. `codex/openai`), which would make the pair incompatible.
+ * Fills only missing Task model/provider fields from the assignee's snapshot.
+ *
+ * Use when:
+ * - Creating a Task or backfilling a legacy model-only Task before execution.
+ *
+ * Expects:
+ * - An unchanged Agent wrapper snapshot and the resolved model override provider.
+ * - Null override provider for API auth that cannot supply a personal binding.
+ *
+ * Returns:
+ * - Missing fields only, without replacing an explicit model or provider.
+ * - A native runtime or personal API provider for model-only overrides, never an
+ *   incompatible wrapper provider. Runtime-ID snapshots retain their original pair.
+ *
+ * Call stack:
+ * TaskService.createTask / TaskRunnerService.runTask
+ *   -> resolveMissingTaskModelConfig
+ *     -> resolveRunAgentConfig (run-time application)
  */
 export const resolveMissingTaskModelConfig = (
   config: Record<string, unknown> | null | undefined,
   snapshot: { model: string; provider: string },
-  nativeModelProvider?: string,
+  modelOverrideProvider?: string | null,
 ): { model?: string; provider?: string } => {
   const model = typeof config?.model === 'string' ? config.model : undefined;
   const hasProvider = typeof config?.provider === 'string';
@@ -18,6 +32,9 @@ export const resolveMissingTaskModelConfig = (
   }
   if (hasProvider) return {};
 
-  const isNativeModel = !!nativeModelProvider && !!model && !isHeterogeneousAgentModelId(model);
-  return { provider: isNativeModel ? nativeModelProvider : snapshot.provider };
+  // Runtime IDs remain wrapper snapshots, never API or native model overrides.
+  if (!model || isHeterogeneousAgentModelId(model)) return { provider: snapshot.provider };
+  // Missing/server-default API bindings must remain unbound; dispatch applies its guard.
+  if (modelOverrideProvider === null) return {};
+  return { provider: modelOverrideProvider ?? snapshot.provider };
 };

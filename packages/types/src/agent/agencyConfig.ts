@@ -340,13 +340,29 @@ export const resolveHeterogeneousProviderTopicModel = (
 };
 
 /**
- * The provider a native model-only override (a Task's `{ model }`) runs with:
- * the runtime itself (e.g. `codex`) under subscription or local auth. API
- * bindings have no native provider, so callers keep the Agent's provider.
+ * Resolves the provider for an explicit model-only Task override.
+ *
+ * Use when:
+ * - Creating a Task or filling missing fields on an older Task.
+ *
+ * Expects:
+ * - The assignee's current heterogeneous runtime configuration.
+ *
+ * Returns:
+ * - The runtime provider for subscription/local auth, or the personal API binding ID.
+ * - Null when API auth has no Topic-compatible binding; do not infer a wrapper provider.
+ * - Undefined for a regular Agent, which uses its model/provider snapshot.
+ *
+ * The previous native-only lookup deliberately omitted API auth. Task callers
+ * also need the API binding identity so model-only input cannot become codex/openai.
  */
-export const getHeterogeneousNativeModelProvider = (
+export const getHeterogeneousTaskModelProvider = (
   config: HeterogeneousProviderConfig | null | undefined,
-): string | undefined => (config && config.authMode !== 'api' ? config.type : undefined);
+): string | null | undefined => {
+  if (!config) return undefined;
+  if (config.authMode !== 'api') return config.type;
+  return resolveHeterogeneousProviderTopicModel(config)?.provider || null;
+};
 
 const applyTopicModelPin = (
   config: HeterogeneousProviderConfig,
