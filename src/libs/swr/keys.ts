@@ -747,6 +747,11 @@ export const trashKeys = {
 };
 
 export const deviceKeys = {
+  cliUpdateState: def('device:cliUpdateState', (workspaceId: string | null, deviceId: string) => [
+    'device:cliUpdateState',
+    workspaceId,
+    deviceId,
+  ]),
   appUpdateState: def('device:appUpdateState', (workspaceId: string | null, deviceId: string) => [
     'device:appUpdateState',
     workspaceId,
@@ -892,19 +897,12 @@ export const userMemoryKeys = {
 
 // ---- tool (skills / plugins / builtin / mcp / composio stores) -------------
 export const toolKeys = {
-  agentSkillDetail: def('tool:agentSkillDetail', (id: string) => ['tool:agentSkillDetail', id]),
-  agentSkills: def('tool:agentSkills', () => ['tool:agentSkills']),
   composioAppTools: def('tool:composioAppTools', (appSlug: string) => [
     'tool:composioAppTools',
     appSlug,
   ]),
   composioConnections: def('tool:composioConnections', () => ['tool:composioConnections']),
   installedPlugins: def('tool:installedPlugins', () => ['tool:installedPlugins']),
-  mcpPluginList: def('tool:mcpPluginList', (locale: string, params: unknown) => [
-    'tool:mcpPluginList',
-    locale,
-    params,
-  ]),
   uninstalledBuiltins: def('tool:uninstalledBuiltins', (workspaceId: string | null | undefined) => [
     'tool:uninstalledBuiltins',
     workspaceId,

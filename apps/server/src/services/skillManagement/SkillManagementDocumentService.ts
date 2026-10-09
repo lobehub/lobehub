@@ -121,7 +121,8 @@ export class SkillManagementDocumentService {
    *
    * Expects:
    * - `name` is a stable lowercase skill name.
-   * - `bodyMarkdown` is Markdown body content without YAML frontmatter.
+   * - `bodyMarkdown` is Markdown body content; a pasted YAML frontmatter block
+   *   is stripped because frontmatter renders from structured fields.
    *
    * Returns:
    * - The created skill detail with normalized frontmatter content.
@@ -336,7 +337,8 @@ export class SkillManagementDocumentService {
    *
    * Expects:
    * - The target resolves to a live managed skill bundle.
-   * - Incoming bodyMarkdown has no YAML frontmatter.
+   * - Incoming bodyMarkdown may carry a pasted YAML frontmatter block; it is
+   *   stripped before rendering because frontmatter renders from structured fields.
    *
    * Returns:
    * - Updated skill detail with index content included.

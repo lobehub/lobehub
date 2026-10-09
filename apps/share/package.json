@@ -16,6 +16,7 @@
   "devDependencies": {
     "@ant-design/cssinjs": "^2.1.2",
     "@cloudflare/vite-plugin": "^1.52.1",
+    "@codemirror/streamparser": "^6.0.0",
     "@react-router/dev": "^8.3.0",
     "isbot": "^5.1.32",
     "vite-tsconfig-paths": "^6.1.1",
