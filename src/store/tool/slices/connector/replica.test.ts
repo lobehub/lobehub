@@ -13,6 +13,7 @@ import { cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
+import { broadcastCacheScope, resetCacheScopeBroadcast } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
 
 import { useToolStore } from '../../store';
@@ -80,6 +81,7 @@ describe('connector slice replica', () => {
 
   beforeEach(() => {
     useScope(`connector-user-${randomUUID()}:personal`);
+    resetCacheScopeBroadcast();
     useToolStore.setState({ ...initialConnectorState });
   });
 
@@ -139,6 +141,86 @@ describe('connector slice replica', () => {
     await new Promise((resolve) => setTimeout(resolve, 30));
     expect(useToolStore.getState().connectors).toEqual([]);
     expect(useToolStore.getState().isConnectorsInit).toBe(false);
+  });
+
+  // These resources have no `useSync` mount: nothing re-renders them on a scope
+  // switch, so the engine would keep the previous identity's views — and their
+  // init flags, which is what makes every gated consumer skip the fetch for the
+  // new scope.
+  it('drops every connector view when the cache scope changes', async () => {
+    listQuery.mockResolvedValue([connector('c1')]);
+    listAgentBoundQuery.mockResolvedValue([connector('c1')]);
+    listByAgentQuery.mockResolvedValue([connector('c1')]);
+
+    await useToolStore.getState().fetchConnectors();
+    await useToolStore.getState().fetchAgentBoundConnectors();
+    await useToolStore.getState().fetchAgentConnectors('a1');
+    expect(useToolStore.getState().connectors).toHaveLength(1);
+    expect(useToolStore.getState().agentBoundConnectors).toHaveLength(1);
+    expect(useToolStore.getState().agentConnectors.a1).toHaveLength(1);
+
+    const workspaceScope = `${scope.split(':')[0]}:ws-1`;
+    useScope(workspaceScope);
+    broadcastCacheScope(workspaceScope);
+
+    expect(useToolStore.getState().connectors).toEqual([]);
+    expect(useToolStore.getState().isConnectorsInit).toBe(false);
+    expect(useToolStore.getState().agentBoundConnectors).toEqual([]);
+    expect(useToolStore.getState().isAgentBoundInit).toBe(false);
+    expect(useToolStore.getState().agentConnectors).toEqual({});
+    expect(useToolStore.getState().agentConnectorsInit).toEqual({});
+  });
+
+  // The reported boot: a direct workspace URL hydrates the personal projection
+  // before the URL→store sync resolves the slug. The personal response that is
+  // still in flight gets dropped — but if the hydrated view (and the init flag
+  // it set) survived the switch, the workspace would keep painting the personal
+  // inventory and never load its own.
+  it('re-arms the workspace fetch after a personal-scope hydration', async () => {
+    await connectorsResource.storage!.set(
+      { queryKey: LIST_STORAGE_KEY, scope },
+      { data: [connector('personal-stale')], updatedAt: 1 },
+    );
+    listQuery.mockImplementation(pending);
+
+    void useToolStore.getState().fetchConnectors();
+    await vi.waitFor(() =>
+      expect(useToolStore.getState().connectors.map((c) => c.id)).toEqual(['personal-stale']),
+    );
+
+    const workspaceScope = `${scope.split(':')[0]}:ws-1`;
+    useScope(workspaceScope);
+    broadcastCacheScope(workspaceScope);
+
+    // The gate is back to "not loaded", so the consumers gated on it fetch
+    // again, and nothing from the personal partition is left on screen.
+    expect(useToolStore.getState().isConnectorsInit).toBe(false);
+    expect(useToolStore.getState().connectors).toEqual([]);
+  });
+
+  it('never persists connector secrets, but keeps them in the in-memory row', async () => {
+    const withSecrets = {
+      ...connector('c1'),
+      mcpStdioConfig: { args: ['-y'], command: 'npx', env: { API_KEY: 'sk-live-secret' } },
+      metadata: { customHeaders: { Authorization: 'Bearer header-secret' }, description: 'kept' },
+    };
+    listQuery.mockResolvedValue([withSecrets]);
+
+    await useToolStore.getState().fetchConnectors();
+
+    // The edit form still pre-fills from the in-memory row.
+    const inMemory = useToolStore.getState().connectors[0] as typeof withSecrets;
+    expect(inMemory.mcpStdioConfig.env).toEqual({ API_KEY: 'sk-live-secret' });
+    expect(inMemory.metadata.customHeaders).toEqual({ Authorization: 'Bearer header-secret' });
+
+    const persisted = await vi.waitFor(async () => {
+      const row = await connectorsResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope });
+      expect(row?.data).toBeDefined();
+      return row!.data as unknown as Array<typeof withSecrets>;
+    });
+
+    expect('env' in persisted[0].mcpStdioConfig).toBe(false);
+    expect(persisted[0].metadata).toEqual({ description: 'kept' });
   });
 
   it('shows a permission change immediately and rolls it back when rejected', async () => {

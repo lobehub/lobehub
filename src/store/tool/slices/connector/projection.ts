@@ -59,3 +59,50 @@ export const agentBoundConnectorsEntity: ReplicaEntityAdapter<
   AgentBoundConnector[],
   AgentBoundConnector
 > = arrayEntity<AgentBoundConnector>((connector) => connector.id);
+
+/**
+ * `mcpStdioConfig` is a runtime-only field of the connector rows — the server
+ * ships it, but `ConnectorWithTools` doesn't declare it (consumers cast for it).
+ */
+interface ConnectorSecretFields {
+  mcpStdioConfig?: { args?: string[]; command?: string; env?: Record<string, string> };
+}
+
+/**
+ * Strip the connector secrets the list routes ship for the *edit form* before a
+ * projection is persisted.
+ *
+ * `list` / `listByAgent` / `listAgentBound` remove `credentials` and the OIDC
+ * client secret, but they spread the rest of the row through — so
+ * `mcpStdioConfig.env` (the API keys / tokens an MCP stdio process is launched
+ * with) and `metadata.customHeaders` (the headers an HTTP MCP endpoint is
+ * called with) reach the browser. That is deliberate: `CustomConnectorModal`
+ * pre-fills both from the list instead of calling `getForEdit`.
+ *
+ * Keeping them in memory is fine. Writing them to IndexedDB is not: persisted
+ * projection rows outlive the session, are partitioned per scope but never
+ * cleared on logout, and would turn an authenticated response into durable
+ * plaintext secret storage. So strip them on the way to storage only — the
+ * in-memory row keeps them, and the `ConnectorWithTools` type never promised
+ * them anyway.
+ */
+export const withoutConnectorSecrets = <T extends ConnectorWithTools>(connectors: T[]): T[] =>
+  connectors.map((connector) => {
+    const stdio = (connector as ConnectorWithTools & ConnectorSecretFields).mcpStdioConfig;
+    const metadata = connector.metadata;
+
+    const stripStdioEnv = !!stdio?.env && Object.keys(stdio.env).length > 0;
+    const stripCustomHeaders = !!metadata && 'customHeaders' in metadata;
+    if (!stripStdioEnv && !stripCustomHeaders) return connector;
+
+    const next = { ...connector };
+    if (stripStdioEnv) {
+      const { env: _env, ...stdioConfig } = stdio!;
+      (next as ConnectorWithTools & ConnectorSecretFields).mcpStdioConfig = stdioConfig;
+    }
+    if (stripCustomHeaders) {
+      const { customHeaders: _customHeaders, ...restMetadata } = metadata!;
+      next.metadata = restMetadata;
+    }
+    return next;
+  });

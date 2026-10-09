@@ -8,6 +8,7 @@ import {
   linkReplicaEntity,
   type ReplicaLens,
 } from '@/libs/replica';
+import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
 import { mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
@@ -20,6 +21,7 @@ import {
   CONNECTOR_LIST_KEY,
   connectorsEntity,
   connectorsResource,
+  withoutConnectorSecrets,
 } from './projection';
 import type { AgentBoundConnector, ConnectorWithTools } from './types';
 
@@ -117,6 +119,7 @@ export class ConnectorActionImpl {
       get,
       set,
       stateKey: 'connectorsReplica',
+      toPersisted: withoutConnectorSecrets,
       view: connectorsLens,
     });
     this.#agentBoundConnectors = createReplicaSlice(agentBoundConnectorsResource, {
@@ -126,6 +129,7 @@ export class ConnectorActionImpl {
       get,
       set,
       stateKey: 'agentBoundConnectorsReplica',
+      toPersisted: withoutConnectorSecrets,
       view: agentBoundConnectorsLens,
     });
     this.#agentConnectors = createReplicaSlice(agentConnectorsResource, {
@@ -135,6 +139,7 @@ export class ConnectorActionImpl {
       get,
       set,
       stateKey: 'agentConnectorsReplica',
+      toPersisted: withoutConnectorSecrets,
       view: agentConnectorsLens,
     });
     this.#connectorRows = linkReplicaEntity<ConnectorWithTools>([
@@ -142,7 +147,26 @@ export class ConnectorActionImpl {
       this.#agentBoundConnectors,
       this.#agentConnectors,
     ]);
+
+    // These three resources have no `useSync` mount, so nothing re-renders them
+    // on a cache-scope switch and the engine only resets on its *next* dispatch
+    // — which the gated consumers never make, because the init flag they check
+    // is still set. Drop the previous identity's views the moment the scope
+    // changes. The store is an app-lifetime singleton, so the subscription is
+    // never torn down.
+    subscribeCacheScope((scope) => this.#dropStaleScope(scope));
   }
+
+  /**
+   * Drop every connector view of the previous identity (rows *and* the init
+   * flag that lets consumers skip their fetch). A no-op when the scope has not
+   * moved on, which is the common case on the imperative refresh paths.
+   */
+  #dropStaleScope = (scope: string): void => {
+    this.#connectors.ensureScope(scope);
+    this.#agentBoundConnectors.ensureScope(scope);
+    this.#agentConnectors.ensureScope(scope);
+  };
 
   /**
    * Refresh the base connector list. The persisted projection paints as soon
@@ -166,14 +190,18 @@ export class ConnectorActionImpl {
    * when the workspace switch fires its own, and the personal one landing last
    * is what made a business workspace list the user's PERSONAL tools.
    *
-   * Dropping a response deliberately leaves the one-shot init flag alone
-   * rather than marking the bucket loaded: a scope change remounts the
-   * workspace context slot's subtree, so the consumers gated on that flag
-   * re-issue their fetch under the new scope and the discarded result is not
-   * one anybody still needs.
+   * Dropping the response is only half of it. A dropped response must not leave
+   * the *previous* scope's hydration behind either: the persisted personal
+   * projection can have painted (and set `isConnectorsInit`) during that same
+   * personal window, and every consumer gates its fetch on that flag — so the
+   * workspace would keep showing the personal inventory and never load its own.
+   * `#dropStaleScope` clears the views the moment the scope moves, and is also
+   * run at the top of each fetch so an imperative refresh under a new scope
+   * can never replace into a view that still belongs to the old one.
    */
   fetchConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
+    this.#dropStaleScope(scope);
     const pending = this.#connectors.fetcher!(LIST_PARAMS);
     if (!this.#get().isConnectorsInit) await this.#connectors.hydrate(LIST_PARAMS, scope);
     const data = await pending;
@@ -202,6 +230,7 @@ export class ConnectorActionImpl {
    */
   fetchAgentBoundConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
+    this.#dropStaleScope(scope);
     const pending = this.#agentBoundConnectors.fetcher!(LIST_PARAMS);
     if (!this.#get().isAgentBoundInit) await this.#agentBoundConnectors.hydrate(LIST_PARAMS, scope);
     const data = await pending;
@@ -215,6 +244,7 @@ export class ConnectorActionImpl {
    */
   fetchAgentConnectors = async (agentId: string): Promise<void> => {
     const scope = cacheScope.get();
+    this.#dropStaleScope(scope);
     const params = { agentId };
     const pending = this.#agentConnectors.fetcher!(params);
     if (!this.#get().agentConnectorsInit[agentId])
