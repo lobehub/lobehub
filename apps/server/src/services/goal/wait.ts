@@ -1,14 +1,17 @@
 import type { GoalGraphSnapshot, GoalManagerState, GoalTickResult } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { z } from 'zod';
 
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { goals } from '@/database/schemas/goal';
+import { goalSubscriptions } from '@/database/schemas/goalSubscription';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { scheduleGoalAdvance } from './scheduler';
+import { planningInterval } from './subscriptionPolicy';
+import { GoalSubscriptionService } from './subscriptions';
 
 export const goalWaitSchema = z.object({
   until: z.string().datetime(),
@@ -44,14 +47,49 @@ export class GoalWaitService {
   };
 
   // The sweep also recovers lost callbacks after the deadline.
-  schedule = (goalId: string, delay: number) =>
-    scheduleGoalAdvance({
+  schedule = async (goalId: string, delay: number) => {
+    const bounded = await this.db.transaction(async (tx) => {
+      const db = tx as unknown as LobeChatDatabase;
+      const goal = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
+      if (!goal || !['planning', 'running'].includes(goal.status)) return delay;
+      const subs = await db
+        .select()
+        .from(goalSubscriptions)
+        .where(and(eq(goalSubscriptions.goalId, goalId), eq(goalSubscriptions.enabled, true)));
+      const now = Date.now();
+      const windows = subs.flatMap((sub) =>
+        sub.wakeCondition.type === 'observation_window'
+          ? [
+              Math.max(
+                1,
+                Math.ceil(
+                  ((sub.cursor.lastWakeAt ? Date.parse(sub.cursor.lastWakeAt) : now) +
+                    Math.max(sub.wakeCondition.intervalMs, planningInterval(sub.wakeCondition)) -
+                    now) /
+                    1000,
+                ),
+              ),
+            ]
+          : [],
+      );
+      const nextDelay = Math.min(delay, ...windows);
+      const state = goal.config?.managerState;
+      if (state?.wait && !state.wait.wake) {
+        await this.save(db, goalId, {
+          ...state,
+          wait: { ...state.wait, armedUntil: new Date(now + nextDelay * 1000).toISOString() },
+        });
+      }
+      return nextDelay;
+    });
+    return scheduleGoalAdvance({
       goalId,
       userId: this.userId,
       workspaceId: this.workspaceId,
       trigger: 'wake',
-      delay,
+      delay: bounded,
     });
+  };
 
   private save = async (db: LobeChatDatabase, goalId: string, state: GoalManagerState) => {
     await db
@@ -64,9 +102,22 @@ export class GoalWaitService {
   };
 
   advance = async (graph: GoalGraphSnapshot): Promise<GoalTickResult | null> => {
-    const state = graph.goal.config?.managerState;
+    await GoalSubscriptionService.forGoal(this.db, graph.goal.id);
+    // Re-read after the start-of-wait scan may have durably installed a wake.
+    const currentGoal = await new GoalModel(this.db, this.userId, this.workspaceId).findById(
+      graph.goal.id,
+    );
+    const state = currentGoal?.config?.managerState;
     const wait = state?.wait;
-    if (!state?.consumed || !wait || wait.wake) return null;
+    if (!state?.consumed || !wait) return null;
+    if (wait.wake)
+      return graph.goal.config?.managerState?.wait?.wake
+        ? null
+        : {
+            goalId: graph.goal.id,
+            outcome: 'advanced',
+            message: 'Widget observation woke this wait',
+          };
     if (Date.parse(wait.until) > Date.now()) {
       await this.rearm(graph.goal.id, state.token);
       return {

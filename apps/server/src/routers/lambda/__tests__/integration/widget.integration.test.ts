@@ -523,11 +523,20 @@ describe('widget + dashboard routers integration', () => {
         ],
         type: 'series' as const,
       };
+      const persistedModel = new WidgetModel(db, ownerId);
+      const version = await persistedModel.createVersion(widget.id, {
+        ...statScript,
+        outputType: 'series',
+        sourceType: 'agent',
+      });
+      await persistedModel.publishVersion(widget.id, version!.id);
+      const first = await persistedModel.startRun(widget.id, { trigger: 'manual' });
+      const second = await persistedModel.startRun(widget.id, { trigger: 'schedule' });
       const record = (runId: string) =>
         recordWidgetMetrics(db, widget, { observedAt: new Date(), output, runId });
 
       // a manual refresh and a scheduled run report the same window at once
-      const results = await Promise.all([record('run-a'), record('run-b')]);
+      const results = await Promise.all([record(first!.id), record(second!.id)]);
       expect(results.map((r) => r.pointsWritten).sort()).toEqual([0, 2]);
 
       const [metric] = await db

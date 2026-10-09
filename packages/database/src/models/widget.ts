@@ -91,6 +91,8 @@ export interface StartWidgetRunInput {
 }
 
 export interface FinishWidgetRunInput {
+  /** Fence an obsolete worker after a scheduled lease takeover. */
+  expectedStartedAt?: Date;
   durationMs?: number | null;
   error?: WidgetRunError | null;
   exitCode?: number | null;
@@ -710,6 +712,7 @@ export class WidgetModel {
         .values({
           // Millisecond precision on purpose: the lease is compared-and-set
           // against the value a reader got back as a JS Date.
+          createdAt: sql`clock_timestamp()`,
           startedAt: new Date(),
           status: 'running',
           trigger: 'schedule',
@@ -818,27 +821,36 @@ export class WidgetModel {
     if (!versionId) throw new Error('Widget has no version to run');
     if (!isUuid(versionId)) throw new Error('Version does not belong to this widget');
 
-    const [version] = await db
-      .select({ id: widgetVersions.id })
-      .from(widgetVersions)
-      .where(and(eq(widgetVersions.id, versionId), eq(widgetVersions.widgetId, widget.id)))
-      .limit(1);
-    if (!version) throw new Error('Version does not belong to this widget');
-
-    const [run] = await db
-      .insert(widgetRuns)
-      .values({
-        operationId: input.operationId ?? null,
-        status: 'running',
-        trigger: input.trigger,
-        userId: widget.userId,
-        versionId,
-        widgetId: widget.id,
-        workspaceId: widget.workspaceId,
-      })
-      .returning();
-
-    return run;
+    return db.transaction(async (tx) => {
+      // Scanners and every reservation share this lock. Allocate the timestamp
+      // AFTER acquiring it: transaction-start timestamps can commit behind a cursor.
+      const [current] = await tx
+        .select()
+        .from(widgets)
+        .where(eq(widgets.id, widget.id))
+        .for('update');
+      if (!current || current.isDeleted) throw new Error('Widget unavailable');
+      const [version] = await tx
+        .select({ id: widgetVersions.id })
+        .from(widgetVersions)
+        .where(and(eq(widgetVersions.id, versionId), eq(widgetVersions.widgetId, widget.id)));
+      if (!version) throw new Error('Version does not belong to this widget');
+      const [run] = await tx
+        .insert(widgetRuns)
+        .values({
+          createdAt: sql`clock_timestamp()`,
+          startedAt: new Date(),
+          operationId: input.operationId ?? null,
+          status: 'running',
+          trigger: input.trigger,
+          userId: current.userId,
+          versionId,
+          widgetId: current.id,
+          workspaceId: current.workspaceId,
+        })
+        .returning();
+      return run;
+    });
   }
 
   /**
@@ -883,8 +895,20 @@ export class WidgetModel {
     db: LobeChatDatabase,
     runId: string,
     input: FinishWidgetRunInput,
+    publishMetrics?: (tx: Transaction, run: WidgetRunRow) => Promise<void>,
   ): Promise<{ folded: boolean; run: WidgetRunRow } | undefined> {
     return db.transaction(async (tx) => {
+      const [reservation] = await tx
+        .select({ widgetId: widgetRuns.widgetId })
+        .from(widgetRuns)
+        .where(eq(widgetRuns.id, runId));
+      if (!reservation) return undefined;
+      // Match reservation/scanner lock order, before touching the run row.
+      await tx
+        .select({ id: widgets.id })
+        .from(widgets)
+        .where(eq(widgets.id, reservation.widgetId))
+        .for('update');
       const finishedAt = input.finishedAt ?? new Date();
       const [run] = await tx
         .update(widgetRuns)
@@ -901,7 +925,15 @@ export class WidgetModel {
           stderr: input.stderr ?? null,
           stdout: input.stdout ?? null,
         })
-        .where(and(eq(widgetRuns.id, runId), eq(widgetRuns.status, 'running')))
+        .where(
+          and(
+            eq(widgetRuns.id, runId),
+            eq(widgetRuns.status, 'running'),
+            input.expectedStartedAt
+              ? sql`date_trunc('milliseconds', ${widgetRuns.startedAt}) = ${input.expectedStartedAt.toISOString()}::timestamptz`
+              : undefined,
+          ),
+        )
         .returning();
       if (!run) return undefined;
 
@@ -933,6 +965,9 @@ export class WidgetModel {
         })
         .where(eq(widgets.id, run.widgetId));
 
+      // Throwing rolls back completion and snapshot as well as all metric writes.
+      // A retry never observes a completed run with unfinished publication.
+      if (input.status === 'succeeded' && publishMetrics) await publishMetrics(tx, run);
       return { folded: true, run };
     });
   }

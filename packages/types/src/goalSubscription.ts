@@ -2,11 +2,15 @@ import type { GoalMetricComparison } from './goal';
 import type { MetricKind } from './metric';
 
 /** Planning policy; collection cadence remains owned by the Widget schedule. */
-export type GoalSubscriptionWakeCondition =
+export type GoalSubscriptionWakeCondition = (
   | { type: 'each_valid_run' }
   | { intervalMs: number; type: 'observation_window' }
   | { op: GoalMetricComparison; target: number; type: 'threshold' }
-  | { minimumAbsoluteChange: number; type: 'change' };
+  | { minimumAbsoluteChange: number; type: 'change' }
+) & {
+  /** Independent minimum time between planning wakes; defaults to one minute. */
+  minimumPlanningIntervalMs?: number;
+};
 
 /** Strict eligibility for Goal evaluation, independent of card rendering. */
 export interface GoalSubscriptionFreshnessPolicy {
@@ -30,6 +34,8 @@ export interface GoalSubscriptionSemanticBinding {
 export interface GoalSubscriptionCursor {
   /** Last durable planning request; used to enforce planning cadence across restarts. */
   lastWakeAt?: string;
+  /** Eligible observations await a durable Goal wait receipt; no values copied. */
+  pendingWake?: boolean;
   /** Last accepted observation in (observed_at, UUID) order for this binding. */
   observation?: { observedAt: string; pointId: string };
   /** Last completely handled run in (created_at, UUID) order; never a running run. */

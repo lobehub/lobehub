@@ -14,6 +14,7 @@ import { alias } from 'drizzle-orm/pg-core';
 import type { GoalItem, NewGoal } from '../schemas/goal';
 import { goals } from '../schemas/goal';
 import { goalEdges, goalNodeDecisions, goalNodes } from '../schemas/goalGraph';
+import { goalSubscriptions } from '../schemas/goalSubscription';
 import { tasks, taskTopics } from '../schemas/task';
 import { topics } from '../schemas/topic';
 import type { LobeChatDatabase } from '../type';
@@ -227,16 +228,17 @@ export class GoalModel {
   };
 
   update = async (id: string, value: Partial<Omit<GoalItem, 'id' | 'userId'>>) => {
-    const [row] = await this.db
-      .update(goals)
-      .set({
-        ...value,
-        // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
-        // ownership always comes from the current row, never that snapshot, and
-        // policy edits cannot replace the concurrently written incident ledger.
-        ...(value.config !== undefined
-          ? {
-              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'acceptance')
+    return this.db.transaction(async (tx) => {
+      const [row] = await tx
+        .update(goals)
+        .set({
+          ...value,
+          // Policy editors may carry a pre-claim or pre-release snapshot. Runtime
+          // ownership always comes from the current row, never that snapshot, and
+          // policy edits cannot replace the concurrently written incident ledger.
+          ...(value.config !== undefined
+            ? {
+                config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'acceptance')
                 || jsonb_strip_nulls(jsonb_build_object(
                   'planningCheckpoint', ${goals.config}->'planningCheckpoint',
                   'planningProtocol', ${goals.config}->'planningProtocol',
@@ -250,13 +252,25 @@ export class GoalModel {
                     '{}'::jsonb
                   )
                 ))`,
-            }
-          : {}),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(goals.id, id), this.ownership()))
-      .returning();
-    return row as GoalItem | undefined;
+              }
+            : {}),
+          updatedAt: new Date(),
+        })
+        .where(and(eq(goals.id, id), this.ownership()))
+        .returning();
+      if (row && ['paused', 'canceled', 'achieved', 'failed'].includes(row.status)) {
+        await tx
+          .update(goalSubscriptions)
+          .set({
+            enabled: false,
+            bindingRevision: sql`${goalSubscriptions.bindingRevision} + 1`,
+            cursor: sql`${goalSubscriptions.cursor} - 'pendingWake'`,
+            updatedAt: new Date(),
+          })
+          .where(and(eq(goalSubscriptions.goalId, row.id), eq(goalSubscriptions.enabled, true)));
+      }
+      return row as GoalItem | undefined;
+    });
   };
 
   /** Call inside a transaction when a coordinator needs to serialize a write. */

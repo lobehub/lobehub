@@ -17,6 +17,11 @@ import {
 } from '@/server/services/goal/recoveryPolicy';
 import { GoalReportStore, type SubmitGoalReportInput } from '@/server/services/goal/reportStore';
 import { scheduleGoalAdvance } from '@/server/services/goal/scheduler';
+import {
+  bindSubscriptionSchema,
+  GoalSubscriptionService,
+  updateSubscriptionSchema,
+} from '@/server/services/goal/subscriptions';
 import { GoalWaitService, goalWakeEventSchema } from '@/server/services/goal/wait';
 import {
   HeteroOperationPrincipalError,
@@ -28,6 +33,11 @@ import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManag
 const goalProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
   opts.next({
     ctx: {
+      goalSubscriptionService: new GoalSubscriptionService(
+        opts.ctx.serverDB,
+        opts.ctx.userId,
+        opts.ctx.workspaceId ?? undefined,
+      ),
       goalModel: new GoalModel(
         opts.ctx.serverDB,
         opts.ctx.userId,
@@ -187,6 +197,48 @@ function mapGoalError(error: unknown, operation: string): never {
 }
 
 export const goalRouter = router({
+  disableSubscription: goalWriteProcedure
+    .input(z.object({ id: z.string().uuid(), bindingRevision: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.goalSubscriptionService.setEnabled(input.id, input.bindingRevision, false),
+      success: true,
+    })),
+  enableSubscription: goalWriteProcedure
+    .input(z.object({ id: z.string().uuid(), bindingRevision: z.number().int().positive() }))
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.goalSubscriptionService.setEnabled(input.id, input.bindingRevision, true),
+      success: true,
+    })),
+  bindSubscription: goalWriteProcedure
+    .input(bindSubscriptionSchema)
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.goalSubscriptionService.bind(input),
+      success: true,
+    })),
+  listSubscriptions: goalProcedure
+    .input(z.object({ goalId: z.string().min(1) }))
+    .query(async ({ ctx, input }) => ({
+      data: await ctx.goalSubscriptionService.list(input.goalId),
+      success: true,
+    })),
+  rebindSubscription: goalWriteProcedure
+    .input(
+      bindSubscriptionSchema.extend({
+        id: z.string().uuid(),
+        bindingRevision: z.number().int().positive(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.goalSubscriptionService.bind(input, input),
+      success: true,
+    })),
+  updateSubscription: goalWriteProcedure
+    .input(updateSubscriptionSchema)
+    .mutation(async ({ ctx, input }) => ({
+      data: await ctx.goalSubscriptionService.update(input),
+      success: true,
+    })),
+
   wake: goalWriteProcedure
     .input(goalWakeEventSchema.extend({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {

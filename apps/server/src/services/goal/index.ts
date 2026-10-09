@@ -98,6 +98,7 @@ import { isGoalReportNode, withoutGoalReport } from './report';
 import { GoalReportService } from './reportService';
 import { GoalReportStore } from './reportStore';
 import { scheduleGoalAdvance } from './scheduler';
+import { GoalSubscriptionService } from './subscriptions';
 import { GoalSupervisorService } from './supervisor';
 import { statusAuthoredByActor } from './supervisor/policy';
 import { claimGoalTask } from './taskClaim';
@@ -888,7 +889,17 @@ export class GoalService {
       this.resolveSpend(graph),
       new GoalReportStore(this.db, this.userId, this.workspaceId).state(graph),
     ]);
-    return { ...graph, acceptances, assignees, deliveredAt, report, runHeartbeats, spend };
+    const metricCriteria = await this.evaluateMetricCriteria(graph);
+    return {
+      ...graph,
+      acceptances,
+      assignees,
+      deliveredAt,
+      report,
+      runHeartbeats,
+      spend,
+      metricCriteria,
+    };
   };
 
   /**
@@ -1261,10 +1272,23 @@ export class GoalService {
       }),
     );
 
+    const subscriptions = await new GoalSubscriptionService(
+      this.db,
+      this.userId,
+      this.workspaceId,
+    ).criteria(
+      graph.goal.id,
+      declared.map((c) => c.key),
+    );
     const criteria = declared.map((criterion) => {
       const op = criterion.op ?? 'gte';
       const seriesId = seriesByKey.get(criterion.key)?.id;
-      const point = seriesId ? latestByMetricId.get(seriesId) : undefined;
+      const subscription = subscriptions.get(criterion.key);
+      const point = subscription?.bound
+        ? subscription.point
+        : seriesId
+          ? latestByMetricId.get(seriesId)
+          : undefined;
       const value = point?.value ?? null;
       return {
         key: criterion.key,
@@ -2254,6 +2278,8 @@ export class GoalService {
     // The coordinator never sees the wrap-up report node: it runs after the
     // Goal-level acceptance and does not take part in the Goal's status.
     const graph = withoutGoalReport(await this.requireGraph(goalId));
+    if (!graph.goal.config?.manager)
+      await new GoalSubscriptionService(this.db, this.userId, this.workspaceId).acknowledge(goalId);
     if (graph.goal.config?.manager) {
       // The system's own planner leads whenever the Goal has one: a main Agent is
       // the fallback for problems that planner cannot express, not a replacement
@@ -2362,6 +2388,17 @@ export class GoalService {
           this.workspaceId,
         ).reconsiderAcceptance(graph, move.message);
         if (replanning) return observe(replanning);
+        const subscriptions = await new GoalSubscriptionService(
+          this.db,
+          this.userId,
+          this.workspaceId,
+        ).list(goalId);
+        if (subscriptions.some((entry) => entry.subscription.enabled)) {
+          // A measured shortfall is an observation wait, not a user's pause.
+          // The Widget schedule continues, and its durable pending effect or
+          // cyclic window scan requests the next coordinator evaluation.
+          return observe({ goalId, message: move.message, outcome: 'waiting_external' });
+        }
         await this.setPauseReason(goalId, 'measured_acceptance');
         await this.transitionStatus(graph.goal, 'paused', move.message);
         effects.push({ type: 'goal_status', detail: 'paused' });
@@ -2563,6 +2600,14 @@ export class GoalService {
         );
         if (blocked.costLimitReached || blocked.deadlinePassed || blocked.roundLimitReached)
           return false;
+        // Re-evaluate current bindings, provenance and freshness under the same
+        // Goal lock as the final transition; the earlier verdict is not a lease.
+        const numeric = await new GoalService(
+          tx,
+          this.userId,
+          this.workspaceId,
+        ).evaluateMetricCriteria(fresh);
+        if (!numeric.allMet) return false;
         const writer = new GoalGraphModel(tx, this.userId, this.workspaceId, {
           id: GOAL_COORDINATOR_ACTOR_ID,
           type: 'system',

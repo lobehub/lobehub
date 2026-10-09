@@ -4,6 +4,8 @@ import type {
   GoalGraphSnapshot,
   GoalMetricCriterion,
   GoalNodeKind,
+  GoalSubscriptionFreshnessPolicy,
+  GoalSubscriptionWakeCondition,
   GoalTickResult,
 } from '@lobechat/types';
 
@@ -21,6 +23,37 @@ export interface GoalListParams {
 
 /** Every graph method takes the `goals` row id. */
 class GoalService {
+  enableSubscription = async (id: string, bindingRevision: number) =>
+    (await lambdaClient.goal.enableSubscription.mutate({ id, bindingRevision })).data;
+  disableSubscription = async (id: string, bindingRevision: number) =>
+    (await lambdaClient.goal.disableSubscription.mutate({ id, bindingRevision })).data;
+
+  listSubscriptions = async (goalId: string) =>
+    (await lambdaClient.goal.listSubscriptions.query({ goalId })).data;
+
+  bindSubscription = async (input: {
+    goalId: string;
+    widgetId: string;
+    metricId: string | null;
+    criterionKey?: string;
+    confirmedVersionId: string;
+    confirmedContentHash: string;
+    freshnessPolicy: GoalSubscriptionFreshnessPolicy;
+    wakeCondition: GoalSubscriptionWakeCondition;
+  }) => (await lambdaClient.goal.bindSubscription.mutate(input)).data;
+
+  rebindSubscription = async (
+    input: Parameters<GoalService['bindSubscription']>[0] & { id: string; bindingRevision: number },
+  ) => (await lambdaClient.goal.rebindSubscription.mutate(input)).data;
+
+  updateSubscription = async (input: {
+    id: string;
+    bindingRevision: number;
+    enabled: boolean;
+    freshnessPolicy: GoalSubscriptionFreshnessPolicy;
+    wakeCondition: GoalSubscriptionWakeCondition;
+  }) => (await lambdaClient.goal.updateSubscription.mutate(input)).data;
+
   /**
    * List goals. Each item is the execution-carrier task with the goal row
    * attached plus subtree run statistics — see `GoalModel.list` on the server.

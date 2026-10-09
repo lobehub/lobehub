@@ -33,7 +33,7 @@ export interface ExecuteWidgetRunDeps {
 }
 
 export interface ExecuteWidgetRunParams {
-  run: Pick<WidgetRunRow, 'id' | 'trigger'>;
+  run: Pick<WidgetRunRow, 'id' | 'trigger'> & Partial<Pick<WidgetRunRow, 'startedAt'>>;
   version: Pick<
     WidgetVersionRow,
     'manifest' | 'outputType' | 'publishedByUserId' | 'runtime' | 'script' | 'userId'
@@ -186,36 +186,56 @@ export const executeWidgetRun = async (
   const outcome = await runInSandbox(db, params, deps);
 
   const finishedAt = new Date();
-  const finished = await WidgetModel.finishRun(db, run.id, {
-    durationMs: outcome.durationMs ?? null,
-    error: outcome.error ?? null,
-    exitCode: outcome.exitCode ?? null,
-    finishedAt,
-    output: outcome.output ?? null,
-    status: outcome.status,
-    stderr: outcome.stderr ? sanitizeStream(outcome.stderr, outcome.env) : null,
-    stdout: outcome.stdout ? sanitizeStream(outcome.stdout, outcome.env) : null,
-  });
+  let finished: Awaited<ReturnType<typeof WidgetModel.finishRun>>;
+  try {
+    finished = await WidgetModel.finishRun(
+      db,
+      run.id,
+      {
+        expectedStartedAt: run.startedAt,
+        durationMs: outcome.durationMs ?? null,
+        error: outcome.error ?? null,
+        exitCode: outcome.exitCode ?? null,
+        finishedAt,
+        output: outcome.output ?? null,
+        status: outcome.status,
+        stderr: outcome.stderr ? sanitizeStream(outcome.stderr, outcome.env) : null,
+        stdout: outcome.stdout ? sanitizeStream(outcome.stdout, outcome.env) : null,
+      },
+      async (tx) => {
+        if (!outcome.output) return;
+        const transactionalDB = tx as unknown as LobeChatDatabase;
+        const { primaryMetricId } = await recordWidgetMetrics(transactionalDB, widget, {
+          manifest: version.manifest,
+          observedAt: finishedAt,
+          output: outcome.output,
+          runId: run.id,
+        });
+        if (primaryMetricId)
+          await WidgetModel.linkMetric(transactionalDB, widget.id, primaryMetricId, run.id);
+      },
+    );
+  } catch (error) {
+    console.error('[widget:executeRun] atomic metric publication failed', error);
+    // The failed transaction left no points or success. Persist the collection
+    // failure in existing history; consumers can handle it without guessing.
+    finished = await WidgetModel.finishRun(db, run.id, {
+      status: 'failed',
+      finishedAt,
+      expectedStartedAt: run.startedAt,
+      error: {
+        code: 'METRIC_PUBLICATION_FAILED',
+        message: 'Widget metric publication failed; check source semantics and storage',
+      },
+    });
+  }
 
-  // Same "current run" rule as the snapshot: a stale run (old version, or
-  // started before the snapshot's run) finishing late must not become the
-  // newest trend point nor move `widgets.metric_id`.
-  if (finished?.folded && outcome.status === 'succeeded' && outcome.output) {
-    try {
-      const { primaryMetricId } = await recordWidgetMetrics(db, widget, {
-        manifest: version.manifest,
-        observedAt: finishedAt,
-        output: outcome.output,
-        runId: run.id,
-      });
-      if (primaryMetricId && primaryMetricId !== widget.metricId) {
-        // A newer run may have taken the snapshot while this one recorded metrics.
-        await WidgetModel.linkMetric(db, widget.id, primaryMetricId, run.id);
-      }
-    } catch (error) {
-      // The run itself succeeded; a trend write failure must not flip it.
-      console.error('[widget:executeRun] failed to record metrics widget=%s', widget.id, error);
-    }
+  if (finished && finished.run.trigger !== 'preview') {
+    // A completion is only a hint. The durable scanner also runs on wait/sweep.
+    const { GoalSubscriptionService } = await import('../goal/subscriptions');
+    await GoalSubscriptionService.forWidget(db, widget.id).catch((error) => {
+      console.error('[widget:executeRun] subscription scan failed', error);
+    });
   }
 
   log('run=%s widget=%s status=%s', run.id, widget.id, outcome.status);

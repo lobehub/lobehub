@@ -1,6 +1,8 @@
 import type { WidgetManifest, WidgetOutput } from '@lobechat/types';
+import { and, eq, sql } from 'drizzle-orm';
 
 import { MetricModel } from '@/database/models/metric';
+import { metrics,widgetRuns, widgetVersions } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 
 export interface WidgetMetricScope {
@@ -72,6 +74,36 @@ export const recordWidgetMetrics = async (
 ): Promise<RecordWidgetMetricsResult> => {
   const { manifest, output, observedAt, runId } = params;
   const metricModel = new MetricModel(db, widget.userId, widget.workspaceId ?? undefined);
+  const [version] = await db
+    .select({ contentHash: widgetVersions.contentHash })
+    .from(widgetRuns)
+    .innerJoin(widgetVersions, eq(widgetVersions.id, widgetRuns.versionId))
+    .where(eq(widgetRuns.id, runId));
+  if (!version) throw new Error('Metric run has no persisted version');
+  const ensure = async (params: Parameters<MetricModel['ensure']>[0]) => {
+    const metric = await metricModel.ensure({
+      ...params,
+      metadata: { widgetContentHash: version.contentHash },
+    });
+    if (!metric) throw new Error('Metric scope unavailable');
+    // Legacy series may be adopted only while empty. A changed script/account/
+    // extraction must use a new key, even after explicitly rebinding a Goal.
+    const [confirmed] = await db
+      .update(metrics)
+      .set({ metadata: { widgetContentHash: version.contentHash } })
+      .where(
+        and(
+          eq(metrics.id, metric.id),
+          sql`(
+        ${metrics.metadata}->>'widgetContentHash' = ${version.contentHash}
+        OR (${metrics.metadata} IS NULL AND NOT EXISTS (SELECT 1 FROM metric_points WHERE metric_id = ${metric.id}))
+      )`,
+        ),
+      )
+      .returning();
+    if (!confirmed) throw new Error('Widget metric source changed: publish a new metric key');
+    return confirmed;
+  };
   const kind = manifest?.metric?.kind ?? 'gauge';
 
   const pointBase = {
@@ -86,7 +118,7 @@ export const recordWidgetMetrics = async (
     );
     if (value === undefined) return { pointsWritten: 0 };
 
-    const metric = await metricModel.ensure({
+    const metric = await ensure({
       key: manifest?.metric?.key ?? DEFAULT_STAT_KEY,
       kind,
       subjectId: widget.id,
@@ -107,10 +139,13 @@ export const recordWidgetMetrics = async (
     for (const series of output.series) {
       const points = series.points
         .map((p) => ({ observedAt: parseTime(p.t), value: p.v }))
-        .filter((p): p is { observedAt: Date; value: number } => !!p.observedAt);
+        .filter(
+          (p): p is { observedAt: Date; value: number } =>
+            !!p.observedAt && Number.isFinite(p.value),
+        );
       if (points.length === 0) continue;
 
-      const metric = await metricModel.ensure({
+      const metric = await ensure({
         key: `${SERIES_KEY_PREFIX}${series.name}`,
         kind,
         subjectId: widget.id,
