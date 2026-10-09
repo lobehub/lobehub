@@ -1,10 +1,12 @@
 import type { FollowUpChip, FollowUpHint, FollowUpModelConfig } from '@lobechat/types';
 
+import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { aiChatService } from '@/services/aiChat';
 import { followUpActionService } from '@/services/followUpAction';
 import { type StoreSetter } from '@/store/types';
 
 import { type FollowUpActionSlot } from './initialState';
+import { followUpSlotResource } from './projection';
 import { type FollowUpActionStore } from './store';
 
 // LLM `generateObject` for chip extraction routinely takes 8-12s end-to-end.
@@ -22,37 +24,6 @@ interface FetchForParams {
   topicId: string;
 }
 
-const writeSlot = (
-  set: Setter,
-  conversationKey: string,
-  slot: FollowUpActionSlot,
-  action: string,
-): void => {
-  set(
-    (state) => ({
-      slots: {
-        ...state.slots,
-        [conversationKey]: slot,
-      },
-    }),
-    false,
-    action,
-  );
-};
-
-const removeSlot = (set: Setter, conversationKey: string, action: string): void => {
-  set(
-    (state) => {
-      if (!state.slots[conversationKey]) return state;
-
-      const { [conversationKey]: _, ...rest } = state.slots;
-      return { slots: rest };
-    },
-    false,
-    action,
-  );
-};
-
 export const createFollowUpActionSlice = (
   set: Setter,
   get: () => FollowUpActionStore,
@@ -60,14 +31,31 @@ export const createFollowUpActionSlice = (
 ) => new FollowUpActionImpl(set, get, _api);
 
 export class FollowUpActionImpl {
-  readonly #set: Setter;
   readonly #get: () => FollowUpActionStore;
+  /** Local-first replica of the per-conversation chip slots (`slots` is its view). */
+  readonly #slots;
 
   constructor(set: Setter, get: () => FollowUpActionStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+    this.#slots = createReplicaSlice(followUpSlotResource, {
+      actionPrefix: 'followUpAction/slot',
+      get,
+      set,
+      stateKey: 'slotsReplica',
+      view: recordLens<FollowUpActionStore, FollowUpActionSlot>('slots'),
+    });
   }
+
+  /** Replace one conversation's slot (in-memory only — slots never persist). */
+  #writeSlot = (conversationKey: string, slot: FollowUpActionSlot): void => {
+    this.#slots.update(conversationKey, () => slot, { persist: false });
+  };
+
+  /** Drop one conversation's slot (and its replica bookkeeping entry). */
+  #removeSlot = (conversationKey: string): void => {
+    this.#slots.remove(conversationKey);
+  };
 
   fetchFor = async (conversationKey: string, params: FetchForParams): Promise<void> => {
     const existing = this.#get().slots[conversationKey];
@@ -82,16 +70,11 @@ export class FollowUpActionImpl {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-    writeSlot(
-      this.#set,
-      conversationKey,
-      {
-        abortController: controller,
-        chips: [],
-        status: 'loading',
-      },
-      'fetchFor:start',
-    );
+    this.#writeSlot(conversationKey, {
+      abortController: controller,
+      chips: [],
+      status: 'loading',
+    });
 
     const result = await followUpActionService.extract(
       {
@@ -110,21 +93,16 @@ export class FollowUpActionImpl {
     if (this.#get().slots[conversationKey]?.abortController !== controller) return;
 
     if (!result || !result.messageId || result.chips.length === 0) {
-      writeSlot(this.#set, conversationKey, { ...IDLE_SLOT }, 'fetchFor:fail');
+      this.#writeSlot(conversationKey, { ...IDLE_SLOT });
       return;
     }
 
-    writeSlot(
-      this.#set,
-      conversationKey,
-      {
-        chips: result.chips,
-        messageId: result.messageId,
-        status: 'ready',
-        tracingId: result.tracingId,
-      },
-      'fetchFor:ready',
-    );
+    this.#writeSlot(conversationKey, {
+      chips: result.chips,
+      messageId: result.messageId,
+      status: 'ready',
+      tracingId: result.tracingId,
+    });
   };
 
   abort = (conversationKey: string): void => {
@@ -132,7 +110,7 @@ export class FollowUpActionImpl {
     if (!slot) return;
     this.#maybeRecordDismissal(slot);
     slot.abortController?.abort();
-    writeSlot(this.#set, conversationKey, { ...IDLE_SLOT }, 'abort');
+    this.#writeSlot(conversationKey, { ...IDLE_SLOT });
   };
 
   clear = (conversationKey: string): void => {
@@ -140,7 +118,7 @@ export class FollowUpActionImpl {
     if (!slot) return;
     this.#maybeRecordDismissal(slot);
     slot.abortController?.abort();
-    removeSlot(this.#set, conversationKey, 'clear');
+    this.#removeSlot(conversationKey);
   };
 
   consume = (conversationKey: string, chip: FollowUpChip): void => {
@@ -166,7 +144,7 @@ export class FollowUpActionImpl {
       })
       .catch((err) => console.warn('[FollowUp] recordFeedback (clicked) failed', err));
 
-    writeSlot(this.#set, conversationKey, { ...slot, feedbackDone: true }, 'recordChipClick');
+    this.#writeSlot(conversationKey, { ...slot, feedbackDone: true });
   };
 
   /**
