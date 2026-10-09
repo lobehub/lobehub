@@ -5,6 +5,7 @@ import ModelConfigFooter from '../Footer';
 
 const mocks = vi.hoisted(() => ({
   close: vi.fn(),
+  error: vi.fn(),
   updateAiModelsConfig: vi.fn(),
 }));
 
@@ -19,6 +20,7 @@ vi.mock('@lobehub/ui/base-ui', () => ({
     </button>
   ),
   ModalFooter: ({ children }: any) => <div>{children}</div>,
+  toast: { error: mocks.error },
   useModalContext: () => ({ close: mocks.close }),
 }));
 
@@ -36,6 +38,7 @@ const formRef = { current: { getValues: () => formValues } as any };
 describe('ModelConfigFooter', () => {
   beforeEach(() => {
     mocks.close.mockReset();
+    mocks.error.mockReset();
     mocks.updateAiModelsConfig.mockReset();
   });
 
@@ -51,8 +54,6 @@ describe('ModelConfigFooter', () => {
   });
 
   it('clears loading and keeps the modal open when saving rejects', async () => {
-    const unhandled = vi.fn();
-    process.on('unhandledRejection', unhandled);
     mocks.updateAiModelsConfig.mockRejectedValue(new Error('400 Bad Request'));
 
     render(<ModelConfigFooter formRef={formRef} id="gpt-4o" />);
@@ -63,6 +64,6 @@ describe('ModelConfigFooter', () => {
     await waitFor(() => expect(okButton.dataset.loading).toBe('false'));
     expect(mocks.close).not.toHaveBeenCalled();
 
-    process.off('unhandledRejection', unhandled);
+    expect(mocks.error).toHaveBeenCalledWith('operationFailed');
   });
 });

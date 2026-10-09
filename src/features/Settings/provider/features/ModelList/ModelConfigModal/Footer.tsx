@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, ModalFooter, useModalContext } from '@lobehub/ui/base-ui';
+import { Button, ModalFooter, toast, useModalContext } from '@lobehub/ui/base-ui';
 import { type FormInstance } from '@lobehub/ui/base-ui/form';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +36,9 @@ const ModelConfigFooter = memo<ModelConfigFooterProps>(({ formRef, id }) => {
           try {
             await updateAiModelsConfig(id, editingProvider, data);
             close();
+          } catch (error) {
+            console.error('Failed to save model configuration', error);
+            toast.error(t('operationFailed'));
           } finally {
             setLoading(false);
           }
