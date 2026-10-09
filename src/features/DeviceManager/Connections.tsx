@@ -31,11 +31,11 @@ interface ConnectionCardProps {
 
 /**
  * One client connection: state dot, client, version, connection status and
- * action on one baseline-aligned line; anything more goes on a second line.
+ * action on one vertically centered line; anything more goes on a second line.
  */
 const ConnectionCard = ({ channel, detail, extra, live, status, version }: ConnectionCardProps) => (
   <Block gap={4} paddingBlock={8} paddingInline={12} variant={'outlined'}>
-    <Flexbox horizontal align={'baseline'} gap={8}>
+    <Flexbox horizontal align={'center'} gap={8}>
       <Text style={{ flex: 'none' }}>
         <PresenceDot live={live} />
       </Text>

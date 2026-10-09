@@ -70,15 +70,15 @@ export const CliUpdate = ({
                 {t('common:alreadyUpToDate')}
               </Text>
             ) : (
-              <Button
+              <ActionIcon
+                aria-label={t('common:checkForUpdates')}
                 disabled={update.requesting}
+                icon={RotateCwIcon}
                 loading={update.requesting}
                 size={'small'}
-                type={'text'}
+                title={t('common:checkForUpdates')}
                 onClick={update.check}
-              >
-                {t('common:checkForUpdates')}
-              </Button>
+              />
             )}
           </>
         )}
@@ -95,56 +95,57 @@ export const CliUpdate = ({
       )}
     </Flexbox>
   );
-  const detail = (
-    <Flexbox gap={4} style={{ paddingInlineStart: 16 }}>
-      {view !== 'ready' && !(view === 'loading' && update.error) && (
-        <Text
-          fontSize={12}
-          type={
-            view === 'failed' || view === 'timedOut' || view === 'unavailable'
-              ? 'danger'
-              : 'secondary'
-          }
-        >
-          {t(`devices.cliUpdate.${view}`)}
-          {view === 'unsupported' && ` · ${t('devices.cliUpdate.bootstrap')}`}
-        </Text>
-      )}
-      {update.error && view !== 'unsupported' && (
-        <Text fontSize={12} type={'danger'}>
-          {t('devices.cliUpdate.requestFailed')}
-        </Text>
-      )}
-      {errorDetails && (
-        <Popover
-          placement={'bottomLeft'}
-          styles={{ content: { maxWidth: 'min(400px, 80vw)' } }}
-          trigger={'click'}
-          content={
-            <Text
-              fontSize={12}
-              style={{
-                maxHeight: 200,
-                overflow: 'auto',
-                whiteSpace: 'pre-wrap',
-                wordBreak: 'break-word',
-              }}
-            >
-              {errorDetails}
-            </Text>
-          }
-        >
-          <Button size={'small'} style={{ alignSelf: 'flex-start' }} type={'text'}>
-            {t('devices.cliUpdate.showDetails')}
-          </Button>
-        </Popover>
-      )}
-      {update.ambiguous && view !== 'success' && (
-        <Text fontSize={12} type={'danger'}>
-          {t('devices.cliUpdate.ambiguous')}
-        </Text>
-      )}
-    </Flexbox>
-  );
+  const detail =
+    view === 'ready' && !update.error && !update.ambiguous ? undefined : (
+      <Flexbox gap={4} style={{ paddingInlineStart: 16 }}>
+        {view !== 'ready' && !(view === 'loading' && update.error) && (
+          <Text
+            fontSize={12}
+            type={
+              view === 'failed' || view === 'timedOut' || view === 'unavailable'
+                ? 'danger'
+                : 'secondary'
+            }
+          >
+            {t(`devices.cliUpdate.${view}`)}
+            {view === 'unsupported' && ` · ${t('devices.cliUpdate.bootstrap')}`}
+          </Text>
+        )}
+        {update.error && view !== 'unsupported' && (
+          <Text fontSize={12} type={'danger'}>
+            {t('devices.cliUpdate.requestFailed')}
+          </Text>
+        )}
+        {errorDetails && (
+          <Popover
+            placement={'bottomLeft'}
+            styles={{ content: { maxWidth: 'min(400px, 80vw)' } }}
+            trigger={'click'}
+            content={
+              <Text
+                fontSize={12}
+                style={{
+                  maxHeight: 200,
+                  overflow: 'auto',
+                  whiteSpace: 'pre-wrap',
+                  wordBreak: 'break-word',
+                }}
+              >
+                {errorDetails}
+              </Text>
+            }
+          >
+            <Button size={'small'} style={{ alignSelf: 'flex-start' }} type={'text'}>
+              {t('devices.cliUpdate.showDetails')}
+            </Button>
+          </Popover>
+        )}
+        {update.ambiguous && view !== 'success' && (
+          <Text fontSize={12} type={'danger'}>
+            {t('devices.cliUpdate.ambiguous')}
+          </Text>
+        )}
+      </Flexbox>
+    );
   return children({ actions, detail });
 };
