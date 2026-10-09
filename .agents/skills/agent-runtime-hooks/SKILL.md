@@ -109,6 +109,14 @@ const hook: AgentHook = {
 - Extra response fields are allowed and discarded. Only `decision` and a deny's optional string `reason` are consumed; `updatedInput`/`additionalContext` do not change tool arguments or conversation context.
 - Configuration: `packages/types/src/agentHook.ts`; response parsing: `packages/types/src/agentHookResponse.ts`; HTTP delivery: `apps/server/src/services/agentRuntime/hooks/httpWebhook.ts`.
 
+### Hook configuration lifetime
+
+- Environment hooks (`AGENT_HOOK_WEBHOOK_*`) always come from the executing worker's **current environment**, including after human approval and deferred completion. Never persist their configuration or restore a previous environment's hooks.
+- Code-supplied webhook hooks (`execAgent({ hooks })`) retain the existing per-operation serialization and persistence. Recover these caller hooks from the runtime snapshot or durable operation record; preserve environment-variable templates without expanding secrets into storage.
+- Evaluate recovered caller hooks together with current environment hooks. Removing an environment hook stops it from controlling subsequent results; when no matching result control remains, allow the result and release its pending review marker. Historical `pending` alone must not require a removed environment policy to remain configured.
+- Preserve recorded denials on duplicate completion. An unavailable caller-policy store is a recovery error, distinct from a successfully recovered empty hook list. Do not extend default allow to configured-hook delivery failures: those follow `onError`.
+- Cover environment removal/addition across approval and snapshot expiry, release of pending markers, and continued enforcement of persisted caller hooks in regression tests.
+
 ## Events
 
 | Event                       | Timing and payload                                                                         |

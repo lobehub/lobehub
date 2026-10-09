@@ -62,7 +62,6 @@ export async function controlDeferredToolResult(
   const review = message?.metadata?.toolResultControl;
   // A durable denial survives policy removal and late completion replay.
   const targetReview = targetMessage?.metadata?.toolResultControl ?? review;
-  const needsReview = review?.status === 'pending' || targetReview?.status === 'pending';
   if (review?.status === 'blocked' || targetReview?.status === 'blocked') {
     const blocked = blockedToolResult(input.result, input.preserveUsage);
     if (persisted?.state?.onComplete === 'finish') blocked.state!.onComplete = 'finish';
@@ -78,7 +77,7 @@ export async function controlDeferredToolResult(
   let hooks = state?.host?.hooks;
   if (!state && operationId) {
     hooks = await deps.loadDurableHooks(operationId);
-    if (hooks === undefined && (review || needsReview)) {
+    if (hooks === undefined && (review || targetReview)) {
       throw new Error(
         'Cannot recover afterToolCall control policy; retry or restart the pending run',
       );
@@ -88,7 +87,7 @@ export async function controlDeferredToolResult(
     // are still evaluated. New protected rows cannot lose their marker through
     // ordinary metadata updates or approval rollback.
   }
-  if (!needsReview && !deps.dispatcher.hasAfterToolCallControl(operationId ?? '', hooks))
+  if (!deps.dispatcher.hasAfterToolCallControl(operationId ?? '', hooks))
     return {
       blocked: false,
       cancelled: false,
@@ -109,20 +108,6 @@ export async function controlDeferredToolResult(
     // Do not acknowledge an unreviewed backfill when its authoritative call
     // cannot be reconstructed. A durable callback can retry the same result.
     throw new Error('Cannot evaluate afterToolCall: tool call context is unavailable');
-  }
-  // An empty recovered array can mean an environment-only policy disappeared.
-  // A pending row requires a control matching its original call, not merely
-  // a readable snapshot or an unrelated hook. Leave it quarantined for retry.
-  if (
-    needsReview &&
-    !deps.dispatcher.hasAfterToolCallControl(operationId, hooks, {
-      apiName: plugin.apiName,
-      identifier: plugin.identifier,
-    })
-  ) {
-    throw new Error(
-      'Cannot recover afterToolCall control policy; retry or restart the pending run',
-    );
   }
   let args: Record<string, unknown> = {};
   try {
@@ -170,6 +155,12 @@ export async function controlDeferredToolResult(
   );
   if (controlled.blocked && plugin.state?.onComplete === 'finish') {
     controlled.result.state!.onComplete = 'finish';
+  }
+  // A pending marker records an unfinished result, not a frozen environment
+  // policy. No current matching control means allow, including when only hooks
+  // for other tools remain. Publish the verdict so history releases the row.
+  if (!controlled.cancelled && !controlled.review && targetReview) {
+    controlled.review = { ...targetReview, status: 'allowed' };
   }
   return controlled;
 }
