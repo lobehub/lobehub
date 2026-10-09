@@ -63,6 +63,11 @@ export default {
 
   'directories.autoFileTopics': 'All {{count}} existing topics will be linked to this project.',
   'settings.general': 'General',
+  'settings.logo': 'Logo',
+  'settings.logoDescription': 'Shown in the project header, sidebar and switcher.',
+  'settings.logoSizeExceeded': 'The logo must be smaller than 2 MB.',
+  'settings.logoUploadFailed': 'Could not upload the logo',
+  'settings.advanced': 'Advanced',
   'settings.noRepository': 'No GitHub repository linked',
   'settings.noDirectories':
     'No folders in this environment yet. Add an existing folder on a connected device to start working.',

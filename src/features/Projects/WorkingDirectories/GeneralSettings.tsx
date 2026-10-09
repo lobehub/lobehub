@@ -2,31 +2,57 @@
 // `help`/`validateStatus`, which this form uses for the slug field.
 // eslint-disable-next-line no-restricted-imports
 import { Flexbox, Form } from '@lobehub/ui';
-import { Button, confirmModal, Input, TextArea, toast } from '@lobehub/ui/base-ui';
+import { Button, Input, TextArea, toast } from '@lobehub/ui/base-ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import AsyncError from '@/components/AsyncError';
+import EmojiPicker from '@/components/EmojiPicker';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
+import { useFileStore } from '@/store/file';
 import type { ProjectDetail } from '@/store/project';
 import { useProjectStore } from '@/store/project';
-import { useUserStore } from '@/store/user';
-import { userProfileSelectors } from '@/store/user/selectors';
 
 import { isProjectSlugValid } from '../createProjectForm';
+
+const MAX_LOGO_SIZE = 2 * 1024 * 1024;
 
 export function GeneralSettings({ project }: { project: ProjectDetail['project'] }) {
   const { t } = useTranslation('project');
   const [name, setName] = useState(project.name);
   const [slug, setSlug] = useState(project.slug ?? '');
   const [description, setDescription] = useState(project.description ?? '');
+  const [avatar, setAvatar] = useState<string | null>(project.avatar ?? null);
+  const [uploading, setUploading] = useState(false);
   const navigate = useWorkspaceAwareNavigate();
-  const deleteProject = useProjectStore((s) => s.deleteProject);
-  const currentUserId = useUserStore(userProfileSelectors.userId);
+  const uploadWithProgress = useFileStore((s) => s.uploadWithProgress);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<unknown>();
   const updateProject = useProjectStore((s) => s.updateProject);
+
+  const uploadLogo = async (file: File) => {
+    if (file.size > MAX_LOGO_SIZE) {
+      toast.error(t('settings.logoSizeExceeded'));
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const result = await uploadWithProgress({ file });
+      if (!result?.url) {
+        toast.error(t('settings.logoUploadFailed'));
+        return;
+      }
+      setAvatar(result.url);
+    } catch (error) {
+      console.error('Failed to upload project logo', error);
+      toast.error(t('settings.logoUploadFailed'));
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const save = async () => {
     setPending(true);
     setError(undefined);
@@ -35,6 +61,7 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
         name: name.trim(),
         slug: slug.trim() || null,
         description: description.trim() || null,
+        avatar,
       });
       navigate(`/project/${saved.slug ?? saved.id}/settings/general`, { replace: true });
       toast.success(t('rename.success'));
@@ -47,11 +74,13 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
   };
   const saveDisabled =
     pending ||
+    uploading ||
     !name.trim() ||
     !isProjectSlugValid(slug) ||
     (name.trim() === project.name &&
       slug.trim() === (project.slug ?? '') &&
-      description.trim() === (project.description ?? ''));
+      description.trim() === (project.description ?? '') &&
+      avatar === (project.avatar ?? null));
 
   return (
     <Flexbox gap={24}>
@@ -76,6 +105,25 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
           {
             title: t('settings.general'),
             children: [
+              {
+                label: t('settings.logo'),
+                desc: t('settings.logoDescription'),
+                children: (
+                  <EmojiPicker
+                    allowDelete={!!avatar}
+                    allowUpload={{ enableEmoji: true }}
+                    loading={uploading}
+                    shape="square"
+                    size={80}
+                    value={avatar || undefined}
+                    onDelete={() => setAvatar(null)}
+                    onUpload={uploadLogo}
+                    onChange={(next) => {
+                      if (!next.startsWith('data:')) setAvatar(next || null);
+                    }}
+                  />
+                ),
+              },
               {
                 label: t('create.nameLabel'),
                 children: (
@@ -130,47 +178,6 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
           },
         ]}
       />
-      {currentUserId === project.userId && (
-        <Form
-          {...FORM_STYLE}
-          itemsType="flat"
-          variant="filled"
-          items={[
-            {
-              label: t('list.deleteAction'),
-              desc: t('list.deleteConfirmDescription', { name: project.name }),
-              minWidth: undefined,
-              children: (
-                <Button
-                  danger
-                  disabled={pending}
-                  onClick={() =>
-                    confirmModal({
-                      title: t('list.deleteConfirmTitle'),
-                      content: t('list.deleteConfirmDescription', { name: project.name }),
-                      okText: t('delete', { ns: 'common' }),
-                      cancelText: t('cancel', { ns: 'common' }),
-                      okButtonProps: { danger: true },
-                      onOk: async () => {
-                        try {
-                          await deleteProject(project.id);
-                          navigate('/projects', { replace: true });
-                        } catch (error) {
-                          console.error('Failed to delete project', error);
-                          toast.error(t('list.deleteError'));
-                          throw error;
-                        }
-                      },
-                    })
-                  }
-                >
-                  {t('list.deleteAction')}
-                </Button>
-              ),
-            },
-          ]}
-        />
-      )}
     </Flexbox>
   );
 }
