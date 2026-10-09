@@ -4,6 +4,7 @@ import { createStaticStyles } from 'antd-style';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useUserMemoryStore } from '@/store/userMemory';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -17,6 +18,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 
 const PersonaHeader = () => {
   const { t } = useTranslation(['memory', 'common']);
+  const workspaceId = useActiveWorkspaceId();
   const deletePersona = useUserMemoryStore((s) => s.deletePersona);
   const [loading, setLoading] = useState(false);
 
@@ -46,9 +48,11 @@ const PersonaHeader = () => {
       <Text as={'h1'} className={styles.title}>
         Persona
       </Text>
-      <Button danger loading={loading} size={'small'} onClick={confirmDelete}>
-        {t('persona.delete.action')}
-      </Button>
+      {!workspaceId && (
+        <Button danger loading={loading} size={'small'} onClick={confirmDelete}>
+          {t('persona.delete.action')}
+        </Button>
+      )}
     </Flexbox>
   );
 };
