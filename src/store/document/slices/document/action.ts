@@ -100,8 +100,10 @@ export class DocumentActionImpl {
       get,
       set,
       stateKey: 'documentDetailReplica',
-      // A "not found" answer is a page state, not a document — never persist it.
-      toPersisted: (data) => (data.document ? data : undefined),
+      // A "not found" answer is a page state, not a document: never persist it,
+      // and evict the row persisted for this document earlier (the engine
+      // removes it) so a reload cannot resurrect a deleted / revoked document.
+      toPersisted: (data) => (data.document ? data : null),
       view: recordLens<DocumentStore, DocumentDetail>('documentDetailMap'),
     });
   }
@@ -348,9 +350,15 @@ export class DocumentActionImpl {
    * so navigation paints the editor from the projection instead of a skeleton.
    */
   prefetchDocument = async (documentId: string): Promise<void> => {
+    // Capture the identity BEFORE the request. An account / workspace switch
+    // while it is in flight would otherwise make `replace` fall back to the new
+    // scope and write the old identity's document into its memory and IndexedDB
+    // partition. The regular `useSync` path captures the scope the same way; the
+    // engine drops an action whose scope is no longer active.
+    const scope = documentDetailResource.scope.get();
     try {
       const document = await documentService.getDocumentById(documentId);
-      this.#detail.replace(documentId, { document: document ?? null });
+      this.#detail.replace(documentId, { document: document ?? null }, scope);
     } catch (error) {
       console.error('[DocumentStore] Failed to prefetch document:', error);
     }

@@ -312,4 +312,72 @@ describe('document detail replica', () => {
     });
     expect((await storedRow('doc-2', scope))?.data).toEqual({ document: prefetched });
   });
+
+  it('does not leak a prefetch fetched under another identity into the new scope', async () => {
+    const previousScope = scope;
+    const prefetched = documentRow({ id: 'doc-2', content: '# Old identity' });
+    let resolveFetch!: (value: unknown) => void;
+    vi.mocked(documentService.getDocumentById).mockImplementation(
+      () => new Promise((resolve) => (resolveFetch = resolve)) as any,
+    );
+
+    const inflight = useDocumentStore.getState().prefetchDocument('doc-2');
+    // The identity switches while the request is in flight.
+    useScope(`document-user-${randomUUID()}:personal`);
+    resolveFetch(prefetched);
+    await act(async () => {
+      await inflight;
+    });
+
+    // The response was fetched under the previous identity, so it may not land
+    // in the new identity's memory…
+    expect(useDocumentStore.getState().documentDetailMap['doc-2']).toBeUndefined();
+    expect(await storedRow('doc-2', scope)).toBeUndefined();
+    // …nor in the previous identity's persisted partition.
+    expect(await storedRow('doc-2', previousScope)).toBeUndefined();
+  });
+
+  it('evicts a previously persisted document when the server no longer has it', async () => {
+    // Cached before the document was deleted / became inaccessible.
+    const stale = documentRow({ content: '# Revoked' });
+    await documentDetailResource.storage!.set(
+      { queryKey: 'doc-1', scope },
+      { data: { document: stale }, updatedAt: 1 },
+    );
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(undefined as any);
+
+    const editor = createEditor();
+    const { result } = renderDocument('doc-1', editor);
+
+    await waitFor(() =>
+      expect(useDocumentStore.getState().documentDetailMap['doc-1']).toEqual({ document: null }),
+    );
+    expect(result.current.data).toBeNull();
+    // The in-memory "not found" marker is kept, but the stale row is gone.
+    await waitFor(async () => expect(await storedRow('doc-1', scope)).toBeUndefined());
+  });
+
+  it('a reload cannot resurrect a document the server has dropped', async () => {
+    const stale = documentRow({ content: '# Revoked' });
+    await documentDetailResource.storage!.set(
+      { queryKey: 'doc-1', scope },
+      { data: { document: stale }, updatedAt: 1 },
+    );
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(undefined as any);
+    const first = renderDocument('doc-1', createEditor());
+    await waitFor(async () => expect(await storedRow('doc-1', scope)).toBeUndefined());
+    first.unmount();
+
+    // Reload: memory is gone, so only the persisted projection could paint a
+    // first frame — and the read that follows fails.
+    act(() => useDocumentStore.setState(detailSliceState()));
+    vi.mocked(documentService.getDocumentById).mockRejectedValue(new Error('offline') as any);
+    const editor = createEditor();
+    const second = renderDocument('doc-1', editor);
+    await waitFor(() => expect(second.result.current.error).toBeDefined());
+
+    expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeUndefined();
+    expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
+    expect(editor.setDocument).not.toHaveBeenCalled();
+  });
 });
