@@ -105,6 +105,9 @@ describe('persisted recipient', () => {
       'REQUEST_MISMATCH',
     );
     expect(
+      await codeOf(() => openWithPersistedKey({ envelope, key, now: request.expiresAt, request })),
+    ).toBe('EXPIRED');
+    expect(
       await codeOf(() =>
         openWithPersistedKey({ envelope, key, now: request.expiresAt + 1, request }),
       ),

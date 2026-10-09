@@ -60,8 +60,11 @@ export const unframePlaintext = (framed: Uint8Array): Uint8Array => {
     throw new AscError('INVALID_ENVELOPE', 'bad padded length');
   if (framed[0] !== FRAME_VERSION) throw new AscError('UNSUPPORTED_VERSION');
 
+  // The declared length is bounded by the protocol maximum, not just by the padded buffer: a frame
+  // large enough to fit a longer declaration must not smuggle a secret `framePlaintext` would have
+  // refused ([ASC-L2-21], [ASC-L2-22]).
   const length = (framed[1] << 8) | framed[2];
-  if (length === 0 || length > framed.length - FRAME_HEADER)
+  if (length === 0 || length > ASC_MAX_SECRET_BYTES || length > framed.length - FRAME_HEADER)
     throw new AscError('INVALID_ENVELOPE', 'bad secret length');
 
   let padding = 0;
@@ -215,7 +218,9 @@ export class EphemeralRecipient {
     if (this._state !== 'pending' || !this.keyPair)
       throw new AscError(this._state === 'expired' ? 'EXPIRED' : 'REPLAYED', `recipient is ${this._state}`);
 
-    if (now > request.expiresAt) {
+    // [ASC-L2-26]: at or after `expiresAt` the recipient is destroyed and the request refused,
+    // matching the Client's seal check ([ASC-L2-29]) and the Relay ([ASC-RL-05]).
+    if (now >= request.expiresAt) {
       this.drop('expired');
       throw new AscError('EXPIRED');
     }

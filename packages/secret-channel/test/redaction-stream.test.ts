@@ -35,4 +35,32 @@ describe('streaming redaction', () => {
     expect(stream.push('TOKEN')).toBe('«secret:token»');
     expect(stream.flush()).toBe('');
   });
+
+  it('never emits a completed match that overlaps a trailing prefix', () => {
+    const redactor = createSecretRedactor();
+    redactor.add('long', 'abcdef');
+    redactor.add('short', 'efgh');
+    const stream = createStreamingRedactor(redactor);
+
+    // `efg` is a proper prefix of `efgh`, but `abcdef` ends at offset 6: cutting at 4 would emit
+    // `abcd`, retain `efg`, and let the next chunk reconstruct the unredacted `abcdefgX`.
+    expect(stream.push('abcdefg')).toBe('');
+    expect(stream.push('X')).toBe('«secret:long»gX');
+    expect(stream.flush()).toBe('');
+  });
+
+  it('matches a whole-buffer redaction for every chunk split', () => {
+    const redactor = createSecretRedactor();
+    redactor.add('long', 'abcdef');
+    redactor.add('short', 'efgh');
+    const text = 'abcdefgh and abcdef and efgh and abcdefgX';
+    const expected = redactor.redact(text);
+
+    for (let split = 0; split <= text.length; split++) {
+      const stream = createStreamingRedactor(redactor);
+      const out =
+        stream.push(text.slice(0, split)) + stream.push(text.slice(split)) + stream.flush();
+      expect(out, `split at ${split}`).toBe(expected);
+    }
+  });
 });

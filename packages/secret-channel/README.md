@@ -5,10 +5,12 @@ requests, the canonical 14-field AAD, HPKE (RFC 9180) envelope seal/open and red
 placeholders.
 
 `src/asc/` is vendored unchanged from the reference implementation
-(`agent-secret-channel` → `packages/asc-core`, main `442ae4d` plus the redaction fixes `e078942`
-and `fbe8c51`, and the fail-closed fixes `5f6f40d`); `test/vectors/` are the
-protocol's test vectors, so `test/vectors.test.ts` proves this copy is byte-for-byte
-conformant. Update both together; never edit `src/asc/` here without changing the upstream first.
+(`agent-secret-channel` → `packages/asc-core`): it equals `main` `442ae4d` with the fix branches
+`fix/redact-short-secret-variants` (`e078942`), `fix/fail-closed-suite-and-version` (`5f6f40d`),
+`fix/streaming-redaction-overlap` (`cb7c780`) and `fix/frame-and-expiry-hardening` (`d1ab2d2`)
+applied. `test/vectors/` are the protocol's test vectors, so `test/vectors.test.ts` proves this copy
+is byte-for-byte conformant. Update both together; never edit `src/asc/` here without changing the
+upstream first.
 
 Two files are LobeHub additions: `src/persistedRecipient.ts`, a per-request recipient key that can be
 stored between two HTTP requests (serverless Executor), opened with the same checks and error

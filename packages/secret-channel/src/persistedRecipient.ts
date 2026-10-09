@@ -80,7 +80,8 @@ export const openWithPersistedKey = async ({
   // [ASC-L2-02]: a Base-only opener must refuse a label it does not implement rather than let an
   // unrecognised Request fall through to Base mode without sender authentication.
   if (requestSuiteLabel !== ASC_SUITE) throw new AscError('UNSUPPORTED_VERSION');
-  if (now > request.expiresAt) throw new AscError('EXPIRED');
+  // [ASC-L2-26]: at or after `expiresAt`, matching `EphemeralRecipient.open` and the Client seal.
+  if (now >= request.expiresAt) throw new AscError('EXPIRED');
 
   if (envelope.v !== ASC_VERSION || envelope.suite !== requestSuiteLabel)
     throw new AscError('UNSUPPORTED_VERSION');
