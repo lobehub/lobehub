@@ -616,6 +616,24 @@ describe('createReplicaSlice', () => {
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(storage.writes).toEqual([]);
     });
+
+    it('retries the storage delete of a removal made while the scope was untrusted', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      // Cold boot: identity is not resolved, so writes are refused and the
+      // delete never reaches storage — the hydration guard is armed all the same.
+      scopeState.trusted = false;
+      act(() => slice.remove('a'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(storage.rows.get('user-1:personal|a')).toBeDefined();
+
+      // Identity resolves: the next removal must clear the row, not no-op.
+      scopeState.trusted = true;
+      act(() => slice.remove('a'));
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
   });
 
   describe('missing responses', () => {

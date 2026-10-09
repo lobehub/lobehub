@@ -157,15 +157,29 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   // value supersedes it, otherwise the late read resurrects the exact value the
   // removal just dropped.
   const removedEntries = new Map<string, Set<string>>();
-  const markRemoved = (scope: string, key: string) => {
-    const keys = removedEntries.get(scope) ?? new Set<string>();
-    removedEntries.set(scope, keys);
+  /**
+   * Keys whose persisted row delete was actually queued. `runEffects` refuses to
+   * write while the scope is untrusted, so a removal made on a cold boot can arm
+   * the guard without clearing the row. The guard alone must therefore not turn
+   * a later removal into a no-op, or the stale row would survive and hydrate
+   * again once the scope becomes trusted.
+   */
+  const purgedEntries = new Map<string, Set<string>>();
+  const addTo = (map: Map<string, Set<string>>, scope: string, key: string) => {
+    const keys = map.get(scope) ?? new Set<string>();
+    map.set(scope, keys);
     keys.add(key);
   };
+  const hasIn = (map: Map<string, Set<string>>, scope: string, key: string) =>
+    map.get(scope)?.has(key) ?? false;
+  const markRemoved = (scope: string, key: string) => addTo(removedEntries, scope, key);
   const clearRemoved = (scope: string, key: string) => {
     removedEntries.get(scope)?.delete(key);
+    purgedEntries.get(scope)?.delete(key);
   };
-  const isRemoved = (scope: string, key: string) => removedEntries.get(scope)?.has(key) ?? false;
+  const isRemoved = (scope: string, key: string) => hasIn(removedEntries, scope, key);
+  const markPurged = (scope: string, key: string) => addTo(purgedEntries, scope, key);
+  const isPurged = (scope: string, key: string) => hasIn(purgedEntries, scope, key);
 
   const getSlot = port.getState;
   const storageKey = (key: string, query?: string) => ({
@@ -216,6 +230,9 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       const key = { ...storageKey(effect.key, effect.query), scope: effect.scope };
       if (effect.type === 'remove') {
         writeQueue.remove(key);
+        // The delete is on its way: a repeated removal for this key can now be a
+        // real no-op (see `remove`).
+        markPurged(effect.scope, effect.key);
         trackStorageKey(effect.scope, key.queryKey, false);
         continue;
       }
@@ -396,15 +413,19 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   /**
    * Drop an entry and its persisted row.
    *
-   * A removal that is already in effect — the key is guarded and its value is
-   * absent — is a no-op. A subject with no acceptance polls `null` every couple
-   * of seconds, and re-emitting the same delete on every tick only churns
-   * storage with transactions that change nothing. The *first* removal still
-   * runs, so a stale persisted row is cleared; later ones wait for a server
-   * value to supersede the guard.
+   * A removal is a no-op only once there is genuinely nothing left to do: the
+   * key is guarded, its value is gone, AND its stale row was already scheduled
+   * for deletion (or there is no persisted row to clear). A subject with no
+   * acceptance polls `null` every couple of seconds, and re-emitting the same
+   * delete on every tick would only churn storage. But a removal whose delete
+   * was skipped — an untrusted scope refuses writes — keeps retrying, so the row
+   * cannot survive to hydrate again once the scope is trusted.
    */
   const remove = (key: string, scope: string = resource.scope.get()): boolean => {
-    if (isRemoved(scope, key) && port.read(key) === undefined) return false;
+    // Nothing persisted (no storage, or a key this resource never persists) is
+    // already "cleared"; otherwise the row delete must have been queued.
+    const rowCleared = !writeQueue || !resource.persistKey(key) || isPurged(scope, key);
+    if (rowCleared && isRemoved(scope, key) && port.read(key) === undefined) return false;
     return dispatch({ key, scope, type: 'remove' });
   };
 

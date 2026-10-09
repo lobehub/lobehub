@@ -53,8 +53,12 @@ export default function AcceptanceDetailRoute() {
   // shows a spinner until client revalidation lands. Seeded once per acceptance
   // id (the route component is reused across param changes); later renders keep
   // whatever the live replica holds.
+  // Client only: the store is a module singleton reused across requests, so a
+  // server render must not write one request's authorized bundle into it — a
+  // later (or concurrent) request whose loader returned null would then paint
+  // the retained entry into its own response.
   const seededId = useRef<string | null>(null);
-  if (bundle && seededId.current !== acceptanceId) {
+  if (typeof window !== 'undefined' && bundle && seededId.current !== acceptanceId) {
     seededId.current = acceptanceId;
     useVerifyStore.getState().seedAcceptanceBundle(acceptanceId, bundle);
   }
