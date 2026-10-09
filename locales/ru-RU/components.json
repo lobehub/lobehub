@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Открыть",
   "LocalFile.action.preview": "Предпросмотр",
   "LocalFile.action.showInFolder": "Показать в папке",
+  "LocalFile.action.startTopic": "Начать новую тему здесь",
+  "LocalFile.action.startTopicFailed": "Не удалось начать новую тему в этой папке.",
   "MaxTokenSlider.unlimited": "Без ограничений",
   "ModelSelect.featureTag.audio": "Эта модель поддерживает распознавание аудиовхода.",
   "ModelSelect.featureTag.custom": "Пользовательская модель по умолчанию поддерживает вызовы функций и визуальное распознавание. Пожалуйста, проверьте доступность этих возможностей в вашей ситуации.",

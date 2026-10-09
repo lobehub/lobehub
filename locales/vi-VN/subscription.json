@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Kết nối WeChat sau khi nâng cấp",
   "plansModal.modelAccess.desc": "Mô hình này có sẵn trong các gói trả phí. Nâng cấp để sử dụng toàn bộ danh mục mô hình.",
   "plansModal.modelAccess.title": "Mở khóa tất cả các mô hình",
+  "plansModal.persistentSandbox.desc": "Các tệp mà agent của bạn ghi trong sandbox đám mây sẽ bị xóa khi phiên làm việc kết thúc. Nâng cấp để giữ một thư mục làm việc liên tục, tồn tại qua các phiên và được chia sẻ giữa các chủ đề của bạn.",
+  "plansModal.persistentSandbox.title": "Giữ các tệp sandbox của bạn",
   "qa.desc": "Nếu câu hỏi của bạn chưa được giải đáp, hãy xem <1>Tài liệu sản phẩm</1> để biết thêm câu hỏi thường gặp, hoặc liên hệ với chúng tôi.",
   "qa.detail": "Xem chi tiết",
   "qa.list.credit.a": "Tín dụng tính toán là đơn vị đo lường việc sử dụng mô hình AI khi gọi mô hình trong {{cloud}}. Các mô hình AI khác nhau tiêu tốn lượng tín dụng khác nhau.",
@@ -631,8 +633,16 @@
   "switchPlan": "Chuyển gói",
   "switchToMonthly.desc": "Sau khi chuyển, thanh toán hàng tháng sẽ có hiệu lực sau khi gói hàng năm hiện tại hết hạn.",
   "switchToMonthly.title": "Chuyển sang thanh toán hàng tháng",
+  "switchToYearly.after": "Sau khi chuyển đổi",
+  "switchToYearly.billedYearly": "{{price}} được tính hàng năm",
+  "switchToYearly.credit": "Tín dụng cho tháng này",
   "switchToYearly.desc": "Sau khi chuyển, thanh toán hàng năm sẽ có hiệu lực ngay sau khi thanh toán phần chênh lệch. Ngày bắt đầu được kế thừa từ gói trước.",
+  "switchToYearly.dueToday": "Phải trả hôm nay",
+  "switchToYearly.now": "Bây giờ",
+  "switchToYearly.period": "Chu kỳ thanh toán",
+  "switchToYearly.price": "Giá",
   "switchToYearly.title": "Chuyển sang thanh toán hàng năm",
+  "switchToYearly.yearlyPlan": "Gói hàng năm",
   "tab.billing": "Quản lý Thanh toán",
   "tab.budget": "Ngân sách",
   "tab.credits": "Quản lý Tín dụng",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Tổng quan sử dụng",
   "usage.remaining": "Còn lại",
   "usage.storage.embeddings.used": "Lưu trữ vector",
-  "usage.storage.file.used": "Sử dụng tệp"
+  "usage.storage.file.used": "Sử dụng tệp",
+  "usage.storage.sandboxStorage.used": "Dung lượng lưu trữ Sandbox đã sử dụng"
 }

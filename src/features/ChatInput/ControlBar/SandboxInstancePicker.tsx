@@ -2,15 +2,25 @@
 
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Popover, Skeleton, Text } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  confirmModal,
+  DropdownMenu,
+  Popover,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,
+  CircleStopIcon,
   FolderClockIcon,
   FolderIcon,
   InfoIcon,
   LockIcon,
+  MoreVerticalIcon,
   PlusIcon,
   SettingsIcon,
   TimerIcon,
@@ -20,11 +30,15 @@ import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';
 
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
+import { describeError } from '@/features/EnvironmentManager/errorMessage';
 import { repositoryPath } from '@/features/EnvironmentManager/repository';
+import { settleThenRefresh } from '@/features/EnvironmentManager/settleThenRefresh';
+import { useCanEditEnvironment } from '@/features/EnvironmentManager/useCanEditEnvironment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 import OptionRow from './OptionRow';
+import { usePendingIds } from './usePendingIds';
 import type { SandboxSelection } from './useSandboxMode';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
 
@@ -196,8 +210,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // The slot's own name comes from the device namespace on purpose: the local
     // picker and this one are the same slot, and a second string meaning
     // "working directory" would be one more pair to keep in step.
-    const { t } = useTranslation(['chat', 'device']);
+    const { t } = useTranslation(['chat', 'device', 'setting']);
     const [open, setOpen] = useState(false);
+    // Instances whose run is being stopped from this menu.
+    const stopping = usePendingIds();
+    const canEdit = useCanEditEnvironment();
     const navigate = useWorkspaceAwareNavigate();
 
     const boundInstanceId = value.mode === 'persistent' ? value.instanceId : undefined;
@@ -205,7 +222,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // Fetched while CLOSED whenever an instance is bound, because the chip names
     // it by looking it up in this list: gating the list on `open` alone leaves
     // the closed chip with nothing to look up.
-    const { data, isLoading: instancesLoading } = useSWR(
+    const {
+      data,
+      isLoading: instancesLoading,
+      mutate: refreshInstances,
+    } = useSWR(
       entitled && (open || boundInstanceId) ? ['sandbox-instances', topicId] : null,
       () => sandboxStorageService.listInstances({ topicId, withSizes: false }),
       // The topic is in the key because occupancy is answered per conversation
@@ -298,6 +319,45 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       action();
     };
 
+    // The same stop the settings row offers, from the place the person found
+    // the instance blocked. The dialog and its outcomes are that row's own
+    // words, so the two surfaces cannot drift into describing it differently.
+    // Keys are checked per namespace, and these are the settings row's.
+    const translate = t as (key: string, options?: Record<string, unknown>) => string;
+    const tSetting = (key: string, options?: Record<string, unknown>) =>
+      translate(key, { ...options, ns: 'setting' });
+    const confirmStop = (instance: (typeof instances)[number]) =>
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: tSetting('environments.instances.stopConfirmContent'),
+        okText: tSetting('environments.instances.stop'),
+        onOk: () => {
+          stopping.add(instance.id);
+          // Refreshed either way — a refusal may land after the run ended on
+          // its own — and the row stays busy until the refreshed list is in,
+          // so it never reads free on the toast and locked on the row.
+          void settleThenRefresh(
+            () => sandboxStorageService.stopInstance({ id: instance.id }),
+            refreshInstances,
+          )
+            .then(({ stopped }) =>
+              toast.success(
+                tSetting(
+                  stopped ? 'environments.instances.stopped' : 'environments.instances.stopNothing',
+                  { name: instance.name },
+                ),
+              ),
+            )
+            .catch((error: unknown) =>
+              toast.error(
+                describeError(error, tSetting, tSetting('environments.instances.stopFailed')),
+              ),
+            )
+            .finally(() => stopping.remove(instance.id));
+        },
+        title: tSetting('environments.instances.stopConfirmTitle', { name: instance.name }),
+      });
+
     const renderInstance = (instance: (typeof instances)[number]) => {
       const environment = environmentById.get(instance.environmentId);
       // What the environment builds from, marked the way the settings list
@@ -322,6 +382,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       // same: a build that failed is retried from the settings page, and a
       // conversation pointed at the instance is how someone gets back to it.
       const unbuilt = instance.status === 'error';
+      // The way out of `occupied`, for whoever may end that run: the owner,
+      // as on the settings row. A colleague's run in a published environment
+      // is theirs to finish, and this menu only explains the wait.
+      const stoppable = occupied && !preparing && !!environment && canEdit(environment);
+      const isStopping = stopping.has(instance.id);
 
       return (
         <OptionRow
@@ -341,6 +406,31 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
                 : instance.workingDirectory}
             </span>
           }
+          extra={
+            // Behind a menu rather than on the row: a picker row is for
+            // picking, and a bare stop icon beside it reads as part of that
+            // choice. The spinner stays on the trigger while a stop runs.
+            stoppable ? (
+              <DropdownMenu
+                items={[
+                  {
+                    disabled: isStopping,
+                    icon: CircleStopIcon,
+                    key: 'stop',
+                    label: t('sandboxStorage.stop'),
+                    onClick: () => confirmStop(instance),
+                  },
+                ]}
+              >
+                <ActionIcon
+                  disabled={isStopping}
+                  icon={MoreVerticalIcon}
+                  loading={isStopping}
+                  size={'small'}
+                />
+              </DropdownMenu>
+            ) : undefined
+          }
           tag={
             preparing ? (
               t('sandboxStorage.building')
@@ -349,14 +439,20 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
             ) : instance.inUse ? (
               // "Running" alone reads as a state of the instance, not as
               // the reason this row is the one that cannot be picked, and
-              // it says nothing about how long that lasts — there is no
-              // way to end the run from here, so the wait is the answer.
+              // it says nothing about how long that lasts — or, for the
+              // owner, that it can be ended now with the button beside it.
               // Only when somebody ELSE holds it, though: this conversation's
               // own run leaves the row selectable, and telling the person to
               // wait for a lease they already have describes a block that is
               // not there.
               <Tooltip
-                title={t(occupied ? 'sandboxStorage.runningHint' : 'sandboxStorage.runningOwnHint')}
+                title={t(
+                  !occupied
+                    ? 'sandboxStorage.runningOwnHint'
+                    : stoppable
+                      ? 'sandboxStorage.runningHintStoppable'
+                      : 'sandboxStorage.runningHint',
+                )}
               >
                 <span>{t('sandboxStorage.running')}</span>
               </Tooltip>

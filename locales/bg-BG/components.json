@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Отвори",
   "LocalFile.action.preview": "Преглед",
   "LocalFile.action.showInFolder": "Покажи в папката",
+  "LocalFile.action.startTopic": "Започнете нова тема тук",
+  "LocalFile.action.startTopicFailed": "Неуспешно стартиране на нова тема в тази папка.",
   "MaxTokenSlider.unlimited": "Неограничено",
   "ModelSelect.featureTag.audio": "Този модел поддържа разпознаване на аудио вход.",
   "ModelSelect.featureTag.custom": "Персонализиран модел, по подразбиране поддържа извикване на функции и визуално разпознаване. Моля, проверете наличността на тези възможности според конкретната ситуация.",

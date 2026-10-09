@@ -48,6 +48,7 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId })
         repository={repository}
         onBuild={actions.rebuildInstance}
         onRemove={actions.removeInstance}
+        onStop={actions.stopInstance}
       />
     </Flexbox>
   );

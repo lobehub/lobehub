@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Conecta WeChat después de actualizar",
   "plansModal.modelAccess.desc": "Este modelo está disponible en planes de pago. Mejora tu plan para usar toda la gama de modelos.",
   "plansModal.modelAccess.title": "Desbloquea todos los modelos",
+  "plansModal.persistentSandbox.desc": "Los archivos que tu agente escribe en el sandbox en la nube se descartan cuando termina la sesión. Mejora tu plan para mantener un directorio de trabajo persistente que sobreviva a las sesiones y se comparta entre tus temas.",
+  "plansModal.persistentSandbox.title": "Mantén tus archivos del sandbox",
   "qa.desc": "Si tu pregunta no está respondida, revisa la <1>Documentación del Producto</1> para más preguntas frecuentes, o contáctanos.",
   "qa.detail": "Ver Detalles",
   "qa.list.credit.a": "Los créditos de cómputo son una métrica utilizada por {{cloud}} para medir el uso de modelos de IA al llamarlos. Diferentes modelos consumen diferentes cantidades de créditos.",
@@ -631,8 +633,16 @@
   "switchPlan": "Cambiar Plan",
   "switchToMonthly.desc": "Después del cambio, la facturación mensual se aplicará al finalizar el plan anual actual.",
   "switchToMonthly.title": "Cambiar a Facturación Mensual",
+  "switchToYearly.after": "Después de cambiar",
+  "switchToYearly.billedYearly": "{{price}} facturado anualmente",
+  "switchToYearly.credit": "Crédito para este mes",
   "switchToYearly.desc": "Después del cambio, la facturación anual se aplicará inmediatamente tras pagar la diferencia. La fecha de inicio se hereda del plan anterior.",
+  "switchToYearly.dueToday": "A pagar hoy",
+  "switchToYearly.now": "Ahora",
+  "switchToYearly.period": "Período de facturación",
+  "switchToYearly.price": "Precio",
   "switchToYearly.title": "Cambiar a Facturación Anual",
+  "switchToYearly.yearlyPlan": "Plan anual",
   "tab.billing": "Gestión de Facturación",
   "tab.budget": "Presupuesto",
   "tab.credits": "Gestión de Créditos",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Resumen de Uso",
   "usage.remaining": "Restante",
   "usage.storage.embeddings.used": "Almacenamiento Vectorial",
-  "usage.storage.file.used": "Uso de Archivos"
+  "usage.storage.file.used": "Uso de Archivos",
+  "usage.storage.sandboxStorage.used": "Almacenamiento del sandbox"
 }

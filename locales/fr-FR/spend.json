@@ -19,6 +19,7 @@
   "table.columns.trigger.enums.agent_share": "Partage de l'agent",
   "table.columns.trigger.enums.agent_signal": "Signal de l'agent",
   "table.columns.trigger.enums.api": "Appel API",
+  "table.columns.trigger.enums.asr": "Transcription vocale",
   "table.columns.trigger.enums.bot": "Message Bot",
   "table.columns.trigger.enums.builder_suggestion": "Suggestions du Concepteur",
   "table.columns.trigger.enums.chat": "Message Chat",

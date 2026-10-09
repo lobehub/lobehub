@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Aç",
   "LocalFile.action.preview": "Önizleme",
   "LocalFile.action.showInFolder": "Klasörde Göster",
+  "LocalFile.action.startTopic": "Burada yeni bir konu başlat",
+  "LocalFile.action.startTopicFailed": "Bu klasörde yeni bir konu başlatılamadı.",
   "MaxTokenSlider.unlimited": "Sınırsız",
   "ModelSelect.featureTag.audio": "Bu model ses girişi tanımayı destekler.",
   "ModelSelect.featureTag.custom": "Özel model, varsayılan olarak fonksiyon çağrıları ve görsel tanımayı destekler. Yukarıdaki yeteneklerin kullanılabilirliğini gerçek duruma göre doğrulayın.",

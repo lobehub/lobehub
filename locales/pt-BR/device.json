@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Renomear branch",
   "workingDirectory.renameBranchTitle": "Renomear branch",
   "workingDirectory.renameFailed": "Falha ao renomear",
+  "workingDirectory.rollBranchName": "Gerar outro nome de branch",
   "workingDirectory.searchPlaceholder": "Pesquisar diretórios",
   "workingDirectory.selectFolder": "Selecionar pasta",
   "workingDirectory.setDefault": "Definir como padrão",

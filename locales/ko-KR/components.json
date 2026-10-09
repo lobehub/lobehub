@@ -129,6 +129,8 @@
   "LocalFile.action.open": "열기",
   "LocalFile.action.preview": "미리보기",
   "LocalFile.action.showInFolder": "폴더에서 보기",
+  "LocalFile.action.startTopic": "여기에서 새 주제 시작",
+  "LocalFile.action.startTopicFailed": "이 폴더에서 새 주제를 시작하지 못했습니다.",
   "MaxTokenSlider.unlimited": "제한 없음",
   "ModelSelect.featureTag.audio": "이 모델은 오디오 입력 인식을 지원합니다.",
   "ModelSelect.featureTag.custom": "사용자 정의 모델입니다. 기본 설정은 함수 호출 및 시각 인식을 지원합니다. 실제 사용 가능 여부는 확인이 필요합니다.",

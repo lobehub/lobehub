@@ -158,6 +158,15 @@ class SandboxStorageService {
   removeInstance = async (params: { id: string; topicId?: string }) =>
     lambdaClient.sandboxStorage.removeInstance.mutate(params);
 
+  /**
+   * Ends the run holding an instance, so it is free now rather than after the
+   * idle sweep. The execution plane saves that run's snapshot first, so this
+   * can take seconds — and refuses, retryably, while the snapshot is still
+   * packing. `stopped: false` means nothing was holding it.
+   */
+  stopInstance = async (params: { id: string }) =>
+    lambdaClient.sandboxStorage.stopInstance.mutate(params);
+
   /** Create a directory (parents included, idempotent). */
   createDirectory = async (params: { instanceId?: string; path: string; topicId?: string }) =>
     lambdaClient.sandboxStorage.createDirectory.mutate(params);

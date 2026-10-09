@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Branch umbenennen",
   "workingDirectory.renameBranchTitle": "Branch umbenennen",
   "workingDirectory.renameFailed": "Umbenennen fehlgeschlagen",
+  "workingDirectory.rollBranchName": "Einen anderen Branch-Namen rollen",
   "workingDirectory.searchPlaceholder": "Verzeichnisse durchsuchen",
   "workingDirectory.selectFolder": "Ordner auswählen",
   "workingDirectory.setDefault": "Als Standard festlegen",

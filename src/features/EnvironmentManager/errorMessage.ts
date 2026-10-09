@@ -17,8 +17,15 @@ const CODE_KEYS: Record<string, string> = {
   // code is kept until that rename is deployed everywhere, so a refusal from a
   // server still on the previous build reads as a sentence rather than a code.
   ENVIRONMENT_IN_USE: 'environments.instances.inUse',
+  INSTANCE_BUILDING: 'environments.instances.stopBuilding',
+  INSTANCE_BUSY: 'environments.instances.stopBusy',
   INSTANCE_IN_USE: 'environments.instances.inUse',
+  INSTANCE_STARTING: 'environments.instances.stopStarting',
+  INSTANCE_STOP_FAILED: 'environments.instances.stopRefused',
   PATH_OUTSIDE_INSTANCE: 'environments.files.invalidPath',
+  // Retryable on purpose: the run is still packing its snapshot, and the
+  // execution plane would rather leave it running than cut the save off.
+  SNAPSHOT_IN_PROGRESS: 'environments.instances.stopSnapshotPending',
 };
 
 /**

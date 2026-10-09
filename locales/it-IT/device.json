@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Rinomina ramo",
   "workingDirectory.renameBranchTitle": "Rinomina ramo",
   "workingDirectory.renameFailed": "Rinomina fallita",
+  "workingDirectory.rollBranchName": "Genera un altro nome di branch",
   "workingDirectory.searchPlaceholder": "Cerca directory",
   "workingDirectory.selectFolder": "Seleziona cartella",
   "workingDirectory.setDefault": "Imposta come predefinito",

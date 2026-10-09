@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Connetti WeChat dopo l'upgrade",
   "plansModal.modelAccess.desc": "Questo modello è disponibile nei piani a pagamento. Aggiorna per utilizzare l'intera gamma di modelli.",
   "plansModal.modelAccess.title": "Sblocca tutti i modelli",
+  "plansModal.persistentSandbox.desc": "I file che il tuo agente scrive nella sandbox cloud vengono eliminati al termine della sessione. Effettua l'upgrade per mantenere una directory di lavoro persistente che sopravvive alle sessioni e viene condivisa tra i tuoi argomenti.",
+  "plansModal.persistentSandbox.title": "Mantieni i file della tua sandbox",
   "qa.desc": "Se non trovi risposta alla tua domanda, consulta la <1>Documentazione del Prodotto</1> per ulteriori FAQ o contattaci.",
   "qa.detail": "Visualizza Dettagli",
   "qa.list.credit.a": "I crediti di calcolo sono una metrica utilizzata da {{cloud}} per misurare l'utilizzo dei modelli AI. Modelli diversi consumano quantità diverse di crediti.",
@@ -631,8 +633,16 @@
   "switchPlan": "Cambia Piano",
   "switchToMonthly.desc": "Dopo il cambio, la fatturazione mensile entrerà in vigore alla scadenza del piano annuale attuale.",
   "switchToMonthly.title": "Passa alla Fatturazione Mensile",
+  "switchToYearly.after": "Dopo il passaggio",
+  "switchToYearly.billedYearly": "{{price}} fatturati annualmente",
+  "switchToYearly.credit": "Credito per questo mese",
   "switchToYearly.desc": "Dopo il cambio, la fatturazione annuale entrerà in vigore immediatamente dopo il pagamento della differenza. La data di inizio sarà ereditata dal piano precedente.",
+  "switchToYearly.dueToday": "Dovuto oggi",
+  "switchToYearly.now": "Adesso",
+  "switchToYearly.period": "Periodo di fatturazione",
+  "switchToYearly.price": "Prezzo",
   "switchToYearly.title": "Passa alla Fatturazione Annuale",
+  "switchToYearly.yearlyPlan": "Piano annuale",
   "tab.billing": "Gestione della fatturazione",
   "tab.budget": "Budget",
   "tab.credits": "Gestione dei crediti",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Panoramica Utilizzo",
   "usage.remaining": "Rimanente",
   "usage.storage.embeddings.used": "Archiviazione Vettoriale",
-  "usage.storage.file.used": "Utilizzo File"
+  "usage.storage.file.used": "Utilizzo File",
+  "usage.storage.sandboxStorage.used": "Spazio di archiviazione della sandbox utilizzato"
 }

@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "アップグレード後にWeChatを接続",
   "plansModal.modelAccess.desc": "このモデルは有料プランで利用可能です。アップグレードして、すべてのモデルを利用しましょう。",
   "plansModal.modelAccess.title": "すべてのモデルをアンロック",
+  "plansModal.persistentSandbox.desc": "クラウドサンドボックスでエージェントが作成したファイルはセッション終了時に破棄されます。セッションを超えて持続し、トピック間で共有される永続的な作業ディレクトリを保持するにはアップグレードしてください。",
+  "plansModal.persistentSandbox.title": "サンドボックスファイルを保持する",
   "qa.desc": "ご質問の答えが見つからない場合は、<1>製品ドキュメント</1>をご確認いただくか、お問い合わせください。",
   "qa.detail": "詳細を見る",
   "qa.list.credit.a": "コンピューティングクレジットは、{{cloud}}がAIモデルの使用量を測定するための指標です。モデルによって消費量は異なります。",
@@ -631,8 +633,16 @@
   "switchPlan": "プランを切り替える",
   "switchToMonthly.desc": "切り替え後、現在の年額プランの有効期限終了後に月額請求が適用されます。",
   "switchToMonthly.title": "月額請求に切り替え",
+  "switchToYearly.after": "切り替え後",
+  "switchToYearly.billedYearly": "{{price}} 年間請求",
+  "switchToYearly.credit": "今月のクレジット",
   "switchToYearly.desc": "切り替え後、差額を支払うことで即時に年額請求が適用されます。開始日は前のプランを引き継ぎます。",
+  "switchToYearly.dueToday": "本日のお支払い",
+  "switchToYearly.now": "現在",
+  "switchToYearly.period": "請求期間",
+  "switchToYearly.price": "価格",
   "switchToYearly.title": "年額請求に切り替え",
+  "switchToYearly.yearlyPlan": "年間プラン",
   "tab.billing": "請求管理",
   "tab.budget": "予算",
   "tab.credits": "クレジット管理",
@@ -665,5 +675,6 @@
   "usage.overview.title": "使用状況概要",
   "usage.remaining": "残り",
   "usage.storage.embeddings.used": "ベクトルストレージ",
-  "usage.storage.file.used": "ファイル使用量"
+  "usage.storage.file.used": "ファイル使用量",
+  "usage.storage.sandboxStorage.used": "サンドボックスストレージ"
 }

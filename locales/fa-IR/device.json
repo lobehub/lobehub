@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "تغییر نام شاخه",
   "workingDirectory.renameBranchTitle": "تغییر نام شاخه",
   "workingDirectory.renameFailed": "تغییر نام ناموفق بود",
+  "workingDirectory.rollBranchName": "تغییر نام شاخه دیگر",
   "workingDirectory.searchPlaceholder": "جستجوی دایرکتوری‌ها",
   "workingDirectory.selectFolder": "انتخاب پوشه",
   "workingDirectory.setDefault": "تنظیم به عنوان پیش‌فرض",

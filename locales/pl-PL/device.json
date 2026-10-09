@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Zmień nazwę gałęzi",
   "workingDirectory.renameBranchTitle": "Zmień nazwę gałęzi",
   "workingDirectory.renameFailed": "Zmiana nazwy nie powiodła się",
+  "workingDirectory.rollBranchName": "Przetocz inną nazwę gałęzi",
   "workingDirectory.searchPlaceholder": "Szukaj katalogów",
   "workingDirectory.selectFolder": "Wybierz folder",
   "workingDirectory.setDefault": "Ustaw jako domyślny",

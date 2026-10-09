@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "ブランチ名を変更",
   "workingDirectory.renameBranchTitle": "ブランチ名を変更",
   "workingDirectory.renameFailed": "名前の変更に失敗しました",
+  "workingDirectory.rollBranchName": "別のブランチ名をロールする",
   "workingDirectory.searchPlaceholder": "ディレクトリを検索",
   "workingDirectory.selectFolder": "フォルダーを選択",
   "workingDirectory.setDefault": "デフォルトに設定",

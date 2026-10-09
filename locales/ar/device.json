@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "إعادة تسمية الفرع",
   "workingDirectory.renameBranchTitle": "إعادة تسمية الفرع",
   "workingDirectory.renameFailed": "فشل إعادة التسمية",
+  "workingDirectory.rollBranchName": "تدوير اسم فرع آخر",
   "workingDirectory.searchPlaceholder": "بحث في الأدلة",
   "workingDirectory.selectFolder": "اختر مجلدًا",
   "workingDirectory.setDefault": "تعيين كافتراضي",

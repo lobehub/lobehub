@@ -34,10 +34,6 @@ const styles = createStaticStyles(({ css }) => ({
     align-items: center;
 
     margin-inline-start: auto;
-
-    /* A disabled row dims itself, but its trailing action is the way OUT of
-       that state — dimming the setup button would read as "also unavailable". */
-    opacity: 1;
   `,
   option: css`
     cursor: pointer;
@@ -59,9 +55,16 @@ const styles = createStaticStyles(({ css }) => ({
   optionActive: css`
     background: ${cssVar.colorFillSecondary};
   `,
+  /* Dims the row's own content rather than the row. Its trailing action is the
+     way OUT of that state — dimming it would read as "also unavailable" — and
+     opacity on the row cannot be undone by a child, so the action is left out
+     of the selector instead. */
   optionDisabled: css`
     cursor: not-allowed;
-    opacity: 0.55;
+
+    & > :not([data-option-extra]) {
+      opacity: 0.55;
+    }
 
     &:hover {
       background: transparent;
@@ -158,6 +161,7 @@ const OptionRow = memo<OptionRowProps>(
       </div>
       {extra ? (
         <div
+          data-option-extra
           className={styles.extra}
           onClick={(event) => {
             event.stopPropagation();

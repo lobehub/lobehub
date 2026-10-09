@@ -4138,6 +4138,25 @@ When I am ___, I need ___
     'A conversation is using this instance — try again once that run ends',
   'environments.instances.runningHint':
     'A run is still using this instance — a conversation, a build, or the file browser. It is released on its own roughly 15 minutes after that run goes quiet; Run history shows which one is holding it.',
+  'environments.instances.runningHintStoppable':
+    'A run is still using this instance — a conversation, a build, or the file browser. It is released on its own roughly 15 minutes after that run goes quiet, or you can stop it now; Run history shows which one is holding it.',
+  'environments.instances.stop': 'Stop',
+  'environments.instances.stopConfirmTitle': 'Stop the run in "{{name}}"?',
+  'environments.instances.stopConfirmContent':
+    'The run holding this instance is stopped now instead of when it goes quiet. What it installed and wrote is saved first. A conversation in the middle of a step has that step cut off, and picks up from the saved state with its next message.',
+  'environments.instances.stopping': 'Stopping — saving the run first…',
+  'environments.instances.stopped': 'Stopped. "{{name}}" is free to use',
+  'environments.instances.stopNothing': 'Nothing is running in "{{name}}" any more',
+  'environments.instances.stopFailed': 'Could not stop the run',
+  'environments.instances.stopSnapshotPending':
+    'The run is still saving its work, so it was left running — try again in a moment',
+  'environments.instances.stopStarting':
+    'A run is just starting in this instance — try again in a moment',
+  'environments.instances.stopBusy':
+    'This instance is being copied or deleted — try again in a moment',
+  'environments.instances.stopBuilding':
+    'This instance is being built. It is released when the build finishes',
+  'environments.instances.stopRefused': 'The run could not be stopped — try again',
   'environments.instances.notBuilt': 'Not built yet — nothing has been cloned or installed',
   'environments.instances.rebuildConfirmContent':
     "This clears the instance's folder, then clones the code again and runs the setup script. Everything in it now — changes made in conversations, installed packages, reports, data — will be lost. This cannot be undone.",
