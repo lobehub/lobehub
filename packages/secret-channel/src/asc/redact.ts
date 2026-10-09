@@ -12,6 +12,14 @@ export const sanitizeSecretLabel = (label: string): string =>
 /** The only representation of a secret allowed in DB, model context and traces (spec §7.4). */
 export const formatSecretPlaceholder = (label: string) => `«secret:${sanitizeSecretLabel(label)}»`;
 
+/**
+ * Break a placeholder up with `separator` between every pair of adjacent characters. With a
+ * separator that appears in none of the Run's variants no length-2-or-more substring of the result
+ * can match one, so an escaped placeholder can never carry a secret (spec §7.4, [ASC-L3-09]).
+ */
+const escapePlaceholder = (placeholder: string, separator: string): string =>
+  [...placeholder].join(separator);
+
 const toHex = (bytes: Uint8Array) =>
   [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 
@@ -68,9 +76,10 @@ export interface SecretRedactor {
  * scope and documented as a limitation.
  */
 export const createSecretRedactor = (): SecretRedactor => {
-  let patterns: { placeholder: string; variant: string }[] = [];
+  let patterns: { label: string; variant: string }[] = [];
   // Variants bucketed by first character so the streaming scan only compares plausible candidates.
-  let byFirst = new Map<string, { placeholder: string; variant: string }[]>();
+  let byFirst = new Map<string, { label: string; variant: string }[]>();
+  let placeholders = new Map<string, string>();
 
   const index = () => {
     byFirst = new Map();
@@ -81,9 +90,36 @@ export const createSecretRedactor = (): SecretRedactor => {
     }
   };
 
+  /** A character that appears in no registered variant, so escaping with it cannot be matched. */
+  const pickSeparator = () => {
+    const used = new Set([...patterns.map((p) => p.variant).join('')]);
+    for (let code = 0x200b; code <= 0x10ffff; code++) {
+      if (code >= 0xd800 && code <= 0xdfff) continue; // lone surrogates
+      const candidate = String.fromCodePoint(code);
+      if (!used.has(candidate)) return candidate;
+    }
+    /* c8 ignore next -- the union of a Run's variants never covers every code point */
+    return '·';
+  };
+
+  /**
+   * A placeholder must not contain a delivered secret, or the redacted output would carry it
+   * verbatim. Reachable only when a secret is a substring of `secret` or of its own label, for
+   * example the secret `secret` itself; unrelated labels keep the plain §7.4 form.
+   */
+  const refreshPlaceholders = () => {
+    placeholders = new Map();
+    for (const { label } of patterns) {
+      const plain = formatSecretPlaceholder(label);
+      const collides = patterns.some((p) => plain.includes(p.variant));
+      placeholders.set(label, collides ? escapePlaceholder(plain, pickSeparator()) : plain);
+    }
+  };
+
   const redactText = (text: string) => {
     let out = text;
-    for (const { placeholder, variant } of patterns) {
+    for (const { label, variant } of patterns) {
+      const placeholder = placeholders.get(label) ?? formatSecretPlaceholder(label);
       if (out.includes(variant)) out = out.split(variant).join(placeholder);
     }
     return out;
@@ -94,15 +130,16 @@ export const createSecretRedactor = (): SecretRedactor => {
       // No whole-value length guard here: `secretVariants` already drops the representations
       // shorter than the minimum. Gating on the raw value would skip a short secret's longer
       // encodings too (e.g. `abc` → `YWJj`, `616263`), leaving them in the output unredacted.
-      const placeholder = formatSecretPlaceholder(label);
-      for (const variant of secretVariants(value)) patterns.push({ placeholder, variant });
+      for (const variant of secretVariants(value)) patterns.push({ label, variant });
       // Longest first so a raw value inside its own longer encoding is handled by the longer match.
       patterns.sort((a, b) => b.variant.length - a.variant.length);
       index();
+      refreshPlaceholders();
     },
     clear() {
       patterns = [];
       index();
+      refreshPlaceholders();
     },
     get maxLength() {
       return patterns[0]?.variant.length ?? 0;
@@ -126,7 +163,8 @@ export const createSecretRedactor = (): SecretRedactor => {
           break;
         const match = byFirst.get(text[at])?.find((p) => text.startsWith(p.variant, at));
         if (match) {
-          out += redactText(text.slice(decided, at)) + match.placeholder;
+          const placeholder = placeholders.get(match.label) ?? formatSecretPlaceholder(match.label);
+          out += redactText(text.slice(decided, at)) + placeholder;
           at += match.variant.length;
           decided = at;
         } else {
