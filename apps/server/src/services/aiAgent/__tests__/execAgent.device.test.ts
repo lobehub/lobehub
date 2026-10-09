@@ -787,6 +787,24 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
 
+    // Regression: the project-directory guard must not add a topic read to the
+    // broad sandbox path. Its fact is carried forward from turn setup, which
+    // already loaded the topic — a `kind !== 'device'` gate alone would look the
+    // topic up on every non-chat sandbox send.
+    it('does not pay an extra topic lookup for a sandbox run', async () => {
+      mockDeviceProxy.isConfigured = false;
+      topicMock.findById.mockResolvedValue({ id: 'topic-1', metadata: undefined });
+      topicMock.findById.mockClear();
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Hello',
+        appContext: { topicId: 'topic-1' },
+      });
+
+      expect(topicMock.findById).toHaveBeenCalledTimes(1);
+    });
+
     // Regression: dropping the device probe must not let an offline project
     // directory fall through to the cloud sandbox — a run pinned to one repo on
     // one device has to fail on that device, not execute elsewhere.

@@ -393,6 +393,12 @@ export interface TurnSetupResult {
    */
   topicEditingGroupId?: string;
   topicId: string;
+  /**
+   * The reused topic is pinned to a project working directory, so the run is
+   * bound to one repository on one device. Carried forward so the execution
+   * guard needs no extra topic lookup on any send path.
+   */
+  topicProjectDirectoryBound: boolean;
   userMessageId?: string;
 }
 
@@ -459,6 +465,7 @@ export const setupTurn = async (
     : isFixedExecutionTargetSelection
       ? undefined
       : requestedDeviceId;
+  let topicProjectDirectoryBound = false;
 
   // Effective model/provider for this run. Defaults to the agent config, but a
   // topic pins its own model in the top-level `topics.model`/`provider` columns
@@ -634,6 +641,7 @@ export const setupTurn = async (
         resolvedRequestedDeviceId = directory.deviceId;
         effectiveRequestedDeviceId = directory.deviceId;
         topicBoundDeviceId = directory.deviceId;
+        topicProjectDirectoryBound = true;
         agentConfig.agencyConfig = {
           ...agentConfig.agencyConfig,
           boundDeviceId: directory.deviceId,
@@ -1018,6 +1026,7 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
+    topicProjectDirectoryBound,
     userMessageId: userMessageRecord?.id,
   };
 };

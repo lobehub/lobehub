@@ -72,6 +72,7 @@ export interface OperationInitRequest {
   runAttachments: RunAttachments;
   selectedToolIds?: string[];
   topicBoundDeviceId?: string | null;
+  topicProjectDirectoryBound: boolean;
 }
 
 /** The live half: models, services and the two loaders the stages call back into. */
@@ -181,6 +182,7 @@ export const runOperationInit = async (
         selectedToolIds: request.selectedToolIds,
         throwIfExecutionAborted: deps.throwIfExecutionAborted,
         topicBoundDeviceId: request.topicBoundDeviceId,
+        topicProjectDirectoryBound: request.topicProjectDirectoryBound,
       },
     ),
   );
