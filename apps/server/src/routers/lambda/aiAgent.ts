@@ -2635,13 +2635,18 @@ export const aiAgentRouter = router({
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
-      // The run was dispatched but no Task run could be recorded for it — the
-      // Task was retired while the run was starting (or the write failed). The
-      // run's hooks are already attached, so letting it continue would settle a
-      // retired Task's row with an operation the Task side never recorded (and
-      // could move a canceled Task back to `paused`). Stop it, exactly as the
-      // runner stops the run it dispatched under the same race.
-      if (reopenOutcome === 'refused') {
+      // The run was dispatched but it did not take the Task's run row over. Two
+      // ways that happens: the Task was retired while the run was starting (the
+      // write failed or there is no row to keep honest), or a concurrent send on
+      // the same topic won the reopen and already owns the row. In both cases
+      // the run's hooks are already attached for the whole run, and
+      // `onTopicComplete` settles the topic row by id without checking which
+      // operation owns it — so letting this run continue would let the loser
+      // settle a row it does not own, finishing the winner's run ahead of it and
+      // overwriting its handoff/result. Stop it, exactly as the runner stops the
+      // run it dispatched under the same race.
+      if (reopenOutcome === 'refused' || reopenOutcome === 'already-running') {
+        const lostTheRow = reopenOutcome === 'already-running';
         const stop = await ctx.aiAgentService
           .interruptTask({ operationId: result.operationId })
           .catch((error) => {
@@ -2653,7 +2658,9 @@ export const aiAgentRouter = router({
         throw new TRPCError({
           code: stopped ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
           message: stopped
-            ? 'This task run could not be recorded while it was starting; the run was stopped.'
+            ? lostTheRow
+              ? 'Another run is already live on this task; this duplicate send was stopped.'
+              : 'This task run could not be recorded while it was starting; the run was stopped.'
             : `This task run could not be recorded while it was starting, and stopping it (operation ${result.operationId}) could not be confirmed.`,
         });
       }
