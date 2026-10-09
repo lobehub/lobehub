@@ -1296,6 +1296,7 @@ export default {
 
   // Connect agent device guard banner
   'platformAgent.deviceGuard.deviceOffline.title': 'Device not connected',
+  'platformAgent.deviceGuard.checking': 'Checking device connection…',
   'platformAgent.deviceGuard.cliUnavailable.title': 'Connect the device with LobeHub CLI',
   'platformAgent.deviceGuard.cliUnavailable.desc':
     'API mode requires a live, updated `lh connect` on this device. A Desktop connection alone cannot run this binding.',

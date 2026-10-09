@@ -1640,6 +1640,7 @@
   "piInstallGuide.title": "安装 Pi CLI",
   "pin": "置顶",
   "pinOff": "取消置顶",
+  "platformAgent.deviceGuard.checking": "正在检查设备连接…",
   "platformAgent.deviceGuard.cliUnavailable.desc": "API 模式需要该设备运行已更新的 `lh connect`。仅 Desktop 在线无法执行此绑定。",
   "platformAgent.deviceGuard.cliUnavailable.title": "请通过 LobeHub CLI 连接设备",
   "platformAgent.deviceGuard.configure": "去配置",
