@@ -57,6 +57,16 @@ export default {
 4. Leave all other locales to `.github/workflows/auto-i18n.yml`, which runs daily and opens an automated translation PR
 5. Run `bun run i18n` manually only when the branch needs those translations immediately; it is slow and requires `OPENAI_API_KEY`
 
+### Changing an existing key's English text
+
+`lobe-i18n` (both the daily workflow and `bun run i18n`) only translates keys that are **missing** from a locale. It never re-translates a key whose English value changed, so editing an existing value leaves every generated locale on the old text indefinitely (e.g. expanded `settingsSearch.tabKeywords.*` stayed stale in 16 locales for weeks).
+
+When a change alters an existing key's meaning or content (not just a typo), do one of:
+
+- Rename the key, so it is missing everywhere and gets translated fresh.
+- Re-translate it in the same PR: delete the key from every generated `locales/*/{namespace}.json` (all except en-US/zh-CN), run `bun run i18n`, and commit **only** those keys — the run also fills unrelated missing keys, which belong to the daily workflow PR.
+- If the stale translation is harmless until the daily run, delete the key from the generated locales so they fall back to English and the workflow re-translates it. Do not do this when the localized text is load-bearing (e.g. search keywords users type in their own language).
+
 ## Usage
 
 ```tsx
