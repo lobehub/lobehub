@@ -413,13 +413,10 @@ export const workKeys = {
 };
 
 // ---- brief --------------------------------------------------------------
+// The unresolved brief feed no longer has an SWR key: it moved onto
+// `@lobechat/replica` (`briefList`, partitioned by identity scope). Only the
+// day-scoped news digest still reads through SWR.
 export const briefKeys = {
-  /**
-   * Unresolved brief feed, keyed by login + identity scope. Briefs are per-user
-   * AND per-workspace rows, so an entry fetched in one scope must never be
-   * served in another — its ids are unreachable there.
-   */
-  list: def('brief:list', (isLogin: boolean, scope: string) => ['brief:list', isLogin, scope]),
   /**
    * Day-scoped news digest (`insight` + `result`, resolved included), keyed by
    * the viewer's local day (`YYYY-MM-DD`) on top of the identity scope.
