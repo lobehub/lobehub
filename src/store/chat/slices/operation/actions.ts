@@ -327,19 +327,16 @@ export class OperationActionsImpl {
       operation.status !== 'completed'
     ) {
       const state = this.#get();
-      const context = operation.context;
-      if (
-        !context.agentId ||
-        !context.topicId ||
-        operationSelectors.isAgentRuntimeRunningByContext(context)(state)
-      )
-        return;
+      const { agentId, topicId } = operation.context;
+      if (!agentId || !topicId) return;
+      // A run that finishes after the user switched away must still persist to
+      // its own conversation, so rebuild the operation's context with a definite
+      // agent/topic: `OperationContext` exposes them as optional, but the runtime
+      // check, the message key and the persist call all need a concrete agentId.
+      const context = { ...operation.context, agentId, topicId };
+      if (operationSelectors.isAgentRuntimeRunningByContext(context)(state)) return;
       const messages = state.dbMessagesMap[messageMapKey(context)];
-      if (messages)
-        persistSettledTranscript(
-          { ...context, agentId: context.agentId, topicId: context.topicId },
-          messages,
-        );
+      if (messages) persistSettledTranscript(context, messages);
     }
   };
 
