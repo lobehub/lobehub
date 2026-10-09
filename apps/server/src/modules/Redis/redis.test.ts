@@ -22,7 +22,7 @@ const buildRedisConfig = (): RedisConfig | null => {
 
 const loadRedisProvider = async () => (await import('./redis')).IoRedisRedisProvider;
 
-const createMockedProvider = async () => {
+const createMockedProvider = async (config: Partial<RedisConfig> = {}) => {
   const instances: Array<{ options: Record<PropertyKey, unknown>; url: string }> = [];
 
   const createPipelineMock = () => {
@@ -116,6 +116,7 @@ const createMockedProvider = async () => {
     prefix: 'mock',
     tls: false,
     url: 'redis://localhost:6379',
+    ...config,
   });
 
   await provider.initialize();
@@ -180,6 +181,22 @@ describe('mocked', () => {
         maxRetriesPerRequest: 2,
       },
       url: 'redis://localhost:6379',
+    });
+
+    await provider.disconnect();
+  });
+
+  it('honors per-config connect and command timeouts', async () => {
+    const { instances, provider } = await createMockedProvider({
+      commandTimeoutMs: 1000,
+      connectTimeoutMs: 1000,
+    });
+
+    expect(instances[0]).toMatchObject({
+      options: {
+        commandTimeout: 1000,
+        connectTimeout: 1000,
+      },
     });
 
     await provider.disconnect();

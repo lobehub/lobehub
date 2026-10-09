@@ -27,8 +27,8 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
 
   async initialize() {
     this.client = new IORedis(this.config.url, {
-      commandTimeout: REDIS_COMMAND_TIMEOUT_MS,
-      connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+      commandTimeout: this.config.commandTimeoutMs ?? REDIS_COMMAND_TIMEOUT_MS,
+      connectTimeout: this.config.connectTimeoutMs ?? REDIS_CONNECT_TIMEOUT_MS,
       db: this.config.database,
       keyPrefix: this.config.prefix ? `${this.config.prefix}:` : undefined,
       lazyConnect: true,
