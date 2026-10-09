@@ -352,7 +352,17 @@ describe('DocumentHistoryModel.list cursor', () => {
       savedAt,
     });
 
-    const [lowerId, higherId] = [first.id, second.id].sort();
+    // The cursor walks the ids in the database's collation, which is not JS string
+    // order: `en_US.utf8` folds case, while `Array.prototype.sort` compares UTF-16
+    // code units, and these ids come from a mixed-case alphabet. Sorting the ids here
+    // therefore picked the wrong "higher" id whenever the two first differed by case,
+    // pointing the cursor past both rows and returning an empty page (~1 run in 6).
+    // Read the pair back in the query's own order instead.
+    const ordered = await historyModel.list({ documentId });
+    expect(ordered).toHaveLength(2);
+
+    const [higherId, lowerId] = [ordered[0]!.id, ordered[1]!.id];
+    expect(new Set([higherId, lowerId])).toEqual(new Set([first.id, second.id]));
 
     const rows = await historyModel.list({
       beforeId: higherId,
