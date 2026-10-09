@@ -37,6 +37,8 @@ interface InspectorProps {
    * Whether the tool is currently executing (from operation state)
    */
   isToolCalling?: boolean;
+  /** Owning message; native tool ids such as Codex `item_1` repeat across messages. */
+  messageId: string;
   result?: { content: string | null; error?: any; state?: any };
   toolCallId: string;
   toolCallStartTime?: number;
@@ -52,6 +54,7 @@ const Inspectors = memo<InspectorProps>(
     isArgumentsStreaming,
     isExpanded,
     isToolCalling,
+    messageId,
     toolCallId,
     toolCallStartTime,
   }) => {
@@ -156,7 +159,7 @@ const Inspectors = memo<InspectorProps>(
         <ExecutionTime
           isExecuting={showExecutionTimer}
           startTime={toolCallStartTime}
-          timerKey={toolCallId}
+          timerKey={`${messageId}:${toolCallId}`}
         />
       </Flexbox>
     );
