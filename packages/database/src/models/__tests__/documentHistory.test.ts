@@ -352,16 +352,22 @@ describe('DocumentHistoryModel.list cursor', () => {
       savedAt,
     });
 
-    const [lowerId, higherId] = [first.id, second.id].sort();
+    // The tie-break is a *database* comparison (`saved_at = ? AND id < ?`)
+    // under the column collation, which is not JavaScript's code-unit order —
+    // with `en_US.utf8`, 'a' < 'B' but 'Z' > 'a'. Ordering the ids with
+    // `Array.sort()` therefore disagrees with the query roughly half the time
+    // and the cursor page comes back empty, so anchor on the row the database
+    // itself reports as newest and expect the other one back.
+    const [newest, older] = await historyModel.list({ documentId });
+    expect(new Set([newest.id, older.id])).toEqual(new Set([first.id, second.id]));
 
     const rows = await historyModel.list({
-      beforeId: higherId,
-      beforeSavedAt: savedAt,
+      beforeId: newest.id,
+      beforeSavedAt: new Date(newest.savedAt),
       documentId,
     });
 
-    expect(rows).toHaveLength(1);
-    expect(rows[0]?.id).toBe(lowerId);
+    expect(rows.map((row) => row.id)).toEqual([older.id]);
   });
 
   it('should ignore beforeId when there is no savedAt anchor', async () => {
