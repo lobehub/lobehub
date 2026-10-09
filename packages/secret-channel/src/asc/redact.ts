@@ -47,8 +47,13 @@ export interface SecretRedactor {
   add: (label: string, value: string) => void;
   /** Forget every registered value (operation ended). */
   clear: () => void;
-  /** Length of the longest registered variant; streaming callers keep `maxLength - 1` chars back. */
+  /** Length of the longest registered variant. */
   readonly maxLength: number;
+  /**
+   * Length of the longest trailing run of `text` that is a proper prefix of a registered variant:
+   * the raw text a streaming caller must hold back because a match may still complete.
+   */
+  partialSuffixLength: (text: string) => number;
   redact: (text: string) => string;
   readonly size: number;
 }
@@ -77,6 +82,18 @@ export const createSecretRedactor = (): SecretRedactor => {
     get maxLength() {
       return patterns[0]?.variant.length ?? 0;
     },
+    partialSuffixLength(text) {
+      // Only a *proper* prefix has to wait: a suffix that already equals a whole variant can be
+      // redacted now unless a longer variant starts with it. Patterns are sorted longest first.
+      const longestPrefix = Math.max(0, (patterns[0]?.variant.length ?? 0) - 1);
+      let hold = 0;
+      for (let length = 1; length <= Math.min(text.length, longestPrefix); length++) {
+        const suffix = text.slice(text.length - length);
+        if (patterns.some((p) => p.variant.length > length && p.variant.startsWith(suffix)))
+          hold = length;
+      }
+      return hold;
+    },
     redact(text) {
       let out = text;
       for (const { placeholder, variant } of patterns) {
@@ -91,8 +108,11 @@ export const createSecretRedactor = (): SecretRedactor => {
 };
 
 /**
- * Chunk-boundary-safe wrapper for stdout/stderr streams: holds back `maxLength - 1` characters so a
- * secret split across two chunks is still caught. Call `flush()` at end of stream.
+ * Chunk-boundary-safe wrapper for stdout/stderr streams. It holds back only the raw characters a
+ * match may still be completed from, so redaction runs on the prefix that is already decided.
+ * Redacting before deciding consumes a shorter variant that is the prefix of a longer one and
+ * leaks the longer one's suffix: given `abcd` and `abcdef`, `push('abcd')` then `push('ef')` must
+ * yield `«secret:long»`, not `«secret:short»ef`. Call `flush()` at end of stream.
  */
 export const createStreamingRedactor = (redactor: SecretRedactor) => {
   let pending = '';
@@ -103,14 +123,12 @@ export const createStreamingRedactor = (redactor: SecretRedactor) => {
       return out;
     },
     push(chunk: string): string {
-      const combined = redactor.redact(pending + chunk);
-      const keep = Math.max(0, redactor.maxLength - 1);
-      if (combined.length <= keep) {
-        pending = combined;
-        return '';
-      }
-      pending = combined.slice(combined.length - keep);
-      return combined.slice(0, combined.length - keep);
+      pending += chunk;
+      const cut = pending.length - redactor.partialSuffixLength(pending);
+      if (cut <= 0) return '';
+      const head = pending.slice(0, cut);
+      pending = pending.slice(cut);
+      return redactor.redact(head);
     },
   };
 };
