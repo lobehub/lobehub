@@ -80,6 +80,9 @@ export const openWithPersistedKey = async ({
   // [ASC-L2-02]: a Base-only opener must refuse a label it does not implement rather than let an
   // unrecognised Request fall through to Base mode without sender authentication.
   if (requestSuiteLabel !== ASC_SUITE) throw new AscError('UNSUPPORTED_VERSION');
+  // [ASC-EXT-02]: reject a Request version this implementation does not speak, before consuming.
+  if (request.v !== ASC_VERSION)
+    throw new AscError('UNSUPPORTED_VERSION', `request version ${request.v}`);
   // [ASC-L2-26]: at or after `expiresAt`, matching `EphemeralRecipient.open` and the Client seal.
   if (now >= request.expiresAt) throw new AscError('EXPIRED');
 
@@ -95,9 +98,11 @@ export const openWithPersistedKey = async ({
     throw new AscError('INVALID_ENVELOPE');
 
   const suite = getSuite();
-  const privateBytes = fromBase64Url(key.privateKey);
+  let privateBytes: Uint8Array | undefined;
   let framed: Uint8Array;
   try {
+    // A corrupted or tampered record must fail as DECRYPT_FAILED, not a raw base64url decode error.
+    privateBytes = fromBase64Url(key.privateKey);
     const recipientKey = {
       privateKey: await suite.kem.deserializePrivateKey(toArrayBuffer(privateBytes)),
       publicKey: await suite.kem.deserializePublicKey(toArrayBuffer(fromBase64Url(key.publicKey))),

@@ -7,10 +7,11 @@ placeholders.
 `src/asc/` is vendored unchanged from the reference implementation
 (`agent-secret-channel` → `packages/asc-core`): it equals `main` `442ae4d` with the fix branches
 `fix/redact-short-secret-variants` (`e078942`), `fix/fail-closed-suite-and-version` (`5f6f40d`),
-`fix/frame-and-expiry-hardening` (`d1ab2d2`), `fix/malformed-identity-key` (`6681e84`) and
-`fix/collision-free-placeholder` (`1761f01`, which stacks on `fix/streaming-redaction-overlap`)
-applied. `test/vectors/` are the protocol's test vectors, so `test/vectors.test.ts` proves this copy
-is byte-for-byte conformant. Update both together; never edit `src/asc/` here without changing the
+`fix/frame-and-expiry-hardening` (`d1ab2d2`), `fix/opener-request-version` (`8f2e39d`, stacked on
+`fix/frame-and-expiry-hardening`), `fix/malformed-identity-key` (`6681e84`) and
+`fix/collision-free-placeholder` (`1761f01`, stacked on `fix/streaming-redaction-overlap`) applied.
+`test/vectors/` are the protocol's test vectors, so `test/vectors.test.ts` proves this copy is
+byte-for-byte conformant. Update both together; never edit `src/asc/` here without changing the
 upstream first.
 
 Two files are LobeHub additions: `src/persistedRecipient.ts`, a per-request recipient key that can be

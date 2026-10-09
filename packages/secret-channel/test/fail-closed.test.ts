@@ -94,6 +94,62 @@ describe('fail closed', () => {
       ).toThrowError(expect.objectContaining({ code: 'FINGERPRINT_MISMATCH' }));
   });
 
+  it('[ASC-EXT-02] the Executor opener rejects a Request whose v it does not speak', async () => {
+    const recipient = await EphemeralRecipient.create();
+    const request = build({ ephPub: recipient.publicKey, kind: 'password', targetKind: 'sudo' });
+    const envelope = {
+      ct: 'AA',
+      enc: 'AA',
+      requestId: request.id,
+      suite: ASC_SUITE,
+      v: ASC_VERSION,
+    };
+
+    expect(
+      await codeOf(() => recipient.open({ ...request, v: 2 as never }, envelope, Date.now())),
+    ).toBe('UNSUPPORTED_VERSION');
+    // Refused before consumption: a v1 Request still gets as far as decryption, not REPLAYED.
+    expect(await codeOf(() => recipient.open(request, envelope, Date.now()))).not.toBe('REPLAYED');
+  });
+
+  it('[ASC-EXT-02] the persisted opener rejects a Request whose v it does not speak', async () => {
+    const key = await generatePersistableRecipientKey();
+    const request = build({ ephPub: key.publicKey, kind: 'password', targetKind: 'sudo' });
+    const envelope = {
+      ct: 'AA',
+      enc: 'AA',
+      requestId: request.id,
+      suite: ASC_SUITE,
+      v: ASC_VERSION,
+    };
+
+    expect(
+      await codeOf(() =>
+        openWithPersistedKey({ envelope, key, request: { ...request, v: 2 as never } }),
+      ),
+    ).toBe('UNSUPPORTED_VERSION');
+  });
+
+  it('[ASC-L2-28] maps a malformed persisted private key to DECRYPT_FAILED, not a decode error', async () => {
+    const key = await generatePersistableRecipientKey();
+    const request = build({ ephPub: key.publicKey, kind: 'password', targetKind: 'sudo' });
+    const envelope = {
+      ct: 'AA',
+      enc: 'AA',
+      requestId: request.id,
+      suite: ASC_SUITE,
+      v: ASC_VERSION,
+    };
+
+    // A corrupted or tampered at-rest record must fail as an ASC error, since callers classify
+    // failures through `AscError`.
+    expect(
+      await codeOf(() =>
+        openWithPersistedKey({ envelope, key: { ...key, privateKey: '!' }, request }),
+      ),
+    ).toBe('DECRYPT_FAILED');
+  });
+
   it('[ASC-L2-02] refuses an unrecognised Request suite label instead of opening it in Base mode', async () => {
     const recipient = await EphemeralRecipient.create();
     const request = build({ ephPub: recipient.publicKey, kind: 'password', targetKind: 'sudo' });

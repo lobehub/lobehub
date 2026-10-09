@@ -215,6 +215,12 @@ export class EphemeralRecipient {
     if (request.executor.ephPub !== this.publicKey)
       throw new AscError('REQUEST_MISMATCH', 'ephemeral key does not belong to request');
 
+    // [ASC-EXT-02]: a receiver MUST reject a message whose `v` it does not implement. Checking
+    // `envelope.v` alone is not enough — the AAD binds the constant version, so a future-version
+    // Request would still decrypt here and be interpreted with v1 semantics.
+    if (request.v !== ASC_VERSION)
+      throw new AscError('UNSUPPORTED_VERSION', `request version ${request.v}`);
+
     if (this._state !== 'pending' || !this.keyPair)
       throw new AscError(this._state === 'expired' ? 'EXPIRED' : 'REPLAYED', `recipient is ${this._state}`);
 
