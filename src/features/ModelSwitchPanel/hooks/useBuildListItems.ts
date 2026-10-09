@@ -7,26 +7,43 @@ import { isNewReleaseDate } from '@/utils/time';
 import { type GroupMode, type ListItem, type ModelWithProviders } from '../types';
 
 /**
- * Shares the exact rule behind `NewModelBadge`, so a model is pinned to the top only while its
- * badge is still visible. Every renderer of this list must keep the badge on — otherwise models
- * jump ahead with no visible explanation.
+ * Shares the exact rule behind `NewModelBadge`. Every renderer of this list must keep the badge
+ * on — otherwise pinned models jump ahead with no visible explanation.
  */
 const isNewModel = (releasedAt?: string): boolean => !!releasedAt && isNewReleaseDate(releasedAt);
 
 /**
- * Pins new models to the top, then orders them newest-first. Ranking the pinned models by
- * `displayOrder` instead would surface whichever vendor happens to sit earliest in the catalog,
- * so a model released days earlier could outrank today's launch under the same "new" badge.
- *
- * Same-day releases fall through to 0 and keep `displayOrder` via stable sort.
+ * Caps how many new models jump ahead of the catalog order. A busy launch week can badge many
+ * models at once; pinning all of them would push every established model out of the first screen.
+ * New models beyond the cap keep their badge but stay in their catalog position.
  */
-const compareNewness = (a?: string, b?: string): number => {
-  const aNew = isNewModel(a);
-  const bNew = isNewModel(b);
-  if (aNew !== bNew) return aNew ? -1 : 1;
-  if (!aNew) return 0;
+export const MAX_PINNED_NEW_MODELS = 4;
 
-  return dayjs(b).valueOf() - dayjs(a).valueOf();
+/**
+ * Pins at most {@link MAX_PINNED_NEW_MODELS} new models to the top, newest-first, and keeps the
+ * remaining items in catalog order. Ranking the pinned models by `displayOrder` instead would
+ * surface whichever vendor happens to sit earliest in the catalog, so a model released days
+ * earlier could outrank today's launch under the same "new" badge.
+ *
+ * Items flagged by `isLast` sink below everything else and are never pinned. Same-day releases
+ * keep `displayOrder` via stable sort.
+ */
+const sortWithPinnedNewModels = <T>(
+  items: T[],
+  getReleasedAt: (item: T) => string | undefined,
+  isLast?: (item: T) => boolean,
+): T[] => {
+  const pinned = items
+    .filter((item) => !isLast?.(item) && isNewModel(getReleasedAt(item)))
+    .toSorted((a, b) => dayjs(getReleasedAt(b)).valueOf() - dayjs(getReleasedAt(a)).valueOf())
+    .slice(0, MAX_PINNED_NEW_MODELS);
+  const pinnedSet = new Set(pinned);
+  const rest = items.filter((item) => !pinnedSet.has(item));
+
+  return [
+    ...pinned,
+    ...(isLast ? rest.toSorted((a, b) => Number(isLast(a)) - Number(isLast(b))) : rest),
+  ];
 };
 
 export const buildListItems = (
@@ -95,14 +112,12 @@ export const buildListItems = (
       });
     }
 
-    const sortedModels = modelArray.toSorted((a, b) => {
-      if (sortModelLast) {
-        const aLast = a.providers.every((provider) => sortModelLast(a.model.id, provider.id));
-        const bLast = b.providers.every((provider) => sortModelLast(b.model.id, provider.id));
-        if (aLast !== bLast) return Number(aLast) - Number(bLast);
-      }
-      return compareNewness(a.model.releasedAt, b.model.releasedAt);
-    });
+    const sortedModels = sortWithPinnedNewModels(
+      modelArray,
+      (item) => item.model.releasedAt,
+      sortModelLast &&
+        ((item) => item.providers.every((provider) => sortModelLast(item.model.id, provider.id))),
+    );
 
     return sortedModels.map((data) => ({
       data,
@@ -119,15 +134,11 @@ export const buildListItems = (
         (modelItem) =>
           matchesSearch(modelItem.displayName || modelItem.id) || matchesSearch(providerItem.name),
       );
-      const sortedModels = filteredModels.toSorted((a, b) => {
-        if (sortModelLast) {
-          const diff =
-            Number(sortModelLast(a.id, providerItem.id)) -
-            Number(sortModelLast(b.id, providerItem.id));
-          if (diff !== 0) return diff;
-        }
-        return compareNewness(a.releasedAt, b.releasedAt);
-      });
+      const sortedModels = sortWithPinnedNewModels(
+        filteredModels,
+        (item) => item.releasedAt,
+        sortModelLast && ((item) => sortModelLast(item.id, providerItem.id)),
+      );
 
       if (sortedModels.length > 0 || !searchKeyword.trim()) {
         items.push({ provider: providerItem, type: 'group-header' });
