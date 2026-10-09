@@ -131,6 +131,33 @@ export class GenerationTopicModel {
   };
 
   /**
+   * Replace the cover and return the cover it displaced. Reading and writing
+   * under one row lock means concurrent replacements (or a server-set cover
+   * landing meanwhile) each see the cover they actually overwrote, so callers
+   * can delete exactly that object.
+   */
+  replaceCover = async (
+    id: string,
+    coverUrl: string,
+  ): Promise<{ previousCoverUrl: string | null; topic: GenerationTopicItem } | undefined> =>
+    this.db.transaction(async (tx) => {
+      const [current] = await tx
+        .select({ coverUrl: generationTopics.coverUrl })
+        .from(generationTopics)
+        .where(and(eq(generationTopics.id, id), this.ownership()))
+        .for('update');
+      if (!current) return undefined;
+
+      const [topic] = await tx
+        .update(generationTopics)
+        .set({ coverUrl, updatedAt: new Date() })
+        .where(and(eq(generationTopics.id, id), this.ownership()))
+        .returning();
+
+      return { previousCoverUrl: current.coverUrl, topic };
+    });
+
+  /**
    * Flip a generation topic's `visibility`. Bidirectional publish/unpublish.
    * The combined `user_id = ?` + `visibility = fromVisibility` guards keep the
    * operation creator-only and idempotent against rows already at the target

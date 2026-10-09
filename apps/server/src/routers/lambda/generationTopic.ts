@@ -124,19 +124,22 @@ export const generationTopicRouter = router({
       const newCoverKey = await ctx.generationService.createCoverFromUrl(input.coverUrl);
 
       // Update the topic with the new cover key
-      const updated = await ctx.generationTopicModel.update(input.id, { coverUrl: newCoverKey });
+      const replaced = await ctx.generationTopicModel.replaceCover(input.id, newCoverKey);
+      const previousCoverUrl = replaced?.previousCoverUrl;
 
       // Each cover is a dedicated object, so a replaced one is unreachable once the
-      // topic points elsewhere (e.g. an older client overwriting a server-set cover)
-      if (topic.coverUrl && topic.coverUrl !== newCoverKey) {
+      // topic points elsewhere (e.g. an older client overwriting a server-set cover).
+      // Use the cover the update displaced, not the one read before the upload:
+      // another cover may have been set in between.
+      if (previousCoverUrl && previousCoverUrl !== newCoverKey) {
         try {
-          await ctx.fileService.deleteFile(topic.coverUrl);
+          await ctx.fileService.deleteFile(previousCoverUrl);
         } catch (error) {
           console.error('[generationTopic] Failed to delete replaced cover:', error);
         }
       }
 
-      return updated;
+      return replaced?.topic;
     }),
 
   /**

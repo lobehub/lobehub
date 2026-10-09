@@ -177,7 +177,9 @@ describe('generationTopicRouter', () => {
     };
 
     const mockCreateCoverFromUrl = vi.fn().mockResolvedValue(mockNewCoverKey);
-    const mockUpdate = vi.fn().mockResolvedValue(mockUpdatedTopic);
+    const mockReplaceCover = vi
+      .fn()
+      .mockResolvedValue({ previousCoverUrl: null, topic: mockUpdatedTopic });
 
     vi.mocked(GenerationService).mockImplementation(function () {
       return {
@@ -188,7 +190,7 @@ describe('generationTopicRouter', () => {
     vi.mocked(GenerationTopicModel).mockImplementation(function () {
       return {
         findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
-        update: mockUpdate,
+        replaceCover: mockReplaceCover,
       } as any;
     });
 
@@ -200,12 +202,13 @@ describe('generationTopicRouter', () => {
 
     expect(result).toEqual(mockUpdatedTopic);
     expect(mockCreateCoverFromUrl).toHaveBeenCalledWith(mockCoverUrl);
-    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { coverUrl: mockNewCoverKey });
+    expect(mockReplaceCover).toHaveBeenCalledWith(mockTopicId, mockNewCoverKey);
   });
 
-  it('should delete the replaced cover object when updating a topic cover', async () => {
+  it('should delete the cover actually displaced by the update', async () => {
     const mockTopicId = 'topic-123';
-    const mockOldCoverKey = 'generations/covers/server-cover.webp';
+    // Set after the request read the topic (e.g. by the server success path)
+    const mockDisplacedCoverKey = 'generations/covers/server-cover.webp';
     const mockNewCoverKey = 'generations/covers/new-cover-key.webp';
     const mockUpdatedTopic = { coverUrl: mockNewCoverKey, id: mockTopicId, userId: 'test-user' };
     const mockDeleteFile = vi.fn().mockResolvedValue(undefined);
@@ -217,8 +220,10 @@ describe('generationTopicRouter', () => {
       return {
         findById: vi
           .fn()
-          .mockResolvedValue({ coverUrl: mockOldCoverKey, id: mockTopicId, userId: 'test-user' }),
-        update: vi.fn().mockResolvedValue(mockUpdatedTopic),
+          .mockResolvedValue({ coverUrl: null, id: mockTopicId, userId: 'test-user' }),
+        replaceCover: vi
+          .fn()
+          .mockResolvedValue({ previousCoverUrl: mockDisplacedCoverKey, topic: mockUpdatedTopic }),
       } as any;
     });
     vi.mocked(FileService).mockImplementation(function () {
@@ -232,7 +237,7 @@ describe('generationTopicRouter', () => {
     });
 
     expect(result).toEqual(mockUpdatedTopic);
-    expect(mockDeleteFile).toHaveBeenCalledWith(mockOldCoverKey);
+    expect(mockDeleteFile).toHaveBeenCalledWith(mockDisplacedCoverKey);
   });
 
   it('should delete a topic without cover', async () => {
