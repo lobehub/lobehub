@@ -1,9 +1,14 @@
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { produce } from 'immer';
-import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
-import { toolKeys } from '@/libs/swr/keys';
+import {
+  cacheScope,
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { toolsClient } from '@/libs/trpc/client';
 import { type StoreSetter } from '@/store/types';
 import { useUserStore } from '@/store/user';
@@ -12,6 +17,16 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type ToolStore } from '../../store';
 import { type LobehubSkillStoreState } from './initialState';
+import {
+  createLobehubSkillLocalIntent,
+  LOBEHUB_SKILL_SERVERS_KEY,
+  type LobehubSkillLocalIntent,
+  lobehubSkillProviderToolsResource,
+  lobehubSkillServersEntity,
+  lobehubSkillServersResource,
+  mapProviderTools,
+  mergeLobehubSkillServers,
+} from './projection';
 import {
   type CallLobehubSkillToolParams,
   type CallLobehubSkillToolResult,
@@ -26,18 +41,80 @@ const n = setNamespace('lobehubSkillStore');
  * LobeHub Skill Store Actions
  */
 
+/** The connections list is one entry, so every sync shares these params. */
+const SERVERS_PARAMS = {} as Record<string, never>;
+
+/**
+ * The connections list keeps its long-standing flat `lobehubSkillServers` field
+ * as the replica view, so every selector reads what it did. `undefined` means
+ * "not loaded yet": the engine only hydrates an empty slot, so an empty-array
+ * default would read as a real value and block the persisted row.
+ */
+const serversLens: ReplicaLens<ToolStore, LobehubSkillServer[]> = {
+  clear: () => ({ lobehubSkillServers: undefined }),
+  get: (state) => state.lobehubSkillServers,
+  keys: (state) => (state.lobehubSkillServers ? [LOBEHUB_SKILL_SERVERS_KEY] : []),
+  set: (_state, _key, data) => ({ lobehubSkillServers: data }),
+};
+
+/** The connections sync, plus the `mutate` alias the skills surfaces call. */
+export interface LobehubSkillConnectionsSyncResult extends ReplicaSyncResult {
+  /** Alias of `revalidate`, kept for the existing "reload skills" control. */
+  mutate: () => Promise<unknown>;
+}
+
 type Setter = StoreSetter<ToolStore>;
 export const createLobehubSkillStoreSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new LobehubSkillStoreActionImpl(set, get, _api);
 
 export class LobehubSkillStoreActionImpl {
   readonly #get: () => ToolStore;
+  #intent = createLobehubSkillLocalIntent();
+  #intentScope?: string;
+  /**
+   * One provider's tool catalog, keyed by provider id — the replica view the
+   * skill detail surfaces render from.
+   */
+  readonly #providerTools;
+  /**
+   * The user's connected providers — a `@lobechat/replica` list, so the
+   * persisted row paints before the network answers and a connect / revoke shows
+   * on the row at once.
+   */
+  readonly #servers;
+  /** Entity handle so per-provider changes reach every place holding the row. */
+  readonly #server;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#servers = createReplicaSlice(lobehubSkillServersResource, {
+      actionPrefix: 'lobehubSkillServers',
+      entity: lobehubSkillServersEntity,
+      fetcher: () => this.#fetchServers(),
+      get,
+      // A list response replaces the whole value; merge local intent the
+      // response predates so an in-flight sync cannot drop a just-connected
+      // provider or resurrect a just-revoked one.
+      merge: (incoming) => mergeLobehubSkillServers(incoming, this.#localIntent()),
+      set,
+      stateKey: 'lobehubSkillServersReplica',
+      view: serversLens,
+    });
+    this.#server = linkReplicaEntity<LobehubSkillServer>([this.#servers]);
+    this.#providerTools = createReplicaSlice(lobehubSkillProviderToolsResource, {
+      actionPrefix: 'lobehubSkillProviderTools',
+      fetcher: async (provider) => {
+        const response = await toolsClient.market.connectListTools.query({ provider });
+        return mapProviderTools(response.tools);
+      },
+      get,
+      set,
+      stateKey: 'lobehubSkillToolsReplica',
+      view: recordLens<ToolStore, LobehubSkillTool[]>('lobehubSkillToolsMap'),
+    });
   }
 
   callLobehubSkillTool = async (
@@ -146,16 +223,10 @@ export class LobehubSkillStoreActionImpl {
         tokenExpiresAt: response.connection?.tokenExpiresAt,
       };
 
+      this.#upsertServer(server);
+
       this.#set(
         produce((draft: LobehubSkillStoreState) => {
-          const existingIndex = draft.lobehubSkillServers.findIndex(
-            (s) => s.identifier === provider,
-          );
-          if (existingIndex >= 0) {
-            draft.lobehubSkillServers[existingIndex] = server;
-          } else {
-            draft.lobehubSkillServers.push(server);
-          }
           draft.lobehubSkillLoadingIds.delete(provider);
         }),
         false,
@@ -203,19 +274,7 @@ export class LobehubSkillStoreActionImpl {
     provider: string,
     update: Partial<LobehubSkillServer>,
   ): void => {
-    this.#set(
-      produce((draft: LobehubSkillStoreState) => {
-        const serverIndex = draft.lobehubSkillServers.findIndex((s) => s.identifier === provider);
-        if (serverIndex >= 0) {
-          draft.lobehubSkillServers[serverIndex] = {
-            ...draft.lobehubSkillServers[serverIndex],
-            ...update,
-          };
-        }
-      }),
-      false,
-      n('internal_updateLobehubSkillServer'),
-    );
+    this.#server.update(provider, (server) => ({ ...server, ...update }));
   };
 
   refreshLobehubSkillToken = async (provider: string): Promise<boolean> => {
@@ -240,16 +299,10 @@ export class LobehubSkillStoreActionImpl {
     try {
       const response = await toolsClient.market.connectListTools.query({ provider });
 
-      this.#set(
-        produce((draft: LobehubSkillStoreState) => {
-          const serverIndex = draft.lobehubSkillServers.findIndex((s) => s.identifier === provider);
-          if (serverIndex >= 0) {
-            draft.lobehubSkillServers[serverIndex].tools = response.tools as LobehubSkillTool[];
-          }
-        }),
-        false,
-        n('refreshLobehubSkillTools/success'),
-      );
+      this.#server.update(provider, (server) => ({
+        ...server,
+        tools: response.tools as LobehubSkillTool[],
+      }));
     } catch (error) {
       console.error('[LobehubSkill] Failed to refresh tools:', error);
     }
@@ -267,11 +320,15 @@ export class LobehubSkillStoreActionImpl {
     try {
       await toolsClient.market.connectRevoke.mutate({ provider });
 
+      // Drop the row locally, and keep a list response that was already in
+      // flight from bringing the revoked provider back.
+      const intent = this.#localIntent();
+      intent.added.delete(provider);
+      intent.removed.add(provider);
+      this.#server.remove(provider);
+
       this.#set(
         produce((draft: LobehubSkillStoreState) => {
-          draft.lobehubSkillServers = draft.lobehubSkillServers.filter(
-            (s) => s.identifier !== provider,
-          );
           draft.lobehubSkillLoadingIds.delete(provider);
         }),
         false,
@@ -290,75 +347,90 @@ export class LobehubSkillStoreActionImpl {
     }
   };
 
-  useFetchLobehubSkillConnections = (enabled: boolean): SWRResponse<LobehubSkillServer[]> => {
+  /**
+   * Fetch orchestration only; read the tools through `lobehubSkillToolsMap`.
+   * One replica entry per provider, so switching providers paints the cached
+   * tools and the network only confirms.
+   */
+  useFetchProviderTools = (provider: string | undefined): ReplicaSyncResult =>
+    this.#providerTools.useSync(provider ?? null, { revalidateOnFocus: false });
+
+  /**
+   * Fetch orchestration only; read the list through `lobehubSkillSelectors`.
+   * The persisted row paints the first frame, and a connect / revoke is folded
+   * into the same replica entry the surfaces already read.
+   */
+  useFetchLobehubSkillConnections = (enabled: boolean): LobehubSkillConnectionsSyncResult => {
     const isSignedIn = useUserStore(authSelectors.isLogin);
 
-    return useSWR<LobehubSkillServer[]>(
-      enabled && isSignedIn ? toolKeys.lobehubSkillConnections() : null,
-      async () => {
-        const response = await toolsClient.market.connectListConnections.query();
-
-        // Debug logging
-
-        return response.connections.map((conn: any) => {
-          // Debug logging for each connection
-
-          // Get provider config from local definition for correct display name
-          const providerConfig = getLobehubSkillProviderById(conn.providerId);
-          return {
-            cachedAt: Date.now(),
-            icon: conn.icon,
-            identifier: conn.providerId,
-            isConnected: true,
-            // Use local config label (e.g., "Linear") instead of API's providerName (which is user's name on that service)
-            name: providerConfig?.label || conn.providerId,
-            providerUsername: conn.providerUsername,
-            scopes: conn.scopes,
-            status: LobehubSkillStatus.CONNECTED,
-            tokenExpiresAt: conn.tokenExpiresAt,
-          };
-        });
+    const sync = this.#servers.useSync(SERVERS_PARAMS, {
+      enabled: enabled && isSignedIn,
+      onSuccess: (servers) => {
+        // The connections response carries no tools; fill each connected
+        // provider's catalog so the agent tool list can resolve them.
+        for (const server of servers) {
+          this.#get().refreshLobehubSkillTools(server.identifier);
+        }
       },
-      {
-        onSuccess: (data) => {
-          if (data.length > 0) {
-            this.#set(
-              produce((draft: LobehubSkillStoreState) => {
-                const existingIds = new Set(draft.lobehubSkillServers.map((s) => s.identifier));
-                const newServers = data.filter((s) => !existingIds.has(s.identifier));
-                draft.lobehubSkillServers = [...draft.lobehubSkillServers, ...newServers];
-              }),
-              false,
-              n('useFetchLobehubSkillConnections'),
-            );
+      revalidateOnFocus: false,
+      shouldRetryOnError: false,
+    });
 
-            for (const server of data) {
-              this.#get().refreshLobehubSkillTools(server.identifier);
-            }
-          }
-        },
-        revalidateOnFocus: false,
-        shouldRetryOnError: false,
-      },
-    );
+    return { ...sync, mutate: sync.revalidate };
   };
 
-  useFetchProviderTools = (provider: string | undefined): SWRResponse<LobehubSkillTool[]> => {
-    return useSWR<LobehubSkillTool[]>(
-      provider ? toolKeys.lobehubSkillTools(provider) : null,
-      async () => {
-        const response = await toolsClient.market.connectListTools.query({ provider: provider! });
-        return (response.tools || []).map((tool: any) => ({
-          description: tool.description,
-          inputSchema: tool.inputSchema,
-          name: tool.name,
-        }));
-      },
-      {
-        fallbackData: [],
-        revalidateOnFocus: false,
-      },
-    );
+  /**
+   * Local intent of the active identity. Kept per scope: the intent is about
+   * this user's unsynced writes, so a workspace / user switch starts clean
+   * rather than carrying the previous identity's pending rows over.
+   */
+  #localIntent = (): LobehubSkillLocalIntent => {
+    const scope = cacheScope.get();
+    if (scope !== this.#intentScope) {
+      this.#intentScope = scope;
+      this.#intent = createLobehubSkillLocalIntent();
+    }
+    return this.#intent;
+  };
+
+  /** Replace the row in place (by identifier) or append the new one. */
+  #upsertServer = (server: LobehubSkillServer): void => {
+    // The two intents are mutually exclusive per provider: a fresh write
+    // supersedes a pending revoke, so a re-connect inside the race window is
+    // never hidden by the previous revoke.
+    const intent = this.#localIntent();
+    intent.removed.delete(server.identifier);
+    // The row survives a list response that was already in flight when it was
+    // written (see `mergeLobehubSkillServers`).
+    intent.added.set(server.identifier, server);
+    this.#servers.update(LOBEHUB_SKILL_SERVERS_KEY, (servers) => {
+      const list = servers ?? [];
+      const index = list.findIndex((s) => s.identifier === server.identifier);
+      if (index < 0) return [...list, server];
+      return list.map((s, i) => (i === index ? { ...s, ...server } : s));
+    });
+  };
+
+  /** The user's connected providers (`connectListConnections`). */
+  #fetchServers = async (): Promise<LobehubSkillServer[]> => {
+    const response = await toolsClient.market.connectListConnections.query();
+
+    return response.connections.map((conn: any) => {
+      // Get provider config from local definition for correct display name
+      const providerConfig = getLobehubSkillProviderById(conn.providerId);
+      return {
+        cachedAt: Date.now(),
+        icon: conn.icon,
+        identifier: conn.providerId,
+        isConnected: true,
+        // Use local config label (e.g., "Linear") instead of API's providerName (which is user's name on that service)
+        name: providerConfig?.label || conn.providerId,
+        providerUsername: conn.providerUsername,
+        scopes: conn.scopes,
+        status: LobehubSkillStatus.CONNECTED,
+        tokenExpiresAt: conn.tokenExpiresAt,
+      };
+    });
   };
 }
 

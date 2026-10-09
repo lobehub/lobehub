@@ -35,7 +35,14 @@ export const LobehubDetailProvider = ({ children, identifier }: LobehubDetailPro
   );
 
   const useFetchProviderTools = useToolStore((s) => s.useFetchProviderTools);
-  const { data: tools = [], isLoading: toolsLoading } = useFetchProviderTools(identifier);
+  const providerTools = useToolStore((s) => s.lobehubSkillToolsMap[identifier]);
+  const { isHydrated, isValidating } = useFetchProviderTools(identifier);
+
+  // The tool catalog is read from the store (the replica view); the hook only
+  // orchestrates the fetch. `isLoading` means "nothing to show yet" — a
+  // revalidation with the tools already on screen must not blank them.
+  const tools = providerTools ?? [];
+  const toolsLoading = !providerTools && (isValidating || !isHydrated);
 
   if (!config) return null;
 
