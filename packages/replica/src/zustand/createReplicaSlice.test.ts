@@ -139,7 +139,11 @@ describe('createReplicaSlice', () => {
         }),
       });
       renderHook(() => failing.slice.useSync({ id: 'b' }, { onError }), { wrapper });
-      await waitFor(() => expect(onError).toHaveBeenCalledWith(failure));
+      // The callback also receives the key/scope the failing read was captured
+      // under, so a terminal removal can be bound to the right scope.
+      await waitFor(() =>
+        expect(onError).toHaveBeenCalledWith(failure, { key: 'b', scope: 'user-1:personal' }),
+      );
       expect(failing.store.getState().lists.b).toBeUndefined();
     });
 
@@ -445,6 +449,38 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.a).toBeUndefined();
     });
 
+    it('does not drop the active scope entry for a removal captured under another scope', () => {
+      const { slice, store } = setup();
+
+      // The active scope has the entry loaded.
+      scopeState.current = 'user-2:personal';
+      act(() => slice.replace({ id: 'a' }, ['b-value']));
+      expect(store.getState().lists.a).toEqual(['b-value']);
+
+      // A late NOT_FOUND from a request captured under the previous scope must
+      // not delete the entry that is on screen now.
+      act(() => slice.remove('a', 'user-1:personal'));
+
+      expect(store.getState().lists.a).toEqual(['b-value']);
+    });
+
+    it('binds the captured key and scope to the error callback', async () => {
+      const fetcher = vi.fn(async () => {
+        throw new Error('not found');
+      });
+      const { slice } = setup({ fetcher });
+      const contexts: { key: string | undefined; scope: string }[] = [];
+
+      scopeState.current = 'user-1:personal';
+      renderHook(
+        () => slice.useSync({ id: 'a' }, { onError: (_error, context) => contexts.push(context) }),
+        { wrapper },
+      );
+
+      await waitFor(() => expect(contexts.length).toBeGreaterThan(0));
+      expect(contexts[0]).toEqual({ key: 'a', scope: 'user-1:personal' });
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.
@@ -616,6 +652,38 @@ describe('createReplicaSlice', () => {
       act(() => slice.replace({ id: 'a' }, null));
       expect(store.getState().notes.a).toBeUndefined();
       expect(store.getState().notesReplica.entries.a).toBeUndefined();
+    });
+
+    it('treats a repeated missing response as a no-op', () => {
+      type NullableState = {
+        notes: Record<string, string[] | null>;
+        notesReplica: ReplicaState<string[] | null>;
+      };
+      const resource = defineReplica<{ id: string }, string[] | null>({
+        key: ({ id }) => id,
+        name: 'nullableNoteRepeat',
+        scope,
+        version: 1,
+      });
+      const store = createStore<NullableState>()(() => ({
+        notes: {},
+        notesReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<NullableState, { id: string }, string[] | null>(resource, {
+        driver,
+        get: store.getState,
+        isMissing: (note) => note === null,
+        set: (partial) => store.setState(partial),
+        stateKey: 'notesReplica',
+        view: recordLens('notes'),
+      });
+
+      act(() => slice.replace({ id: 'a' }, ['kept']));
+      // The first "missing" drops the entry and clears stale storage…
+      expect(slice.replace({ id: 'a' }, null)).toBe(true);
+      // …a poll that still answers "missing" must not re-emit the removal.
+      expect(slice.replace({ id: 'a' }, null)).toBe(false);
+      expect(store.getState().notes.a).toBeUndefined();
     });
   });
 

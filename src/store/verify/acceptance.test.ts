@@ -62,6 +62,17 @@ describe('verify acceptance replica', () => {
     expect(calls[0].key[4]).toBe('acceptance-1');
   });
 
+  it('seeds a bundle an authorized loader already fetched', () => {
+    // The Workbench SSR loader hands its authorized bundle straight to the store;
+    // that runtime disables persisted hydration, so without the seed the first
+    // render would have nothing to paint.
+    const bundle = { acceptance: { id: 'acceptance-seed' }, checks: [] } as never;
+
+    useVerifyStore.getState().seedAcceptanceBundle('acceptance-seed', bundle);
+
+    expect(useVerifyStore.getState().acceptanceBundleMap['acceptance-seed']).toEqual(bundle);
+  });
+
   it('paints a fetched bundle into the replica view', async () => {
     vi.mocked(verifyService.getAcceptanceBundle).mockResolvedValue({
       acceptance: { id: 'acceptance-1' },

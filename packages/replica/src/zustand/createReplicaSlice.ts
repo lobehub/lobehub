@@ -36,10 +36,27 @@ export interface CreateReplicaSliceOptions<TStore, TParams, TData, TFetched> ext
   view: ReplicaLens<TStore, TData>;
 }
 
+/**
+ * What a failed sync read was captured under. `scope` is the cache scope active
+ * when the request was issued, which may differ from the scope active when the
+ * callback runs (an identity / workspace switch in between).
+ */
+export interface ReplicaSyncErrorContext {
+  /** The entry key the read was for; `undefined` for a disabled read. */
+  key: string | undefined;
+  /** The cache scope the read was captured under. */
+  scope: string;
+}
+
 export interface ReplicaSyncOptions<TFetched = unknown> extends ReplicaSyncSchedule {
   enabled?: boolean;
-  /** Side effects of a failed fetch (error side-maps); the store view is left as is. */
-  onError?: (error: unknown) => void;
+  /**
+   * Side effects of a failed fetch (error side-maps); the store view is left as is.
+   * Receives the captured {@link ReplicaSyncErrorContext} so a terminal removal
+   * can target the scope the request belonged to rather than the one that is
+   * active once the callback runs.
+   */
+  onError?: (error: unknown, context: ReplicaSyncErrorContext) => void;
   /**
    * Side effects of a response, run after it is folded into the replica
    * (e.g. adopting an active id, or settling a "not found" state).
@@ -159,7 +176,9 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
       () => fetcher!(params!, undefined),
       {
         ...schedule,
-        onError,
+        // Bind the captured key/scope to the error callback: a late terminal
+        // removal must not land in a scope that became active after the request.
+        onError: onError ? (error: unknown) => onError(error, { key, scope }) : undefined,
         onSuccess: (data) => {
           // Discard a head response the entry has moved past: the newer query
           // owns the view (see `headQuery`).

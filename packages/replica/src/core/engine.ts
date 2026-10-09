@@ -360,7 +360,9 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     // arms the hydration guard, so a persisted read still in flight cannot bring
     // the dropped value back.
     if (!paging && options.isMissing?.(incoming)) {
-      return dispatch({ key, scope, type: 'remove' });
+      // Route through `remove` so a repeated "missing" is a no-op and a response
+      // captured under another scope is dropped rather than applied here.
+      return remove(key, scope);
     }
     const query = resource.query(params);
     const entry = getSlot().entries[key];
@@ -391,7 +393,20 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     { persist = true }: { persist?: boolean } = {},
   ) => dispatch({ apply, key, persist, scope: resource.scope.get(), type: 'update' });
 
-  const remove = (key: string) => dispatch({ key, scope: resource.scope.get(), type: 'remove' });
+  /**
+   * Drop an entry and its persisted row.
+   *
+   * A removal that is already in effect — the key is guarded and its value is
+   * absent — is a no-op. A subject with no acceptance polls `null` every couple
+   * of seconds, and re-emitting the same delete on every tick only churns
+   * storage with transactions that change nothing. The *first* removal still
+   * runs, so a stale persisted row is cleared; later ones wait for a server
+   * value to supersede the guard.
+   */
+  const remove = (key: string, scope: string = resource.scope.get()): boolean => {
+    if (isRemoved(scope, key) && port.read(key) === undefined) return false;
+    return dispatch({ key, scope, type: 'remove' });
+  };
 
   /**
    * Persist the confirmed value of an entry as it is now — the flush after a

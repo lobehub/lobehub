@@ -100,6 +100,17 @@ export class ActionImpl {
   };
 
   /**
+   * Seed a bundle an authorized server fetch already returned — the Workbench SSR
+   * loader. That runtime disables the persisted replica (its cache scope is not
+   * this session's), so without a seed the first render has nothing to paint and
+   * the gate shows a spinner until client revalidation lands. A server-sourced
+   * seed supersedes any local projection and is not re-fetched by first paint.
+   */
+  seedAcceptanceBundle = (acceptanceId: string, bundle: AcceptanceBundle): void => {
+    this.#bundle.replace(acceptanceId, bundle);
+  };
+
+  /**
    * Fetch orchestration only; the caller reads the bundle through
    * `acceptanceBundleMap` (`verifySelectors.acceptanceBundle`). `refreshInterval`
    * drives the live 5s poll of an in-flight round.
@@ -110,15 +121,15 @@ export class ActionImpl {
   ): ReplicaSyncResult =>
     this.#bundle.useSync(acceptanceId || null, {
       enabled: options.enabled ?? true,
-      onError: (error) => {
+      onError: (error, { key, scope }) => {
         // A deleted (NOT_FOUND) or unauthorized (FORBIDDEN) bundle must not keep
         // rendering from the projection: drop the entry so the gate shows its
-        // terminal state instead of a stale decision surface.
-        if (
-          acceptanceId &&
-          (isTrpcErrorCode(error, 'NOT_FOUND') || isTrpcErrorCode(error, 'FORBIDDEN'))
-        ) {
-          this.#bundle.remove(acceptanceId);
+        // terminal state instead of a stale decision surface. Bind the removal to
+        // the scope the failing request was captured under — an identity or
+        // workspace switch while it was in flight must not let the error delete
+        // the same id out of the scope that is active now.
+        if (key && (isTrpcErrorCode(error, 'NOT_FOUND') || isTrpcErrorCode(error, 'FORBIDDEN'))) {
+          this.#bundle.remove(key, scope);
         }
       },
       refreshInterval: options.refreshInterval,

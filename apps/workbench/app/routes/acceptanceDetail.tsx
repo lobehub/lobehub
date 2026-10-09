@@ -1,7 +1,9 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useRef } from 'react';
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
-import { useRouteLoaderData } from 'react-router';
+import { useLoaderData, useRouteLoaderData } from 'react-router';
+
+import { useVerifyStore } from '@/store/verify';
 
 import WorkbenchLoading from '../../src/shell/WorkbenchLoading';
 import { cloudflareContext } from '../lib/cloudflareContext';
@@ -43,9 +45,20 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 
 export default function AcceptanceDetailRoute() {
   const root = useRouteLoaderData<typeof rootLoader>('root');
+  const { acceptanceId, bundle } = useLoaderData<typeof loader>();
 
-  // The bundle is a replica (`acceptanceBundleMap`), read client-side: the
-  // loader only feeds the SSR meta tags, not the rendered body.
+  // The loader already fetched an authorized bundle. The Workbench runtime never
+  // hydrates the persisted replica, so seed the store from the loader result
+  // before the gate below reads it — otherwise the first render has no data and
+  // shows a spinner until client revalidation lands. Seeded once per acceptance
+  // id (the route component is reused across param changes); later renders keep
+  // whatever the live replica holds.
+  const seededId = useRef<string | null>(null);
+  if (bundle && seededId.current !== acceptanceId) {
+    seededId.current = acceptanceId;
+    useVerifyStore.getState().seedAcceptanceBundle(acceptanceId, bundle);
+  }
+
   return (
     <Suspense fallback={<WorkbenchLoading />}>
       {root?.embedConfig.embed ? <AcceptanceEmbed /> : <AcceptanceDetail />}
