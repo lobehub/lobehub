@@ -219,6 +219,7 @@ export const claimApprovalResume = async (
       ...(typeof targetMessage.content === 'string' ? { content: targetMessage.content } : {}),
       id: targetMessage.id,
       intervention: (plugin.intervention ?? { status: 'pending' }) as Record<string, unknown>,
+      pluginError: plugin.error ?? null,
       pluginState: (plugin.state ?? null) as Record<string, unknown> | null,
       replacePluginState: true,
     }));
@@ -355,11 +356,12 @@ export const claimApprovalResume = async (
             intervention: (resumeToolResultPlugin.intervention ?? {
               status: 'pending',
             }) as Record<string, unknown>,
+            pluginError: resumeToolResultPlugin.error ?? null,
             pluginState: (resumeToolResultPlugin.state ?? null) as Record<string, unknown> | null,
             replacePluginState: true,
           },
         ];
-    const result = await deps.controlToolResult?.({
+    const controlled = await deps.controlToolResult?.({
       operationId: approvalSourceOperationId,
       toolMessageId: resumeToolResult.parentMessageId,
       result: {
@@ -368,7 +370,8 @@ export const claimApprovalResume = async (
         success: !skipped,
       },
     });
-    const withheld = result?.state?.phase === 'afterToolCall';
+    const result = controlled?.result;
+    const withheld = controlled?.blocked;
     if (result)
       resolvedToolResult = {
         ...resumeToolResult,
@@ -403,10 +406,10 @@ export const claimApprovalResume = async (
         resumeToolResult.parentMessageId,
         {
           content: result.content,
-          pluginError: result.error,
+          pluginError: result.error ?? null,
           pluginState: result.state,
           preserveBlockedResult: true,
-          releaseToolResultReview: true,
+          toolResultReview: controlled?.review,
           ...(withheld && { replacePluginState: true }),
         },
       );

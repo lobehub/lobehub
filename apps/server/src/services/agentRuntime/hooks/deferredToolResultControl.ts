@@ -8,7 +8,11 @@ import type { MessageModel } from '@/database/models/message';
 import { resolveRunActiveDeviceId } from '@/server/modules/AgentRuntime/executors/resolveRunActiveDeviceId';
 
 import { type HookDispatcher, parseSerializedHooks } from './HookDispatcher';
-import { blockedToolResult, controlToolResult } from './toolResultControl';
+import {
+  blockedToolResult,
+  controlToolResult,
+  type ToolResultControlOutcome,
+} from './toolResultControl';
 
 export interface DeferredToolResultControlInput {
   /** Parent tool whose arguments produced a member anchor's result. */
@@ -46,21 +50,27 @@ export async function controlDeferredToolResult(
     workspaceId?: string;
   },
   input: DeferredToolResultControlInput,
-): Promise<{ blocked: boolean; cancelled: boolean; result: ToolRunResult }> {
+): Promise<ToolResultControlOutcome> {
   const contextMessageId = input.contextToolMessageId ?? input.toolMessageId;
-  const [message, persisted] = await Promise.all([
+  const [message, persisted, targetMessage] = await Promise.all([
     deps.messageModel.findById(contextMessageId),
     deps.messageModel.findMessagePlugin(input.toolMessageId),
+    contextMessageId === input.toolMessageId
+      ? undefined
+      : deps.messageModel.findById(input.toolMessageId),
   ]);
   const review = message?.metadata?.toolResultControl;
   // A durable denial survives policy removal and late completion replay.
-  if (
-    review?.status === 'blocked' ||
-    (persisted?.state?.type === 'blocked' && persisted.state.phase === 'afterToolCall')
-  ) {
+  const targetReview = targetMessage?.metadata?.toolResultControl ?? review;
+  if (review?.status === 'blocked' || targetReview?.status === 'blocked') {
     const blocked = blockedToolResult(input.result, input.preserveUsage);
     if (persisted?.state?.onComplete === 'finish') blocked.state!.onComplete = 'finish';
-    return { blocked: true, cancelled: false, result: blocked };
+    return {
+      blocked: true,
+      cancelled: false,
+      result: blocked,
+      review: { ...(targetReview ?? review)!, status: 'blocked' },
+    };
   }
   const operationId = review?.operationId ?? input.operationId;
   const state = operationId ? await deps.loadState(operationId) : null;
@@ -78,7 +88,12 @@ export async function controlDeferredToolResult(
     // ordinary metadata updates or approval rollback.
   }
   if (!deps.dispatcher.hasAfterToolCallControl(operationId ?? '', hooks))
-    return { blocked: false, cancelled: false, result: input.result };
+    return {
+      blocked: false,
+      cancelled: false,
+      result: input.result,
+      ...(targetReview && { review: { ...targetReview, status: 'allowed' } }),
+    };
   const plugin =
     contextMessageId === input.toolMessageId
       ? persisted

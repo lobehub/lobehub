@@ -428,6 +428,8 @@ export class ServerToolTransport implements ToolTransport {
         ...execution,
         mocked: toolCallMocked || execution.mocked,
         result: executionResult,
+        // A hook-less continuation still has to release the original pending gate.
+        toolResultReview: controlled.review ?? originalControl?.review,
       };
     } catch (error) {
       executeToolSpan.recordException(error as Error);

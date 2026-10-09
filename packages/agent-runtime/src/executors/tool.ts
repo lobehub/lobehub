@@ -4,6 +4,7 @@ import { UsageCounter } from '../core';
 import type {
   AgentRuntimeHost,
   ToolRunContext,
+  ToolRunExecution,
   ToolRunResult,
   ToolWorkRegistration,
 } from '../transport';
@@ -468,12 +469,14 @@ const createToolMessage = async ({
   host,
   parentMessageId,
   result,
+  toolResultReview,
   state,
   tool,
 }: {
   host: AgentRuntimeHost;
   parentMessageId: string;
   result: ToolRunResult;
+  toolResultReview?: ToolRunExecution['toolResultReview'];
   state: AgentState;
   tool: ChatToolPayload;
 }) => {
@@ -489,12 +492,15 @@ const createToolMessage = async ({
       agentId,
       content: result.content,
       groupId: host.operation.groupId ?? state.origin?.groupId ?? undefined,
-      metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
+      metadata: {
+        toolExecutionTimeMs: result.executionTime ?? 0,
+        ...(toolResultReview && { toolResultControl: toolResultReview }),
+      },
       parentId: parentMessageId,
       plugin: tool as any,
-      pluginError: result.error,
-      ...(result.state?.type === 'blocked' && {
-        pluginIntervention: { rejectedReason: result.state.reason, status: 'rejected' },
+      pluginError: result.error ?? (toolResultReview ? null : undefined),
+      ...((isBlockedBeforeExecution(result) || toolResultReview?.status === 'blocked') && {
+        pluginIntervention: { rejectedReason: result.state?.reason, status: 'rejected' },
       }),
       pluginState: result.state,
       role: 'tool',
@@ -511,23 +517,26 @@ const createToolMessage = async ({
 const updateExistingToolMessage = async ({
   host,
   result,
+  toolResultReview,
   toolMessageId,
 }: {
   host: AgentRuntimeHost;
   result: ToolRunResult;
+  toolResultReview?: ToolRunExecution['toolResultReview'];
   toolMessageId: string;
 }) => {
   try {
     await host.transports.messages.updateToolMessage(toolMessageId, {
       content: result.content,
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
-      pluginError: result.error,
+      pluginError: result.error ?? (toolResultReview ? null : undefined),
       pluginState: result.state,
-      ...(result.state?.phase === 'afterToolCall' && { replacePluginState: true }),
+      toolResultReview,
+      ...(toolResultReview?.status === 'blocked' && { replacePluginState: true }),
     });
-    if (result.state?.type === 'blocked') {
+    if (isBlockedBeforeExecution(result) || toolResultReview?.status === 'blocked') {
       await host.transports.messages.updateToolIntervention(toolMessageId, {
-        rejectedReason: result.state.reason,
+        rejectedReason: result.state?.reason,
         status: 'rejected',
       });
     }
@@ -685,16 +694,27 @@ export const callTool =
       if (execution.toolMessageId) {
         toolMessageId = execution.toolMessageId;
         if (!execution.resultPersisted) {
-          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+          await updateExistingToolMessage({
+            host,
+            result: executionResult,
+            toolMessageId,
+            toolResultReview: execution.toolResultReview,
+          });
         }
       } else if (payload.skipCreateToolMessage) {
         toolMessageId = payload.parentMessageId;
-        await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+        await updateExistingToolMessage({
+          host,
+          result: executionResult,
+          toolMessageId,
+          toolResultReview: execution.toolResultReview,
+        });
       } else {
         const toolMessage = await createToolMessage({
           host,
           parentMessageId: payload.parentMessageId,
           result: executionResult,
+          toolResultReview: execution.toolResultReview,
           state,
           tool,
         });
@@ -1002,19 +1022,30 @@ export const callToolsBatch =
         if (execution.toolMessageId) {
           toolMessageId = execution.toolMessageId;
           if (!execution.resultPersisted) {
-            await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+            await updateExistingToolMessage({
+              host,
+              result: executionResult,
+              toolMessageId,
+              toolResultReview: execution.toolResultReview,
+            });
           }
         } else if (existingMessageId) {
           // Batch approval resume: fill the pending placeholder in place.
           // Creating a fresh row here would leave the approved-but-empty
           // original stranded under the same assistant.
           toolMessageId = existingMessageId;
-          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+          await updateExistingToolMessage({
+            host,
+            result: executionResult,
+            toolMessageId,
+            toolResultReview: execution.toolResultReview,
+          });
         } else {
           const toolMessage = await createToolMessage({
             host,
             parentMessageId,
             result: executionResult,
+            toolResultReview: execution.toolResultReview,
             state,
             tool,
           });

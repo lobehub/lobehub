@@ -154,6 +154,13 @@ describe('out-of-band tool result control', () => {
   it('keeps a denial on callback replay even after all hooks are removed', async () => {
     const { deps, input } = setup();
     deps.loadState.mockResolvedValue(null);
+    deps.messageModel.findById.mockResolvedValue({
+      id: 'tool-row',
+      parentId: 'assistant',
+      metadata: {
+        toolResultControl: { operationId: 'parent', callIndex: 1, stepIndex: 1, status: 'blocked' },
+      },
+    });
     deps.messageModel.findMessagePlugin.mockResolvedValue({
       ...plugin,
       state: { type: 'blocked', phase: 'afterToolCall', onComplete: 'finish' },
@@ -166,6 +173,44 @@ describe('out-of-band tool result control', () => {
     expect(JSON.stringify(result)).not.toContain(secret);
     expect(fetchHook).not.toHaveBeenCalled();
   });
+  it('does not treat tool-owned blocked state as a prior hook denial', async () => {
+    const { deps, input } = setup();
+    deps.messageModel.findMessagePlugin.mockResolvedValue({
+      ...plugin,
+      state: { type: 'blocked', phase: 'afterToolCall' },
+    });
+    fetchHook.mockResolvedValue(new Response(JSON.stringify({ decision: 'allow' })));
+    const controlled = await controlDeferredToolResult(deps, input);
+    expect(controlled).toMatchObject({
+      blocked: false,
+      result: original,
+      review: { status: 'allowed' },
+    });
+    expect(fetchHook).toHaveBeenCalledTimes(1);
+  });
+
+  it('retains a member anchor denial when the parent group review is still pending', async () => {
+    const { deps, input } = setup();
+    deps.messageModel.findById.mockImplementation(async (id) => ({
+      id,
+      parentId: 'assistant',
+      metadata: {
+        toolResultControl: {
+          operationId: 'parent',
+          callIndex: 1,
+          stepIndex: 1,
+          status: id === 'tool-row' ? 'blocked' : 'pending',
+        },
+      },
+    }));
+    const controlled = await controlDeferredToolResult(deps, {
+      ...input,
+      contextToolMessageId: 'group-tool',
+    });
+    expect(controlled).toMatchObject({ blocked: true, review: { status: 'blocked' } });
+    expect(fetchHook).not.toHaveBeenCalled();
+  });
+
   it('uses the parent group call arguments for an isolated member result', async () => {
     const { deps, input } = setup();
     deps.messageModel.findMessagePlugin.mockImplementation(async (id) =>

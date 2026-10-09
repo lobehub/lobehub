@@ -153,7 +153,6 @@ export class ServerMessageTransport implements MessageTransport {
   async updateToolMessage(id: string, params: UpdateToolMessageInput): Promise<void> {
     const result = await this.messageModel.updateToolMessage(id, {
       ...params,
-      releaseToolResultReview: true,
     });
     if (!result.success) {
       throw new Error('Failed to persist withheld tool result');

@@ -209,7 +209,11 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockControlToolResult.mockImplementation(async ({ result }) => result);
+    mockControlToolResult.mockImplementation(async ({ result }) => ({
+      result,
+      blocked: false,
+      cancelled: false,
+    }));
     mockCreateOperation.mockResolvedValue({
       autoStarted: true,
       messageId: 'queue-msg-1',
@@ -290,7 +294,12 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
       success: false,
     };
-    mockControlToolResult.mockResolvedValue(blocked);
+    mockControlToolResult.mockResolvedValue({
+      result: blocked,
+      blocked: true,
+      cancelled: false,
+      review: { operationId: 'op', callIndex: 1, stepIndex: 1, status: 'blocked' },
+    });
     mockUpdateToolMessage.mockResolvedValue({ success: true });
     await service.execAgent({
       ...baseParams,
@@ -331,9 +340,13 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
   it('does not start a continuation when withholding the persisted answer fails', async () => {
     mockControlToolResult.mockResolvedValue({
-      content: 'withheld',
-      state: { phase: 'afterToolCall', type: 'blocked' },
-      success: false,
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'withheld',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
     });
     mockUpdateToolMessage.mockResolvedValue({ success: false });
     await expect(
@@ -348,6 +361,53 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
     ).rejects.toThrow('Failed to persist reviewed tool result');
     expect(mockCreateOperation).not.toHaveBeenCalled();
     expect(mockMessageQuery).not.toHaveBeenCalled();
+  });
+
+  it('restores the original error on startup failure and clears it on an allowed retry', async () => {
+    const originalError = { message: 'old tool error' };
+    mockFindMessagePlugin.mockResolvedValue({ ...pendingToolPlugin, error: originalError });
+    mockControlToolResult.mockResolvedValueOnce({
+      blocked: true,
+      cancelled: false,
+      result: {
+        content: 'withheld',
+        error: 'hook_denied',
+        state: { phase: 'afterToolCall', type: 'blocked' },
+        success: false,
+      },
+      review: { operationId: 'op', callIndex: 1, stepIndex: 1, status: 'blocked' },
+    });
+    mockCreateOperation.mockRejectedValueOnce(new Error('startup failed'));
+    const params = {
+      ...baseParams,
+      resumeToolResult: {
+        content: 'answer',
+        parentMessageId: 'tool-msg-1',
+        toolCallId: 'call_ask',
+      },
+    };
+    await expect(service.execAgent(params)).resolves.toMatchObject({
+      success: false,
+      error: 'startup failed',
+    });
+    expect(mockRestoreHumanApproval).toHaveBeenCalledWith([
+      expect.objectContaining({ id: 'tool-msg-1', pluginError: originalError }),
+    ]);
+    mockControlToolResult.mockResolvedValueOnce({
+      blocked: false,
+      cancelled: false,
+      result: { content: 'answer', success: true },
+      review: { operationId: 'op', callIndex: 1, stepIndex: 1, status: 'allowed' },
+    });
+    await service.execAgent(params);
+    expect(mockUpdateToolMessage).toHaveBeenLastCalledWith(
+      'tool-msg-1',
+      expect.objectContaining({
+        content: 'answer',
+        pluginError: null,
+        toolResultReview: expect.objectContaining({ status: 'allowed' }),
+      }),
+    );
   });
 
   it('persists pluginState when provided', async () => {

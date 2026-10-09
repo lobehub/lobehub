@@ -895,7 +895,7 @@ export class AgentRuntimeService {
   }
 
   /** Review out-of-band results before any subsequent history read can expose them. */
-  async controlCompletedToolResult(input: DeferredToolResultControlInput): Promise<ToolRunResult> {
+  async controlCompletedToolResult(input: DeferredToolResultControlInput) {
     const controlled = await controlDeferredToolResult(
       {
         dispatcher: hookDispatcher,
@@ -908,7 +908,7 @@ export class AgentRuntimeService {
       },
       input,
     );
-    return controlled.result;
+    return controlled;
   }
 
   /** Load the authoritative runtime state for a deterministic intervention continuation. */
@@ -4392,7 +4392,7 @@ export class AgentRuntimeService {
       ? appendSubAgentReference(resultContent, threadId)
       : resultContent;
 
-    const completed = await this.controlCompletedToolResult({
+    const { result: completed, review } = await this.controlCompletedToolResult({
       preserveUsage: true,
       operationId: parentOperationId,
       toolMessageId,
@@ -4421,11 +4421,11 @@ export class AgentRuntimeService {
     });
     const backfill = await this.messageModel.updateToolMessage(toolMessageId, {
       content: completed.content,
-      pluginError: completed.error,
+      pluginError: completed.error ?? null,
       pluginState: completed.state,
       preserveBlockedResult: true,
-      releaseToolResultReview: true,
-      ...(completed.state?.phase === 'afterToolCall' && { replacePluginState: true }),
+      toolResultReview: review,
+      ...(review?.status === 'blocked' && { replacePluginState: true }),
     });
     if (!backfill.success) {
       throw new Error(
@@ -4657,7 +4657,7 @@ export class AgentRuntimeService {
         ? `Agent ${agentLabel} responded in the group.`
         : lastAssistantContent || 'Agent member completed without a textual answer.';
 
-    const completed = await this.controlCompletedToolResult({
+    const { result: completed, review } = await this.controlCompletedToolResult({
       preserveUsage: true,
       contextToolMessageId: groupToolMessageId,
       operationId: parentOperationId,
@@ -4685,11 +4685,11 @@ export class AgentRuntimeService {
     });
     const anchorBackfill = await this.messageModel.updateToolMessage(anchorMessageId, {
       content: completed.content,
-      pluginError: completed.error,
+      pluginError: completed.error ?? null,
       pluginState: completed.state,
       preserveBlockedResult: true,
-      releaseToolResultReview: true,
-      ...(completed.state?.phase === 'afterToolCall' && { replacePluginState: true }),
+      toolResultReview: review,
+      ...(review?.status === 'blocked' && { replacePluginState: true }),
     });
     if (!anchorBackfill.success) {
       throw new Error(
@@ -4721,7 +4721,7 @@ export class AgentRuntimeService {
       // All members done — backfill the group tool call so the parked op's
       // single-tool barrier ([groupTool]) passes. Idempotent across racing
       // last-committers; the resume/finish CAS guarantees one transition.
-      const groupResult = await this.controlCompletedToolResult({
+      const { result: groupResult, review: groupReview } = await this.controlCompletedToolResult({
         operationId: parentOperationId,
         toolMessageId: groupToolMessageId,
         result: {
@@ -4732,11 +4732,11 @@ export class AgentRuntimeService {
       });
       const groupBackfill = await this.messageModel.updateToolMessage(groupToolMessageId, {
         content: groupResult.content,
+        pluginError: groupResult.error ?? null,
         pluginState: groupResult.state,
         preserveBlockedResult: true,
-        releaseToolResultReview: true,
-        ...(groupResult.state?.phase === 'afterToolCall' && {
-          pluginError: groupResult.error,
+        toolResultReview: groupReview,
+        ...(groupReview?.status === 'blocked' && {
           replacePluginState: true,
         }),
       });

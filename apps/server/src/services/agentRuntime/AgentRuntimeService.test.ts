@@ -3779,9 +3779,9 @@ describe('AgentRuntimeService', () => {
       expect(won).toBe(true);
       expect(updateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
         preserveBlockedResult: true,
-        releaseToolResultReview: true,
+        toolResultReview: undefined,
         content: 'final answer',
-        pluginError: undefined,
+        pluginError: null,
         pluginState: {
           model: 'gpt-test',
           status: 'completed',
@@ -3829,6 +3829,11 @@ describe('AgentRuntimeService', () => {
       });
       updateToolMessage.mockImplementation(async (_id, value) => {
         stored.state = value.pluginState;
+        (service as any).messageModel.findById.mockResolvedValue({
+          id: 'tool-msg-1',
+          parentId: 'assistant',
+          metadata: { toolResultControl: value.toolResultReview },
+        });
         return { success: true };
       });
       try {

@@ -967,7 +967,7 @@ describe('MessageModel Update Tests', () => {
           },
           preserveBlockedResult: true,
           replacePluginState: true,
-          releaseToolResultReview: true,
+          toolResultReview: { ...marker, status: 'blocked' },
         }),
       );
       const readAll = async () =>
@@ -985,7 +985,7 @@ describe('MessageModel Update Tests', () => {
         'review-tool',
         {
           content: 'withheld',
-          releaseToolResultReview: true,
+          toolResultReview: { ...marker, status: 'blocked' },
         },
       );
       expect(failed.success).toBe(false);
@@ -1016,10 +1016,107 @@ describe('MessageModel Update Tests', () => {
           content: secret,
           pluginState: { answer: secret },
           preserveBlockedResult: true,
-          releaseToolResultReview: true,
+          toolResultReview: { ...marker, status: 'allowed' },
         }),
       ).toMatchObject({ success: true, applied: false });
       expect(JSON.stringify(await readAll())).not.toContain(secret);
+    });
+
+    it.each([null, { message: 'original tool error' }])(
+      'restores the error snapshot after a denied approval continuation fails: %j',
+      async (originalError) => {
+        const marker = {
+          operationId: 'review-op',
+          callIndex: 1,
+          stepIndex: 2,
+          status: 'pending' as const,
+        };
+        await serverDB.insert(messages).values({
+          id: 'review-retry',
+          userId,
+          role: 'tool',
+          content: '',
+          metadata: { toolResultControl: marker },
+        });
+        await serverDB.insert(messagePlugins).values({
+          id: 'review-retry',
+          userId,
+          identifier: 'tool',
+          toolCallId: 'retry-call',
+          error: originalError,
+          state: { awaitingAnswer: true },
+          intervention: { status: 'pending' },
+        });
+        await messageModel.resolveHumanApproval([
+          {
+            id: 'review-retry',
+            content: 'answer',
+            intervention: { status: 'approved', resolutionRequestId: 'denied-attempt' },
+          },
+        ]);
+        await messageModel.updateToolMessage('review-retry', {
+          content: 'Tool result withheld by afterToolCall hook.',
+          pluginError: 'hook_denied',
+          pluginState: { phase: 'afterToolCall', type: 'blocked' },
+          replacePluginState: true,
+          toolResultReview: { ...marker, status: 'blocked' },
+        });
+        await messageModel.restoreHumanApproval([
+          {
+            id: 'review-retry',
+            content: '',
+            pluginState: { awaitingAnswer: true },
+            pluginError: originalError,
+            intervention: { status: 'pending' },
+            claimedResolutionRequestId: 'denied-attempt',
+          },
+        ]);
+        const [plugin] = await serverDB
+          .select()
+          .from(messagePlugins)
+          .where(eq(messagePlugins.id, 'review-retry'));
+        expect(plugin.error).toEqual(originalError);
+        expect(plugin.state).toEqual({ awaitingAnswer: true });
+        expect(
+          (await messageModel.findById('review-retry'))?.metadata?.toolResultControl?.status,
+        ).toBe('pending');
+      },
+    );
+
+    it('persists an allowed verdict independently of tool-owned blocked state', async () => {
+      const marker = {
+        operationId: 'review-op',
+        callIndex: 1,
+        stepIndex: 2,
+        status: 'pending' as const,
+      };
+      await serverDB.insert(messages).values({
+        id: 'review-spoof',
+        userId,
+        role: 'tool',
+        content: '',
+        metadata: { toolResultControl: marker },
+      });
+      await serverDB
+        .insert(messagePlugins)
+        .values({ id: 'review-spoof', userId, identifier: 'tool', toolCallId: 'spoof-call' });
+      await messageModel.updateToolMessage('review-spoof', {
+        content: 'allowed output',
+        pluginState: { phase: 'afterToolCall', type: 'blocked' },
+        toolResultReview: { ...marker, status: 'allowed' },
+      });
+      expect(
+        (await messageModel.findById('review-spoof'))?.metadata?.toolResultControl?.status,
+      ).toBe('allowed');
+      expect((await messageModel.queryByIds(['review-spoof']))[0].content).toBe('allowed output');
+      expect(
+        await messageModel.updateToolMessage('review-spoof', {
+          content: 'allowed retry',
+          preserveBlockedResult: true,
+          toolResultReview: { ...marker, status: 'allowed' },
+        }),
+      ).toMatchObject({ success: true, applied: true });
+      expect((await messageModel.queryByIds(['review-spoof']))[0].content).toBe('allowed retry');
     });
 
     it('releases allowed answers atomically and quarantines them again on approval rollback', async () => {
@@ -1054,7 +1151,12 @@ describe('MessageModel Update Tests', () => {
       await messageModel.updateToolMessage('review-allow', {
         content: 'allowed answer',
         pluginState: { answer: 'allowed answer' },
-        releaseToolResultReview: true,
+        toolResultReview: {
+          operationId: 'review-op',
+          callIndex: 1,
+          stepIndex: 2,
+          status: 'allowed',
+        },
       });
       expect((await messageModel.queryByIds(['review-allow']))[0].content).toBe('allowed answer');
       await messageModel.restoreHumanApproval([
@@ -1186,6 +1288,12 @@ describe('MessageModel Update Tests', () => {
           content: 'Tool result withheld.',
           pluginError: 'hook_denied',
           pluginState: blocked,
+          toolResultReview: {
+            operationId: 'review-op',
+            callIndex: 1,
+            stepIndex: 2,
+            status: 'blocked',
+          },
           replacePluginState: true,
           preserveBlockedResult: true,
         }),

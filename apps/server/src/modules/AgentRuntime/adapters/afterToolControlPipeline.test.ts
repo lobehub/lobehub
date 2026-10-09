@@ -235,6 +235,30 @@ describe('afterToolCall control pipeline', () => {
     },
   );
 
+  it.each(['server', 'client'] as const)(
+    'carries the allowed verdict separately from %s result state',
+    async (executor) => {
+      const fixture = setup([control()]);
+      const result = {
+        content: 'allowed output',
+        success: true,
+        state: { phase: 'afterToolCall', type: 'blocked' },
+      };
+      if (executor === 'client') {
+        dispatchClient.mockResolvedValue(result);
+      }
+      fixture.execute.mockResolvedValue(result);
+      await fixture.step([{ ...call(), ...(executor === 'client' && { executor: 'client' }) }]);
+      expect(dispatchClient).toHaveBeenCalledTimes(executor === 'client' ? 1 : 0);
+      expect(fixture.execute).toHaveBeenCalledTimes(executor === 'server' ? 1 : 0);
+      expect(fixture.rows[0]).toMatchObject({
+        content: 'allowed output',
+        metadata: { toolResultControl: { status: 'allowed', operationId: 'op' } },
+      });
+      expect(fixture.rows[0].pluginIntervention).toBeUndefined();
+    },
+  );
+
   it('inspects complete output before archiving an allowed result', async () => {
     const fixture = setup([control()]);
     fixture.execute.mockResolvedValue(raw());
@@ -512,6 +536,60 @@ describe('afterToolCall control pipeline', () => {
       expect(JSON.stringify(result)).not.toContain(secret);
       expect(JSON.stringify(fixture.rows)).not.toContain(secret);
       expect(archive).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['single', 'batch'] as const)(
+    'releases the original pending result after an allowed %s hook-less continuation',
+    async (mode) => {
+      const fixture = setup([]);
+      const review = { operationId: 'original-op', callIndex: 2, stepIndex: 4, status: 'pending' };
+      fixture.rows.push({
+        id: 'protected-row',
+        parentId: 'original-assistant',
+        role: 'tool',
+        tool_call_id: 'native-1',
+        content: '',
+        plugin: call(),
+        metadata: { toolResultControl: review },
+      });
+      fixture.loadState.mockResolvedValue({
+        ...fixture.state,
+        operationId: 'original-op',
+        host: { hooks: [control()] },
+      });
+      fetchHook.mockImplementation(async () => response('allow'));
+      if (mode === 'single') {
+        await fixture.executors.call_tool!(
+          {
+            type: 'call_tool',
+            payload: {
+              parentMessageId: 'protected-row',
+              skipCreateToolMessage: true,
+              toolCalling: call(),
+            },
+          },
+          fixture.state,
+        );
+      } else {
+        await fixture.executors.call_tools_batch!(
+          {
+            type: 'call_tools_batch',
+            payload: {
+              parentMessageId: 'assistant',
+              toolsCalling: [call()],
+              existingToolMessageIds: { 'native-1': 'protected-row' },
+            },
+          },
+          fixture.state,
+        );
+      }
+      expect(fetchHook).toHaveBeenCalledTimes(1);
+      expect(fixture.host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
+        'protected-row',
+        expect.objectContaining({ toolResultReview: { ...review, status: 'allowed' } }),
+      );
+      expect(fixture.rows[0].content).toBe('executed');
     },
   );
 
