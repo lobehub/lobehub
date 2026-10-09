@@ -2,8 +2,9 @@ import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 
 import { isValidElement, type ReactElement, Suspense } from 'react';
+import { renderToString } from 'react-dom/server';
 import type { RouteObject } from 'react-router';
-import { matchRoutes } from 'react-router';
+import { matchRoutes, MemoryRouter } from 'react-router';
 import { describe, expect, it, vi } from 'vitest';
 
 import BrandTextLoading from '@/components/Loading/BrandTextLoading';
@@ -466,14 +467,23 @@ describe('desktop router shared definition', () => {
   it.each([
     ['Web', (_pathname: string) => webDesktopRoutes],
     ['Electron', (pathname: string) => createTabRouter(pathname).routes],
-  ])('%s lets boot preload the lazily loaded resource skeleton', (_, getRoutes) => {
-    const matches = matchRoutes(getRoutes('/resource/files'), '/resource/files');
-    const Skeleton = resolveRouteSkeleton(
-      matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
-    );
+  ])(
+    '%s paints the resource skeleton on its first render, without a chunk wait',
+    (_, getRoutes) => {
+      const matches = matchRoutes(getRoutes('/resource/files'), '/resource/files');
+      const Skeleton = resolveRouteSkeleton(
+        matches?.map(({ route }) => ({ handle: route.handle })) ?? [],
+      );
 
-    expect(Skeleton?.preload).toBeTypeOf('function');
-  });
+      const html = renderToString(
+        <MemoryRouter initialEntries={['/resource/files']}>
+          {Skeleton && <Skeleton />}
+        </MemoryRouter>,
+      );
+
+      expect(html).toContain('aria-busy');
+    },
+  );
 
   it.each([
     ['Web', (_pathname: string) => webDesktopRoutes],

@@ -53,6 +53,7 @@ import {
   projectDirectoriesRouteMeta,
   projectsRouteMeta,
 } from '@/features/Projects/routeMeta';
+import ResourceCategorySkeleton from '@/features/ResourceHome/Skeleton';
 import { settingsRouteMeta } from '@/features/Settings/features/routeMeta';
 import { workspaceHomeRouteMeta } from '@/features/Workspace/routeMeta';
 import WorkspaceProviderRedirect from '@/features/WorkspaceSetting/ProviderRedirect';
@@ -75,35 +76,11 @@ import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShel
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { pageListLoader } from '@/spa/router/pageListLoader';
-import {
-  NoRouteSkeleton,
-  routeMeta,
-  type RouteSkeleton,
-  type RouteSkeletonProps,
-} from '@/spa/router/routeMeta';
-import { registerRoutePreloadLoader } from '@/spa/router/routePreloadRegistry';
+import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
-import {
-  createPreloadableComponent,
-  dynamicElement,
-  dynamicLayout,
-  ErrorBoundary,
-  redirectElement,
-} from '@/utils/router';
+import { dynamicElement, dynamicLayout, ErrorBoundary, redirectElement } from '@/utils/router';
 
-const resourceCategorySkeleton = createPreloadableComponent<RouteSkeletonProps>(
-  () => import('@/features/ResourceHome/Skeleton'),
-);
-registerRoutePreloadLoader('resource', resourceCategorySkeleton.preload);
-
-export const ResourceCategorySkeleton: RouteSkeleton = Object.assign(
-  (props: RouteSkeletonProps) => (
-    <Suspense fallback={null}>
-      <resourceCategorySkeleton.Component {...props} />
-    </Suspense>
-  ),
-  { preload: resourceCategorySkeleton.preload },
-);
+export { ResourceCategorySkeleton };
 
 const agentChatElement = dynamicElement(
   () => loadRouteWithBuiltinToolSurfaces(() => import('@/routes/(main)/agent')),

@@ -9,11 +9,9 @@ import { ErrorBoundary } from '@/utils/router';
 
 import { createMainAreaChildren } from './desktopRouter.config';
 import { withSegmentFallback } from './desktopRouter.shared';
-import { RouteSkeletonPreloader } from './useRouteSkeleton';
 
 const TabRootLayout = () => (
   <Suspense fallback={<RouteSegmentSkeleton />}>
-    <RouteSkeletonPreloader />
     <Outlet />
     <TabLocationReporter />
   </Suspense>
