@@ -23,7 +23,7 @@ import {
   RESOURCE_LIST_KEY,
   resourceListResource,
 } from './projection';
-import { getResourcePoolKey, getResourceQueryKey } from './utils';
+import { getResourceQueryKey } from './utils';
 
 const log = debug('resource-manager:action');
 
@@ -111,8 +111,6 @@ export class ResourceActionImpl {
   #requestedListParams?: ResourceListParams;
   /** Storage row of `#requestedListParams`; a slow hydrate of another query is dropped. */
   #requestedListStorageKey?: string;
-  /** Pool the painted rows answer, to tell a navigation from a re-sort. */
-  #paintedListPoolKey?: string;
   /** Storage row the painted rows answer, so the navigation effect only runs on a change. */
   #paintedListStorageKey?: string;
 
@@ -417,33 +415,25 @@ export class ResourceActionImpl {
   // ---- list lifecycle -----------------------------------------------------
 
   /**
-   * Repaint the explorer for a new query pool (folder / library / filter). The
-   * entry is a singleton reused by every query, and `hydrate` only fills an
-   * empty slot, so the previous pool's rows must go first — otherwise the new
-   * pool's persisted page could never load and a warm (or offline) navigation
-   * would sit on a skeleton until the network answered. The once-per-key driver
-   * read has already run for a folder the session visited before, which is why
-   * this reads the persisted page directly instead of relying on it.
+   * Repaint the explorer for a new query. The entry is a singleton reused by
+   * every query, and `hydrate` otherwise only fills an empty slot — so without
+   * this a query change waits for the network even when its own persisted page
+   * exists (a warm navigation, or any navigation while offline). Reading that
+   * page with `overwrite` repaints the entry in a single write, so the views
+   * never see an empty middle frame and a same-pool change (`sorter` /
+   * `sortType` / view mode) stays flash-free.
    *
-   * Only a *pool* change resets: `sorter` / `sortType` / `q` re-ask the same
-   * pool (the engine's own `replace` reset handles them) and clearing there
-   * would flash a skeleton the views deliberately avoid.
+   * The once-per-key driver read cannot cover this: it already ran for a query
+   * the session loaded before (hydrates are `once`), so the read is done here.
    */
   #hydrateListQuery = (): void => {
     const params = this.#requestedListParams;
     const storageKey = this.#requestedListStorageKey;
     if (!params || storageKey === undefined) return;
     if (storageKey === this.#paintedListStorageKey) return;
-
-    const poolKey = getResourcePoolKey(params);
-    const poolChanged =
-      this.#paintedListPoolKey !== undefined && this.#paintedListPoolKey !== poolKey;
     this.#paintedListStorageKey = storageKey;
-    this.#paintedListPoolKey = poolKey;
-    if (!poolChanged) return;
 
-    this.#resourceList.reset(RESOURCE_LIST_KEY);
-    void this.#resourceList.hydrate(params);
+    void this.#resourceList.hydrate(params, undefined, { overwrite: true });
   };
 
   /**
@@ -907,6 +897,10 @@ export class ResourceActionImpl {
       await knowledgeBaseService.removeFilesFromKnowledgeBase(knowledgeBaseId, ids);
       if (isKnowledgeBaseView) {
         token?.commit();
+        // The rows left the server's page too, so the offset the loaded depth
+        // implies no longer lines up with the survivors — without a revalidate
+        // the next "load more" would skip the row that shifted up into the gap.
+        await this.#revalidateList();
       } else {
         token?.commit((data) =>
           this.#patchRows(data, idsSet, (resource) =>

@@ -24,6 +24,13 @@ import type { ResourceItem } from '@/types/resource';
 import type { ResourceListParams } from './projection';
 import { normalizeResourceListParams, RESOURCE_LIST_KEY, resourceListResource } from './projection';
 
+vi.mock('@/services/knowledgeBase', () => ({
+  knowledgeBaseService: {
+    addFilesToKnowledgeBase: vi.fn(async () => undefined),
+    removeFilesFromKnowledgeBase: vi.fn(async () => undefined),
+  },
+}));
+
 const BASE_INPUT = { parentId: null } as const;
 const BASE_PARAMS = normalizeResourceListParams(BASE_INPUT)!;
 const BASE_KEY = resourceListResource.storageKey(BASE_PARAMS);
@@ -338,5 +345,56 @@ describe('resourceList replica', () => {
     // hydrate it again rather than wait for a network that is not there.
     hook.rerender({ parentId: null });
     await waitFor(() => expect(ids()).toEqual(['cached-a']));
+  });
+
+  it('paints a previously cached sort from its persisted page', async () => {
+    const sortedParams = normalizeResourceListParams({
+      parentId: null,
+      sorter: 'size',
+      sortType: 'asc',
+    })!;
+    await seedPersisted(sortedParams, [row('cached-sorted')]);
+
+    // Only the default (newest-first) query answers; the sorted one is offline.
+    querySpy.mockImplementation((params) =>
+      params.sorter === 'size' ? pending() : Promise.resolve(page([row('newest-1')], 1)),
+    );
+
+    const hook = renderHook(
+      (props: { sorter?: 'size' }) =>
+        useFileStore((s) => s.useFetchResources)({
+          parentId: null,
+          sorter: props.sorter,
+          sortType: props.sorter ? 'asc' : undefined,
+        }),
+      { initialProps: {} as { sorter?: 'size' }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['newest-1']));
+
+    // Same pool, different storage row: the cached page must still hydrate.
+    hook.rerender({ sorter: 'size' });
+
+    await waitFor(() => expect(ids()).toEqual(['cached-sorted']));
+  });
+
+  it('confirms the page with the server after removing rows from a knowledge base view', async () => {
+    querySpy.mockResolvedValueOnce(page(rows(50), 60)).mockResolvedValueOnce(page(rows(50, 1), 59));
+
+    renderHook(() => useFileStore((s) => s.useFetchResources)({ libraryId: 'kb-1' }), { wrapper });
+
+    await waitFor(() => expect(ids()).toHaveLength(50));
+    expect(ids()[0]).toBe('resource-0');
+
+    // Removing a row shrinks the server's page, so the loaded offset no longer
+    // lines up; the action must confirm the page instead of leaving a gap that
+    // the next "load more" would skip.
+    await act(async () => {
+      await useFileStore.getState().removeResourcesFromKnowledgeBase('kb-1', ['resource-0']);
+    });
+
+    await waitFor(() => expect(ids()[0]).toBe('resource-1'));
+    expect(ids()).not.toContain('resource-0');
+    expect(querySpy).toHaveBeenCalledTimes(2);
   });
 });

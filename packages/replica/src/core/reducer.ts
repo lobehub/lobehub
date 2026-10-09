@@ -13,6 +13,13 @@ export type ReplicaAction<T> =
   | {
       data: T;
       key: string;
+      /**
+       * Repaint a slot that answers a *different* query from the persisted page
+       * (a navigation). Only the caller that knows the entry has moved on
+       * (the requested query changed) may ask for it; by default a hydrate only
+       * fills an empty slot.
+       */
+      overwrite?: boolean;
       params?: unknown;
       query?: string;
       scope: string;
@@ -39,13 +46,6 @@ export type ReplicaAction<T> =
   | { confirm?: (data: T) => T; id: number; key: string; scope: string; type: 'commit' }
   | { id: number; key: string; scope: string; type: 'rollback' }
   | { key: string; scope: string; type: 'remove' }
-  /**
-   * Drop one entry's value and its painted view, but keep the persisted row.
-   * Used when an entry is reused for a new query (a navigation): `hydrate` only
-   * fills an empty slot, so the previous query's value must go first for the new
-   * query's persisted page to load.
-   */
-  | { key: string; scope: string; type: 'reset' }
   | { scope: string; type: 'resetScope' };
 
 export type ReplicaEffect<T> =
@@ -110,8 +110,16 @@ export const replicaReducer = <T>(
   switch (action.type) {
     case 'hydrate': {
       // Hydrate only fills an empty slot: a server-confirmed value, an
-      // optimistic write or any local write always wins over storage.
-      if (entry || view !== undefined) return noop(state);
+      // optimistic write or any local write always wins over storage. A caller
+      // that knows the slot answers a *different* query (a navigation) may ask
+      // to repaint it from that query's persisted page instead — but never over
+      // an in-flight optimistic write.
+      if (entry) {
+        if (!action.overwrite || entry.pending.length > 0 || entry.query === action.query)
+          return noop(state);
+      } else if (view !== undefined) {
+        return noop(state);
+      }
       return {
         effects: [],
         state: withEntry({
@@ -217,17 +225,6 @@ export const replicaReducer = <T>(
     case 'remove': {
       return {
         effects: [{ key: action.key, query: entry?.query, scope, type: 'remove' }],
-        state: withEntry(undefined),
-        writes: view === undefined ? [] : [{ data: undefined, key: action.key }],
-      };
-    }
-
-    case 'reset': {
-      // Memory only: the persisted row is still this query's valid projection,
-      // and the next query to occupy the key hydrates it like a fresh slot.
-      if (!entry && view === undefined) return noop(state);
-      return {
-        effects: [],
         state: withEntry(undefined),
         writes: view === undefined ? [] : [{ data: undefined, key: action.key }],
       };
