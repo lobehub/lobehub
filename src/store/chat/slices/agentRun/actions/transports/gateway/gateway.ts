@@ -2314,6 +2314,16 @@ export class GatewayActionImpl {
     const topic = await topicService.getTopicDetail(topicId).catch(() => undefined);
     if (!topic || isInterventionRunActive(topic)) return 0;
 
+    // Mirror the SERVER's authoritative terminal status instead of stamping
+    // `active` over it: a run that finished while the user was away settles the
+    // row to `unread`, and overwriting that would suppress the completion badge
+    // they come back for (or clobber `completed` / `failed`). Only a topic the
+    // user is actually looking at gets the `active` pin — the same split the
+    // terminal-frame path makes
+    // (`viewing || !effectiveSucceeded ? 'active' : undefined`).
+    const viewing = this.#get().activeTopicId === topicId;
+    const terminalStatus: ChatTopicStatus = viewing ? 'active' : (topic.status ?? 'active');
+
     let settled = 0;
     for (const op of candidates) {
       // A terminal frame may have landed while the read was in flight.
@@ -2326,7 +2336,7 @@ export class GatewayActionImpl {
         agentId: params.agentId,
         groupId: params.groupId,
         operationId: op.metadata.serverOperationId ?? op.id,
-        status: 'active',
+        status: terminalStatus,
         topicId,
       });
       settled++;

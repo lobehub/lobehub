@@ -3147,6 +3147,28 @@ describe('topic action', () => {
       });
     });
 
+    // A run that finished while the user was elsewhere settles the SERVER row to
+    // `unread`. The sweep has to mirror that terminal status — stamping `active`
+    // would hide the completion badge the user comes back for (and would clobber
+    // `completed` / `failed` the same way).
+    it("mirrors the server's terminal status instead of forcing active", async () => {
+      const { key, serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        ...serverRow,
+        status: 'unread',
+      } as ChatTopic);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      expect(useChatStore.getState().topicDataMap[key].items[0]).toMatchObject({
+        metadata: { runningOperation: null },
+        status: 'unread',
+      });
+    });
+
     // The counter-case: an op that pins the row ON PURPOSE without a server-side
     // run. `autoRetryPending` is held across the heterogeneous overload countdown
     // — longest window 30s ± 20% jitter, i.e. past the sweep's own 30s settle
