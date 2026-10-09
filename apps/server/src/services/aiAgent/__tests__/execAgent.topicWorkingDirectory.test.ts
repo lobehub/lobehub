@@ -370,6 +370,79 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
   });
 
+  it('merges a directory the user added mid-scan instead of overwriting it', async () => {
+    const staleEntry = {
+      path: '/repo/default',
+      workspace: { instructions: [], skills: [] },
+      workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
+    };
+
+    // The scan takes up to 30s; land a concurrent directory edit while it is
+    // in flight so the write-back has a newer list to merge into.
+    let scanStarted = false;
+    mockInitWorkspace.mockImplementation(async () => {
+      scanStarted = true;
+      return { instructions: [], skills: [] };
+    });
+    mockFindByDeviceId.mockImplementation(async () => ({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: scanStarted
+        ? [staleEntry, { path: '/repo/new', workspaceScannedAt: 1 }]
+        : [staleEntry],
+    }));
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    // The refreshed entry is persisted AND the concurrent add survives the
+    // write-back — rebuilding from the pre-scan snapshot would drop it.
+    expect(mockUpdateDevice).toHaveBeenCalledWith(
+      DEVICE_ID,
+      expect.objectContaining({
+        workingDirs: expect.arrayContaining([
+          expect.objectContaining({ path: '/repo/default' }),
+          expect.objectContaining({ path: '/repo/new' }),
+        ]),
+      }),
+    );
+  });
+
+  it('still refreshes when the Redis claim command fails', async () => {
+    mockFindByDeviceId.mockResolvedValue({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: [
+        {
+          path: '/repo/default',
+          workspace: { instructions: [], skills: [] },
+          workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
+        },
+      ],
+    });
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+    mockInitWorkspace.mockResolvedValue({ instructions: [], skills: [] });
+    // A memoized client whose commands fail: coordination is best-effort, so
+    // the refresh must still happen instead of being silently skipped.
+    mockTryInitializeRedisWithPrefix.mockResolvedValueOnce({
+      get: vi.fn(async () => null),
+      set: vi.fn(async () => {
+        throw new Error('redis down');
+      }),
+    } as any);
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+    expect(mockUpdateDevice).toHaveBeenCalled();
+  });
+
   it('never rewrites a topic that is already pinned to a directory', async () => {
     // The historical pin is the contract: an old conversation must not follow
     // the agent's current default when that default changes later.

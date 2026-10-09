@@ -125,4 +125,15 @@ describe('claimRedisOnce', () => {
   it('grants the claim when there is no client to coordinate through', async () => {
     await expect(claimRedisOnce(null, 'claim', 1000)).resolves.toBe(true);
   });
+
+  it('grants the claim when the SET NX command fails', async () => {
+    // A memoized client can still have its commands rejected (e.g. Redis went
+    // down). Coordination is best-effort: the caller must not be left with
+    // "not the winner" and therefore do nothing.
+    const redis = fakeRedis({
+      set: vi.fn().mockRejectedValue(new Error('redis down')),
+    });
+
+    await expect(claimRedisOnce(redis, 'claim', 45_000)).resolves.toBe(true);
+  });
 });

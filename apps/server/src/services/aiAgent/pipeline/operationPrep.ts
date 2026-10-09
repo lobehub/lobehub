@@ -316,12 +316,16 @@ const resolveWorkspaceInit = async (
       });
       if (!scanned) return undefined;
 
-      const updated = upsertWorkspaceScan(
-        workingDirs,
-        cached?.path ?? boundCwd,
-        scanned,
-        Date.now(),
-      );
+      // Re-read the row before writing: the scan runs for up to 30s, and the
+      // user (or another refresh) may have edited `workingDirs` in the
+      // meantime. Merging the fresh scan into the CURRENT list keeps those
+      // edits instead of overwriting them with the pre-scan snapshot.
+      const latest = deviceWorkspaceId
+        ? await deviceModel.findWorkspaceDeviceById(activeDeviceId)
+        : await deviceModel.findByDeviceId(activeDeviceId);
+      const current = latest?.workingDirs ?? workingDirs;
+
+      const updated = upsertWorkspaceScan(current, cached?.path ?? boundCwd, scanned, Date.now());
       if (deviceWorkspaceId) {
         await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
       } else {

@@ -118,10 +118,12 @@ export const readThroughRedis = async <T>(
  * that fan out from concurrent requests — one should do the work, the rest
  * should not pile on.
  *
- * Without a client there is nothing to coordinate through, so the claim is
- * granted: the caller does its work, as it would have before any claim
- * existed. A claim is never released early — a successful refresh makes the
- * next read fresh anyway, and a failed one is retried once the claim expires.
+ * Best-effort, like the rest of this module: without a client there is nothing
+ * to coordinate through, so the claim is granted; likewise a command failure
+ * (Redis memoized the client but rejects `SET NX`) grants the claim, so a
+ * caller either coordinates or does the work, never neither. A claim is never
+ * released early — a successful refresh makes the next read fresh anyway, and
+ * a failed one is retried once the claim expires.
  */
 export const claimRedisOnce = async (
   redis: BaseRedisProvider | null,
@@ -129,6 +131,10 @@ export const claimRedisOnce = async (
   ttlMs: number,
 ): Promise<boolean> => {
   if (!redis) return true;
-  const result = await redis.set(key, '1', { nx: true, px: Math.max(1, Math.round(ttlMs)) });
-  return result === 'OK';
+  try {
+    const result = await redis.set(key, '1', { nx: true, px: Math.max(1, Math.round(ttlMs)) });
+    return result === 'OK';
+  } catch {
+    return true;
+  }
 };
