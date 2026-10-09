@@ -102,8 +102,36 @@ describe('GatewayConnectionService system_info_request', () => {
     );
   });
 
-  /** @example Updating or removing Codex must change the next gateway capability response. */
-  it('revokes native support after the bundled capability probe fails', async () => {
+  // ROOT CAUSE:
+  // Every system_info_request spawned the bundled CLI (up to 9 s) plus a Codex handshake,
+  // and system info is queried during ordinary runs, so every device user paid for it.
+  /** @example Repeated system-info requests reuse one bundled CLI probe per connection. */
+  it('probes the bundled CLI once per connection', async () => {
+    getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+    });
+    const client = createClient();
+    for (const requestId of ['first', 'second', 'third']) {
+      await service['handleSystemInfoRequest'](client, {
+        requestId,
+        type: 'system_info_request',
+      });
+    }
+    expect(execFileMock).toHaveBeenCalledOnce();
+    expect(client.sendSystemInfoResponse).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        requestId: 'third',
+        result: {
+          success: true,
+          systemInfo: expect.objectContaining({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+        },
+      }),
+    );
+  });
+
+  /** @example Updating or removing Codex changes the capability after reconnecting. */
+  it('revokes native support when a reconnect probe fails', async () => {
     getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
     execFileMock.mockResolvedValueOnce({
       stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
@@ -114,6 +142,11 @@ describe('GatewayConnectionService system_info_request', () => {
       type: 'system_info_request',
     });
     execFileMock.mockRejectedValueOnce(new Error('bundled CLI unavailable or timed out'));
+    // Only the status transition matters here; keep-awake and broadcasting are out of scope.
+    vi.spyOn(service as any, 'syncPowerSaveBlocker').mockImplementation(() => {});
+    vi.spyOn(service as any, 'scheduleStatusBroadcast').mockImplementation(() => {});
+    service['setStatus']('reconnecting');
+    service['setStatus']('connected');
     await service['handleSystemInfoRequest'](client, {
       requestId: 'second',
       type: 'system_info_request',
@@ -128,6 +161,7 @@ describe('GatewayConnectionService system_info_request', () => {
         },
       }),
     );
+    expect(execFileMock).toHaveBeenCalledTimes(2);
   });
 
   /** @example An older CLI's help output must not be interpreted as native support. */

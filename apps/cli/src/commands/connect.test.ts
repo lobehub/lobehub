@@ -409,13 +409,18 @@ describe('connect command', () => {
     }
   });
 
-  /** @example Refreshing system info detects a binary downgrade instead of keeping stale support. */
-  it('reprobes native Codex after a successful system info request', async () => {
+  // ROOT CAUSE:
+  // Every system_info_request started a Codex app-server handshake (up to 6 s), and tool
+  // runs query system info during ordinary turns, so every device run paid for it.
+  /** @example Repeated system info requests reuse one native probe per connection. */
+  it('probes native Codex once per connection', async () => {
     await createProgram().parseAsync(['node', 'test', 'connect']);
-    await clientEventHandlers['system_info_request']?.({
-      requestId: 'probe-new',
-      type: 'system_info_request',
-    });
+    for (const requestId of ['probe-1', 'probe-2', 'probe-3']) {
+      await clientEventHandlers['system_info_request']?.({
+        requestId,
+        type: 'system_info_request',
+      });
+    }
     /** @example Resolution PATH is carried into the exact probed executable. */
     expect(codexProbe.options).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -423,13 +428,28 @@ describe('connect command', () => {
         env: expect.objectContaining({ PATH: '/resolved/bin' }),
       }),
     );
+    expect(codexProbe.connect).toHaveBeenCalledOnce();
+    expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([
+      'codex-app-server-v1',
+    ]);
+  });
+
+  /** @example Reconnecting detects a binary downgrade instead of keeping stale support. */
+  it('reprobes native Codex when the gateway connection is re-established', async () => {
+    await createProgram().parseAsync(['node', 'test', 'connect']);
+    await clientEventHandlers['system_info_request']?.({
+      requestId: 'probe-new',
+      type: 'system_info_request',
+    });
     codexProbe.connect.mockRejectedValueOnce(new Error('binary downgraded'));
+    clientEventHandlers['connected']?.();
     await clientEventHandlers['system_info_request']?.({
       requestId: 'probe-downgrade',
       type: 'system_info_request',
     });
     /** @example A later unsupported binary revokes the previous capability. */
     expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([]);
+    expect(codexProbe.connect).toHaveBeenCalledTimes(2);
   });
 
   it('should handle auth_failed', async () => {
@@ -590,7 +610,7 @@ describe('connect command', () => {
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);
 
-    clientEventHandlers['system_info_request']?.({
+    await clientEventHandlers['system_info_request']?.({
       requestId: 'req-3',
       type: 'system_info_request',
     });

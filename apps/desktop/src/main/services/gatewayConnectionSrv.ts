@@ -24,6 +24,7 @@ import type {
 } from '@lobechat/device-gateway-client';
 import type { IdentitySource } from '@lobechat/device-identity';
 import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import { createRuntimeProbeCache } from '@lobechat/heterogeneous-agents/runtimeProbeCache';
 import { isRecord } from '@lobechat/utils/object';
 import { app, powerSaveBlocker } from 'electron';
 
@@ -163,6 +164,13 @@ export default class GatewayConnectionService extends ServiceModule {
   private statusBroadcastTimer: ReturnType<typeof setTimeout> | null = null;
 
   private identitySource: IdentitySource | null = null;
+
+  /**
+   * Bundled CLI capability probe. Each probe starts an Electron-as-node CLI plus a Codex
+   * app-server handshake, while system info is requested during ordinary runs, so it is
+   * probed once per connection (and refreshed after the cache lifetime).
+   */
+  private readonly agentRuntimes = createRuntimeProbeCache(() => this.collectAgentRuntimes());
 
   private tokenProvider: (() => Promise<string | null>) | null = null;
   private tokenRefresher: (() => Promise<{ error?: string; success: boolean }>) | null = null;
@@ -876,11 +884,11 @@ export default class GatewayConnectionService extends ServiceModule {
    * Returns: an empty capability list if the CLI is absent, incompatible, or unresponsive.
    *
    * Call stack:
-   * handleSystemInfoRequest -> {@link collectSystemInfo}
+   * handleSystemInfoRequest -> {@link collectSystemInfo} -> agentRuntimes.get
    *   -> {@link collectAgentRuntimes} -> {@link resolveCliScript}
    *     -> lh connect capabilities -> supportsNativeCodex -> Codex initialize
    */
-  private async collectAgentRuntimes(): Promise<DeviceSystemInfo['supportedAgentRuntimes']> {
+  private async collectAgentRuntimes(): Promise<string[]> {
     try {
       // Use the bundled entrypoint rather than a global lh that may lag this build.
       // The CLI bounds its native handshake to 6 seconds; this outer deadline also
@@ -910,7 +918,7 @@ export default class GatewayConnectionService extends ServiceModule {
     const { getShellInfo } = await import('@lobechat/local-file-shell/shell');
     return {
       supportedTools: ['lobe-computer-use'],
-      supportedAgentRuntimes: await this.collectAgentRuntimes(),
+      supportedAgentRuntimes: await this.agentRuntimes.get(),
       arch: os.arch(),
       // Tell the server-side prompt builder which shell runCommand spawns here.
       defaultShell: (await getShellInfo()).displayName,
@@ -1199,7 +1207,12 @@ export default class GatewayConnectionService extends ServiceModule {
     this.status = status;
 
     // Upload what accrued while offline right away, not at the next tick.
-    if (status === 'connected') void this.metricsSampler?.sampler.flush();
+    if (status === 'connected') {
+      void this.metricsSampler?.sampler.flush();
+      // A (re)connection reprobes the bundled CLI and warms the cache for the first request.
+      this.agentRuntimes.invalidate();
+      void this.agentRuntimes.get();
+    }
     this.syncPowerSaveBlocker();
     this.scheduleStatusBroadcast(status);
   }
