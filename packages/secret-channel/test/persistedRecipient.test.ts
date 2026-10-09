@@ -16,21 +16,27 @@ import {
 
 const identity = generateIdentity();
 
+/**
+ * A verifier-checked Request ([ASC-L2-35]). The persisted opener is Base-only, and Base mode is
+ * only sound for a Sink that checks the value against a secret that already exists ([ASC-L2-37]).
+ * `createRequest` forces a value-accepting Request onto the Auth suite ([ASC-L2-36]), which this
+ * Base-only path cannot open at all — so the fixture has to be a verifier-checked target.
+ */
 const buildRequest = (ephPub: string, now = Date.now()): AscRequest =>
   createRequest({
     ephPub,
     executor: { executorId: 'lobehub-test', executorName: 'LobeHub' },
     identity,
-    kind: 'otp',
-    label: 'verification-code',
+    kind: 'password',
+    label: 'sudo-password',
     now,
-    purpose: { systemObserved: 'Reply to bob@example.com' },
+    purpose: { systemObserved: 'sudo: lobehub-agent sendMessage' },
     requester: { runId: 'op-1', source: 'tool' },
     target: {
-      argvDisplay: 'sendMessage aria@lobe.id -> bob@example.com',
-      argvHash: hashArgv(['acc-1', 'bob@example.com', '', 'code {{secret}}', '']),
-      exePath: 'lobe-agent-account/sendMessage',
-      kind: 'lobehub-send-message',
+      argvDisplay: 'lobehub-agent sendMessage',
+      argvHash: hashArgv(['lobehub-agent', 'sendMessage']),
+      exePath: '/usr/bin/sudo',
+      kind: 'sudo',
       verification: 'verified',
     },
     ttlSec: 600,

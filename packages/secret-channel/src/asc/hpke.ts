@@ -223,7 +223,13 @@ export class EphemeralRecipient {
     // [ASC-L2-38]: an Auth-suite Request accepts only an Auth Envelope from a paired Client. These
     // checks precede consumption, like REQUEST_MISMATCH: nothing is decrypted, so a Relay that
     // injects its own Envelope learns nothing and cannot pre-empt the paired Client's answer.
-    const auth = requestSuite(request) === ASC_SUITE_AUTH;
+    // [ASC-L2-02]: only the implemented suite labels are acceptable. An unrecognised Request label
+    // MUST NOT fall through to Base mode, where the Relay could inject a value of its own choosing.
+    const requestSuiteLabel = requestSuite(request);
+    if (requestSuiteLabel !== ASC_SUITE && requestSuiteLabel !== ASC_SUITE_AUTH)
+      throw new AscError('UNSUPPORTED_VERSION');
+    const auth = requestSuiteLabel === ASC_SUITE_AUTH;
+
     let senderPublicKey: string | undefined;
     if (auth) {
       if (envelope.suite !== ASC_SUITE_AUTH || envelope.sender === undefined)

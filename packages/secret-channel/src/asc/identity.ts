@@ -2,7 +2,7 @@ import { ed25519 } from '@noble/curves/ed25519.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 
 import { type AscBindableRequest, encodeRequestAad } from './aad';
-import { ASC_SIGNATURE_CONTEXT } from './constants';
+import { ASC_SIGNATURE_CONTEXT, ASC_VERSION } from './constants';
 import { bytesEqual, concatBytes, fromBase64Url, toBase64Url, utf8Encode } from './encoding';
 import { AscError } from './errors';
 
@@ -49,6 +49,12 @@ export interface AscTrustCheck {
 
 /** Client side, before sealing (spec §6.5). Throws FINGERPRINT_MISMATCH / BAD_SIGNATURE. */
 export const verifyRequest = (request: AscBindableRequest, { pinnedFingerprint }: AscTrustCheck = {}) => {
+  // [ASC-EXT-02]: a receiver MUST reject a message whose `v` it does not implement, and MUST NOT
+  // fall back to a lower version. The AAD binds the constant version, so without this check a
+  // tampered `v` would still verify as version 1.
+  const version: number = request.v;
+  if (version !== ASC_VERSION) throw new AscError('UNSUPPORTED_VERSION', `request version ${version}`);
+
   const { identityPublicKey, identityKeyFp, sig } = request.executor;
 
   if (fingerprintIdentityKey(identityPublicKey) !== identityKeyFp)

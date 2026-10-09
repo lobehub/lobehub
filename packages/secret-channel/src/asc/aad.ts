@@ -22,9 +22,19 @@ export interface AscAadBinding {
   v: number;
 }
 
+/** The Request fields a receiver binds before trusting it: the AAD inputs plus `v` ([ASC-EXT-02]). */
 export type AscBindableRequest = Pick<
   AscRequest,
-  'executor' | 'expiresAt' | 'id' | 'kind' | 'label' | 'purpose' | 'requester' | 'suite' | 'target'
+  | 'executor'
+  | 'expiresAt'
+  | 'id'
+  | 'kind'
+  | 'label'
+  | 'purpose'
+  | 'requester'
+  | 'suite'
+  | 'target'
+  | 'v'
 >;
 
 /** The Request's suite label (spec §6.10): the `suite` member, or the Base suite when absent. */

@@ -21,6 +21,7 @@ import {
   ASC_HPKE_INFO,
   ASC_MAX_CT_B64_LENGTH,
   ASC_MAX_ENC_B64_LENGTH,
+  ASC_SUITE,
   ASC_SUITE_AUTH,
   ASC_VERSION,
 } from './asc/constants';
@@ -74,10 +75,14 @@ export const openWithPersistedKey = async ({
   if (envelope.requestId !== request.id) throw new AscError('REQUEST_MISMATCH');
   if (request.executor.ephPub !== key.publicKey)
     throw new AscError('REQUEST_MISMATCH', 'ephemeral key does not belong to request');
-  if (requestSuite(request) === ASC_SUITE_AUTH) throw new AscError('SENDER_AUTH_REQUIRED');
+  const requestSuiteLabel = requestSuite(request);
+  if (requestSuiteLabel === ASC_SUITE_AUTH) throw new AscError('SENDER_AUTH_REQUIRED');
+  // [ASC-L2-02]: a Base-only opener must refuse a label it does not implement rather than let an
+  // unrecognised Request fall through to Base mode without sender authentication.
+  if (requestSuiteLabel !== ASC_SUITE) throw new AscError('UNSUPPORTED_VERSION');
   if (now > request.expiresAt) throw new AscError('EXPIRED');
 
-  if (envelope.v !== ASC_VERSION || envelope.suite !== requestSuite(request))
+  if (envelope.v !== ASC_VERSION || envelope.suite !== requestSuiteLabel)
     throw new AscError('UNSUPPORTED_VERSION');
   if ('sender' in envelope) throw new AscError('INVALID_ENVELOPE');
   if (

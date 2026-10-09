@@ -1,7 +1,14 @@
-import { ASC_DEFAULT_TTL_SEC, ASC_MAX_TTL_SEC, ASC_SUITE, ASC_VERSION } from './constants';
+import {
+  ASC_DEFAULT_TTL_SEC,
+  ASC_MAX_TTL_SEC,
+  ASC_SUITE,
+  ASC_SUITE_AUTH,
+  ASC_VERSION,
+} from './constants';
 import { toBase64Url } from './encoding';
 import { AscError } from './errors';
 import { fingerprintIdentityKey, signRequest } from './identity';
+import { isVerifierChecked } from './sender';
 import type { AscRequest } from './types';
 
 /** 128 random bits, base64url (spec §5.1). */
@@ -18,6 +25,11 @@ export interface CreateRequestParams extends Pick<
   id?: string;
   identity: { publicKey: string; secretKey: Uint8Array };
   now?: number;
+  /**
+   * [ASC-L2-35]: the Sink writes a new secret instead of checking one that already exists, which
+   * makes the Request value-accepting even for a `password` / `passphrase` / `otp` kind.
+   */
+  setsNewSecret?: boolean;
   ttlSec?: number;
 }
 
@@ -32,12 +44,20 @@ export const createRequest = ({
   now = Date.now(),
   purpose,
   requester,
+  setsNewSecret,
   suite,
   target,
   ttlSec = ASC_DEFAULT_TTL_SEC,
 }: CreateRequestParams): AscRequest => {
   if (!Number.isFinite(ttlSec) || ttlSec <= 0 || ttlSec > ASC_MAX_TTL_SEC)
     throw new AscError('INVALID_REQUEST', `ttlSec must be in (0, ${ASC_MAX_TTL_SEC}]`);
+
+  // [ASC-L2-36]: a value-accepting Request MUST carry the Auth suite, whether or not a Client is
+  // paired. Base mode is only sound when the Sink checks the value against a secret that already
+  // exists ([ASC-L2-37]), so a value-accepting Request never falls back to it ([ASC-EXT-07]).
+  const requestSuiteLabel = isVerifierChecked(kind, target.kind, { setsNewSecret })
+    ? suite
+    : ASC_SUITE_AUTH;
 
   const unsigned: AscRequest = {
     createdAt: now,
@@ -57,7 +77,7 @@ export const createRequest = ({
     purpose,
     requester,
     // Omitted for the Base suite so that Base Requests keep their draft-00 shape (spec §6.10).
-    ...(suite && suite !== ASC_SUITE ? { suite } : {}),
+    ...(requestSuiteLabel && requestSuiteLabel !== ASC_SUITE ? { suite: requestSuiteLabel } : {}),
     target,
     v: ASC_VERSION,
   };
