@@ -1,48 +1,23 @@
 import { describe, expect, it } from 'vitest';
 
-import type { ResourceItem } from '@/types/resource';
+import { getResourceQueryKey } from './utils';
 
-import { getResourceQueryKey, mergeServerResourcesWithOptimistic } from './utils';
+describe('getResourceQueryKey', () => {
+  it('returns one stable default key when no query is given', () => {
+    expect(getResourceQueryKey()).toBe('resource-query:default');
+    expect(getResourceQueryKey(null)).toBe('resource-query:default');
+  });
 
-const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => ({
-  createdAt: new Date('2026-01-01T00:00:00.000Z'),
-  fileType: 'text/plain',
-  id: 'resource-1',
-  name: 'Resource 1',
-  parentId: null,
-  size: 1,
-  sourceType: 'file',
-  updatedAt: new Date('2026-01-01T00:00:00.000Z'),
-  url: 'files/resource-1.txt',
-  ...overrides,
-});
-
-describe('mergeServerResourcesWithOptimistic', () => {
-  it('should preserve optimistic resources from other queries in the global resource map', () => {
-    const offscreenOptimistic = createResource({
-      _optimistic: {
-        isPending: true,
-        queryKey: getResourceQueryKey({ parentId: 'folder-a' }),
-        retryCount: 0,
-      },
-      id: 'temp-a',
-      name: 'Offscreen upload',
-      parentId: 'folder-a',
-    });
-    const currentServerItem = createResource({
-      id: 'file-b',
-      name: 'Visible item',
-      parentId: 'folder-b',
-    });
-
-    const merged = mergeServerResourcesWithOptimistic(
-      [currentServerItem],
-      new Map([[offscreenOptimistic.id, offscreenOptimistic]]),
-      { parentId: 'folder-b' },
+  it('keys by the fields that select the row set', () => {
+    expect(getResourceQueryKey({ parentId: 'folder-a' })).toBe(
+      getResourceQueryKey({ parentId: 'folder-a' }),
     );
-
-    expect(merged.resourceList).toEqual([currentServerItem]);
-    expect(merged.resourceMap.get(offscreenOptimistic.id)).toEqual(offscreenOptimistic);
-    expect(merged.resourceMap.get(currentServerItem.id)).toEqual(currentServerItem);
+    expect(getResourceQueryKey({ parentId: 'folder-a' })).not.toBe(
+      getResourceQueryKey({ parentId: 'folder-b' }),
+    );
+    expect(getResourceQueryKey({ q: 'foo' })).not.toBe(getResourceQueryKey({ q: 'bar' }));
+    expect(getResourceQueryKey({ libraryId: 'kb-1' })).not.toBe(
+      getResourceQueryKey({ libraryId: 'kb-2' }),
+    );
   });
 });

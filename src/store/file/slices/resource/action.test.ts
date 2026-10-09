@@ -4,32 +4,45 @@ import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
 import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
-const { activeWorkspace, mockApplyMoveToCaches, mockCreateResource, mockMoveResource, treeState } =
-  vi.hoisted(() => ({
-    activeWorkspace: { id: null as string | null },
-    mockApplyMoveToCaches: vi.fn(),
-    mockCreateResource: vi.fn(),
-    mockMoveResource: vi.fn(),
-    treeState: { children: {} as Record<string, any[]> },
-  }));
+import type { ResourceListParams, ResourceListValue } from './projection';
+
+const {
+  mockAddFilesToKnowledgeBase,
+  mockCreateResource,
+  mockDeleteResource,
+  mockDeleteResources,
+  mockMoveResource,
+  mockRemoveFilesFromKnowledgeBase,
+  mockUpdateResource,
+} = vi.hoisted(() => ({
+  mockAddFilesToKnowledgeBase: vi.fn(),
+  mockCreateResource: vi.fn(),
+  mockDeleteResource: vi.fn(),
+  mockDeleteResources: vi.fn(),
+  mockMoveResource: vi.fn(),
+  mockRemoveFilesFromKnowledgeBase: vi.fn(),
+  mockUpdateResource: vi.fn(),
+}));
 
 vi.mock('@/services/resource', () => ({
   resourceService: {
     createResource: mockCreateResource,
+    deleteResource: mockDeleteResource,
+    deleteResources: mockDeleteResources,
     moveResource: mockMoveResource,
+    updateResource: mockUpdateResource,
   },
 }));
 
-vi.mock('./hooks', () => ({
-  applyResourceMoveToListCaches: mockApplyMoveToCaches,
-}));
-
-vi.mock('@/store/tree', () => ({
-  useTreeStore: { getState: () => treeState },
+vi.mock('@/services/knowledgeBase', () => ({
+  knowledgeBaseService: {
+    addFilesToKnowledgeBase: mockAddFilesToKnowledgeBase,
+    removeFilesFromKnowledgeBase: mockRemoveFilesFromKnowledgeBase,
+  },
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: () => activeWorkspace.id,
+  getActiveWorkspaceId: () => null,
 }));
 
 const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => ({
@@ -45,25 +58,61 @@ const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => 
   ...overrides,
 });
 
+/**
+ * Seed the replica view exactly as the lens would after a head page landed:
+ * the flat fields and the entry stay in step, so the slice's engine reads the
+ * same rows the selectors do.
+ */
+const seedList = (
+  params: Partial<ResourceListParams>,
+  items: ResourceItem[],
+  meta: Partial<ResourceListValue> = {},
+) => {
+  const queryParams: ResourceListParams = {
+    pageSize: 50,
+    parentId: null,
+    showFilesInKnowledgeBase: false,
+    ...params,
+  };
+  const entry: ResourceListValue = {
+    currentPage: 0,
+    hasMore: false,
+    items,
+    nextCursor: null,
+    pageSize: queryParams.pageSize,
+    queryParams,
+    total: items.length,
+    ...meta,
+  };
+
+  useFileStore.setState({
+    hasMore: entry.hasMore,
+    isLoadingMore: false,
+    offset: items.length,
+    queryParams: entry.queryParams,
+    resourceList: items,
+    resourceListEntry: entry,
+    resourceMap: new Map(items.map((item) => [item.id, item])),
+    total: entry.total ?? items.length,
+  });
+};
+
+const listIds = () => useFileStore.getState().resourceList.map((item) => item.id);
+
 describe('resource actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    activeWorkspace.id = null;
-    treeState.children = {};
     useFileStore.setState(initialState);
   });
 
-  it('should keep completed background uploads out of the current resource list when they are off-screen', () => {
+  it('keeps a completed background upload out of the visible list when it is off-screen', () => {
     const visibleResource = createResource({
       id: 'visible-1',
       name: 'Visible resource',
       parentId: 'folder-b',
     });
     const optimisticResource = createResource({
-      _optimistic: {
-        isPending: true,
-        retryCount: 0,
-      },
+      _optimistic: { isPending: true, retryCount: 0 },
       id: 'temp-a',
       name: 'Background upload',
       parentId: 'folder-a',
@@ -74,236 +123,135 @@ describe('resource actions', () => {
       parentId: 'folder-a',
     });
 
-    useFileStore.setState({
-      queryParams: { parentId: 'folder-b' },
-      resourceList: [visibleResource],
-      resourceMap: new Map([
-        [visibleResource.id, visibleResource],
-        [optimisticResource.id, optimisticResource],
-      ]),
-    });
+    seedList({ parentId: 'folder-b' }, [visibleResource]);
 
     useFileStore.getState().replaceLocalResource(optimisticResource.id, completedResource);
 
     const { resourceList, resourceMap } = useFileStore.getState();
 
     expect(resourceList).toEqual([visibleResource]);
+    // The replica view is per query: a row for another folder never enters the
+    // open folder's list, so it is not in the derived map either.
     expect(resourceMap.has(optimisticResource.id)).toBe(false);
-    expect(resourceMap.get(completedResource.id)).toEqual(completedResource);
+    expect(resourceMap.has(completedResource.id)).toBe(false);
   });
 
-  it('should remove a root item from the visible list when moving it into a folder', async () => {
-    const rootResource = createResource({
-      id: 'root-1',
-      name: 'Root resource',
-      parentId: null,
-    });
-    const movedResource = createResource({
-      id: 'root-1',
-      name: 'Root resource',
-      parentId: 'folder-a',
-    });
+  it('replaces the temp row in place when the upload belongs to the open folder', () => {
+    const temp = createResource({ _optimistic: { isPending: true, retryCount: 0 }, id: 'temp-a' });
+    seedList({}, [temp]);
 
-    mockMoveResource.mockResolvedValue(movedResource);
+    useFileStore.getState().replaceLocalResource('temp-a', createResource({ id: 'file-a' }));
 
-    useFileStore.setState({
-      queryParams: { parentId: null },
-      resourceList: [rootResource],
-      resourceMap: new Map([[rootResource.id, rootResource]]),
-    });
+    expect(listIds()).toEqual(['file-a']);
+    expect(useFileStore.getState().resourceMap.has('temp-a')).toBe(false);
+  });
+
+  it('inserts a local upload row at the head of the list', () => {
+    seedList({}, [createResource({ id: 'existing' })]);
+
+    const id = useFileStore.getState().insertLocalResource(
+      {
+        fileType: 'text/plain',
+        name: 'Upload',
+        size: 3,
+        sourceType: 'file',
+        url: '',
+      },
+      'temp-upload',
+    );
+
+    expect(id).toBe('temp-upload');
+    expect(listIds()).toEqual(['temp-upload', 'existing']);
+  });
+
+  it('removes a root item from the visible list when moving it into a folder', async () => {
+    const rootResource = createResource({ id: 'root-1', parentId: null });
+    mockMoveResource.mockResolvedValue(createResource({ id: 'root-1', parentId: 'folder-a' }));
+
+    seedList({ parentId: null }, [rootResource]);
 
     await useFileStore.getState().moveResource(rootResource.id, 'folder-a');
 
-    const { resourceList, resourceMap } = useFileStore.getState();
-
-    expect(resourceList).toEqual([]);
-    expect(resourceMap.has(rootResource.id)).toBe(false);
-  });
-
-  it('should patch the destination and source folder-list caches once a move lands', async () => {
-    // Explorer is inside `2026.09` (URL slug), dragging a row onto the sibling
-    // folder row `W37`: the drop target only knows the folder id.
-    const targetFolder = createResource({
-      fileType: 'custom/folder',
-      id: 'folder-w37-id',
-      name: '2026.09.W37',
-      parentId: 'folder-2026-09-id',
-      slug: 'w37-slug',
-    });
-    const doc = createResource({ id: 'doc-1', name: 'Weekly', parentId: 'folder-2026-09-id' });
-    const movedDoc = { ...doc, parentId: targetFolder.id };
-    mockMoveResource.mockResolvedValue(movedDoc);
-    treeState.children = {
-      'folder-2026-09-id': [
-        { id: targetFolder.id, isFolder: true, name: targetFolder.name, slug: 'w37-slug' },
-      ],
-      'root': [{ id: 'folder-2026-09-id', isFolder: true, name: '2026.09', slug: '2026-09-slug' }],
-    };
-
-    useFileStore.setState({
-      currentFolderId: 'folder-2026-09-id',
-      queryParams: { parentId: '2026-09-slug' },
-      resourceList: [doc, targetFolder],
-      resourceMap: new Map([
-        [doc.id, doc],
-        [targetFolder.id, targetFolder],
-      ]),
-    });
-
-    await useFileStore.getState().moveResource(doc.id, targetFolder.id);
-
-    expect(mockApplyMoveToCaches).toHaveBeenCalledTimes(1);
-    const [resource, patch] = mockApplyMoveToCaches.mock.calls[0];
-    expect(resource).toEqual(movedDoc);
-    expect(new Set(patch.fromParentKeys)).toEqual(new Set(['folder-2026-09-id', '2026-09-slug']));
-    expect(new Set(patch.toParentKeys)).toEqual(new Set(['folder-w37-id', 'w37-slug']));
-    expect(patch.scope).toEqual({ libraryId: undefined, workspaceId: null });
-  });
-
-  it('should resolve folder aliases before the request so a scope switch cannot hide them', async () => {
-    const targetFolder = createResource({
-      fileType: 'custom/folder',
-      id: 'folder-w37-id',
-      name: 'W37',
-      parentId: null,
-      slug: 'w37-slug',
-    });
-    const doc = createResource({ id: 'doc-1', parentId: null });
-    mockMoveResource.mockImplementation(async () => {
-      // The user opened another library meanwhile: the old rows are gone.
-      useFileStore.setState({
-        queryParams: { libraryId: 'kb-2', parentId: null },
-        resourceList: [],
-        resourceMap: new Map(),
-      });
-      treeState.children = {};
-      return { ...doc, parentId: targetFolder.id };
-    });
-    useFileStore.setState({
-      queryParams: { parentId: null },
-      resourceList: [doc, targetFolder],
-      resourceMap: new Map([
-        [doc.id, doc],
-        [targetFolder.id, targetFolder],
-      ]),
-    });
-
-    await useFileStore.getState().moveResource(doc.id, targetFolder.id);
-
-    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
-    expect(new Set(patch.toParentKeys)).toEqual(new Set(['folder-w37-id', 'w37-slug']));
-  });
-
-  it('should patch the caches of the workspace and library the move started in', async () => {
-    // The user switches workspace and library while the request is in flight;
-    // the caches that listed the row belong to the scope captured beforehand.
-    const doc = createResource({ id: 'doc-1', parentId: null });
-    activeWorkspace.id = 'workspace-1';
-    mockMoveResource.mockImplementation(async () => {
-      activeWorkspace.id = 'workspace-2';
-      useFileStore.setState({ queryParams: { libraryId: 'kb-2', parentId: null } });
-      return { ...doc, parentId: 'folder-a' };
-    });
-
-    useFileStore.setState({
-      queryParams: { libraryId: 'kb-1', parentId: null },
-      resourceList: [doc],
-      resourceMap: new Map([[doc.id, doc]]),
-    });
-
-    await useFileStore.getState().moveResource(doc.id, 'folder-a');
-
-    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
-    expect(patch.scope).toEqual({ libraryId: 'kb-1', workspaceId: 'workspace-1' });
-  });
-
-  it('should address the root with a null parent key when moving out of a folder', async () => {
-    const doc = createResource({ id: 'doc-1', parentId: 'folder-a' });
-    mockMoveResource.mockResolvedValue({ ...doc, parentId: null });
-
-    useFileStore.setState({
-      queryParams: { parentId: 'folder-a' },
-      resourceList: [doc],
-      resourceMap: new Map([[doc.id, doc]]),
-    });
-
-    await useFileStore.getState().moveResource(doc.id, null);
-
-    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
-    expect(patch.toParentKeys).toEqual([null]);
-    expect(patch.fromParentKeys).toContain('folder-a');
-  });
-
-  it('should treat the current folder as the source when the row omits parentId', async () => {
-    // `queryResources` rows carry no `parentId`; the row is in the current list,
-    // so the current query's parent (a URL slug) is the folder it leaves.
-    const doc = createResource({ id: 'doc-1', parentId: undefined });
-    mockMoveResource.mockResolvedValue({ ...doc, parentId: 'folder-w37-id' });
-
-    useFileStore.setState({
-      queryParams: { parentId: '2026-09-slug' },
-      resourceList: [doc],
-      resourceMap: new Map([[doc.id, doc]]),
-    });
-
-    await useFileStore.getState().moveResource(doc.id, 'folder-w37-id');
-
+    expect(listIds()).toEqual([]);
+    expect(useFileStore.getState().resourceMap.has(rootResource.id)).toBe(false);
+    // The row's own copy rides along, so the move stays one request.
     expect(mockMoveResource).toHaveBeenCalledWith(
-      doc.id,
-      'folder-w37-id',
-      expect.objectContaining({ id: doc.id }),
-    );
-    const [, patch] = mockApplyMoveToCaches.mock.calls[0];
-    expect(patch.fromParentKeys).toContain('2026-09-slug');
-    expect(patch.fromParentKeys).not.toContain(null);
-    expect(patch.toParentKeys).toEqual(['folder-w37-id']);
-  });
-
-  it('should still call the API when the row omits parentId and the target is the root', async () => {
-    const doc = createResource({ id: 'doc-1', parentId: undefined });
-    mockMoveResource.mockResolvedValue({ ...doc, parentId: null });
-
-    useFileStore.setState({
-      queryParams: { parentId: 'folder-a' },
-      resourceList: [doc],
-      resourceMap: new Map([[doc.id, doc]]),
-    });
-
-    await useFileStore.getState().moveResource(doc.id, null);
-
-    expect(mockMoveResource).toHaveBeenCalledWith(
-      doc.id,
-      null,
-      expect.objectContaining({ id: doc.id }),
+      'root-1',
+      'folder-a',
+      expect.objectContaining({ id: 'root-1' }),
     );
   });
 
-  it('should not touch the caches when the move is rejected', async () => {
-    const doc = createResource({ id: 'doc-1', parentId: null });
+  it('keeps a row visible when it moves within the open folder', async () => {
+    const folderChild = createResource({ id: 'child-1', parentId: 'folder-a' });
+    mockMoveResource.mockResolvedValue(createResource({ id: 'child-1', parentId: 'folder-a' }));
+
+    seedList({ parentId: 'folder-a' }, [folderChild]);
+
+    await useFileStore.getState().moveResource('child-1', 'folder-a');
+
+    expect(listIds()).toEqual(['child-1']);
+  });
+
+  it('rolls the moved row back when the server rejects the move', async () => {
+    const rootResource = createResource({ id: 'root-1', parentId: null });
     mockMoveResource.mockRejectedValue(new Error('nope'));
 
-    useFileStore.setState({
-      queryParams: { parentId: null },
-      resourceList: [doc],
-      resourceMap: new Map([[doc.id, doc]]),
-    });
+    seedList({ parentId: null }, [rootResource]);
 
-    await expect(useFileStore.getState().moveResource(doc.id, 'folder-a')).rejects.toThrow();
+    await expect(useFileStore.getState().moveResource('root-1', 'folder-a')).rejects.toThrow();
 
-    expect(mockApplyMoveToCaches).not.toHaveBeenCalled();
+    // Rollback restores the row and its original parent.
+    expect(listIds()).toEqual(['root-1']);
+    expect(useFileStore.getState().resourceMap.get('root-1')?.parentId).toBeNull();
   });
 
-  it('should patch a file-backed document resource with statuses returned by file id', () => {
-    const resource = createResource({
-      chunkCount: null,
-      fileId: 'file-1',
-      id: 'docs-1',
-    });
+  it('should not call the API when the row is already in the target folder', async () => {
+    const folderChild = createResource({ id: 'child-1', parentId: 'folder-a' });
+    seedList({ parentId: 'folder-a' }, [folderChild]);
 
-    useFileStore.setState({
-      resourceList: [resource],
-      resourceMap: new Map([[resource.id, resource]]),
-    });
+    await useFileStore.getState().moveResource('child-1', 'folder-a');
+
+    expect(mockMoveResource).not.toHaveBeenCalled();
+  });
+
+  it('optimistically drops deleted rows and restores them on failure', async () => {
+    const rows = [createResource({ id: 'r1' }), createResource({ id: 'r2' })];
+    mockDeleteResources.mockRejectedValue(new Error('nope'));
+
+    seedList({}, rows);
+
+    await expect(useFileStore.getState().deleteResources(['r1'])).rejects.toThrow();
+
+    expect(listIds()).toEqual(['r1', 'r2']);
+
+    mockDeleteResources.mockResolvedValue(undefined);
+    await useFileStore.getState().deleteResources(['r1']);
+
+    expect(listIds()).toEqual(['r2']);
+  });
+
+  it('optimistically renames a row and confirms it with the server response', async () => {
+    const resource = createResource({ id: 'r1', name: 'Before' });
+    const renamed = createResource({ id: 'r1', name: 'After' });
+    mockUpdateResource.mockResolvedValue(renamed);
+
+    seedList({}, [resource]);
+
+    const promise = useFileStore.getState().updateResource('r1', { name: 'After' });
+
+    expect(useFileStore.getState().resourceMap.get('r1')?.name).toBe('After');
+
+    await promise;
+
+    expect(useFileStore.getState().resourceMap.get('r1')?.name).toBe('After');
+    expect(useFileStore.getState().resourceList[0]._optimistic).toBeUndefined();
+  });
+
+  it('patches a file-backed document resource with statuses returned by file id', () => {
+    const resource = createResource({ chunkCount: null, fileId: 'file-1', id: 'docs-1' });
+
+    seedList({}, [resource]);
 
     useFileStore.getState().patchLocalResourceStatuses([
       {
@@ -317,19 +265,34 @@ describe('resource actions', () => {
       },
     ]);
 
-    const { resourceList, resourceMap } = useFileStore.getState();
-
-    expect(resourceList[0]).toMatchObject({
+    expect(useFileStore.getState().resourceMap.get('docs-1')).toMatchObject({
       chunkCount: 10,
       chunkingStatus: 'success',
       embeddingStatus: 'success',
       finishEmbedding: true,
       id: 'docs-1',
     });
-    expect(resourceMap.get('docs-1')).toMatchObject({
-      chunkCount: 10,
-      embeddingStatus: 'success',
-    });
+  });
+
+  it('removes rows from the list when the open view is that knowledge base', async () => {
+    const rows = [createResource({ id: 'r1', knowledgeBaseId: 'kb-1' })];
+    mockRemoveFilesFromKnowledgeBase.mockResolvedValue(undefined);
+
+    seedList({ libraryId: 'kb-1' }, rows);
+
+    await useFileStore.getState().removeResourcesFromKnowledgeBase('kb-1', ['r1']);
+
+    expect(listIds()).toEqual([]);
+    expect(mockRemoveFilesFromKnowledgeBase).toHaveBeenCalledWith('kb-1', ['r1']);
+  });
+
+  it('clears the painted rows but keeps the queried params', () => {
+    seedList({ parentId: 'folder-a' }, [createResource({ id: 'r1', parentId: 'folder-a' })]);
+
+    useFileStore.getState().clearCurrentQueryResources();
+
+    expect(listIds()).toEqual([]);
+    expect(useFileStore.getState().queryParams?.parentId).toBe('folder-a');
   });
 });
 
@@ -350,11 +313,7 @@ describe('createResourceAndSync list placement', () => {
 
   it('keeps a root-level create out of the list while a folder is open', async () => {
     const folderRow = createResource({ id: 'doc-in-folder', parentId: 'folder-a' });
-    useFileStore.setState({
-      queryParams: { libraryId: 'kb-1', parentId: 'folder-a-slug' },
-      resourceList: [folderRow],
-      resourceMap: new Map([[folderRow.id, folderRow]]),
-    });
+    seedList({ libraryId: 'kb-1', parentId: 'folder-a-slug' }, [folderRow]);
     mockCreateResource.mockResolvedValue(
       createResource({ id: 'doc-root', knowledgeBaseId: 'kb-1', parentId: null }),
     );
@@ -362,38 +321,30 @@ describe('createResourceAndSync list placement', () => {
     const id = await useFileStore.getState().createResourceAndSync(createParams(null));
 
     expect(id).toBe('doc-root');
-    expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-in-folder']);
-    expect(useFileStore.getState().resourceMap.has('doc-root')).toBe(true);
+    expect(listIds()).toEqual(['doc-in-folder']);
+    expect(useFileStore.getState().resourceMap.has('doc-root')).toBe(false);
   });
 
   it('keeps a create inside a folder out of the list while the root is open', async () => {
     const rootRow = createResource({ id: 'doc-root', parentId: null });
-    useFileStore.setState({
-      queryParams: { libraryId: 'kb-1', parentId: null },
-      resourceList: [rootRow],
-      resourceMap: new Map([[rootRow.id, rootRow]]),
-    });
+    seedList({ libraryId: 'kb-1', parentId: null }, [rootRow]);
     mockCreateResource.mockResolvedValue(
       createResource({ id: 'doc-nested', knowledgeBaseId: 'kb-1', parentId: 'folder-a' }),
     );
 
     await useFileStore.getState().createResourceAndSync(createParams('folder-a'));
 
-    expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-root']);
+    expect(listIds()).toEqual(['doc-root']);
   });
 
   it('still lists a create in the open folder when that folder is addressed by slug and not cached', async () => {
-    useFileStore.setState({
-      queryParams: { libraryId: 'kb-1', parentId: 'folder-a-slug' },
-      resourceList: [],
-      resourceMap: new Map(),
-    });
+    seedList({ libraryId: 'kb-1', parentId: 'folder-a-slug' }, []);
     mockCreateResource.mockResolvedValue(
       createResource({ id: 'doc-new', knowledgeBaseId: 'kb-1', parentId: 'folder-a' }),
     );
 
     await useFileStore.getState().createResourceAndSync(createParams('folder-a'));
 
-    expect(useFileStore.getState().resourceList.map((item) => item.id)).toEqual(['doc-new']);
+    expect(listIds()).toEqual(['doc-new']);
   });
 });
