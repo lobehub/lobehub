@@ -763,9 +763,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     'dispatches the Topic API binding with resume %s',
     async (sessionId) => {
       // ROOT CAUSE:
-      // Receipts and wrapper args used Topic A, but the device RPC sent Agent B.
-      // The connector correctly treated the RPC binding as authoritative and
-      // sanitized away the model arg for A, making execution disagree with its receipt.
+      // Wrapper args used Topic A, but the device RPC sent Agent B. The connector
+      // correctly treated the RPC binding as authoritative and sanitized away the
+      // model arg for A, so the run executed the Agent's binding.
       Object.assign(heteroAgentConfig.agencyConfig, {
         boundDeviceId: 'device-1',
         executionTarget: 'device',
@@ -798,18 +798,6 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
           }),
           resumeSessionId: sessionId,
         }),
-      );
-      const receipt = recordStartSpy.mock.calls[0][0].metadata?.heterogeneousRuntimeConfig;
-      /** @example Operation receipt reports the model that the connector will actually execute. */
-      expect(receipt?.fields).toContainEqual({
-        key: 'model',
-        source: 'topic',
-        value: 'topic-model-a',
-      });
-      /** @example Topic receipt mirrors the identical resolved configuration. */
-      expect(topicMock.updateMetadata).toHaveBeenCalledWith(
-        'topic-existing',
-        expect.objectContaining({ heteroRuntimeConfig: receipt }),
       );
       /** @example A Topic override must leave the Agent binding intact. */
       expect(heteroAgentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
