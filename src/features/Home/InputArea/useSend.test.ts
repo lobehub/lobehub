@@ -79,6 +79,16 @@ const taskState = vi.hoisted(() => ({
   runTask: runTaskMock,
 }));
 
+const userStoreState = vi.hoisted(() => ({
+  defaultSettings: {},
+  isSignedIn: true,
+  settings: { memory: { enabled: true } } as { memory?: { enabled?: boolean } },
+}));
+
+const userMemoryStoreState = vi.hoisted(() => ({
+  ensurePersona: vi.fn(),
+}));
+
 const homeDailyBriefState = vi.hoisted(() => ({
   advance: vi.fn(),
   currentIndex: 0,
@@ -175,6 +185,16 @@ vi.mock('@/store/task', () => ({
   useTaskStore: (selector: (state: typeof taskState) => unknown) => selector(taskState),
 }));
 
+// The user store itself stays real — the selectors under test read it — but the
+// snapshot `useSend` reads outside React is this one.
+vi.mock('@/store/user/store', () => ({
+  getUserStoreState: () => userStoreState,
+}));
+
+vi.mock('@/store/userMemory', () => ({
+  getUserMemoryStoreState: () => userMemoryStoreState,
+}));
+
 describe('Home InputArea useSend', () => {
   beforeEach(() => {
     routerMock.push.mockReset();
@@ -193,6 +213,9 @@ describe('Home InputArea useSend', () => {
     restoreChatContextSelectionsMock.mockReset();
     createTaskMock.mockReset();
     runTaskMock.mockReset();
+    userMemoryStoreState.ensurePersona.mockReset();
+    userStoreState.isSignedIn = true;
+    userStoreState.settings = { memory: { enabled: true } };
     toggleTaskAgentPanelMock.mockReset();
     messageErrorMock.mockReset();
     messageSuccessMock.mockReset();
@@ -616,5 +639,64 @@ describe('Home InputArea useSend', () => {
       }),
     );
     expect(clearChatContextSelectionsMock).toHaveBeenCalledWith('home:chat:agt_inbox');
+  });
+
+  it('loads the persona before a Home send builds its context', async () => {
+    // Cold Home: no conversation is mounted, so nothing else has pre-warmed the
+    // memory store. The first turn reads the persona from it synchronously, so a
+    // submission must not be dispatched while the load is still in flight.
+    let resolvePersona = () => {};
+    userMemoryStoreState.ensurePersona.mockImplementation(
+      () =>
+        new Promise<void>((resolve) => {
+          resolvePersona = resolve;
+        }),
+    );
+
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'hello',
+    };
+
+    let sendPromise: Promise<void> | undefined;
+    await act(async () => {
+      sendPromise = result.current.send(params);
+    });
+
+    expect(userMemoryStoreState.ensurePersona).toHaveBeenCalledTimes(1);
+    expect(sendMessageMock).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolvePersona();
+      await sendPromise;
+    });
+
+    expect(sendMessageMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: { agentId: 'agt_inbox', isolatedTopic: true },
+        message: 'hello',
+      }),
+    );
+  });
+
+  it('skips the persona load when user memories are switched off', async () => {
+    userStoreState.settings = { memory: { enabled: false } };
+    const { result } = renderHook(() => useSend());
+    const params: Parameters<SendButtonHandler>[0] = {
+      clearContent: vi.fn(),
+      editor: {} as Parameters<SendButtonHandler>[0]['editor'],
+      getEditorData: () => undefined,
+      getMarkdownContent: () => 'hello',
+    };
+
+    await act(async () => {
+      await result.current.send(params);
+    });
+
+    expect(userMemoryStoreState.ensurePersona).not.toHaveBeenCalled();
+    expect(sendMessageMock).toHaveBeenCalled();
   });
 });
