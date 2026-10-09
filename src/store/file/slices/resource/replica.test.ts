@@ -450,6 +450,69 @@ describe('resourceList replica', () => {
     await waitFor(() => expect(ids()).toEqual(['b-1']));
   });
 
+  it('keeps an upload started before the first page lands', async () => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    querySpy.mockImplementation(async () => {
+      await gate;
+      return page([row('server-1')], 1);
+    });
+
+    renderHook(() => useFileStore((s) => s.useFetchResources)(BASE_INPUT), { wrapper });
+
+    // The header is usable while the first page is still in flight.
+    act(() =>
+      useFileStore.getState().insertLocalResource(
+        {
+          fileType: 'text/plain',
+          name: 'Uploading',
+          parentId: null,
+          size: 3,
+          sourceType: 'file',
+          url: '',
+        },
+        'temp-upload',
+      ),
+    );
+    expect(ids()).toEqual(['temp-upload']);
+
+    await act(async () => {
+      release();
+      await gate;
+    });
+
+    // The head response must keep the row it has no server counterpart for.
+    await waitFor(() => expect(ids()).toEqual(['temp-upload', 'server-1']));
+  });
+
+  it('repaints a query after the workspace scope switches away and back', async () => {
+    await seedPersisted(BASE_PARAMS, [row('cached-a')]);
+    querySpy.mockImplementation(pending);
+
+    const firstScope = scope;
+    const hook = renderHook(
+      (props: { generation: number }) => {
+        void props.generation;
+        return useFileStore((s) => s.useFetchResources)(BASE_INPUT);
+      },
+      { initialProps: { generation: 0 }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['cached-a']));
+
+    // Another workspace: an empty replica whose network never answers.
+    act(() => useScope(`resource-user-${randomUUID()}:ws-2`));
+    hook.rerender({ generation: 1 });
+    await waitFor(() => expect(ids()).toEqual([]));
+
+    // Back to the first workspace: its own persisted page must paint again.
+    act(() => useScope(firstScope));
+    hook.rerender({ generation: 2 });
+    await waitFor(() => expect(ids()).toEqual(['cached-a']));
+  });
+
   it('confirms the page with the server after removing rows from a knowledge base view', async () => {
     querySpy.mockResolvedValueOnce(page(rows(50), 60)).mockResolvedValueOnce(page(rows(50, 1), 59));
 

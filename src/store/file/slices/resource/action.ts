@@ -112,7 +112,7 @@ export class ResourceActionImpl {
   /** Storage row of `#requestedListParams`; a slow hydrate of another query is dropped. */
   #requestedListStorageKey?: string;
   /** Storage row the painted rows answer, so the navigation effect only runs on a change. */
-  #paintedListStorageKey?: string;
+  #paintedListKey?: string;
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
@@ -361,7 +361,10 @@ export class ResourceActionImpl {
   #createOptimisticResource = (params: CreateResourceParams, id?: string): ResourceItem => ({
     _optimistic: {
       isPending: true,
-      queryKey: getResourceQueryKey(this.#get().queryParams),
+      // The row must read as *this* pool's on the head response, including when
+      // it is inserted before the first page landed (the store's `queryParams` is
+      // only set by a paint) — so stamp the pool the Explorer asked for.
+      queryKey: getResourceQueryKey(this.#requestedListParams ?? this.#get().queryParams),
       retryCount: 0,
     },
     createdAt: new Date(),
@@ -444,13 +447,18 @@ export class ResourceActionImpl {
    *
    * The once-per-key driver read cannot cover this: it already ran for a query
    * the session loaded before (hydrates are `once`), so the read is done here.
+   * The painted identity includes the replica scope: the same query in another
+   * workspace is another persisted row, and `useSync` clears the view when the
+   * scope switches.
    */
   #hydrateListQuery = (): void => {
     const params = this.#requestedListParams;
     const storageKey = this.#requestedListStorageKey;
     if (!params || storageKey === undefined) return;
-    if (storageKey === this.#paintedListStorageKey) return;
-    this.#paintedListStorageKey = storageKey;
+
+    const paintedKey = `${resourceListResource.scope.get()}\u0000${storageKey}`;
+    if (paintedKey === this.#paintedListKey) return;
+    this.#paintedListKey = paintedKey;
 
     void this.#resourceList.hydrate(params, undefined, { overwrite: true });
   };
@@ -469,6 +477,9 @@ export class ResourceActionImpl {
     // Subscribed, so the first frame after a hydrate/replace re-renders.
     const hasValue = useFileStore((s) => s.resourceListEntry !== undefined);
     const storageKey = normalized ? resourceListResource.storageKey(normalized) : undefined;
+    // Subscribed: a scope switch clears the replica view, so the navigation
+    // effect below has to re-run and repaint from the new scope's own row.
+    const scope = resourceListResource.scope.use();
 
     // The latest request, read by the navigation effect below and by the
     // stale-hydrate guard. Kept on the instance so the effect deps stay primitive.
@@ -480,7 +491,7 @@ export class ResourceActionImpl {
     useLayoutEffect(() => {
       if (!active || storageKey === undefined) return;
       this.#hydrateListQuery();
-    }, [active, storageKey]);
+    }, [active, scope, storageKey]);
 
     const sync = this.#resourceList.useSync(active ? normalized : null, { enabled: enable });
 
