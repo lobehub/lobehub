@@ -2346,16 +2346,25 @@ export class GatewayActionImpl {
    * to call opportunistically (e.g. on a sidebar interval).
    */
   settleAllUnbackedTopicRuns = async (): Promise<number> => {
-    const topicIds = new Set(
-      Object.values(this.#get().operations)
-        .filter((op) => this.#isLiveLocalRuntimeOp(op))
-        .map((op) => op.context.topicId)
-        .filter((id): id is string => !!id),
-    );
-    if (topicIds.size === 0) return 0;
+    // Dedupe by the FULL scope, not by topicId alone. A leaked run's row lives in
+    // its own agent/group bucket, and `clearLocalRunningOperation` resolves that
+    // bucket from the params it is handed — so dropping the scope here made the
+    // sweep clear whichever agent happened to be active instead of the one the
+    // run came from, completing the op but leaving the real row spinning.
+    const candidates = new Map<string, { agentId?: string; groupId?: string; topicId: string }>();
+    for (const op of Object.values(this.#get().operations)) {
+      if (!this.#isLiveLocalRuntimeOp(op)) continue;
+
+      const { agentId, groupId, topicId } = op.context;
+      if (!topicId) continue;
+
+      const key = `${agentId ?? ''}|${groupId ?? ''}|${topicId}`;
+      if (!candidates.has(key)) candidates.set(key, { agentId, groupId, topicId });
+    }
+    if (candidates.size === 0) return 0;
 
     const settled = await Promise.all(
-      [...topicIds].map((topicId) => this.settleUnbackedTopicRuns({ topicId })),
+      [...candidates.values()].map((candidate) => this.settleUnbackedTopicRuns(candidate)),
     );
 
     return settled.reduce((sum, count) => sum + count, 0);
@@ -2384,17 +2393,34 @@ export class GatewayActionImpl {
 
   /**
    * Whether `op` is one the topic row reports as running AND the sweep is
-   * allowed to retire ({@link SETTLEABLE_TOPIC_RUN_OPERATION_TYPES}). Using
-   * anything narrower leaks: an op that pins the row but sits outside this
-   * filter can never be retired, so the row spins until a reload. Using anything
-   * broader is worse than useless — it retires the local-only waits, e.g. the
-   * heterogeneous-overload `autoRetryPending` countdown, whose abort check reads
-   * a non-running op as "the user cancelled".
+   * allowed to retire. Three independent requirements, each closing a distinct
+   * way of killing a live turn:
+   *
+   * 1. Its type must be one the row reads ({@link
+   *    SETTLEABLE_TOPIC_RUN_OPERATION_TYPES}). Anything narrower leaks — an op
+   *    that pins the row but sits outside the filter can never be retired, so
+   *    the row spins until a reload.
+   * 2. It must be server-owned (`metadata.serverOperationId`). The sweep's claim
+   *    is "the server no longer backs this run", which is only meaningful for a
+   *    run the server ever owned. A local-only op owns its whole lifetime in
+   *    this tab, and completing it is destructive: the client-mode
+   *    `submitToolInteraction` / `skipToolInteraction` pre-dispatch phase
+   *    deliberately writes the topic back to `active` BEFORE awaiting its
+   *    optimistic writes, so an already-`active` server row is expected there
+   *    and says nothing about the run — and `#wasInterimOpStopped` then reads the
+   *    completed op as a user Stop, returning without ever starting the
+   *    continuation. `autoRetryPending` is the same shape (see
+   *    LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES).
+   * 3. It must not already be on its way out (`isAborting`).
+   *
+   * The leaked op this exists for is a gateway `execServerAgentRuntime`, which
+   * does carry `serverOperationId` — so requirement 2 costs nothing there.
    */
   #isLiveLocalRuntimeOp = (op: ChatStore['operations'][string]): boolean =>
     SETTLEABLE_TOPIC_RUN_OPERATION_TYPES.includes(op.type) &&
     op.status === 'running' &&
-    !op.metadata.isAborting;
+    !op.metadata.isAborting &&
+    !!op.metadata.serverOperationId;
 
   /**
    * Whether this tab has a live turn on `topicId` that belongs to a run other
