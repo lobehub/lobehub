@@ -12,8 +12,8 @@ import { TopicRuntimeConfig } from './TopicRuntimeConfig';
 const fixture = vi.hoisted(() => ({
   agent: {} as AgentStoreState,
   chat: {} as ChatStoreState,
+  revalidate: vi.fn().mockResolvedValue(undefined),
   useFetchTopicDetail: vi.fn(),
-  refreshTopicDetail: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/store/agent', () => ({
@@ -24,21 +24,20 @@ vi.mock('@/store/chat', () => ({
     selector: (
       state: ChatStoreState & {
         useFetchTopicDetail: typeof fixture.useFetchTopicDetail;
-        refreshTopicDetail: typeof fixture.refreshTopicDetail;
       },
     ) => T,
   ) =>
     selector({
       ...fixture.chat,
       useFetchTopicDetail: fixture.useFetchTopicDetail,
-      refreshTopicDetail: fixture.refreshTopicDetail,
     }),
 }));
 
 describe('TopicRuntimeConfig', () => {
   beforeEach(() => {
-    fixture.useFetchTopicDetail.mockClear();
-    fixture.refreshTopicDetail.mockClear();
+    fixture.revalidate.mockClear();
+    fixture.useFetchTopicDetail.mockReset();
+    fixture.useFetchTopicDetail.mockReturnValue({ revalidate: fixture.revalidate });
     fixture.agent = {
       ...initialAgentState,
       agentMap: {
@@ -109,10 +108,9 @@ describe('TopicRuntimeConfig', () => {
     rerender(
       <TopicRuntimeConfig agentId={'assignee'} operationId={'operation-2'} topicId={'run-1'} />,
     );
-    /** @example A same-Topic continuation triggers one by-id revalidation. */
-    await waitFor(() => expect(fixture.refreshTopicDetail).toHaveBeenCalledWith('run-1'));
-    /** @example Mounting and then continuing each request current Topic details. */
-    expect(fixture.refreshTopicDetail).toHaveBeenCalledTimes(2);
+    /** @example A same-Topic continuation revalidates the mounted by-id SWR entry once. */
+    await waitFor(() => expect(fixture.revalidate).toHaveBeenCalledTimes(1));
+    expect(fixture.useFetchTopicDetail).toHaveBeenLastCalledWith('run-1');
     fixture.chat.topicDetailMap['run-1'] = {
       id: 'run-1',
       metadata: {
@@ -154,7 +152,7 @@ describe('TopicRuntimeConfig', () => {
     fireEvent.click(screen.getByRole('button', { name: 'taskDetail.runtimeConfig.title' }));
     /** @example Clearing the running marker must not hide op2's native model. */
     expect(screen.getByText('gpt-5.5', { exact: true })).toBeInTheDocument();
-    fixture.refreshTopicDetail.mockClear();
+    fixture.revalidate.mockClear();
     fixture.chat.topicDetailMap['run-1'] = {
       ...fixture.chat.topicDetailMap['run-1'],
       metadata: {
@@ -168,7 +166,7 @@ describe('TopicRuntimeConfig', () => {
       <TopicRuntimeConfig agentId={'assignee'} operationId={'operation-1'} topicId={'run-1'} />,
     );
     /** @example Receipt updates do not create a revalidation loop. */
-    expect(fixture.refreshTopicDetail).not.toHaveBeenCalled();
+    expect(fixture.revalidate).not.toHaveBeenCalled();
     /** @example The by-id Topic remains the receipt source of truth. */
     expect(screen.getByText('gpt-5.4', { exact: true })).toBeInTheDocument();
   });

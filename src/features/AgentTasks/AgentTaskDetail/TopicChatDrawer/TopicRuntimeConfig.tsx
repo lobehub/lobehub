@@ -1,6 +1,6 @@
 import { resolveHeterogeneousRuntimeConfig } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors } from '@/store/agent/selectors';
@@ -33,7 +33,7 @@ interface TopicRuntimeConfigProps {
  */
 export const TopicRuntimeConfig = ({ agentId, operationId, topicId }: TopicRuntimeConfigProps) => {
   const useFetchTopicDetail = useChatStore((s) => s.useFetchTopicDetail);
-  useFetchTopicDetail(topicId);
+  const { revalidate } = useFetchTopicDetail(topicId);
 
   const provider = useAgentStore(
     (s) => agentByIdSelectors.getAgencyConfigById(agentId)(s)?.heterogeneousProvider,
@@ -45,13 +45,22 @@ export const TopicRuntimeConfig = ({ agentId, operationId, topicId }: TopicRunti
     isEqual,
   );
   const receipt = topic?.metadata?.heteroRuntimeConfig;
-  const refreshTopicDetail = useChatStore((s) => s.refreshTopicDetail);
+  // A run this client did not dispatch (a scheduled Task run, another tab) writes
+  // a newer receipt under the same Topic ID. The by-id SWR entry above already
+  // loads on mount; revalidate that same entry only when the run changes.
+  const seenOperation = useRef({ operationId, topicId });
   useEffect(() => {
-    if (!operationId) return;
-    void refreshTopicDetail(topicId).catch((error) => {
+    const seen = seenOperation.current;
+    if (seen.topicId !== topicId) {
+      seenOperation.current = { operationId, topicId };
+      return;
+    }
+    if (!operationId || seen.operationId === operationId) return;
+    seenOperation.current = { operationId, topicId };
+    void revalidate().catch((error) => {
       console.error('Failed to refresh Task run configuration', error);
     });
-  }, [operationId, refreshTopicDetail, topicId]);
+  }, [operationId, revalidate, topicId]);
 
   // Task continuations change activity IDs; ordinary follow-ups can write a newer
   // Topic receipt without changing that association. Always display the latest detail.
