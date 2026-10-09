@@ -1,6 +1,6 @@
 import type { FollowUpChip, FollowUpHint, FollowUpModelConfig } from '@lobechat/types';
 
-import { createReplicaSlice, recordLens } from '@/libs/replica';
+import { cacheScope, createReplicaSlice, recordLens } from '@/libs/replica';
 import { aiChatService } from '@/services/aiChat';
 import { followUpActionService } from '@/services/followUpAction';
 import { type StoreSetter } from '@/store/types';
@@ -57,7 +57,25 @@ export class FollowUpActionImpl {
     this.#slots.remove(conversationKey);
   };
 
+  /**
+   * Drop another identity's slots before this slice inspects the view, and
+   * return the scope the caller must still be under when it writes back.
+   *
+   * Unlike the query-backed replicas, this slice never runs `useSync`, so
+   * nothing else calls `ensureScope` on an account / workspace switch. Without
+   * it the new identity would read the previous one's slot — and, when that
+   * slot is still `loading`, skip its own extraction entirely.
+   */
+  #ensureActiveScope = (): string => {
+    const scope = cacheScope.get();
+    this.#slots.ensureScope(scope);
+    return scope;
+  };
+
   fetchFor = async (conversationKey: string, params: FetchForParams): Promise<void> => {
+    // Capture the originating scope: an extraction is an async LLM round trip,
+    // and a completion must never land under a different identity.
+    const scope = this.#ensureActiveScope();
     const existing = this.#get().slots[conversationKey];
     if (existing?.status === 'loading') return;
 
@@ -87,6 +105,18 @@ export class FollowUpActionImpl {
     );
     clearTimeout(timeoutId);
 
+    // Scope guard: the identity changed while the extraction was in flight, so
+    // this completion has no owner. Writing it would dispatch under the *new*
+    // identity's scope and commit one identity's suggestions as the next one's.
+    // Drop our own now-ownerless slot too — unless the new identity already
+    // started its own extraction for the same key (a different controller).
+    if (cacheScope.get() !== scope) {
+      if (this.#get().slots[conversationKey]?.abortController === controller) {
+        this.#removeSlot(conversationKey);
+      }
+      return;
+    }
+
     // Identity guard: a same-key follow-up turn (next assistant settle) would
     // otherwise let an in-flight prior result overwrite the new turn's chips
     // when the network abort race is lost.
@@ -106,6 +136,7 @@ export class FollowUpActionImpl {
   };
 
   abort = (conversationKey: string): void => {
+    this.#ensureActiveScope();
     const slot = this.#get().slots[conversationKey];
     if (!slot) return;
     this.#maybeRecordDismissal(slot);
@@ -114,6 +145,7 @@ export class FollowUpActionImpl {
   };
 
   clear = (conversationKey: string): void => {
+    this.#ensureActiveScope();
     const slot = this.#get().slots[conversationKey];
     if (!slot) return;
     this.#maybeRecordDismissal(slot);
@@ -132,6 +164,7 @@ export class FollowUpActionImpl {
    * doesn't additionally fire a dismissal for the same chips.
    */
   recordChipClick = (conversationKey: string, chipIndex: number): void => {
+    this.#ensureActiveScope();
     const slot = this.#get().slots[conversationKey];
     if (!slot || slot.status !== 'ready' || !slot.tracingId || slot.feedbackDone) return;
 

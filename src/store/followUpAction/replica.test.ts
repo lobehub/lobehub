@@ -92,6 +92,50 @@ describe('followUpAction replica', () => {
     expect(useFollowUpActionStore.getState().slotsReplica.scope).toBe('u2:personal');
   });
 
+  it('does not let a new identity reuse the previous identity’s in-flight slot', async () => {
+    // Identity A's extraction never settles.
+    vi.mocked(followUpActionService.extract).mockImplementation(
+      () => new Promise(() => {}) as never,
+    );
+    void useFollowUpActionStore.getState().fetchFor(KEY_A, params('topic-a'));
+    expect(slot(KEY_A)?.status).toBe('loading');
+
+    // The identity switches while A's extraction is still in flight.
+    useScope('u2:personal');
+    vi.mocked(followUpActionService.extract).mockResolvedValue({
+      chips: [{ label: 'b', message: 'b' }],
+      messageId: MSG,
+    });
+
+    // Same conversation key: the new identity must run its own extraction
+    // instead of reading A's `loading` slot and skipping its fetch.
+    await useFollowUpActionStore.getState().fetchFor(KEY_A, params('topic-a'));
+
+    expect(followUpActionService.extract).toHaveBeenCalledTimes(2);
+    expect(slot(KEY_A)?.chips).toEqual([{ label: 'b', message: 'b' }]);
+    expect(useFollowUpActionStore.getState().slotsReplica.scope).toBe('u2:personal');
+  });
+
+  it('drops an extraction that lands after the identity switched', async () => {
+    const resolvers: Array<(value: unknown) => void> = [];
+    vi.mocked(followUpActionService.extract).mockImplementation(
+      () => new Promise((resolve) => resolvers.push(resolve)) as never,
+    );
+
+    const pending = useFollowUpActionStore.getState().fetchFor(KEY_A, params('topic-a'));
+    expect(slot(KEY_A)?.status).toBe('loading');
+
+    // The identity switches mid-flight, then A's ownerless result lands.
+    useScope('u2:personal');
+    resolvers[0]({ chips: [{ label: 'a', message: 'a' }], messageId: MSG });
+    await pending;
+
+    // It must not be committed as the new identity's data (nor left on screen
+    // as its own slot).
+    expect(slot(KEY_A)).toBeUndefined();
+    expect(entry(KEY_A)).toBeUndefined();
+  });
+
   it('reset clears the view and the replica bookkeeping together', async () => {
     await useFollowUpActionStore.getState().fetchFor(KEY_A, params('topic-a'));
 
