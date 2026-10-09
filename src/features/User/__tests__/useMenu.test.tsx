@@ -60,6 +60,7 @@ describe('useMenu', () => {
       expect(mainItems?.some((item) => item?.key === 'memory')).toBe(false);
       // 'logout' is shown when isLoginWithAuth is true
       expect(logoutItems.some((item) => item?.key === 'logout')).toBe(true);
+      expect(logoutItems.at(-1)).not.toMatchObject({ type: 'divider' });
     });
   });
 

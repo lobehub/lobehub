@@ -1,15 +1,31 @@
 import { List, type ListProps } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { memo } from 'react';
 
 export type MenuProps = ListProps;
 
-const Menu = memo<MenuProps>(({ selectable = false, styles, ...rest }) => (
-  <List
-    selectable={selectable}
-    styles={selectable ? styles : { ...styles, item: { color: cssVar.colorText, ...styles?.item } }}
-    {...rest}
-  />
-));
+const styles = createStaticStyles(({ css }) => ({
+  inset: css`
+    & > li:not([role='separator']) {
+      margin-inline: 4px;
+    }
+  `,
+}));
+
+const Menu = memo<MenuProps>(
+  ({ className, compact, selectable = false, styles: customStyles, ...rest }) => (
+    <List
+      className={cx(!compact && styles.inset, className)}
+      compact={compact}
+      selectable={selectable}
+      styles={
+        selectable
+          ? customStyles
+          : { ...customStyles, item: { color: cssVar.colorText, ...customStyles?.item } }
+      }
+      {...rest}
+    />
+  ),
+);
 
 export default Menu;
