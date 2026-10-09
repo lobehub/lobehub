@@ -2,8 +2,8 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { LoaderFunctionArgs } from 'react-router';
 
 import { getSidebarTopicListParams } from '@/hooks/chatTopicListQuery';
-import { readPersistedTranscript } from '@/services/message/replica';
 import { PRE_PAINT_HYDRATE_TIMEOUT, settleWithin } from '@/libs/replica/prePaint';
+import { readPersistedTranscript } from '@/services/message/replica';
 import { useAgentStore } from '@/store/agent';
 import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
