@@ -546,3 +546,24 @@ files = [ "packages/alint/fixtures/no-privileged-untrusted-electron/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-privileged-untrusted-electron" = "warn"
+
+# Tests: a unit test asserts on behaviour, never on how long a wall-clock
+# measurement happened to take. Scope is every business test in the repo;
+# `packages/database` is left out on purpose — its query-time guards are
+# deliberate and run in the DB package's single-process suite.
+[[config.group]]
+files = [ "**/*.test.ts", "**/*.test.tsx" ]
+ignores = [ "packages/database/**", "packages/alint/fixtures/**" ]
+
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+
+[config.group.rules]
+"lobehub/no-benchmark-in-tests" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/no-benchmark-in-tests/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-benchmark-in-tests" = "warn"

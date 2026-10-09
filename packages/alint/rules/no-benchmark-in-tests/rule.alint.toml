@@ -1,0 +1,29 @@
+name = "no-benchmark-in-tests"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one unit test file from the LobeHub repository.
+
+Team rule, from the owner's review: "除了 DB 测试之外，其他的业务场景中也有类似的单测 benchmark 场景，用了那种真实的 timer，然后跑出来的效果就是 benchmark"; "test case 是并发跑的 这个很多时候不稳定的"; "开个 PR 写一个 alint 规则 … 有多少业务测试的代码在单测里写 Benchmark 了".
+
+A unit test asserts on behaviour, never on how long a wall-clock measurement happened to take. These tests run concurrently on shared CI machines, so a stopwatch reading (`Date.now()` / `performance.now()` delta) turned into an assertion is a benchmark hiding inside a unit test: the number is machine- and load-dependent, it flakes under the parallel runner, and it stops meaning anything once the machine is busy. A speed or complexity threshold belongs in a dedicated benchmark (`vitest bench`, `*.bench.ts`) that runs single-threaded, not in a `.test.ts`.
+
+Report a test case that measures elapsed wall-clock time with a real clock and asserts on the measured number:
+
+1. an assertion whose subject is an elapsed duration read from a real timer — `expect(Date.now() - start).toBeLessThan(100)`, `expect(performance.now() - startedAt).toBeLessThan(500)`, or `expect(elapsed)…` where `elapsed` / `duration` / `executionTime` / `queryTime` / `took` / `latency` was computed from `Date.now()` / `performance.now()` / `new Date()` in the same test case;
+2. the same measured across statements (`const start = performance.now()` … `const elapsed = performance.now() - start` … `expect(elapsed).toBeLessThan(500)`): anchor on the `expect(...)` line, and in the message name the operation being timed;
+3. a test whose stated purpose is a speed or complexity threshold — "completes in under 100ms", "scans … in linear time", "stays linear on long runs", "not vulnerable to ReDoS", "should be fast" — when it proves that with a stopwatch reading instead of a deterministic signal.
+
+Anchor on the line of the elapsed-time assertion (the `expect(...)` line). In the message, name the operation being timed and the threshold, and say that a wall-clock bound is unreliable because the suite runs concurrently. In the suggestion, replace the timing bound with an assertion on the observable outcome (return value, call counts, emitted events, call ordering), or drive the clock with fake timers (`vi.useFakeTimers()` + `vi.advanceTimersByTime()` / `advanceTimersByTimeAsync()`) when the test is really about a timeout or interval contract; if a real performance guard is wanted, move it to a dedicated single-threaded benchmark (`vitest bench` / `*.bench.ts`) rather than this concurrent unit test.
+
+Do not report:
+- a controlled clock: `vi.useFakeTimers()`, `vi.advanceTimersByTime()`, `vi.advanceTimersByTimeAsync()`, `vi.setSystemTime()`, `vi.runAllTimers()`, sinon fake timers, or any elapsed value derived from an advanced virtual clock;
+- `Date.now()` / `new Date()` used to build a value rather than to measure one: `createdAt`, an id, `exp`, `expiresAt`, `deadlineAt`, a stale-`updatedAt` fixture such as `Date.now() - 60_000`, `mtimeMs`;
+- an assertion about how old an already-stored timestamp is — `expect(Date.now() - staleBefore.getTime()).toBeGreaterThanOrEqual(10 * 60 * 1000)`, an expiry or staleness bound the test wrote itself — even when it is written as a clock difference;
+- an assertion on a field that merely carries milliseconds from production code — a `timeout` option, a batch's `durationMs`, `deadlines.totalMs`, an `expiresAt.getTime()` bound, a `max_tokens`-style numeric limit;
+- comparisons that share the matcher but are not elapsed time: `expect(a.indexOf('x')).toBeLessThan(b.indexOf('y'))`, lengths, versions, numeric ids, `toHaveLength`;
+- waiting for an async condition where the elapsed time itself is not asserted (`vi.waitFor`, `expect.poll`, a polling loop guarded by a deadline);
+- a clock read that is logged, passed to a mock, or written into metadata but never asserted on;
+- `*.bench.ts` files and `vitest bench` suites — a dedicated benchmark is the intended home, and they are outside this rule's concern.
+
+If an exclusion applies, return no finding. If uncertain, use low confidence rather than forcing a finding.
+"""
