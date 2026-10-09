@@ -3,11 +3,36 @@ import { TaskTopicModel } from '@/database/models/taskTopic';
 import type { LobeChatDatabase } from '@/database/type';
 
 export interface TopicRunLink {
+  /**
+   * The Task's creator, which is the identity the completion callback reads:
+   * `/api/workflows/task/on-topic-complete` derives the workspace from
+   * `tasks.createdByUserId = userId`. A workspace member answering someone
+   * else's run must hand the owner over — passing the member would make that
+   * lookup miss and settle the run in personal scope, where the workspace row
+   * is invisible, leaving it stuck `running`.
+   */
+  ownerUserId: string;
   /** The run row's status, as the Task side last wrote it. */
   runStatus: string;
   taskId: string;
   taskIdentifier: string;
+  /**
+   * The conversation the row belongs to — the one the user typed into, and the
+   * one the reopen is keyed on. A run the server placed on a topic of its own is
+   * not a continuation of this row; if that ever happened, the row left behind
+   * is settled by the orphaned-run reconciliation like any other lost run.
+   */
+  topicId: string;
 }
+
+/** What reopening a run did, so the caller can tell a no-op from a refusal. */
+export type TopicRunReopenOutcome =
+  /** The row is this operation's: the run is recorded and live. */
+  | 'reopened'
+  /** A newer run owns the row. Nothing was written; leave it alone. */
+  | 'already-running'
+  /** The Task was retired under this send: nothing can be recorded. */
+  | 'refused';
 
 /**
  * The Task side of a run started in a conversation.
@@ -36,21 +61,37 @@ export class TopicRunService {
   }
 
   /**
-   * The run this conversation continues, if it is one.
+   * The run this send can own, if any — the whole "is this a Task run?" test for
+   * the composer path.
    *
-   * `undefined` is the ordinary conversation — by far the common case for a
-   * send — so callers use this as the "is this a Task run at all?" test.
+   * `undefined` is the ordinary conversation, which is the common case, plus the
+   * two cases where this send must not take the run over:
+   *
+   * - **the Task is retired** (canceled, or gone): there is no Task-side row to
+   *   keep honest, and settling one would resurrect it — a default-config Task
+   *   can be moved out of `canceled` by a completion. The message still sends,
+   *   as an ordinary turn in the conversation.
+   * - **the row is already `running`**: a live run owns it, and a second send is
+   *   not a second Task run. Reopening would steal the `operationId` that
+   *   cancellation interrupts, and attaching a completion hook would let this
+   *   send settle the row while that run is still going.
    */
-  async findByTopicId(topicId: string): Promise<TopicRunLink | undefined> {
+  async resolveOwnableRun(topicId: string): Promise<TopicRunLink | undefined> {
     const run = await new TaskTopicModel(this.db, this.userId, this.workspaceId).findByTopicId(
       topicId,
     );
-    if (!run?.topicId) return undefined;
+    if (!run?.topicId || run.status === 'running') return undefined;
 
     const task = await new TaskModel(this.db, this.userId, this.workspaceId).findById(run.taskId);
-    if (!task) return undefined;
+    if (!task || task.status === 'canceled') return undefined;
 
-    return { runStatus: run.status, taskId: run.taskId, taskIdentifier: task.identifier };
+    return {
+      ownerUserId: task.createdByUserId ?? this.userId,
+      runStatus: run.status,
+      taskId: run.taskId,
+      taskIdentifier: task.identifier,
+      topicId,
+    };
   }
 
   /**
@@ -61,33 +102,31 @@ export class TopicRunService {
    * live run stamped as ended. That is also why the model method only writes the
    * row and this owns the pair.
    *
-   * Best-effort on purpose. The message is already sent and the run is already
-   * going, so a Task retired underneath it must not fail the caller's request —
-   * there is nothing left to reopen, and nothing to gain by refusing.
+   * Runs on the operation-created boundary, *before* the run's first step: a
+   * short run can otherwise finish — and have its completion hook settle the
+   * row — while the dispatch is still returning, and a reopen after that would
+   * rewrite a finished run back to `running` with nothing left to settle it.
    */
   async reopen(params: {
     link: TopicRunLink;
     operationId: string;
-    topicId: string;
-  }): Promise<boolean> {
-    const { link, operationId, topicId } = params;
+  }): Promise<TopicRunReopenOutcome> {
+    const { link, operationId } = params;
+    const { topicId } = link;
 
     return this.db.transaction(async (tx) => {
-      const taskModel = new TaskModel(tx, this.userId, this.workspaceId);
-      const taskTopicModel = new TaskTopicModel(tx, this.userId, this.workspaceId);
+      const taskModel = new TaskModel(tx, link.ownerUserId, this.workspaceId);
+      const taskTopicModel = new TaskTopicModel(tx, link.ownerUserId, this.workspaceId);
 
       // The runner's own lock, for the runner's own reason: a Task deleted or
       // retired while this run was starting has to be observed here rather than
       // have a live run reopened underneath it.
-      if (!(await taskModel.lockForUpdate(link.taskId))) return false;
+      if (!(await taskModel.lockForUpdate(link.taskId))) return 'refused';
 
       const task = await taskModel.findById(link.taskId);
-      if (!task || task.status === 'canceled') return false;
+      if (!task || task.status === 'canceled') return 'refused';
 
-      // A miss is a real answer rather than a no-op: the row is already
-      // `running`, so this message joined the run in flight and that run's
-      // operation id must stay the one cancellation interrupts.
-      if (!(await taskTopicModel.reopenSettledRun(topicId, operationId))) return false;
+      if (!(await taskTopicModel.reopenSettledRun(topicId, operationId))) return 'already-running';
 
       await taskTopicModel.clearTopicEnded(topicId);
 
@@ -98,7 +137,7 @@ export class TopicRunService {
         });
       }
 
-      return true;
+      return 'reopened';
     });
   }
 }
