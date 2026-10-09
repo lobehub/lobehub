@@ -12,6 +12,13 @@ import { getRestrictedKnowledgeBaseIds } from './_helpers/knowledgeBaseAccess';
 const MARKETPLACE_SEARCH_TYPES = new Set(['communityAgent', 'mcp', 'plugin']);
 
 /**
+ * The Market API rejects `pageSize` above 40 with `Invalid query parameters`.
+ * The command menu's typed view asks for 50 per type, which made MCP searches
+ * silently empty and community agent searches fail, so cap every marketplace call.
+ */
+const MARKETPLACE_MAX_PAGE_SIZE = 40;
+
+/**
  * Calculate relevance score for marketplace items
  * 1 = exact match, 2 = prefix match, 3 = contains match
  */
@@ -99,6 +106,7 @@ export const searchRouter = router({
     )
     .query(async ({ input, ctx }) => {
       const { query, type, limitPerType = 5, locale } = input;
+      const marketplacePageSize = Math.min(limitPerType, MARKETPLACE_MAX_PAGE_SIZE);
 
       // Early return for empty query
       if (!query || query.trim() === '') return [];
@@ -149,7 +157,7 @@ export const searchRouter = router({
           ctx.discoverService
             .getMcpList({
               locale,
-              pageSize: limitPerType,
+              pageSize: marketplacePageSize,
               q: query,
             })
             .then((response) =>
@@ -185,7 +193,7 @@ export const searchRouter = router({
           ctx.discoverService
             .getPluginList({
               locale,
-              pageSize: limitPerType,
+              pageSize: marketplacePageSize,
               q: query,
             })
             .then((response) =>
@@ -219,7 +227,7 @@ export const searchRouter = router({
               {
                 includeAgentGroup: true,
                 locale,
-                pageSize: limitPerType,
+                pageSize: marketplacePageSize,
                 q: query,
               },
               { throwOnError: type === 'communityAgent' },

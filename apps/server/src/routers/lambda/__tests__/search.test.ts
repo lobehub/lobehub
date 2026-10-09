@@ -156,6 +156,25 @@ describe('searchRouter', () => {
     expect(getUserSettings).not.toHaveBeenCalled();
   });
 
+  it.each(['mcp', 'plugin', 'communityAgent'] as const)(
+    'caps the %s marketplace page size at the Market API maximum',
+    async (type) => {
+      getAssistantList.mockResolvedValue({ items: [] });
+      const caller = searchRouter.createCaller({ userId: 'test-user' } as any);
+
+      // The command menu requests 50 per type in its typed view.
+      await caller.query({ limitPerType: 50, query: 'github', type });
+
+      const listFn = { communityAgent: getAssistantList, mcp: getMcpList, plugin: getPluginList }[
+        type
+      ];
+      expect(listFn).toHaveBeenCalledWith(
+        expect.objectContaining({ pageSize: 40 }),
+        ...(type === 'communityAgent' ? [expect.anything()] : []),
+      );
+    },
+  );
+
   it('returns a typed error when the community agent market search fails', async () => {
     const marketError = new Error('Market unavailable');
     getAssistantList.mockRejectedValue(marketError);
