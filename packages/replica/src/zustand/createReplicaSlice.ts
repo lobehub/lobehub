@@ -172,9 +172,14 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
 
     return {
       error: sync.error,
+      // A read with no key has nothing to hydrate, so it counts as hydrated: a
+      // conditional consumer must not show "loading" for an absent id (the
+      // former SWR disabled-key behaviour). A read that is disabled but *has* a
+      // key still waits for its persisted row.
       isHydrated:
+        key === undefined ||
         !resource.persisted ||
-        (key !== undefined && !resource.persistKey(key)) ||
+        !resource.persistKey(key) ||
         hydration.data === true,
       isValidating: sync.isValidating,
       revalidate: () => sync.mutate(),

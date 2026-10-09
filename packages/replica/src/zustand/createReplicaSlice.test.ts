@@ -413,6 +413,38 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.a).toEqual(['regranted']);
     });
 
+    it('reports a keyless (disabled) read as hydrated, so it never looks loading', () => {
+      const { slice } = setup();
+
+      const { result } = renderHook(() => slice.useSync(null), { wrapper });
+
+      expect(result.current.isHydrated).toBe(true);
+      expect(result.current.isValidating).toBe(false);
+    });
+
+    it('keeps the removal guard when a response captured under another scope is discarded', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      // The persisted-row delete is best-effort: simulate it still being pending.
+      storage.storage.remove = async () => {};
+      const { slice, store } = setup({ storage });
+
+      // Scope A removes the entry (and arms its guard).
+      act(() => slice.remove('a'));
+
+      // A response captured under A resolves only after the user switched to B,
+      // so `dispatch` drops it. It must not clear A's guard on the way out.
+      scopeState.current = 'user-2:personal';
+      act(() => slice.replace({ id: 'a' }, ['stale'], 'user-1:personal'));
+
+      // Switching back to A must still refuse to hydrate the stale row.
+      scopeState.current = 'user-1:personal';
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a' })).toBe(false);
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.

@@ -251,6 +251,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     // Every removal path (explicit `remove`, a missing response, an entity that
     // takes its whole value with it) arms the hydration guard for this key.
     if (action.type === 'remove') markRemoved(action.scope, action.key);
+    // A replacement that reaches the active scope supersedes an earlier removal,
+    // so the key may hydrate again. A response captured under another scope is
+    // dropped below and must NOT clear its guard: the removal still stands for
+    // its own scope, whose row delete may be pending or may have failed.
+    if (action.type === 'replace') clearRemoved(action.scope, action.key);
 
     const initial = getSlot();
     let slot = initial;
@@ -357,9 +362,6 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     if (!paging && options.isMissing?.(incoming)) {
       return dispatch({ key, scope, type: 'remove' });
     }
-    // A response that carries a value supersedes an earlier removal: the entry
-    // exists again, so the key may hydrate once more.
-    clearRemoved(scope, key);
     const query = resource.query(params);
     const entry = getSlot().entries[key];
     // A different query (filters, sort) must not merge with loaded pages. A
