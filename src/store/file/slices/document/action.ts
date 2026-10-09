@@ -2,35 +2,49 @@ import {
   CUSTOM_DOCUMENT_FILE_TYPE,
   CUSTOM_FOLDER_FILE_TYPE,
   DERIVED_DOCUMENT_SOURCE_TYPE,
-  PAGE_DOCUMENT_FILE_TYPES,
-  PAGE_DOCUMENT_SOURCE_TYPES,
 } from '@lobechat/const';
+import { type DocumentItem } from '@lobechat/database/schemas';
 import { createNanoId } from '@lobechat/utils';
-import { type SWRResponse } from 'swr';
 
-import { useClientDataSWRWithSync } from '@/libs/swr';
+import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { documentService } from '@/services/document';
-import { useGlobalStore } from '@/store/global';
 import { type StoreSetter } from '@/store/types';
 import { type LobeDocument } from '@/types/document';
 import { DocumentSourceType } from '@/types/document';
 import { type ResourceItem } from '@/types/resource';
 import { setNamespace } from '@/utils/storeDebug';
 
-import type { FileStore } from '../../store';
+import { type FileStore, useFileStore } from '../../store';
 import { getResourceQueryKey } from '../resource/utils';
-import { type DocumentQueryFilter } from './initialState';
+import { type FileDocumentDetail, fileDocumentResource } from './projection';
 
 const n = setNamespace('document');
 
-// EDITOR is a client-only stamp on in-memory drafts; DB rows never carry it.
-const ALLOWED_DOCUMENT_SOURCE_TYPES = new Set([
-  DocumentSourceType.EDITOR as string,
-  ...PAGE_DOCUMENT_SOURCE_TYPES,
-]);
-const ALLOWED_DOCUMENT_FILE_TYPES = new Set(PAGE_DOCUMENT_FILE_TYPES);
-const EDITOR_DOCUMENT_FILE_TYPE = CUSTOM_DOCUMENT_FILE_TYPE;
+type Setter = StoreSetter<FileStore>;
 
+/**
+ * Result of {@link DocumentActionImpl.useFetchDocumentDetail}.
+ *
+ * `data` is the replica view, read from the store (not from the hook's return)
+ * so the first frame paints from the persisted projection and the network only
+ * confirms it: `undefined` = nothing loaded for this id yet, `null` = the
+ * server answered "not found".
+ */
+export interface UseFetchDocumentDetailResult {
+  data: LobeDocument | null | undefined;
+  error: unknown;
+  /** SWR's `isLoading` semantics: no value yet and no error. */
+  isLoading: boolean;
+  isValidating: boolean;
+  /** Re-run the network sync for this document. */
+  mutate: () => Promise<unknown>;
+}
+
+/**
+ * Shape the resource explorer merges onto its list rows. Kept separate from
+ * `LobeDocument`: a list row also needs the library it belongs to, which the
+ * document row itself does not carry.
+ */
 interface ResourceDocumentSnapshot {
   content?: string | null;
   createdAt?: Date | string;
@@ -47,35 +61,76 @@ interface ResourceDocumentSnapshot {
   updatedAt?: Date | string;
 }
 
-/**
- * Check if a page should be displayed in the page list
- */
-const isAllowedDocument = (page: { fileType: string; sourceType: string }) => {
-  return (
-    ALLOWED_DOCUMENT_SOURCE_TYPES.has(page.sourceType) &&
-    ALLOWED_DOCUMENT_FILE_TYPES.has(page.fileType)
-  );
-};
-
-type Setter = StoreSetter<FileStore>;
 export const createDocumentSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
   new DocumentActionImpl(set, get, _api);
 
 export class DocumentActionImpl {
   readonly #get: () => FileStore;
-  readonly #set: Setter;
+  /**
+   * One document row per id. The replica owns every transition of `documentMap`
+   * (hydrate → first frame, server replace, optimistic rename, delete).
+   */
+  readonly #documents;
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+    this.#documents = createReplicaSlice(fileDocumentResource, {
+      actionPrefix: n('fileDocument'),
+      fetcher: async (id) => {
+        const row = await documentService.getDocumentById(id);
+
+        return { document: row ? this.#toLobeDocument(row) : null };
+      },
+      get,
+      set,
+      stateKey: 'fileDocumentReplica',
+      // A "not found" answer is a page state, not a document — never persist it.
+      toPersisted: (data) => (data.document ? data : undefined),
+      view: recordLens<FileStore, FileDocumentDetail>('documentMap'),
+    });
   }
 
-  #findExistingDocument = (documentId: string): LobeDocument | undefined => {
-    const { documents, localDocumentMap } = this.#get();
+  /**
+   * Normalize a server row into the store's document shape. Kept in one place so
+   * the sync path and the create/duplicate paths produce the same entry.
+   */
+  #toLobeDocument = (row: DocumentItem): LobeDocument => ({
+    content: row.content || null,
+    createdAt: row.createdAt ? new Date(row.createdAt) : new Date(),
+    editorData:
+      typeof row.editorData === 'string' ? JSON.parse(row.editorData) : (row.editorData ?? null),
+    fileType: row.fileType,
+    filename: row.title || row.filename || 'Untitled',
+    id: row.id,
+    metadata: row.metadata || {},
+    source: 'document',
+    sourceType: DocumentSourceType.EDITOR,
+    title: row.title || '',
+    totalCharCount: row.content?.length || 0,
+    totalLineCount: 0,
+    updatedAt: row.updatedAt ? new Date(row.updatedAt) : new Date(),
+  });
 
-    return localDocumentMap.get(documentId) ?? documents.find((doc) => doc.id === documentId);
-  };
+  /** The resource-explorer snapshot of a server row (carries its library). */
+  #toResourceSnapshot = (
+    row: DocumentItem,
+    knowledgeBaseId?: string,
+  ): ResourceDocumentSnapshot => ({
+    content: row.content,
+    createdAt: row.createdAt,
+    editorData: row.editorData,
+    fileType: row.fileType,
+    id: row.id,
+    knowledgeBaseId,
+    metadata: row.metadata,
+    parentId: row.parentId,
+    slug: row.slug,
+    source: row.source,
+    title: row.title,
+    totalCharCount: row.totalCharCount,
+    updatedAt: row.updatedAt,
+  });
 
   #normalizeDate = (value: Date | string | undefined, fallback: Date) => {
     return value ? new Date(value) : fallback;
@@ -111,13 +166,6 @@ export class DocumentActionImpl {
       title: updates.title || existingDocument.title,
       updatedAt: new Date(),
     };
-  };
-
-  #setLocalDocument = (documentId: string, document: LobeDocument, actionName: string) => {
-    const { localDocumentMap } = this.#get();
-    const newMap = new Map(localDocumentMap);
-    newMap.set(documentId, document);
-    this.#set({ localDocumentMap: newMap }, false, actionName);
   };
 
   /**
@@ -186,7 +234,7 @@ export class DocumentActionImpl {
       content: document.content !== undefined ? document.content : (fallback?.content ?? null),
       createdAt: this.#normalizeDate(document.createdAt, fallback?.createdAt ?? now),
       editorData: this.#parseEditorData(document.editorData, fallback?.editorData),
-      fileType: document.fileType ?? fallback?.fileType ?? EDITOR_DOCUMENT_FILE_TYPE,
+      fileType: document.fileType ?? fallback?.fileType ?? CUSTOM_DOCUMENT_FILE_TYPE,
       id: document.id,
       knowledgeBaseId: document.knowledgeBaseId ?? fallback?.knowledgeBaseId,
       metadata: document.metadata ?? fallback?.metadata,
@@ -251,7 +299,7 @@ export class DocumentActionImpl {
     const newPage = await documentService.createDocument({
       content,
       editorData: '{}', // Empty JSON object instead of empty string
-      fileType: EDITOR_DOCUMENT_FILE_TYPE,
+      fileType: CUSTOM_DOCUMENT_FILE_TYPE,
       knowledgeBaseId,
       metadata: {
         createdAt: now,
@@ -260,24 +308,12 @@ export class DocumentActionImpl {
       title,
     });
 
+    // Hold the row in the replica so the page can be opened (and re-opened from
+    // a reload) without another round trip; the explorer list is fed from the
+    // resource slice.
+    this.#documents.replace(newPage.id, { document: this.#toLobeDocument(newPage) });
     this.#syncResourceItem(
-      this.#createResourceItem(
-        {
-          content: newPage.content,
-          createdAt: newPage.createdAt,
-          editorData: newPage.editorData,
-          fileType: newPage.fileType,
-          id: newPage.id,
-          knowledgeBaseId,
-          metadata: newPage.metadata,
-          parentId: newPage.parentId,
-          source: newPage.source,
-          title: newPage.title,
-          totalCharCount: newPage.totalCharCount,
-          updatedAt: newPage.updatedAt,
-        },
-        undefined,
-      ),
+      this.#createResourceItem(this.#toResourceSnapshot(newPage, knowledgeBaseId)),
     );
 
     return newPage;
@@ -307,59 +343,12 @@ export class DocumentActionImpl {
       title: name,
     });
 
+    this.#documents.replace(folder.id, { document: this.#toLobeDocument(folder) });
     this.#syncResourceItem(
-      this.#createResourceItem(
-        {
-          content: folder.content,
-          createdAt: folder.createdAt,
-          editorData: folder.editorData,
-          fileType: folder.fileType,
-          id: folder.id,
-          knowledgeBaseId,
-          metadata: folder.metadata,
-          parentId: folder.parentId,
-          slug: folder.slug,
-          source: folder.source,
-          title: folder.title,
-          totalCharCount: folder.totalCharCount,
-          updatedAt: folder.updatedAt,
-        },
-        undefined,
-      ),
+      this.#createResourceItem(this.#toResourceSnapshot(folder, knowledgeBaseId)),
     );
 
     return folder.id;
-  };
-
-  createOptimisticDocument = (title: string = 'Untitled'): string => {
-    const { localDocumentMap } = this.#get();
-
-    // Generate temporary ID with prefix to identify optimistic pages
-    const tempId = `temp-document-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-    const now = new Date();
-
-    const newPage: LobeDocument = {
-      content: null,
-      createdAt: now,
-      editorData: null,
-      fileType: EDITOR_DOCUMENT_FILE_TYPE,
-      filename: title,
-      id: tempId,
-      metadata: {},
-      source: 'document',
-      sourceType: DocumentSourceType.EDITOR,
-      title,
-      totalCharCount: 0,
-      totalLineCount: 0,
-      updatedAt: now,
-    };
-
-    // Add to local map
-    const newMap = new Map(localDocumentMap);
-    newMap.set(tempId, newPage);
-    this.#set({ localDocumentMap: newMap }, false, n('createOptimisticDocument'));
-
-    return tempId;
   };
 
   duplicateDocument = async (documentId: string): Promise<{ [key: string]: any; id: string }> => {
@@ -387,256 +376,17 @@ export class DocumentActionImpl {
       title: `${sourcePage.title} (Copy)`,
     });
 
-    // Add the new page to local map immediately for instant UI update
-    const { localDocumentMap } = this.#get();
-    const newMap = new Map(localDocumentMap);
-    const editorPage: LobeDocument = {
-      content: newPage.content || null,
-      createdAt: newPage.createdAt ? new Date(newPage.createdAt) : new Date(),
-      editorData:
-        typeof newPage.editorData === 'string'
-          ? JSON.parse(newPage.editorData)
-          : newPage.editorData || null,
-      fileType: newPage.fileType,
-      filename: newPage.title || newPage.filename || '',
-      id: newPage.id,
-      metadata: newPage.metadata || {},
-      source: 'document',
-      sourceType: DocumentSourceType.EDITOR,
-      title: newPage.title || '',
-      totalCharCount: newPage.content?.length || 0,
-      totalLineCount: 0,
-      updatedAt: newPage.updatedAt ? new Date(newPage.updatedAt) : new Date(),
-    };
-    newMap.set(newPage.id, editorPage);
-    this.#set({ localDocumentMap: newMap }, false, n('duplicateDocument'));
-
-    // Don't refresh pages here - we've already added it to the local map
-    // This prevents the loading skeleton from appearing
+    // Make the copy openable immediately: the replica entry is what
+    // `getDocumentById` resolves, so the editor does not wait on a refetch.
+    this.#documents.replace(newPage.id, { document: this.#toLobeDocument(newPage) });
 
     return newPage;
   };
 
-  fetchDocumentDetail = async (documentId: string): Promise<void> => {
-    try {
-      const document = await documentService.getDocumentById(documentId);
-
-      if (!document) {
-        console.warn(`[fetchDocumentDetail] Document not found: ${documentId}`);
-        return;
-      }
-
-      // Update local map with full document details including editorData
-      const { localDocumentMap } = this.#get();
-      const newMap = new Map(localDocumentMap);
-
-      const fullDocument: LobeDocument = {
-        content: document.content || null,
-        createdAt: document.createdAt ? new Date(document.createdAt) : new Date(),
-        editorData:
-          typeof document.editorData === 'string'
-            ? JSON.parse(document.editorData)
-            : document.editorData || null,
-        fileType: document.fileType,
-        filename: document.title || document.filename || 'Untitled',
-        id: document.id,
-        metadata: document.metadata || {},
-        source: 'document',
-        sourceType: DocumentSourceType.EDITOR,
-        title: document.title || '',
-        totalCharCount: document.content?.length || 0,
-        totalLineCount: 0,
-        updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
-      };
-
-      newMap.set(documentId, fullDocument);
-      this.#set({ localDocumentMap: newMap }, false, n('fetchDocumentDetail'));
-    } catch (error) {
-      console.error('[fetchDocumentDetail] Failed to fetch document:', error);
-    }
-  };
-
-  fetchDocuments = async ({ pageOnly = false }: { pageOnly?: boolean }): Promise<void> => {
-    this.#set({ isDocumentListLoading: true }, false, n('fetchDocuments/start'));
-
-    try {
-      const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-      const queryFilters: DocumentQueryFilter | undefined = pageOnly
-        ? {
-            fileTypes: PAGE_DOCUMENT_FILE_TYPES,
-            sourceTypes: PAGE_DOCUMENT_SOURCE_TYPES,
-          }
-        : undefined;
-
-      const queryParams = queryFilters
-        ? { current: 0, pageSize, ...queryFilters }
-        : { current: 0, pageSize };
-
-      const result = await documentService.queryDocuments(queryParams);
-
-      const pages = result.items.filter(isAllowedDocument).map((doc) => ({
-        ...doc,
-        filename: doc.filename ?? doc.title ?? 'Untitled',
-      })) as LobeDocument[];
-
-      const hasMore = result.items.length >= pageSize;
-
-      this.#set(
-        {
-          currentPage: 0,
-          documentQueryFilter: queryFilters,
-          documents: pages,
-          documentsTotal: result.total,
-          hasMoreDocuments: hasMore,
-          isDocumentListLoading: false,
-        },
-        false,
-        n('fetchDocuments/success'),
-      );
-
-      // Sync with local map: remove temp pages that now exist on server
-      const { localDocumentMap } = this.#get();
-      const newMap = new Map(localDocumentMap);
-
-      for (const [id] of localDocumentMap.entries()) {
-        if (id.startsWith('temp-document-')) {
-          newMap.delete(id);
-        }
-      }
-
-      this.#set({ localDocumentMap: newMap }, false, n('fetchDocuments/syncLocalMap'));
-    } catch (error) {
-      console.error('Failed to fetch pages:', error);
-      this.#set({ isDocumentListLoading: false }, false, n('fetchDocuments/error'));
-      throw error;
-    }
-  };
-
-  getOptimisticDocuments = (): LobeDocument[] => {
-    const { localDocumentMap, documents } = this.#get();
-
-    // Track which pages we've added
-    const addedIds = new Set<string>();
-
-    // Create result array - start with server pages
-    const result: LobeDocument[] = documents.map((page) => {
-      addedIds.add(page.id);
-      // Check if we have a local optimistic update for this page
-      const localUpdate = localDocumentMap.get(page.id);
-      // If local update exists and is newer, use it; otherwise use server version
-      if (localUpdate && new Date(localUpdate.updatedAt) >= new Date(page.updatedAt)) {
-        return localUpdate;
-      }
-      return page;
-    });
-
-    // Add any optimistic pages that aren't in server list yet (e.g., newly created temp pages)
-    for (const [id, page] of localDocumentMap.entries()) {
-      if (!addedIds.has(id)) {
-        result.unshift(page); // Add new pages to the beginning
-      }
-    }
-
-    return result;
-  };
-
-  loadMoreDocuments = async (): Promise<void> => {
-    const { currentPage, isLoadingMoreDocuments, hasMoreDocuments, documentQueryFilter } =
-      this.#get();
-
-    if (isLoadingMoreDocuments || !hasMoreDocuments) return;
-
-    const nextPage = currentPage + 1;
-
-    this.#set({ isLoadingMoreDocuments: true }, false, n('loadMoreDocuments/start'));
-
-    try {
-      const pageSize = useGlobalStore.getState().status.pagePageSize || 20;
-      const queryParams = documentQueryFilter
-        ? { current: nextPage, pageSize, ...documentQueryFilter }
-        : { current: nextPage, pageSize };
-
-      const result = await documentService.queryDocuments(queryParams);
-
-      const newPages = result.items.filter(isAllowedDocument).map((doc) => ({
-        ...doc,
-        filename: doc.filename ?? doc.title ?? 'Untitled',
-      })) as LobeDocument[];
-
-      const hasMore = result.items.length >= pageSize;
-
-      this.#set(
-        {
-          currentPage: nextPage,
-          documents: [...this.#get().documents, ...newPages],
-          documentsTotal: result.total,
-          hasMoreDocuments: hasMore,
-          isLoadingMoreDocuments: false,
-        },
-        false,
-        n('loadMoreDocuments/success'),
-      );
-    } catch (error) {
-      console.error('Failed to load more pages:', error);
-      this.#set({ isLoadingMoreDocuments: false }, false, n('loadMoreDocuments/error'));
-    }
-  };
-
-  removeDocument = async (documentId: string): Promise<void> => {
-    // Remove from local optimistic map first (optimistic update)
-    const { localDocumentMap, documents } = this.#get();
-    const newMap = new Map(localDocumentMap);
-    newMap.delete(documentId);
-
-    // Also remove from documents array to update the list immediately
-    const newDocuments = documents.filter((doc) => doc.id !== documentId);
-
-    this.#set(
-      { documents: newDocuments, localDocumentMap: newMap },
-      false,
-      n('removeDocument/optimistic'),
-    );
-
-    try {
-      // Delete from documents table
-      await documentService.deleteDocument(documentId);
-      // No need to call fetchDocuments() - optimistic update is enough
-    } catch (error) {
-      console.error('Failed to delete document:', error);
-      // Restore the document in local map and documents array on error
-      const restoredMap = new Map(localDocumentMap);
-      this.#set(
-        {
-          documents,
-          localDocumentMap: restoredMap,
-        },
-        false,
-        n('removeDocument/restore'),
-      );
-      throw error;
-    }
-  };
-
-  removeTempDocument = (tempId: string): void => {
-    const { localDocumentMap } = this.#get();
-    const newMap = new Map(localDocumentMap);
-    newMap.delete(tempId);
-    this.#set({ localDocumentMap: newMap }, false, n('removeTempDocument'));
-  };
-
-  replaceTempDocumentWithReal = (tempId: string, realPage: LobeDocument): void => {
-    const { localDocumentMap } = this.#get();
-    const newMap = new Map(localDocumentMap);
-
-    // Remove temp page
-    newMap.delete(tempId);
-
-    // Add real page with same position
-    newMap.set(realPage.id, realPage);
-
-    this.#set({ localDocumentMap: newMap }, false, n('replaceTempDocumentWithReal'));
-  };
-
+  /**
+   * Keep the client's document row in step with the server, without a list
+   * refetch: the replica entry is the single cache the resource manager reads.
+   */
   updateDocument = async (id: string, updates: Partial<LobeDocument>): Promise<void> => {
     await documentService.updateDocument({
       content: updates.content ?? undefined,
@@ -651,11 +401,11 @@ export class DocumentActionImpl {
       title: updates.title,
     });
 
-    const existingDocument = this.#findExistingDocument(id);
+    const existingDocument = this.#get().documentMap[id]?.document;
 
     if (existingDocument) {
       const updatedDocument = this.#createUpdatedDocument(existingDocument, updates);
-      this.#setLocalDocument(id, updatedDocument, n('updateDocument'));
+      this.#documents.replace(id, { document: updatedDocument });
       this.#syncResourceItem(
         this.#createResourceItem(updatedDocument, this.#get().resourceMap.get(id)),
       );
@@ -682,65 +432,62 @@ export class DocumentActionImpl {
     );
   };
 
+  /**
+   * Rename / re-emoji a document: show it at once, write through, and put the
+   * previous value back if the write fails. Also mirrors the change onto the
+   * explorer row, which is what the user is actually looking at.
+   */
   updateDocumentOptimistically = async (
     documentId: string,
     updates: Partial<LobeDocument>,
   ): Promise<void> => {
-    const { localDocumentMap, documents } = this.#get();
+    const existingDocument = this.#get().documentMap[documentId]?.document;
 
-    // Find the page either in local map or documents state
-    let existingPage = localDocumentMap.get(documentId);
-    if (!existingPage) {
-      existingPage = documents.find((doc) => doc.id === documentId);
-    }
-
-    if (!existingPage) {
-      console.warn('[updateDocumentOptimistically] Page not found:', documentId);
+    if (!existingDocument) {
+      console.warn('[updateDocumentOptimistically] Document not found:', documentId);
       return;
     }
 
     const existingResource = this.#get().resourceMap.get(documentId);
-    const updatedPage = this.#createUpdatedDocument(existingPage, updates);
+    const updatedDocument = this.#createUpdatedDocument(existingDocument, updates);
 
-    // Update local map immediately for optimistic UI
-    this.#setLocalDocument(documentId, updatedPage, n('updateDocumentOptimistically'));
+    // Optimistic overlay: the view shows the new value until the DB confirms it.
+    const token = this.#documents.beginOptimistic(documentId, () => ({
+      document: updatedDocument,
+    }));
 
     if (existingResource) {
       this.#syncResourceItem(
-        this.#createResourceItem(updatedPage, existingResource, { optimistic: true }),
+        this.#createResourceItem(updatedDocument, existingResource, { optimistic: true }),
       );
     }
 
-    // Queue background sync to DB
     try {
       await documentService.updateDocument({
         id: documentId,
-        metadata: updatedPage.metadata || {},
-        parentId: updatedPage.parentId !== undefined ? updatedPage.parentId : undefined,
-        title: updatedPage.title || updatedPage.filename,
-        ...(updates.content === undefined ? {} : { content: updatedPage.content ?? '' }),
+        metadata: updatedDocument.metadata || {},
+        parentId: updatedDocument.parentId !== undefined ? updatedDocument.parentId : undefined,
+        title: updatedDocument.title || updatedDocument.filename,
+        ...(updates.content === undefined ? {} : { content: updatedDocument.content ?? '' }),
         ...(updates.editorData === undefined
           ? {}
           : {
               editorData:
-                typeof updatedPage.editorData === 'string'
-                  ? updatedPage.editorData
-                  : JSON.stringify(updatedPage.editorData || {}),
+                typeof updatedDocument.editorData === 'string'
+                  ? updatedDocument.editorData
+                  : JSON.stringify(updatedDocument.editorData || {}),
             }),
       });
+
+      token.commit();
+
       if (existingResource) {
-        this.#syncResourceItem(this.#createResourceItem(updatedPage, existingResource));
+        this.#syncResourceItem(this.#createResourceItem(updatedDocument, existingResource));
       }
     } catch (error) {
       console.error('[updateDocumentOptimistically] Failed to sync to DB:', error);
-      // On error, revert the optimistic update
-      const revertMap = new Map(localDocumentMap);
-      if (existingPage) {
-        revertMap.set(documentId, existingPage);
-      } else {
-        revertMap.delete(documentId);
-      }
-      this.#set({ localDocumentMap: revertMap }, false, n('revertOptimisticUpdate'));
+      // Put the previous row back; the explorer row follows the same value.
+      token.rollback();
 
       if (existingResource) {
         this.#syncResourceItem(existingResource);
@@ -748,56 +495,56 @@ export class DocumentActionImpl {
     }
   };
 
-  useFetchDocumentDetail = (documentId: string | undefined): SWRResponse<LobeDocument | null> => {
-    const swrKey = documentId ? ['documentDetail', documentId] : null;
+  removeDocument = async (documentId: string): Promise<void> => {
+    // Drop the row optimistically; restore it if the server rejects the delete.
+    const snapshot = this.#get().documentMap[documentId];
+    this.#documents.remove(documentId);
 
-    return useClientDataSWRWithSync<LobeDocument | null>(
-      swrKey,
-      async () => {
-        if (!documentId) return null;
+    try {
+      await documentService.deleteDocument(documentId);
+    } catch (error) {
+      console.error('Failed to delete document:', error);
+      if (snapshot) this.#documents.replace(documentId, snapshot);
+      throw error;
+    }
+  };
 
-        const document = await documentService.getDocumentById(documentId);
-        if (!document) {
-          console.warn(`[useFetchDocumentDetail] Document not found: ${documentId}`);
-          return null;
-        }
+  /**
+   * Warm the replica for a document the user is about to open, so the resource
+   * manager paints from the projection (and a later reload hydrates it) instead
+   * of waiting on the network.
+   */
+  prefetchDocument = async (documentId: string): Promise<void> => {
+    try {
+      const row = await documentService.getDocumentById(documentId);
+      this.#documents.replace(documentId, {
+        document: row ? this.#toLobeDocument(row) : null,
+      });
+    } catch (error) {
+      console.error('[FileStore] Failed to prefetch document:', error);
+    }
+  };
 
-        // Transform API response to LobeDocument format
-        const fullDocument: LobeDocument = {
-          content: document.content || null,
-          createdAt: document.createdAt ? new Date(document.createdAt) : new Date(),
-          editorData:
-            typeof document.editorData === 'string'
-              ? JSON.parse(document.editorData)
-              : document.editorData || null,
-          fileType: document.fileType,
-          filename: document.title || document.filename || 'Untitled',
-          id: document.id,
-          metadata: document.metadata || {},
-          source: 'document',
-          sourceType: DocumentSourceType.EDITOR,
-          title: document.title || '',
-          totalCharCount: document.content?.length || 0,
-          totalLineCount: 0,
-          updatedAt: document.updatedAt ? new Date(document.updatedAt) : new Date(),
-        };
+  /**
+   * Sync one document through its replica. The view is the source of truth, so
+   * a reload or a return to the route paints from the persisted projection on
+   * the first frame and the network only confirms it.
+   */
+  useFetchDocumentDetail = (documentId: string | undefined): UseFetchDocumentDetailResult => {
+    const entry = useFileStore((s) => (documentId ? s.documentMap[documentId] : undefined));
 
-        return fullDocument;
-      },
-      {
-        focusThrottleInterval: 5000,
-        onData: (document) => {
-          if (!document) return;
+    const sync = this.#documents.useSync(documentId, {
+      // Keep an open page in step with other writers.
+      revalidateOnFocus: true,
+    });
 
-          // Auto-sync to localDocumentMap
-          const { localDocumentMap } = this.#get();
-          const newMap = new Map(localDocumentMap);
-          newMap.set(documentId!, document);
-          this.#set({ localDocumentMap: newMap }, false, n('useFetchDocumentDetail/onData'));
-        },
-        revalidateOnFocus: true, // 5 seconds
-      },
-    );
+    return {
+      data: entry?.document,
+      error: sync.error,
+      isLoading: Boolean(documentId) && entry === undefined && sync.error == null,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    };
   };
 }
 
