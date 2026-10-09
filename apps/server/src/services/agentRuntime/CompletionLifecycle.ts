@@ -243,7 +243,8 @@ export class CompletionLifecycle {
       persisted = false;
       // Hook configuration may contain inline authorization headers. Never log
       // a database error that could repeat its bound metadata parameters.
-      if (params.metadata?._hooks)
+      const hooks = params.metadata?._hooks;
+      if (hooks && (!Array.isArray(hooks) || hooks.length > 0))
         log('[%s] Failed to record operation start (non-fatal)', params.operationId);
       else log('[%s] Failed to record operation start (non-fatal): %O', params.operationId, error);
     }

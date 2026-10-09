@@ -28,7 +28,8 @@ export function projectToolResultControl<T extends ResultMessage>(message: T): T
   return {
     ...message,
     content,
-    metadata: {},
+    // Council layout is server-authored structure, not part of the gated result.
+    metadata: metadata.agentCouncil === true ? { agentCouncil: true } : {},
     pluginError: blocked ? 'hook_denied' : undefined,
     pluginState: {
       ...(blocked && pickToolResultUsage(message.pluginState)),
