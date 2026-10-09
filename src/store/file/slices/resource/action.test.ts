@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { setScopedMutate } from '@/libs/swr/mutate';
 import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
 import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
@@ -405,5 +406,49 @@ describe('applyMovedResourceToCaches scope', () => {
       );
 
     expect(listIds()).toEqual([]);
+  });
+});
+
+describe('revalidating after a committed mutation', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetActiveWorkspaceId.mockReturnValue(null);
+    useFileStore.setState(initialState);
+    // Every confirmation of the mounted list rejects.
+    setScopedMutate((async () => {
+      throw new Error('revalidate failed');
+    }) as never);
+  });
+
+  afterEach(() => {
+    setScopedMutate((async () => []) as never);
+  });
+
+  it('reports a committed move as successful even when its confirmation fails', async () => {
+    mockMoveResource.mockResolvedValue(createResource({ id: 'root-1', parentId: 'folder-a' }));
+    seedList({ parentId: null }, [createResource({ id: 'root-1', parentId: null })]);
+
+    await expect(
+      useFileStore.getState().moveResource('root-1', 'folder-a'),
+    ).resolves.toBeUndefined();
+
+    // The move stands: the row left the root view instead of being restored.
+    expect(listIds()).toEqual([]);
+  });
+
+  it('keeps an API-only move completion when its confirmation fails', async () => {
+    seedList({ parentId: 'folder-b' }, []);
+
+    await expect(
+      useFileStore
+        .getState()
+        .applyMovedResourceToCaches(createResource({ id: 'moved-1', parentId: 'folder-b' }), {
+          fromParentKeys: [null],
+          scope: { libraryId: undefined, workspaceId: null },
+          toParentKeys: ['folder-b'],
+        }),
+    ).resolves.toBeUndefined();
+
+    expect(listIds()).toEqual(['moved-1']);
   });
 });

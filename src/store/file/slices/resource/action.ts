@@ -287,6 +287,20 @@ export class ResourceActionImpl {
     await this.#resourceList.revalidate();
   };
 
+  /**
+   * Confirm the mounted list after a mutation that the server already accepted.
+   * A failed confirmation must not undo (or fail) that mutation: the rows are
+   * committed, the next visit revalidates anyway, and the caller's own
+   * transaction would otherwise restore a row the server has moved.
+   */
+  #revalidateListQuietly = async (action: string): Promise<void> => {
+    try {
+      await this.#revalidateList();
+    } catch (error) {
+      log('%s: revalidation after the mutation failed', action, error);
+    }
+  };
+
   #clearSyncingOptimistic = (resource: ResourceItem): ResourceItem => stripOptimistic(resource);
 
   #isResourceOutsideCurrentQuery = (resource: ResourceItem): boolean => {
@@ -648,13 +662,15 @@ export class ResourceActionImpl {
     try {
       const moved = (await resourceService.moveResource(id, parentId, existing)) as ResourceItem;
       token?.commit((data) => applyMove(data, moved));
-      // The folder lists the engine persisted under other queries are not in
-      // memory; revalidate the mounted list so what the user sees confirms.
-      await this.#revalidateList();
     } catch (error) {
       token?.rollback();
       throw error;
     }
+
+    // The server accepted the move, so a reconciliation failure must not undo it
+    // or report the operation as failed (the caller — the tree's optimistic
+    // transaction — would restore a row the server already moved).
+    await this.#revalidateListQuietly('moveResource');
   };
 
   /**
@@ -719,7 +735,7 @@ export class ResourceActionImpl {
       { persist: true },
     );
 
-    await this.#revalidateList();
+    await this.#revalidateListQuietly('applyMovedResourceToCaches');
   };
 
   // ---- local-only row edits (upload / optimistic search paths) ------------
@@ -900,7 +916,7 @@ export class ResourceActionImpl {
         // The rows left the server's page too, so the offset the loaded depth
         // implies no longer lines up with the survivors — without a revalidate
         // the next "load more" would skip the row that shifted up into the gap.
-        await this.#revalidateList();
+        await this.#revalidateListQuietly('removeResourcesFromKnowledgeBase');
       } else {
         token?.commit((data) =>
           this.#patchRows(data, idsSet, (resource) =>
