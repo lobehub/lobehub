@@ -1054,6 +1054,30 @@ describe('GenerationService', () => {
       expect(mockFileService.deleteFile).toHaveBeenCalledWith(coverKey);
     });
 
+    it('keeps its upload when the failed save actually committed the cover', async () => {
+      mockTopicModel.findById
+        .mockResolvedValueOnce({ coverUrl: null, id: 'gt_1' })
+        .mockResolvedValueOnce({ coverUrl: coverKey, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockRejectedValue(new Error('connection lost'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('keeps its upload when the topic cannot be re-checked after a failed save', async () => {
+      mockTopicModel.findById
+        .mockResolvedValueOnce({ coverUrl: null, id: 'gt_1' })
+        .mockRejectedValueOnce(new Error('DB down'));
+      mockTopicModel.updateCoverIfEmpty.mockRejectedValue(new Error('connection lost'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+    });
+
     it('does not throw when cover processing fails', async () => {
       mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
       mockFileService.getFileByteArray.mockRejectedValue(new Error('S3 down'));

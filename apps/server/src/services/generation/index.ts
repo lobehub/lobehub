@@ -349,6 +349,18 @@ export class GenerationService {
     } catch (error) {
       console.error('[generation] Failed to set topic cover:', error);
       if (!coverKey) return;
+
+      // The update may have committed before failing (e.g. the connection dropped
+      // before returning). Deleting a committed cover would leave a broken
+      // reference that later generations never repair, so only delete when the
+      // topic provably does not use it; keep the object if that cannot be checked.
+      try {
+        const topic = await this.generationTopicModel.findById(topicId);
+        if (topic?.coverUrl === coverKey) return;
+      } catch (checkError) {
+        console.error('[generation] Failed to verify topic cover, keeping upload:', checkError);
+        return;
+      }
     }
 
     // The uploaded cover was not saved on the topic; delete it so it is not orphaned
