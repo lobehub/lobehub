@@ -1043,6 +1043,17 @@ describe('GenerationService', () => {
       expect(mockFileService.deleteFile).toHaveBeenCalledWith(coverKey);
     });
 
+    it('removes its upload when saving the cover fails', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockRejectedValue(new Error('DB down'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(service.ensureTopicCover('gt_1', 'generations/thumb.webp')).resolves.toBe(
+        undefined,
+      );
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith(coverKey);
+    });
+
     it('does not throw when cover processing fails', async () => {
       mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
       mockFileService.getFileByteArray.mockRejectedValue(new Error('S3 down'));
@@ -1052,6 +1063,7 @@ describe('GenerationService', () => {
         undefined,
       );
       expect(consoleError).toHaveBeenCalled();
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
     });
   });
 });

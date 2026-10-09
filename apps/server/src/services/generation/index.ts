@@ -332,6 +332,7 @@ export class GenerationService {
    * @param sourceKey - S3 key of the generated image or video thumbnail
    */
   async ensureTopicCover(topicId: string, sourceKey: string): Promise<void> {
+    let coverKey: string | undefined;
     try {
       const topic = await this.generationTopicModel.findById(topicId);
       if (!topic || topic.coverUrl) return;
@@ -339,15 +340,22 @@ export class GenerationService {
       // Read the object directly instead of fetching its URL, which may be an
       // internal S3 endpoint rejected by the SSRF-safe fetch in self-hosted setups.
       const source = await this.fileService.getFileByteArray(sourceKey);
-      const coverKey = await this.createCoverFromBuffer(Buffer.from(source));
+      coverKey = await this.createCoverFromBuffer(Buffer.from(source));
 
       const updated = await this.generationTopicModel.updateCoverIfEmpty(topicId, coverKey);
-      if (!updated) {
-        log('Topic %s got a cover from a concurrent generation, removing %s', topicId, coverKey);
-        await this.fileService.deleteFile(coverKey);
-      }
+      if (updated) return;
+
+      log('Topic %s got a cover from a concurrent generation, removing %s', topicId, coverKey);
     } catch (error) {
       console.error('[generation] Failed to set topic cover:', error);
+      if (!coverKey) return;
+    }
+
+    // The uploaded cover was not saved on the topic; delete it so it is not orphaned
+    try {
+      await this.fileService.deleteFile(coverKey);
+    } catch (error) {
+      console.error('[generation] Failed to delete unused topic cover:', error);
     }
   }
 

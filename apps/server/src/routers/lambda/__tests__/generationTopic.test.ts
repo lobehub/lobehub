@@ -203,6 +203,38 @@ describe('generationTopicRouter', () => {
     expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { coverUrl: mockNewCoverKey });
   });
 
+  it('should delete the replaced cover object when updating a topic cover', async () => {
+    const mockTopicId = 'topic-123';
+    const mockOldCoverKey = 'generations/covers/server-cover.webp';
+    const mockNewCoverKey = 'generations/covers/new-cover-key.webp';
+    const mockUpdatedTopic = { coverUrl: mockNewCoverKey, id: mockTopicId, userId: 'test-user' };
+    const mockDeleteFile = vi.fn().mockResolvedValue(undefined);
+
+    vi.mocked(GenerationService).mockImplementation(function () {
+      return { createCoverFromUrl: vi.fn().mockResolvedValue(mockNewCoverKey) } as any;
+    });
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi
+          .fn()
+          .mockResolvedValue({ coverUrl: mockOldCoverKey, id: mockTopicId, userId: 'test-user' }),
+        update: vi.fn().mockResolvedValue(mockUpdatedTopic),
+      } as any;
+    });
+    vi.mocked(FileService).mockImplementation(function () {
+      return { deleteFile: mockDeleteFile } as any;
+    });
+
+    const caller = generationTopicRouter.createCaller(mockCtx);
+    const result = await caller.updateTopicCover({
+      coverUrl: 'https://example.com/cover.jpg',
+      id: mockTopicId,
+    });
+
+    expect(result).toEqual(mockUpdatedTopic);
+    expect(mockDeleteFile).toHaveBeenCalledWith(mockOldCoverKey);
+  });
+
   it('should delete a topic without cover', async () => {
     const mockTopicId = 'topic-123';
     const mockDeletedTopic = {
