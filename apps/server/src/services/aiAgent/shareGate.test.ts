@@ -423,6 +423,50 @@ describe('applyShareGateToToolSet', () => {
     expect(toolSet.manifestMap['mcp-github'].systemRole).toBe('Use run for repository operations.');
   });
 
+  it('drops a granted MCP server that only the creator machine can reach', () => {
+    const toolSet = buildToolSet([
+      { apis: [{ name: 'read_file' }], identifier: 'mcp-fs', type: 'mcp' },
+      { apis: [{ name: 'query' }], identifier: 'mcp-lan', type: 'mcp' },
+      { apis: [{ name: 'run' }], identifier: 'mcp-remote', type: 'mcp' },
+    ]);
+    (toolSet.manifestMap['mcp-fs'] as any).mcpParams = {
+      args: [],
+      command: 'npx',
+      name: 'mcp-fs',
+      type: 'stdio',
+    };
+    (toolSet.manifestMap['mcp-lan'] as any).mcpParams = {
+      name: 'mcp-lan',
+      type: 'http',
+      url: 'http://192.168.1.20:8000/mcp',
+    };
+    (toolSet.manifestMap['mcp-remote'] as any).mcpParams = {
+      name: 'mcp-remote',
+      type: 'http',
+      url: 'https://mcp.example.com/mcp',
+    };
+    toolSet.executorMap['mcp-fs'] = 'client';
+
+    applyShareGateToToolSet(
+      toolSet,
+      buildGate({
+        toolGrants: [
+          { identifier: 'mcp-fs' },
+          { identifier: 'mcp-lan' },
+          { identifier: 'mcp-remote' },
+        ],
+      }),
+    );
+
+    expect(toolSet.enabledToolIds).toEqual(['mcp-remote']);
+    expect(toolSet.activatableToolIds).toEqual(['mcp-remote']);
+    expect(Object.keys(toolSet.manifestMap)).toEqual(['mcp-remote']);
+    expect(toolSet.executorMap).not.toHaveProperty('mcp-fs');
+    expect(toolSet.tools!.map((tool) => tool.function.name)).toEqual([
+      toolName('mcp-remote', 'run', 'mcp'),
+    ]);
+  });
+
   it('collapses the whole set when no tools are enabled', () => {
     const toolSet = buildToolSet([
       { apis: [{ name: 'calculate' }], identifier: CalculatorIdentifier },

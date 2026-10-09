@@ -34,6 +34,7 @@ import {
 import type { LobeToolManifest, ToolExecutor, ToolSource } from '@lobechat/context-engine';
 import { generateToolsFromManifest, ToolNameResolver } from '@lobechat/context-engine';
 import type { AgentShareToolGrant } from '@lobechat/types';
+import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 
 import type { AgentShareConfig } from '@/database/schemas';
 
@@ -545,7 +546,23 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   // custom plugins) are outside `isGovernedByBuiltinAllowlist`'s population, so
   // they pass straight through to the owner-picker check unaffected — this
   // allowlist must never decide their fate, in either direction.
+  // MCP servers only the creator's machine can reach (stdio / localhost / LAN)
+  // never survive, grant or not: dispatching one tunnels to the creator's
+  // device under the creator's identity. Decided from the manifest's runtime
+  // `mcpParams` (set for connector manifests by `buildConnectorManifests`),
+  // the same field `ToolExecutionService.executeMCPTool` dispatches on — which
+  // also refuses these calls for visitor runs as the unbypassable backstop.
+  const deviceOnlyMcpIds = new Set(
+    Object.entries(toolSet.manifestMap)
+      .filter(([, manifest]) => {
+        const mcpParams = (manifest as { mcpParams?: { type?: string; url?: string } }).mcpParams;
+        return !!mcpParams && isDeviceOnlyMcpEndpoint(mcpParams);
+      })
+      .map(([id]) => id),
+  );
+
   const isAllowed = (id: string) => {
+    if (deviceOnlyMcpIds.has(id)) return false;
     if (!hasShareToolGrant(grants, id)) return false;
     if (!isGovernedByBuiltinAllowlist(id)) return true;
     return SHARE_VISITOR_ALLOWED_IDENTIFIERS.has(id);
@@ -745,6 +762,14 @@ const applyShareGateToPerApiGrants = (
  *   Share runs now honor the visitor's approval flow, but both stay denied
  *   until audited on their own: `lobe-activator` can widen the run's tool
  *   surface at runtime, which must be proven not to escape the share grant.
+ *
+ * - Device-only MCP servers (stdio, or an HTTP endpoint on localhost / a
+ *   private network): not builtin identifiers, so the allowlist above never
+ *   sees them, but a visitor run must still never reach them — the server can
+ *   only call them by tunneling to the creator's online desktop app (or, with
+ *   no device gateway, by spawning the binary on the server itself).
+ *   `applyShareGateToToolSet` drops them regardless of `toolGrants`, and
+ *   `ToolExecutionService.executeMCPTool` refuses the dispatch.
  */
 
 /**

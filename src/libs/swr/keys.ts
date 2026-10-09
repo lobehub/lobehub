@@ -1176,6 +1176,11 @@ export const inboxKeys = {
 // ---- share (shared agent / topic / page) ---------------------------------
 export const shareKeys = {
   agentInfo: def('share:agentInfo', (slugOrId: string) => ['share:agentInfo', slugOrId]),
+  /** Connector lists the creator-side AGENT share tool picker screens, keyed by agentId. */
+  agentShareConnectors: def('share:agentShareConnectors', (agentId: string) => [
+    'share:agentShareConnectors',
+    agentId,
+  ]),
   /** Candidates for the creator-side AGENT share skill picker, keyed by agentId. */
   agentShareGrantableSkills: def('share:agentShareGrantableSkills', (agentId: string) => [
     'share:agentShareGrantableSkills',
