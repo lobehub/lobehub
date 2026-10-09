@@ -1,6 +1,6 @@
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, confirmModal, Popover, Text } from '@lobehub/ui/base-ui';
-import { RotateCwIcon } from 'lucide-react';
+import { DownloadIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -58,7 +58,7 @@ export const CliUpdate = ({
                 <ActionIcon
                   aria-label={t('devices.cliUpdate.update')}
                   disabled={!update.allowed || update.requesting}
-                  icon={RotateCwIcon}
+                  icon={DownloadIcon}
                   loading={update.requesting}
                   size={'small'}
                   title={t('devices.cliUpdate.update')}
@@ -73,7 +73,7 @@ export const CliUpdate = ({
               <ActionIcon
                 aria-label={t('common:checkForUpdates')}
                 disabled={update.requesting}
-                icon={RotateCwIcon}
+                icon={DownloadIcon}
                 loading={update.requesting}
                 size={'small'}
                 title={t('common:checkForUpdates')}
