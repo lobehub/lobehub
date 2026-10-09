@@ -162,8 +162,6 @@ export interface ToolDiscoveryInput {
   selectedToolIds?: string[];
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   topicBoundDeviceId?: string | null;
-  /** The turn's topic is pinned to a project working directory (from turn setup). */
-  topicProjectDirectoryBound: boolean;
 }
 
 export interface ToolDiscoveryResult {
@@ -301,7 +299,6 @@ export const discoverTools = async (
     selectedToolIds,
     throwIfExecutionAborted,
     topicBoundDeviceId,
-    topicProjectDirectoryBound,
   } = input;
   // Feature-flagged builtin tools (e.g. lobe-dashboard) leave the pool while
   // their flag is off for this user; a flag read failure keeps them out.
@@ -963,43 +960,6 @@ export const discoverTools = async (
         error: {
           body: { detail, ...errorData },
           message: 'Fixed agent device unavailable',
-          type: 'ServerAgentRuntimeError',
-        },
-      });
-      throw new TRPCError({
-        cause: { data: errorData },
-        code: 'PRECONDITION_FAILED',
-        message: detail,
-      });
-    }
-    // A conversation pinned to a project working directory makes the same
-    // promise as a fixed device target: it runs in one repository on one device.
-    // An unrouted or sandbox plan degrades exec (lobe-skills runCommand /
-    // execScript) to the cloud sandbox below, which would silently run the
-    // user's commands in an unrelated sandbox instead of failing on the bound
-    // device. Reject it the same way instead. The flag is carried forward from
-    // turn setup, which already loaded the topic, so no send path pays a lookup.
-    if (
-      topicProjectDirectoryBound &&
-      executionPlan.kind !== 'device' &&
-      resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat'
-    ) {
-      const detail =
-        executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline'
-          ? "The device bound to this project's working directory is offline. Bring it online, then send again."
-          : "The device bound to this project's working directory is unavailable for this run.";
-      const errorData: DeviceUnavailableErrorData = {
-        code: 'DEVICE_NOT_FOUND',
-        deviceId: boundDeviceId,
-        retryable: true,
-        scope: deps.workspaceId ? 'workspace' : 'personal',
-        ...(deps.workspaceId ? { workspaceId: deps.workspaceId } : {}),
-      };
-      await deps.messageModel.update(assistantMessageId, {
-        content: '',
-        error: {
-          body: { detail, ...errorData },
-          message: 'Project directory device unavailable',
           type: 'ServerAgentRuntimeError',
         },
       });

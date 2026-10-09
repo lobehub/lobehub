@@ -28,6 +28,7 @@ import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/a
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -393,12 +394,6 @@ export interface TurnSetupResult {
    */
   topicEditingGroupId?: string;
   topicId: string;
-  /**
-   * The reused topic is pinned to a project working directory, so the run is
-   * bound to one repository on one device. Carried forward so the execution
-   * guard needs no extra topic lookup on any send path.
-   */
-  topicProjectDirectoryBound: boolean;
   userMessageId?: string;
 }
 
@@ -465,7 +460,6 @@ export const setupTurn = async (
     : isFixedExecutionTargetSelection
       ? undefined
       : requestedDeviceId;
-  let topicProjectDirectoryBound = false;
 
   // Effective model/provider for this run. Defaults to the agent config, but a
   // topic pins its own model in the top-level `topics.model`/`provider` columns
@@ -632,16 +626,26 @@ export const setupTurn = async (
           agentConfig.agencyConfig.boundDeviceId !== directory.deviceId
         )
           throw new Error('Agent is fixed to another execution target');
-        // No device round trip here. Whether the directory still exists on the
-        // device is discovered by the dispatch that follows, which is the single
-        // source of truth for liveness. A blocking `statPath` probe put a full
-        // WebSocket round trip (up to its 8s timeout) on the critical path of
-        // every message in a project-directory topic, and rejected the send
-        // outright when the device was merely slow to answer.
+        // The directory lives on one device, so only that device can honour the
+        // run. Reject an unavailable device *here*, before the user/assistant
+        // rows are persisted: the client treats a rejected send as never
+        // accepted, keeps the draft and rolls back its optimistic pair, so a
+        // later rejection would leave a failed turn durable server-side that the
+        // client disagrees with. Liveness comes from the gateway's device
+        // listing — not a device round trip — so the send path keeps the latency
+        // fix, and the dispatch remains the authority on whether the directory
+        // still exists on the device.
+        const { canUseDevice: canUseProjectDevice } = resolveDeviceAccessPolicy({ botContext });
+        const projectDevices = canUseProjectDevice
+          ? await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
+          : [];
+        if (
+          !projectDevices.some((device) => device.deviceId === directory.deviceId && device.online)
+        )
+          throw new Error('Device is offline or working directory is unavailable');
         resolvedRequestedDeviceId = directory.deviceId;
         effectiveRequestedDeviceId = directory.deviceId;
         topicBoundDeviceId = directory.deviceId;
-        topicProjectDirectoryBound = true;
         agentConfig.agencyConfig = {
           ...agentConfig.agencyConfig,
           boundDeviceId: directory.deviceId,
@@ -1026,7 +1030,6 @@ export const setupTurn = async (
     topicBoundDeviceId,
     topicEditingGroupId,
     topicId,
-    topicProjectDirectoryBound,
     userMessageId: userMessageRecord?.id,
   };
 };

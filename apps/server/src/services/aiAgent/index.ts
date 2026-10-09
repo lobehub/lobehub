@@ -1462,7 +1462,6 @@ export class AiAgentService {
       runAttachments,
       selectedToolIds,
       topicBoundDeviceId: turn.topicBoundDeviceId,
-      topicProjectDirectoryBound: turn.topicProjectDirectoryBound,
     });
 
     const { discovery, initialContext, prep } = await traceSendStage('operation_init', () =>

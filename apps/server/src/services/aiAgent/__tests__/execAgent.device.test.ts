@@ -787,28 +787,12 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
 
-    // Regression: the project-directory guard must not add a topic read to the
-    // broad sandbox path. Its fact is carried forward from turn setup, which
-    // already loaded the topic — a `kind !== 'device'` gate alone would look the
-    // topic up on every non-chat sandbox send.
-    it('does not pay an extra topic lookup for a sandbox run', async () => {
-      mockDeviceProxy.isConfigured = false;
-      topicMock.findById.mockResolvedValue({ id: 'topic-1', metadata: undefined });
-      topicMock.findById.mockClear();
-
-      await service.execAgent({
-        agentId: 'agent-1',
-        prompt: 'Hello',
-        appContext: { topicId: 'topic-1' },
-      });
-
-      expect(topicMock.findById).toHaveBeenCalledTimes(1);
-    });
-
-    // Regression: dropping the device probe must not let an offline project
-    // directory fall through to the cloud sandbox — a run pinned to one repo on
-    // one device has to fail on that device, not execute elsewhere.
-    it('rejects instead of degrading to the sandbox when the bound device is offline', async () => {
+    // Regression: the directory lives on one device, so an offline device has to
+    // reject the send *before* the user/assistant rows are persisted. A
+    // rejection after persistence leaves a failed turn durable server-side while
+    // the client treats the send as unaccepted, rolls its optimistic pair back
+    // and keeps the draft — and retrying then stacks duplicate failed turns.
+    it('rejects an offline bound device before persisting the turn', async () => {
       mockDeviceProxy.isConfigured = true;
       mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
       topicMock.findById.mockResolvedValue({
@@ -823,21 +807,24 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
         permission: 'readWrite',
         platform: 'darwin',
       });
+      mockMessageCreate.mockClear();
+      mockCreateOperation.mockClear();
 
-      await expect(
-        service.execAgent({
+      const error: unknown = await service
+        .execAgent({
           agentId: 'agent-1',
           prompt: 'Run a command',
           appContext: { topicId: 'topic-1' },
-        }),
-      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+        })
+        .catch((thrown) => thrown);
 
+      // Asserted before the message so a post-persistence rejection fails here,
+      // on the divergence itself rather than on the error text.
+      expect(mockMessageCreate).not.toHaveBeenCalled();
       expect(mockCreateOperation).not.toHaveBeenCalled();
-      expect(mockMessageUpdate).toHaveBeenCalledWith(
-        'msg-1',
-        expect.objectContaining({
-          error: expect.objectContaining({ message: 'Project directory device unavailable' }),
-        }),
+      expect(error).toBeInstanceOf(Error);
+      expect((error as Error).message).toBe(
+        'Device is offline or working directory is unavailable',
       );
     });
   });
