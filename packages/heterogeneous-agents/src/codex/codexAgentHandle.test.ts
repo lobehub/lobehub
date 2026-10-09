@@ -159,10 +159,32 @@ describe('createCodexAgentHandle', () => {
     expect(received).toEqual([{ text: 'one prompt', text_elements: [], type: 'text' }]);
   });
 
+  /** @example An ordinary topic surfaces the raw Codex error so the CLI can retry fresh. */
+  it('reports a missing ordinary session without the Fork refusal', async () => {
+    mocks.run.mockRejectedValue(
+      new Error('thread/resume failed: no rollout found for thread id stale'),
+    );
+    const handle = await createCodexAgentHandle({ ...options, resumeSessionId: 'stale' });
+    let stderr = '';
+    handle.stderr.on('data', (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    for await (const _event of handle.events) {
+      /* Drain the actual async event contract. */
+    }
+    expect(await handle.exit).toEqual({ code: 1, signal: null });
+    expect(stderr).toContain('no rollout found');
+    expect(stderr).not.toContain('refusing to restart');
+  });
+
   /** @example A missing native child produces a clear terminal error without a new session. */
   it('reports lost native history without declaring the requested source token as the child', async () => {
     mocks.run.mockRejectedValue(new Error('thread not found'));
-    const handle = await createCodexAgentHandle({ ...options, resumeSessionId: 'lost-child' });
+    const handle = await createCodexAgentHandle({
+      ...options,
+      resumeSessionId: 'lost-child',
+      strictHistory: true,
+    });
     let stderr = '';
     handle.stderr.on('data', (chunk: Buffer) => {
       stderr += chunk.toString();
