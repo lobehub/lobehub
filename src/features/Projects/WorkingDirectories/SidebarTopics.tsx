@@ -4,6 +4,7 @@ import { PlusIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import AsyncError from '@/components/AsyncError';
 import Filter from '@/features/AgentSidebar/Topic/Filter';
 import { useAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode';
 import ToggleGroups from '@/features/AgentSidebar/Topic/ToggleGroups';

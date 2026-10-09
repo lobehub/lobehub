@@ -76,7 +76,7 @@ describe('resolveAgentTopicGroupMode', () => {
   });
 
   /** @example byAgent picked in a project sidebar must not leak into a single agent's own sidebar. */
-  it.each([{ agentTopicGroupMode: undefined }, { agentTopicGroupMode: 'byAgent' }])(
+  it.each([{ agentTopicGroupMode: undefined }, { agentTopicGroupMode: 'byAgent' as const }])(
     'normalizes byAgent to byTime for unscoped agent sidebars (config %o)',
     ({ agentTopicGroupMode }) => {
       // ROOT CAUSE: the project sidebar persists byAgent into the global
