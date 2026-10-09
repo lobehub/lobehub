@@ -1,7 +1,7 @@
 'use client';
 
 import { TRASH_RETENTION_DAYS } from '@lobechat/const';
-import type { TrashItem, TrashResourceType } from '@lobechat/types';
+import type { TrashCountByType, TrashItem, TrashResourceType } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Avatar, Button, confirmModal, Segmented, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles } from 'antd-style';
@@ -17,6 +17,10 @@ import { trashSelectors, useTrashStore } from '@/store/trash';
 import { TRASH_TYPE_ICON, TRASH_TYPE_ORDER } from './typeMeta';
 
 dayjs.extend(relativeTime);
+
+/** Stable empties so the replicated views never trip the store's shallow equality. */
+const EMPTY_ITEMS: TrashItem[] = [];
+const EMPTY_COUNTS: TrashCountByType = {};
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   container: css`
@@ -52,11 +56,8 @@ const TrashList = () => {
   const mobile = useIsMobile();
 
   const [
-    items,
-    nextCursor,
     activeType,
     countByType,
-    isLoadingMore,
     loadingIds,
     setActiveType,
     restore,
@@ -66,11 +67,8 @@ const TrashList = () => {
     useFetchTrash,
     useFetchTrashCount,
   ] = useTrashStore((s) => [
-    s.items,
-    s.nextCursor,
     s.activeType,
-    s.countByType,
-    s.isLoadingMore,
+    s.trashCountMap.all ?? EMPTY_COUNTS,
     s.loadingIds,
     s.setActiveType,
     s.restore,
@@ -80,11 +78,19 @@ const TrashList = () => {
     s.useFetchTrash,
     s.useFetchTrashCount,
   ]);
-  const isEmpty = useTrashStore(trashSelectors.isEmpty);
+
+  // The active filter's local-first page: first frame paints from storage.
+  const list = useTrashStore(trashSelectors.currentList(activeType));
+  const items = list?.items ?? EMPTY_ITEMS;
+  const nextCursor = list?.nextCursor ?? null;
+  const isLoadingMore = !!list?.isLoadingMore;
+  const isEmpty = useTrashStore(trashSelectors.isEmpty(activeType));
   const total = useTrashStore(trashSelectors.totalCount);
 
-  const { error, isLoading, isValidating, mutate: retry } = useFetchTrash(true, activeType);
+  const { error, isValidating, revalidate } = useFetchTrash(true, activeType);
   useFetchTrashCount(true);
+
+  const isLoading = !isEmpty && items.length === 0 && isValidating;
 
   const typeLabel = (type: TrashResourceType) => t(`trash.type.${type}` as const);
 
@@ -274,7 +280,7 @@ const TrashList = () => {
       <LiteTable
         columns={columns}
         dataSource={items}
-        loading={isLoading && !isEmpty && items.length === 0}
+        loading={isLoading}
         rowKey={(item) => item.id}
         emptyText={
           <Center height={240} width={'100%'}>
@@ -283,7 +289,7 @@ const TrashList = () => {
                 description={t('trash.loadFailed.desc')}
                 title={t('trash.loadFailed.title')}
                 action={
-                  <Button loading={isValidating} size={'small'} onClick={() => retry()}>
+                  <Button loading={isValidating} size={'small'} onClick={() => revalidate()}>
                     {tc('retry')}
                   </Button>
                 }
