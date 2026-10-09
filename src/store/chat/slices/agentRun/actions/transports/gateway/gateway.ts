@@ -2332,8 +2332,21 @@ export class GatewayActionImpl {
       if (this.#get().operations[op.id]?.status !== 'running') continue;
 
       // Complete the op itself first: it is what every "a run is in flight"
-      // surface reads (sidebar spinner, elapsed clock, stop button).
+      // surface reads (sidebar spinner, elapsed clock, stop button). Doing it
+      // before the teardown below also makes the `disconnected` that teardown
+      // provokes a no-op.
       this.#get().completeOperation(op.id);
+
+      // Then tear the transport down exactly like `reconcileSilentEnd` does.
+      // `internal_cleanupGatewayConnection` only drops store state, so without
+      // the `disconnect()` the discarded handle keeps a v1 reconnect timer
+      // opening sockets and a mux operation subscribed for a run nobody will
+      // ever read. (The transcript's canonical final state is NOT this sweep's
+      // job — it belongs to the conversation's own fetch/settle path, which
+      // has the session closure to synthesize a `notify_update` from.)
+      this.#get().gatewayConnections[op.id]?.client?.disconnect();
+      this.internal_cleanupGatewayConnection(op.id);
+
       this.clearLocalRunningOperation({
         agentId: params.agentId,
         groupId: params.groupId,

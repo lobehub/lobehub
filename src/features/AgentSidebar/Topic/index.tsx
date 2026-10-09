@@ -10,6 +10,7 @@ import {
   Spin,
   Text,
 } from '@lobehub/ui/base-ui';
+import { useDocumentVisibility } from 'ahooks';
 import { cx } from 'antd-style';
 import React, { memo, Suspense, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -51,6 +52,9 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
   const cleanupStaleRunningTopics = useChatStore((s) => s.cleanupStaleRunningTopics);
   const settleAllUnbackedTopicRuns = useChatStore((s) => s.settleAllUnbackedTopicRuns);
   const hasVisiblyRunningTopic = useChatStore(operationSelectors.hasVisiblyRunningTopic);
+  // A hidden tab has nothing to repaint, so polling the server for it would buy
+  // nothing — and the sweep re-runs on the next visibility change anyway.
+  const documentVisibility = useDocumentVisibility();
   const dropdownMenu = useTopicActionsDropdownMenu();
   const { isRevalidating } = useFetchChatTopics();
 
@@ -66,11 +70,11 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
   // Keep retiring whatever the server no longer backs for as long as a row still
   // reports itself running. The sweep returns before any server read when there
   // is no candidate, so this only runs while a row is stuck — or genuinely
-  // mid-run. Serialized (never two sweeps in flight) and backed off while a
-  // sweep retires nothing, so an ordinary long run is not polled at the
-  // leak-hunting cadence.
+  // mid-run. Serialized (never two sweeps in flight), paused while the document
+  // is hidden, and backed off while a sweep retires nothing, so an ordinary long
+  // run is not polled at the leak-hunting cadence.
   useEffect(() => {
-    if (!expanded || !hasVisiblyRunningTopic) return;
+    if (!expanded || documentVisibility === 'hidden' || !hasVisiblyRunningTopic) return;
 
     let cancelled = false;
     let inFlight = false;
@@ -107,7 +111,7 @@ const Topic = memo<TopicProps>(({ expanded, itemKey }) => {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [expanded, hasVisiblyRunningTopic, settleAllUnbackedTopicRuns]);
+  }, [documentVisibility, expanded, hasVisiblyRunningTopic, settleAllUnbackedTopicRuns]);
 
   return (
     <AccordionItem value={itemKey}>
