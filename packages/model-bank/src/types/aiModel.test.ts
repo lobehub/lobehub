@@ -18,6 +18,22 @@ describe('AI model mutation schemas', () => {
 
     expect(UpdateAiModelSchema.parse({ agentCompatibility })).toEqual({});
   });
+
+  it('normalizes null optional object fields in UpdateAiModelSchema to undefined', () => {
+    expect(
+      UpdateAiModelSchema.parse({
+        abilities: null,
+        config: null,
+        displayName: 'Updated Model',
+        settings: null,
+      }),
+    ).toEqual({
+      abilities: undefined,
+      config: undefined,
+      displayName: 'Updated Model',
+      settings: undefined,
+    });
+  });
 });
 
 describe('Gemini reasoning config persistence', () => {

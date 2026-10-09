@@ -213,6 +213,8 @@ export class AiModelModel {
     // model-instance reasoning defaults.
     if (normalizedValue.config !== undefined && normalizedValue.config !== null) {
       set.config = sql`COALESCE(ai_models.config, '{}'::jsonb) || excluded.config`;
+    } else {
+      delete set.config;
     }
 
     return this.db

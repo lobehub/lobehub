@@ -33,10 +33,12 @@ const ModelConfigFooter = memo<ModelConfigFooterProps>(({ formRef, id }) => {
           const data = form.getValues();
 
           setLoading(true);
-          await updateAiModelsConfig(id, editingProvider, data);
-          setLoading(false);
-
-          close();
+          try {
+            await updateAiModelsConfig(id, editingProvider, data);
+            close();
+          } finally {
+            setLoading(false);
+          }
         }}
       >
         {t('ok')}
