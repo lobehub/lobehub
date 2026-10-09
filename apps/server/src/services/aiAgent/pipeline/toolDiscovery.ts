@@ -52,6 +52,7 @@ import { DocumentModel } from '@/database/models/document';
 import { FileModel } from '@/database/models/file';
 import type { MessageModel } from '@/database/models/message';
 import type { PluginModel } from '@/database/models/plugin';
+import { TopicModel } from '@/database/models/topic';
 import {
   type ExecutionPlan,
   executionPlanToManifestExecutionEnv,
@@ -255,6 +256,20 @@ const readCredentialFacts = async (
     log('execAgent: failed to freeze credential facts: %O', error);
     return undefined;
   }
+};
+
+/**
+ * Whether the turn is pinned to a project working directory. One indexed topic
+ * read, and only ever called from an already-degraded branch, so a run that
+ * routes to its device never pays for it.
+ */
+const topicPinsProjectDirectory = async (
+  deps: Pick<ToolDiscoveryDeps, 'db' | 'userId' | 'workspaceId'>,
+  topicId: string | undefined,
+): Promise<boolean> => {
+  if (!topicId) return false;
+  const topic = await new TopicModel(deps.db, deps.userId, deps.workspaceId).findById(topicId);
+  return !!topic?.projectWorkingDirectoryId;
 };
 
 export const discoverTools = async (
@@ -960,6 +975,44 @@ export const discoverTools = async (
         error: {
           body: { detail, ...errorData },
           message: 'Fixed agent device unavailable',
+          type: 'ServerAgentRuntimeError',
+        },
+      });
+      throw new TRPCError({
+        cause: { data: errorData },
+        code: 'PRECONDITION_FAILED',
+        message: detail,
+      });
+    }
+    // A conversation pinned to a project working directory makes the same
+    // promise as a fixed device target: it runs in one repository on one device.
+    // An unrouted plan degrades exec (lobe-skills runCommand/execScript) to the
+    // cloud sandbox below, which would silently run the user's commands in an
+    // unrelated sandbox instead of failing on the bound device. Reject it the
+    // same way instead. The binding is read only in this already-degraded
+    // branch, so the send path keeps its no-device-probe fast path when the run
+    // routes to its device.
+    if (
+      executionPlan.kind !== 'device' &&
+      resolveToolMode(agentConfig.chatConfig ?? undefined) !== 'chat' &&
+      (await topicPinsProjectDirectory(deps, topicId))
+    ) {
+      const detail =
+        executionPlan.kind === 'device-unrouted' && executionPlan.reason === 'bound-device-offline'
+          ? "The device bound to this project's working directory is offline. Bring it online, then send again."
+          : "The device bound to this project's working directory is unavailable for this run.";
+      const errorData: DeviceUnavailableErrorData = {
+        code: 'DEVICE_NOT_FOUND',
+        deviceId: boundDeviceId,
+        retryable: true,
+        scope: deps.workspaceId ? 'workspace' : 'personal',
+        ...(deps.workspaceId ? { workspaceId: deps.workspaceId } : {}),
+      };
+      await deps.messageModel.update(assistantMessageId, {
+        content: '',
+        error: {
+          body: { detail, ...errorData },
+          message: 'Project directory device unavailable',
           type: 'ServerAgentRuntimeError',
         },
       });

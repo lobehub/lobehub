@@ -786,6 +786,42 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('device-001');
     });
+
+    // Regression: dropping the device probe must not let an offline project
+    // directory fall through to the cloud sandbox — a run pinned to one repo on
+    // one device has to fail on that device, not execute elsewhere.
+    it('rejects instead of degrading to the sandbox when the bound device is offline', async () => {
+      mockDeviceProxy.isConfigured = true;
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice2]);
+      topicMock.findById.mockResolvedValue({
+        id: 'topic-1',
+        metadata: { boundDeviceId: 'device-001', workingDirectory: '/repo' },
+        projectId: 'project-1',
+        projectWorkingDirectoryId: 'dir-1',
+      });
+      mockResolveProjectDirectoryForTopic.mockResolvedValueOnce({
+        deviceId: 'device-001',
+        path: '/repo',
+        permission: 'readWrite',
+        platform: 'darwin',
+      });
+
+      await expect(
+        service.execAgent({
+          agentId: 'agent-1',
+          prompt: 'Run a command',
+          appContext: { topicId: 'topic-1' },
+        }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+
+      expect(mockCreateOperation).not.toHaveBeenCalled();
+      expect(mockMessageUpdate).toHaveBeenCalledWith(
+        'msg-1',
+        expect.objectContaining({
+          error: expect.objectContaining({ message: 'Project directory device unavailable' }),
+        }),
+      );
+    });
   });
 
   describe('gateway not configured', () => {
