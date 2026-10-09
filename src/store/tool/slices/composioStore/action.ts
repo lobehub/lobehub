@@ -2,6 +2,7 @@ import { COMPOSIO_APP_TYPES } from '@lobechat/const';
 import { produce } from 'immer';
 
 import {
+  cacheScope,
   createReplicaSlice,
   linkReplicaEntity,
   recordLens,
@@ -17,8 +18,11 @@ import { type ComposioStoreState } from './initialState';
 import {
   COMPOSIO_SERVERS_KEY,
   composioAppToolsResource,
+  type ComposioLocalIntent,
   composioServersEntity,
   composioServersResource,
+  createComposioLocalIntent,
+  mergeComposioServers,
 } from './projection';
 import {
   type CallComposioToolParams,
@@ -66,6 +70,8 @@ export class ComposioStoreActionImpl {
   readonly #appTools;
   readonly #connections;
   readonly #get: () => ToolStore;
+  #intent = createComposioLocalIntent();
+  #intentScope?: string;
   readonly #servers;
   readonly #set: Setter;
 
@@ -78,6 +84,10 @@ export class ComposioStoreActionImpl {
       entity: composioServersEntity,
       fetcher: () => this.#fetchServers(),
       get,
+      // A list response replaces the whole value; merge local intent the
+      // response predates so an in-flight sync cannot drop a new connection or
+      // resurrect a deleted one.
+      merge: (incoming) => mergeComposioServers(incoming, this.#localIntent()),
       set,
       stateKey: 'composioServersReplica',
       view: composioServersLens,
@@ -182,6 +192,9 @@ export class ComposioStoreActionImpl {
 
       // Replace the record in place (by identifier) or append the new one, so a
       // re-authorization keeps showing the same row with a fresh `redirectUrl`.
+      // The intent survives a list response that was already in flight when the
+      // connection was created (see `mergeComposioServers`).
+      this.#localIntent().added.set(identifier, server);
       this.#connections.update(COMPOSIO_SERVERS_KEY, (servers) => {
         const list = servers ?? [];
         const index = list.findIndex((s) => s.identifier === identifier);
@@ -346,7 +359,9 @@ export class ComposioStoreActionImpl {
     const server = composioServers.find((s) => s.identifier === identifier);
 
     // Drop the row locally first — the server delete stays best-effort, so a
-    // failure never resurrects the row the user just deleted.
+    // failure never resurrects the row the user just deleted. The intent keeps a
+    // list response that was already in flight from bringing it back either.
+    this.#localIntent().removed.add(identifier);
     this.#servers.remove(identifier);
 
     if (server) {
@@ -375,6 +390,20 @@ export class ComposioStoreActionImpl {
     const sync = this.#connections.useSync(CONNECTIONS_PARAMS, { enabled });
 
     return { ...sync, mutate: sync.revalidate };
+  };
+
+  /**
+   * Local intent of the active identity. Kept per scope: the intent is about
+   * this user's unsynced writes, so a workspace / user switch starts clean
+   * rather than carrying the previous identity's pending rows over.
+   */
+  #localIntent = (): ComposioLocalIntent => {
+    const scope = cacheScope.get();
+    if (scope !== this.#intentScope) {
+      this.#intentScope = scope;
+      this.#intent = createComposioLocalIntent();
+    }
+    return this.#intent;
   };
 
   /**

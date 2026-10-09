@@ -22,6 +22,8 @@ import {
   COMPOSIO_SERVERS_KEY,
   composioAppToolsResource,
   composioServersResource,
+  createComposioLocalIntent,
+  mergeComposioServers,
 } from './projection';
 
 const mocks = vi.hoisted(() => ({
@@ -104,6 +106,9 @@ const pending = () => new Promise<never>(() => {});
 
 const SERVERS_STORAGE_KEY = composioServersResource.storageKey({} as Record<string, never>);
 const APP_TOOLS_STORAGE_KEY = composioAppToolsResource.storageKey('gmail');
+
+/** Identifiers of the connections the store currently shows. */
+const connectionIds = () => useToolStore.getState().composioServers.map((s) => s.identifier);
 
 describe('composio connections replica', () => {
   const scopes = new Set<string>();
@@ -295,6 +300,137 @@ describe('composio connections replica', () => {
     expect(mocks.updateComposioPlugin).toHaveBeenCalled();
   });
 
+  it('keeps a new connection when a list response that predates it lands', async () => {
+    // The list loads empty first, then a response racing the connect arrives.
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
+
+    mocks.createConnection.mockResolvedValue({
+      authConfigId: 'ac_slack',
+      connectedAccountId: 'ca_slack',
+      identifier: 'slack',
+      redirectUrl: 'https://composio.dev/redirect',
+    });
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'SLACK', identifier: 'slack', label: 'Slack' });
+    });
+    expect(connectionIds()).toEqual(['slack']);
+
+    // The `getComposioPlugins` response the connect raced (no new row) lands.
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual(['slack']);
+  });
+
+  it('hands the list back to the server once it echoes the new connection', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
+
+    mocks.createConnection.mockResolvedValue({
+      authConfigId: 'ac_slack',
+      connectedAccountId: 'ca_slack',
+      identifier: 'slack',
+      redirectUrl: undefined,
+    });
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'SLACK', identifier: 'slack', label: 'Slack' });
+    });
+
+    // The server now echoes it: the local intent is settled.
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('slack')]);
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual(['slack']);
+
+    // A later response without it is authoritative again (e.g. removed elsewhere).
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual([]);
+  });
+
+  it('keeps a removed connection gone when a list response that still has it lands', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail')]);
+    const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(connectionIds()).toEqual(['gmail']));
+
+    mocks.deleteConnection.mockResolvedValue({ success: true });
+    await act(async () => {
+      await useToolStore.getState().removeComposioConnection('gmail');
+    });
+    expect(connectionIds()).toEqual([]);
+
+    // A list response fetched before the delete still carries the row.
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual([]);
+
+    // Once the server confirms it is gone, the server is authoritative again.
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual([]);
+  });
+
+  it('still refreshes a connection created while a list response was in flight', async () => {
+    // Reproduces the reported dead-end: connect, let the racing list response
+    // land, then complete the OAuth flow — the row must still be there.
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
+
+    mocks.createConnection.mockResolvedValue({
+      authConfigId: 'ac_slack',
+      connectedAccountId: 'ca_slack',
+      identifier: 'slack',
+      redirectUrl: 'https://composio.dev/redirect',
+    });
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'SLACK', identifier: 'slack', label: 'Slack' });
+    });
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+
+    mocks.getConnection.mockResolvedValue({ gmailReadPermission: false, status: 'ACTIVE' });
+    mocks.listActions.mockResolvedValue({
+      tools: [
+        { description: 'Post a message', inputSchema: { type: 'object' }, name: 'SLACK_POST' },
+      ],
+    });
+    mocks.updateComposioPlugin.mockResolvedValue({ success: true });
+
+    await act(async () => {
+      await useToolStore.getState().refreshComposioConnectionStatus('slack');
+    });
+
+    const server = useToolStore.getState().composioServers.find((s) => s.identifier === 'slack');
+    expect(server?.status).toBe('active');
+    expect(server?.tools?.map((t) => t.name)).toEqual(['SLACK_POST']);
+    expect(mocks.updateComposioPlugin).toHaveBeenCalled();
+  });
+
   it('revalidates through the connections sync mutate without clearing the list', async () => {
     mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail')]);
     const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
@@ -387,5 +523,38 @@ describe('composio app tools replica', () => {
 
   it('exposes the connections key as a single scope entry', () => {
     expect(COMPOSIO_SERVERS_KEY).toBe('all');
+  });
+});
+
+describe('mergeComposioServers', () => {
+  const server = (identifier: string) => ({ identifier }) as never;
+
+  it('carries a pending add and hides a pending remove until the server reflects them', () => {
+    const intent = createComposioLocalIntent();
+    intent.added.set('slack', server('slack'));
+    intent.removed.add('gmail');
+
+    // A response that predates both writes: the new row is re-appended, the
+    // deleted one stays hidden.
+    expect(mergeComposioServers([server('gmail')], intent).map((s) => s.identifier)).toEqual([
+      'slack',
+    ]);
+
+    // The server echoes the add and confirms the removal: intent settles.
+    expect(mergeComposioServers([server('slack')], intent).map((s) => s.identifier)).toEqual([
+      'slack',
+    ]);
+    expect(intent.added.size).toBe(0);
+    expect(intent.removed.size).toBe(0);
+
+    // The server is authoritative again: a later response wins.
+    expect(mergeComposioServers([server('gmail')], intent).map((s) => s.identifier)).toEqual([
+      'gmail',
+    ]);
+  });
+
+  it('returns the incoming list unchanged when nothing is pending', () => {
+    const incoming = [server('gmail')];
+    expect(mergeComposioServers(incoming, createComposioLocalIntent())).toBe(incoming);
   });
 });
