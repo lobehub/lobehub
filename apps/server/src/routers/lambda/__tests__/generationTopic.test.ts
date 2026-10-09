@@ -133,7 +133,6 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockUpdateValue = {
       title: 'Updated Title',
-      coverUrl: 'updated-cover-url',
     };
     const mockUpdatedTopic = {
       id: mockTopicId,
@@ -160,6 +159,26 @@ describe('generationTopicRouter', () => {
 
     expect(result).toEqual(mockUpdatedTopic);
     expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, mockUpdateValue);
+  });
+
+  it('should not let updateTopic write an arbitrary cover key', async () => {
+    const mockTopicId = 'topic-123';
+    const mockUpdate = vi.fn().mockResolvedValue({ id: mockTopicId, title: 'Title' });
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return {
+        findById: vi.fn().mockResolvedValue({ id: mockTopicId, userId: 'test-user' }),
+        update: mockUpdate,
+      } as any;
+    });
+
+    const caller = generationTopicRouter.createCaller(mockCtx);
+    await caller.updateTopic({
+      id: mockTopicId,
+      // A key of another user's object; deleting the topic would delete it
+      value: { coverUrl: 'files/other-user/private.png', title: 'Title' } as any,
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith(mockTopicId, { title: 'Title' });
   });
 
   it('should update topic cover', async () => {
@@ -526,7 +545,6 @@ describe('generationTopicRouter', () => {
     const mockTopicId = 'topic-123';
     const mockUpdateValue = {
       title: null,
-      coverUrl: null,
     };
     const mockUpdatedTopic = {
       id: mockTopicId,

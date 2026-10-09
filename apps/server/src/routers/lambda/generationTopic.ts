@@ -28,8 +28,11 @@ const generationTopicProcedure = wsCompatProcedure.use(serverDatabase).use(async
 // Define input schemas
 const updateTopicSchema = z.object({
   id: z.string(),
+  // No `coverUrl`: it must only reference cover objects the server created
+  // (`updateTopicCover` / generation success), because cover replacement and
+  // topic deletion delete that key from storage. An arbitrary key here would
+  // let a caller delete objects they do not own.
   value: z.object({
-    coverUrl: z.string().nullish(),
     title: z.string().nullish(),
   }),
 });
