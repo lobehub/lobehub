@@ -70,7 +70,7 @@ A personal `lh connect` connection can execute a Codex agent configured with an 
 
 The connector resolves the selected, enabled provider and model using its current personal authentication. It uses an isolated Codex profile and environment, while the child process receives operation-scoped authentication for reporting. Provider keys are not included in gateway requests or command-line arguments. A follow-up resumes only when its saved session belongs to the same binding; changing bindings starts a new native session with the conversation context.
 
-Use this path for personal Codex API bindings on a selected device. Workspace connections, deployment-default API bindings, and other heterogeneous runtimes do not support this device path. Desktop local execution keeps its existing provider support. The API model controls the run without overwriting a Topic's saved native model pin.
+Use this path for personal Codex API bindings on a selected device with a live CLI connection. A Desktop-only connection does not support this RPC. The connector must include provider-bound execution support; older versions reject the request instead of using native credentials. Unused binding profiles follow the shared 30-day cleanup policy. Workspace connections, deployment-default API bindings, and other heterogeneous runtimes do not support this device path. Desktop local execution keeps its existing provider support. The API model controls the run without overwriting a Topic's saved native model pin.
 
 ## Shell Completion
 

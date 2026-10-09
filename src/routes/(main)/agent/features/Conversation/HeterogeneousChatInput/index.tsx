@@ -193,22 +193,29 @@ const HeterogeneousChatInput = memo(() => {
 
   const deviceBlocked =
     isDeviceExecution &&
-    (status === 'device-offline' || status === 'platform-unavailable' || status === 'no-device');
+    (status === 'device-offline' ||
+      status === 'platform-unavailable' ||
+      status === 'no-device' ||
+      status === 'cli-unavailable' ||
+      (isApiAuth && status === 'checking'));
 
   const renderDeviceGuard = () => {
-    if (!deviceBlocked) return null;
+    if (!deviceBlocked || status === 'checking') return null;
 
     let title: string;
     let desc: string;
 
-    if (status === 'no-device') {
+    if (status === 'cli-unavailable') {
+      title = t('platformAgent.deviceGuard.cliUnavailable.title');
+      desc = t('platformAgent.deviceGuard.cliUnavailable.desc');
+    } else if (status === 'no-device') {
       title = t('platformAgent.deviceGuard.noDevice.title');
       desc = t('platformAgent.deviceGuard.noDevice.desc');
     } else if (status === 'device-offline') {
       title = t('platformAgent.deviceGuard.deviceOffline.title');
       desc = t('platformAgent.deviceGuard.deviceOffline.desc');
     } else {
-      // `platform-unavailable` only arises for remote-typed agents (the guard's
+      // `platform-unavailable` arises for remote-typed agents (the guard's
       // capability check), so providerType is always set here — fall back safely.
       const name = (providerType && HETEROGENEOUS_TYPE_LABELS[providerType]) || providerType || '';
       title = t('platformAgent.deviceGuard.platformUnavailable.title', { name });

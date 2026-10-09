@@ -1928,6 +1928,13 @@ export class DeviceGateway {
       ingestWorkspaceId: _ingest,
       ...payload
     } = params;
+    // General online status also includes Desktop, which has no binding RPC.
+    // Read this personal principal's live channels before sending the CLI-only run.
+    const devices = await this.queryDeviceList(userId);
+    const device = devices.find((candidate) => candidate.deviceId === deviceId);
+    if (!device?.channels?.some((connection) => connection.channel === 'cli')) {
+      return { error: 'Provider binding requires a live lh connect connection.', success: false };
+    }
     try {
       const result = await client.invokeRpc<{ status: 'accepted' | 'rejected'; reason?: string }>(
         { channel: 'cli', deviceId, userId, timeout: 30_000 },

@@ -142,4 +142,55 @@ describe('useRemoteAgentDeviceGuard', () => {
 
     await waitFor(() => expect(result.current.status).toBe('no-device'));
   });
+  // ROOT CAUSE:
+  // Codex API runs were enabled for any online device, including Desktop-only sockets.
+  /** @example Personal API bindings require a CLI socket, while native runs keep existing routing. */
+  it('blocks a Desktop-only device for a Codex API binding', async () => {
+    mockedUseEffectiveAgencyConfig.mockReturnValue({
+      agencyConfig: {
+        boundDeviceId: 'my-device',
+        executionTarget: 'device',
+        heterogeneousProvider: {
+          type: 'codex',
+          authMode: 'api',
+          apiConfig: { model: 'api-model', providerId: 'provider' },
+        },
+      },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    });
+    mockedListDevices.mockResolvedValue([
+      { deviceId: 'my-device', online: true, channels: [{ channel: 'desktop' }] },
+    ] as never);
+    const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
+    /** @example General online status cannot enable the CLI-only composer. */
+    await waitFor(() => expect(result.current.status).toBe('cli-unavailable'));
+  });
+
+  /** @example The supported device remains usable after adding the channel guard. */
+  it('allows a live CLI connection for a Codex API binding', async () => {
+    mockedUseEffectiveAgencyConfig.mockReturnValue({
+      agencyConfig: {
+        boundDeviceId: 'my-device',
+        executionTarget: 'device',
+        heterogeneousProvider: {
+          type: 'codex',
+          authMode: 'api',
+          apiConfig: { model: 'api-model', providerId: 'provider' },
+        },
+      },
+      canDisplayExecutionTarget: true,
+      canSelectExecutionTarget: true,
+      isPreferenceLoading: false,
+      workspaceScoped: false,
+    });
+    mockedListDevices.mockResolvedValue([
+      { deviceId: 'my-device', online: true, channels: [{ channel: 'cli' }] },
+    ] as never);
+    const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
+    /** @example API dispatch stays enabled when a CLI channel is actually online. */
+    await waitFor(() => expect(result.current.status).toBe('ok'));
+  });
 });

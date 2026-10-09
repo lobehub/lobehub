@@ -11,7 +11,10 @@ import {
   sanitizeCodexProviderBindingArgs,
 } from '@lobechat/heterogeneous-agents/codexProviderBinding';
 import { ProviderBoundAgentRunSchema } from '@lobechat/heterogeneous-agents/protocol';
-import { prepareHostedProviderBinding } from '@lobechat/heterogeneous-agents/providerBindingHost';
+import {
+  gcHostedProviderBindingProfiles,
+  prepareHostedProviderBinding,
+} from '@lobechat/heterogeneous-agents/providerBindingHost';
 
 import { createLambdaClient } from '../api/client';
 import type { resolveToken } from '../auth/resolveToken';
@@ -100,9 +103,10 @@ export async function spawnProviderBoundAgentRun(
       (entry): entry is [string, string] => entry[1] !== undefined,
     ),
   );
+  const appStoragePath = path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'provider-runs', account);
   const binding = await prepareHostedProviderBinding({
     agentType: params.agentType,
-    appStoragePath: path.join(os.homedir(), CLI_CONFIG_DIR_NAME, 'provider-runs', account),
+    appStoragePath,
     args: sanitizeProviderBoundExecArgs(params.args ?? []),
     driver: { prepareProviderBinding: prepareCodexProviderBinding },
     env,
@@ -110,6 +114,11 @@ export async function spawnProviderBoundAgentRun(
     resolution: resolved.resolution,
     // Hash untrusted operation ids before using them as a directory component.
     sessionId: createHash('sha256').update(params.operationId).digest('hex'),
+  });
+  // Preparation just touched the active profile. Reuse Desktop's retention policy
+  // for abandoned profiles without delaying execution or exposing filesystem errors.
+  void gcHostedProviderBindingProfiles(appStoragePath).catch(() => {
+    logger.error('Provider-binding profile cleanup failed.');
   });
   const resumeSessionId =
     params.providerBinding.resumeBindingKey === binding.bindingKey

@@ -3,16 +3,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { spawnProviderBoundAgentRun } from './providerBoundAgentRun';
 
-const { runtime, prepare, spawn, cleanup, client } = vi.hoisted(() => ({
+const { runtime, prepare, spawn, cleanup, client, gc } = vi.hoisted(() => ({
   runtime: vi.fn(),
   prepare: vi.fn(),
   spawn: vi.fn(),
   cleanup: vi.fn(),
   client: vi.fn(),
+  gc: vi.fn(),
 }));
 vi.mock('../api/client', () => ({ createLambdaClient: client }));
 vi.mock('@lobechat/heterogeneous-agents/providerBindingHost', () => ({
   prepareHostedProviderBinding: prepare,
+  gcHostedProviderBindingProfiles: gc,
 }));
 vi.mock('./agentRun', () => ({ spawnHeteroAgentRun: spawn }));
 
@@ -39,6 +41,7 @@ const request = {
 describe('provider-bound device execution', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    gc.mockResolvedValue([]);
     client.mockReturnValue({ aiProvider: { getProviderBindingRuntime: { mutate: runtime } } });
     runtime.mockResolvedValue({
       enabled: true,
@@ -146,5 +149,27 @@ describe('provider-bound device execution', () => {
         args: ['--agent-arg=-c', '--agent-arg=model_reasoning_effort="low"'],
       }),
     );
+  });
+  // ROOT CAUSE:
+  // CLI runs removed transient files but never swept abandoned persistent profiles.
+  // Reuse the shared retention policy after preparation has touched the active profile.
+  /** @example The sweep uses the same account-specific root as preparation. */
+  it('sweeps old profiles after preparing the active binding', async () => {
+    await spawnProviderBoundAgentRun(request, auth, undefined, logger);
+    /** @example The newly touched profile is protected by the shared age policy. */
+    expect(gc).toHaveBeenCalledWith(prepare.mock.calls[0][0].appStoragePath);
+    /** @example Preparation completes before the opportunistic sweep. */
+    expect(prepare.mock.invocationCallOrder[0]).toBeLessThan(gc.mock.invocationCallOrder[0]);
+  });
+
+  /** @example A disk cleanup failure must neither reject execution nor log private paths. */
+  it('continues execution when profile cleanup fails', async () => {
+    gc.mockRejectedValue(new Error('private/path/with/credential'));
+    /** @example Cleanup is best effort and the real child is still acknowledged. */
+    await expect(spawnProviderBoundAgentRun(request, auth, undefined, logger)).resolves.toEqual({
+      status: 'accepted',
+    });
+    /** @example The diagnostic does not expose the filesystem exception. */
+    expect(logger.error).toHaveBeenCalledWith('Provider-binding profile cleanup failed.');
   });
 });

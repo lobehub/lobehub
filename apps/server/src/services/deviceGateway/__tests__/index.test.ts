@@ -45,6 +45,70 @@ describe('DeviceGateway', () => {
     mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = undefined;
   });
 
+  /** @example Desktop online status does not imply a live CLI execution channel. */
+  describe('provider-bound execution channel', () => {
+    const params = {
+      agentType: 'codex' as const,
+      assistantMessageId: 'message',
+      deviceId: 'device-1',
+      jwt: 'operation-token',
+      operationId: 'operation',
+      prompt: 'hello',
+      topicId: 'topic',
+      userId: 'user-1',
+      providerBinding: {
+        kind: 'provider' as const,
+        apiConfig: { model: 'api-model', providerId: 'provider' },
+      },
+    };
+    beforeEach(() => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.invokeRpc.mockResolvedValue({ data: { status: 'accepted' }, success: true });
+    });
+
+    // ROOT CAUSE:
+    // General online state includes Desktop, which cannot handle this CLI-only RPC.
+    /** @example A Desktop-only connection is rejected before sending the run RPC. */
+    it('requires a live CLI channel on the selected device', async () => {
+      mockClient.queryDeviceList.mockResolvedValue([
+        {
+          deviceId: 'device-1',
+          connectedAt: Date.now(),
+          channels: [{ channel: 'desktop', connectionId: 'desktop-1', connectedAt: Date.now() }],
+        },
+      ]);
+      /** @example No incompatible transport receives an API run. */
+      await expect(
+        new DeviceGateway().dispatchProviderBoundAgentRun(params),
+      ).resolves.toMatchObject({ success: false });
+      /** @example Online Desktop does not act as a fallback. */
+      expect(mockClient.invokeRpc).not.toHaveBeenCalled();
+    });
+
+    /** @example A live personal CLI channel keeps the acknowledged dispatch path. */
+    it('dispatches only after finding the selected CLI connection', async () => {
+      mockClient.queryDeviceList.mockResolvedValue([
+        {
+          deviceId: 'device-1',
+          connectedAt: Date.now(),
+          channels: [{ channel: 'cli', connectionId: 'cli-1', connectedAt: Date.now() }],
+        },
+      ]);
+      /** @example The connector still must acknowledge the dedicated RPC. */
+      await expect(new DeviceGateway().dispatchProviderBoundAgentRun(params)).resolves.toEqual({
+        success: true,
+      });
+      /** @example Presence is read from the same personal principal as the RPC. */
+      expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1', undefined);
+      /** @example Generic Desktop channels cannot consume provider credentials. */
+      expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+        expect.objectContaining({ channel: 'cli', deviceId: 'device-1', userId: 'user-1' }),
+        expect.objectContaining({ method: 'dispatchProviderBoundAgentRun' }),
+      );
+    });
+  });
+
   describe('remote app update', () => {
     const configure = () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
