@@ -593,6 +593,48 @@ describe('afterToolCall control pipeline', () => {
     },
   );
 
+  it('rejects a resumed pending result before archival when its control is unavailable', async () => {
+    const fixture = setup([]);
+    fixture.rows.push({
+      id: 'protected-row',
+      parentId: 'original-assistant',
+      role: 'tool',
+      tool_call_id: 'native-1',
+      content: '',
+      plugin: call(),
+      metadata: {
+        toolResultControl: {
+          operationId: 'original-op',
+          callIndex: 2,
+          stepIndex: 4,
+          status: 'pending',
+        },
+      },
+    });
+    fixture.loadState.mockResolvedValue({ ...fixture.state, operationId: 'original-op' });
+    fixture.execute.mockResolvedValue(raw());
+    await expect(
+      fixture.host.transports.tools!.run(call(), {
+        callIndex: 1,
+        effectiveManifestMap: {},
+        mode: 'single',
+        operationId: 'op',
+        parentMessageId: 'protected-row',
+        parsedArgs: { path: 'a' },
+        state: fixture.state,
+        stepIndex: 1,
+        toolMessageId: 'protected-row',
+        toolName: 'fs/write',
+      }),
+    ).rejects.toThrow('Cannot recover afterToolCall control policy');
+    expect(fetchHook).not.toHaveBeenCalled();
+    expect(archive).not.toHaveBeenCalled();
+    expect(JSON.stringify(fixture.rows)).not.toContain(secret);
+    expect(fixture.rows[0]).toMatchObject({
+      metadata: { toolResultControl: { status: 'pending' } },
+    });
+  });
+
   it('does not trust tool state to bypass a continuation’s additional control', async () => {
     const fixture = setup([control('new-policy')]);
     fixture.rows.push({

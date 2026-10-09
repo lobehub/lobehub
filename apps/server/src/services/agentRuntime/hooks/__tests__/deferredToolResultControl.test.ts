@@ -151,6 +151,134 @@ describe('out-of-band tool result control', () => {
     expect((await controlDeferredToolResult(deps, input)).result).toBe(original);
     expect(fetchHook).not.toHaveBeenCalled();
   });
+  it('preserves already-allowed replay when recovered hooks are empty', async () => {
+    const { deps, input } = setup();
+    deps.loadState.mockResolvedValue(null);
+    deps.messageModel.findById.mockResolvedValue({
+      id: 'tool-row',
+      parentId: 'assistant',
+      metadata: {
+        toolResultControl: { operationId: 'parent', callIndex: 2, stepIndex: 5, status: 'allowed' },
+      },
+    });
+    expect(await controlDeferredToolResult(deps, input)).toMatchObject({
+      result: original,
+      review: { status: 'allowed' },
+    });
+    expect(fetchHook).not.toHaveBeenCalled();
+  });
+  it('preserves unmarked legacy results when configured hooks only match another tool', async () => {
+    const { deps, input } = setup();
+    deps.loadState.mockResolvedValue(null);
+    deps.loadDurableHooks.mockResolvedValue([{ ...hook, matcher: '^other/tool$' }]);
+    expect((await controlDeferredToolResult(deps, input)).result).toBe(original);
+    expect(fetchHook).not.toHaveBeenCalled();
+  });
+  it.each([false, true])(
+    'keeps an environment-protected result quarantined when the policy disappears, queue=%s',
+    async (queue) => {
+      queueMode.mockReturnValue(queue);
+      const { deps, input } = setup();
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/after');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      expect(deps.dispatcher.hasAfterToolCallControl('parent', [], plugin)).toBe(true);
+      deps.loadState.mockResolvedValue(null);
+      deps.loadDurableHooks.mockResolvedValue([]);
+      deps.messageModel.findById.mockResolvedValue({
+        id: 'tool-row',
+        parentId: 'assistant',
+        metadata: {
+          toolResultControl: {
+            operationId: 'parent',
+            callIndex: 2,
+            stepIndex: 5,
+            status: 'pending',
+          },
+        },
+      });
+
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', undefined);
+      await expect(controlDeferredToolResult(deps, input)).rejects.toThrow(
+        'Cannot recover afterToolCall control policy',
+      );
+      expect(fetchHook).not.toHaveBeenCalled();
+
+      // Restoring the current worker's policy makes the same callback retryable.
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/after');
+      fetchHook.mockResolvedValue(new Response(JSON.stringify({ decision: 'allow' })));
+      expect(await controlDeferredToolResult(deps, input)).toMatchObject({
+        result: original,
+        review: { status: 'allowed' },
+      });
+      expect(fetchHook).toHaveBeenCalledTimes(1);
+    },
+  );
+  it.each([
+    { label: 'live snapshot without controls', snapshot: true, hooks: [] },
+    {
+      label: 'only notification hooks',
+      snapshot: false,
+      hooks: [
+        { ...hook, webhook: { ...hook.webhook, responseHandling: 'ignore', onError: 'continue' } },
+      ],
+    },
+    {
+      label: 'controls for another tool',
+      snapshot: false,
+      hooks: [{ ...hook, matcher: '^other/tool$' }],
+    },
+    {
+      label: 'removed environment hook template',
+      snapshot: false,
+      hooks: [{ ...hook, id: 'server-env-webhook:afterToolCall' }],
+    },
+  ])('rejects unexplained pending markers with $label', async ({ snapshot, hooks }) => {
+    const { deps, input } = setup();
+    deps.loadState.mockResolvedValue(snapshot ? { ...state, host: { hooks } } : null);
+    deps.loadDurableHooks.mockResolvedValue(hooks);
+    deps.messageModel.findById.mockResolvedValue({
+      id: 'tool-row',
+      parentId: 'assistant',
+      metadata: {
+        toolResultControl: { operationId: 'parent', callIndex: 2, stepIndex: 5, status: 'pending' },
+      },
+    });
+    await expect(controlDeferredToolResult(deps, input)).rejects.toThrow(
+      'Cannot recover afterToolCall control policy',
+    );
+    expect(fetchHook).not.toHaveBeenCalled();
+  });
+  it.each(['tool-row', 'group-tool'])(
+    'requires the pending policy when only %s has the marker',
+    async (markedId) => {
+      const { deps, input } = setup();
+      deps.loadState.mockResolvedValue(null);
+      deps.messageModel.findById.mockImplementation(async (id) => ({
+        id,
+        parentId: 'assistant',
+        ...(id === markedId && {
+          metadata: {
+            toolResultControl: {
+              operationId: 'parent',
+              callIndex: 2,
+              stepIndex: 5,
+              status: 'pending',
+            },
+          },
+        }),
+      }));
+      await expect(
+        controlDeferredToolResult(deps, {
+          ...input,
+          operationId: undefined,
+          contextToolMessageId: 'group-tool',
+        }),
+      ).rejects.toThrow('Cannot recover afterToolCall control policy');
+      expect(fetchHook).not.toHaveBeenCalled();
+    },
+  );
   it('keeps a denial on callback replay even after all hooks are removed', async () => {
     const { deps, input } = setup();
     deps.loadState.mockResolvedValue(null);
