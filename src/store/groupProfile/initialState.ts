@@ -1,5 +1,7 @@
 import { type IEditor } from '@lobehub/editor';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
 export type SaveStatus = 'idle' | 'saving' | 'saved';
 
 export interface SaveState {
@@ -27,9 +29,12 @@ export interface State extends PublicState {
   editor?: IEditor;
   editorState?: any; // EditorState from useEditorState hook
   /**
-   * Save state map by tab ID (key: 'group' | agentId)
+   * Save state map by tab ID (key: 'group' | agentId). This is the replica view
+   * of `groupProfileSaveResource`.
    */
   saveStateMap: Record<string, SaveState>;
+  /** Replica bookkeeping for `saveStateMap` (see `groupProfileSaveResource`). */
+  saveStateMapReplica: ReplicaState<SaveState>;
   /**
    * Content being streamed from AI
    */
@@ -44,6 +49,7 @@ export const initialState: State = {
   activeTabId: 'group',
   chatPanelExpanded: true,
   saveStateMap: {},
+  saveStateMapReplica: createReplicaState(),
   streamingContent: undefined,
   streamingInProgress: false,
 };
