@@ -1534,7 +1534,7 @@ export class GatewayActionImpl {
     // without needing an out-of-band lookup.
     const { operationId: gatewayOpId } = this.#get().startOperation({
       context: resolvedMessageContext,
-      metadata: { serverOperationId: result.operationId },
+      metadata: { heteroAutoRetryAvailable: true, serverOperationId: result.operationId },
       parentOperationId,
       type: 'execServerAgentRuntime',
     });

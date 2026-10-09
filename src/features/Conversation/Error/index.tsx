@@ -391,6 +391,7 @@ const ErrorMessageExtra = memo<ErrorExtraProps>(
         canRetry &&
         isHeterogeneousAgentStatusGuideError(sessionErrorBody) &&
         sessionErrorBody.code === HeterogeneousAgentSessionErrorCode.Overloaded,
+      messageId: data.id,
       onRetry: handleRetryAgentMessage,
       scopeId: resolvedScopeId,
     });

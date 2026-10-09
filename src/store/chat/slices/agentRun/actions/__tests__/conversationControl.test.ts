@@ -522,6 +522,39 @@ describe('ConversationControl actions', () => {
   });
 
   describe('switchMessageBranch', () => {
+    // ROOT CAUSE:
+    // An unclaimed retry grant could outlive its visible branch. Selecting old
+    // history must revoke that grant before a newly mounted error card sees it.
+    /** @example Branch selection revokes only the selected conversation's grants. */
+    it('revokes unclaimed auto retries before displaying another branch', async () => {
+      const context = { agentId: 'retry-agent', topicId: 'retry-topic', threadId: null };
+      const otherContext = { agentId: 'retry-agent', topicId: 'other-topic', threadId: null };
+      const current = useChatStore.getState().startOperation({
+        context,
+        metadata: { heteroAutoRetryAvailable: true },
+        type: 'execServerAgentRuntime',
+      });
+      const unrelated = useChatStore.getState().startOperation({
+        context: otherContext,
+        metadata: { heteroAutoRetryAvailable: true },
+        type: 'execServerAgentRuntime',
+      });
+      vi.spyOn(useChatStore.getState(), 'optimisticUpdateMessageMetadata').mockImplementation(
+        async () => {
+          /** @example Revocation happens before the asynchronous branch replacement. */
+          expect(
+            useChatStore.getState().operations[current.operationId].metadata
+              .heteroAutoRetryAvailable,
+          ).toBe(false);
+        },
+      );
+      await useChatStore.getState().switchMessageBranch('parent-user', 1, { context });
+      /** @example Other topics retain their live recovery intent. */
+      expect(
+        useChatStore.getState().operations[unrelated.operationId].metadata.heteroAutoRetryAvailable,
+      ).toBe(true);
+    });
+
     it('should switch to a different message branch', async () => {
       const { result } = renderHook(() => useChatStore());
       const messageId = TEST_IDS.MESSAGE_ID;

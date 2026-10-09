@@ -556,6 +556,9 @@ export const dataSlice: StateCreator<
       const message = dataSelectors.getDbMessageById(messageId)(state);
       if (!message || !message.parentId) return;
 
+      // Invalidate pending automatic recovery before a historical error can mount.
+      getChatStoreState().revokeHeteroAutoRetry(state.context);
+
       // Update the parent's metadata.activeBranchIndex
       // because the branch indicator is on the child message,
       // but the activeBranchIndex is stored on the parent

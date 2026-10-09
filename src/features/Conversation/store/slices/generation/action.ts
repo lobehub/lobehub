@@ -333,7 +333,10 @@ export const runHeterogeneousFromExistingMessage = async (
   const { operationId: heteroOpId } = chatStore.startOperation({
     context,
     label: 'Heterogeneous Agent Execution',
-    metadata: { heterogeneousType: heterogeneousProvider.type },
+    metadata: {
+      heteroAutoRetryAvailable: !replayTranscript,
+      heterogeneousType: heterogeneousProvider.type,
+    },
     parentOperationId,
     type: 'execHeterogeneousAgent',
   });

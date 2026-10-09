@@ -49,6 +49,32 @@ export class OperationActionsImpl {
     this.#get = get;
   }
 
+  /**
+   * Abandons unclaimed automatic recovery when a conversation changes branches.
+   *
+   * Use when:
+   * - Either conversation surface selects another persisted reply.
+   *
+   * Expects:
+   * - The full message context, including thread and share scopes.
+   *
+   * Returns:
+   * - No value; unrelated conversations and explicit Retry remain unchanged.
+   *
+   * Call stack:
+   *
+   * switchMessageBranch (conversation or chat store)
+   *   -> {@link OperationActionsImpl.revokeHeteroAutoRetry}
+   *     -> {@link OperationActionsImpl.updateOperationMetadata}
+   */
+  revokeHeteroAutoRetry = (context: MessageMapKeyInput): void => {
+    for (const operation of operationSelectors.getOperationsByContext(context)(this.#get())) {
+      if (operation.metadata.heteroAutoRetryAvailable) {
+        this.updateOperationMetadata(operation.id, { heteroAutoRetryAvailable: false });
+      }
+    }
+  };
+
   internal_getConversationContext = (reference?: {
     context?: MessageMapKeyInput;
     operationId?: string;

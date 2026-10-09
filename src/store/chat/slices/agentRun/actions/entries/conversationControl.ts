@@ -679,6 +679,11 @@ export class ConversationControlActionImpl {
     branchIndex: number,
     context?: OptimisticUpdateContext,
   ): Promise<void> => {
+    const store = this.#get();
+    const messageContext = store.internal_getConversationContext(context);
+    // A branch change only changes the displayed reply; it does not authorize
+    // recovery of an old failure when its card mounts.
+    store.revokeHeteroAutoRetry(messageContext);
     await this.#get().optimisticUpdateMessageMetadata(
       messageId,
       { activeBranchIndex: branchIndex },
