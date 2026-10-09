@@ -3274,6 +3274,30 @@ describe('topic action', () => {
       expect(state.topicDataMap[key].items[0].status).toBe('running');
     });
 
+    // The transport is keyed by the SERVER operation id, not by this tab's local
+    // op id (`connectToGateway` stores under `result.operationId`). A teardown
+    // that looked the connection up by the local id silently tore nothing down
+    // and left a v1 reconnect timer / mux subscription alive for a finished run.
+    it("tears the transport down under the server's operation id", async () => {
+      const { serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      const disconnect = vi.fn();
+      useChatStore.setState({
+        gatewayConnections: {
+          ...useChatStore.getState().gatewayConnections,
+          [serverOperationId]: { client: { disconnect } as never, status: 'connecting' },
+        },
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      expect(disconnect).toHaveBeenCalledTimes(1);
+      expect(useChatStore.getState().gatewayConnections[serverOperationId]).toBeUndefined();
+    });
+
     // The user-visible contract: opening the sidebar runs the watchdog, and the
     // watchdog must retire a leak the server cannot see. Before the mirror sweep
     // existed this test hung on a `running` op forever — the spinner and elapsed

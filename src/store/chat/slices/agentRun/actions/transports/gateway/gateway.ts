@@ -2331,6 +2331,14 @@ export class GatewayActionImpl {
       // A terminal frame may have landed while the read was in flight.
       if (this.#get().operations[op.id]?.status !== 'running') continue;
 
+      // The transport AND the server marker are keyed by the SERVER operation id,
+      // not by this tab's local Zustand op id — `connectToGateway` stores under
+      // `result.operationId`. Looking the connection up by the local id (as the
+      // first cut did) silently tore nothing down.
+      // `#isLiveLocalRuntimeOp` already guarantees the marker is present.
+      const serverOperationId = op.metadata.serverOperationId;
+      if (!serverOperationId) continue;
+
       // Complete the op itself first: it is what every "a run is in flight"
       // surface reads (sidebar spinner, elapsed clock, stop button). Doing it
       // before the teardown below also makes the `disconnected` that teardown
@@ -2342,15 +2350,15 @@ export class GatewayActionImpl {
       // the `disconnect()` the discarded handle keeps a v1 reconnect timer
       // opening sockets and a mux operation subscribed for a run nobody will
       // ever read. (The transcript's canonical final state is NOT this sweep's
-      // job — it belongs to the conversation's own fetch/settle path, which
-      // has the session closure to synthesize a `notify_update` from.)
-      this.#get().gatewayConnections[op.id]?.client?.disconnect();
-      this.internal_cleanupGatewayConnection(op.id);
+      // job — it belongs to the conversation's own fetch/settle path, which has
+      // the session closure to synthesize a `notify_update` from.)
+      this.#get().gatewayConnections[serverOperationId]?.client?.disconnect();
+      this.internal_cleanupGatewayConnection(serverOperationId);
 
       this.clearLocalRunningOperation({
         agentId: params.agentId,
         groupId: params.groupId,
-        operationId: op.metadata.serverOperationId ?? op.id,
+        operationId: serverOperationId,
         scope: params.scope,
         status: terminalStatus,
         topicId,
