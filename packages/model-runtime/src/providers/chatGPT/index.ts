@@ -32,8 +32,10 @@ const isResponsesLiteModel = (model: string | undefined) =>
  *
  * A stale `agencyConfig.subagent.chatConfig.reasoningMode` configured for one
  * override model must not reach a model that no longer declares the param, so
- * the provider strips it here as a final capability gate regardless of where
- * the field leaked in from.
+ * the provider strips it as a final capability gate regardless of where the
+ * field leaked in from. The gate runs in `prepareRequest`, i.e. after
+ * `modelIdMapping` has resolved the logical model to the actual upstream model
+ * ID, so capability is judged against the model the request really targets.
  */
 const CHATGPT_REASONING_MODE_MODEL_PREFIXES = ['gpt-5.6-'];
 
@@ -69,23 +71,10 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
       const handledPayload = openAIParams.responses?.handlePayload?.(payload) || payload;
       const { service_tier: _serviceTier, ...rest } = handledPayload;
 
-      // Final capability gate for `reasoning.mode`: strip the field for models
-      // the Codex backend rejects it on (see supportsReasoningMode). Effort and
-      // summary stay untouched — only `mode` is a subscription-catalog-gated
-      // field, and a stale sub-agent override must not kill the whole request.
-      const reasoning = supportsReasoningMode(payload.model)
-        ? rest.reasoning
-        : (() => {
-            const { mode: _mode, ...reasoningWithoutMode } =
-              (rest.reasoning as { mode?: string } | undefined) ?? {};
-            return Object.keys(reasoningWithoutMode).length > 0 ? reasoningWithoutMode : undefined;
-          })();
-
       // The ChatGPT Codex backend manages output limits from the subscription
       // model catalog and rejects the public API's max_output_tokens field.
       return {
         ...rest,
-        reasoning,
         include: ['reasoning.encrypted_content'],
         max_tokens: undefined,
       };
@@ -93,8 +82,28 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
     prepareRequest: (payload) => {
       const { safety_identifier: _safetyIdentifier, ...subscriptionPayload } = payload;
 
-      if (!isResponsesLiteModel(payload.model)) {
-        return { payload: subscriptionPayload };
+      // Final capability gate for `reasoning.mode`: strip the field for models
+      // the Codex backend rejects it on (see supportsReasoningMode). This runs
+      // after `modelIdMapping`, so a mapping from a supporting logical model
+      // (e.g. gpt-5.6-sol) to a rejecting upstream model (e.g. gpt-6.1-sol)
+      // still strips, and the inverse mapping keeps the field. Effort and
+      // summary stay untouched — only `mode` is a subscription-catalog-gated
+      // field, and a stale sub-agent override must not kill the whole request.
+      const reasoning = supportsReasoningMode(subscriptionPayload.model)
+        ? subscriptionPayload.reasoning
+        : (() => {
+            const { mode: _mode, ...reasoningWithoutMode } =
+              (subscriptionPayload.reasoning as { mode?: string } | undefined) ?? {};
+            return Object.keys(reasoningWithoutMode).length > 0 ? reasoningWithoutMode : undefined;
+          })();
+
+      if (!isResponsesLiteModel(subscriptionPayload.model)) {
+        return {
+          payload:
+            reasoning === undefined
+              ? subscriptionPayload
+              : { ...subscriptionPayload, reasoning },
+        };
       }
 
       // Codex GPT-5.6 models use Responses Lite: tools move into the input
@@ -103,7 +112,7 @@ export const LobeChatGPTAI = createOpenAICompatibleRuntime<ChatGPTClientOptions>
         input,
         instructions,
         parallel_tool_calls: _parallelToolCalls,
-        reasoning,
+        reasoning: _rawReasoning,
         tool_choice: toolChoice,
         tools,
         ...rest

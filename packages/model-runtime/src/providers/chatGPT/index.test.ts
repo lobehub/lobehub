@@ -297,6 +297,48 @@ describe('LobeChatGPTAI', () => {
     expect(request.reasoning).toEqual({ summary: 'auto' });
   });
 
+  // Codex review P2: capability must be judged against the mapped upstream
+  // model, not the logical ID. `handlePayload` runs before `modelIdMapping`
+  // resolves the logical model, so the gate lives in `prepareRequest`, which
+  // receives the mapped model.
+  it('strips reasoning.mode when modelIdMapping maps onto a rejecting model', async () => {
+    const mapped = new LobeChatGPTAI({
+      apiKey: 'access-token',
+      chatgptAccountId: 'account-id',
+      modelIdMapping: { 'gpt-5.6-sol': 'gpt-6.1-sol' },
+    });
+    vi.spyOn(mapped['client'].responses, 'create').mockResolvedValue(new ReadableStream() as never);
+
+    await mapped.chat({
+      messages: [{ content: 'Write a chapter', role: 'user' }],
+      model: 'gpt-5.6-sol',
+      reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
+    });
+
+    const request = (mapped['client'].responses.create as Mock).mock.calls[0][0];
+
+    expect(request.model).toBe('gpt-6.1-sol');
+    expect(request.reasoning).toEqual({ effort: 'high', summary: 'auto' });
+  });
+
+  it('keeps reasoning.mode when modelIdMapping maps onto a supporting model', async () => {
+    const mapped = new LobeChatGPTAI({
+      apiKey: 'access-token',
+      chatgptAccountId: 'account-id',
+      modelIdMapping: { 'gpt-6.1-sol': 'gpt-5.6-sol' },
+    });
+    vi.spyOn(mapped['client'].responses, 'create').mockResolvedValue(new ReadableStream() as never);
+    await mapped.chat({
+      messages: [{ content: 'Write a chapter', role: 'user' }],
+      model: 'gpt-6.1-sol',
+      reasoning: { effort: 'high', mode: 'pro', summary: 'auto' },
+    });
+
+    const request = (mapped['client'].responses.create as Mock).mock.calls[0][0];
+
+    expect(request.reasoning).toMatchObject({ effort: 'high', mode: 'pro', summary: 'auto' });
+  });
+
   it.each(['gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna'])(
     'keeps reasoning.mode for %s (declared capability)',
     async (model) => {
