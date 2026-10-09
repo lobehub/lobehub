@@ -17,7 +17,7 @@ import {
 import type { ReplicaAction, ReplicaEffect, ReplicaViewWrite } from './reducer';
 import { replicaReducer } from './reducer';
 import { createTombstones } from './tombstones';
-import type { ReplicaResource, ReplicaState } from './types';
+import type { ReplicaResource, ReplicaSource, ReplicaState } from './types';
 import { ReplicaWriteQueue } from './writeQueue';
 
 /** Reserved storage key of the per-scope index of persisted rows. */
@@ -401,12 +401,17 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     });
   };
 
-  /** Confirmed local write: patches the view (and the base under any overlay). */
+  /**
+   * Confirmed local write: patches the view (and the base under any overlay).
+   * Pass `source: 'seed'` for a provisional row (a list row standing in for a
+   * detail): it is hydratable and never persisted, so the authoritative value it
+   * stands in for is preserved (see `ReplicaSource`).
+   */
   const update = (
     key: string,
     apply: (data: TData | undefined) => TData | undefined,
-    { persist = true }: { persist?: boolean } = {},
-  ) => dispatch({ apply, key, persist, scope: resource.scope.get(), type: 'update' });
+    { persist = true, source }: { persist?: boolean; source?: ReplicaSource } = {},
+  ) => dispatch({ apply, key, persist, scope: resource.scope.get(), source, type: 'update' });
 
   /**
    * Purge a removal that belongs to a scope which is no longer active.

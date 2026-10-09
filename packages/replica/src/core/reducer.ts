@@ -1,4 +1,9 @@
-import type { ReplicaEntryMeta, ReplicaPendingMutation, ReplicaState } from './types';
+import type {
+  ReplicaEntryMeta,
+  ReplicaPendingMutation,
+  ReplicaSource,
+  ReplicaState,
+} from './types';
 
 /**
  * Pure transition core of a replica. It never touches the store
@@ -33,6 +38,8 @@ export type ReplicaAction<T> =
       key: string;
       persist: boolean;
       scope: string;
+      /** Marks a provisional write (`'seed'`); defaults to the entry's own source. */
+      source?: ReplicaSource;
       type: 'update';
     }
   | { apply: (data: T) => T; id: number; key: string; scope: string; type: 'optimistic' }
@@ -102,9 +109,13 @@ export const replicaReducer = <T>(
 
   switch (action.type) {
     case 'hydrate': {
-      // Hydrate only fills an empty slot: a server-confirmed value, an
-      // optimistic write or any local write always wins over storage.
-      if (entry || view !== undefined) return noop(state);
+      // Hydrate only fills an empty slot: a server-confirmed value, an optimistic
+      // write or any confirmed local write always wins over storage. A
+      // provisional `seed` is the one exception — it is a list row standing in
+      // for a detail, not authoritative state, so the persisted value replaces
+      // it. Otherwise a seeded entry would block the persisted detail forever.
+      const provisionalSeed = !!entry && entry.source === 'seed' && entry.pending.length === 0;
+      if (!provisionalSeed && (entry || view !== undefined)) return noop(state);
       return {
         effects: [],
         state: withEntry({
@@ -146,16 +157,24 @@ export const replicaReducer = <T>(
       const pending = entry?.pending ?? [];
       const nextBase = pending.length ? action.apply(entry!.base) : nextView;
       if (nextView === view && nextBase === confirmed) return noop(state);
+      // A provisional seed is never authoritative, so it must not persist: it
+      // only stands in for a value another source owns, and persisting it would
+      // overwrite that value's persisted row. A `seed` also only ever marks a
+      // fresh slot — a value already in memory (written outside the binding) is
+      // authoritative and is never downgraded to a seed.
+      const source: ReplicaSource =
+        entry?.source ?? (view === undefined ? (action.source ?? 'local') : 'local');
+      const persist = action.persist && source !== 'seed';
       return {
         effects:
-          action.persist && nextBase !== undefined
+          persist && nextBase !== undefined
             ? [{ data: nextBase, key: action.key, query: entry?.query, scope, type: 'persist' }]
             : [],
         state: withEntry({
           ...entry,
           base: pending.length ? nextBase : undefined,
           pending,
-          source: entry?.source ?? 'local',
+          source,
           updatedAt: now,
         }),
         writes: nextView === view ? [] : [{ data: nextView, key: action.key }],

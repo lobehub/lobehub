@@ -29,8 +29,12 @@ export interface ReplicaStorage<T> {
  * - `storage`: hydrated from the persisted projection (may be stale)
  * - `server`: confirmed by a network response
  * - `local`: written locally before any hydrate/replace landed
+ * - `seed`: a provisional local row (e.g. a list row standing in for a detail so
+ *   an object stays resolvable). Unlike `local` it is *not* authoritative: a
+ *   persisted `storage` value may replace it on hydrate, and it never persists —
+ *   so it cannot overwrite the detail it is only standing in for.
  */
-export type ReplicaSource = 'local' | 'server' | 'storage';
+export type ReplicaSource = 'local' | 'seed' | 'server' | 'storage';
 
 /**
  * Identity partition of the persisted projection (user + workspace by default).

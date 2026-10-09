@@ -85,6 +85,52 @@ describe('replicaReducer', () => {
       expect(h.view.k).toBe(before);
       expect(h.state.entries.k.source).toBe('server');
     });
+
+    it('hydrates over a provisional seed (a list row standing in for a detail)', () => {
+      const h = createHarness();
+      // The seed makes the object resolvable before its own detail is known.
+      h.run({
+        apply: () => ['seed'],
+        key: 'k',
+        persist: false,
+        scope: S,
+        source: 'seed',
+        type: 'update',
+      });
+      expect(h.view.k).toEqual(['seed']);
+      expect(h.state.entries.k.source).toBe('seed');
+
+      // The persisted authoritative detail replaces it instead of being blocked.
+      h.run({ data: ['persisted'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['persisted']);
+      expect(h.state.entries.k.source).toBe('storage');
+      expect(h.effects).toEqual([]);
+    });
+
+    it('keeps a confirmed local write authoritative over a late hydrate', () => {
+      const h = createHarness();
+      h.run({ apply: () => ['local'], key: 'k', persist: true, scope: S, type: 'update' });
+      expect(h.state.entries.k.source).toBe('local');
+
+      h.run({ data: ['persisted'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['local']);
+    });
+
+    it('does not hydrate over a seed that carries an in-flight overlay', () => {
+      const h = createHarness();
+      h.run({
+        apply: () => ['seed'],
+        key: 'k',
+        persist: false,
+        scope: S,
+        source: 'seed',
+        type: 'update',
+      });
+      h.run({ apply: append('opt'), id: 1, key: 'k', scope: S, type: 'optimistic' });
+
+      h.run({ data: ['persisted'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['seed', 'opt']);
+    });
   });
 
   describe('scope isolation', () => {
@@ -218,6 +264,24 @@ describe('replicaReducer', () => {
       h.run({ apply: () => ['b'], key: 'k', persist: false, scope: S, type: 'update' });
 
       expect(h.view.k).toEqual(['b']);
+      expect(h.effects).toEqual([]);
+    });
+
+    it('a seed never persists, even when its write asks to', () => {
+      const h = createHarness();
+      h.run({
+        apply: () => ['seed'],
+        key: 'k',
+        persist: true,
+        scope: S,
+        source: 'seed',
+        type: 'update',
+      });
+      // A later write on top of the seed keeps it provisional.
+      h.run({ apply: append('patched'), key: 'k', persist: true, scope: S, type: 'update' });
+
+      expect(h.view.k).toEqual(['seed', 'patched']);
+      expect(h.state.entries.k.source).toBe('seed');
       expect(h.effects).toEqual([]);
     });
 

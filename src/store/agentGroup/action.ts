@@ -2,9 +2,9 @@ import { type AgentGroupDetail } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 import { type StateCreator } from 'zustand/vanilla';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { type ChatGroupItem } from '@/database/schemas/chatGroup';
 import {
+  cacheScope,
   createReplicaSlice,
   linkReplicaEntity,
   recordLens,
@@ -112,8 +112,17 @@ class ChatGroupInternalAction implements ResetableStore {
     this.#set(initialChatGroupState, false, n('reset'));
   };
 
-  /** Whether the scope captured when a request was issued is still the active one. */
-  #isStillInScope = (scope: string | null): boolean => getActiveWorkspaceId() === scope;
+  /**
+   * The cache scope (`${userId}:${workspaceId}`) a request starts under. The
+   * full scope is what partitions the persisted replica rows, so it — not just
+   * the workspace id — is what an imperative response must be validated
+   * against: two users in personal mode share a `null` workspace, and a
+   * response started for one must never land in the other's partition.
+   */
+  #captureScope = (): string => cacheScope.get();
+
+  /** Whether the identity a request started under is still the active one. */
+  #isStillInScope = (scope: string): boolean => cacheScope.get() === scope;
 
   #removeStaleGroup = (groupId: string) => {
     this.#groupRows.remove(groupId);
@@ -180,8 +189,10 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   internal_fetchGroupDetail = async (groupId: string) => {
-    const scope = getActiveWorkspaceId();
+    const scope = this.#captureScope();
     const groupDetail = await chatGroupService.getGroupDetail(groupId);
+    // The request may resolve after a logout / account switch; its response
+    // belongs to the scope it started under, not the one active now.
     if (!this.#isStillInScope(scope)) return;
 
     if (!groupDetail) {
@@ -192,18 +203,24 @@ class ChatGroupInternalAction implements ResetableStore {
     this.#clearGroupNotFound(groupId);
 
     // Confirmed server detail: it paints the group page on the next visit too.
-    this.#groupDetail.replace({ groupId }, groupDetail);
+    // The captured scope makes the write itself admit only its own identity.
+    this.#groupDetail.replace({ groupId }, groupDetail, scope);
     this.#syncGroupAgents(groupDetail);
   };
 
   /**
-   * Add a freshly created group to every view that holds group rows.
+   * Add a freshly created group to every view that holds group rows. The detail
+   * entry is only a `seed` (the create response carries no roster): it keeps the
+   * new group resolvable until {@link internal_fetchGroupDetail} confirms it.
    */
   internal_addGroup = (group: ChatGroupItem) => {
     this.#groupList.update(AGENT_GROUP_LIST_KEY, (items) => [...(items ?? []), group], {
       persist: false,
     });
-    this.#groupDetail.update(group.id, () => toAgentGroupDetail(group), { persist: false });
+    this.#groupDetail.update(group.id, () => toAgentGroupDetail(group), {
+      persist: false,
+      source: 'seed',
+    });
   };
 
   /** Patch one group row in every view that holds it (list row + detail map). */
@@ -216,8 +233,11 @@ class ChatGroupInternalAction implements ResetableStore {
    * keeps its roster (`agents`) and its authoritative `config`; a group that is
    * only known from the list gets an empty roster until its detail fetch lands.
    *
-   * In-memory only: a list row is not the authoritative detail, so it must not
-   * overwrite the persisted roster a detail fetch already wrote.
+   * The write is a `seed`, not authoritative detail: it is in-memory only, and
+   * the detail replica may still hydrate the persisted full detail over it (see
+   * `packages/replica/src/core/reducer.ts`). A plain local entry would have
+   * blocked that hydrate, stranding the group page on default config and no
+   * members whenever the network was slow, failed or offline.
    */
   internal_updateGroupMaps = (groups: ChatGroupItem[]) => {
     for (const group of groups) {
@@ -236,7 +256,7 @@ class ChatGroupInternalAction implements ResetableStore {
                 config: existing.config || group.config,
               } as AgentGroupDetail)
             : toAgentGroupDetail(group),
-        { persist: false },
+        { persist: false, source: 'seed' },
       );
     }
   };
@@ -245,14 +265,18 @@ class ChatGroupInternalAction implements ResetableStore {
    * Refresh the group list. The persisted projection paints as soon as it is
    * read, while the network confirms it in parallel, instead of blanking the
    * list first; the rows then seed `groupMap`.
+   *
+   * The scope is captured before the first await and threaded through the
+   * writes, so a response that resolves after an identity switch is dropped
+   * instead of being written (and persisted) into the next scope's partition.
    */
   loadGroups = async () => {
-    const scope = getActiveWorkspaceId();
-    if (!this.#get().groupsInit) await this.#groupList.hydrate(LIST_PARAMS);
+    const scope = this.#captureScope();
+    if (!this.#get().groupsInit) await this.#groupList.hydrate(LIST_PARAMS, scope);
     const groups = await chatGroupService.getGroups();
     if (!this.#isStillInScope(scope)) return;
 
-    this.#groupList.replace(LIST_PARAMS, groups);
+    this.#groupList.replace(LIST_PARAMS, groups, scope);
     this.internal_updateGroupMaps(groups);
   };
 

@@ -273,4 +273,122 @@ describe('agentGroup store replica', () => {
       ).toBe('After'),
     );
   });
+
+  // P1 #1: the list seeds `groupMap` with a roster-less row. That seed must not
+  // block the persisted full detail from hydrating, or a slow / failed / offline
+  // detail fetch strands the group page on default config and no members.
+  it('hydrates the persisted detail over a list seed when the network never answers', async () => {
+    const scope = createScope();
+    const roster = [{ id: 'a1', isSupervisor: false, title: 'Member' }];
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      {
+        data: {
+          ...groupDetail('g1', 'Persisted detail'),
+          agents: roster,
+          config: { systemPrompt: 'authoritative' },
+        } as any,
+        updatedAt: 1,
+      },
+    );
+
+    // The list lands first: `groupMap` only knows the roster-less list row.
+    useAgentGroupStore
+      .getState()
+      .internal_updateGroupMaps([{ ...groupRow('g1', 'List row'), config: null } as any]);
+    expect(useAgentGroupStore.getState().groupMap.g1?.title).toBe('List row');
+    expect(useAgentGroupStore.getState().groupMap.g1?.agents).toEqual([]);
+
+    // The group page mounts while the network hangs (offline / slow).
+    getGroupDetail.mockImplementation(pending);
+    const session = renderHook(() => useAgentGroupStore.getState().useFetchGroupDetail(true, 'g1'));
+
+    await vi.waitFor(() =>
+      expect(useAgentGroupStore.getState().groupMap.g1?.agents).toEqual(roster),
+    );
+    expect(useAgentGroupStore.getState().groupMap.g1?.config).toEqual({
+      systemPrompt: 'authoritative',
+    });
+    session.unmount();
+  });
+
+  it('never persists a list seed over the authoritative detail row', async () => {
+    const scope = createScope();
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      {
+        data: {
+          ...groupDetail('g1', 'Persisted detail'),
+          agents: [{ id: 'a1', isSupervisor: false, title: 'Member' }],
+        } as any,
+        updatedAt: 1,
+      },
+    );
+
+    // Only the list seed is in memory (the detail was not loaded this session).
+    useAgentGroupStore
+      .getState()
+      .internal_updateGroupMaps([{ ...groupRow('g1', 'List row'), config: null } as any]);
+    expect(useAgentGroupStore.getState().groupMap.g1?.agents).toEqual([]);
+
+    // A metadata patch against the seed asks to persist, but a seed never does.
+    useAgentGroupStore.getState().internal_updateGroupRow('g1', { title: 'Renamed' });
+    expect(useAgentGroupStore.getState().groupMap.g1?.title).toBe('Renamed');
+
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const row = await agentGroupDetailResource.storage!.get({
+      queryKey: detailStorageKey('g1'),
+      scope,
+    });
+    expect(row?.data?.title).toBe('Persisted detail');
+    expect((row?.data as any)?.agents).toEqual([
+      { id: 'a1', isSupervisor: false, title: 'Member' },
+    ]);
+  });
+
+  // P1 #2: two users in personal mode both have a `null` workspace, so the guard
+  // must compare the full cache scope (`${userId}:${workspaceId}`) — otherwise a
+  // response started for user A lands in user B's partition.
+  it('drops a group detail response that lands after an account switch', async () => {
+    createScope('agent-group-user-a');
+    let resolveDetail!: (value: unknown) => void;
+    getGroupDetail.mockImplementation(() => new Promise((resolve) => (resolveDetail = resolve)));
+
+    const inflight = useAgentGroupStore.getState().internal_fetchGroupDetail('g1');
+    // Switch to another user, also personal (both have a null workspace).
+    const scopeB = createScope('agent-group-user-b');
+
+    resolveDetail(groupDetail('g1', 'User A group'));
+    await inflight;
+
+    expect(useAgentGroupStore.getState().groupMap.g1).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(
+      await agentGroupDetailResource.storage!.get({
+        queryKey: detailStorageKey('g1'),
+        scope: scopeB,
+      }),
+    ).toBeUndefined();
+  });
+
+  it('drops a group list response that lands after an account switch', async () => {
+    createScope('agent-group-user-a');
+    let resolveGroups!: (value: unknown) => void;
+    getGroups.mockImplementation(() => new Promise((resolve) => (resolveGroups = resolve)));
+
+    const inflight = useAgentGroupStore.getState().loadGroups();
+    // `loadGroups` hydrates before it fetches, so wait for the request to be in flight.
+    await vi.waitFor(() => expect(getGroups).toHaveBeenCalled());
+    const scopeB = createScope('agent-group-user-b');
+
+    resolveGroups([groupRow('g1', 'User A group')]);
+    await inflight;
+
+    expect(useAgentGroupStore.getState().groups).toEqual([]);
+    expect(useAgentGroupStore.getState().groupMap.g1).toBeUndefined();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(
+      await agentGroupListResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope: scopeB }),
+    ).toBeUndefined();
+  });
 });
