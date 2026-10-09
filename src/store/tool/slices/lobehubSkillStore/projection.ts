@@ -82,10 +82,16 @@ export const createLobehubSkillLocalIntent = (): LobehubSkillLocalIntent => ({
  * pending removal stays hidden until a response confirms it is gone. Each
  * settles the moment a response reflects it, after which the server is
  * authoritative again.
+ *
+ * The list response also carries no tool catalog, so a confirmed row's tools
+ * are carried over whenever the response omits them — the agent tool list keeps
+ * resolving a connected provider even if the follow-up `connectListTools` call
+ * fails.
  */
 export const mergeLobehubSkillServers = (
   incoming: LobehubSkillServer[],
   intent: LobehubSkillLocalIntent,
+  confirmed?: LobehubSkillServer[],
 ): LobehubSkillServer[] => {
   const echoed = new Set(incoming.map((server) => server.identifier));
 
@@ -102,7 +108,32 @@ export const mergeLobehubSkillServers = (
     : incoming;
   const carried = [...intent.added.values()];
 
-  if (carried.length === 0 && kept === incoming) return incoming;
+  // `connectListConnections` carries no tool catalog, so the response alone
+  // would drop the tools a confirmed row already holds. Keep them until a
+  // `connectListTools` success replaces them: a transient tool-fetch failure
+  // must not remove a connected provider from the agent tool list while a
+  // usable persisted catalog still exists.
+  const cachedTools = new Map<string, LobehubSkillTool[]>();
+  for (const server of confirmed ?? []) {
+    if (server.tools?.length) cachedTools.set(server.identifier, server.tools);
+  }
+  const keepTools = (server: LobehubSkillServer): LobehubSkillServer => {
+    if (server.tools?.length) return server;
+    const tools = cachedTools.get(server.identifier);
+    return tools ? { ...server, tools } : server;
+  };
+  const withCachedTools = (list: LobehubSkillServer[]): LobehubSkillServer[] => {
+    if (cachedTools.size === 0) return list;
+    const next = list.map(keepTools);
+    // Return the original list when nothing gained tools, so an unchanged
+    // response keeps its reference (no needless write).
+    return next.some((server, index) => server !== list[index]) ? next : list;
+  };
 
-  return [...kept, ...carried];
+  const keptWithTools = withCachedTools(kept);
+  const carriedWithTools = withCachedTools(carried);
+
+  if (carriedWithTools.length === 0 && keptWithTools === incoming) return incoming;
+
+  return [...keptWithTools, ...carriedWithTools];
 };

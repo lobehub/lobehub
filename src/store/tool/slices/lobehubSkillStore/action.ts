@@ -97,8 +97,11 @@ export class LobehubSkillStoreActionImpl {
       get,
       // A list response replaces the whole value; merge local intent the
       // response predates so an in-flight sync cannot drop a just-connected
-      // provider or resurrect a just-revoked one.
-      merge: (incoming) => mergeLobehubSkillServers(incoming, this.#localIntent()),
+      // provider or resurrect a just-revoked one. The confirmed value is passed
+      // in too, so a response without a tool catalog keeps the tools the row
+      // already holds (see `mergeLobehubSkillServers`).
+      merge: (incoming, confirmed) =>
+        mergeLobehubSkillServers(incoming, this.#localIntent(), confirmed),
       set,
       stateKey: 'lobehubSkillServersReplica',
       view: serversLens,

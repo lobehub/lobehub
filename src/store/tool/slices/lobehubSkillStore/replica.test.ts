@@ -22,6 +22,7 @@ import { useUserStore } from '@/store/user';
 import { useToolStore } from '../../store';
 import { initialLobehubSkillStoreState } from './initialState';
 import { lobehubSkillProviderToolsResource, lobehubSkillServersResource } from './projection';
+import { lobehubSkillStoreSelectors } from './selectors';
 import { LobehubSkillStatus } from './types';
 
 const mocks = vi.hoisted(() => ({
@@ -372,6 +373,37 @@ describe('lobehubSkill connections replica', () => {
       expect(useToolStore.getState().lobehubSkillServers?.[0].tools).toHaveLength(1),
     );
     expect(useToolStore.getState().lobehubSkillServers?.[0].tools![0].name).toBe('createIssue');
+  });
+
+  it('keeps a connected provider’s cached tools when a revalidation drops them and the tool fetch fails', async () => {
+    mocks.connectListConnections.mockResolvedValue({ connections: [connection('linear')] });
+    mocks.connectListTools.mockResolvedValue({
+      tools: [
+        { description: 'Create an issue', inputSchema: { type: 'object' }, name: 'createIssue' },
+      ],
+    });
+
+    const sync = renderHook(() => useToolStore((s) => s.useFetchLobehubSkillConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() =>
+      expect(useToolStore.getState().lobehubSkillServers?.[0].tools).toHaveLength(1),
+    );
+
+    // The revalidation's list response carries no tools, and this time the
+    // follow-up `connectListTools` call fails.
+    mocks.connectListTools.mockRejectedValue(new Error('network down'));
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+
+    // The persisted catalog survives on the row, so the provider still resolves
+    // for the agent tool list even though the refresh failed.
+    expect(mocks.connectListTools).toHaveBeenCalledWith({ provider: 'linear' });
+    expect(useToolStore.getState().lobehubSkillServers?.[0].tools).toHaveLength(1);
+    expect(
+      lobehubSkillStoreSelectors.lobehubSkillAsLobeTools(useToolStore.getState()),
+    ).toHaveLength(1);
   });
 
   it('paints a provider’s persisted tool catalog before the network answers', async () => {
