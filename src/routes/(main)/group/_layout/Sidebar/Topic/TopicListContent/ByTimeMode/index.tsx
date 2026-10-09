@@ -16,20 +16,9 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
-import { type TopicGroupMode } from '@/types/topic';
 
 import GroupItem from './GroupItem';
-
-/**
- * The group-chat sidebar renders every non-flat preference through its time
- * renderer, but its menu never offers `byAgent` and group topics carry no
- * per-row agent attribution. When a project-scoped sidebar persists `byAgent`
- * into the global preference, grouping by it here would emit `agent:*` buckets
- * that this surface's headers format as time-bucket translation keys — so the
- * mode falls back to the default time grouping.
- */
-export const resolveGroupSidebarMode = (mode: TopicGroupMode): TopicGroupMode =>
-  mode === 'byAgent' ? 'byTime' : mode;
+import { resolveGroupSidebarMode } from './resolveGroupSidebarMode';
 
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');

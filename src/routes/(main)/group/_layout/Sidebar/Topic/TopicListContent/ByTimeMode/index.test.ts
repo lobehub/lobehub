@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveGroupSidebarMode } from './index';
+import { resolveGroupSidebarMode } from './resolveGroupSidebarMode';
 
 describe('resolveGroupSidebarMode', () => {
   /** @example A byAgent preference leaked from a project sidebar must not render as time-bucket translation keys in group chats. */
