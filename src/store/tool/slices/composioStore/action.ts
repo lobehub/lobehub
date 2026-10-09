@@ -74,6 +74,13 @@ export class ComposioStoreActionImpl {
   #intentScope?: string;
   readonly #servers;
   readonly #set: Setter;
+  /**
+   * Confirmed local writes to the connections list. A `getComposioPlugins`
+   * request stamps itself with this on start; a response stamped before the
+   * latest write is dropped (see `mergeComposioServers`), so an in-flight sync
+   * can never roll a confirmed connect / delete / status refresh back.
+   */
+  #writeSeq = 0;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
@@ -82,12 +89,20 @@ export class ComposioStoreActionImpl {
     this.#connections = createReplicaSlice(composioServersResource, {
       actionPrefix: 'composioServers',
       entity: composioServersEntity,
-      fetcher: () => this.#fetchServers(),
+      // Stamp the request with the write sequence in flight when it starts, so
+      // `merge` can drop a response the server produced before a later write.
+      fetcher: async () => {
+        const since = this.#writeSeq;
+        const servers = await this.#fetchServers();
+        return { servers, since };
+      },
       get,
-      // A list response replaces the whole value; merge local intent the
-      // response predates so an in-flight sync cannot drop a new connection or
-      // resurrect a deleted one.
-      merge: (incoming) => mergeComposioServers(incoming, this.#localIntent()),
+      // A list response replaces the whole value; a response issued before the
+      // latest local write is dropped, and one issued after it is still merged
+      // with the local intent (a new connection the server has not echoed, a
+      // deletion it has not confirmed) so an in-flight sync can neither drop a
+      // new connection nor resurrect a deleted one.
+      merge: (response) => mergeComposioServers(response, this.#localIntent(), this.#writeSeq),
       set,
       stateKey: 'composioServersReplica',
       view: composioServersLens,
@@ -193,7 +208,9 @@ export class ComposioStoreActionImpl {
       // Replace the record in place (by identifier) or append the new one, so a
       // re-authorization keeps showing the same row with a fresh `redirectUrl`.
       // The intent survives a list response that was already in flight when the
-      // connection was created (see `mergeComposioServers`).
+      // connection was created (see `mergeComposioServers`); a pending removal
+      // of the same identifier is cleared, since the row is back.
+      this.#localIntent().removed.delete(identifier);
       this.#localIntent().added.set(identifier, server);
       this.#connections.update(COMPOSIO_SERVERS_KEY, (servers) => {
         const list = servers ?? [];
@@ -201,6 +218,7 @@ export class ComposioStoreActionImpl {
         if (index < 0) return [...list, server];
         return list.map((s, i) => (i === index ? server : s));
       });
+      this.#markLocalWrite();
 
       this.#set(
         produce((draft: ComposioStoreState) => {
@@ -285,6 +303,7 @@ export class ComposioStoreActionImpl {
         status: ComposioServerStatus.ACTIVE,
         tools,
       }));
+      this.#markLocalWrite();
 
       this.#set(
         produce((draft: ComposioStoreState) => {
@@ -308,6 +327,9 @@ export class ComposioStoreActionImpl {
           name: t.name,
         })),
       });
+      // The server only now reflects the ACTIVE row: invalidate anything issued
+      // while that write was in flight, so it cannot revert the status.
+      this.#markLocalWrite();
     } catch (error) {
       console.error('[Composio] Failed to refresh connection status:', error);
 
@@ -316,6 +338,7 @@ export class ComposioStoreActionImpl {
         errorMessage: error instanceof Error ? error.message : String(error),
         status: ComposioServerStatus.ERROR,
       }));
+      this.#markLocalWrite();
 
       this.#set(
         produce((draft: ComposioStoreState) => {
@@ -363,6 +386,7 @@ export class ComposioStoreActionImpl {
     // list response that was already in flight from bringing it back either.
     this.#localIntent().removed.add(identifier);
     this.#servers.remove(identifier);
+    this.#markLocalWrite();
 
     if (server) {
       try {
@@ -404,6 +428,16 @@ export class ComposioStoreActionImpl {
       this.#intent = createComposioLocalIntent();
     }
     return this.#intent;
+  };
+
+  /**
+   * Record a confirmed local write to the connections list. Monotonic: every
+   * `getComposioPlugins` response issued before the latest write is dropped, so
+   * a stale sync can neither drop a new connection, resurrect a deleted one,
+   * nor revert a refreshed status (see `mergeComposioServers`).
+   */
+  #markLocalWrite = (): void => {
+    this.#writeSeq += 1;
   };
 
   /**

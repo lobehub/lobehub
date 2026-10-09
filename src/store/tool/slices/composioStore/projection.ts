@@ -6,11 +6,29 @@ import { type ComposioServer, type ComposioTool } from './types';
 export const COMPOSIO_SERVERS_KEY = 'all';
 
 /**
+ * One `getComposioPlugins` response, stamped with the local-write sequence that
+ * was current when the request was issued.
+ *
+ * A list response replaces the whole value and carries no ordering of its own,
+ * so the stamp is what lets the slice tell a response the server produced
+ * *before* a local write (which must not be applied) from one produced after it.
+ */
+export interface ComposioServersResponse {
+  servers: ComposioServer[];
+  /** `writeSeq` at the moment the request was issued. */
+  since: number;
+}
+
+/**
  * The user's Composio connections (`getComposioPlugins`): a local-first replica
  * so the settings / skills surfaces paint the persisted list on the first frame
  * and let the network confirm it, and a connect / delete shows on the row at once.
  */
-export const composioServersResource = defineReplica<Record<string, never>, ComposioServer[]>({
+export const composioServersResource = defineReplica<
+  Record<string, never>,
+  ComposioServer[],
+  ComposioServersResponse
+>({
   key: () => COMPOSIO_SERVERS_KEY,
   name: 'composioServers',
   storage: 'indexedDB',
@@ -51,23 +69,32 @@ export const createComposioLocalIntent = (): ComposioLocalIntent => ({
 });
 
 /**
- * Folds a server list into the connections replica without discarding local
- * intent the response predates.
+ * Folds a connections response into the replica.
  *
- * A connect / disconnect writes the list, but a `getComposioPlugins` response
- * that was already in flight when the write happened still arrives afterwards
- * and `replace`s the whole value: the just-created row would vanish (and the
- * OAuth completion then early-returns because the server is "missing"), or the
- * just-deleted row would come back. `replace` carries no request ordering, so
- * the response is merged instead of trusted blindly: a pending add is
- * re-appended until the server echoes it, a pending removal stays hidden until
- * a response confirms it is gone. Each settles the moment a response reflects
- * it, after which the server is authoritative again.
+ * Returns `undefined` — the engine's "keep the current value" — when the
+ * response was issued before the latest confirmed local write. Such a response
+ * is the reported race: `getComposioPlugins` was already in flight when the
+ * connect / delete / status refresh wrote the list, so its snapshot predates the
+ * write and applying it wholesale would roll the row back — drop the
+ * just-created row (the OAuth polling then early-returns on `Server not found`),
+ * resurrect a just-deleted row, or revert a row just marked `active`. Dropping
+ * the response makes the server authoritative again only once a request issued
+ * after the write answers.
+ *
+ * A response issued after the write is still merged, not trusted blindly,
+ * because the write is local-first and the server may not have adopted it yet:
+ * a pending add (created, not yet echoed) is re-appended, and a pending removal
+ * stays hidden until a response confirms it is gone. Each settles the moment a
+ * response reflects it, after which the server is authoritative again.
  */
 export const mergeComposioServers = (
-  incoming: ComposioServer[],
+  response: ComposioServersResponse,
   intent: ComposioLocalIntent,
-): ComposioServer[] => {
+  latestLocalWrite: number,
+): ComposioServer[] | undefined => {
+  if (response.since < latestLocalWrite) return undefined;
+
+  const incoming = response.servers;
   const echoed = new Set(incoming.map((server) => server.identifier));
 
   // A response confirms a pending add (echoed) or drop (gone): settle it.
