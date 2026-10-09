@@ -72,16 +72,22 @@ export const createComposioLocalIntent = (): ComposioLocalIntent => ({
  * Folds a connections response into the replica.
  *
  * Returns `undefined` — the engine's "keep the current value" — when the
- * response was issued before the latest confirmed local write. Such a response
- * is the reported race: `getComposioPlugins` was already in flight when the
- * connect / delete / status refresh wrote the list, so its snapshot predates the
- * write and applying it wholesale would roll the row back — drop the
- * just-created row (the OAuth polling then early-returns on `Server not found`),
- * resurrect a just-deleted row, or revert a row just marked `active`. Dropping
- * the response makes the server authoritative again only once a request issued
- * after the write answers.
+ * response cannot be trusted to reflect the local writes:
  *
- * A response issued after the write is still merged, not trusted blindly,
+ * - `hasUnpersistedWrite`: a local write is still being persisted on the server
+ *   (a refresh's `active` row, while `updateComposioPlugin` is in flight). The
+ *   server keeps answering the pre-write row, so a response it produced in that
+ *   window would revert the write even though the request was *issued* after it.
+ *   Wait for a request issued once persistence finishes.
+ * - `response.since < latestLocalWrite`: the request was issued before the
+ *   latest confirmed local write, so its snapshot predates it. This is the
+ *   reported race: `getComposioPlugins` was already in flight when the
+ *   connect / delete / status refresh wrote the list, so applying it wholesale
+ *   would roll the row back — drop the just-created row (the OAuth polling then
+ *   early-returns on `Server not found`), resurrect a just-deleted row, or
+ *   revert a row just marked `active`.
+ *
+ * A response that clears both checks is still merged, not trusted blindly,
  * because the write is local-first and the server may not have adopted it yet:
  * a pending add (created, not yet echoed) is re-appended, and a pending removal
  * stays hidden until a response confirms it is gone. Each settles the moment a
@@ -91,7 +97,9 @@ export const mergeComposioServers = (
   response: ComposioServersResponse,
   intent: ComposioLocalIntent,
   latestLocalWrite: number,
+  hasUnpersistedWrite = false,
 ): ComposioServer[] | undefined => {
+  if (hasUnpersistedWrite) return undefined;
   if (response.since < latestLocalWrite) return undefined;
 
   const incoming = response.servers;

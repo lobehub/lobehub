@@ -81,6 +81,15 @@ export class ComposioStoreActionImpl {
    * can never roll a confirmed connect / delete / status refresh back.
    */
   #writeSeq = 0;
+  /**
+   * Local writes whose server persistence is still in flight. A
+   * `getComposioPlugins` the server answers while one is pending still reflects
+   * the pre-write row (the refresh's `ACTIVE` row is only persisted by
+   * `updateComposioPlugin` below), so every response is dropped until it
+   * settles — the stamp alone cannot tell such a response from a fresh one,
+   * because its request was issued *after* the local write.
+   */
+  #unpersistedWrites = 0;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
@@ -98,11 +107,18 @@ export class ComposioStoreActionImpl {
       },
       get,
       // A list response replaces the whole value; a response issued before the
-      // latest local write is dropped, and one issued after it is still merged
-      // with the local intent (a new connection the server has not echoed, a
-      // deletion it has not confirmed) so an in-flight sync can neither drop a
-      // new connection nor resurrect a deleted one.
-      merge: (response) => mergeComposioServers(response, this.#localIntent(), this.#writeSeq),
+      // latest local write — or while one is still being persisted — is dropped,
+      // and one that clears both is still merged with the local intent (a new
+      // connection the server has not echoed, a deletion it has not confirmed)
+      // so an in-flight sync can neither drop a new connection nor resurrect a
+      // deleted one.
+      merge: (response) =>
+        mergeComposioServers(
+          response,
+          this.#localIntent(),
+          this.#writeSeq,
+          this.#unpersistedWrites > 0,
+        ),
       set,
       stateKey: 'composioServersReplica',
       view: composioServersLens,
@@ -303,6 +319,11 @@ export class ComposioStoreActionImpl {
         status: ComposioServerStatus.ACTIVE,
         tools,
       }));
+      // The row is ACTIVE locally, but the server keeps serving the pre-refresh
+      // row until `updateComposioPlugin` lands below. Hold every list response
+      // until then: one the server answered in that window carries the old row
+      // and would revert this write.
+      this.#unpersistedWrites += 1;
       this.#markLocalWrite();
 
       this.#set(
@@ -313,20 +334,24 @@ export class ComposioStoreActionImpl {
         n('refreshComposioConnectionStatus/success'),
       );
 
-      await lambdaClient.composio.updateComposioPlugin.mutate({
-        agentId: server.agentId,
-        appSlug: server.appSlug,
-        authConfigId: server.authConfigId,
-        connectedAccountId: server.connectedAccountId,
-        identifier,
-        label: server.label,
-        status: 'ACTIVE',
-        tools: tools.map((t) => ({
-          description: t.description,
-          inputSchema: t.inputSchema,
-          name: t.name,
-        })),
-      });
+      try {
+        await lambdaClient.composio.updateComposioPlugin.mutate({
+          agentId: server.agentId,
+          appSlug: server.appSlug,
+          authConfigId: server.authConfigId,
+          connectedAccountId: server.connectedAccountId,
+          identifier,
+          label: server.label,
+          status: 'ACTIVE',
+          tools: tools.map((t) => ({
+            description: t.description,
+            inputSchema: t.inputSchema,
+            name: t.name,
+          })),
+        });
+      } finally {
+        this.#unpersistedWrites -= 1;
+      }
       // The server only now reflects the ACTIVE row: invalidate anything issued
       // while that write was in flight, so it cannot revert the status.
       this.#markLocalWrite();
@@ -382,8 +407,12 @@ export class ComposioStoreActionImpl {
     const server = composioServers.find((s) => s.identifier === identifier);
 
     // Drop the row locally first — the server delete stays best-effort, so a
-    // failure never resurrects the row the user just deleted. The intent keeps a
-    // list response that was already in flight from bringing it back either.
+    // failure never resurrects the row the user just deleted. Recording the
+    // removal also cancels a pending add of the same identifier: the row was
+    // created but never echoed, so leaving it in `added` would re-append it the
+    // moment a response clears `removed`, resurrecting the deleted row for the
+    // rest of the session.
+    this.#localIntent().added.delete(identifier);
     this.#localIntent().removed.add(identifier);
     this.#servers.remove(identifier);
     this.#markLocalWrite();

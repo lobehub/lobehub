@@ -498,6 +498,45 @@ describe('composio connections replica', () => {
     expect(connectionIds()).toEqual([]);
   });
 
+  it('keeps a connection created and then deleted before any response echoes it', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(useToolStore.getState().isComposioServersInit).toBe(true));
+
+    mocks.createConnection.mockResolvedValue({
+      authConfigId: 'ac_slack',
+      connectedAccountId: 'ca_slack',
+      identifier: 'slack',
+      redirectUrl: 'https://composio.dev/redirect',
+    });
+    await act(async () => {
+      await useToolStore
+        .getState()
+        .createComposioConnection({ appSlug: 'SLACK', identifier: 'slack', label: 'Slack' });
+    });
+    expect(connectionIds()).toEqual(['slack']);
+
+    // Deleted before any list response echoed the create.
+    mocks.deleteConnection.mockResolvedValue({ success: true });
+    await act(async () => {
+      await useToolStore.getState().removeComposioConnection('slack');
+    });
+    expect(connectionIds()).toEqual([]);
+
+    // The server never echoes the row: every later empty response must keep it
+    // gone instead of re-appending the stale pending add.
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual([]);
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual([]);
+  });
+
   it('does not let a list response issued before a refresh revert the active row', async () => {
     mocks.getComposioPlugins.mockResolvedValue([composioPlugin('slack', { status: 'PENDING' })]);
     const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
@@ -537,6 +576,49 @@ describe('composio connections replica', () => {
     const row = useToolStore.getState().composioServers.find((s) => s.identifier === 'slack');
     expect(row?.status).toBe('active');
     expect(row?.tools?.map((t) => t.name)).toEqual(['SLACK_POST']);
+  });
+
+  it('keeps a refreshed connection active while its server write is still in flight', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('slack', { status: 'PENDING' })]);
+    const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
+      wrapper,
+    });
+    await waitFor(() => expect(connectionIds()).toEqual(['slack']));
+
+    mocks.getConnection.mockResolvedValue({ gmailReadPermission: false, status: 'ACTIVE' });
+    mocks.listActions.mockResolvedValue({
+      tools: [
+        { description: 'Post a message', inputSchema: { type: 'object' }, name: 'SLACK_POST' },
+      ],
+    });
+    // The server write of the ACTIVE row stays in flight …
+    let resolveUpdate!: (value: unknown) => void;
+    const updateInFlight = new Promise((resolve) => {
+      resolveUpdate = resolve;
+    });
+    mocks.updateComposioPlugin.mockReturnValueOnce(updateInFlight);
+
+    let refresh!: Promise<void>;
+    await act(async () => {
+      refresh = useToolStore.getState().refreshComposioConnectionStatus('slack');
+    });
+    await waitFor(() => expect(mocks.updateComposioPlugin).toHaveBeenCalledTimes(1));
+    expect(useToolStore.getState().composioServers[0].status).toBe('active');
+
+    // … and a focus revalidation the server answers in that window still
+    // returns the pre-refresh `PENDING` row: it must not revert the write.
+    await act(async () => {
+      await sync.result.current.mutate();
+    });
+    const row = useToolStore.getState().composioServers.find((s) => s.identifier === 'slack');
+    expect(row?.status).toBe('active');
+    expect(row?.tools?.map((t) => t.name)).toEqual(['SLACK_POST']);
+
+    await act(async () => {
+      resolveUpdate({ success: true });
+      await refresh;
+    });
+    expect(useToolStore.getState().composioServers[0].status).toBe('active');
   });
 
   it('revalidates through the connections sync mutate without clearing the list', async () => {
@@ -682,5 +764,19 @@ describe('mergeComposioServers', () => {
     expect(mergeComposioServers(response(5, 'gmail'), createComposioLocalIntent(), 5)).toEqual([
       server('gmail'),
     ]);
+  });
+
+  it('drops every response while a local write is still being persisted', () => {
+    const intent = createComposioLocalIntent();
+    intent.added.set('slack', server('slack'));
+
+    // The request was issued after the local write, but the server has not
+    // persisted it yet: nothing it answers can be trusted.
+    expect(mergeComposioServers(response(5, 'slack'), intent, 5, true)).toBeUndefined();
+
+    // Persistence finished: a response issued after the write applies again.
+    expect(mergeComposioServers(response(5, 'slack'), intent, 5)!.map((s) => s.identifier)).toEqual(
+      ['slack'],
+    );
   });
 });
