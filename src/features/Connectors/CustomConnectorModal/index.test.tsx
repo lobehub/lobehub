@@ -85,10 +85,35 @@ describe('CustomConnectorModal edit pre-fill', () => {
     expect(seeded.customParams.mcp.command).toBe('npx');
   });
 
-  it('falls back to the list row when the edit read carries no stdio config', async () => {
+  it('falls back to the list row only when the edit read omits the field', async () => {
     mocks.state.connector = {
       ...(mocks.state.connector as object),
       mcpStdioConfig: { command: 'uvx', env: { LEGACY: 'from-row' } },
+    };
+    // `undefined` = an older read that does not ship the field at all.
+    mocks.state.getConnectorForEdit.mockResolvedValue({
+      credentials: null,
+      metadata: undefined,
+      oidcConfig: null,
+    });
+
+    render(<CustomConnectorModal open connectorId="c1" onClose={() => {}} />);
+
+    await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
+
+    const seeded = JSON.parse(screen.getByTestId('seed').textContent!);
+    expect(seeded.customParams.mcp.env).toEqual({ LEGACY: 'from-row' });
+  });
+
+  // `null` from the protected read is the server confirming there is nothing —
+  // not "field missing". A row cached by this browser can be older than the
+  // connector (re-created or cleared in another session), so it must not
+  // resurrect secrets that the read says are gone.
+  it('treats an explicit null from the edit read as authoritative', async () => {
+    mocks.state.connector = {
+      ...(mocks.state.connector as object),
+      metadata: { customHeaders: { Authorization: 'stale-header' }, description: 'Stale' },
+      mcpStdioConfig: { command: 'uvx', env: { STALE: 'from-row' } },
     };
     mocks.state.getConnectorForEdit.mockResolvedValue({
       credentials: null,
@@ -102,6 +127,9 @@ describe('CustomConnectorModal edit pre-fill', () => {
     await waitFor(() => expect(screen.getByTestId('seed').textContent).not.toBe('null'));
 
     const seeded = JSON.parse(screen.getByTestId('seed').textContent!);
-    expect(seeded.customParams.mcp.env).toEqual({ LEGACY: 'from-row' });
+    expect(seeded.customParams.mcp.env).toBeUndefined();
+    expect(seeded.customParams.mcp.command).toBeUndefined();
+    expect(seeded.customParams.mcp.headers).toBeUndefined();
+    expect(seeded.customParams.description).toBeUndefined();
   });
 });

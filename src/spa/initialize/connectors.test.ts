@@ -4,8 +4,13 @@ const mocks = vi.hoisted(() => ({
   fetchConnectors: vi.fn(async () => {}),
   isConnectorsInit: false,
   isSignedIn: false,
+  scope: 'user_a:personal',
   toolSubscribe: vi.fn(),
   userSubscribe: vi.fn(),
+}));
+
+vi.mock('@/libs/swr/useCacheScope', () => ({
+  getCacheScope: () => mocks.scope,
 }));
 
 vi.mock('@/store/tool', () => ({
@@ -34,6 +39,7 @@ describe('startConnectorInitialization', () => {
     mocks.fetchConnectors.mockResolvedValue(undefined);
     mocks.isConnectorsInit = false;
     mocks.isSignedIn = false;
+    mocks.scope = 'user_a:personal';
   });
 
   it('fetches connectors when a signed-in user is present', async () => {
@@ -86,6 +92,40 @@ describe('startConnectorInitialization', () => {
     });
 
     toolListener();
+
+    expect(mocks.fetchConnectors).toHaveBeenCalledTimes(2);
+  });
+
+  // The other half of the same guard: a scope switch while the request is in
+  // flight re-arms the gate, but the subscriber's re-entrant call is swallowed
+  // by the in-flight slot — and the response being awaited belongs to the old
+  // scope, so it will be discarded. The new scope must get its own request once
+  // the slot frees up, instead of waiting for an unrelated store update.
+  it('re-runs the fetch when the scope changed while one was in flight', async () => {
+    mocks.isSignedIn = true;
+
+    const { startConnectorInitialization } = await import('./connectors');
+
+    let resolveInFlight!: () => void;
+    mocks.fetchConnectors.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (resolveInFlight = resolve)),
+    );
+
+    startConnectorInitialization();
+    expect(mocks.fetchConnectors).toHaveBeenCalledTimes(1);
+
+    const toolListener = mocks.toolSubscribe.mock.calls[0]![0] as () => void;
+
+    // The workspace slug resolves while the personal request is still pending.
+    mocks.scope = 'user_a:ws-1';
+    mocks.isConnectorsInit = false;
+    toolListener();
+
+    // Swallowed by the in-flight slot — not a second request.
+    expect(mocks.fetchConnectors).toHaveBeenCalledTimes(1);
+
+    resolveInFlight();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     expect(mocks.fetchConnectors).toHaveBeenCalledTimes(2);
   });

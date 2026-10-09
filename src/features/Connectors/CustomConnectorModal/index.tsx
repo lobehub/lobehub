@@ -114,8 +114,11 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         if (controller.signal.aborted) return;
         setEditFetchedData({
           credentials: (data?.credentials ?? null) as EditFetchedData['credentials'],
-          mcpStdioConfig: data?.mcpStdioConfig ?? null,
-          metadata: data?.metadata ?? null,
+          // Keep `undefined` (the read did not ship the field) distinct from
+          // `null` (the server confirmed there is none): only the former may
+          // fall back to the list row.
+          mcpStdioConfig: data?.mcpStdioConfig,
+          metadata: data?.metadata,
           oidcConfig: (data?.oidcConfig ?? null) as EditFetchedData['oidcConfig'],
         });
       });
@@ -138,12 +141,18 @@ const CustomConnectorModal = memo<CustomConnectorModalProps>(
         mcpStdioConfig?: StdioConfig;
       };
       // Both of these are stripped from the persisted list projection, so the
-      // protected edit read is the source of truth; the row is only a fallback
-      // for the window where the list has been refreshed but the edit read is
-      // older. `editValue` is undefined until the read resolves, so the form is
-      // never seeded from the row alone.
-      const mcpStdioConfig = editFetchedData.mcpStdioConfig ?? c.mcpStdioConfig;
-      const metadata = editFetchedData.metadata ?? connector.metadata;
+      // protected edit read is authoritative. `undefined` means the read did not
+      // ship the field at all (older server), which is the only case where the
+      // list row may be used; `null` means the server confirmed there is none,
+      // and a row cached by this browser must not resurrect it — that is how a
+      // connector re-created or cleared in another session would come back with
+      // stale secrets written from the editor.
+      const mcpStdioConfig =
+        editFetchedData.mcpStdioConfig === undefined
+          ? c.mcpStdioConfig
+          : (editFetchedData.mcpStdioConfig ?? undefined);
+      const metadata =
+        editFetchedData.metadata === undefined ? connector.metadata : editFetchedData.metadata;
 
       const { credentials, oidcConfig } = editFetchedData;
 
