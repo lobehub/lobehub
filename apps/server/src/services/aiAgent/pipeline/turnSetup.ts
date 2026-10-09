@@ -28,7 +28,6 @@ import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/a
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
-import { deviceGateway } from '@/server/services/deviceGateway';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -626,14 +625,12 @@ export const setupTurn = async (
           agentConfig.agencyConfig.boundDeviceId !== directory.deviceId
         )
           throw new Error('Agent is fixed to another execution target');
-        const stat = await deviceGateway.statPath({
-          deviceId: directory.deviceId,
-          path: directory.path,
-          userId: deps.userId,
-          workspaceId: deps.workspaceId,
-        });
-        if (!stat?.exists || !stat.isDirectory)
-          throw new Error('Device is offline or working directory is unavailable');
+        // No device round trip here. Whether the directory still exists on the
+        // device is discovered by the dispatch that follows, which is the single
+        // source of truth for liveness. A blocking `statPath` probe put a full
+        // WebSocket round trip (up to its 8s timeout) on the critical path of
+        // every message in a project-directory topic, and rejected the send
+        // outright when the device was merely slow to answer.
         resolvedRequestedDeviceId = directory.deviceId;
         effectiveRequestedDeviceId = directory.deviceId;
         topicBoundDeviceId = directory.deviceId;
