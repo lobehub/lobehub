@@ -42,12 +42,15 @@ describe('getRedisServiceClient', () => {
   });
 
   it('returns the shared client and asks for the bounded timeouts', async () => {
-    const provider = { get: vi.fn(), set: vi.fn() };
+    const provider = { get: vi.fn().mockResolvedValue('value'), set: vi.fn() };
     mockGetRedisConfig.mockReturnValue(enabledConfig);
     mockTryInitializeRedisWithPrefix.mockResolvedValue(provider);
     const { getRedisServiceClient } = await loadClient();
 
-    await expect(getRedisServiceClient()).resolves.toBe(provider);
+    const client = await getRedisServiceClient();
+    expect(client).not.toBeNull();
+    await expect(client!.get('k')).resolves.toBe('value');
+
     expect(mockTryInitializeRedisWithPrefix).toHaveBeenCalledWith(
       expect.objectContaining({ commandTimeoutMs: 1000, connectTimeoutMs: 1000 }),
       'sendPathCache',
@@ -81,5 +84,24 @@ describe('getRedisServiceClient', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('opens the circuit when a command on the memoized client fails', async () => {
+    // Redis can go down after the provider is memoized; acquisition would keep
+    // returning it, so the command failure itself must trip the cooldown.
+    const provider = {
+      get: vi.fn().mockRejectedValue(new Error('redis down')),
+      set: vi.fn(),
+    };
+    mockGetRedisConfig.mockReturnValue(enabledConfig);
+    mockTryInitializeRedisWithPrefix.mockResolvedValue(provider);
+    const { getRedisServiceClient } = await loadClient();
+
+    const client = await getRedisServiceClient();
+    expect(client).not.toBeNull();
+    await expect(client!.get('k')).rejects.toThrow('redis down');
+
+    await expect(getRedisServiceClient()).resolves.toBeNull();
+    expect(mockTryInitializeRedisWithPrefix).toHaveBeenCalledTimes(1);
   });
 });

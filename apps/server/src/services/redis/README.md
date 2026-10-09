@@ -13,6 +13,9 @@ connection and keyspace, preserving deployed cache/claim compatibility. A namesp
 partition, not a reason to open another connection. Add a separate connection only for a
 transport requirement such as pub/sub or blocking commands. Client/provider code and its tests live in `apps/server/src/modules/Redis`.
 The service composes this infrastructure through domain methods.
+`cache.ts` holds the generic cache/claim policy (read-through caching, the atomic claim with its
+process-local fallback) internal to this directory: it is not re-exported, so callers cannot reach
+around the domain methods.
 The former `src/libs/redis` directory is removed without forwarding exports.
 Do not export transport primitives from the business service barrel.
 

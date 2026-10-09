@@ -1,5 +1,6 @@
-import { readThroughRedis, RedisKeys } from '@/server/modules/Redis';
+import { RedisKeys } from '@/server/modules/Redis';
 
+import { readThroughRedis } from './cache';
 import { getRedisServiceClient } from './client';
 
 export const skillTools = {

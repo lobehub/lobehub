@@ -1,5 +1,6 @@
-import { claimRedisOnce, RedisKeys } from '@/server/modules/Redis';
+import { RedisKeys } from '@/server/modules/Redis';
 
+import { claimRedisOnce } from './cache';
 import { getRedisServiceClient } from './client';
 
 // Covers the 30 second scan timeout plus writeback. Claims expire rather than release early.
