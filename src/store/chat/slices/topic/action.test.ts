@@ -65,6 +65,7 @@ vi.mock('@/services/topic', () => ({
     removeTopic: vi.fn(),
     cloneTopic: vi.fn(),
     createTopic: vi.fn(),
+    forkTopic: vi.fn(),
     updateTopicFavorite: vi.fn(),
     updateTopicMetadata: vi.fn(),
     updateTopicModel: vi.fn(),
@@ -3962,6 +3963,62 @@ describe('topic action', () => {
       expect(cloneTopicSpy).toHaveBeenCalledWith(topicId, 'duplicateTitle_Original Topic');
       expect(refreshTopicSpy).toHaveBeenCalled();
       expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId);
+    });
+  });
+  describe('forkTopic', () => {
+    it('should fork the active topic up to a message and switch to the new topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const topicId = 'topic-1';
+      const newTopicId = 'forked-topic-id';
+      const topics = [{ id: topicId, title: 'Original Topic' }] as ChatTopic[];
+
+      await act(async () => {
+        useChatStore.setState({
+          activeAgentId: 'abc',
+          activeTopicId: topicId,
+          topicDataMap: {
+            [topicMapKey({ agentId: 'abc' })]: {
+              items: topics,
+              total: topics.length,
+              currentPage: 0,
+              hasMore: false,
+              pageSize: 20,
+            },
+          },
+        });
+      });
+
+      const forkTopicSpy = vi.spyOn(topicService, 'forkTopic').mockResolvedValue(newTopicId);
+      const refreshTopicSpy = vi.spyOn(result.current, 'refreshTopic');
+      const switchTopicSpy = vi.spyOn(result.current, 'switchTopic');
+
+      await act(async () => {
+        await result.current.forkTopic('msg-2');
+      });
+
+      expect(forkTopicSpy).toHaveBeenCalledWith({
+        id: topicId,
+        messageId: 'msg-2',
+        newTitle: 'forkTitle_Original Topic',
+      });
+      expect(refreshTopicSpy).toHaveBeenCalled();
+      expect(switchTopicSpy).toHaveBeenCalledWith(newTopicId);
+    });
+
+    it('should not fork when there is no active topic', async () => {
+      const { result } = renderHook(() => useChatStore());
+
+      await act(async () => {
+        useChatStore.setState({ activeTopicId: undefined });
+      });
+
+      const forkTopicSpy = vi.spyOn(topicService, 'forkTopic');
+
+      await act(async () => {
+        await result.current.forkTopic('msg-2');
+      });
+
+      expect(forkTopicSpy).not.toHaveBeenCalled();
     });
   });
   describe('autoRenameTopicTitle', () => {

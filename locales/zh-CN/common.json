@@ -240,6 +240,8 @@
   "footer.star.desc": "如果你喜欢我们的产品，可以去 GitHub 给我们点一颗星。这个小动作对我们意义重大，能激励我们持续改进",
   "footer.star.title": "在 GitHub 为我们点亮星标",
   "footer.title": "喜欢我们的产品？",
+  "forkRequiresSavedTopic": "当前话题未保存。保存后即可创建新会话",
+  "forkTopic": "在新会话中继续",
   "fullscreen": "全屏模式",
   "generation.hero.taglinePrefix": "即刻创作",
   "generation.promptModeration.blocked": "内容政策检查未通过。请修改您的提示。",

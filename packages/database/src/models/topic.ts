@@ -216,6 +216,39 @@ const pickVisitorRunningOperation = (
   return { assistantMessageId, heteroType, operationId, scope, startedAt, threadId };
 };
 
+/**
+ * Collect the ancestor chain of `messageId` (itself → … → topic root) within a
+ * single topic's messages. Used by {@link TopicModel.duplicate} when a fork
+ * should carry only the selected conversation prefix: walking `parentId` keeps
+ * exactly the context the user pointed at, while sibling branches produced by
+ * regenerate stay behind in the source topic.
+ */
+const collectMessageChain = <T extends { id: string; parentId: string | null }>(
+  topicMessages: T[],
+  messageId: string,
+  topicId: string,
+): T[] => {
+  const byId = new Map(topicMessages.map((message) => [message.id, message]));
+
+  const selected = byId.get(messageId);
+  if (!selected) {
+    throw new Error(`Message with id ${messageId} not found in topic ${topicId}`);
+  }
+
+  // Walk up to the root, then reverse back to root → selected so parents are
+  // inserted before their children.
+  const chain: T[] = [];
+  const visited = new Set<string>();
+  let cursor: T | undefined = selected;
+  while (cursor && !visited.has(cursor.id)) {
+    visited.add(cursor.id);
+    chain.push(cursor);
+    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+  }
+
+  return chain.reverse();
+};
+
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
@@ -1584,7 +1617,14 @@ export class TopicModel {
     });
   };
 
-  duplicate = async (topicId: string, newTitle?: string) => {
+  /**
+   * Copy a topic into a new one.
+   *
+   * `options.upToMessageId` narrows the copy to the ancestor chain ending at
+   * that message (first message → that message) — the "fork from here" path.
+   * Without it the whole topic is copied, matching the duplicate action.
+   */
+  duplicate = async (topicId: string, newTitle?: string, options?: { upToMessageId?: string }) => {
     return this.db.transaction(async (tx) => {
       // find original topic
       const originalTopic = await tx.query.topics.findFirst({
@@ -1613,11 +1653,17 @@ export class TopicModel {
         .returning();
 
       // Find messages associated with the original topic, ordered by createdAt
-      const originalMessages = await tx
+      const topicMessages = await tx
         .select()
         .from(messages)
         .where(and(eq(messages.topicId, topicId), this.messageOwnership()))
         .orderBy(messages.createdAt);
+
+      // A fork copies only the selected prefix of the conversation; a duplicate
+      // copies the whole topic.
+      const originalMessages = options?.upToMessageId
+        ? collectMessageChain(topicMessages, options.upToMessageId, topicId)
+        : topicMessages;
 
       // Find all messagePlugins for this topic
       const messageIds = originalMessages.map((m) => m.id);

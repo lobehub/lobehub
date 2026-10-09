@@ -240,6 +240,8 @@
   "footer.star.desc": "If you like {{appName}}, a GitHub star helps a lot. Thank you.",
   "footer.star.title": "Star us on GitHub",
   "footer.title": "Like Our Product?",
+  "forkRequiresSavedTopic": "Current topic is not saved. Save it first to fork a new topic",
+  "forkTopic": "Continue in new topic",
   "fullscreen": "Full Screen Mode",
   "generation.hero.taglinePrefix": "Start Creating with",
   "generation.promptModeration.blocked": "Content policy check failed. Please revise your prompt.",

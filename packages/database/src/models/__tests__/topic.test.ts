@@ -1633,6 +1633,88 @@ describe('TopicModel', () => {
     it('throws when the source topic does not exist', async () => {
       await expect(topicModel.duplicate('nope')).rejects.toThrow('not found');
     });
+
+    it('copies only the ancestor chain when forking up to a message', async () => {
+      const topic = await topicModel.create({ title: 'fork source' });
+      await serverDB.insert(messages).values([
+        { content: 'q1', id: 'fork-m1', role: 'user', topicId: topic.id, userId },
+        {
+          content: 'a1',
+          id: 'fork-m2',
+          parentId: 'fork-m1',
+          role: 'assistant',
+          topicId: topic.id,
+          userId,
+        },
+        {
+          content: 'q2',
+          id: 'fork-m3',
+          parentId: 'fork-m2',
+          role: 'user',
+          topicId: topic.id,
+          userId,
+        },
+      ]);
+
+      const { topic: forked, messages: forkedMessages } = await topicModel.duplicate(
+        topic.id,
+        'forked',
+        { upToMessageId: 'fork-m2' },
+      );
+
+      // only the selected prefix is copied, in root → selected order
+      expect(forkedMessages.map((m) => m.content)).toEqual(['q1', 'a1']);
+      expect(forkedMessages.every((m) => m.topicId === forked.id)).toBe(true);
+
+      // the chain is re-parented inside the fork: root stays root, child points at the copy
+      const [root, child] = forkedMessages;
+      expect(root.parentId).toBeNull();
+      expect(child.parentId).toBe(root.id);
+
+      // the unselected tail stays behind in the source topic
+      const sourceMessages = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, topic.id));
+      expect(sourceMessages.map((m) => m.id).sort()).toEqual(['fork-m1', 'fork-m2', 'fork-m3']);
+    });
+
+    it('leaves sibling branches out of the fork', async () => {
+      const topic = await topicModel.create({ title: 'branched source' });
+      await serverDB.insert(messages).values([
+        { content: 'q1', id: 'br-m1', role: 'user', topicId: topic.id, userId },
+        {
+          content: 'draft',
+          id: 'br-m2a',
+          parentId: 'br-m1',
+          role: 'assistant',
+          topicId: topic.id,
+          userId,
+        },
+        {
+          content: 'regenerated',
+          id: 'br-m2b',
+          parentId: 'br-m1',
+          role: 'assistant',
+          topicId: topic.id,
+          userId,
+        },
+      ]);
+
+      const { messages: forkedMessages } = await topicModel.duplicate(topic.id, 'forked', {
+        upToMessageId: 'br-m2b',
+      });
+
+      expect(forkedMessages.map((m) => m.content)).toEqual(['q1', 'regenerated']);
+    });
+
+    it('throws when the fork anchor message is not in the topic', async () => {
+      const topic = await topicModel.create({ title: 'no anchor' });
+
+      await expect(
+        topicModel.duplicate(topic.id, 'forked', { upToMessageId: 'missing' }),
+      ).rejects.toThrow('not found in topic');
+    });
   });
 
   describe('batchMoveToAgent', () => {
