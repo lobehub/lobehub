@@ -276,18 +276,14 @@ export class GenerationBatchActionImpl {
                 ),
               );
 
-              // If generation succeeds and has a thumbnail, check if the current topic has an imageUrl
+              // The server fills an empty topic cover before reporting success; refresh to show it
               if (data.status === AsyncTaskStatus.Success && data.generation.asset?.thumbnailUrl) {
                 const currentTopic = generationTopicSelectors.getGenerationTopicById(topicId)(
                   this.#get(),
                 );
 
-                // If the current topic doesn't have an imageUrl, update it with this generation's thumbnailUrl
                 if (currentTopic && !currentTopic.coverUrl) {
-                  await this.#get().updateGenerationTopicCover(
-                    topicId,
-                    data.generation.asset.thumbnailUrl,
-                  );
+                  await this.#get().refreshGenerationTopics();
                 }
               }
             }

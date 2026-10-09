@@ -3,7 +3,7 @@ import type {
   ImageGenerationTopic,
   VideoGenerationAsset,
 } from '@lobechat/types';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, isNull } from 'drizzle-orm';
 
 import { FileService } from '@/server/services/file';
 
@@ -107,6 +107,24 @@ export class GenerationTopicModel {
       .update(generationTopics)
       .set({ ...data, updatedAt: new Date() })
       .where(and(eq(generationTopics.id, id), this.ownership()))
+      .returning();
+
+    return updatedTopic;
+  };
+
+  /**
+   * Set the cover only when the topic has none yet. Generations in one batch
+   * finish concurrently, so the `cover_url IS NULL` guard lets exactly one of
+   * them win; callers clean up their uploaded cover when this returns undefined.
+   */
+  updateCoverIfEmpty = async (
+    id: string,
+    coverUrl: string,
+  ): Promise<GenerationTopicItem | undefined> => {
+    const [updatedTopic] = await this.db
+      .update(generationTopics)
+      .set({ coverUrl, updatedAt: new Date() })
+      .where(and(eq(generationTopics.id, id), this.ownership(), isNull(generationTopics.coverUrl)))
       .returning();
 
     return updatedTopic;

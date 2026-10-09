@@ -16,6 +16,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import type { LobeChatDatabase } from '@/database/type';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { GenerationService } from '@/server/services/generation';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
@@ -126,6 +127,12 @@ export async function processBackgroundVideoPolling(
         prompt: batch?.prompt,
       }),
       FileSource.VideoGeneration,
+    );
+
+    // Before marking Success so the client's post-success topic refresh sees it
+    await new GenerationService(db, userId, workspaceId).ensureTopicCover(
+      generationTopicId,
+      processResult.thumbnailKey,
     );
 
     const duration = Date.now() - asyncTaskCreatedAt.getTime();

@@ -4,6 +4,7 @@ import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { FileService } from '@/server/services/file';
 import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
@@ -30,6 +31,7 @@ vi.mock('mime');
 vi.mock('nanoid');
 vi.mock('sharp');
 vi.mock('@/server/services/file');
+vi.mock('@/database/models/generationTopic');
 vi.mock('@/utils/number');
 vi.mock('@/utils/time');
 vi.mock('@/utils/url');
@@ -39,16 +41,26 @@ describe('GenerationService', () => {
   const mockDb = {} as any;
   const mockUserId = 'test-user';
   let mockFileService: any;
+  let mockTopicModel: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     // Setup common mocks used across all tests
     mockFileService = {
+      deleteFile: vi.fn(),
+      getFileByteArray: vi.fn(),
       uploadMedia: vi.fn(),
     };
     vi.mocked(FileService).mockImplementation(function () {
       return mockFileService;
+    });
+    mockTopicModel = {
+      findById: vi.fn(),
+      updateCoverIfEmpty: vi.fn(),
+    };
+    vi.mocked(GenerationTopicModel).mockImplementation(function () {
+      return mockTopicModel;
     });
     vi.mocked(nanoid).mockReturnValue('test-uuid');
     vi.mocked(getYYYYmmddHHMMss).mockReturnValue('20240101123000');
@@ -979,6 +991,67 @@ describe('GenerationService', () => {
       expect(filename).toContain('_cover.'); // Cover suffix
 
       expect(result).toBe('generations/covers/test-uuid_256x192_20240101123000_cover.webp');
+    });
+  });
+
+  describe('ensureTopicCover', () => {
+    const coverKey = 'generations/covers/test-uuid_256x192_20240101123000_cover.webp';
+
+    beforeEach(() => {
+      vi.mocked(sharp).mockReturnValue({
+        metadata: vi.fn().mockResolvedValue({ height: 384, width: 512 }),
+        resize: vi.fn().mockReturnThis(),
+        toBuffer: vi.fn().mockResolvedValue(Buffer.from('cover')),
+        webp: vi.fn().mockReturnThis(),
+      } as any);
+      vi.mocked(calculateThumbnailDimensions).mockReturnValue({
+        shouldResize: true,
+        thumbnailHeight: 192,
+        thumbnailWidth: 256,
+      });
+      mockFileService.getFileByteArray.mockResolvedValue(new Uint8Array([1, 2, 3]));
+      mockFileService.uploadMedia.mockResolvedValue({ key: coverKey });
+    });
+
+    it('creates a cover from the stored asset when the topic has none', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockResolvedValue({ coverUrl: coverKey, id: 'gt_1' });
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.getFileByteArray).toHaveBeenCalledWith('generations/thumb.webp');
+      expect(mockSsrfSafeFetch).not.toHaveBeenCalled();
+      expect(mockTopicModel.updateCoverIfEmpty).toHaveBeenCalledWith('gt_1', coverKey);
+      expect(mockFileService.deleteFile).not.toHaveBeenCalled();
+    });
+
+    it('skips topics that already have a cover', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: 'existing', id: 'gt_1' });
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.getFileByteArray).not.toHaveBeenCalled();
+      expect(mockFileService.uploadMedia).not.toHaveBeenCalled();
+    });
+
+    it('removes its upload when a concurrent generation set the cover first', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockTopicModel.updateCoverIfEmpty.mockResolvedValue(undefined);
+
+      await service.ensureTopicCover('gt_1', 'generations/thumb.webp');
+
+      expect(mockFileService.deleteFile).toHaveBeenCalledWith(coverKey);
+    });
+
+    it('does not throw when cover processing fails', async () => {
+      mockTopicModel.findById.mockResolvedValue({ coverUrl: null, id: 'gt_1' });
+      mockFileService.getFileByteArray.mockRejectedValue(new Error('S3 down'));
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(service.ensureTopicCover('gt_1', 'generations/thumb.webp')).resolves.toBe(
+        undefined,
+      );
+      expect(consoleError).toHaveBeenCalled();
     });
   });
 });

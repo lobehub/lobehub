@@ -235,6 +235,56 @@ describe('GenerationTopicModel', () => {
     });
   });
 
+  describe('updateCoverIfEmpty', () => {
+    it('should set the cover when the topic has none', async () => {
+      const { id } = await generationTopicModel.create('Topic');
+
+      const result = await generationTopicModel.updateCoverIfEmpty(id, 'cover-key');
+
+      expect(result?.coverUrl).toBe('cover-key');
+    });
+
+    it('should keep an existing cover', async () => {
+      const { id } = await generationTopicModel.create('Topic');
+      await generationTopicModel.update(id, { coverUrl: 'first-cover' });
+
+      const result = await generationTopicModel.updateCoverIfEmpty(id, 'second-cover');
+
+      expect(result).toBeUndefined();
+      const topic = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, id),
+      });
+      expect(topic?.coverUrl).toBe('first-cover');
+    });
+
+    it('should let only one concurrent writer set the cover', async () => {
+      const { id } = await generationTopicModel.create('Topic');
+
+      const results = await Promise.all(
+        ['cover-a', 'cover-b', 'cover-c'].map((key) =>
+          generationTopicModel.updateCoverIfEmpty(id, key),
+        ),
+      );
+
+      const winners = results.filter(Boolean);
+      expect(winners).toHaveLength(1);
+      const topic = await serverDB.query.generationTopics.findFirst({
+        where: eq(generationTopics.id, id),
+      });
+      expect(topic?.coverUrl).toBe(winners[0]!.coverUrl);
+    });
+
+    it('should not update topics of other users', async () => {
+      await serverDB
+        .insert(generationTopics)
+        .values({ id: 'other-cover-topic', title: 'Other', userId: otherUserId });
+
+      const result = await generationTopicModel.updateCoverIfEmpty('other-cover-topic', 'cover');
+
+      expect(result).toBeUndefined();
+    });
+  });
+
   describe('update', () => {
     it('should update a generation topic', async () => {
       // Create a test topic

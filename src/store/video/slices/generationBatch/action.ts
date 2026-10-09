@@ -206,17 +206,14 @@ export class GenerationBatchActionImpl {
                 ),
               );
 
-              // Update topic cover if generation succeeds and has a thumbnail
+              // The server fills an empty topic cover before reporting success; refresh to show it
               if (data.status === AsyncTaskStatus.Success && data.generation.asset?.thumbnailUrl) {
                 const currentTopic = generationTopicSelectors.getGenerationTopicById(topicId)(
                   this.#get(),
                 );
 
                 if (currentTopic && !currentTopic.coverUrl) {
-                  await this.#get().updateGenerationTopicCover(
-                    topicId,
-                    data.generation.asset.thumbnailUrl,
-                  );
+                  await this.#get().refreshGenerationTopics();
                 }
               }
             }

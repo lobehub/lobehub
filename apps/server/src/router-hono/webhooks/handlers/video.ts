@@ -26,6 +26,7 @@ import { GenerationModel } from '@/database/models/generation';
 import { generationBatches } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { GenerationService } from '@/server/services/generation';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
 import { sanitizeFileName } from '@/utils/sanitizeFileName';
@@ -302,6 +303,15 @@ export const videoWebhook = async (c: Context<BlankEnv, '/video/:provider'>) => 
       },
       FileSource.VideoGeneration,
     );
+
+    // Before marking Success so the client's post-success topic refresh sees it
+    if (batch?.generationTopicId) {
+      await new GenerationService(
+        db,
+        asyncTask.userId,
+        asyncTask.workspaceId ?? undefined,
+      ).ensureTopicCover(batch.generationTopicId, processResult.thumbnailKey);
+    }
 
     const duration = Date.now() - asyncTask.createdAt.getTime();
 
