@@ -148,6 +148,25 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   /** Keys with a `loadMore` request in flight (the only valid `isLoadingMore`). */
   const loadingMore = new Set<string>();
 
+  // ---- removal guard ----------------------------------------------------
+  // An explicit removal (a deleted / unauthorized aggregate, or a subject whose
+  // attachment is gone) drops the entry AND its persisted row — but a read of
+  // that row that started before the removal still holds the old value, and a
+  // removal leaves no trace in the slots for the `hydrate` guard to see. So a
+  // scope+key is remembered as removed and refuses hydration until a server
+  // value supersedes it, otherwise the late read resurrects the exact value the
+  // removal just dropped.
+  const removedEntries = new Map<string, Set<string>>();
+  const markRemoved = (scope: string, key: string) => {
+    const keys = removedEntries.get(scope) ?? new Set<string>();
+    removedEntries.set(scope, keys);
+    keys.add(key);
+  };
+  const clearRemoved = (scope: string, key: string) => {
+    removedEntries.get(scope)?.delete(key);
+  };
+  const isRemoved = (scope: string, key: string) => removedEntries.get(scope)?.has(key) ?? false;
+
   const getSlot = port.getState;
   const storageKey = (key: string, query?: string) => ({
     queryKey: replicaStorageKey(key, query),
@@ -229,6 +248,10 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     // An action captured under another identity is stale — drop it.
     if (action.scope !== activeScope) return false;
 
+    // Every removal path (explicit `remove`, a missing response, an entity that
+    // takes its whole value with it) arms the hydration guard for this key.
+    if (action.type === 'remove') markRemoved(action.scope, action.key);
+
     const initial = getSlot();
     let slot = initial;
     const writes: ReplicaViewWrite<TData>[] = [];
@@ -271,9 +294,15 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     if (resource.scope.canHydrate && !resource.scope.canHydrate()) return false;
     const key = resource.key(params);
     if (!resource.persistKey(key)) return false;
+    // A removed entry is not read back: only a later server value supersedes
+    // the removal (see `replace`), so a stale row can never repaint it.
+    if (isRemoved(scope, key)) return false;
     const query = resource.query(params);
     const cached = await resource.storage.get({ ...storageKey(key, query), scope });
     if (!cached) return false;
+    // Re-check after the read: a removal that landed while it was in flight must
+    // not resurrect the row it just dropped.
+    if (isRemoved(scope, key)) return false;
     if (options.isHydratable && !options.isHydratable(cached.data, params)) return false;
     return dispatch({
       data: cached.data,
@@ -322,10 +351,15 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       : fetched;
     if (incoming === undefined) return false;
     // A response that says the entry is gone clears it outright: the merge path
-    // would keep — and re-persist — the confirmed value it is replacing.
+    // would keep — and re-persist — the confirmed value it is replacing. It also
+    // arms the hydration guard, so a persisted read still in flight cannot bring
+    // the dropped value back.
     if (!paging && options.isMissing?.(incoming)) {
       return dispatch({ key, scope, type: 'remove' });
     }
+    // A response that carries a value supersedes an earlier removal: the entry
+    // exists again, so the key may hydrate once more.
+    clearRemoved(scope, key);
     const query = resource.query(params);
     const entry = getSlot().entries[key];
     // A different query (filters, sort) must not merge with loaded pages. A
