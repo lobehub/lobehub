@@ -14,6 +14,7 @@ import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/ski
 import { setNamespace } from '@/utils/storeDebug';
 
 import type { DocumentStore } from '../../store';
+import { documentDetailResource } from '../document/projection';
 import type { DocumentDispatch } from './reducer';
 import { documentReducer } from './reducer';
 
@@ -444,6 +445,12 @@ export class EditorActionImpl {
     const errorCode = (error as { data?: { code?: string } })?.data?.code;
     if (errorCode !== 'CONFLICT') throw error;
 
+    // Capture the identity BEFORE the request, like the sync and prefetch paths.
+    // An account / workspace switch while the read is in flight must not
+    // reconcile the previous identity's row into the new identity's editor
+    // state, nor persist it into the new scope's replica partition.
+    const scope = documentDetailResource.scope.get();
+
     let latest: Awaited<ReturnType<typeof documentService.getDocumentById>>;
     try {
       latest = await documentService.getDocumentById(id);
@@ -451,12 +458,14 @@ export class EditorActionImpl {
       throw error;
     }
     if (!latest?.updatedAt) throw error;
+    // The identity moved on while we were fetching: this reconciliation is stale.
+    if (scope !== documentDetailResource.scope.get()) throw error;
 
     const outcome = this.reconcileRemote(id, latest);
     if (outcome === 'adopted') {
       // Feed the adopted row back into the detail replica so the next sync
       // reconciles against it instead of re-adopting a stale server read.
-      this.#get().internal_adoptDocumentDetail(id, latest);
+      this.#get().internal_adoptDocumentDetail(id, latest, scope);
     }
     if (outcome === 'adopted' || !canRetry) throw error;
 

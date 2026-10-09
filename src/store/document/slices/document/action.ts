@@ -368,9 +368,20 @@ export class DocumentActionImpl {
    * Adopt a server row the caller already holds (e.g. the save pipeline
    * reconciling a CONFLICT) so the replica — not a stale fetch — is what the
    * editor hydrates from next.
+   *
+   * `scope` is the identity the row was fetched under, captured *before* the
+   * request. Pass it whenever the caller awaited something in between: an
+   * account / workspace switch would otherwise make `replace` fall back to the
+   * new scope and write the previous identity's document into its memory and
+   * IndexedDB partition. The engine drops an action whose scope is no longer
+   * active.
    */
-  internal_adoptDocumentDetail = (documentId: string, document: DocumentItem | null): void => {
-    this.#detail.replace(documentId, { document });
+  internal_adoptDocumentDetail = (
+    documentId: string,
+    document: DocumentItem | null,
+    scope?: string,
+  ): void => {
+    this.#detail.replace(documentId, { document }, scope);
   };
 }
 

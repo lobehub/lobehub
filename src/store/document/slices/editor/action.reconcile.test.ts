@@ -1,9 +1,11 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import { documentService } from '@/services/document';
 
 import { useDocumentStore } from '../../store';
+import { documentDetailResource } from '../document/projection';
 
 // Mock services
 vi.mock('@/services/document', () => ({
@@ -653,6 +655,84 @@ describe('DocumentStore - Editor Actions (reconcile)', () => {
         saveStatus: 'saved',
       });
       vi.useRealTimers();
+    });
+
+    it('drops a CONFLICT reconciliation whose read lands after the identity moved on', async () => {
+      const previousScope = 'user_previous:personal';
+      const nextScope = 'user_next:personal';
+      const scopeSpy = vi.spyOn(cacheScope, 'get').mockReturnValue(previousScope);
+      const persistSpy = vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+
+      try {
+        const { result } = renderHook(() => useDocumentStore());
+        const conflict = Object.assign(new Error('conflict'), { data: { code: 'CONFLICT' } });
+        vi.mocked(documentService.updateDocument).mockRejectedValue(conflict);
+
+        let resolveFetch!: (value: unknown) => void;
+        vi.mocked(documentService.getDocumentById).mockImplementation(
+          () => new Promise((resolve) => (resolveFetch = resolve)) as any,
+        );
+
+        // The editor holds an unsaved local draft the mock reports back verbatim.
+        const savedEditorData = { root: { children: [], type: 'root' } };
+        const draftEditorData = {
+          root: { children: [{ children: [], type: 'paragraph' }], type: 'root' },
+        };
+        const editor = {
+          ...createValidMockEditor(),
+          getDocument: vi.fn((type: string) => {
+            if (type === 'markdown') return '# Local draft';
+            if (type === 'json') return draftEditorData;
+            return null;
+          }),
+        };
+
+        act(() => {
+          result.current.initDocumentWithEditor({
+            content: '# Saved',
+            documentId: 'doc-1',
+            editor: editor as any,
+            editorData: savedEditorData,
+            sourceType: 'page',
+            updatedAt: new Date('2025-12-31T00:00:00.000Z'),
+          });
+          result.current.markDirty('doc-1');
+        });
+
+        let save!: Promise<unknown>;
+        await act(async () => {
+          save = result.current
+            .performSave('doc-1', undefined, { saveSource: 'manual' })
+            .catch(() => undefined);
+        });
+
+        // The account / workspace switches while the reconciliation read is in flight.
+        scopeSpy.mockReturnValue(nextScope);
+        await act(async () => {
+          resolveFetch({
+            content: '# Remote from the previous identity',
+            id: 'doc-1',
+            updatedAt: new Date('2026-01-05T00:00:00.000Z'),
+          });
+          await save;
+        });
+
+        // The previous identity's row must not reach the new identity's editor state…
+        expect(result.current.documents['doc-1']).toMatchObject({
+          content: '# Local draft',
+          isDirty: true,
+        });
+        // …nor its replica memory or persisted partition.
+        expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeUndefined();
+        await waitFor(async () => {
+          expect(
+            await documentDetailResource.storage!.get({ queryKey: 'doc-1', scope: nextScope }),
+          ).toBeUndefined();
+        });
+      } finally {
+        scopeSpy.mockRestore();
+        persistSpy.mockRestore();
+      }
     });
   });
 });
