@@ -502,21 +502,46 @@ export const INPUT_LOADING_OPERATION_TYPES: OperationType[] = [
 
 /**
  * Operation types whose in-flight state pins a topic row's `running` ring and
- * elapsed clock. Single source of truth for BOTH sides of that signal:
+ * elapsed clock — the set `operationSelectors.isTopicVisiblyRunning` /
+ * `visiblyRunningTopicIds` read.
  *
- * - the row reads it (`operationSelectors.isTopicVisiblyRunning` /
- *   `visiblyRunningTopicIds`), and
- * - the stale-run sweeps that retire a leaked op must scan the same set
- *   (`ChatAgentRunGatewayAction.settleAllUnbackedTopicRuns`).
- *
- * Anything that can pin the row but falls outside a sweeper's filter strands
- * the row spinning and counting over a finished topic until a full reload.
- * That is exactly what an intervention continuation's interim op
- * (`approveToolCalling` / `submitToolInteraction` / `skipToolInteraction`) did
- * while the sweeps only looked at {@link AI_RUNTIME_OPERATION_TYPES}. Keep both
- * sides on this one list.
+ * The stale-run sweep must be able to retire a leaked op from this set (see
+ * {@link SETTLEABLE_TOPIC_RUN_OPERATION_TYPES}): one that pins the row but sits
+ * outside the sweeper's filter strands the row spinning and counting over a
+ * finished topic until a full reload. That is exactly what an intervention
+ * continuation's interim op (`approveToolCalling` / `submitToolInteraction` /
+ * `skipToolInteraction`) did while the sweeps only looked at
+ * {@link AI_RUNTIME_OPERATION_TYPES}.
  */
 export const TOPIC_VISIBLY_RUNNING_OPERATION_TYPES: OperationType[] = INPUT_LOADING_OPERATION_TYPES;
+
+/**
+ * Row-pinning operations that deliberately live WITHOUT a server-side run, so
+ * the stale-run sweep must never retire them.
+ *
+ * `autoRetryPending` is the entire reason this list exists. It is held for the
+ * heterogeneous overload backoff (`HETERO_OVERLOAD_BACKOFF_SECONDS` reaches 30s
+ * ± 20% jitter) precisely so the turn keeps its busy state across the wait. The
+ * sweep's own settle age is 30s, so without this exclusion it would retire the
+ * wait op mid-countdown — and `isHeteroOverloadWaitAborted` reads a non-running
+ * op as "the user cancelled", which would silently exhaust the retry sequence.
+ */
+export const LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES: OperationType[] = ['autoRetryPending'];
+
+/**
+ * {@link TOPIC_VISIBLY_RUNNING_OPERATION_TYPES} minus the
+ * {@link LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES}: the operations
+ * `ChatAgentRunGatewayAction.settleAllUnbackedTopicRuns` may retire once the
+ * server reports no live run.
+ *
+ * Anything that can pin the row and IS server-backed has to be in here, or it
+ * leaks a permanently-spinning row. Anything local-only has to stay out, or the
+ * sweep kills the wait it is holding.
+ */
+export const SETTLEABLE_TOPIC_RUN_OPERATION_TYPES: OperationType[] =
+  TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.filter(
+    (type) => !LOCAL_ONLY_TOPIC_RUN_OPERATION_TYPES.includes(type),
+  );
 
 /**
  * Operation types that block a fresh `sendMessage`: a send fired while one of

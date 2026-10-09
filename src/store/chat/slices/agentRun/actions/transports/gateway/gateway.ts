@@ -56,7 +56,10 @@ import {
 } from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
-import { TOPIC_VISIBLY_RUNNING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import {
+  SETTLEABLE_TOPIC_RUN_OPERATION_TYPES,
+  TOPIC_VISIBLY_RUNNING_OPERATION_TYPES,
+} from '@/store/chat/slices/operation/types';
 import type { ChatStore } from '@/store/chat/store';
 import { isInterventionRunActive } from '@/store/chat/utils/interventionSync';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
@@ -2380,13 +2383,16 @@ export class GatewayActionImpl {
   };
 
   /**
-   * Whether `op` is one the topic row reports as running — the exact set the row
-   * reads ({@link TOPIC_VISIBLY_RUNNING_OPERATION_TYPES}). Using anything
-   * narrower here leaks: an op that pins the row but sits outside this filter can
-   * never be retired by the sweep, so the row spins until a reload.
+   * Whether `op` is one the topic row reports as running AND the sweep is
+   * allowed to retire ({@link SETTLEABLE_TOPIC_RUN_OPERATION_TYPES}). Using
+   * anything narrower leaks: an op that pins the row but sits outside this
+   * filter can never be retired, so the row spins until a reload. Using anything
+   * broader is worse than useless — it retires the local-only waits, e.g. the
+   * heterogeneous-overload `autoRetryPending` countdown, whose abort check reads
+   * a non-running op as "the user cancelled".
    */
   #isLiveLocalRuntimeOp = (op: ChatStore['operations'][string]): boolean =>
-    TOPIC_VISIBLY_RUNNING_OPERATION_TYPES.includes(op.type) &&
+    SETTLEABLE_TOPIC_RUN_OPERATION_TYPES.includes(op.type) &&
     op.status === 'running' &&
     !op.metadata.isAborting;
 

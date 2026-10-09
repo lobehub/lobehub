@@ -18,7 +18,8 @@ import { useAgentStore } from '@/store/agent';
 import { useAiInfraStore } from '@/store/aiInfra';
 import { aiModelSelectors } from '@/store/aiInfra/slices/aiModel/selectors';
 import { operationSelectors } from '@/store/chat/slices/operation/selectors';
-import { TOPIC_VISIBLY_RUNNING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import type { TOPIC_VISIBLY_RUNNING_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
+import { SETTLEABLE_TOPIC_RUN_OPERATION_TYPES } from '@/store/chat/slices/operation/types';
 import { PortalViewType } from '@/store/chat/slices/portal/initialState';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { topicMapKey } from '@/store/chat/utils/topicMapKey';
@@ -3033,11 +3034,11 @@ describe('topic action', () => {
       return operationId;
     };
 
-    // Parametrized over the exact set the row reads, so a type that can pin the
-    // row while sitting outside the sweep's filter fails here instead of leaking
-    // a permanently-spinning row. The interim types are the ones an intervention
-    // continuation leaves behind (see TOPIC_VISIBLY_RUNNING_OPERATION_TYPES).
-    it.each(TOPIC_VISIBLY_RUNNING_OPERATION_TYPES)(
+    // Parametrized over the exact set the sweep is allowed to retire, so a
+    // server-backed type that can pin the row while sitting outside the sweep's
+    // filter fails here instead of leaking a permanently-spinning row. The
+    // interim types are the ones an intervention continuation leaves behind.
+    it.each(SETTLEABLE_TOPIC_RUN_OPERATION_TYPES)(
       'retires a leaked %s op once the server reports the run is over',
       async (type) => {
         const { key, serverRow } = seedLeakedRow();
@@ -3083,6 +3084,31 @@ describe('topic action', () => {
 
       expect(settled).toBe(0);
       expect(detail).not.toHaveBeenCalled();
+    });
+
+    // The counter-case: an op that pins the row ON PURPOSE without a server-side
+    // run. `autoRetryPending` is held across the heterogeneous overload countdown
+    // — longest window 30s ± 20% jitter, i.e. past the sweep's own 30s settle
+    // age. Retiring it would make `isHeteroOverloadWaitAborted` read a
+    // non-running op as "the user cancelled" and silently exhaust the retry
+    // sequence, so it has to stay outside the settleable set.
+    it('never retires an intentional local-only retry wait', async () => {
+      const { key, serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('autoRetryPending');
+      // The server reports the run is over, so the type exclusion is the ONLY
+      // thing keeping the wait alive.
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      const state = useChatStore.getState();
+      expect(settled).toBe(0);
+      expect(state.operations[operationId].status).toBe('running');
+      expect(operationSelectors.isTopicVisiblyRunning(topicId)(state)).toBe(true);
+      // Excluded from the candidate scan entirely, not merely spared by the
+      // server's answer.
+      expect(topicService.getTopicDetail).not.toHaveBeenCalled();
+      expect(state.topicDataMap[key].items[0].status).toBe('running');
     });
 
     // The user-visible contract: opening the sidebar runs the watchdog, and the
