@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-/** Separate RPC version: older connectors must reject rather than run with native auth. */
+/** Credential-free compatibility probe; a v1 response permits dispatch through this connection. */
+export const PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD = 'getProviderBoundAgentRunCapability';
+
+/** Separate run RPC: older connectors must reject rather than run with native auth. */
 export const PROVIDER_BOUND_AGENT_RUN_METHOD = 'dispatchProviderBoundAgentRun';
 
 /** Credential-free reference and operation-scoped callback data for a personal Codex run. */

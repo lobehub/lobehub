@@ -8,16 +8,22 @@ import { useRemoteAgentDeviceGuard } from './useRemoteAgentDeviceGuard';
 
 vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({ useEffectiveAgencyConfig: vi.fn() }));
 vi.mock('@/services/device', () => ({
-  deviceService: { checkCapability: vi.fn(), listDevices: vi.fn() },
+  deviceService: {
+    checkCapability: vi.fn(),
+    checkProviderBindingCapability: vi.fn(),
+    listDevices: vi.fn(),
+  },
 }));
 
 const mockedUseEffectiveAgencyConfig = vi.mocked(useEffectiveAgencyConfig);
 const mockedCheckCapability = vi.mocked(deviceService.checkCapability);
+const mockedCheckBinding = vi.mocked(deviceService.checkProviderBindingCapability);
 const mockedListDevices = vi.mocked(deviceService.listDevices);
 
 describe('useRemoteAgentDeviceGuard', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedCheckBinding.mockResolvedValue({ available: false });
   });
 
   it('checks the EFFECTIVE bound device (with the caller override merged)', async () => {
@@ -170,7 +176,8 @@ describe('useRemoteAgentDeviceGuard', () => {
   });
 
   /** @example The supported device remains usable after adding the channel guard. */
-  it('allows a live CLI connection for a Codex API binding', async () => {
+  it('allows a compatible custom CLI channel for a Codex API binding', async () => {
+    mockedCheckBinding.mockResolvedValue({ available: true });
     mockedUseEffectiveAgencyConfig.mockReturnValue({
       agencyConfig: {
         boundDeviceId: 'my-device',
@@ -187,7 +194,7 @@ describe('useRemoteAgentDeviceGuard', () => {
       workspaceScoped: false,
     });
     mockedListDevices.mockResolvedValue([
-      { deviceId: 'my-device', online: true, channels: [{ channel: 'cli' }] },
+      { deviceId: 'my-device', online: true, channels: [{ channel: 'cli-dev' }] },
     ] as never);
     const { result } = renderHook(() => useRemoteAgentDeviceGuard({ agentId: 'agent-1' }));
     /** @example API dispatch stays enabled when a CLI channel is actually online. */

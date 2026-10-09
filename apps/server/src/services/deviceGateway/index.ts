@@ -10,6 +10,7 @@ import {
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
 import {
+  PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD,
   PROVIDER_BOUND_AGENT_RUN_METHOD,
   type ProviderBoundAgentRun,
 } from '@lobechat/heterogeneous-agents/protocol';
@@ -1894,6 +1895,45 @@ export class DeviceGateway {
   }
 
   /**
+   * Find a live personal connection that implements provider-bound execution.
+   *
+   * Use when:
+   * - Validating the composer or routing a provider-bound device run.
+   * Expects:
+   * - The authenticated personal principal and its selected device ID.
+   * Returns:
+   * - The compatible connection's actual routing label, or undefined.
+   *
+   * Call stack:
+   * device.checkProviderBindingCapability / {@link dispatchProviderBoundAgentRun}
+   *   -> findProviderBindingChannel
+   *     -> GatewayHttpClient.invokeRpc (credential-free capability probe)
+   */
+  async findProviderBindingChannel(userId: string, deviceId: string): Promise<string | undefined> {
+    const client = this.getClient();
+    if (!client) return;
+    const devices = await this.queryDeviceList(userId);
+    const device = devices.find((candidate) => candidate.deviceId === deviceId);
+    const channels = [...new Set(device?.channels?.map((connection) => connection.channel))];
+    for (const channel of channels) {
+      if (!channel) continue;
+      try {
+        // Probe each distinct live label, rather than guessing client capabilities
+        // from names such as cli-dev. Old clients reject this read-only RPC.
+        const result = await client.invokeRpc<{ available?: boolean; version?: number }>(
+          { channel, deviceId, userId, timeout: 3_000 },
+          { method: PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD, params: {} },
+        );
+        if (result.success && result.data?.available === true && result.data.version === 1) {
+          return channel;
+        }
+      } catch {
+        // One stale socket must not hide another compatible live connection.
+      }
+    }
+  }
+
+  /**
    * Dispatch a provider-bound run only to a connector implementing the dedicated RPC.
    *
    * Use when:
@@ -1928,16 +1968,16 @@ export class DeviceGateway {
       ingestWorkspaceId: _ingest,
       ...payload
     } = params;
-    // General online status also includes Desktop, which has no binding RPC.
-    // Read this personal principal's live channels before sending the CLI-only run.
-    const devices = await this.queryDeviceList(userId);
-    const device = devices.find((candidate) => candidate.deviceId === deviceId);
-    if (!device?.channels?.some((connection) => connection.channel === 'cli')) {
-      return { error: 'Provider binding requires a live lh connect connection.', success: false };
-    }
     try {
+      const channel = await this.findProviderBindingChannel(userId, deviceId);
+      if (!channel) {
+        return {
+          error: 'Provider binding requires a compatible lh connect connection.',
+          success: false,
+        };
+      }
       const result = await client.invokeRpc<{ status: 'accepted' | 'rejected'; reason?: string }>(
-        { channel: 'cli', deviceId, userId, timeout: 30_000 },
+        { channel, deviceId, userId, timeout: 30_000 },
         { method: PROVIDER_BOUND_AGENT_RUN_METHOD, params: payload },
       );
       return result.success && result.data?.status === 'accepted'

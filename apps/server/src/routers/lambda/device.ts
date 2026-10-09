@@ -220,6 +220,15 @@ const workspaceFileWriteProcedure = workspaceFileProcedure.use(
 );
 
 export const deviceRouter = router({
+  /** Probe the personal connection protocol without exposing provider configuration. */
+  checkProviderBindingCapability: deviceProcedure
+    .input(z.object({ deviceId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      if (ctx.workspaceId) return { available: false };
+      const channel = await deviceGateway.findProviderBindingChannel(ctx.userId, input.deviceId);
+      return { available: channel !== undefined };
+    }),
+
   /**
    * Probe whether a specific agent platform (openclaw / hermes) is available
    * on the given device. Dispatches a `checkPlatformCapability` tool call to

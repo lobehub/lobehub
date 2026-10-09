@@ -23,6 +23,7 @@ export {
 } from './promptEngine';
 export {
   HETERO_SESSION_BINDING_KEY_ENV,
+  PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD,
   PROVIDER_BOUND_AGENT_RUN_METHOD,
   type ProviderBoundAgentRun,
   ProviderBoundAgentRunSchema,

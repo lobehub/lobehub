@@ -76,8 +76,11 @@ export const useRemoteAgentDeviceGuard = ({
         return;
       }
 
-      if (requiresCli && !device.channels?.some((connection) => connection.channel === 'cli')) {
-        setStatus('cli-unavailable');
+      if (requiresCli) {
+        const capability = await deviceService.checkProviderBindingCapability({
+          deviceId: boundDeviceId,
+        });
+        setStatus(capability.available ? 'ok' : 'cli-unavailable');
         return;
       }
 

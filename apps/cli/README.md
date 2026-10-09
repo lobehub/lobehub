@@ -131,3 +131,5 @@ Signal and VFS tests additionally require their documented Agent ID variables.
 Search fixtures wait up to 60 seconds for asynchronous indexing; a timeout fails
 the suite rather than accepting empty results. The command above supplies a live
 network budget explicitly; this does not change unit-test timeouts or enable retries.
+
+Provider-bound device dispatch probes the connection protocol before sending. Freeform `LOBEHUB_CLI_CHANNEL` labels, including `cli-dev`, are routed through the label that answered the probe; older connectors and Desktop-only connections remain unavailable.
