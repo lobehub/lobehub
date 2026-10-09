@@ -216,39 +216,6 @@ const pickVisitorRunningOperation = (
   return { assistantMessageId, heteroType, operationId, scope, startedAt, threadId };
 };
 
-/**
- * Collect the ancestor chain of `messageId` (itself → … → topic root) within a
- * single topic's messages. Used by {@link TopicModel.duplicate} when a fork
- * should carry only the selected conversation prefix: walking `parentId` keeps
- * exactly the context the user pointed at, while sibling branches produced by
- * regenerate stay behind in the source topic.
- */
-const collectMessageChain = <T extends { id: string; parentId: string | null }>(
-  topicMessages: T[],
-  messageId: string,
-  topicId: string,
-): T[] => {
-  const byId = new Map(topicMessages.map((message) => [message.id, message]));
-
-  const selected = byId.get(messageId);
-  if (!selected) {
-    throw new Error(`Message with id ${messageId} not found in topic ${topicId}`);
-  }
-
-  // Walk up to the root, then reverse back to root → selected so parents are
-  // inserted before their children.
-  const chain: T[] = [];
-  const visited = new Set<string>();
-  let cursor: T | undefined = selected;
-  while (cursor && !visited.has(cursor.id)) {
-    visited.add(cursor.id);
-    chain.push(cursor);
-    cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
-  }
-
-  return chain.reverse();
-};
-
 export interface CreateTopicParams {
   agentId?: string | null;
   favorite?: boolean;
@@ -1659,11 +1626,30 @@ export class TopicModel {
         .where(and(eq(messages.topicId, topicId), this.messageOwnership()))
         .orderBy(messages.createdAt);
 
-      // A fork copies only the selected prefix of the conversation; a duplicate
-      // copies the whole topic.
-      const originalMessages = options?.upToMessageId
-        ? collectMessageChain(topicMessages, options.upToMessageId, topicId)
-        : topicMessages;
+      // A fork copies only the selected prefix of the conversation (first
+      // message → `upToMessageId`), so sibling branches left behind by
+      // regenerate stay in the source topic; a duplicate copies the whole topic.
+      let originalMessages = topicMessages;
+      if (options?.upToMessageId) {
+        const byId = new Map(topicMessages.map((message) => [message.id, message]));
+        const selected = byId.get(options.upToMessageId);
+        if (!selected) {
+          throw new Error(`Message with id ${options.upToMessageId} not found in topic ${topicId}`);
+        }
+
+        // Walk up to the root, then reverse back to root → selected so parents
+        // are inserted before their children.
+        const chain: typeof topicMessages = [];
+        const visited = new Set<string>();
+        let cursor: (typeof topicMessages)[number] | undefined = selected;
+        while (cursor && !visited.has(cursor.id)) {
+          visited.add(cursor.id);
+          chain.push(cursor);
+          cursor = cursor.parentId ? byId.get(cursor.parentId) : undefined;
+        }
+
+        originalMessages = chain.reverse();
+      }
 
       // Find all messagePlugins for this topic
       const messageIds = originalMessages.map((m) => m.id);
