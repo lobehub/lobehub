@@ -1,6 +1,7 @@
 import debug from 'debug';
 
-import { OtelQstashClient, toQStashDeduplicationId } from '@/libs/qstash';
+import { OtelQstashClient } from '@/libs/qstash';
+import { toQStashDeduplicationId } from '@/libs/qstash/deduplicationId';
 
 import { type HealthCheckResult, type QueueMessage, type QueueStats } from '../types';
 import { type QueueServiceImpl } from './type';

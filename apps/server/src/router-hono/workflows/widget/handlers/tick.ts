@@ -2,7 +2,8 @@ import type { Context } from 'hono';
 
 import { getServerDB } from '@/database/server';
 import { appEnv } from '@/envs/app';
-import { qstashClient, toQStashDeduplicationId } from '@/libs/qstash';
+import { qstashClient } from '@/libs/qstash';
+import { toQStashDeduplicationId } from '@/libs/qstash/deduplicationId';
 import { createWidgetSandboxRunner } from '@/server/services/widget/sandbox';
 import {
   isWidgetResumeTarget,

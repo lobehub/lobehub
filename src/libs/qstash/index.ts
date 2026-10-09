@@ -1,5 +1,3 @@
-import { createHash } from 'node:crypto';
-
 import { recordUpstashWorkflowEvent } from '@lobechat/observability-otel/modules/upstash-workflow';
 import { errorNameFrom } from '@lobechat/utils';
 import { Client, type PublishRequest, type PublishResponse, Receiver } from '@upstash/qstash';
@@ -8,19 +6,7 @@ import debug from 'debug';
 
 const log = debug('lobe-server:qstash');
 
-/**
- * Encode a logical execution key into a QStash-safe deduplication id.
- *
- * Keep the logical key intact in durable state and local queues, but encode it
- * at the provider boundary: QStash rejects characters such as `:`, while a
- * SHA-256 hex digest is deterministic, alphanumeric and exactly 64 chars.
- *
- * Every caller that publishes a deduplicated message must go through this —
- * passing a raw logical id to `publishJSON` fails the publish with
- * `DeduplicationId cannot contain ':'`.
- */
-export const toQStashDeduplicationId = (logicalId: string): string =>
-  createHash('sha256').update(logicalId).digest('hex');
+export { toQStashDeduplicationId } from './deduplicationId';
 
 const headers = {
   ...(process.env.VERCEL_AUTOMATION_BYPASS_SECRET && {
