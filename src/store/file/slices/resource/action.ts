@@ -1,4 +1,5 @@
 import debug from 'debug';
+import { useLayoutEffect } from 'react';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
@@ -22,7 +23,7 @@ import {
   RESOURCE_LIST_KEY,
   resourceListResource,
 } from './projection';
-import { getResourceQueryKey } from './utils';
+import { getResourcePoolKey, getResourceQueryKey } from './utils';
 
 const log = debug('resource-manager:action');
 
@@ -106,6 +107,14 @@ export class ResourceActionImpl {
    * pages through the engine instead of a hand-rolled `offset` accumulator.
    */
   readonly #resourceList;
+  /** Query the Explorer last asked for (set every render, read by the effects). */
+  #requestedListParams?: ResourceListParams;
+  /** Storage row of `#requestedListParams`; a slow hydrate of another query is dropped. */
+  #requestedListStorageKey?: string;
+  /** Pool the painted rows answer, to tell a navigation from a re-sort. */
+  #paintedListPoolKey?: string;
+  /** Storage row the painted rows answer, so the navigation effect only runs on a change. */
+  #paintedListStorageKey?: string;
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
@@ -114,6 +123,14 @@ export class ResourceActionImpl {
       actionPrefix: n('resourceList'),
       fetcher: (params, cursor) => this.#fetchResourcePage(params, cursor),
       get,
+      // A slow hydrate of a query the user has already left must not repaint the
+      // list: the requested row — not whatever the store still shows — decides.
+      isHydratable: (_cached, params) =>
+        resourceListResource.storageKey(params) === this.#requestedListStorageKey,
+      // Rows the explorer inserted locally (an in-flight upload / create) are
+      // the newest and have no server row yet, so a head response — initial,
+      // focus or reconnect — must keep them instead of replacing them away.
+      isClientOnly: (item: ResourceItem) => !!item._optimistic,
       set,
       stateKey: 'resourceListReplica',
       view: resourceListLens,
@@ -400,6 +417,36 @@ export class ResourceActionImpl {
   // ---- list lifecycle -----------------------------------------------------
 
   /**
+   * Repaint the explorer for a new query pool (folder / library / filter). The
+   * entry is a singleton reused by every query, and `hydrate` only fills an
+   * empty slot, so the previous pool's rows must go first — otherwise the new
+   * pool's persisted page could never load and a warm (or offline) navigation
+   * would sit on a skeleton until the network answered. The once-per-key driver
+   * read has already run for a folder the session visited before, which is why
+   * this reads the persisted page directly instead of relying on it.
+   *
+   * Only a *pool* change resets: `sorter` / `sortType` / `q` re-ask the same
+   * pool (the engine's own `replace` reset handles them) and clearing there
+   * would flash a skeleton the views deliberately avoid.
+   */
+  #hydrateListQuery = (): void => {
+    const params = this.#requestedListParams;
+    const storageKey = this.#requestedListStorageKey;
+    if (!params || storageKey === undefined) return;
+    if (storageKey === this.#paintedListStorageKey) return;
+
+    const poolKey = getResourcePoolKey(params);
+    const poolChanged =
+      this.#paintedListPoolKey !== undefined && this.#paintedListPoolKey !== poolKey;
+    this.#paintedListStorageKey = storageKey;
+    this.#paintedListPoolKey = poolKey;
+    if (!poolChanged) return;
+
+    this.#resourceList.reset(RESOURCE_LIST_KEY);
+    void this.#resourceList.hydrate(params);
+  };
+
+  /**
    * Fetch orchestration for the explorer list. Hydrates the persisted head page,
    * then revalidates; the rows land in the flat view — read them from the store,
    * never from this hook.
@@ -412,6 +459,19 @@ export class ResourceActionImpl {
     const active = enable && normalized !== null;
     // Subscribed, so the first frame after a hydrate/replace re-renders.
     const hasValue = useFileStore((s) => s.resourceListEntry !== undefined);
+    const storageKey = normalized ? resourceListResource.storageKey(normalized) : undefined;
+
+    // The latest request, read by the navigation effect below and by the
+    // stale-hydrate guard. Kept on the instance so the effect deps stay primitive.
+    this.#requestedListParams = normalized ?? undefined;
+    this.#requestedListStorageKey = storageKey;
+
+    // Declared before `useSync` so it runs before the sync's own effects: the
+    // persisted page of the new pool paints on this frame, not after the fetch.
+    useLayoutEffect(() => {
+      if (!active || storageKey === undefined) return;
+      this.#hydrateListQuery();
+    }, [active, storageKey]);
 
     const sync = this.#resourceList.useSync(active ? normalized : null, { enabled: enable });
 
@@ -639,11 +699,19 @@ export class ResourceActionImpl {
    * moved row is patched (or dropped) in the in-memory view, and any mounted
    * query is revalidated so a later visit reads the fresh head page instead of
    * the pre-move persisted rows.
+   *
+   * The patch carries the scope the move was issued from. Reconcile only when
+   * that scope is still the active one: after a workspace or library switch the
+   * mounted replica answers another identity / query, and applying the
+   * completion there would paint (and persist) this scope's row into it.
    */
   applyMovedResourceToCaches = async (
     resource: ResourceItem,
-    _patch: Awaited<ReturnType<ResourceActionImpl['prepareResourceMoveCachePatch']>>,
+    patch: Awaited<ReturnType<ResourceActionImpl['prepareResourceMoveCachePatch']>>,
   ): Promise<void> => {
+    if (getActiveWorkspaceId() !== patch.scope.workspaceId) return;
+    if ((this.#get().queryParams?.libraryId ?? undefined) !== patch.scope.libraryId) return;
+
     const stripped = stripOptimistic(resource);
 
     this.#resourceList.update(

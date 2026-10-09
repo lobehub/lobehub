@@ -229,4 +229,41 @@ describe('replicaReducer', () => {
       expect(h.effects).toEqual([{ key: 'k', scope: S, type: 'remove' }]);
     });
   });
+
+  describe('reset', () => {
+    it('drops the entry and its painted view but keeps the persisted row', () => {
+      const h = createHarness();
+      h.run({ data: ['cached'], key: 'k', scope: S, type: 'hydrate' });
+
+      h.run({ key: 'k', scope: S, type: 'reset' });
+
+      expect(h.view).toEqual({});
+      expect(h.state.entries.k).toBeUndefined();
+      // A reset is memory-only: the projection is still this query's cache.
+      expect(h.effects).toEqual([]);
+    });
+
+    it('lets a different query hydrate the slot it frees', () => {
+      const h = createHarness();
+      h.run({ data: ['old-query'], key: 'k', params: 1, query: 'q1', scope: S, type: 'hydrate' });
+      // The same entry key is re-asked for another query while the slot is full.
+      h.run({ data: ['stale'], key: 'k', params: 2, query: 'q2', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['old-query']);
+
+      h.run({ key: 'k', scope: S, type: 'reset' });
+      h.run({ data: ['new-query'], key: 'k', params: 2, query: 'q2', scope: S, type: 'hydrate' });
+
+      expect(h.view.k).toEqual(['new-query']);
+      expect(h.state.entries.k.query).toBe('q2');
+    });
+
+    it('is a no-op when there is nothing to drop', () => {
+      const h = createHarness();
+      const transition = h.run({ key: 'k', scope: S, type: 'reset' });
+
+      expect(h.view).toEqual({});
+      expect(transition.writes).toEqual([]);
+      expect(h.effects).toEqual([]);
+    });
+  });
 });

@@ -342,6 +342,14 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   const remove = (key: string) => dispatch({ key, scope: resource.scope.get(), type: 'remove' });
 
   /**
+   * Drop an entry's in-memory value and its painted view, keeping the persisted
+   * row. A key reused for another query (a navigation) must be emptied first:
+   * `hydrate` only fills an empty slot, so without this the new query's
+   * persisted page could never load.
+   */
+  const reset = (key: string) => dispatch({ key, scope: resource.scope.get(), type: 'reset' });
+
+  /**
    * Persist the confirmed value of an entry as it is now — the flush after a
    * burst of in-memory `update(..., { persist: false })` writes (a stream).
    */
@@ -577,6 +585,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     persist,
     remove,
     replace,
+    reset,
     resource,
     revalidate,
     update,

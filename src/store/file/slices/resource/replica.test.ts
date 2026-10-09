@@ -21,6 +21,7 @@ import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
 import type { ResourceItem } from '@/types/resource';
 
+import type { ResourceListParams } from './projection';
 import { normalizeResourceListParams, RESOURCE_LIST_KEY, resourceListResource } from './projection';
 
 const BASE_INPUT = { parentId: null } as const;
@@ -63,6 +64,8 @@ const wrapper = ({ children }: PropsWithChildren) =>
 
 describe('resourceList replica', () => {
   const scopes = new Set<string>();
+  /** Storage rows written by a test, so each one is cleaned up after it. */
+  const seededQueryKeys = new Set<string>([BASE_KEY]);
   let scope = '';
   let querySpy: ReturnType<typeof vi.spyOn>;
 
@@ -74,6 +77,27 @@ describe('resourceList replica', () => {
     vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
   };
 
+  /** Seed a persisted head page exactly as the engine would have written it. */
+  const seedPersisted = async (params: ResourceListParams, items: ResourceItem[]) => {
+    const queryKey = resourceListResource.storageKey(params);
+    seededQueryKeys.add(queryKey);
+    await resourceListResource.storage!.set(
+      { queryKey, scope },
+      {
+        data: {
+          currentPage: 0,
+          hasMore: false,
+          items,
+          nextCursor: null,
+          pageSize: params.pageSize ?? 50,
+          queryParams: params,
+          total: items.length,
+        },
+        updatedAt: 1,
+      },
+    );
+  };
+
   beforeEach(() => {
     useScope(`resource-user-${randomUUID()}:personal`);
     querySpy = vi.spyOn(resourceService, 'queryResources');
@@ -83,11 +107,14 @@ describe('resourceList replica', () => {
   afterEach(async () => {
     cleanup();
     await Promise.all(
-      [...scopes].map((value) =>
-        resourceListResource.storage!.remove({ queryKey: BASE_KEY, scope: value }),
+      [...scopes].flatMap((value) =>
+        [...seededQueryKeys].map((queryKey) =>
+          resourceListResource.storage!.remove({ queryKey, scope: value }),
+        ),
       ),
     );
     scopes.clear();
+    seededQueryKeys.clear();
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -225,5 +252,91 @@ describe('resourceList replica', () => {
 
     expect(hook.result.current.isLoading).toBe(true);
     expect(useFileStore.getState().resourceList).toEqual([]);
+  });
+
+  it('keeps a pending upload row across a head revalidation and out of storage', async () => {
+    querySpy.mockResolvedValue(page([row('server-1')], 1));
+
+    const hook = renderHook(
+      () => ({ sync: useFileStore((s) => s.useFetchResources)(BASE_INPUT) }),
+      {
+        wrapper,
+      },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['server-1']));
+
+    act(() =>
+      useFileStore.getState().insertLocalResource(
+        {
+          fileType: 'text/plain',
+          name: 'Uploading',
+          size: 3,
+          sourceType: 'file',
+          url: '',
+        },
+        'temp-upload',
+      ),
+    );
+    expect(ids()).toEqual(['temp-upload', 'server-1']);
+
+    // A focus / reconnect head response no longer carries the pending row.
+    querySpy.mockResolvedValue(page([row('server-1')], 1));
+    await act(async () => {
+      await hook.result.current.sync.mutate();
+    });
+
+    // The local row survives the refresh ...
+    expect(ids()).toContain('temp-upload');
+    // ... without ever reaching the persisted head page.
+    const persisted = await resourceListResource.storage!.get({ queryKey: BASE_KEY, scope });
+    expect((persisted?.data.items as ResourceItem[]).map((item) => item.id)).toEqual(['server-1']);
+  });
+
+  it('paints a previously visited folder from its persisted page on navigation', async () => {
+    const paramsB = normalizeResourceListParams({ parentId: 'folder-b' })!;
+    await seedPersisted(paramsB, [row('cached-b')]);
+
+    // Folder A answers; folder B never does — only its cache can paint it.
+    querySpy.mockImplementation((params) =>
+      params.parentId === 'folder-b' ? pending() : Promise.resolve(page([row('a-1')], 1)),
+    );
+
+    const hook = renderHook(
+      (props: { parentId: string | null }) =>
+        useFileStore((s) => s.useFetchResources)({ parentId: props.parentId }),
+      { initialProps: { parentId: null as string | null }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['a-1']));
+
+    hook.rerender({ parentId: 'folder-b' });
+
+    await waitFor(() => expect(ids()).toEqual(['cached-b']));
+    expect(useFileStore.getState().queryParams?.parentId).toBe('folder-b');
+  });
+
+  it('restores each folder from its persisted page when navigating back offline', async () => {
+    const paramsA = normalizeResourceListParams({ parentId: null })!;
+    const paramsB = normalizeResourceListParams({ parentId: 'folder-b' })!;
+    await seedPersisted(paramsA, [row('cached-a')]);
+    await seedPersisted(paramsB, [row('cached-b')]);
+    querySpy.mockImplementation(pending);
+
+    const hook = renderHook(
+      (props: { parentId: string | null }) =>
+        useFileStore((s) => s.useFetchResources)({ parentId: props.parentId }),
+      { initialProps: { parentId: null as string | null }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['cached-a']));
+
+    hook.rerender({ parentId: 'folder-b' });
+    await waitFor(() => expect(ids()).toEqual(['cached-b']));
+
+    // The once-per-key driver read of folder A already ran, so coming back must
+    // hydrate it again rather than wait for a network that is not there.
+    hook.rerender({ parentId: null });
+    await waitFor(() => expect(ids()).toEqual(['cached-a']));
   });
 });

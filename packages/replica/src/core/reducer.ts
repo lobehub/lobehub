@@ -39,6 +39,13 @@ export type ReplicaAction<T> =
   | { confirm?: (data: T) => T; id: number; key: string; scope: string; type: 'commit' }
   | { id: number; key: string; scope: string; type: 'rollback' }
   | { key: string; scope: string; type: 'remove' }
+  /**
+   * Drop one entry's value and its painted view, but keep the persisted row.
+   * Used when an entry is reused for a new query (a navigation): `hydrate` only
+   * fills an empty slot, so the previous query's value must go first for the new
+   * query's persisted page to load.
+   */
+  | { key: string; scope: string; type: 'reset' }
   | { scope: string; type: 'resetScope' };
 
 export type ReplicaEffect<T> =
@@ -210,6 +217,17 @@ export const replicaReducer = <T>(
     case 'remove': {
       return {
         effects: [{ key: action.key, query: entry?.query, scope, type: 'remove' }],
+        state: withEntry(undefined),
+        writes: view === undefined ? [] : [{ data: undefined, key: action.key }],
+      };
+    }
+
+    case 'reset': {
+      // Memory only: the persisted row is still this query's valid projection,
+      // and the next query to occupy the key hydrates it like a fresh slot.
+      if (!entry && view === undefined) return noop(state);
+      return {
+        effects: [],
         state: withEntry(undefined),
         writes: view === undefined ? [] : [{ data: undefined, key: action.key }],
       };

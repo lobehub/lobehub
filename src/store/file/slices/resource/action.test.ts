@@ -4,6 +4,7 @@ import { initialState } from '@/store/file/initialState';
 import { useFileStore } from '@/store/file/store';
 import type { CreateDocumentParams, ResourceItem } from '@/types/resource';
 
+import type { ResourceMoveCachePatch, ResourceMoveCacheScope } from './hooks';
 import type { ResourceListParams, ResourceListValue } from './projection';
 
 const {
@@ -11,6 +12,7 @@ const {
   mockCreateResource,
   mockDeleteResource,
   mockDeleteResources,
+  mockGetActiveWorkspaceId,
   mockMoveResource,
   mockRemoveFilesFromKnowledgeBase,
   mockUpdateResource,
@@ -19,6 +21,7 @@ const {
   mockCreateResource: vi.fn(),
   mockDeleteResource: vi.fn(),
   mockDeleteResources: vi.fn(),
+  mockGetActiveWorkspaceId: vi.fn(() => null as string | null),
   mockMoveResource: vi.fn(),
   mockRemoveFilesFromKnowledgeBase: vi.fn(),
   mockUpdateResource: vi.fn(),
@@ -42,7 +45,7 @@ vi.mock('@/services/knowledgeBase', () => ({
 }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: () => null,
+  getActiveWorkspaceId: () => mockGetActiveWorkspaceId(),
 }));
 
 const createResource = (overrides: Partial<ResourceItem> = {}): ResourceItem => ({
@@ -102,6 +105,7 @@ const listIds = () => useFileStore.getState().resourceList.map((item) => item.id
 describe('resource actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetActiveWorkspaceId.mockReturnValue(null);
     useFileStore.setState(initialState);
   });
 
@@ -346,5 +350,60 @@ describe('createResourceAndSync list placement', () => {
     await useFileStore.getState().createResourceAndSync(createParams('folder-a'));
 
     expect(listIds()).toEqual(['doc-new']);
+  });
+});
+
+describe('applyMovedResourceToCaches scope', () => {
+  const patchFrom = (scope: ResourceMoveCacheScope): ResourceMoveCachePatch => ({
+    fromParentKeys: [null],
+    scope,
+    toParentKeys: ['folder-b'],
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetActiveWorkspaceId.mockReturnValue(null);
+    useFileStore.setState(initialState);
+  });
+
+  it('reconciles the completed move while the captured scope is still active', async () => {
+    seedList({ parentId: 'folder-b' }, []);
+
+    await useFileStore
+      .getState()
+      .applyMovedResourceToCaches(
+        createResource({ id: 'moved-1', parentId: 'folder-b' }),
+        patchFrom({ libraryId: undefined, workspaceId: null }),
+      );
+
+    expect(listIds()).toEqual(['moved-1']);
+  });
+
+  it('does not reconcile once the user has switched workspace', async () => {
+    seedList({ parentId: 'folder-b' }, []);
+    // The move was issued from ws-1; the replica now belongs to ws-2.
+    mockGetActiveWorkspaceId.mockReturnValue('ws-2');
+
+    await useFileStore
+      .getState()
+      .applyMovedResourceToCaches(
+        createResource({ id: 'moved-1', parentId: 'folder-b' }),
+        patchFrom({ libraryId: undefined, workspaceId: 'ws-1' }),
+      );
+
+    expect(listIds()).toEqual([]);
+  });
+
+  it('does not reconcile once the user has switched library', async () => {
+    seedList({ libraryId: 'kb-2', parentId: 'folder-b' }, []);
+
+    await useFileStore
+      .getState()
+      .applyMovedResourceToCaches(
+        createResource({ id: 'moved-1', knowledgeBaseId: 'kb-2', parentId: 'folder-b' }),
+        patchFrom({ libraryId: 'kb-1', workspaceId: null }),
+      );
+
+    expect(listIds()).toEqual([]);
   });
 });
