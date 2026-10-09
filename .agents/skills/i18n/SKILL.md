@@ -8,7 +8,7 @@ user-invocable: false
 
 - Default language: English (en-US)
 - Framework: react-i18next
-- **Only edit files in `packages/locales/src/default/`** - Never edit JSON files in `locales/` (except hand-written en-US/zh-CN previews)
+- **Only edit files in `packages/locales/src/default/`** - Never hand-write translations in `locales/` JSON (except en-US/zh-CN previews); generated locales change only through `lobe-i18n`, plus the key deletions described in [Changing an existing key's English text](#changing-an-existing-keys-english-text)
 - Leave generated locales to the daily `auto-i18n.yml` workflow by default; run `bun run i18n` manually only when they are needed immediately
 
 ## Key Naming Convention
