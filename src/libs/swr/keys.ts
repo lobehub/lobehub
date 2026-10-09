@@ -243,20 +243,6 @@ export const isDocumentCommentKeyForEvent = (
   return false;
 };
 
-// ---- agent labels -------------------------------------------------------
-export const agentLabelKeys = {
-  /**
-   * Agent label registry (workspace-shared, or personal). Keyed by workspace:
-   * the registries are disjoint per scope, so a shared key would serve the
-   * previous workspace's labels across a switch.
-   */
-  list: def('agentLabel:list', (isLogin: boolean, workspaceId: string | null | undefined) => [
-    'agentLabel:list',
-    isLogin,
-    workspaceId ?? null,
-  ]),
-};
-
 // ---- agent builder (opening-suggestion chips) ---------------------------
 // Persisted to the localStorage tier (see `CACHE_TIERS.local`) so revisits skip
 // the LLM generation instead of paying a skeleton + a generateJSON call every
@@ -1456,7 +1442,6 @@ export const swrKeys = {
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,
-  agentLabel: agentLabelKeys,
   agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
   aiModel: aiModelKeys,
