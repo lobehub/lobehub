@@ -7,9 +7,10 @@ import { openAcceptanceDeleteConfirm } from '@/features/Acceptance/Workspace/Acc
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
 import { usePermission } from '@/hooks/usePermission';
 import { mutate as globalMutate } from '@/libs/swr';
-import { isAcceptanceListKey, verifyKeys } from '@/libs/swr/keys';
+import { isAcceptanceListKey } from '@/libs/swr/keys';
 import { verifyService } from '@/services/verify';
 import { useChatStore } from '@/store/chat';
+import { useVerifyStore } from '@/store/verify';
 
 import { useAcceptancePageUrl } from './usePageUrl';
 
@@ -30,7 +31,7 @@ export const useAcceptanceMoreMenu = (): PortalMoreMenuConfig | undefined => {
   // The workspace list shows the same title, so a rename refreshes both.
   const refreshAll = () =>
     Promise.all([
-      globalMutate(verifyKeys.acceptanceBundle(acceptanceId)),
+      useVerifyStore.getState().refreshAcceptanceBundle(acceptanceId),
       globalMutate(isAcceptanceListKey),
     ]);
 
@@ -51,7 +52,7 @@ export const useAcceptanceMoreMenu = (): PortalMoreMenuConfig | undefined => {
             title,
           })
       : undefined,
-    refresh: () => globalMutate(verifyKeys.acceptanceBundle(acceptanceId)),
+    refresh: () => useVerifyStore.getState().refreshAcceptanceBundle(acceptanceId),
     rename: canManage
       ? () =>
           openRenameModal({

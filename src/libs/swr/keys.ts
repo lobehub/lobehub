@@ -985,18 +985,6 @@ const acceptanceListKeyParts = ({ filter, projectId, scope, source }: Acceptance
 ];
 
 export const verifyKeys = {
-  acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
-    'verify:acceptanceBundle',
-    acceptanceId,
-  ]),
-  acceptanceBySubject: def(
-    'verify:acceptanceBySubject',
-    (subjectType: string, subjectId: string) => [
-      'verify:acceptanceBySubject',
-      subjectType,
-      subjectId,
-    ],
-  ),
   /** Statuses for a known subject set. Ids are sorted+joined so the key is order-free. */
   acceptanceStatuses: def(
     'verify:acceptanceStatuses',

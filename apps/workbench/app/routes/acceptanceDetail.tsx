@@ -1,10 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { lazy, Suspense } from 'react';
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
-import { useLoaderData, useRouteLoaderData } from 'react-router';
-import { SWRConfig, unstable_serialize } from 'swr';
-
-import { verifyKeys } from '@/libs/swr/keys';
+import { useRouteLoaderData } from 'react-router';
 
 import WorkbenchLoading from '../../src/shell/WorkbenchLoading';
 import { cloudflareContext } from '../lib/cloudflareContext';
@@ -45,20 +42,13 @@ export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
 };
 
 export default function AcceptanceDetailRoute() {
-  const { acceptanceId, bundle } = useLoaderData<typeof loader>();
   const root = useRouteLoaderData<typeof rootLoader>('root');
 
+  // The bundle is a replica (`acceptanceBundleMap`), read client-side: the
+  // loader only feeds the SSR meta tags, not the rendered body.
   return (
-    <SWRConfig
-      value={{
-        fallback: bundle
-          ? { [unstable_serialize(verifyKeys.acceptanceBundle(acceptanceId))]: bundle }
-          : {},
-      }}
-    >
-      <Suspense fallback={<WorkbenchLoading />}>
-        {root?.embedConfig.embed ? <AcceptanceEmbed /> : <AcceptanceDetail />}
-      </Suspense>
-    </SWRConfig>
+    <Suspense fallback={<WorkbenchLoading />}>
+      {root?.embedConfig.embed ? <AcceptanceEmbed /> : <AcceptanceDetail />}
+    </Suspense>
   );
 }

@@ -1,19 +1,31 @@
-import { useEffect } from 'react';
-
-import { useClientDataSWR } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
-import { verifyService } from '@/services/verify';
+import type { AcceptanceBundle } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { LIVE_ACCEPTANCE_STATUSES } from './verdict';
 
-const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
-  revalidateOnFocus: true,
-  revalidateOnReconnect: true,
-} as const;
+/** Poll cadence of a still-moving acceptance round. */
+const ACCEPTANCE_BUNDLE_POLL_INTERVAL = 5000;
+
+/** What `useAcceptanceBundle` hands its readers — the former SWR response shape. */
+export interface AcceptanceBundleSync {
+  /** The bundle from the replica view; `undefined` until hydrated or fetched. */
+  data: AcceptanceBundle | undefined;
+  error: unknown;
+  /** Nothing to show yet, and a hydration or fetch is still outstanding. */
+  isLoading: boolean;
+  isValidating: boolean;
+  /** Re-read the bundle and resolve with the freshly read value. */
+  mutate: () => Promise<AcceptanceBundle | undefined>;
+}
 
 /**
- * The acceptance bundle, revalidating on focus/reconnect as a live decision
- * surface.
+ * The acceptance bundle, read from the verify store's replica of
+ * `acceptanceBundleMap[acceptanceId]` — the local projection paints on the
+ * first frame, the network confirms behind it.
+ *
+ * The bundle is a LIVE decision surface (rounds run and reviews land while the
+ * reviewer is away), so the sync revalidates on focus/reconnect and polls every
+ * 5s while the aggregate is still moving.
  *
  * `poll: false` is for a surface that reads a bundle only as a DETAIL view —
  * the goal result page opens one per task row — where the live 5s poll would
@@ -21,26 +33,36 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
  * revalidation (returning to the tab still refreshes) and leaves the always-on
  * polling to the acceptance page itself.
  */
-export const useAcceptanceBundle = (acceptanceId: string | null, options?: { poll?: boolean }) => {
+export const useAcceptanceBundle = (
+  acceptanceId: string | null,
+  options?: { poll?: boolean },
+): AcceptanceBundleSync => {
   const poll = options?.poll ?? true;
-  const swr = useClientDataSWR(
-    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
-    () => verifyService.getAcceptanceBundle(acceptanceId!),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+  const useFetchAcceptanceBundle = useVerifyStore((s) => s.useFetchAcceptanceBundle);
+  const data = useVerifyStore((s) =>
+    acceptanceId ? s.acceptanceBundleMap[acceptanceId] : undefined,
   );
 
-  const status = swr.data?.acceptance.status;
-  useEffect(() => {
-    if (!poll) return;
-    if (!status || !LIVE_ACCEPTANCE_STATUSES.has(status)) return;
-    const timer = setInterval(() => void swr.mutate(), 5000);
-    return () => clearInterval(timer);
-  }, [poll, status, swr.mutate]);
+  const status = data?.acceptance.status;
+  const polling = poll && !!status && LIVE_ACCEPTANCE_STATUSES.has(status);
 
-  return swr;
+  const sync = useFetchAcceptanceBundle(acceptanceId, {
+    refreshInterval: polling ? ACCEPTANCE_BUNDLE_POLL_INTERVAL : 0,
+  });
+
+  return {
+    data,
+    error: sync.error,
+    isLoading: !data && !sync.error && (sync.isValidating || !sync.isHydrated),
+    isValidating: sync.isValidating,
+    mutate: async () => {
+      await sync.revalidate();
+      return acceptanceId ? useVerifyStore.getState().acceptanceBundleMap[acceptanceId] : undefined;
+    },
+  };
 };
 
-type AcceptanceBundleData = Awaited<ReturnType<typeof verifyService.getAcceptanceBundle>>;
+type AcceptanceBundleData = AcceptanceBundle;
 
 /** An evidence's current file URL, wherever in the bundle (a check or its history) it sits. */
 export const findEvidenceFileUrl = (

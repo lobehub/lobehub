@@ -65,7 +65,7 @@ describe('isAcceptanceListKey', () => {
     expect(isAcceptanceListKey(['verify:acceptances', '100', 'needle', 'all', 'workspace-1'])).toBe(
       true,
     );
-    expect(isAcceptanceListKey(['verify:acceptanceBundle', 'acceptance-1'])).toBe(false);
+    expect(isAcceptanceListKey(['verify:acceptancePurgePreview', 'acceptance-1'])).toBe(false);
   });
 
   it('keeps project-scoped acceptance feeds in separate cache entries', () => {
