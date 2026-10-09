@@ -372,7 +372,7 @@ const ChatInput = memo<ChatInputProps>(
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
 
-        // A rejected directory preflight has no persisted message to recover from.
+        // A rejected gateway preflight has no persisted message to recover from.
         // Keep the composer and attachments intact until the target is usable.
         const chatState = useChatStore.getState();
         const sendContext = storeApi.getState().context;
@@ -380,7 +380,7 @@ const ChatInput = memo<ChatInputProps>(
           ? topicSelectors.getTopicById(sendContext.topicId)(chatState)
           : undefined;
         try {
-          await checkProjectExecution(topic, chatState.isGatewayModeEnabled(sendContext.agentId));
+          checkProjectExecution(topic, chatState.isGatewayModeEnabled(sendContext.agentId));
         } catch (error) {
           console.error('Project execution preflight failed', error);
           toast.error(error instanceof Error ? error.message : String(error));

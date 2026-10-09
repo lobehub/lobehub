@@ -8,26 +8,33 @@ import { checkProjectExecution } from './checkExecution';
 
 afterEach(() => vi.restoreAllMocks());
 const topic = { id: 'topic', projectWorkingDirectoryId: 'directory' } as ChatTopic;
+
 describe('project send preflight', () => {
-  it('allows a plain conversation without a gateway', async () => {
-    await expect(checkProjectExecution(undefined, false)).resolves.toBeUndefined();
+  it('allows a plain conversation without a gateway', () => {
+    expect(checkProjectExecution(undefined, false)).toBeUndefined();
   });
-  it('rejects an unavailable gateway before resolving a device', async () => {
+
+  it('rejects an unavailable gateway before resolving a device', () => {
     const resolve = vi.spyOn(projectWorkingDirectoryService, 'resolve');
-    await expect(checkProjectExecution(topic, false)).rejects.toThrow();
+    expect(() => checkProjectExecution(topic, false)).toThrow();
     expect(resolve).not.toHaveBeenCalled();
   });
-  it('rejects offline devices and recovers only when the actual directory exists', async () => {
-    vi.spyOn(projectWorkingDirectoryService, 'resolve').mockResolvedValue({
+
+  // Regression: the send preflight used to resolve the directory and probe it
+  // with `deviceService.statPath` on every send — a full device round trip (up
+  // to its 8s timeout) that could reject the message outright when the device
+  // was merely slow to answer. Liveness is the dispatch's to discover.
+  it('does not probe the device on the send path when the gateway is enabled', () => {
+    const resolve = vi.spyOn(projectWorkingDirectoryService, 'resolve').mockResolvedValue({
       data: { deviceId: 'pinned-device', path: '/project' },
       success: true,
     } as Awaited<ReturnType<typeof projectWorkingDirectoryService.resolve>>);
     const stat = vi
       .spyOn(deviceService, 'statPath')
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ exists: true, isDirectory: true });
-    await expect(checkProjectExecution(topic, true)).rejects.toThrow();
-    await expect(checkProjectExecution(topic, true)).resolves.toBeUndefined();
-    expect(stat).toHaveBeenLastCalledWith('pinned-device', '/project');
+      .mockResolvedValue({ exists: true, isDirectory: true });
+
+    expect(checkProjectExecution(topic, true)).toBeUndefined();
+    expect(resolve).not.toHaveBeenCalled();
+    expect(stat).not.toHaveBeenCalled();
   });
 });
