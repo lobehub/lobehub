@@ -1,4 +1,4 @@
-import { HomeIcon, ImageIcon } from 'lucide-react';
+import { HomeIcon, Image, ImageIcon, Video } from 'lucide-react';
 import { describe, expect, it } from 'vitest';
 
 import { matchRouteMeta } from '@/features/Electron/titlebar/TabBar/resolveRouteMeta';
@@ -31,6 +31,16 @@ describe('mainAreaMetaRoutes (Electron adapter)', () => {
 
     expect(staticMeta.titleKey).toBe('navigation.resourceImages');
     expect(staticMeta.icon).toBe(ImageIcon);
+  });
+
+  it.each([
+    ['/image', Image, 'navigation.image'],
+    ['/video', Video, 'navigation.video'],
+  ])('uses the generation page title and icon for %s', (path, icon, titleKey) => {
+    const { static: staticMeta } = matchRouteMeta(mainAreaMetaRoutes, path);
+
+    expect(staticMeta.icon).toBe(icon);
+    expect(staticMeta.titleKey).toBe(titleKey);
   });
 
   it('resolves a static agent meta and its DynamicMeta runner', () => {

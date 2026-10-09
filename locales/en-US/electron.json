@@ -65,6 +65,7 @@
   "navigation.topics": "Topics",
   "navigation.unpin": "Unpin",
   "navigation.verifyReports": "Verification Reports",
+  "navigation.video": "Video",
   "notification.finishChatGeneration": "AI message generation completed",
   "proxy.auth": "Authentication Required",
   "proxy.authDesc": "If the proxy server requires a username and password",

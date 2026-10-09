@@ -16,6 +16,7 @@ import {
   Settings,
   ShapesIcon,
   SquarePlay,
+  Video,
 } from 'lucide-react';
 import {
   createElement,
@@ -827,6 +828,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
         element: dynamicElement(() => import('@/routes/(main)/(create)/video'), 'Desktop > Video', {
           preloadId: 'video',
         }),
+        handle: {
+          meta: routeMeta({ icon: Video, titleKey: 'navigation.video' }),
+        },
         index: true,
       },
     ],
