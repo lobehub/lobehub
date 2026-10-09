@@ -70,8 +70,14 @@ export class ComposioStoreActionImpl {
   readonly #appTools;
   readonly #connections;
   readonly #get: () => ToolStore;
-  #intent = createComposioLocalIntent();
-  #intentScope?: string;
+  /**
+   * Local intent of the connections replica, per replica scope — the rows this
+   * client wrote that the server has not echoed yet. Keyed by scope, like the
+   * write sequence and persistence holds: a deletion still awaiting the server
+   * has to survive a switch away and back, or the next revalidation — whose
+   * sequence stamp the same scope accepts — resurrects the not-yet-deleted row.
+   */
+  #intentsByScope = new Map<string, ComposioLocalIntent>();
   readonly #servers;
   readonly #set: Setter;
   /**
@@ -471,17 +477,17 @@ export class ComposioStoreActionImpl {
   };
 
   /**
-   * Local intent of the active identity. Kept per scope: the intent is about
-   * this user's unsynced writes, so a workspace / user switch starts clean
-   * rather than carrying the previous identity's pending rows over.
+   * Local intent of a scope (defaults to the active identity): the rows this
+   * client wrote that the server has not echoed yet. Kept per scope, so a switch
+   * away does not discard a deletion that is still awaiting the server.
    */
-  #localIntent = (): ComposioLocalIntent => {
-    const scope = cacheScope.get();
-    if (scope !== this.#intentScope) {
-      this.#intentScope = scope;
-      this.#intent = createComposioLocalIntent();
+  #localIntent = (scope = cacheScope.get()): ComposioLocalIntent => {
+    let intent = this.#intentsByScope.get(scope);
+    if (!intent) {
+      intent = createComposioLocalIntent();
+      this.#intentsByScope.set(scope, intent);
     }
-    return this.#intent;
+    return intent;
   };
 
   /** Write sequence of `scope` (defaults to the active identity). */

@@ -713,6 +713,50 @@ describe('composio connections replica', () => {
     expect(connectionIds()).toEqual(['slack']);
   });
 
+  it('keeps a deletion intent across a scope round trip', async () => {
+    const firstScope = cacheScope.get();
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail', { status: 'PENDING' })]);
+    renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
+    await waitFor(() => expect(connectionIds()).toEqual(['gmail']));
+
+    // A deletion whose server call stays in flight.
+    let resolveDelete!: (value: unknown) => void;
+    mocks.deleteConnection.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    let removal!: Promise<void>;
+    await act(async () => {
+      removal = useToolStore.getState().removeComposioConnection('gmail');
+    });
+    await waitFor(() => expect(mocks.deleteConnection).toHaveBeenCalledTimes(1));
+    expect(connectionIds()).toEqual([]);
+
+    // Away to another scope — its sync runs, so the previous intent is touched —
+    // and back, all while the deletion is still awaiting the server.
+    useScope(`composio-user-${randomUUID()}:personal`);
+    renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
+    await waitFor(() => expect(connectionIds()).toEqual(['gmail']));
+
+    useScope(firstScope);
+    const backSync = renderHook(
+      () => useToolStore((s) => s.useFetchUserComposioConnections)(true),
+      { wrapper },
+    );
+    // The server has not finished deleting: the response must not resurrect it.
+    await act(async () => {
+      await backSync.result.current.mutate();
+    });
+    expect(connectionIds()).toEqual([]);
+
+    await act(async () => {
+      resolveDelete({ success: true });
+      await removal;
+    });
+    expect(connectionIds()).toEqual([]);
+  });
+
   it('revalidates through the connections sync mutate without clearing the list', async () => {
     mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail')]);
     const sync = renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), {
