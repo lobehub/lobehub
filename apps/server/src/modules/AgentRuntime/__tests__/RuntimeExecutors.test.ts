@@ -246,6 +246,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       // call_llm does a parent existence preflight; return a truthy row by
       // default so existing tests don't have to stub it.
       findById: vi.fn().mockResolvedValue({ id: 'msg-existing' }),
+      findMessagePlugin: vi.fn().mockResolvedValue(undefined),
       // The abort settle asks whether a row already holds the call. Null by
       // default: these tests exercise calls that never got one.
       findToolMessageIdByToolCallId: vi.fn().mockResolvedValue(null),
@@ -6686,7 +6687,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
     });
 
     describe('request_human_approve hooks', () => {
-      it('creates a protected result slot before a human answer can be claimed', async () => {
+      it('creates an empty result slot before a human answer can be claimed', async () => {
         const state = createToolState({
           messages: [{ content: '', id: 'asst-1', role: 'assistant' }],
         });
@@ -6720,14 +6721,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
         );
         expect(mockMessageModel.create).toHaveBeenCalledWith(
           expect.objectContaining({
-            metadata: {
-              toolResultControl: {
-                operationId: 'op-123',
-                stepIndex: ctx.stepIndex,
-                callIndex: 1,
-                status: 'pending',
-              },
-            },
+            content: '',
             tool_call_id: 'call-ask',
           }),
         );

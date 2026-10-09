@@ -566,13 +566,6 @@ export interface MessageMetadata {
    * Tool execution time for tool messages (ms)
    */
   toolExecutionTimeMs?: number;
-  /** Server-owned review marker; policy credentials stay on the operation record. */
-  toolResultControl?: {
-    callIndex: number;
-    operationId: string;
-    status: 'pending' | 'allowed' | 'blocked';
-    stepIndex: number;
-  };
   /** @deprecated use the top-level message `usage` field instead */
   totalInputTokens?: number;
   /** @deprecated use the top-level message `usage` field instead */

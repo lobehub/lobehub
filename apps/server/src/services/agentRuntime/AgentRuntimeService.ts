@@ -4392,7 +4392,7 @@ export class AgentRuntimeService {
       ? appendSubAgentReference(resultContent, threadId)
       : resultContent;
 
-    const { result: completed, review } = await this.controlCompletedToolResult({
+    const { result: completed, blocked } = await this.controlCompletedToolResult({
       preserveUsage: true,
       operationId: parentOperationId,
       toolMessageId,
@@ -4423,9 +4423,8 @@ export class AgentRuntimeService {
       content: completed.content,
       pluginError: completed.error ?? null,
       pluginState: completed.state,
-      preserveBlockedResult: true,
-      toolResultReview: review,
-      ...(review?.status === 'blocked' && { replacePluginState: true }),
+      onlyIfEmpty: true,
+      ...(blocked && { replacePluginState: true }),
     });
     if (!backfill.success) {
       throw new Error(
@@ -4657,7 +4656,7 @@ export class AgentRuntimeService {
         ? `Agent ${agentLabel} responded in the group.`
         : lastAssistantContent || 'Agent member completed without a textual answer.';
 
-    const { result: completed, review } = await this.controlCompletedToolResult({
+    const { result: completed, blocked } = await this.controlCompletedToolResult({
       preserveUsage: true,
       contextToolMessageId: groupToolMessageId,
       operationId: parentOperationId,
@@ -4687,9 +4686,8 @@ export class AgentRuntimeService {
       content: completed.content,
       pluginError: completed.error ?? null,
       pluginState: completed.state,
-      preserveBlockedResult: true,
-      toolResultReview: review,
-      ...(review?.status === 'blocked' && { replacePluginState: true }),
+      onlyIfEmpty: true,
+      ...(blocked && { replacePluginState: true }),
     });
     if (!anchorBackfill.success) {
       throw new Error(
@@ -4697,6 +4695,24 @@ export class AgentRuntimeService {
       );
     }
 
+    return this.completeGroupMemberBarrier({
+      anchorMessageId,
+      expectedMembers,
+      groupToolMessageId,
+      parentOperationId,
+    });
+  }
+
+  /** Shared by a child's completion and a member that failed before an operation existed. */
+  async completeGroupMemberBarrier({
+    anchorMessageId,
+    expectedMembers,
+    groupToolMessageId,
+    parentOperationId,
+  }: Pick<
+    GroupActionMemberBridgeParams,
+    'anchorMessageId' | 'expectedMembers' | 'groupToolMessageId' | 'parentOperationId'
+  >): Promise<boolean> {
     // 2. K=N member barrier (multi-member actions only — single-member actions
     //    use the group tool call itself as the anchor, already backfilled above).
     if (expectedMembers > 1 && anchorMessageId !== groupToolMessageId) {
@@ -4704,7 +4720,7 @@ export class AgentRuntimeService {
       if (fulfilled < expectedMembers) {
         log(
           '[%s] group-member barrier %d/%d, holding parent %s',
-          operationId,
+          parentOperationId,
           fulfilled,
           expectedMembers,
           parentOperationId,
@@ -4721,7 +4737,7 @@ export class AgentRuntimeService {
       // All members done — backfill the group tool call so the parked op's
       // single-tool barrier ([groupTool]) passes. Idempotent across racing
       // last-committers; the resume/finish CAS guarantees one transition.
-      const { result: groupResult, review: groupReview } = await this.controlCompletedToolResult({
+      const { result: groupResult, blocked: groupBlocked } = await this.controlCompletedToolResult({
         operationId: parentOperationId,
         toolMessageId: groupToolMessageId,
         result: {
@@ -4734,9 +4750,8 @@ export class AgentRuntimeService {
         content: groupResult.content,
         pluginError: groupResult.error ?? null,
         pluginState: groupResult.state,
-        preserveBlockedResult: true,
-        toolResultReview: groupReview,
-        ...(groupReview?.status === 'blocked' && {
+        onlyIfEmpty: true,
+        ...(groupBlocked && {
           replacePluginState: true,
         }),
       });
@@ -5141,6 +5156,7 @@ export class AgentRuntimeService {
       execSubAgent: this.delegate.execSubAgent,
       execVirtualSubAgent: this.delegate.execVirtualSubAgent,
       execGroupMember: this.delegate.execGroupMember,
+      onGroupMemberResult: (params) => this.completeGroupMemberBarrier(params),
       hookDispatcher,
       loadAgentState: this.coordinator.loadAgentState.bind(this.coordinator),
       messageModel: this.messageModel,

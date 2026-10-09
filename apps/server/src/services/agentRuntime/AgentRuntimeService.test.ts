@@ -3778,8 +3778,7 @@ describe('AgentRuntimeService', () => {
 
       expect(won).toBe(true);
       expect(updateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
-        preserveBlockedResult: true,
-        toolResultReview: undefined,
+        onlyIfEmpty: true,
         content: 'final answer',
         pluginError: null,
         pluginState: {
@@ -3828,11 +3827,13 @@ describe('AgentRuntimeService', () => {
         host: { hooks },
       });
       updateToolMessage.mockImplementation(async (_id, value) => {
+        if ((stored as any).content && value.onlyIfEmpty) return { success: true, applied: false };
+        (stored as any).content = value.content;
         stored.state = value.pluginState;
         (service as any).messageModel.findById.mockResolvedValue({
           id: 'tool-msg-1',
           parentId: 'assistant',
-          metadata: { toolResultControl: value.toolResultReview },
+          content: value.content,
         });
         return { success: true };
       });
@@ -3855,7 +3856,7 @@ describe('AgentRuntimeService', () => {
           expect.objectContaining({
             content: 'Tool result withheld by afterToolCall hook.',
             replacePluginState: true,
-            preserveBlockedResult: true,
+            onlyIfEmpty: true,
           }),
         );
         expect(resumeSpy).toHaveBeenCalledTimes(1);
@@ -3869,7 +3870,7 @@ describe('AgentRuntimeService', () => {
           } as any,
         });
         expect(fetchHook).toHaveBeenCalledTimes(1);
-        expect(JSON.stringify(updateToolMessage.mock.calls)).not.toContain(privateContent);
+        expect((stored as any).content).toBe('Tool result withheld by afterToolCall hook.');
       } finally {
         fetchHook.mockRestore();
       }

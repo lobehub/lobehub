@@ -108,12 +108,7 @@ const heterogeneousToolStateSnapshotSchema = z.object({
   snapshotSeq: z.number().int().positive(),
 });
 
-const publicToolMetadataSchema = z
-  .record(z.string(), z.any())
-  .refine(
-    (value) => !Object.hasOwn(value, 'toolResultControl'),
-    'Tool result review metadata is server-owned',
-  );
+const publicToolMetadataSchema = z.record(z.string(), z.any());
 
 const messageBatchOperationSchema = z.discriminatedUnion('type', [
   z.object({

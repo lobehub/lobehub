@@ -24,7 +24,6 @@ export class ServerMessageTransport implements MessageTransport {
   constructor(
     private readonly messageModel: MessageModel,
     private readonly options: {
-      prepareToolMessage?: (params: CreateMessageParams) => Promise<CreateMessageParams>;
       postProcessUrl?: (
         path: string | null,
         file: { fileType: string; id?: string | null },
@@ -73,9 +72,7 @@ export class ServerMessageTransport implements MessageTransport {
 
   async createToolMessage(params: CreateMessageParams): Promise<RuntimeMessageRef> {
     try {
-      return await this.messageModel.create(
-        (await this.options.prepareToolMessage?.(params)) ?? params,
-      );
+      return await this.messageModel.create(params);
     } catch (error) {
       if (typeof params.parentId === 'string' && isMidOperationReferenceMissingError(error)) {
         throw createConversationParentMissingError(params.parentId, error);

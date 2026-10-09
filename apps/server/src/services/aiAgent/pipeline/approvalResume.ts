@@ -226,9 +226,9 @@ export const claimApprovalResume = async (
 
     // Shared exactly-once boundary for Web, Mobile, Stop, and signed system
     // actions. All rows are locked and checked before the first write.
-    if (unclaimedDecisions.length > 0) {
+    if (validatedDecisions.length > 0) {
       const claimState = await deps.messageModel.resolveHumanApproval(
-        unclaimedDecisions.map(({ entry }) => {
+        validatedDecisions.map(({ entry }) => {
           if (entry.decision === 'approved') {
             return {
               id: entry.parentMessageId,
@@ -250,6 +250,7 @@ export const claimApprovalResume = async (
             },
           };
         }),
+        { publishResult: true },
       );
       if (claimState === 'applied') {
         approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
@@ -378,8 +379,10 @@ export const claimApprovalResume = async (
         content: result.content,
         pluginState: result.state,
       };
-    if (!alreadyClaimed) {
-      const claimState = await deps.messageModel.resolveHumanApproval([
+    // Source adapters only claim the decision. Publish the final hook result
+    // with the claim in one transaction, or finish an existing same-owner claim.
+    const claimState = await deps.messageModel.resolveHumanApproval(
+      [
         {
           content: result?.content ?? resumeToolResult.content,
           id: resumeToolResult.parentMessageId,
@@ -391,29 +394,28 @@ export const claimApprovalResume = async (
                 status: 'rejected',
               }
             : { resolutionRequestId: approvalResolutionRequestId, status: 'approved' },
+          pluginError: result?.error ?? null,
           pluginState: result?.state ?? resumeToolResult.pluginState,
           ...(withheld && { replacePluginState: true }),
         },
+      ],
+      { publishResult: true },
+    );
+    if (claimState === 'applied' && !alreadyClaimed) {
+      approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
+    } else if (claimState === 'idempotent') {
+      // A duplicate continuation must also use the first published result in
+      // memory, including a denial, rather than the replay's incoming answer.
+      const [stored, plugin] = await Promise.all([
+        deps.messageModel.findById(resumeToolResult.parentMessageId),
+        deps.messageModel.findMessagePlugin(resumeToolResult.parentMessageId),
       ]);
-      if (claimState === 'applied') {
-        approvalClaim.rollbackSnapshot = approvalRollbackSnapshot;
-      }
-    }
-    // Source-based resolutions can arrive already claimed, with the raw
-    // answer written by the source API. Gate that row before history loads.
-    if (result) {
-      const persisted = await deps.messageModel.updateToolMessage(
-        resumeToolResult.parentMessageId,
-        {
-          content: result.content,
-          pluginError: result.error ?? null,
-          pluginState: result.state,
-          preserveBlockedResult: true,
-          toolResultReview: controlled?.review,
-          ...(withheld && { replacePluginState: true }),
-        },
-      );
-      if (!persisted.success) throw new Error('Failed to persist reviewed tool result');
+      if (!stored) throw new Error('Resolved tool message is unavailable');
+      resolvedToolResult = {
+        ...resumeToolResult,
+        content: stored.content ?? '',
+        pluginState: plugin?.state ?? undefined,
+      };
     }
     if (providedApprovalResolutionRequestId) {
       approvalClaim.continuationPrepared = true;

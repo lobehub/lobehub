@@ -113,9 +113,17 @@ const hook: AgentHook = {
 
 - Environment hooks (`AGENT_HOOK_WEBHOOK_*`) always come from the executing worker's **current environment**, including after human approval and deferred completion. Never persist their configuration or restore a previous environment's hooks.
 - Code-supplied webhook hooks (`execAgent({ hooks })`) retain the existing per-operation serialization and persistence. Recover these caller hooks from the runtime snapshot or durable operation record; preserve environment-variable templates without expanding secrets into storage.
-- Evaluate recovered caller hooks together with current environment hooks. Removing an environment hook stops it from controlling subsequent results; when no matching result control remains, allow the result and release its pending review marker. Historical `pending` alone must not require a removed environment policy to remain configured.
-- Preserve recorded denials on duplicate completion. An unavailable caller-policy store is a recovery error, distinct from a successfully recovered empty hook list. Do not extend default allow to configured-hook delivery failures: those follow `onError`.
-- Cover environment removal/addition across approval and snapshot expiry, release of pending markers, and continued enforcement of persisted caller hooks in regression tests.
+- Evaluate recovered caller hooks together with current environment hooks. Removing an environment hook stops it from controlling subsequent results; when no matching result control remains, allow the result. Do not freeze a previous environment policy across an approval or restart.
+- Deferred completion publishes into its empty placeholder once; duplicate callbacks retain that first final result, including a denial. Propagate caller-policy storage errors rather than treating failed reads as an empty hook list. Do not extend default allow to configured-hook delivery failures: those follow `onError`.
+- Cover environment removal/addition across approval and snapshot expiry, publication without review markers, and continued enforcement of persisted caller hooks in regression tests.
+
+### Publish after the result hook
+
+- Await result control before archival, message content/state writes, streaming, and model consumption. Persist the allowed result or the sanitized denial directly; do not add `toolResultControl` pending/allowed/blocked metadata or hide raw output through history projections.
+- Human approval sources claim the decision and retain the answer in their private resolution/outbox. `MessageModel.resolveHumanApproval` defaults to claim-only; only the runtime calls it with `publishResult: true` after result control. Stop/rejection receipts can publish directly because they contain no executed tool output.
+- Recover original caller hooks through the existing intervention operation identity or deferred callback's parent operation. Keep the in-memory hook verdict separate from tool-owned state; a tool returning `type: 'blocked'` is not a hook verdict.
+- Every deferred backfill, including a member that fails to start, follows the same hook-before-write order. Use the existing empty placeholder to arbitrate duplicate final writes; do not introduce a replacement review state machine.
+- Cover an answer held while a hook runs, atomic publication and rollback, duplicate callbacks after policy removal, and partial member startup failure. History readers should need no result-review logic.
 
 ## Events
 

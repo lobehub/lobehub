@@ -1,6 +1,5 @@
 import type {
   ChatToolPayload,
-  MessageMetadata,
   RuntimeStepContext,
   StepContextTodoItem,
   WorkRegistrationIntent,
@@ -77,12 +76,12 @@ export interface ToolRunExecution {
   interrupted?: boolean;
   mocked?: boolean;
   result: ToolRunResult;
+  /** Server-owned verdict; tools cannot supply this through their result. */
+  resultBlocked?: boolean;
   /** The transport already persisted the result into its tool message. */
   resultPersisted?: boolean;
   /** Existing/pre-created tool message owned by the transport. */
   toolMessageId?: string;
-  /** Server-owned verdict; tools cannot supply this through their result. */
-  toolResultReview?: NonNullable<MessageMetadata['toolResultControl']>;
 }
 
 /**

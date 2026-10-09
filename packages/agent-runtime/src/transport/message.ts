@@ -1,9 +1,4 @@
-import type {
-  CreateMessageParams,
-  MessageMetadata,
-  UIChatMessage,
-  UpdateMessageParams,
-} from '@lobechat/types';
+import type { CreateMessageParams, UIChatMessage, UpdateMessageParams } from '@lobechat/types';
 
 /** Minimal reference an executor needs back after creating a message. */
 export interface RuntimeMessageRef {
@@ -54,8 +49,6 @@ export interface UpdateToolMessageInput {
   pluginState?: Record<string, any>;
   /** A result gate must not retain keys from a previous complete result. */
   replacePluginState?: boolean;
-  /** Authoritative review from the tool transport, never inferred from pluginState. */
-  toolResultReview?: NonNullable<MessageMetadata['toolResultControl']>;
 }
 
 /**

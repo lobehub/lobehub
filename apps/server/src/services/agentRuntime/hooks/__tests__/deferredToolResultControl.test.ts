@@ -109,65 +109,39 @@ describe('out-of-band tool result control', () => {
     expect((await controlDeferredToolResult(deps, input)).result).toBe(original);
     expect(fetchHook).not.toHaveBeenCalled();
   });
-  it('restores required controls and original correlation after Redis expiry', async () => {
+  it('restores caller controls and call identity after Redis expiry', async () => {
     const { deps, input } = setup();
     deps.loadState.mockResolvedValue(null);
     deps.loadDurableHooks.mockResolvedValue([hook]);
     deps.messageModel.findById.mockResolvedValue({
       id: 'tool-row',
       parentId: 'assistant',
-      metadata: {
-        toolResultControl: { operationId: 'parent', callIndex: 2, stepIndex: 5, status: 'pending' },
-      },
     });
     const { result } = await controlDeferredToolResult(deps, input);
     expect(result.content).toBe(BLOCKED_TOOL_RESULT_CONTENT);
     expect(JSON.parse(fetchHook.mock.calls[0][1].body)).toMatchObject({
-      callIndex: 2,
-      stepIndex: 5,
+      operationId: 'parent',
+      toolCallId: 'native-call',
       result: original,
     });
   });
-  it('cannot release a pending review when both policy stores are unavailable', async () => {
+
+  it('propagates a caller hook store failure rather than treating it as no hooks', async () => {
     const { deps, input } = setup();
     deps.loadState.mockResolvedValue(null);
-    deps.loadDurableHooks.mockResolvedValue(undefined);
-    deps.messageModel.findById.mockResolvedValue({
-      id: 'tool-row',
-      parentId: 'assistant',
-      metadata: {
-        toolResultControl: { operationId: 'parent', callIndex: 2, stepIndex: 5, status: 'pending' },
-      },
-    });
-    await expect(controlDeferredToolResult(deps, input)).rejects.toThrow(
-      'Cannot recover afterToolCall control policy',
-    );
+    deps.loadDurableHooks.mockRejectedValue(new Error('database unavailable'));
+    await expect(controlDeferredToolResult(deps, input)).rejects.toThrow('database unavailable');
     expect(fetchHook).not.toHaveBeenCalled();
   });
-  it('retains pre-feature no-hook behavior for unmarked legacy rows', async () => {
+  it('retains pre-feature no-hook behavior for legacy rows', async () => {
     const { deps, input } = setup();
     deps.loadState.mockResolvedValue(null);
     deps.loadDurableHooks.mockResolvedValue(undefined);
     expect((await controlDeferredToolResult(deps, input)).result).toBe(original);
     expect(fetchHook).not.toHaveBeenCalled();
   });
-  it('preserves already-allowed replay when recovered hooks are empty', async () => {
-    const { deps, input } = setup();
-    deps.loadState.mockResolvedValue(null);
-    deps.messageModel.findById.mockResolvedValue({
-      id: 'tool-row',
-      parentId: 'assistant',
-      metadata: {
-        toolResultControl: { operationId: 'parent', callIndex: 2, stepIndex: 5, status: 'allowed' },
-      },
-    });
-    expect(await controlDeferredToolResult(deps, input)).toMatchObject({
-      result: original,
-      review: { status: 'allowed' },
-    });
-    expect(fetchHook).not.toHaveBeenCalled();
-  });
-  it('preserves unmarked legacy results when configured hooks only match another tool', async () => {
+
+  it('preserves legacy results when configured hooks only match another tool', async () => {
     const { deps, input } = setup();
     deps.loadState.mockResolvedValue(null);
     deps.loadDurableHooks.mockResolvedValue([{ ...hook, matcher: '^other/tool$' }]);
@@ -175,7 +149,7 @@ describe('out-of-band tool result control', () => {
     expect(fetchHook).not.toHaveBeenCalled();
   });
   it.each([false, true])(
-    'releases pending results using the current environment instead of its old policy, queue=%s',
+    'evaluates deferred results using the current environment instead of its old policy, queue=%s',
     async (queue) => {
       queueMode.mockReturnValue(queue);
       const { deps, input } = setup();
@@ -189,21 +163,12 @@ describe('out-of-band tool result control', () => {
       deps.messageModel.findById.mockResolvedValue({
         id: 'tool-row',
         parentId: 'assistant',
-        metadata: {
-          toolResultControl: {
-            operationId: 'parent',
-            callIndex: 2,
-            stepIndex: 5,
-            status: 'pending',
-          },
-        },
       });
 
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', undefined);
       expect(await controlDeferredToolResult(deps, input)).toMatchObject({
         blocked: false,
         result: original,
-        review: { status: 'allowed' },
       });
       expect(fetchHook).not.toHaveBeenCalled();
 
@@ -212,7 +177,6 @@ describe('out-of-band tool result control', () => {
       fetchHook.mockResolvedValue(new Response(JSON.stringify({ decision: 'allow' })));
       expect(await controlDeferredToolResult(deps, input)).toMatchObject({
         result: original,
-        review: { status: 'allowed' },
       });
       expect(fetchHook).toHaveBeenCalledTimes(1);
     },
@@ -236,61 +200,20 @@ describe('out-of-band tool result control', () => {
       snapshot: false,
       hooks: [{ ...hook, id: 'server-env-webhook:afterToolCall' }],
     },
-  ])(
-    'releases pending markers when there is no matching control: $label',
-    async ({ snapshot, hooks }) => {
-      const { deps, input } = setup();
-      deps.loadState.mockResolvedValue(snapshot ? { ...state, host: { hooks } } : null);
-      deps.loadDurableHooks.mockResolvedValue(hooks);
-      deps.messageModel.findById.mockResolvedValue({
-        id: 'tool-row',
-        parentId: 'assistant',
-        metadata: {
-          toolResultControl: {
-            operationId: 'parent',
-            callIndex: 2,
-            stepIndex: 5,
-            status: 'pending',
-          },
-        },
-      });
-      expect(await controlDeferredToolResult(deps, input)).toMatchObject({
-        blocked: false,
-        result: original,
-        review: { status: 'allowed' },
-      });
-      expect(fetchHook).not.toHaveBeenCalled();
-    },
-  );
-  it.each(['tool-row', 'group-tool'])(
-    'releases the pending result when only %s has the marker and no control matches',
-    async (markedId) => {
-      const { deps, input } = setup();
-      deps.loadState.mockResolvedValue(null);
-      deps.messageModel.findById.mockImplementation(async (id) => ({
-        id,
-        parentId: 'assistant',
-        ...(id === markedId && {
-          metadata: {
-            toolResultControl: {
-              operationId: 'parent',
-              callIndex: 2,
-              stepIndex: 5,
-              status: 'pending',
-            },
-          },
-        }),
-      }));
-      await expect(
-        controlDeferredToolResult(deps, {
-          ...input,
-          operationId: undefined,
-          contextToolMessageId: 'group-tool',
-        }),
-      ).resolves.toMatchObject({ blocked: false, result: original, review: { status: 'allowed' } });
-      expect(fetchHook).not.toHaveBeenCalled();
-    },
-  );
+  ])('allows results when there is no matching control: $label', async ({ snapshot, hooks }) => {
+    const { deps, input } = setup();
+    deps.loadState.mockResolvedValue(snapshot ? { ...state, host: { hooks } } : null);
+    deps.loadDurableHooks.mockResolvedValue(hooks);
+    deps.messageModel.findById.mockResolvedValue({
+      id: 'tool-row',
+      parentId: 'assistant',
+    });
+    expect(await controlDeferredToolResult(deps, input)).toMatchObject({
+      blocked: false,
+      result: original,
+    });
+    expect(fetchHook).not.toHaveBeenCalled();
+  });
   it.each([false, true])(
     'still enforces persisted caller hooks after environment removal, queue=%s',
     async (queue) => {
@@ -302,45 +225,15 @@ describe('out-of-band tool result control', () => {
       deps.messageModel.findById.mockResolvedValue({
         id: 'tool-row',
         parentId: 'assistant',
-        metadata: {
-          toolResultControl: {
-            operationId: 'parent',
-            callIndex: 2,
-            stepIndex: 5,
-            status: 'pending',
-          },
-        },
       });
       expect(await controlDeferredToolResult(deps, input)).toMatchObject({
         blocked: true,
-        review: { status: 'blocked' },
       });
       expect(fetchHook).toHaveBeenCalledTimes(1);
       expect(fetchHook.mock.calls[0][0]).toBe(hook.webhook.url);
     },
   );
-  it('keeps a denial on callback replay even after all hooks are removed', async () => {
-    const { deps, input } = setup();
-    deps.loadState.mockResolvedValue(null);
-    deps.messageModel.findById.mockResolvedValue({
-      id: 'tool-row',
-      parentId: 'assistant',
-      metadata: {
-        toolResultControl: { operationId: 'parent', callIndex: 1, stepIndex: 1, status: 'blocked' },
-      },
-    });
-    deps.messageModel.findMessagePlugin.mockResolvedValue({
-      ...plugin,
-      state: { type: 'blocked', phase: 'afterToolCall', onComplete: 'finish' },
-    });
-    const { result } = await controlDeferredToolResult(deps, input);
-    expect(result).toMatchObject({
-      content: BLOCKED_TOOL_RESULT_CONTENT,
-      state: { onComplete: 'finish' },
-    });
-    expect(JSON.stringify(result)).not.toContain(secret);
-    expect(fetchHook).not.toHaveBeenCalled();
-  });
+
   it('does not treat tool-owned blocked state as a prior hook denial', async () => {
     const { deps, input } = setup();
     deps.messageModel.findMessagePlugin.mockResolvedValue({
@@ -352,31 +245,46 @@ describe('out-of-band tool result control', () => {
     expect(controlled).toMatchObject({
       blocked: false,
       result: original,
-      review: { status: 'allowed' },
     });
     expect(fetchHook).toHaveBeenCalledTimes(1);
   });
 
-  it('retains a member anchor denial when the parent group review is still pending', async () => {
+  it('keeps original caller hooks on an approved deferred call and applies continuation hooks too', async () => {
     const { deps, input } = setup();
-    deps.messageModel.findById.mockImplementation(async (id) => ({
-      id,
-      parentId: 'assistant',
-      metadata: {
-        toolResultControl: {
-          operationId: 'parent',
-          callIndex: 1,
-          stepIndex: 1,
-          status: id === 'tool-row' ? 'blocked' : 'pending',
-        },
-      },
-    }));
-    const controlled = await controlDeferredToolResult(deps, {
-      ...input,
-      contextToolMessageId: 'group-tool',
+    deps.messageModel.findMessagePlugin.mockResolvedValue({
+      ...plugin,
+      intervention: { operationId: 'original', status: 'approved' },
     });
-    expect(controlled).toMatchObject({ blocked: true, review: { status: 'blocked' } });
-    expect(fetchHook).not.toHaveBeenCalled();
+    deps.loadState.mockImplementation(async (id) =>
+      id === 'original'
+        ? null
+        : {
+            ...state,
+            host: {
+              hooks: [
+                {
+                  ...hook,
+                  id: 'new',
+                  webhook: { ...hook.webhook, url: 'https://hooks.example/new' },
+                },
+              ],
+            },
+          },
+    );
+    deps.loadDurableHooks.mockResolvedValue([hook]);
+    fetchHook.mockImplementation(
+      async (url) =>
+        new Response(
+          JSON.stringify({ decision: String(url).endsWith('/after') ? 'allow' : 'deny' }),
+        ),
+    );
+    expect((await controlDeferredToolResult(deps, input)).result.content).toBe(
+      BLOCKED_TOOL_RESULT_CONTENT,
+    );
+    expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
+      'https://hooks.example/after',
+      'https://hooks.example/new',
+    ]);
   });
 
   it('uses the parent group call arguments for an isolated member result', async () => {

@@ -1,5 +1,4 @@
 import type { AgentRuntimeHost } from '@lobechat/agent-runtime';
-import type { ChatToolPayload } from '@lobechat/types';
 
 import { ServerBlobStore } from './adapters/ServerBlobStore';
 import { ServerCompressionTransport } from './adapters/ServerCompressionTransport';
@@ -11,7 +10,6 @@ import { ServerOperationStore } from './adapters/ServerOperationStore';
 import { ServerStreamSink } from './adapters/ServerStreamSink';
 import { ServerSubAgentTransport } from './adapters/ServerSubAgentTransport';
 import { ServerToolTransport } from './adapters/ServerToolTransport';
-import { prepareToolResultReview } from './adapters/toolResultReview';
 import type { RuntimeExecutorContext } from './context';
 import { buildPostProcessUrl } from './executorHelpers';
 
@@ -54,14 +52,6 @@ export const buildHost = (ctx: RuntimeExecutorContext): AgentRuntimeHost => {
       llm: ctx.userId ? new ServerLLMTransport(ctx, blob) : undefined,
       messages: new ServerMessageTransport(ctx.messageModel, {
         postProcessUrl: buildPostProcessUrl(ctx),
-        prepareToolMessage: async (params) => {
-          if (params.pluginIntervention?.status !== 'pending' || !ctx.hookDispatcher) return params;
-          const state = await ctx.loadAgentState?.(ctx.operationId);
-          const review = prepareToolResultReview(ctx, state, params.plugin as ChatToolPayload);
-          return review
-            ? { ...params, metadata: { ...params.metadata, toolResultControl: review } }
-            : params;
-        },
       }),
       operationStore: new ServerOperationStore(
         ctx.serverDB,

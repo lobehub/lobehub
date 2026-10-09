@@ -1,5 +1,5 @@
 import type { AfterToolCallHookEvent, ToolRunResult } from '@lobechat/agent-runtime';
-import type { MessageMetadata, SerializedAgentHook } from '@lobechat/types';
+import type { SerializedAgentHook } from '@lobechat/types';
 import {
   BLOCKED_TOOL_RESULT_CONTENT,
   pickToolResultUsage,
@@ -13,8 +13,6 @@ export interface ToolResultControlOutcome {
   blocked: boolean;
   cancelled: boolean;
   result: ToolRunResult;
-  /** Trusted runtime verdict, separate from tool-owned result fields. */
-  review?: NonNullable<MessageMetadata['toolResultControl']>;
 }
 
 /**
@@ -47,7 +45,6 @@ export async function controlToolResult(
   signal?: AbortSignal,
   preserveUsage = false,
 ): Promise<ToolResultControlOutcome> {
-  const reviewed = dispatcher?.hasAfterToolCallControl(event.operationId, hooks, event);
   const decision = await dispatcher?.evaluateAfterToolCall(event.operationId, event, hooks, signal);
   if (signal?.aborted || decision?.status === 'cancelled') {
     return {
@@ -63,13 +60,5 @@ export async function controlToolResult(
       decision?.status === 'blocked'
         ? blockedToolResult(event.result, preserveUsage)
         : event.result,
-    ...(reviewed && {
-      review: {
-        operationId: event.operationId,
-        callIndex: event.callIndex,
-        stepIndex: event.stepIndex,
-        status: decision?.status === 'blocked' ? 'blocked' : 'allowed',
-      },
-    }),
   };
 }

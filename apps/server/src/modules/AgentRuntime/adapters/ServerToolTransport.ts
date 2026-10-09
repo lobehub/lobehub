@@ -344,11 +344,12 @@ export class ServerToolTransport implements ToolTransport {
       };
       // Evaluate the full result before truncation/archive creation. A denied
       // archive must not remain retrievable by the model on a later tool call.
-      const existingReview = context.toolMessageId
-        ? (await this.ctx.messageModel.findById(context.toolMessageId))?.metadata?.toolResultControl
+      const originalOperationId = context.toolMessageId
+        ? (await this.ctx.messageModel.findMessagePlugin(context.toolMessageId))?.intervention
+            ?.operationId
         : undefined;
       let originalControl: Awaited<ReturnType<typeof controlDeferredToolResult>> | undefined;
-      if (existingReview && context.toolMessageId) {
+      if (originalOperationId && context.toolMessageId) {
         if (!this.ctx.hookDispatcher || !this.ctx.userId) {
           throw new Error(
             'Cannot review a resumed tool result without its runtime owner and dispatcher',
@@ -371,7 +372,7 @@ export class ServerToolTransport implements ToolTransport {
             workspaceId: this.ctx.workspaceId,
           },
           {
-            operationId: existingReview.operationId,
+            operationId: originalOperationId,
             toolMessageId: context.toolMessageId,
             result: resultWithExecutionTime,
             signal: context.abortSignal,
@@ -382,8 +383,7 @@ export class ServerToolTransport implements ToolTransport {
       // gate; any new run controls can only narrow its decision. Never infer
       // a control decision from the untrusted tool's result.state fields.
       const controlled =
-        originalControl &&
-        (originalControl.blocked || existingReview?.operationId === this.ctx.operationId)
+        originalControl && (originalControl.blocked || originalOperationId === this.ctx.operationId)
           ? originalControl
           : await controlToolResult(
               this.ctx.hookDispatcher,
@@ -428,8 +428,7 @@ export class ServerToolTransport implements ToolTransport {
         ...execution,
         mocked: toolCallMocked || execution.mocked,
         result: executionResult,
-        // A hook-less continuation still has to release the original pending gate.
-        toolResultReview: controlled.review ?? originalControl?.review,
+        resultBlocked: controlled.blocked,
       };
     } catch (error) {
       executeToolSpan.recordException(error as Error);

@@ -115,6 +115,7 @@ function setup(hooks: AgentHook[], signal?: AbortSignal, restore = false) {
               ...call(),
               toolCallId: row.tool_call_id,
               state: row.pluginState,
+              intervention: row.pluginIntervention,
               ...(row.plugin as Record<string, unknown>),
             }
           : undefined;
@@ -253,7 +254,6 @@ describe('afterToolCall control pipeline', () => {
       expect(fixture.execute).toHaveBeenCalledTimes(executor === 'server' ? 1 : 0);
       expect(fixture.rows[0]).toMatchObject({
         content: 'allowed output',
-        metadata: { toolResultControl: { status: 'allowed', operationId: 'op' } },
       });
       expect(fixture.rows[0].pluginIntervention).toBeUndefined();
     },
@@ -485,14 +485,7 @@ describe('afterToolCall control pipeline', () => {
         tool_call_id: 'native-1',
         content: '',
         plugin: call(),
-        metadata: {
-          toolResultControl: {
-            operationId: 'original-op',
-            callIndex: 2,
-            stepIndex: 4,
-            status: 'pending',
-          },
-        },
+        pluginIntervention: { operationId: 'original-op', status: 'approved' },
       });
       fixture.loadState.mockResolvedValue({
         ...fixture.state,
@@ -529,8 +522,6 @@ describe('afterToolCall control pipeline', () => {
       expect(fetchHook).toHaveBeenCalledTimes(1);
       expect(JSON.parse(fetchHook.mock.calls[0][1].body)).toMatchObject({
         operationId: 'original-op',
-        callIndex: 2,
-        stepIndex: 4,
         result: raw(),
       });
       expect(JSON.stringify(result)).not.toContain(secret);
@@ -540,10 +531,9 @@ describe('afterToolCall control pipeline', () => {
   );
 
   it.each(['single', 'batch'] as const)(
-    'releases the original pending result after an allowed %s hook-less continuation',
+    'publishes the result after an allowed %s hook-less continuation',
     async (mode) => {
       const fixture = setup([]);
-      const review = { operationId: 'original-op', callIndex: 2, stepIndex: 4, status: 'pending' };
       fixture.rows.push({
         id: 'protected-row',
         parentId: 'original-assistant',
@@ -551,7 +541,7 @@ describe('afterToolCall control pipeline', () => {
         tool_call_id: 'native-1',
         content: '',
         plugin: call(),
-        metadata: { toolResultControl: review },
+        pluginIntervention: { operationId: 'original-op', status: 'approved' },
       });
       fixture.loadState.mockResolvedValue({
         ...fixture.state,
@@ -587,17 +577,16 @@ describe('afterToolCall control pipeline', () => {
       expect(fetchHook).toHaveBeenCalledTimes(1);
       expect(fixture.host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
         'protected-row',
-        expect.objectContaining({ toolResultReview: { ...review, status: 'allowed' } }),
+        expect.objectContaining({ content: 'executed', pluginError: null }),
       );
       expect(fixture.rows[0].content).toBe('executed');
     },
   );
 
   it.each(['single', 'batch'] as const)(
-    'releases a pending %s result when the environment control has been removed',
+    'publishes a %s result when the environment control has been removed',
     async (mode) => {
       const fixture = setup([]);
-      const review = { operationId: 'original-op', callIndex: 2, stepIndex: 4, status: 'pending' };
       fixture.rows.push({
         id: 'protected-row',
         parentId: 'original-assistant',
@@ -605,7 +594,7 @@ describe('afterToolCall control pipeline', () => {
         tool_call_id: 'native-1',
         content: '',
         plugin: call(),
-        metadata: { toolResultControl: review },
+        pluginIntervention: { operationId: 'original-op', status: 'approved' },
       });
       fixture.loadState.mockResolvedValue({ ...fixture.state, operationId: 'original-op' });
       if (mode === 'single') {
@@ -637,7 +626,7 @@ describe('afterToolCall control pipeline', () => {
       expect(archive).toHaveBeenCalled();
       expect(fixture.host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
         'protected-row',
-        expect.objectContaining({ toolResultReview: { ...review, status: 'allowed' } }),
+        expect.objectContaining({ content: 'executed', pluginError: null }),
       );
       expect(fixture.rows[0].content).toBe('executed');
     },
@@ -652,14 +641,7 @@ describe('afterToolCall control pipeline', () => {
       tool_call_id: 'native-1',
       content: '',
       plugin: call(),
-      metadata: {
-        toolResultControl: {
-          operationId: 'original-op',
-          callIndex: 2,
-          stepIndex: 4,
-          status: 'pending',
-        },
-      },
+      pluginIntervention: { operationId: 'original-op', status: 'approved' },
     });
     fixture.loadState.mockResolvedValue({
       ...fixture.state,

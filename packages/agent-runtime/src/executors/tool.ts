@@ -4,7 +4,6 @@ import { UsageCounter } from '../core';
 import type {
   AgentRuntimeHost,
   ToolRunContext,
-  ToolRunExecution,
   ToolRunResult,
   ToolWorkRegistration,
 } from '../transport';
@@ -469,14 +468,14 @@ const createToolMessage = async ({
   host,
   parentMessageId,
   result,
-  toolResultReview,
+  resultBlocked,
   state,
   tool,
 }: {
   host: AgentRuntimeHost;
   parentMessageId: string;
   result: ToolRunResult;
-  toolResultReview?: ToolRunExecution['toolResultReview'];
+  resultBlocked?: boolean;
   state: AgentState;
   tool: ChatToolPayload;
 }) => {
@@ -494,12 +493,11 @@ const createToolMessage = async ({
       groupId: host.operation.groupId ?? state.origin?.groupId ?? undefined,
       metadata: {
         toolExecutionTimeMs: result.executionTime ?? 0,
-        ...(toolResultReview && { toolResultControl: toolResultReview }),
       },
       parentId: parentMessageId,
       plugin: tool as any,
-      pluginError: result.error ?? (toolResultReview ? null : undefined),
-      ...((isBlockedBeforeExecution(result) || toolResultReview?.status === 'blocked') && {
+      pluginError: result.error ?? null,
+      ...((isBlockedBeforeExecution(result) || resultBlocked) && {
         pluginIntervention: { rejectedReason: result.state?.reason, status: 'rejected' },
       }),
       pluginState: result.state,
@@ -517,24 +515,23 @@ const createToolMessage = async ({
 const updateExistingToolMessage = async ({
   host,
   result,
-  toolResultReview,
+  resultBlocked,
   toolMessageId,
 }: {
   host: AgentRuntimeHost;
   result: ToolRunResult;
-  toolResultReview?: ToolRunExecution['toolResultReview'];
+  resultBlocked?: boolean;
   toolMessageId: string;
 }) => {
   try {
     await host.transports.messages.updateToolMessage(toolMessageId, {
       content: result.content,
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
-      pluginError: result.error ?? (toolResultReview ? null : undefined),
+      pluginError: result.error ?? null,
       pluginState: result.state,
-      toolResultReview,
-      ...(toolResultReview?.status === 'blocked' && { replacePluginState: true }),
+      ...(resultBlocked && { replacePluginState: true }),
     });
-    if (isBlockedBeforeExecution(result) || toolResultReview?.status === 'blocked') {
+    if (isBlockedBeforeExecution(result) || resultBlocked) {
       await host.transports.messages.updateToolIntervention(toolMessageId, {
         rejectedReason: result.state?.reason,
         status: 'rejected',
@@ -698,7 +695,7 @@ export const callTool =
             host,
             result: executionResult,
             toolMessageId,
-            toolResultReview: execution.toolResultReview,
+            resultBlocked: execution.resultBlocked,
           });
         }
       } else if (payload.skipCreateToolMessage) {
@@ -707,14 +704,14 @@ export const callTool =
           host,
           result: executionResult,
           toolMessageId,
-          toolResultReview: execution.toolResultReview,
+          resultBlocked: execution.resultBlocked,
         });
       } else {
         const toolMessage = await createToolMessage({
           host,
           parentMessageId: payload.parentMessageId,
           result: executionResult,
-          toolResultReview: execution.toolResultReview,
+          resultBlocked: execution.resultBlocked,
           state,
           tool,
         });
@@ -1026,7 +1023,7 @@ export const callToolsBatch =
               host,
               result: executionResult,
               toolMessageId,
-              toolResultReview: execution.toolResultReview,
+              resultBlocked: execution.resultBlocked,
             });
           }
         } else if (existingMessageId) {
@@ -1038,14 +1035,14 @@ export const callToolsBatch =
             host,
             result: executionResult,
             toolMessageId,
-            toolResultReview: execution.toolResultReview,
+            resultBlocked: execution.resultBlocked,
           });
         } else {
           const toolMessage = await createToolMessage({
             host,
             parentMessageId,
             result: executionResult,
-            toolResultReview: execution.toolResultReview,
+            resultBlocked: execution.resultBlocked,
             state,
             tool,
           });

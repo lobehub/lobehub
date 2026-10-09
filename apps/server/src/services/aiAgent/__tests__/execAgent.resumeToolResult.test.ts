@@ -254,16 +254,19 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
 
     // Content, intervention, and optional form state share one row-locking
     // first-winner boundary.
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({
-        content: 'My favorite color is blue',
-        id: 'tool-msg-1',
-        intervention: {
-          resolutionRequestId: expect.stringMatching(/^legacy_/),
-          status: 'approved',
-        },
-      }),
-    ]);
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: 'My favorite color is blue',
+          id: 'tool-msg-1',
+          intervention: {
+            resolutionRequestId: expect.stringMatching(/^legacy_/),
+            status: 'approved',
+          },
+        }),
+      ],
+      { publishResult: true },
+    );
 
     // Resumes from `tool_result` — NOT `human_approved_tool` (which would
     // re-dispatch the tool and overwrite the answer).
@@ -298,7 +301,6 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       result: blocked,
       blocked: true,
       cancelled: false,
-      review: { operationId: 'op', callIndex: 1, stepIndex: 1, status: 'blocked' },
     });
     mockUpdateToolMessage.mockResolvedValue({ success: true });
     await service.execAgent({
@@ -315,22 +317,27 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       toolMessageId: 'tool-msg-1',
       result: { content: secret, state: { answer: secret }, success: true },
     });
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({
-        content: blocked.content,
-        pluginState: blocked.state,
-        replacePluginState: true,
-      }),
-    ]);
-    expect(mockUpdateToolMessage).toHaveBeenCalledWith(
-      'tool-msg-1',
-      expect.objectContaining({
-        content: blocked.content,
-        pluginError: 'hook_denied',
-        replacePluginState: true,
-      }),
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: blocked.content,
+          pluginState: blocked.state,
+          replacePluginState: true,
+        }),
+      ],
+      { publishResult: true },
     );
-    expect(mockUpdateToolMessage.mock.invocationCallOrder[0]).toBeLessThan(
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          content: blocked.content,
+          pluginError: 'hook_denied',
+          replacePluginState: true,
+        }),
+      ],
+      { publishResult: true },
+    );
+    expect(mockResolveHumanApproval.mock.invocationCallOrder[0]).toBeLessThan(
       mockMessageQuery.mock.invocationCallOrder[0],
     );
     expect(JSON.stringify(mockCreateOperation.mock.calls[0][0].initialContext)).not.toContain(
@@ -348,7 +355,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
         success: false,
       },
     });
-    mockUpdateToolMessage.mockResolvedValue({ success: false });
+    mockResolveHumanApproval.mockRejectedValueOnce(new Error('Failed to publish tool result'));
     await expect(
       service.execAgent({
         ...baseParams,
@@ -358,7 +365,7 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
           toolCallId: 'call_ask',
         },
       }),
-    ).rejects.toThrow('Failed to persist reviewed tool result');
+    ).rejects.toThrow('Failed to publish tool result');
     expect(mockCreateOperation).not.toHaveBeenCalled();
     expect(mockMessageQuery).not.toHaveBeenCalled();
   });
@@ -375,7 +382,6 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
         state: { phase: 'afterToolCall', type: 'blocked' },
         success: false,
       },
-      review: { operationId: 'op', callIndex: 1, stepIndex: 1, status: 'blocked' },
     });
     mockCreateOperation.mockRejectedValueOnce(new Error('startup failed'));
     const params = {
@@ -397,16 +403,16 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       blocked: false,
       cancelled: false,
       result: { content: 'answer', success: true },
-      review: { operationId: 'op', callIndex: 1, stepIndex: 1, status: 'allowed' },
     });
     await service.execAgent(params);
-    expect(mockUpdateToolMessage).toHaveBeenLastCalledWith(
-      'tool-msg-1',
-      expect.objectContaining({
-        content: 'answer',
-        pluginError: null,
-        toolResultReview: expect.objectContaining({ status: 'allowed' }),
-      }),
+    expect(mockResolveHumanApproval).toHaveBeenLastCalledWith(
+      [
+        expect.objectContaining({
+          content: 'answer',
+          pluginError: null,
+        }),
+      ],
+      { publishResult: true },
     );
   });
 
@@ -421,11 +427,14 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({
-        pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
-      }),
-    ]);
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [
+        expect.objectContaining({
+          pluginState: { askUserAnswers: { 'favorite color?': 'blue' } },
+        }),
+      ],
+      { publishResult: true },
+    );
   });
 
   it('does not persist pluginState when omitted', async () => {
@@ -438,9 +447,10 @@ describe('AiAgentService.execAgent - resumeToolResult', () => {
       },
     });
 
-    expect(mockResolveHumanApproval).toHaveBeenCalledWith([
-      expect.objectContaining({ pluginState: undefined }),
-    ]);
+    expect(mockResolveHumanApproval).toHaveBeenCalledWith(
+      [expect.objectContaining({ pluginState: undefined })],
+      { publishResult: true },
+    );
   });
 
   describe('validation guards', () => {

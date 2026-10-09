@@ -368,7 +368,7 @@ export class InterventionController {
       throw new Error('stopPendingApproval: interrupted operation has unsettled batch members');
     }
 
-    if (alreadyClaimedCount === 0) {
+    {
       await this.deps.messageModel.resolveHumanApproval(
         targets.map((target) => ({
           content: STOPPED_TOOL_CONTENT,
@@ -380,6 +380,7 @@ export class InterventionController {
             status: 'aborted',
           },
         })),
+        { publishResult: true },
       );
     }
 

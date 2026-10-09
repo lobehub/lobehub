@@ -89,9 +89,7 @@ describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () 
     const execVirtualSubAgent = vi.fn(async () => {
       expect(create).toHaveBeenCalledWith(
         expect.objectContaining({
-          metadata: {
-            toolResultControl: { operationId: 'op', stepIndex: 4, callIndex: 2, status: 'pending' },
-          },
+          content: '',
         }),
       );
       return { operationId: 'child', success: true, threadId: 'thread' };
