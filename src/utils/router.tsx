@@ -14,6 +14,7 @@ import { useIsDark } from '@/hooks/useIsDark';
 import SPAGlobalProvider from '@/layout/SPAGlobalProvider';
 import AppLayer from '@/spa/AppLayer';
 import { registerRoutePreloadLoader } from '@/spa/router/routePreloadRegistry';
+import { RouteSkeletonPreloader } from '@/spa/router/useRouteSkeleton';
 import { createSPABrowserRouter } from '@/spa/runtime';
 import { isChunkLoadError, notifyChunkError } from '@/utils/chunkError';
 
@@ -43,7 +44,7 @@ interface DynamicRouteOptions {
   preloadId?: string;
 }
 
-const createPreloadableComponent = <P,>(
+export const createPreloadableComponent = <P,>(
   importFn: () => Promise<{ default: ComponentType<P> } | ComponentType<P>>,
 ) => {
   let loadPromise: Promise<{ default: ComponentType<P> }> | undefined;
@@ -173,6 +174,7 @@ const RouterRoot = memo(() => (
   <SPAGlobalProvider>
     <BusinessGlobalProvider>
       <NavigatorRegistrar />
+      <RouteSkeletonPreloader />
       <AppLayer>
         <Outlet />
       </AppLayer>

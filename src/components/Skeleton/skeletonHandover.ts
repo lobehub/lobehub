@@ -5,10 +5,22 @@
 export const HANDOVER_WINDOW = 400;
 
 let lastSkeletonVisibleAt = -Infinity;
+let visibleSkeletons = 0;
 
 export const markSkeletonVisible = (now = performance.now()) => {
   lastSkeletonVisibleAt = now;
 };
 
+// The next fallback renders before the previous one's unmount cleanup runs, so
+// a skeleton that is still mounted has to count as visible on its own.
+export const retainSkeleton = () => {
+  visibleSkeletons += 1;
+  markSkeletonVisible();
+  return () => {
+    visibleSkeletons -= 1;
+    markSkeletonVisible();
+  };
+};
+
 export const isSkeletonHandover = (now = performance.now()) =>
-  now - lastSkeletonVisibleAt < HANDOVER_WINDOW;
+  visibleSkeletons > 0 || now - lastSkeletonVisibleAt < HANDOVER_WINDOW;

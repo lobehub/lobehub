@@ -1,11 +1,11 @@
 import { createElement } from 'react';
 
+import { SettingsBodySkeleton } from '@/components/Skeleton/Settings/Page';
 import SettingsProfileSkeleton from '@/components/Skeleton/Settings/Profile';
-import SettingsSectionSkeleton from '@/components/Skeleton/Settings/Section';
 import dynamic from '@/libs/next/dynamic';
 import { SettingsTabs } from '@/store/global/initialState';
 
-const loading = (_debugId: string) => () => createElement(SettingsSectionSkeleton);
+const loading = (_debugId: string) => () => createElement(SettingsBodySkeleton);
 
 export const componentMap = {
   [SettingsTabs.Advanced]: dynamic(() => import('../advanced'), {

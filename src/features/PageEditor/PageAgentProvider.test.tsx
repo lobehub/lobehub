@@ -30,7 +30,13 @@ let agentState: AgentState;
 let chatState: ChatState;
 
 vi.mock('@/components/Skeleton/Conversation/Segment', () => ({
-  default: () => <div data-testid="loading" />,
+  default: () => <div data-testid="conversation-skeleton" />,
+}));
+
+vi.mock('@/components/Skeleton/Surface', () => ({
+  default: ({ variant }: { variant?: string }) => (
+    <div data-testid="surface-skeleton" data-variant={variant} />
+  ),
 }));
 
 vi.mock('@/features/Conversation', () => ({
@@ -100,6 +106,20 @@ beforeEach(() => {
 });
 
 describe('PageAgentProvider', () => {
+  it('keeps the editor skeleton while the page agent is initializing', () => {
+    agentState.activeAgentId = undefined;
+    agentState.pageAgentId = '';
+
+    const { queryByTestId, getByTestId } = render(
+      <PageAgentProvider pageId="doc-1">
+        <div>child</div>
+      </PageAgentProvider>,
+    );
+
+    expect(getByTestId('surface-skeleton').dataset.variant).toBe('editor');
+    expect(queryByTestId('conversation-skeleton')).toBeNull();
+  });
+
   it('resets a stale page topic on initial scoped agent sync only', async () => {
     const { rerender } = render(
       <PageAgentProvider>

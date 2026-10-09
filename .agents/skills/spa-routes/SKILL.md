@@ -89,6 +89,9 @@ Each feature should:
    - Where to put it: on the route's `routeMeta` (feature `routeMeta.ts` or inline in `desktopRouter.shared.tsx`). A whole subtree sharing one shape can register once on the parent/layout route's `handle` — children with their own `Skeleton` still override.
    - When changing a page's layout, update its registered skeleton in the same PR — a stale skeleton that no longer matches the page is a regression.
    - Skeleton-only parent handles are safe for titles: title/icon resolution also walks deepest-first, and leaf metas keep winning.
+   - The same deepest skeleton renders at every pending boundary of the chain (layout chunk, page chunk, then the page's own data wait). Make the page's in-component loading state the registered skeleton, or a body that continues it; a different shape there reads as a second, unrelated skeleton.
+   - A skeleton kept out of the entry chunk must not be a bare `lazy()`: build it with `createPreloadableComponent` and expose `preload` on the component (see `ResourceCategorySkeleton`). `RouteSkeletonPreloader` loads it at boot; otherwise the first fallback renders blank until its chunk lands.
+   - A custom fallback (`fallback:` option, in-page `Suspense`, or an early `return <XSkeleton />`) keeps the handover continuous only through `delayed()` / `DelayedFallback` or `RouteLoading`, which register the skeleton as visible (`retainSkeleton`). Rendering a skeleton any other way lets the next boundary wait out its 200ms delay on a blank pane.
 
 ---
 

@@ -3,7 +3,7 @@ import { isChatGroupSessionId } from '@lobechat/types';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useRef } from 'react';
 
-import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';
+import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import type { ConversationContext } from '@/features/Conversation';
 import { ConversationProvider } from '@/features/Conversation';
 import { useOperationState } from '@/hooks/useOperationState';
@@ -102,7 +102,9 @@ export const PageAgentProvider = memo<PageAgentProviderProps>(
     // Get operation state for reactive updates
     const operationState = useOperationState(context);
 
-    if (!pageAgentId) return <ConversationSegmentSkeleton />;
+    // This provider wraps the whole editor, so its wait has to keep the editor's
+    // shape; a conversation skeleton here replaces the page with a chat layout.
+    if (!pageAgentId) return <SurfaceSkeleton variant={'editor'} />;
 
     return (
       <ConversationProvider

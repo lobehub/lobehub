@@ -11,6 +11,7 @@ import {
 import { lazy } from 'react';
 
 import AgentShareSkeleton from '@/components/Skeleton/AgentShare';
+import AgentConversationLayoutSkeleton from '@/components/Skeleton/Conversation/AgentLayout';
 import ConversationLayoutSkeleton from '@/components/Skeleton/Conversation/Layout';
 import ProfileSkeleton from '@/components/Skeleton/Profile';
 import { createSurfaceSkeleton } from '@/components/Skeleton/Surface';
@@ -59,6 +60,12 @@ export const agentRouteMeta = routeMeta({
   icon: MessageSquare,
   Skeleton: ConversationLayoutSkeleton,
   titleKey: 'navigation.chat',
+});
+
+// Desktop mounts the working sidebar beside the conversation; mobile does not.
+export const agentChatDesktopRouteMeta = routeMeta({
+  ...agentRouteMeta,
+  Skeleton: AgentConversationLayoutSkeleton,
 });
 
 export const topicsRouteMeta = routeMeta({

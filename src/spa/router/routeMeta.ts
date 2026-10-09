@@ -27,9 +27,13 @@ export interface RouteSkeletonProps {
   chrome?: RouteSkeletonChrome;
 }
 
+export type RouteSkeleton = ComponentType<RouteSkeletonProps> & {
+  preload?: () => Promise<void>;
+};
+
 export interface RouteMeta extends StaticRouteMeta {
   DynamicMeta?: ComponentType<DynamicRouteMetaProps>;
-  Skeleton?: ComponentType<RouteSkeletonProps>;
+  Skeleton?: RouteSkeleton;
 }
 
 export interface RouteHandle {
