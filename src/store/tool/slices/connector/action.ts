@@ -195,13 +195,17 @@ export class ConnectorActionImpl {
    * projection can have painted (and set `isConnectorsInit`) during that same
    * personal window, and every consumer gates its fetch on that flag — so the
    * workspace would keep showing the personal inventory and never load its own.
-   * `#dropStaleScope` clears the views the moment the scope moves, and is also
-   * run at the top of each fetch so an imperative refresh under a new scope
-   * can never replace into a view that still belongs to the old one.
+   * `#dropStaleScope` clears the views the moment the scope moves (see the
+   * `subscribeCacheScope` wiring in the constructor).
+   *
+   * No reset is needed here for the fetch itself: the engine folds the scope
+   * reset into the same commit as the response, so a stale view can never be
+   * replaced into — and doing it here would commit store state synchronously
+   * before the caller's in-flight guard is up, which multiplies the requests a
+   * single scope switch launches.
    */
   fetchConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
-    this.#dropStaleScope(scope);
     const pending = this.#connectors.fetcher!(LIST_PARAMS);
     if (!this.#get().isConnectorsInit) await this.#connectors.hydrate(LIST_PARAMS, scope);
     const data = await pending;
@@ -230,7 +234,6 @@ export class ConnectorActionImpl {
    */
   fetchAgentBoundConnectors = async (): Promise<void> => {
     const scope = cacheScope.get();
-    this.#dropStaleScope(scope);
     const pending = this.#agentBoundConnectors.fetcher!(LIST_PARAMS);
     if (!this.#get().isAgentBoundInit) await this.#agentBoundConnectors.hydrate(LIST_PARAMS, scope);
     const data = await pending;
@@ -244,7 +247,6 @@ export class ConnectorActionImpl {
    */
   fetchAgentConnectors = async (agentId: string): Promise<void> => {
     const scope = cacheScope.get();
-    this.#dropStaleScope(scope);
     const params = { agentId };
     const pending = this.#agentConnectors.fetcher!(params);
     if (!this.#get().agentConnectorsInit[agentId])

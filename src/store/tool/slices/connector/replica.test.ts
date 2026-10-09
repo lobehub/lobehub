@@ -171,6 +171,24 @@ describe('connector slice replica', () => {
     expect(useToolStore.getState().agentConnectorsInit).toEqual({});
   });
 
+  // The reset the broadcast performs is also folded into the engine's own
+  // commit, so a fetch that runs under a new scope without a broadcast (nothing
+  // mounted `useCacheScope`) still cannot replace into the old scope's view.
+  it('replaces a stale scope’s rows instead of merging into them', async () => {
+    listQuery.mockResolvedValue([connector('personal-row')]);
+    await useToolStore.getState().fetchConnectors();
+    expect(useToolStore.getState().connectors.map((c) => c.id)).toEqual(['personal-row']);
+
+    const workspaceScope = `${scope.split(':')[0]}:ws-1`;
+    useScope(workspaceScope);
+    listQuery.mockResolvedValue([connector('workspace-row')]);
+
+    await useToolStore.getState().fetchConnectors();
+
+    expect(useToolStore.getState().connectors.map((c) => c.id)).toEqual(['workspace-row']);
+    expect(useToolStore.getState().isConnectorsInit).toBe(true);
+  });
+
   // The reported boot: a direct workspace URL hydrates the personal projection
   // before the URL→store sync resolves the slug. The personal response that is
   // still in flight gets dropped — but if the hydrated view (and the init flag
