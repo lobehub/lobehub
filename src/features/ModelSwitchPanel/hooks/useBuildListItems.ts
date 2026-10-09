@@ -1,3 +1,4 @@
+import { modelMappings } from '@lobehub/icons';
 import dayjs from 'dayjs';
 import { useMemo } from 'react';
 
@@ -20,24 +21,60 @@ const isNewModel = (releasedAt?: string): boolean => !!releasedAt && isNewReleas
 export const MAX_PINNED_NEW_MODELS = 4;
 
 /**
- * Pins at most {@link MAX_PINNED_NEW_MODELS} new models to the top, newest-first, and keeps the
- * remaining items in catalog order. Ranking the pinned models by `displayOrder` instead would
- * surface whichever vendor happens to sit earliest in the catalog, so a model released days
- * earlier could outrank today's launch under the same "new" badge.
+ * Resolves the vendor series a model belongs to with the same keyword table `ModelIcon` uses, so
+ * "same series" always means "same row icon" to the user. Models without a matching icon form a
+ * series of their own.
+ */
+const getModelSeries = (modelId: string): unknown => {
+  const id = modelId.toLowerCase();
+  const mapping = modelMappings.find((item) =>
+    item.keywords.some((keyword) => new RegExp(keyword, 'i').test(id)),
+  );
+
+  return mapping?.Icon ?? modelId;
+};
+
+/**
+ * Pins at most {@link MAX_PINNED_NEW_MODELS} new models to the top and keeps the remaining items
+ * in catalog order.
  *
- * Items flagged by `isLast` sink below everything else and are never pinned. Same-day releases
- * keep `displayOrder` via stable sort.
+ * The pinned models are chosen newest-first, so a busy week keeps today's launch over one from
+ * days earlier. They are then grouped by vendor series: series are ordered by their newest model,
+ * and models within a series keep catalog order to match the list below. Ordering purely by
+ * release date would scatter one vendor's launches across the pinned zone (e.g. Claude Haiku 5.5
+ * first and Claude Sonnet 5.5 fourth); ordering purely by `displayOrder` would let whichever
+ * vendor sits earliest in the catalog outrank a newer launch.
+ *
+ * Items flagged by `isLast` sink below everything else and are never pinned.
  */
 const sortWithPinnedNewModels = <T>(
   items: T[],
-  getReleasedAt: (item: T) => string | undefined,
+  getModel: (item: T) => { id: string; releasedAt?: string },
   isLast?: (item: T) => boolean,
 ): T[] => {
+  const releasedAtOf = (item: T) => dayjs(getModel(item).releasedAt).valueOf();
+
+  const pinnedSet = new Set(
+    items
+      .filter((item) => !isLast?.(item) && isNewModel(getModel(item).releasedAt))
+      .toSorted((a, b) => releasedAtOf(b) - releasedAtOf(a))
+      .slice(0, MAX_PINNED_NEW_MODELS),
+  );
+
+  const seriesNewest = new Map<unknown, number>();
+  for (const item of pinnedSet) {
+    const series = getModelSeries(getModel(item).id);
+    seriesNewest.set(series, Math.max(seriesNewest.get(series) ?? 0, releasedAtOf(item)));
+  }
+  // Same-newness series fall back to catalog order via stable sort.
   const pinned = items
-    .filter((item) => !isLast?.(item) && isNewModel(getReleasedAt(item)))
-    .toSorted((a, b) => dayjs(getReleasedAt(b)).valueOf() - dayjs(getReleasedAt(a)).valueOf())
-    .slice(0, MAX_PINNED_NEW_MODELS);
-  const pinnedSet = new Set(pinned);
+    .filter((item) => pinnedSet.has(item))
+    .toSorted(
+      (a, b) =>
+        seriesNewest.get(getModelSeries(getModel(b).id))! -
+        seriesNewest.get(getModelSeries(getModel(a).id))!,
+    );
+
   const rest = items.filter((item) => !pinnedSet.has(item));
 
   return [
@@ -114,7 +151,7 @@ export const buildListItems = (
 
     const sortedModels = sortWithPinnedNewModels(
       modelArray,
-      (item) => item.model.releasedAt,
+      (item) => item.model,
       sortModelLast &&
         ((item) => item.providers.every((provider) => sortModelLast(item.model.id, provider.id))),
     );
@@ -136,7 +173,7 @@ export const buildListItems = (
       );
       const sortedModels = sortWithPinnedNewModels(
         filteredModels,
-        (item) => item.releasedAt,
+        (item) => item,
         sortModelLast && ((item) => sortModelLast(item.id, providerItem.id)),
       );
 

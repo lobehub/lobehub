@@ -167,4 +167,32 @@ describe('buildListItems', () => {
       'pro-d',
     ]);
   });
+  it('should group pinned new models by vendor series, keeping catalog order inside a series', () => {
+    const items = buildListItems(
+      [
+        provider('lobehub', [
+          model('deepseek-v4.1-flash', 'DeepSeek V4.1 Flash', daysAgo(200)),
+          model('claude-sonnet-5.5', 'Claude Sonnet 5.5', daysAgo(4)),
+          model('claude-haiku-5.5', 'Claude Haiku 5.5', daysAgo(1)),
+          model('gpt-6.1-sol', 'GPT-6.1 Sol', daysAgo(2)),
+          model('grok-4.7', 'Grok 4.7', daysAgo(3)),
+        ]),
+      ],
+      'byModel',
+    );
+
+    expect(
+      items.flatMap((item) =>
+        item.type === 'model-item-single' || item.type === 'model-item-multiple'
+          ? [item.data.model.id]
+          : [],
+      ),
+    ).toEqual([
+      'claude-sonnet-5.5',
+      'claude-haiku-5.5',
+      'gpt-6.1-sol',
+      'grok-4.7',
+      'deepseek-v4.1-flash',
+    ]);
+  });
 });
