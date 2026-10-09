@@ -173,6 +173,54 @@ describe('createReplicaSlice', () => {
       );
     });
 
+    it('discards a head response from a query the entry has moved past', () => {
+      // A driver that settles every request through its own callback lets two
+      // queries of the same key resolve out of order. One entry backs one view,
+      // so the query the entry no longer asks for must not repaint it.
+      const requests: {
+        onSuccess: (data: string[]) => void;
+        params: { q?: string };
+      }[] = [];
+      const useQuery = vi.fn((key: any, _fetcher: unknown, options: any) => {
+        if (key !== null) requests.push({ onSuccess: options.onSuccess, params: key.at(-1) });
+        return { isValidating: false, mutate: vi.fn() };
+      });
+      const resource = defineReplica<{ q?: string }, string[]>({
+        fetcher: async () => ['server'],
+        key: () => 'all',
+        name: 'orderedHead',
+        query: ({ q }) => ({ q }),
+        scope,
+        version: 1,
+      });
+      const store = createStore<TestState>()(() => ({
+        lists: {},
+        listsReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<TestState, { q?: string }, string[]>(resource, {
+        driver: { revalidate: vi.fn(), useQuery },
+        get: store.getState,
+        set: (partial) => store.setState(partial),
+        stateKey: 'listsReplica',
+        view: recordLens('lists'),
+      });
+
+      const { rerender } = renderHook((props: { q?: string }) => slice.useSync(props), {
+        initialProps: {} as { q?: string },
+      });
+      rerender({ q: 'b' });
+
+      const base = requests.find((request) => request.params.q === undefined)!;
+      const search = requests.find((request) => request.params.q === 'b')!;
+
+      act(() => search.onSuccess(['b-1']));
+      expect(store.getState().lists.all).toEqual(['b-1']);
+
+      // The superseded query settles late: it must not overwrite the search.
+      act(() => base.onSuccess(['a-1']));
+      expect(store.getState().lists.all).toEqual(['b-1']);
+    });
+
     it('does not let a slow hydration overwrite a faster server response', async () => {
       const storage = createMemoryStorage();
       storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });

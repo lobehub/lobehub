@@ -12,6 +12,10 @@ import SkillDetail from './index';
 
 const mocks = vi.hoisted(() => {
   const toolState = {
+    agentSkillListMap: {} as Record<
+      string,
+      Array<{ id: string; identifier: string; userId?: string }>
+    >,
     builtinSkills: [],
     checkLobehubSkillStatus: vi.fn(),
     composioServers: [] as Array<{ identifier: string; status: string }>,
@@ -139,6 +143,9 @@ vi.mock('@/store/tool', () => ({
 }));
 
 vi.mock('@/store/tool/selectors', () => ({
+  agentSkillsSelectors: {
+    getAgentSkills: (state: typeof mocks.toolState) => state.agentSkillListMap.all || [],
+  },
   builtinToolSelectors: {
     isBuiltinToolInstalled:
       (identifier: string) =>

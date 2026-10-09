@@ -84,6 +84,19 @@ class DeviceService {
     return lambdaClient.device.installAppUpdate.mutate(input);
   }
 
+  /** Read CLI maintenance state without checking the release registry. */
+  getCliUpdateState(input: Parameters<DeviceClient['getCliUpdateState']['query']>[0]) {
+    return lambdaClient.device.getCliUpdateState.query(input);
+  }
+
+  checkCliUpdate(input: Parameters<DeviceClient['checkCliUpdate']['mutate']>[0]) {
+    return lambdaClient.device.checkCliUpdate.mutate(input);
+  }
+
+  restartCli(input: Parameters<DeviceClient['restartCli']['mutate']>[0]) {
+    return lambdaClient.device.restartCli.mutate(input);
+  }
+
   /** The device's recent CPU / memory / load history, bucketed for charting. */
   getMetricSeries(deviceId: string) {
     return lambdaClient.deviceMetric.getSeries.query({ deviceId });

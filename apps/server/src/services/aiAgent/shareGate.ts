@@ -368,7 +368,6 @@ const DATA_TOOL_ACCESS_RULES: Record<string, DataToolAccessRule> = {
     // visitor's approval flow, so `humanIntervention: 'required'` no longer
     // strips the first two — this list is what keeps them closed until
     // opening skill script execution to visitors is decided on its own
-    // (LOBE-14296).
     writeApiNames: SkillsManifest.api
       .map((api) => api.name)
       .filter((apiName) => !AGENT_SHARE_SKILL_API_NAMES.has(apiName)),

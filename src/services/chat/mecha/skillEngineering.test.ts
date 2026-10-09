@@ -27,12 +27,23 @@ vi.mock('@/helpers/toolAvailability', () => ({
 const mockedGetToolStoreState = vi.mocked(getToolStoreState);
 const mockedGetById = vi.mocked(agentSkillService.getById);
 
+/**
+ * The skills list and the loaded detail are replica views: the list lives in
+ * `agentSkillListMap[AGENT_SKILL_LIST_KEY]` and each detail entry wraps the
+ * skill (`{ resourceTree, skillDetail }`).
+ */
 const setToolState = (state: any) => {
+  const { agentSkillDetailMap = {}, agentSkills = [], ...rest } = state;
   mockedGetToolStoreState.mockReturnValue({
-    agentSkillDetailMap: {},
-    agentSkills: [],
+    agentSkillDetailMap: Object.fromEntries(
+      Object.entries(agentSkillDetailMap).map(([id, skillDetail]) => [
+        id,
+        { resourceTree: [], skillDetail },
+      ]),
+    ),
+    agentSkillListMap: { all: agentSkills },
     builtinSkills: [],
-    ...state,
+    ...rest,
   } as any);
 };
 

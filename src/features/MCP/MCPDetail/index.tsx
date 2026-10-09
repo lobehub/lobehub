@@ -29,19 +29,17 @@ const Detail = memo<DetailProps>(({ identifier: defaultIdentifier, defaultTab, n
   const { t } = useTranslation('plugin');
 
   const theme = useTheme(); // Keep for colorBgContainerSecondary (not in cssVar)
-  const [activeMCPIdentifier, isMcpListInit] = useToolStore((s) => [
-    s.activeMCPIdentifier,
-    s.isMcpListInit,
-  ]);
+  const list = useToolStore((s) => s.mcpPluginList);
 
-  const identifier = defaultIdentifier ?? activeMCPIdentifier;
+  // Without an explicit identifier the detail defaults to the first marketplace
+  // row, once the list has painted (from storage or the server).
+  const identifier = defaultIdentifier ?? list?.items?.[0]?.identifier;
 
   const useMcpDetail = useDiscoverStore((s) => s.useFetchMcpDetail);
   const { data, isLoading } = useMcpDetail({ identifier });
 
-  // If an explicit identifier is passed in, skip the isMcpListInit check
-  const shouldWaitForInit = !defaultIdentifier && !isMcpListInit;
-  if (shouldWaitForInit || isLoading) return <Loading />;
+  // An explicit identifier never waits on the list; otherwise wait for it to paint.
+  if ((!defaultIdentifier && !list) || isLoading) return <Loading />;
 
   if (!identifier)
     return (
