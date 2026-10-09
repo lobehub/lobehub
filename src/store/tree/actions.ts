@@ -1,7 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
-import { mutate } from 'swr';
 
-import { resourceKeys } from '@/libs/swr/keys';
+import { hierarchySearchResource } from '@/features/ResourceManager/store/projection';
+import { revalidateReplica } from '@/libs/replica';
 import { fileService } from '@/services/file';
 import { resourceService } from '@/services/resource';
 import type { StoreSetter } from '@/store/types';
@@ -13,17 +13,9 @@ import type { TreeDataState, TreeItem, TreeState, TreeStoreHandle } from './type
  * The library sidebar swaps the tree for a flat search list while a query is
  * typed; its rows reuse the tree's rename/move/delete actions. Those actions
  * only know the affected folder, so every tree revalidation also refreshes the
- * hierarchy-scoped search caches or a renamed/deleted hit would linger there.
+ * hierarchy search replica or a renamed/deleted hit would linger there.
  */
-export const revalidateHierarchySearch = () =>
-  mutate(
-    (key) =>
-      Array.isArray(key) &&
-      key[0] === resourceKeys.search.root &&
-      (key[1] as { scope?: string } | undefined)?.scope === 'hierarchy',
-    async (currentData) => currentData,
-    { revalidate: true },
-  );
+export const revalidateHierarchySearch = () => revalidateReplica(hierarchySearchResource);
 
 const createdTime = (value?: Date | string): number => {
   if (!value) return 0;

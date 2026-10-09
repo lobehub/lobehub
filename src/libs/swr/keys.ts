@@ -1311,11 +1311,6 @@ export const resourceKeys = {
       visibility ?? null,
     ],
   ),
-  search: def('resource:search', (params: unknown, workspaceId: string | null) => [
-    'resource:search',
-    params,
-    workspaceId,
-  ]),
 };
 export const providerKeys = {
   clientConfig: def('provider:clientConfig', (id: string) => ['provider:clientConfig', id]),

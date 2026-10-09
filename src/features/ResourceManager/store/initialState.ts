@@ -1,5 +1,8 @@
 import { type ResourceManagerMode } from '@/features/ResourceManager';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import { FilesTabs, type ResourceSourceFilter, SortType } from '@/types/files';
+
+import { type ExplorerSearchValue, type HierarchySearchValue } from './projection';
 
 export type ViewMode = 'list' | 'masonry';
 export type SelectAllState = 'all' | 'loaded' | 'none';
@@ -26,7 +29,26 @@ export type ResourceListVisibilityFilter = 'private' | 'workspace';
  */
 export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = 'workspace';
 
-export interface State {
+/**
+ * The ResourceManager's two search surfaces as `@lobechat/replica` views.
+ *
+ * Both were bare `useClientDataSWR` entries before: the rows only lived in the
+ * SWR cache, so re-opening a search (or coming back to the surface) had to wait
+ * for a network round-trip before anything was on screen. The replica paints the
+ * persisted head page first and lets the network confirm it.
+ */
+export interface ResourceSearchState {
+  /** Replica view of the explorer's search overlay (`SearchResultsOverlay`). */
+  explorerSearchEntry?: ExplorerSearchValue;
+  /** Replica bookkeeping of `explorerSearchEntry`. */
+  explorerSearchReplica: ReplicaState<ExplorerSearchValue>;
+  /** Replica view of the library sidebar's flat search list. */
+  hierarchySearchEntry?: HierarchySearchValue;
+  /** Replica bookkeeping of `hierarchySearchEntry`. */
+  hierarchySearchReplica: ReplicaState<HierarchySearchValue>;
+}
+
+export interface State extends ResourceSearchState {
   /**
    * Current file category filter
    */
@@ -124,6 +146,10 @@ export const initialState: State = {
   currentViewItemId: undefined,
   detailPanelId: undefined,
   detailPanelIsPage: false,
+  explorerSearchEntry: undefined,
+  explorerSearchReplica: createReplicaState(),
+  hierarchySearchEntry: undefined,
+  hierarchySearchReplica: createReplicaState(),
   libraryId: undefined,
   librarySearchQuery: '',
   // Personal mode keeps the historical neutral value; workspace mode hydrates

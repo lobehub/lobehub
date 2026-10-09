@@ -4,6 +4,7 @@ import { Center, Flexbox } from '@lobehub/ui';
 import { Checkbox, Spin } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
+import { isEqual } from 'es-toolkit';
 import { SearchIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,19 +14,20 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import AsyncError from '@/components/AsyncError';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
+  DEFAULT_SEARCH_PAGE_SIZE,
+  type ExplorerSearchParams,
+} from '@/features/ResourceManager/store/projection';
+import {
   getResourceQueryVisibility,
   getResourceSourceFilter,
 } from '@/features/ResourceManager/store/selectors';
-import { useClientDataSWR } from '@/libs/swr';
-import { resourceKeys } from '@/libs/swr/keys';
-import { resourceService } from '@/services/resource';
 import { useGlobalStore } from '@/store/global';
 import {
   DEFAULT_RESOURCE_MANAGER_COLUMN_WIDTHS,
   INITIAL_STATUS,
 } from '@/store/global/initialState';
 import type { AsyncTaskStatus } from '@/types/asyncTask';
-import { type FileListItem, type ResourceSourceFilter } from '@/types/files';
+import { type FileListItem } from '@/types/files';
 
 import { useExplorerSelectionEligibility } from './hooks/useExplorerSelection';
 import FileListItemComponent from './ListView/ListItem';
@@ -61,50 +63,44 @@ const SearchResultsOverlay = memo(() => {
   const showUploader = !!activeWorkspaceId && (!!libraryId || listVisibility !== 'private');
   const visibility = getResourceQueryVisibility(libraryId, listVisibility);
 
-  const {
-    data: rawData,
-    isLoading,
-    error,
-    mutate,
-  } = useClientDataSWR(
-    isActive
-      ? resourceKeys.search(
-          {
+  // Search results are a `@lobechat/replica` entry owned by the ResourceManager
+  // store: the head page is persisted, so re-opening a search paints the rows it
+  // had before the request lands. The keyword is part of the query identity, so
+  // the painted rows are only used while they still answer the request on screen.
+  const searchParams = useMemo<ExplorerSearchParams | null>(
+    () =>
+      isActive
+        ? {
             category: libraryId ? undefined : category,
             includeContentPreview: viewMode === 'masonry',
             libraryId,
-            q: searchQuery,
-            // Search narrows the list the user is looking at, so it has to honour
-            // the source they picked. Omitting it left the chip visibly selected
-            // while results came back from every non-hidden source — and made
-            // `Acceptance` search unusable, since that source is hidden unless
-            // explicitly asked for.
+            pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+            q: searchQuery!,
             sourceFilter,
             visibility,
-          },
-          activeWorkspaceId ?? null,
-        )
-      : null,
-    async ([, params]: [
-      string,
-      {
-        category?: string;
-        includeContentPreview?: boolean;
-        libraryId?: string;
-        q: string;
-        sourceFilter?: ResourceSourceFilter;
-        visibility?: 'private' | 'public';
-      },
-    ]) => {
-      const response = await resourceService.queryResources({
-        ...params,
-        limit: 50,
-        offset: 0,
-        showFilesInKnowledgeBase: false,
-      } as any);
-      return response.items;
-    },
+          }
+        : null,
+    [isActive, category, libraryId, searchQuery, sourceFilter, viewMode, visibility],
   );
+
+  const { error, revalidate } = useResourceManagerStore((s) => s.useFetchExplorerSearch)(
+    searchParams,
+  );
+  const explorerSearchEntry = useResourceManagerStore((s) => s.explorerSearchEntry);
+
+  const current = useMemo(
+    () =>
+      searchParams &&
+      explorerSearchEntry?.searchParams &&
+      isEqual(explorerSearchEntry.searchParams, searchParams)
+        ? explorerSearchEntry
+        : undefined,
+    [explorerSearchEntry, searchParams],
+  );
+
+  const rawData = current?.items;
+  const isLoading = !current && !error;
+  const mutate = revalidate;
 
   const data: FileListItem[] | undefined = useMemo(
     () =>

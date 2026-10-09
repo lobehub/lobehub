@@ -1,14 +1,35 @@
 import type { StateCreator } from 'zustand/vanilla';
 
 import type { ResourceManagerMode } from '@/features/ResourceManager';
+import {
+  createReplicaSlice,
+  type ReplicaLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
 import { flattenActions } from '@/store/utils/flattenActions';
 import type { FilesTabs, ResourceSourceFilter, SortType } from '@/types/files';
+import type { ResourceItem } from '@/types/resource';
+import { setNamespace } from '@/utils/storeDebug';
 
 import type { ResourceListVisibilityFilter, SelectAllState, State, ViewMode } from './initialState';
 import { DEFAULT_WORKSPACE_LIST_VISIBILITY, initialState } from './initialState';
 import { readPersistedResourceMode, writePersistedResourceMode } from './modePersistence';
+import {
+  DEFAULT_SEARCH_PAGE_SIZE,
+  EXPLORER_SEARCH_KEY,
+  type ExplorerSearchParams,
+  explorerSearchResource,
+  type ExplorerSearchValue,
+  HIERARCHY_SEARCH_KEY,
+  type HierarchySearchParams,
+  hierarchySearchResource,
+  type HierarchySearchValue,
+} from './projection';
+
+const n = setNamespace('resourceManager');
 
 export type MultiSelectActionType =
   | 'addToKnowledgeBase'
@@ -28,14 +49,96 @@ export type Store = Action & State;
 
 type Setter = StoreSetter<Store>;
 
+/**
+ * One page of a search list. `cursor` is the page index (0 = head), so the
+ * replica owns the offset and a query change repaints from its own head page.
+ */
+const fetchExplorerSearchPage = async (
+  params: ExplorerSearchParams,
+  cursor?: number,
+): Promise<ReplicaPageResult<ResourceItem, number>> => {
+  const { resourceService } = await import('@/services/resource');
+  const pageSize = params.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
+
+  const response = await resourceService.queryResources({
+    category: params.category,
+    includeContentPreview: params.includeContentPreview,
+    libraryId: params.libraryId,
+    limit: pageSize,
+    offset: (cursor ?? 0) * pageSize,
+    q: params.q,
+    showFilesInKnowledgeBase: false,
+    sourceFilter: params.sourceFilter,
+    visibility: params.visibility,
+  });
+
+  return { items: response.items, total: response.total };
+};
+
+const fetchHierarchySearchPage = async (
+  params: HierarchySearchParams,
+  cursor?: number,
+): Promise<ReplicaPageResult<ResourceItem, number>> => {
+  const { resourceService } = await import('@/services/resource');
+  const pageSize = params.pageSize ?? DEFAULT_SEARCH_PAGE_SIZE;
+
+  const response = await resourceService.queryResources({
+    libraryId: params.libraryId,
+    limit: pageSize,
+    offset: (cursor ?? 0) * pageSize,
+    q: params.q,
+    showFilesInKnowledgeBase: false,
+  });
+
+  return { items: response.items, total: response.total };
+};
+
+/** Where the explorer search view lives in the store. */
+const explorerSearchLens: ReplicaLens<Store, ExplorerSearchValue> = {
+  clear: () => ({ explorerSearchEntry: undefined }),
+  get: (state) => state.explorerSearchEntry,
+  set: (_state, _key, data) => ({ explorerSearchEntry: data }),
+};
+
+/** Where the library sidebar search view lives in the store. */
+const hierarchySearchLens: ReplicaLens<Store, HierarchySearchValue> = {
+  clear: () => ({ hierarchySearchEntry: undefined }),
+  get: (state) => state.hierarchySearchEntry,
+  set: (_state, _key, data) => ({ hierarchySearchEntry: data }),
+};
+
 export class ResourceManagerStoreActionImpl {
   readonly #get: () => Store;
   readonly #set: Setter;
+  readonly #explorerSearch;
+  readonly #hierarchySearch;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+
+    this.#explorerSearch = createReplicaSlice(explorerSearchResource, {
+      actionPrefix: n('explorerSearch'),
+      fetcher: fetchExplorerSearchPage,
+      get,
+      set,
+      stateKey: 'explorerSearchReplica',
+      view: explorerSearchLens,
+      // The keyword is part of the query identity, so the mounted surface can
+      // tell whether the painted rows still answer the request on screen.
+      viewFields: (params) => ({ searchParams: params }),
+    });
+
+    this.#hierarchySearch = createReplicaSlice(hierarchySearchResource, {
+      actionPrefix: n('hierarchySearch'),
+      fetcher: fetchHierarchySearchPage,
+      get,
+      set,
+      stateKey: 'hierarchySearchReplica',
+      view: hierarchySearchLens,
+      viewFields: (params) => ({ searchParams: params }),
+    });
   }
 
   clearSelectAllState = (): void => {
@@ -309,6 +412,28 @@ export class ResourceManagerStoreActionImpl {
   setViewMode = (viewMode: ViewMode): void => {
     this.#set({ viewMode });
   };
+
+  /**
+   * Fetch orchestration for the explorer's search overlay. It only schedules the
+   * sync; read the rows from `explorerSearchEntry`.
+   */
+  useFetchExplorerSearch = (params: ExplorerSearchParams | null): ReplicaSyncResult =>
+    this.#explorerSearch.useSync(params);
+
+  /**
+   * Fetch orchestration for the library sidebar's flat search list. It only
+   * schedules the sync; read the rows from `hierarchySearchEntry`.
+   */
+  useFetchHierarchySearch = (params: HierarchySearchParams | null): ReplicaSyncResult =>
+    this.#hierarchySearch.useSync(params);
+
+  /** Append the next page of the explorer search (the head page's query). */
+  loadMoreExplorerSearch = async (): Promise<void> =>
+    this.#explorerSearch.loadMore(EXPLORER_SEARCH_KEY);
+
+  /** Append the next page of the sidebar search (the head page's query). */
+  loadMoreHierarchySearch = async (): Promise<void> =>
+    this.#hierarchySearch.loadMore(HIERARCHY_SEARCH_KEY);
 }
 
 export type Action = Pick<ResourceManagerStoreActionImpl, keyof ResourceManagerStoreActionImpl>;

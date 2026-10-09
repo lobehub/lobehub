@@ -1,6 +1,9 @@
 import { CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { hierarchySearchResource } from '@/features/ResourceManager/store/projection';
+import type * as ReplicaModule from '@/libs/replica';
+
 import { sortTreeItems, toTreeItem, toTreeItemFromResource, TreeActionImpl } from './actions';
 import type { TreeState } from './types';
 
@@ -10,8 +13,8 @@ const {
   mockGetKnowledgeItems,
   mockRefreshFileList,
   mockResourceMove,
+  mockRevalidateReplica,
   mockStoreMove,
-  mockSwrMutate,
   mockUpdateResource,
 } = vi.hoisted(() => ({
   mockApplyMovedResourceToCaches: vi.fn(),
@@ -19,12 +22,15 @@ const {
   mockGetKnowledgeItems: vi.fn(),
   mockRefreshFileList: vi.fn(),
   mockResourceMove: vi.fn(),
+  mockRevalidateReplica: vi.fn(),
   mockStoreMove: vi.fn(),
-  mockSwrMutate: vi.fn(),
   mockUpdateResource: vi.fn(),
 }));
 
-vi.mock('swr', () => ({ mutate: mockSwrMutate }));
+vi.mock('@/libs/replica', async () => ({
+  ...(await vi.importActual<typeof ReplicaModule>('@/libs/replica')),
+  revalidateReplica: mockRevalidateReplica,
+}));
 
 vi.mock('@/services/file', () => ({
   fileService: {
@@ -258,25 +264,20 @@ describe('TreeActionImpl folder key resolution', () => {
     expect(state.children['docs_unloaded']).toEqual([doc]);
   });
 
-  it('revalidate also refreshes the hierarchy-scoped search caches', async () => {
+  it('revalidate also refreshes the hierarchy search replica', async () => {
     const state = createState();
     const actions = new TreeActionImpl(
       createSetter(() => state),
       () => state,
     );
-    mockSwrMutate.mockClear();
+    mockRevalidateReplica.mockClear();
     mockGetKnowledgeItems.mockResolvedValue({ items: [] });
 
     await actions.revalidate('folder-a');
 
-    expect(mockSwrMutate).toHaveBeenCalledTimes(1);
-    const [matcher, , options] = mockSwrMutate.mock.calls[0];
-    expect(options).toEqual({ revalidate: true });
-    // Only the sidebar search entries match — not the explorer's own search.
-    expect(matcher(['resource:search', { q: 'a', scope: 'hierarchy' }, 'ws-1'])).toBe(true);
-    expect(matcher(['resource:search', { q: 'a' }, 'ws-1'])).toBe(false);
-    expect(matcher(['resource:list', { q: 'a', scope: 'hierarchy' }, 'ws-1'])).toBe(false);
-    expect(matcher('resource:search')).toBe(false);
+    // The sidebar's flat search list is a replica now; a rename/move/delete in
+    // the tree must revalidate it or the stale hit lingers next to the tree.
+    expect(mockRevalidateReplica).toHaveBeenCalledWith(hierarchySearchResource);
   });
 
   it('a revalidate requested during an in-flight root load runs once that load settles', async () => {
