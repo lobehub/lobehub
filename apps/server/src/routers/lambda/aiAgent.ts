@@ -102,6 +102,8 @@ import {
   HeteroOperationPrincipalError,
   resolveActiveHeteroOperationPrincipal,
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
+import { createTaskRunHooks } from '@/server/services/task/runHooks';
+import { TopicRunService } from '@/server/services/task/topicRun';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -2547,6 +2549,23 @@ export const aiAgentRouter = router({
       );
       if (bridged) return bridged;
 
+      // A message typed into a Task's own conversation continues that Task's
+      // run — and the composer dispatches it, not `runTask`. Everything the Task
+      // side needs for this run is attached here: the hook that settles the run
+      // when it ends, and (below, once the run exists) the reopen that puts its
+      // run row back in flight. Without the pair, an answered run is invisible
+      // to the Task: the run card keeps the finished state of the run it replied
+      // to, `cancelTopic` refuses to stop the live one, and the detail page
+      // stops polling for it.
+      const topicRunService = new TopicRunService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const topicRun = appContext?.topicId
+        ? await topicRunService.findByTopicId(appContext.topicId)
+        : undefined;
+
       const result = await ctx.aiAgentService.execAgent({
         acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
@@ -2573,6 +2592,16 @@ export const aiAgentRouter = router({
         deviceId,
         localDeviceId,
         existingMessageIds,
+        ...(topicRun && {
+          hooks: createTaskRunHooks({
+            db: ctx.serverDB,
+            taskId: topicRun.taskId,
+            taskIdentifier: topicRun.taskIdentifier,
+            trigger: 'manual',
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          }),
+        }),
         fileIds,
         mentionedAgents,
         parentMessageId,
@@ -2591,6 +2620,19 @@ export const aiAgentRouter = router({
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
+      // The run is in flight, so the Task's run row has to come back with it.
+      // Only when the run landed on the topic the user typed into: a run the
+      // server placed on a topic of its own is a new run, and has no row to
+      // reopen. A failure here is not the caller's to absorb — the message is
+      // sent and the run is going — so it is reported, not thrown.
+      if (topicRun && result.success && result.topicId === appContext?.topicId) {
+        await topicRunService
+          .reopen({ link: topicRun, operationId: result.operationId, topicId: result.topicId })
+          .catch((error) => {
+            console.error('[aiAgent.execAgent] failed to reopen the task run: %O', error);
+          });
+      }
+
       return toClientExecAgentResult(result);
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
