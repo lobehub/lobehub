@@ -1,4 +1,5 @@
-import type { AgentSenderMetadata } from '@lobechat/types';
+import type { AgentOperationStatus, AgentSenderMetadata } from '@lobechat/types';
+import { isAgentOperationInFlight } from '@lobechat/types';
 import debug from 'debug';
 
 const log = debug('lobe-server:ai-agent-source-attribution');
@@ -7,6 +8,7 @@ const log = debug('lobe-server:ai-agent-source-attribution');
 export interface SourceOperationRow {
   /** The agent that RAN the operation — the sender, which is not always the topic's owner. */
   agentId?: null | string;
+  status?: AgentOperationStatus | null;
   topicId?: null | string;
   userId: string;
 }
@@ -17,15 +19,15 @@ export interface SourceTopicRow {
   title?: null | string;
 }
 
-/** The slice of the sending agent's config that is snapshotted for display. */
-export interface SourceAgentConfigRow {
+/** The slice of the sending agent's row that is snapshotted for display. */
+export interface SourceAgentDisplayRow {
   avatar?: null | string;
   name?: null | string;
   title?: null | string;
 }
 
 export interface SourceAttributionDeps {
-  findAgentConfig: (agentId: string) => Promise<SourceAgentConfigRow | null | undefined>;
+  findAgentDisplayFields: (agentId: string) => Promise<SourceAgentDisplayRow | null | undefined>;
   findOperation: (operationId: string) => Promise<null | SourceOperationRow | undefined>;
   findTopic: (topicId: string) => Promise<null | SourceTopicRow | undefined>;
   /** The authenticated caller — attribution may only rest on THEIR OWN work. */
@@ -45,10 +47,12 @@ export interface SourceAttributionDeps {
  * alongside it for the jump-back link — the two differ for a heterogeneous
  * `callSubAgent` child, which runs on its spawner's topic.
  *
- * The row must belong to the caller. `AgentOperationModel.findById` is
+ * The row must belong to the caller, and must still be in flight. `findById` is
  * workspace-scoped, so in a workspace it also returns a *sibling member's*
- * operation — without this ownership check, any member holding `message:create`
- * could render arbitrary text as another member's agent.
+ * operation — without the ownership check, any member holding `message:create`
+ * could render arbitrary text as another member's agent. Ownership alone is not
+ * enough either: the operation id travels as an ambient env var and can be
+ * replayed, so a settled run must stop granting attribution.
  *
  * Attribution is display-only, so an unknown operation, a missing topic, or a
  * since-deleted agent degrades to "no attribution" rather than failing a run
@@ -62,6 +66,12 @@ export const resolveAgentSenderFromOperation = async (
 
   const operation = await deps.findOperation(sourceOperationId);
   if (!operation || operation.userId !== deps.userId || !operation.topicId) return undefined;
+  // The claim has to be CURRENT, not merely owned. `LOBEHUB_OPERATION_ID` is an
+  // env var: a shell or a long-lived child process keeps it after its run
+  // finishes, so without this a later human-issued `lh agent run` — or a replay
+  // of any prior operation id through the public API — would still render as
+  // authored by that run's agent.
+  if (!operation.status || !isAgentOperationInFlight(operation.status)) return undefined;
 
   const topic = await deps.findTopic(operation.topicId);
   if (!topic?.agentId) return undefined;
@@ -81,7 +91,7 @@ export const resolveAgentSenderFromOperation = async (
   };
 
   try {
-    const config = await deps.findAgentConfig(senderAgentId);
+    const config = await deps.findAgentDisplayFields(senderAgentId);
     if (!config) return base;
 
     return {

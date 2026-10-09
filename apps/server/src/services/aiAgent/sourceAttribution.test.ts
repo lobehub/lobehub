@@ -1,3 +1,4 @@
+import type { AgentOperationStatus } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { resolveAgentSenderFromOperation } from './sourceAttribution';
@@ -5,15 +6,25 @@ import { resolveAgentSenderFromOperation } from './sourceAttribution';
 const CALLER = 'user-1';
 
 const buildDeps = (overrides?: {
-  agentConfig?: unknown;
+  agentDisplay?: unknown;
   operation?:
-    null | undefined | { agentId?: null | string; topicId?: null | string; userId: string };
+    | null
+    | undefined
+    | {
+        agentId?: null | string;
+        status?: AgentOperationStatus;
+        topicId?: null | string;
+        userId: string;
+      };
   topic?: null | undefined | { agentId?: null | string; title?: null | string };
 }) => ({
-  findAgentConfig: vi.fn().mockResolvedValue(overrides?.agentConfig ?? undefined),
-  findOperation: vi
-    .fn()
-    .mockResolvedValue(overrides?.operation === undefined ? null : overrides.operation),
+  findAgentDisplayFields: vi.fn().mockResolvedValue(overrides?.agentDisplay ?? undefined),
+  findOperation: vi.fn().mockResolvedValue(
+    overrides?.operation === undefined || overrides.operation === null
+      ? null
+      : // Default to an in-flight run so each case states only what it exercises.
+        { status: 'running', ...overrides.operation },
+  ),
   findTopic: vi.fn().mockResolvedValue(overrides?.topic === undefined ? null : overrides.topic),
   userId: CALLER,
 });
@@ -48,7 +59,7 @@ describe('resolveAgentSenderFromOperation', () => {
 
     await expect(resolveAgentSenderFromOperation('op-sibling', deps)).resolves.toBeUndefined();
     expect(deps.findTopic).not.toHaveBeenCalled();
-    expect(deps.findAgentConfig).not.toHaveBeenCalled();
+    expect(deps.findAgentDisplayFields).not.toHaveBeenCalled();
   });
 
   it('stamps nothing when the operation has no topic', async () => {
@@ -69,9 +80,39 @@ describe('resolveAgentSenderFromOperation', () => {
     await expect(resolveAgentSenderFromOperation('op-1', orphans)).resolves.toBeUndefined();
   });
 
+  /**
+   * `LOBEHUB_OPERATION_ID` is an ambient env var: a shell, or a long-lived child
+   * process, keeps it after its run finishes, and the public API can replay any
+   * prior id. A settled run must therefore stop granting authorship.
+   */
+  it('stamps nothing for an operation that has already settled', async () => {
+    for (const status of ['abandoned', 'done', 'error', 'interrupted'] as const) {
+      const deps = buildDeps({
+        operation: { agentId: 'agt-coco', status, topicId: 'tpc-source', userId: CALLER },
+        topic: { agentId: 'agt-coco', title: 'Source' },
+      });
+
+      await expect(resolveAgentSenderFromOperation('op-settled', deps)).resolves.toBeUndefined();
+      expect(deps.findTopic).not.toHaveBeenCalled();
+    }
+  });
+
+  it('still attributes an operation that is only waiting', async () => {
+    for (const status of ['idle', 'waiting_for_human', 'waiting_for_async_tool'] as const) {
+      const deps = buildDeps({
+        operation: { agentId: 'agt-coco', status, topicId: 'tpc-source', userId: CALLER },
+        topic: { agentId: 'agt-coco', title: 'Source' },
+      });
+
+      await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toMatchObject({
+        agentId: 'agt-coco',
+      });
+    }
+  });
+
   it("reads the topic and agent from the caller's own operation row", async () => {
     const deps = buildDeps({
-      agentConfig: { avatar: '🐶', name: 'Coco', title: 'Product Assistant' },
+      agentDisplay: { avatar: '🐶', name: 'Coco', title: 'Product Assistant' },
       operation: { agentId: 'agt-coco', topicId: 'tpc-source', userId: CALLER },
       topic: { agentId: 'agt-coco', title: '帮我评估本周发布的风险' },
     });
@@ -95,7 +136,7 @@ describe('resolveAgentSenderFromOperation', () => {
    */
   it("attributes a sub-agent child, and links back to the topic's own agent", async () => {
     const deps = buildDeps({
-      agentConfig: { avatar: '🤖', name: 'Release Bot', title: 'Release Bot' },
+      agentDisplay: { avatar: '🤖', name: 'Release Bot', title: 'Release Bot' },
       operation: { agentId: 'agt-child', topicId: 'tpc-parent', userId: CALLER },
       topic: { agentId: 'agt-parent', title: 'Parent thread' },
     });
@@ -109,7 +150,7 @@ describe('resolveAgentSenderFromOperation', () => {
       topicId: 'tpc-parent',
       topicTitle: 'Parent thread',
     });
-    expect(deps.findAgentConfig).toHaveBeenCalledWith('agt-child');
+    expect(deps.findAgentDisplayFields).toHaveBeenCalledWith('agt-child');
   });
 
   it("falls back to the topic's owner when the operation names no agent", async () => {
@@ -131,7 +172,7 @@ describe('resolveAgentSenderFromOperation', () => {
       operation: { agentId: 'agt-coco', topicId: 'tpc-source', userId: CALLER },
       topic: { agentId: 'agt-coco', title: 'Source' },
     });
-    deps.findAgentConfig.mockRejectedValue(new Error('agent deleted'));
+    deps.findAgentDisplayFields.mockRejectedValue(new Error('agent deleted'));
 
     await expect(resolveAgentSenderFromOperation('op-1', deps)).resolves.toEqual({
       agentId: 'agt-coco',

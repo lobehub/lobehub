@@ -12,10 +12,16 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 const styles = createStaticStyles(({ css, cssVar }) => ({
   link: css`
     display: inline-flex;
-    flex: none;
+
+    /* Shrinkable, not fixed: the header is a non-wrapping flex row, so on a
+       phone-width viewport the cap below plus the author name and avatar would
+       overflow the row — the inner ellipsis can only truncate a link that is
+       allowed to shrink past its content. */
+    flex: 0 1 auto;
     gap: 3px;
     align-items: center;
 
+    min-inline-size: 0;
     max-inline-size: 320px;
 
     font-size: 12px;

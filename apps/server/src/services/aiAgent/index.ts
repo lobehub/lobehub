@@ -1695,7 +1695,7 @@ export class AiAgentService {
     sourceOperationId?: string,
   ): Promise<AgentSenderMetadata | undefined> =>
     resolveAgentSenderFromOperation(sourceOperationId, {
-      findAgentConfig: (agentId) => this.agentModel.getAgentConfigById(agentId),
+      findAgentDisplayFields: (agentId) => this.agentModel.getAgentDisplayFields(agentId),
       findOperation: (operationId) => this.agentOperationModel.findById(operationId),
       findTopic: (topicId) => this.topicModel.findById(topicId),
       userId: this.userId,
