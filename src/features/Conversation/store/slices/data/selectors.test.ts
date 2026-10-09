@@ -126,6 +126,9 @@ describe('getBlockMetadata', () => {
 
   it('returns undefined for an unknown block', () => {
     expect(dataSelectors.getBlockMetadata('missing')(stateWith([]))).toBeUndefined();
+  });
+});
+
 describe('rowTailId', () => {
   // A steered row keeps its host id (`g1`) while rendering the continuation (`g2`)
   // underneath it — the row tail is what the user is actually looking at.
