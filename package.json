@@ -341,7 +341,7 @@
     "@trpc/next": "^11.18.0",
     "@trpc/react-query": "^11.18.0",
     "@trpc/server": "^11.18.0",
-    "@upstash/qstash": "^2.11.3",
+    "@upstash/qstash": "2.11.3",
     "@upstash/workflow": "^0.2.23",
     "@vercel/analytics": "^1.6.1",
     "@vercel/edge-config": "^1.5.1",
