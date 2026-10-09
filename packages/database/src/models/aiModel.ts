@@ -206,7 +206,10 @@ export class AiModelModel {
   update = async (id: string, providerId: string, value: Partial<AiModelSelectItem>) => {
     const normalizedValue = this.normalizeAiModelValues(value);
 
-    const set: Record<string, unknown> = { ...normalizedValue };
+    // Always bump `updatedAt` so the conflict set has at least one concrete
+    // assignment: a payload whose only fields normalize to `undefined` (e.g. a
+    // lone `config: null`) would otherwise make drizzle throw `No values to set`.
+    const set: Record<string, unknown> = { ...normalizedValue, updatedAt: new Date() };
     // Shallow-merge `config` instead of replacing the column: callers send partial
     // config (the model-config modal only knows `deploymentName`), and a full
     // replace would silently wipe sibling keys such as the user's `chatConfig`
