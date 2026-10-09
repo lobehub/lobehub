@@ -15,6 +15,11 @@ export { buildHeteroExecStdinPayload, type HeteroExecImageRef } from './execStdi
 export { lobeHubCliGuide } from './lobeHubCliGuide';
 export const HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV = 'LOBEHUB_HETERO_EXEC_INHERIT_PROCESS_GROUP';
 export {
+  type CodexBranchRun,
+  resolveCodexBranchRun,
+  resolveCodexForkTarget,
+} from '../codexForkTarget';
+export {
   buildHeterogeneousPrompt,
   type HeterogeneousPromptContextProvider,
   HeterogeneousPromptEngine,

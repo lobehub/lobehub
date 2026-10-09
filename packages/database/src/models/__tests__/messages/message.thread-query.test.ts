@@ -25,6 +25,129 @@ afterEach(async () => {
 });
 
 describe('MessageModel thread query', () => {
+  it('excludes the original prompt from an edit branch without changing the source', async () => {
+    await serverDB.insert(topics).values({ id: 'edit-topic', userId });
+    await serverDB.insert(messages).values([
+      {
+        id: 'u1',
+        userId,
+        topicId: 'edit-topic',
+        role: 'user',
+        content: 'first',
+        createdAt: new Date('2026-01-01'),
+      },
+      {
+        id: 'a1',
+        userId,
+        topicId: 'edit-topic',
+        role: 'assistant',
+        content: 'answer',
+        createdAt: new Date('2026-01-02'),
+      },
+      {
+        id: 'u2',
+        userId,
+        topicId: 'edit-topic',
+        role: 'user',
+        content: 'original',
+        createdAt: new Date('2026-01-03'),
+      },
+    ]);
+    await serverDB.insert(threads).values({
+      id: 'edit-branch',
+      userId,
+      topicId: 'edit-topic',
+      sourceMessageId: 'u2',
+      type: 'continuation',
+      metadata: { sourceMessageExcluded: true },
+    });
+    await serverDB.insert(messages).values({
+      id: 'u2-edited',
+      userId,
+      topicId: 'edit-topic',
+      threadId: 'edit-branch',
+      role: 'user',
+      content: 'edited',
+      createdAt: new Date('2026-01-04'),
+    });
+    const result = await messageModel.query({ threadId: 'edit-branch' });
+    expect(result.map((message) => message.id)).toEqual(['u1', 'a1', 'u2-edited']);
+    expect(await serverDB.query.messages.findFirst({ where: eq(messages.id, 'u2') })).toMatchObject(
+      { content: 'original', threadId: null },
+    );
+  });
+
+  it('includes the parent branch context when forking a message inside a thread', async () => {
+    await serverDB.insert(topics).values({ id: 'nested-topic', userId });
+    await serverDB.insert(messages).values({
+      id: 'main-source',
+      userId,
+      topicId: 'nested-topic',
+      role: 'user',
+      content: 'main',
+      createdAt: new Date('2026-01-01'),
+    });
+    await serverDB.insert(threads).values({
+      id: 'parent-branch',
+      userId,
+      topicId: 'nested-topic',
+      sourceMessageId: 'main-source',
+      type: 'continuation',
+    });
+    await serverDB.insert(messages).values([
+      {
+        id: 'parent-user',
+        userId,
+        topicId: 'nested-topic',
+        threadId: 'parent-branch',
+        role: 'user',
+        content: 'parent',
+        createdAt: new Date('2026-01-02'),
+      },
+      {
+        id: 'parent-answer',
+        userId,
+        topicId: 'nested-topic',
+        threadId: 'parent-branch',
+        role: 'assistant',
+        content: 'answer',
+        createdAt: new Date('2026-01-03'),
+      },
+      {
+        id: 'parent-later',
+        userId,
+        topicId: 'nested-topic',
+        threadId: 'parent-branch',
+        role: 'user',
+        content: 'excluded',
+        createdAt: new Date('2026-01-04'),
+      },
+    ]);
+    await serverDB.insert(threads).values({
+      id: 'nested-branch',
+      userId,
+      topicId: 'nested-topic',
+      sourceMessageId: 'parent-answer',
+      parentThreadId: 'parent-branch',
+      type: 'continuation',
+    });
+    await serverDB.insert(messages).values({
+      id: 'nested-user',
+      userId,
+      topicId: 'nested-topic',
+      threadId: 'nested-branch',
+      role: 'user',
+      content: 'child',
+      createdAt: new Date('2026-01-05'),
+    });
+    const result = await messageModel.query({ threadId: 'nested-branch' });
+    expect(result.map((message) => message.id)).toEqual([
+      'main-source',
+      'parent-user',
+      'parent-answer',
+      'nested-user',
+    ]);
+  });
   it('finds the latest assistant message owned by the requested agent in an exact thread', async () => {
     await serverDB.insert(agents).values([
       { id: 'agent1', userId },

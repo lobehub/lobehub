@@ -5,6 +5,11 @@ export {
   GrokBuildAdapter,
   QoderAdapter,
 } from './adapters';
+export {
+  type CodexBranchRun,
+  resolveCodexBranchRun,
+  resolveCodexForkTarget,
+} from './codexForkTarget';
 export type {
   HeterogeneousAgentCliError,
   HeterogeneousAgentDescriptor,

@@ -15,6 +15,8 @@ import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/hetero
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useAgentStore } from '@/store/agent';
+import { agentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
@@ -85,6 +87,11 @@ export const useChatItemContextMenu = ({
   const isThreadMode = useConversationStore(messageStateSelectors.isThreadMode);
   const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
+  // Codex branches need a native turn boundary, which only the action bar's Fork provides.
+  const isCodex = useAgentStore(
+    (s) => agentSelectors.currentAgentHeterogeneousProviderType(s) === 'codex',
+  );
+  const canBranch = isDevMode && !isCodex;
   const actionsBar = useChatListActionsBar({ hasThread, isRegenerating });
   const inThread = isThreadMode || inPortalThread;
 
@@ -168,7 +175,7 @@ export const useChatItemContextMenu = ({
       // Forking a message into a standalone topic is GA; the in-topic thread
       // creator (`branching`) is still gated behind dev mode.
       if (!inThread && !isGroupSession) list.push(fork);
-      if (!inThread && !isGroupSession && isDevMode) list.push(branching);
+      if (!inThread && !isGroupSession && canBranch) list.push(branching);
 
       list.push(divider, translate, divider, share, divider, regenerate, delAndRegenerate, del);
 
@@ -200,7 +207,7 @@ export const useChatItemContextMenu = ({
     if (role === 'user') {
       const list: MenuItem[] = [edit, copy];
 
-      if (!inThread && isDevMode) list.push(branching);
+      if (!inThread && canBranch) list.push(branching);
 
       list.push(divider, translate, divider, regenerate, del);
 
@@ -210,12 +217,12 @@ export const useChatItemContextMenu = ({
     return [];
   }, [
     actionsBar,
+    canBranch,
     canCreate,
     canEdit,
     error,
     inThread,
     isCollapsed,
-    isDevMode,
     isGroupSession,
     role,
   ]);

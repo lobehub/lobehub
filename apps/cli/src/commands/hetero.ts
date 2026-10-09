@@ -29,14 +29,17 @@ import type {
 } from '@lobechat/heterogeneous-agents/spawn';
 import {
   classifyHeteroProcessFailure,
+  createCodexAgentHandle,
   createFileStoreImageUploader,
   isHeteroStatusGuideErrorData,
   spawnAgent,
 } from '@lobechat/heterogeneous-agents/spawn';
+import { type CodexForkTarget, CodexForkTargetSchema } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 import type { Command } from 'commander';
 
 import { getTrpcClient } from '../api/client';
+import { cliVersion } from '../pkg';
 import { CoalescingBatchIngester } from '../utils/CoalescingBatchIngester';
 import { HeteroTraceRecorder } from '../utils/HeteroTraceRecorder';
 import { log } from '../utils/logger';
@@ -124,7 +127,22 @@ const spawnAgentOrRuntime = (
   spawnOpts: Parameters<typeof spawnAgent>[0],
   onRawStdout?: (chunk: Buffer) => void,
   onStartupControl?: (control: PiRpcStartupControl) => void,
+  nativeCodex?: { forkTarget?: CodexForkTarget },
 ): Promise<Awaited<ReturnType<typeof spawnAgent>>> => {
+  if (nativeCodex)
+    return createCodexAgentHandle({
+      clientVersion: cliVersion,
+      args: spawnOpts.extraArgs ?? [],
+      commandPath: spawnOpts.command!,
+      cwd: spawnOpts.cwd ?? process.cwd(),
+      env: { ...process.env, ...spawnOpts.env },
+      forkTarget: nativeCodex.forkTarget,
+      onRawStdout,
+      onStartupControl,
+      operationId: spawnOpts.operationId,
+      prompt: spawnOpts.prompt,
+      resumeSessionId: spawnOpts.resumeSessionId,
+    });
   const runtimeFactory = spawnRuntimeRegistry[spawnOpts.agentType as LocalHeterogeneousAgentType];
   if (runtimeFactory) return runtimeFactory(spawnOpts, { onRawStdout, onStartupControl });
   return spawnAgent({ ...spawnOpts, onRawStdout });
@@ -173,6 +191,10 @@ const isMissingGrokResumeSession = (data: Record<string, unknown> | undefined): 
 
 interface ExecOptions {
   agentArg?: string[];
+  /** Explicit device protocol capability; unsupported native options fail closed. */
+  codexAppServer?: boolean;
+  /** JSON-encoded, persisted native history boundary. */
+  codexForkTarget?: string;
   command?: string;
   cwd?: string;
   effort?: string;
@@ -472,6 +494,15 @@ const exec = async (options: ExecOptions): Promise<void> => {
     process.exit(2);
   }
 
+  if ((options.codexAppServer || options.codexForkTarget) && options.type !== 'codex') {
+    throw new Error('Native Codex options require --type codex');
+  }
+  if (options.codexForkTarget && !options.codexAppServer) {
+    throw new Error('Native Fork requires --codex-app-server');
+  }
+  const codexForkTarget = options.codexForkTarget
+    ? CodexForkTargetSchema.parse(JSON.parse(options.codexForkTarget))
+    : undefined;
   let resolved: ResolvedPrompt;
   try {
     resolved = await resolvePrompt(options);
@@ -818,7 +849,9 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // abort has no OS signal behind it — the CLI decided on its own — so it
     // must always deliver the signal itself, or the agent keeps running (the
     // desktop and connected-device dispatches are exactly the inherited case).
-    const ownsSignalDelivery = () => !inheritsWrapperProcessGroup || ingestLoss !== undefined;
+    // Native app-server owns a detached process even inside the connect wrapper group.
+    const ownsSignalDelivery = () =>
+      options.codexAppServer || !inheritsWrapperProcessGroup || ingestLoss !== undefined;
     const signalAgent = (signal: NodeJS.Signals) => {
       if (startupControl) cancelStartup(startupControl, signal);
       else handle?.kill(signal);
@@ -870,13 +903,18 @@ const exec = async (options: ExecOptions): Promise<void> => {
     // registry picks the transport: pi runs over RPC, everything else spawns
     // one-shot (same handle shape, so the event loop below is unchanged).
     try {
-      handle = await spawnAgentOrRuntime(spawnOpts, dumpAttempt?.writeStdout, (control) => {
-        startupControl = control;
-        // `control.cancel` is protocol-level (session abort), not an OS signal
-        // — replay any cancellation received before the control bound, even
-        // when the process group already delivered the signal itself.
-        if (cancellationSignal) cancelStartup(control, cancellationSignal);
-      });
+      handle = await spawnAgentOrRuntime(
+        spawnOpts,
+        dumpAttempt?.writeStdout,
+        (control) => {
+          startupControl = control;
+          // `control.cancel` is protocol-level (session abort), not an OS signal
+          // — replay any cancellation received before the control bound, even
+          // when the process group already delivered the signal itself.
+          if (cancellationSignal) cancelStartup(control, cancellationSignal);
+        },
+        options.codexAppServer ? { forkTarget: codexForkTarget } : undefined,
+      );
       if (cancellationSignal && !startupControl) {
         // Same split as `applyCancellation`: when the wrapper does not own
         // signal delivery the process group already signaled the agent, but
@@ -1076,7 +1114,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
 
   // ─── First run (with --resume if provided) ───────────────────────────────
 
-  const interceptResume = !!options.resume;
+  const interceptResume = !!options.resume && !options.codexAppServer;
   const extraArgs = [
     ...(buildExtraArgs(options) ?? []),
     // Point the supported CLI at the lobe_cc AskUserQuestion MCP server we just mounted.
@@ -1140,7 +1178,7 @@ const exec = async (options: ExecOptions): Promise<void> => {
   // fresh session.  The server's `heteroSessionId` is updated with the new id,
   // breaking the stale-session loop.
   let result = first;
-  if (!first.cancelled && !first.ingestError && first.resumeNotFound) {
+  if (!options.codexAppServer && !first.cancelled && !first.ingestError && first.resumeNotFound) {
     log.info('Resume failed (session not found or context overflow) — retrying without --resume');
     result = await runOneAgent(
       {
@@ -1294,6 +1332,8 @@ export function registerHeteroCommand(program: Command) {
       '--input-json <path>',
       'Read full multimodal prompt as JSON content blocks from a file. Use `-` for stdin.',
     )
+    .option('--codex-app-server', 'Use native Codex app-server with strict history continuity')
+    .option('--codex-fork-target <json>', 'Fork at the saved native Codex thread/turn boundary')
     .option('-r, --resume <sessionId>', 'Resume an existing agent session by its native id')
     .option('-d, --cwd <path>', 'Working directory for the spawned agent (default: process.cwd())')
     .option('--mode <mode>', 'Forward a resolved Amp agent mode selection to the agent CLI')

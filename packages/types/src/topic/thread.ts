@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import type { WorkingDirConfig } from '../device';
+import { workingDirConfigSchema } from '../device';
 import {
   type OnboardingUnderstandingThreadMarker,
   OnboardingUnderstandingThreadMarkerSchema,
@@ -11,6 +13,14 @@ export const ThreadType = {
   Isolation: 'isolation',
   Standalone: 'standalone',
 } as const;
+
+/** A persisted native boundary; UI pagination must never determine a Codex fork. */
+export const CodexForkTargetSchema = z.object({
+  position: z.enum(['before', 'after']),
+  threadId: z.string().min(1),
+  turnId: z.string().min(1),
+});
+export type CodexForkTarget = z.infer<typeof CodexForkTargetSchema>;
 
 export type IThreadType = (typeof ThreadType)[keyof typeof ThreadType];
 
@@ -37,12 +47,18 @@ export interface ThreadMetadata {
   [key: string]: unknown;
   /** Whether this thread runs in client mode (local execution) */
   clientMode?: boolean;
+  /** Immutable native origin of a Codex Fork branch; the child session is tracked separately. */
+  codexForkTarget?: CodexForkTarget;
   /** Task completion time */
   completedAt?: string;
   /** Execution duration in milliseconds */
   duration?: number;
   /** Error details when task failed */
   error?: any;
+  heteroSessionBindingKey?: string;
+  heteroSessionBindingKeyByWorkingDirectory?: Record<string, string>;
+  heteroSessionId?: string;
+  heteroSessionIdByWorkingDirectory?: Record<string, string>;
   /**
    * Model the subagent ran on (e.g. CC's per-turn `message.model`). Pinned
    * once for the run and rolled up here on finalize so historical / cold-load
@@ -54,6 +70,8 @@ export interface ThreadMetadata {
   onboardingUnderstanding?: OnboardingUnderstandingThreadMarker;
   /** Operation ID for tracking */
   operationId?: string;
+  /** A user-message fork replays its source prompt instead of inheriting its old answer. */
+  sourceMessageExcluded?: boolean;
   /**
    * The specific tool_use id within `sourceMessageId` that spawned this thread.
    * Used to position the thread inline as a `task` block within the parent
@@ -74,6 +92,8 @@ export interface ThreadMetadata {
   totalTokens?: number;
   /** Total tool calls made */
   totalToolCalls?: number;
+  workingDirectory?: string;
+  workingDirectoryConfig?: WorkingDirConfig;
 }
 
 export interface ThreadItem {
@@ -122,19 +142,27 @@ export interface CreateThreadParams {
 
 export const threadMetadataSchema = z.object({
   clientMode: z.boolean().optional(),
+  codexForkTarget: CodexForkTargetSchema.optional(),
   completedAt: z.string().optional(),
   duration: z.number().optional(),
   error: z.any().optional(),
+  heteroSessionBindingKey: z.string().optional(),
+  heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  heteroSessionId: z.string().optional(),
+  heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   model: z.string().optional(),
   onboardingUnderstanding: OnboardingUnderstandingThreadMarkerSchema.optional(),
   operationId: z.string().optional(),
   sourceToolCallId: z.string().optional(),
+  sourceMessageExcluded: z.boolean().optional(),
   startedAt: z.string().optional(),
   subagentType: z.string().optional(),
   totalCost: z.number().optional(),
   totalMessages: z.number().optional(),
   totalTokens: z.number().optional(),
   totalToolCalls: z.number().optional(),
+  workingDirectory: z.string().optional(),
+  workingDirectoryConfig: workingDirConfigSchema.optional(),
 });
 
 export const createThreadSchema = z.object({

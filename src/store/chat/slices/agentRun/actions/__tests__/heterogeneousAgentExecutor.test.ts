@@ -14,7 +14,12 @@ import type * as LobeChatConst from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
 import type { AgentEventAdapter } from '@lobechat/heterogeneous-agents';
 import { createAdapter } from '@lobechat/heterogeneous-agents';
-import type { ChatTopicMetadata, HeterogeneousProviderConfig } from '@lobechat/types';
+import type {
+  ChatTopicMetadata,
+  CreateMessageParams,
+  HeterogeneousProviderConfig,
+  ThreadItem,
+} from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -23,6 +28,7 @@ import { useChatStore } from '@/store/chat/store';
 import { useElectronStore } from '@/store/electron';
 import { useUserStore } from '@/store/user';
 
+import { resolveCodexBranchRun, resolveCodexForkTarget } from '../dispatch/codexForkTarget';
 import { createGatewayEventHandler } from '../transports/gateway/gatewayEventHandler';
 import type { HeterogeneousAgentExecutorParams } from '../transports/hetero/heterogeneousAgentExecutor';
 import { executeHeterogeneousAgent } from '../transports/hetero/heterogeneousAgentExecutor';
@@ -35,6 +41,7 @@ const mockBatchMutate = vi.fn();
 const mockCreateMessage = vi.fn();
 const mockUpdateMessage = vi.fn();
 const mockUpdateMessageError = vi.fn();
+const mockUpdateMessageMetadata = vi.fn();
 const mockUpdateToolMessage = vi.fn();
 const mockGetMessages = vi.fn();
 
@@ -51,6 +58,7 @@ vi.mock('@/services/message', () => ({
     getMessages: (...args: any[]) => mockGetMessages(...args),
     updateMessage: (...args: any[]) => mockUpdateMessage(...args),
     updateMessageError: (...args: any[]) => mockUpdateMessageError(...args),
+    updateMessageMetadata: (...args: unknown[]) => mockUpdateMessageMetadata(...args),
     updateToolMessage: (...args: any[]) => mockUpdateToolMessage(...args),
   },
 }));
@@ -570,6 +578,7 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
         `created-${params.role}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     }));
     mockUpdateMessage.mockResolvedValue(undefined);
+    mockUpdateMessageMetadata.mockResolvedValue({ success: true });
     mockUpdateMessageError.mockResolvedValue({ success: false });
     mockUpdateToolMessage.mockResolvedValue(undefined);
     mockBatchMutate.mockImplementation(async (operations: any[]) => {
@@ -2970,7 +2979,640 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
     });
   });
 
+  /** @example Forked native turns keep all durable rows in their child thread. */
+  describe('Codex branch isolation', () => {
+    /** @example A tool-separated final answer survives reload without entering the source. */
+    it('persists every tool and assistant step in the branch', async () => {
+      // ROOT CAUSE:
+      // Only the initial assistant carried threadId. Later tool/assistant creates
+      // omitted it, so a DB reload placed those rows in the source conversation.
+      const rows = new Map<string, CreateMessageParams>([
+        ['source', { content: 'unchanged source', role: 'user', topicId: 'topic-1' }],
+        ['ast-initial', { content: '', role: 'assistant', threadId: 'branch', topicId: 'topic-1' }],
+      ]);
+      mockCreateMessage.mockImplementation(async (value: CreateMessageParams) => {
+        rows.set(value.id!, { ...value });
+        return { id: value.id };
+      });
+      mockUpdateMessage.mockImplementation(
+        async (id: string, value: Partial<CreateMessageParams>) => {
+          Object.assign(rows.get(id)!, value);
+          return { success: true };
+        },
+      );
+      mockUpdateToolMessage.mockImplementation(
+        async (id: string, value: Partial<CreateMessageParams>) => {
+          Object.assign(rows.get(id)!, value);
+          return { success: true };
+        },
+      );
+      await runWithEvents(
+        [
+          codexThreadStarted('native-child'),
+          codexTurnStarted(),
+          codexAgentMessage('intro', 'checking'),
+          codexCommandStarted('tool-1', 'pwd'),
+          codexCommandCompleted('tool-1', 'pwd', '/work/project'),
+          codexAgentMessage('answer', 'branch final answer'),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            context: { ...defaultContext, scope: 'thread', threadId: 'branch' },
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+          },
+          store: createMockStore({ threadMaps: { 'topic-1': [] } }),
+        },
+      );
+      const branchRows = [...rows.entries()]
+        .filter(([id]) => id !== 'source')
+        .map(([, row]) => row);
+      /** @example A real tool row and a later answer must both exist. */
+      expect(branchRows.some((row) => row.role === 'tool' && row.content === '/work/project')).toBe(
+        true,
+      );
+      /** @example The final answer remains durable after the tool boundary. */
+      expect(branchRows.some((row) => row.content === 'branch final answer')).toBe(true);
+      /** @example No branch row can reload into the main-topic bucket. */
+      expect(branchRows.every((row) => row.threadId === 'branch')).toBe(true);
+      /** @example Source content and ownership are untouched. */
+      expect(rows.get('source')).toEqual({
+        content: 'unchanged source',
+        role: 'user',
+        topicId: 'topic-1',
+      });
+    });
+
+    /** @example One failed provenance update cannot drop later tool steps or output. */
+    it('replays a failed native provenance write without rejecting the stream queue', async () => {
+      // ROOT CAUSE:
+      // Awaiting an unguarded metadata write rejected the shared event FIFO.
+      // Every later event was chained to that rejection and never persisted.
+      const rows = new Map<string, CreateMessageParams>([
+        ['user-1', { content: 'prompt', role: 'user' }],
+        ['ast-initial', { content: '', role: 'assistant' }],
+      ]);
+      let failed = false;
+      mockCreateMessage.mockImplementation(async (value: CreateMessageParams) => {
+        rows.set(value.id!, { ...value });
+        return { id: value.id };
+      });
+      mockUpdateMessage.mockImplementation(
+        async (id: string, value: Partial<CreateMessageParams>) => {
+          Object.assign(rows.get(id)!, value);
+          return { success: true };
+        },
+      );
+      mockUpdateMessageMetadata.mockImplementation(
+        async (id: string, metadata: Record<string, unknown>) => {
+          if (id === 'user-1' && !failed) {
+            failed = true;
+            throw new Error('transient provenance failure');
+          }
+          const row = rows.get(id)!;
+          row.metadata = { ...row.metadata, ...metadata };
+          return { success: true };
+        },
+      );
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        await runWithEvents(
+          [
+            codexThreadStarted('native-child'),
+            () =>
+              ipc.emitStreamEvent('ipc-sess-1', {
+                type: 'stream_start',
+                data: { codexTurnId: 'turn-child', provider: 'codex', sessionId: 'native-child' },
+              }),
+            codexCommandStarted('tool-1', 'pwd'),
+            codexCommandCompleted('tool-1', 'pwd', '/work/project'),
+            codexAgentMessage('answer', 'retained final answer'),
+            codexTurnCompleted(),
+          ],
+          {
+            params: {
+              heterogeneousProvider: { command: 'codex', type: 'codex' },
+              userMessageId: 'user-1',
+            },
+            store: createMockStore({
+              dbMessagesMap: { conversation: [{ id: 'user-1', role: 'user' }] },
+            }),
+          },
+        );
+        /** @example The failure precondition must actually occur. */
+        expect(failed).toBe(true);
+        /** @example Retrying metadata recovers the stable native boundary. */
+        expect(rows.get('user-1')?.metadata).toMatchObject({
+          codexTurnId: 'turn-child',
+          heteroSessionId: 'native-child',
+        });
+        /** @example Durable final output survives the earlier transient failure. */
+        expect([...rows.values()].some((row) => row.content === 'retained final answer')).toBe(
+          true,
+        );
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+
+    /** @example An older server must retain a user turn boundary after messages reload. */
+    it('persists both native message boundaries through the metadata endpoint on older servers', async () => {
+      // ROOT CAUSE:
+      // Older UpdateMessageParamsSchema strips codexTurnId from batched updates.
+      // The current page retained the ID, but a reload made editing fail.
+      // The existing passthrough metadata endpoint preserves the exact boundary.
+      const userMetadata: Record<string, unknown> = {};
+      const assistantMetadata: Record<string, unknown> = {};
+      mockUpdateMessage.mockImplementation(
+        async (id: string, value: Partial<CreateMessageParams>) => {
+          if (id === 'user-1') {
+            const { codexTurnId: _stripped, ...retained } = value.metadata ?? {};
+            Object.assign(userMetadata, retained);
+          }
+          return { success: true };
+        },
+      );
+      mockUpdateMessageMetadata.mockImplementation(
+        async (id: string, metadata: Record<string, unknown>) => {
+          if (id === 'user-1') Object.assign(userMetadata, metadata);
+          if (id === 'ast-initial') Object.assign(assistantMetadata, metadata);
+          return { success: true };
+        },
+      );
+      await runWithEvents(
+        [
+          codexThreadStarted('native-child'),
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              type: 'stream_start',
+              data: { codexTurnId: 'turn-child', provider: 'codex', sessionId: 'native-child' },
+            }),
+          codexAgentMessage('answer', 'retained answer'),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+            userMessageId: 'user-1',
+          },
+          store: createMockStore({
+            dbMessagesMap: { conversation: [{ id: 'user-1', role: 'user' }] },
+          }),
+        },
+      );
+      /** @example Durable metadata, not the optimistic store, retains both native IDs. */
+      expect(userMetadata).toMatchObject({
+        codexTurnId: 'turn-child',
+        heteroSessionId: 'native-child',
+      });
+      /** @example Fork-after also survives refetching the initial assistant. */
+      expect(assistantMetadata).toMatchObject({
+        codexTurnId: 'turn-child',
+        heteroSessionId: 'native-child',
+      });
+    });
+
+    /** @example Reloading the final answer after a tool preserves its exact Fork boundary. */
+    it('preserves the final tool-separated assistant boundary on older servers', async () => {
+      // ROOT CAUSE:
+      // Only the initial assistant used the passthrough metadata endpoint.
+      // Older create/update schemas stripped codexTurnId from subsequent assistants,
+      // so the visible final answer could no longer be forked after a reload.
+      // Queue each new assistant's provenance behind the existing row-create barrier.
+      const rows = new Map<string, CreateMessageParams>([
+        ['ast-initial', { content: '', role: 'assistant', threadId: 'branch' }],
+      ]);
+      mockCreateMessage.mockImplementation(async (value: CreateMessageParams) => {
+        const { codexTurnId: _stripped, ...metadata } = value.metadata ?? {};
+        rows.set(value.id!, { ...value, metadata });
+        return { id: value.id };
+      });
+      mockUpdateMessage.mockImplementation(
+        async (id: string, value: Partial<CreateMessageParams>) => {
+          const row = rows.get(id);
+          if (!row) return { success: false };
+          const { codexTurnId: _stripped, ...metadata } = value.metadata ?? {};
+          Object.assign(row, { ...value, metadata: { ...row.metadata, ...metadata } });
+          return { success: true };
+        },
+      );
+      mockUpdateMessageMetadata.mockImplementation(
+        async (id: string, metadata: Record<string, unknown>) => {
+          const row = rows.get(id);
+          if (!row) return { success: false };
+          row.metadata = { ...row.metadata, ...metadata };
+          return { success: true };
+        },
+      );
+      await runWithEvents(
+        [
+          codexThreadStarted('native-child'),
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              type: 'stream_start',
+              data: { codexTurnId: 'turn-child', provider: 'codex', sessionId: 'native-child' },
+            }),
+          codexAgentMessage('intro', 'checking'),
+          codexCommandStarted('tool-1', 'pwd'),
+          codexCommandCompleted('tool-1', 'pwd', '/work/project'),
+          codexAgentMessage('answer', 'final answer after the tool'),
+          codexTurnCompleted(),
+        ],
+        {
+          params: {
+            context: { ...defaultContext, scope: 'thread', threadId: 'branch' },
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+          },
+          store: createMockStore({ threadMaps: { 'topic-1': [] } }),
+        },
+      );
+      const finalAnswer = [...rows.entries()].find(
+        ([, row]) => row.role === 'assistant' && row.content === 'final answer after the tool',
+      );
+      /** @example A later assistant row, rather than the initial placeholder, is exercised. */
+      expect(finalAnswer?.[0]).toBeDefined();
+      /** @example Tool-separated final output is a distinct saved assistant. */
+      expect(finalAnswer?.[0]).not.toBe('ast-initial');
+      const [id, row] = finalAnswer!;
+      /** @example Only durable rows supply the boundary after a renderer reload. */
+      expect(resolveCodexForkTarget([{ ...row, id }], id, 'after')).toEqual({
+        position: 'after',
+        threadId: 'native-child',
+        turnId: 'turn-child',
+      });
+    });
+
+    /** @example Recovering a missing child leaves the parent's native context intact. */
+    it('clears a stale child resume binding without clearing the source topic', async () => {
+      // ROOT CAUSE:
+      // Recovery cleared topic metadata even when persistence belonged to a
+      // continuation thread, erasing the valid source session's resume binding.
+      const parentMetadata = {
+        heteroSessionId: 'native-source',
+        heteroSessionIdByWorkingDirectory: { '/work/project': 'native-source' },
+        workingDirectory: '/work/project',
+      };
+      const branch: ThreadItem = {
+        createdAt: new Date(0),
+        lastActiveAt: new Date(0),
+        status: ThreadStatus.Active,
+        title: 'branch',
+        updatedAt: new Date(0),
+        userId: 'user-1',
+        id: 'branch',
+        topicId: 'topic-1',
+        type: 'continuation',
+        metadata: {
+          heteroSessionId: 'missing-child',
+          heteroSessionIdByWorkingDirectory: { '/work/project': 'missing-child' },
+          workingDirectory: '/work/project',
+        },
+      };
+      const previous = useChatStore.getState().threadMaps;
+      useChatStore.setState({ threadMaps: { 'topic-1': [branch] } });
+      const store = createMockStore({
+        internal_dispatchThread: useChatStore.getState().internal_dispatchThread,
+        topicDataMap: { 'topic-1': { id: 'topic-1', metadata: parentMetadata } },
+      });
+      Object.defineProperty(store, 'threadMaps', { get: () => useChatStore.getState().threadMaps });
+      let startCount = 0;
+      mockStartSession.mockImplementation(async () => {
+        const sessionId = `ipc-sess-${++startCount}`;
+        ipc.setAgentType(sessionId, 'codex');
+        return { sessionId };
+      });
+      const controllers = new Map<
+        string,
+        { resolve: () => void; reject: (error: Error) => void }
+      >();
+      mockSendPrompt.mockImplementation(
+        ({ sessionId }: { sessionId: string }) =>
+          new Promise<void>((resolve, reject) => {
+            controllers.set(sessionId, { resolve, reject });
+          }),
+      );
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      try {
+        const execution = executeHeterogeneousAgent(() => store, {
+          ...defaultParams,
+          context: { ...defaultContext, scope: 'thread', threadId: 'branch' },
+          heterogeneousProvider: { command: 'codex', type: 'codex' },
+          resumeSessionId: 'missing-child',
+          workingDirectory: '/work/project',
+        });
+        await flush();
+        ipc.emitError('ipc-sess-1', {
+          agentType: 'codex',
+          code: HeterogeneousAgentSessionErrorCode.ResumeThreadNotFound,
+          message: 'The child native session is unavailable.',
+        });
+        await flush();
+        controllers.get('ipc-sess-1')?.reject(new Error('resume failed'));
+        await flush();
+        ipc.emitRawLine('ipc-sess-2', codexThreadStarted('replacement-child'));
+        ipc.emitComplete('ipc-sess-2');
+        await flush();
+        controllers.get('ipc-sess-2')?.resolve();
+        await execution;
+        /** @example The child's old binding is removed before creating its replacement. */
+        expect(mockUpdateThread).toHaveBeenCalledWith('branch', {
+          metadata: expect.objectContaining({
+            heteroSessionId: undefined,
+            heteroSessionIdByWorkingDirectory: {},
+          }),
+        });
+        /** @example The source's valid native thread remains resumable. */
+        expect(store.updateTopicMetadata).not.toHaveBeenCalled();
+        /** @example The replacement is saved only on the child. */
+        expect(store.threadMaps['topic-1'][0].metadata.heteroSessionId).toBe('replacement-child');
+      } finally {
+        consoleError.mockRestore();
+        useChatStore.setState({ threadMaps: previous });
+      }
+    });
+
+    // ROOT CAUSE:
+    // Background persistence updated the DB but not the cached branch, and a failed
+    // updateThread kept only the source in cache, so queued follow-ups forked again.
+    /** @example One native child serves three queued turns, even when its thread write fails. */
+    it.each([false, true])(
+      'keeps one native child across queued follow-ups (thread write fails: %s)',
+      async (threadWriteFails) => {
+        const target = {
+          position: 'after' as const,
+          threadId: 'native-source',
+          turnId: 'source-turn',
+        };
+        const branch: ThreadItem = {
+          createdAt: new Date(0),
+          lastActiveAt: new Date(0),
+          status: ThreadStatus.Active,
+          title: 'branch',
+          updatedAt: new Date(0),
+          userId: 'user-1',
+          id: 'branch',
+          topicId: 'topic-1',
+          type: 'continuation',
+          metadata: { codexForkTarget: target, workingDirectory: '/work/project' },
+        };
+        const previousLab = useUserStore.getState().preference.lab;
+        useUserStore.setState((state) => ({
+          preference: {
+            ...state.preference,
+            lab: { ...state.preference.lab, enableCodexAppServer: false },
+          },
+        }));
+        const previous = useChatStore.getState().threadMaps;
+        useChatStore.setState({ threadMaps: { 'topic-1': [branch] } });
+        const store = createMockStore({
+          activeTopicId: 'other-topic',
+          internal_dispatchThread: useChatStore.getState().internal_dispatchThread,
+        });
+        Object.defineProperty(store, 'threadMaps', {
+          get: () => useChatStore.getState().threadMaps,
+        });
+        const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+        if (threadWriteFails) mockUpdateThread.mockRejectedValueOnce(new Error('save failed'));
+        try {
+          for (let index = 0; index < 3; index += 1) {
+            // Each executor owns a fresh IPC adapter, as desktop startSession does.
+            ipc = setupIpcCapture();
+            const thread = store.threadMaps['topic-1'][0];
+            const resume = resolveHeteroResume(thread.metadata, '/work/project', {
+              currentBindingKey: 'native:v1:codex',
+            });
+            // Callers resolve the branch the same way before every send.
+            const run = resolveCodexBranchRun({
+              messageId: `user-${index}`,
+              messages: [],
+              resumeSessionId: resume.resumeSessionId,
+              thread,
+            });
+            await runWithEvents(
+              [
+                codexThreadStarted('native-child'),
+                codexAgentMessage('answer', `follow-up ${index}`),
+                codexTurnCompleted(),
+              ],
+              {
+                params: {
+                  ...run,
+                  context: { ...defaultContext, scope: 'thread', threadId: 'branch' },
+                  heterogeneousProvider: { command: 'codex', type: 'codex' },
+                  workingDirectory: '/work/project',
+                },
+                store,
+              },
+            );
+          }
+          // ROOT CAUSE:
+          // After the first Fork, only the child resume ID is sent. Selecting the runtime
+          // from Labs alone silently used legacy exec and lost native turn provenance.
+          // The immutable branch origin must keep every follow-up on app-server.
+          /** @example Only the first run forks the source; both later runs resume the child. */
+          expect(
+            mockStartSession.mock.calls.map(([params]) => [
+              params.resumeSessionId,
+              params.codexForkTarget,
+              params.useCodexAppServer,
+            ]),
+          ).toEqual([
+            ['native-source', target, true],
+            ['native-child', undefined, true],
+            ['native-child', undefined, true],
+          ]);
+          /** @example The origin is never rewritten; only the child binding is added. */
+          expect(store.threadMaps['topic-1'][0].metadata).toMatchObject({
+            codexForkTarget: target,
+            heteroSessionId: 'native-child',
+          });
+          /** @example A child's persistence must never update the parent topic. */
+          expect(store.updateTopicMetadata).not.toHaveBeenCalled();
+        } finally {
+          useUserStore.setState((state) => ({
+            preference: { ...state.preference, lab: previousLab },
+          }));
+          consoleError.mockRestore();
+          useChatStore.setState({ threadMaps: previous });
+        }
+      },
+    );
+  });
+
   describe('Desktop IPC session lifecycle', () => {
+    // ROOT CAUSE:
+    // Native session persistence was gated on the active topic. Navigation left the branch
+    // without its child in cache, so a queued follow-up forked the source again.
+    /** @example A native child remains resumable after navigating to a different topic. */
+    it('updates the captured branch after navigation without writing source topic metadata', async () => {
+      const target = { position: 'before' as const, threadId: 'native-source', turnId: 'turn-2' };
+      const dispatch = vi.fn();
+      const store = createMockStore({
+        activeTopicId: 'other-topic',
+        internal_dispatchThread: dispatch,
+        threadMaps: {
+          'topic-1': [
+            {
+              id: 'branch',
+              metadata: {
+                codexForkTarget: target,
+                workingDirectory: '/branch',
+                workingDirectoryConfig: { path: '/branch' },
+              },
+            },
+          ],
+        },
+      });
+      mockGetSessionInfo.mockResolvedValue({ agentSessionId: 'native-child' });
+      await runWithEvents(
+        [
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              type: 'stream_start',
+              data: { codexTurnId: 'new-turn', provider: 'codex', sessionId: 'native-child' },
+            }),
+        ],
+        {
+          store,
+          params: {
+            context: { ...defaultContext, scope: 'thread', threadId: 'branch' },
+            codexForkTarget: target,
+            resumeSessionId: 'native-source',
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+            workingDirectory: '/branch',
+          },
+        },
+      );
+      expect(mockUpdateThread).toHaveBeenCalledWith(
+        'branch',
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            codexForkTarget: target,
+            heteroSessionId: 'native-child',
+            workingDirectoryConfig: { path: '/branch' },
+          }),
+        }),
+      );
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'branch', type: 'updateThread' }),
+        'persistHeteroThreadSession',
+        'topic-1',
+      );
+      expect(store.updateTopicMetadata).not.toHaveBeenCalled();
+      expect(store.activeTopicId).toBe('other-topic');
+    });
+
+    it('does not rewrite an earlier assistant boundary when continuing a Codex run', async () => {
+      const store = createMockStore({
+        dbMessagesMap: {
+          conversation: [
+            {
+              id: 'earlier-assistant',
+              role: 'assistant',
+              metadata: { codexTurnId: 'old-turn', heteroSessionId: 'native-child' },
+            },
+          ],
+        },
+      });
+      await runWithEvents(
+        [
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              type: 'stream_start',
+              data: { codexTurnId: 'new-turn', provider: 'codex', sessionId: 'native-child' },
+            }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+            userMessageId: 'earlier-assistant',
+          },
+          store,
+        },
+      );
+      expect(mockUpdateMessageMetadata.mock.calls.some(([id]) => id === 'earlier-assistant')).toBe(
+        false,
+      );
+      expect(mockUpdateMessageMetadata).toHaveBeenCalledWith(
+        'ast-initial',
+        { codexTurnId: 'new-turn', heteroSessionId: 'native-child' },
+        expect.any(Object),
+      );
+    });
+    it('persists the native Codex boundary on both the user and initial assistant', async () => {
+      const store = createMockStore({
+        dbMessagesMap: {
+          conversation: [{ id: 'user-1', metadata: { activeBranchIndex: 2 }, role: 'user' }],
+        },
+      });
+      await runWithEvents(
+        [
+          () =>
+            ipc.emitStreamEvent('ipc-sess-1', {
+              type: 'stream_start',
+              data: { codexTurnId: 'turn-7', provider: 'codex', sessionId: 'native-child' },
+            }),
+        ],
+        {
+          params: {
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+            userMessageId: 'user-1',
+          },
+          store,
+        },
+      );
+      // The metadata endpoint merges, so only the boundary is sent, once per row.
+      for (const id of ['user-1', 'ast-initial']) {
+        expect(mockUpdateMessageMetadata).toHaveBeenCalledWith(
+          id,
+          { codexTurnId: 'turn-7', heteroSessionId: 'native-child' },
+          expect.any(Object),
+        );
+      }
+      expect(mockUpdateMessage.mock.calls.some(([, value]) => value?.metadata?.codexTurnId)).toBe(
+        false,
+      );
+    });
+    it('settles a Codex branch that lost its native session without spawning', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const store = createMockStore();
+      try {
+        await expect(
+          executeHeterogeneousAgent(() => store, {
+            ...defaultParams,
+            codexBranchError: 'This Codex branch lost its native session.',
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+          }),
+        ).resolves.toEqual({ terminalError: true });
+        expect(mockStartSession).not.toHaveBeenCalled();
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
+    it('settles a Codex fork whose native source is unavailable without spawning', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const store = createMockStore();
+      try {
+        await expect(
+          executeHeterogeneousAgent(() => store, {
+            ...defaultParams,
+            codexForkTarget: { position: 'after', threadId: 'source', turnId: 'turn-1' },
+            heterogeneousProvider: { command: 'codex', type: 'codex' },
+          }),
+        ).resolves.toEqual({ terminalError: true });
+        expect(mockStartSession).not.toHaveBeenCalled();
+        expect(mockUpdateMessageError).toHaveBeenCalledWith(
+          'ast-initial',
+          expect.objectContaining({
+            message: 'Cannot fork this Codex conversation because its native thread is unavailable',
+          }),
+          expect.any(Object),
+        );
+        expect(store.completeOperation).toHaveBeenCalledWith('op-1');
+      } finally {
+        consoleError.mockRestore();
+      }
+    });
     it('persists the native resume session before releasing the temporary run session', async () => {
       const store = createMockStore();
 

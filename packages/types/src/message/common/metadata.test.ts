@@ -4,6 +4,14 @@ import { RequestTrigger } from '../../agentRuntime';
 import { MessageMetadataSchema } from './metadata';
 
 describe('MessageMetadataSchema', () => {
+  it('preserves the native Codex turn separately from message item provenance', () => {
+    const metadata = {
+      codexTurnId: 'turn-7',
+      heteroMessageId: 'item-3',
+      heteroSessionId: 'thread-child',
+    };
+    expect(MessageMetadataSchema.parse(metadata)).toEqual(metadata);
+  });
   it('preserves explicit internal agent-dispatch semantics', () => {
     const parsed = MessageMetadataSchema.parse({
       agentDispatch: { kind: 'callAgent', visibility: 'internal' },

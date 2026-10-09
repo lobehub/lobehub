@@ -29,6 +29,7 @@ import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { getThreadInputMode } from './inputMode';
 import ThreadDivider from './ThreadDivider';
 import { useThreadActionsBarConfig } from './useThreadActionsBarConfig';
+import { getThreadMessageView } from './visibleMessages';
 
 /**
  * Inner component that uses ConversationStore for message rendering
@@ -40,11 +41,21 @@ interface ThreadChatContentProps {
   forkMessageId?: string;
   isHeterogeneousAgent: boolean;
   readOnly: boolean;
+  sourceMessageExcluded?: boolean;
+  threadId?: string;
   threadType?: IThreadType;
 }
 
 const ThreadChatContent = memo<ThreadChatContentProps>(
-  ({ composerWritable, forkMessageId, isHeterogeneousAgent, readOnly, threadType }) => {
+  ({
+    composerWritable,
+    forkMessageId,
+    isHeterogeneousAgent,
+    readOnly,
+    threadType,
+    threadId,
+    sourceMessageExcluded,
+  }) => {
     const inputMode = getThreadInputMode({
       isExternallyOwnedThread: readOnly,
       isHeterogeneousAgent,
@@ -68,14 +79,10 @@ const ThreadChatContent = memo<ThreadChatContentProps>(
     // The data layer keeps the full history, so AI context inheritance is
     // unchanged. Cutting by position (rather than by `threadId`) is what keeps
     // the user's own message visible during the optimistic window.
-    const visibleIds = useMemo(() => {
-      if (!sourceMessageId) return;
-      const forkIndex = displayMessages.findIndex((msg) => msg.id === sourceMessageId);
-      // Anchor not in this list (a bucket swap mid-flight): show everything
-      // rather than blanking the panel.
-      if (forkIndex < 0) return;
-      return new Set(displayMessages.slice(forkIndex).map((msg) => msg.id));
-    }, [displayMessages, sourceMessageId]);
+    const { visibleIds, readOnlyIds, sourceDisplayMessageId } = useMemo(
+      () => getThreadMessageView(displayMessages, sourceMessageId, threadId, sourceMessageExcluded),
+      [displayMessages, sourceMessageId, threadId, sourceMessageExcluded],
+    );
 
     const filterItem = useCallback(
       (msg: UIChatMessage) => !visibleIds || visibleIds.has(msg.id),
@@ -84,19 +91,19 @@ const ThreadChatContent = memo<ThreadChatContentProps>(
 
     const itemContent = useCallback(
       (index: number, id: string) => {
-        const isSourceMessage = id === sourceMessageId;
+        const isSourceMessage = id === sourceDisplayMessageId;
 
         return (
           <MessageItem
             inPortalThread
-            disableEditing={readOnly || isSourceMessage}
+            disableEditing={readOnly || readOnlyIds.has(id)}
             endRender={isSourceMessage ? <ThreadDivider threadType={threadType} /> : undefined}
             id={id}
             index={index}
           />
         );
       },
-      [sourceMessageId, readOnly, threadType],
+      [sourceDisplayMessageId, readOnlyIds, readOnly, threadType],
     );
 
     return (
@@ -290,6 +297,8 @@ const ThreadChat = memo(() => {
         forkMessageId={threadStartMessageId ?? portalThread?.sourceMessageId ?? undefined}
         isHeterogeneousAgent={isHeterogeneousAgent}
         readOnly={!composerTarget.writable}
+        sourceMessageExcluded={portalThread?.metadata?.sourceMessageExcluded}
+        threadId={portalThreadId}
         threadType={isCreatingNewThread ? newThreadMode : portalThread?.type}
       />
     </ConversationProvider>

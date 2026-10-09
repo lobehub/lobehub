@@ -1,7 +1,8 @@
 # Codex app-server protocol
 
 `generated.ts` vendors the stable TypeScript protocol emitted by Codex at revision
-`5e32f728f1f86a967c6be057351f12505778df8f`.
+`5e32f728f1f86a967c6be057351f12505778df8f`. The `thread/fork`, `thread/read`, and `thread/archive`
+types come from `codex-cli 0.154.0`; their stable shapes are unchanged in `0.160.0`.
 
 Generate the upstream files with:
 

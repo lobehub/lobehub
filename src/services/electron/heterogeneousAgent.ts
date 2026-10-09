@@ -9,6 +9,7 @@ import type {
   LocalHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type {
+  CodexForkTarget,
   HeterogeneousAgentModelCatalog,
   HeteroSessionImportMessage,
   ListHeterogeneousAgentModelsParams,
@@ -28,6 +29,7 @@ class HeterogeneousAgentService {
     agentType?: LocalHeterogeneousAgentType;
     args?: string[];
     command: string;
+    codexForkTarget?: CodexForkTarget;
     cwd?: string;
     env?: Record<string, string>;
     initialModel?: string;

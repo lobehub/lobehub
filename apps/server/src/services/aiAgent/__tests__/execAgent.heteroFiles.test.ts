@@ -6,6 +6,9 @@ import { CompletionLifecycle } from '@/server/services/agentRuntime/CompletionLi
 import { AiAgentService } from '../index';
 
 const {
+  mockQueryDeviceSystemInfo,
+  mockGetCodexBranchRun,
+  mockThreadFindById,
   mockDeviceFindByDeviceId,
   mockDeviceFindWorkspaceDeviceById,
   mockBuildRemoteDeviceHeteroContext,
@@ -23,6 +26,9 @@ const {
   mockPublishAgentRuntimeInit,
   mockPublishAgentRuntimeEnd,
 } = vi.hoisted(() => ({
+  mockQueryDeviceSystemInfo: vi.fn(),
+  mockGetCodexBranchRun: vi.fn(),
+  mockThreadFindById: vi.fn(),
   mockBuildRemoteDeviceHeteroContext: vi.fn().mockReturnValue('device context'),
   mockCreateOperationMetadata: vi.fn().mockResolvedValue(undefined),
   mockDeviceFindByDeviceId: vi.fn(),
@@ -167,7 +173,7 @@ vi.mock('@/database/models/thread', () => ({
   ThreadModel: vi.fn().mockImplementation(function () {
     return {
       create: vi.fn(),
-      findById: vi.fn(),
+      findById: mockThreadFindById,
       update: vi.fn(),
     };
   }),
@@ -190,6 +196,7 @@ vi.mock('@/server/services/market', () => ({
 vi.mock('@/server/services/heterogeneousAgent', () => ({
   HeterogeneousAgentService: vi.fn().mockImplementation(function () {
     return {
+      getCodexBranchRun: mockGetCodexBranchRun,
       getHeterogeneousResumeSessionId: mockGetHeterogeneousResumeSessionId,
     };
   }),
@@ -235,6 +242,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
+    queryDeviceSystemInfo: mockQueryDeviceSystemInfo,
     dispatchAgentRun: mockDispatchAgentRun,
     executeToolCall: mockExecuteToolCall,
     isConfigured: false,
@@ -275,6 +283,9 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockDispatchAgentRun.mockResolvedValue({ success: true });
     mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
+    mockQueryDeviceSystemInfo.mockResolvedValue(undefined);
+    mockGetCodexBranchRun.mockResolvedValue({});
+    mockThreadFindById.mockResolvedValue(undefined);
     mockMessageQuery.mockResolvedValue([]);
     mockBuildRemoteDeviceHeteroContext.mockImplementation(function ({ conversationHistory }) {
       return conversationHistory ? 'device recovery context' : 'device context';
@@ -859,6 +870,118 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       expect.objectContaining({ assistantMessageId: 'msg-1', deviceId: 'device-1' }),
     );
     expect(dispatchParams.args).toEqual(['--model', 'opus', '--effort', 'high']);
+  });
+
+  // ROOT CAUSE:
+  // Sending a new wrapper flag to every Codex device broke installed CLIs.
+  // Native mode must come from the live connection, while persisted Fork origins forbid legacy replay.
+  /** @example An older connection still accepts an ordinary Codex prompt. */
+  it('preserves ordinary Codex sends on an older connected CLI', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    await service.execAgent({ agentId: 'agent-1', prompt: 'ordinary device turn' });
+    /** @example No unsupported native wrapper option reaches the old process. */
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(expect.objectContaining({ args: undefined }));
+    /** @example The capability is obtained from the current connection rather than stale registration. */
+    expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'device-1', undefined);
+  });
+
+  /** @example Native turn/branch parameters only reach a connection advertising their protocol. */
+  it('dispatches the exact native Fork boundary to a capable connection', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    const target = { position: 'before', threadId: 'source-native', turnId: 'turn-2' };
+    mockQueryDeviceSystemInfo.mockResolvedValue({
+      supportedAgentRuntimes: ['codex-app-server-v1'],
+    });
+    mockThreadFindById.mockResolvedValue({
+      id: 'branch',
+      topicId: 'topic-1',
+      type: 'continuation',
+      metadata: { codexForkTarget: target },
+    });
+    mockGetCodexBranchRun.mockResolvedValue({
+      codexForkTarget: target,
+      resumeSessionId: 'source-native',
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'replayed user',
+      appContext: { topicId: 'topic-1', threadId: 'branch' },
+    });
+    /** @example The protocol carries the original native boundary, without a text replay fallback. */
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--codex-app-server', '--codex-fork-target', JSON.stringify(target)],
+        resumeSessionId: 'source-native',
+        resumeFallbackSystemContext: undefined,
+      }),
+    );
+  });
+
+  /** @example Reconnecting an older CLI cannot silently continue a native branch as legacy exec. */
+  it('rejects an established native child on an older connected CLI', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    mockThreadFindById.mockResolvedValue({
+      id: 'branch',
+      topicId: 'topic-1',
+      type: 'continuation',
+      metadata: {
+        codexForkTarget: { position: 'after', threadId: 'source-native', turnId: 'turn-1' },
+        heteroSessionId: 'child-native',
+      },
+    });
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'continue child',
+      appContext: { topicId: 'topic-1', threadId: 'branch' },
+    });
+    /** @example The saved child cannot be rebound by an unsupported legacy process. */
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    /** @example The failed operation publishes an actionable protocol requirement. */
+    expect(mockMessageUpdate).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({
+        error: expect.objectContaining({
+          body: expect.objectContaining({ detail: expect.stringContaining('codex-app-server-v1') }),
+        }),
+      }),
+    );
+  });
+
+  /** @example Cloud selection cannot replace an established device child with text-replayed history. */
+  it('rejects sandbox routing for an established native Codex child', async () => {
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      executionTarget: 'sandbox',
+      heterogeneousProvider: { type: 'codex' },
+    });
+    mockThreadFindById.mockResolvedValue({
+      id: 'branch',
+      topicId: 'topic-1',
+      type: 'continuation',
+      metadata: {
+        codexForkTarget: { position: 'after', threadId: 'source-native', turnId: 'turn-1' },
+        heteroSessionId: 'child-native',
+      },
+    });
+    mockGetCodexBranchRun.mockResolvedValue({ resumeSessionId: 'child-native' });
+    await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'continue child',
+      appContext: { topicId: 'topic-1', threadId: 'branch' },
+    });
+    /** @example Legacy sandbox exec is never started for a persisted native branch. */
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
   it('persists CLI-device routing so a stop request reaches the dispatched writer', async () => {
