@@ -126,11 +126,13 @@ const { loggerInfoMock } = vi.hoisted(() => ({
 
 const {
   beginServerDefaultOperationMock,
+  describeServerDefaultModelMock,
   getProviderBindingRuntimeMock,
   getServerDefaultEndpointMock,
   settleServerDefaultOperationMock,
 } = vi.hoisted(() => ({
   beginServerDefaultOperationMock: vi.fn(),
+  describeServerDefaultModelMock: vi.fn(),
   getProviderBindingRuntimeMock: vi.fn(),
   getServerDefaultEndpointMock: vi.fn(),
   settleServerDefaultOperationMock: vi.fn(),
@@ -138,6 +140,7 @@ const {
 
 vi.mock('@/modules/heterogeneousAgent/providerBindingPort', () => ({
   beginServerDefaultOperation: beginServerDefaultOperationMock,
+  describeServerDefaultModel: describeServerDefaultModelMock,
   getProviderBindingRuntime: getProviderBindingRuntimeMock,
   getServerDefaultEndpoint: getServerDefaultEndpointMock,
   settleServerDefaultOperation: settleServerDefaultOperationMock,
@@ -829,6 +832,8 @@ describe('HeterogeneousAgentCtr', () => {
         settings: { sdkType: 'openai', supportResponsesApi: true },
       },
     });
+    describeServerDefaultModelMock.mockReset();
+    describeServerDefaultModelMock.mockResolvedValue(undefined);
     getServerDefaultEndpointMock.mockReset();
     getServerDefaultEndpointMock.mockResolvedValue('https://app.example.com');
     settleServerDefaultOperationMock.mockReset();
@@ -2697,6 +2702,75 @@ describe('HeterogeneousAgentCtr', () => {
         result: 'done',
       });
       expect(settlement).toEqual({ relayInvocation, success: true });
+    });
+
+    it('describes a non-OpenAI server-default model to Codex from the deployment card', async () => {
+      nextFakeProc = createFakeProc().proc;
+      describeServerDefaultModelMock.mockResolvedValueOnce({
+        abilities: { reasoning: false, vision: false },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        model: 'kimi-k3',
+        nativeResponses: false,
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k3', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi-codex',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(describeServerDefaultModelMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentType: 'codex',
+        model: 'kimi-k3',
+      });
+      const catalog = JSON.parse(
+        await readFile(path.join(spawnCalls[0].options.env.CODEX_HOME, 'models.json'), 'utf8'),
+      );
+      expect(catalog.models[0]).toMatchObject({
+        context_window: 262_144,
+        display_name: 'Kimi K3',
+        slug: 'lobehub/kimi-k3',
+      });
+    });
+
+    it('still launches server-default Codex when the model card cannot be read', async () => {
+      nextFakeProc = createFakeProc().proc;
+      describeServerDefaultModelMock.mockRejectedValueOnce(new Error('offline'));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k3', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi-codex-offline',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/kimi-k3']));
     });
 
     it('injects a Kimi operation token into its Anthropic credential env', async () => {

@@ -72,6 +72,7 @@ import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJ
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
+  describeServerDefaultHeterogeneousModel,
   getServerDefaultHeterogeneousModels,
   initModelRuntimeFromServerConfig,
   resolveServerDefaultHeterogeneousModel,
@@ -2098,6 +2099,31 @@ export const aiAgentRouter = router({
   getServerDefaultHeterogeneousCapability: aiAgentBaseProcedure.query(() =>
     resolveServerDefaultHeterogeneousCapability(),
   ),
+
+  /**
+   * Model-card facts Desktop writes into a CLI's model catalog for a model the
+   * CLI has no entry for. Read with `mutation` semantics so Desktop main can
+   * reach it over its plain-POST tRPC helper; it changes nothing.
+   */
+  describeServerDefaultHeterogeneousModel: aiAgentBaseProcedure
+    .input(
+      z.object({
+        agentType: z.enum(SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES),
+        model: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      return describeServerDefaultHeterogeneousModel(input.agentType, input.model).catch(
+        (error) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: 'The selected server model is not available for this heterogeneous agent',
+          });
+        },
+      );
+    }),
 
   beginServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
     .input(

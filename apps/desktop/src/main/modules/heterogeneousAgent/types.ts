@@ -3,6 +3,7 @@ import type {
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
+import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -57,6 +58,8 @@ export interface PrepareServerDefaultBindingContext {
   endpoint: string;
   env?: Record<string, string>;
   model: string;
+  /** The model's card as the deployment describes it; absent when it could not be read. */
+  modelDescriptor?: ServerDefaultHeterogeneousModelDescriptor;
   profileDir: string;
 }
 
