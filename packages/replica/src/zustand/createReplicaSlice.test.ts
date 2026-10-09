@@ -384,6 +384,57 @@ describe('createReplicaSlice', () => {
       expect(reloaded.store.getState().lists.a).toBeUndefined();
     });
 
+    it('clears a reloaded key from the persisted index when the response has nothing to persist', async () => {
+      const storage = createMemoryStorage();
+      const indexKey = { queryKey: REPLICA_INDEX_KEY, scope: 'user-1:personal' };
+      const bind = () => {
+        const resource = defineReplica<{ id: string }, string[]>({
+          key: ({ id }) => id,
+          name: 'indexedList',
+          scope,
+          storage: storage.storage,
+          version: 1,
+        });
+        const store = createStore<TestState>()(() => ({
+          lists: {},
+          listsReplica: createReplicaState(),
+        }));
+        const slice = createReplicaSlice<TestState, { id: string }, string[]>(resource, {
+          driver,
+          get: store.getState,
+          set: (partial) => store.setState(partial),
+          stateKey: 'listsReplica',
+          toPersisted: (data) => (data[0] === 'gone' ? null : data),
+          view: recordLens('lists'),
+        });
+        return { slice, store };
+      };
+
+      const first = bind();
+      act(() => {
+        first.slice.replace({ id: 'a' }, ['cached']);
+      });
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')?.data).toEqual(['cached']));
+      await waitFor(async () => expect((await storage.storage.get(indexKey))?.data).toEqual(['a']));
+
+      // A reload: a fresh engine whose in-memory index bookkeeping is empty, so
+      // only the persisted index knows the key is there.
+      const reloaded = bind();
+      await act(async () => {
+        await reloaded.slice.hydrate({ id: 'a' });
+      });
+      expect(reloaded.store.getState().lists.a).toEqual(['cached']);
+
+      act(() => {
+        reloaded.slice.replace({ id: 'a' }, ['gone']);
+      });
+      // The row goes…
+      await waitFor(() => expect(storage.rows.has('user-1:personal|a')).toBe(false));
+      // …and so does its index entry, so later entity scans do not chase a
+      // missing row.
+      await waitFor(async () => expect((await storage.storage.get(indexKey))?.data).toEqual([]));
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.

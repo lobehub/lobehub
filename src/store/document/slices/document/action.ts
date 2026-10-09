@@ -4,7 +4,7 @@ import { EDITOR_DEBOUNCE_TIME, EDITOR_MAX_WAIT } from '@lobechat/const';
 import type { DocumentItem } from '@lobechat/database/schemas';
 import type { IEditor } from '@lobehub/editor';
 import { debounce } from 'es-toolkit/compat';
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 
 import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { documentService } from '@/services/document';
@@ -329,12 +329,34 @@ export class DocumentActionImpl {
       revalidateOnFocus: true,
     });
 
-    useEffect(() => {
-      // Wait for the persisted read so a previous identity's row is never
-      // adopted, and skip frames where the entry has not landed yet.
-      if (!enabled || !documentId || !sync.isHydrated || entry === undefined) return;
-      this.#adoptDocument(documentId, entry.document, { autoSave, editor, sourceType, topicId });
-    }, [autoSave, documentId, editor, enabled, entry, sourceType, sync.isHydrated, topicId]);
+    useLayoutEffect(() => {
+      if (!enabled || !documentId) return;
+
+      // Adopt *synchronously with the store write that produced the entry*, so
+      // the editor state lands in the same commit as the hydrated view. Waiting
+      // for a passive effect — or for `isHydrated`, which only flips in a later
+      // commit — leaves a painted frame where the projection already holds the
+      // document but `documents[id]` is still missing, and that frame is exactly
+      // the skeleton flash a repeat visit is supposed to avoid.
+      const adopt = (state: DocumentStore, previous?: DocumentStore) => {
+        const next = state.documentDetailMap[documentId];
+        if (!next) return;
+        // Only react to *this* entry changing; every other store write (typing
+        // in the editor included) is none of our business.
+        if (previous && previous.documentDetailMap[documentId] === next) return;
+        // Entries are scope-owned by the engine; never adopt one that belongs to
+        // another identity (this hook can stay mounted across an identity switch).
+        const scope = state.documentDetailReplica?.scope;
+        if (scope !== undefined && scope !== documentDetailResource.scope.get()) return;
+        this.#adoptDocument(documentId, next.document, { autoSave, editor, sourceType, topicId });
+      };
+
+      // An entry already in memory (repeat visit in this session) never writes
+      // again, so adopt it now; hydration and every response go through the
+      // subscription.
+      adopt(useDocumentStore.getState());
+      return useDocumentStore.subscribe(adopt);
+    }, [autoSave, documentId, editor, enabled, sourceType, topicId]);
 
     return {
       data: document,

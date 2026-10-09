@@ -8,7 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, render, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
@@ -280,6 +280,34 @@ describe('document detail replica', () => {
     // No editor entry is created for a document that does not exist.
     expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
     expect(await storedRow('doc-1', scope)).toBeUndefined();
+  });
+
+  it('initializes the editor in the same commit that the projection lands in', async () => {
+    const cached = documentRow({ content: '# Cached' });
+    await documentDetailResource.storage!.set(
+      { queryKey: 'doc-1', scope },
+      { data: { document: cached }, updatedAt: 1 },
+    );
+    vi.mocked(documentService.getDocumentById).mockImplementation(pending as any);
+
+    const editor = createEditor();
+    const commits: Array<{ editorReady: boolean; view: boolean }> = [];
+    const Probe = () => {
+      const view = useDocumentStore((s) => Boolean(s.documentDetailMap['doc-1']));
+      const editorReady = useDocumentStore((s) => Boolean(s.documents['doc-1']));
+      commits.push({ editorReady, view });
+      useDocumentStore((s) => s.useFetchDocument)('doc-1', { editor, sourceType: 'page' });
+      return null;
+    };
+
+    render(createElement(Probe), { wrapper });
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+
+    // No committed render may show the projection holding the document while the
+    // editor state is still missing: that frame is the skeleton flash a repeat
+    // visit is supposed to be free of.
+    expect(commits.filter((c) => c.view && !c.editorReady)).toEqual([]);
+    expect(useDocumentStore.getState().documents['doc-1']?.content).toBe('# Cached');
   });
 
   it('drops the previous identity’s document before the next one paints', async () => {
