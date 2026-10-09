@@ -11,7 +11,7 @@ import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useKnowledgeBaseStore } from '@/store/library';
+import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
 import Item from './Item';
 import { getLibraryListAsyncState } from './state';
@@ -29,15 +29,14 @@ const LibraryList = memo(() => {
   const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
-  // `isValidating` catches the first fetch after switching mode — SWR's key
-  // has no cache yet, and because `useFetchKnowledgeBaseList` sets
-  // `fallbackData: []`, `isLoading` collapses to false immediately. Without
-  // this, the sidebar flashes the empty state for the network round-trip
-  // before the real list arrives.
-  // `fallbackData: []` keeps `data` an array even on failure, so a failed KB-list
-  // fetch used to render the "create your first library" empty (Read §1.1
-  // failure-as-empty). Read `error` / `mutate` and branch the failure before empty.
-  const { data, isLoading, isValidating, error, mutate } = useFetchKnowledgeBaseList(visibility);
+  // The rows are read from the local-first replica view, the hook only reports
+  // the sync flags. `!isHydrated` covers the window before the persisted row is
+  // read and `isValidating` the first network round-trip, so the sidebar shows
+  // the skeleton instead of flashing the empty state for the round-trip.
+  // A failed KB-list fetch must branch to the error state before empty (Read
+  // §1.1 failure-as-empty): read `error` / `revalidate` and branch first.
+  const { error, isHydrated, isValidating, revalidate } = useFetchKnowledgeBaseList(visibility);
+  const data = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseList(visibility));
 
   const navigate = useWorkspaceAwareNavigate();
 
@@ -57,7 +56,7 @@ const LibraryList = memo(() => {
     boundaryData,
     isEmpty,
     isLoading: showSkeleton,
-  } = getLibraryListAsyncState({ data, isLoading, isValidating });
+  } = getLibraryListAsyncState({ data, isLoading: !isHydrated, isValidating });
 
   return (
     <AsyncBoundary
@@ -76,7 +75,7 @@ const LibraryList = memo(() => {
           onClick={handleCreate}
         />
       }
-      onRetry={() => mutate()}
+      onRetry={() => revalidate()}
     >
       <Flexbox gap={1} paddingInline={4}>
         {data?.map((item) => (
@@ -86,9 +85,9 @@ const LibraryList = memo(() => {
             key={item.id}
             memberRestricted={(item as { memberRestricted?: boolean }).memberRestricted}
             name={item.name}
+            permissionManageable={(item as { permissionManageable?: boolean }).permissionManageable}
             userId={item.userId}
             visibility={item.visibility}
-            permissionManageable={(item as { permissionManageable?: boolean }).permissionManageable}
           />
         ))}
       </Flexbox>

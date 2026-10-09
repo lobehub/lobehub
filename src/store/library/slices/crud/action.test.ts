@@ -1,506 +1,331 @@
+/**
+ * @vitest-environment happy-dom
+ *
+ * The knowledge-base list and the by-id projection are replicas: they paint
+ * from the persisted copy on the first frame, the network only confirms, and a
+ * rename or delete reaches every loaded copy at once.
+ */
+import { randomUUID } from 'node:crypto';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
+import type { PropsWithChildren } from 'react';
+import { createElement, useEffect } from 'react';
+import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { mutate } from '@/libs/swr';
-import { knowledgeBaseKeys } from '@/libs/swr/keys';
+import { cacheScope } from '@/libs/replica';
+import { setScopedMutate } from '@/libs/swr/mutate';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
-import type { CreateKnowledgeBaseParams, KnowledgeBaseItem } from '@/types/knowledgeBase';
-import { withSWR } from '~test-utils';
+import type { KnowledgeBaseItem } from '@/types/knowledgeBase';
 
 import { useKnowledgeBaseStore } from '../../store';
+import { initialKnowledgeBaseState } from './initialState';
+import { knowledgeBaseItemResource, knowledgeBaseListResource } from './projection';
+import { knowledgeBaseSelectors } from './selectors';
 
-const mocks = vi.hoisted(() => ({
-  activeWorkspaceId: null as string | null,
-}));
+const mocks = vi.hoisted(() => ({ activeWorkspaceId: null as string | null }));
 
 vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
-  getActiveWorkspaceId: vi.fn(() => mocks.activeWorkspaceId),
-  useActiveWorkspaceId: vi.fn(() => mocks.activeWorkspaceId),
+  getActiveWorkspaceId: () => mocks.activeWorkspaceId,
+  useActiveWorkspaceId: () => mocks.activeWorkspaceId,
 }));
 
-vi.mock('@/libs/swr', async (importOriginal) => {
-  const modules = await importOriginal();
-  return {
-    ...(modules as any),
-    mutate: vi.fn(),
-  };
-});
+vi.mock('@/services/knowledgeBase', () => ({
+  knowledgeBaseService: {
+    createKnowledgeBase: vi.fn(),
+    deleteKnowledgeBase: vi.fn(),
+    getKnowledgeBaseById: vi.fn(),
+    getKnowledgeBaseList: vi.fn(),
+    publishKnowledgeBaseToWorkspace: vi.fn(),
+    setKnowledgeBaseVisibility: vi.fn(),
+    updateKnowledgeBaseList: vi.fn(),
+  },
+}));
 
-vi.mock('swr', async (importOriginal) => {
-  const modules = await importOriginal();
-  return {
-    ...(modules as any),
-    mutate: vi.fn(),
-  };
-});
+const MutateBridge = () => {
+  const { mutate } = useSWRConfig();
+  useEffect(() => setScopedMutate(mutate), [mutate]);
+  return null;
+};
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  mocks.activeWorkspaceId = null;
-
-  useKnowledgeBaseStore.setState(
-    {
-      activeKnowledgeBaseId: null,
-      activeKnowledgeBaseItems: {},
-      initKnowledgeBaseList: false,
-      knowledgeBaseLoadingIds: [],
-      knowledgeBaseRenamingId: null,
-    },
-    false,
+const wrapper = ({ children }: PropsWithChildren) =>
+  createElement(
+    SWRConfig,
+    { value: { dedupingInterval: 0, provider: () => new Map() } },
+    createElement(MutateBridge),
+    children,
   );
-});
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
+const item = (id: string, name = id): KnowledgeBaseItem =>
+  ({
+    avatar: null,
+    createdAt: new Date(0),
+    id,
+    isPublic: null,
+    name,
+    settings: {},
+    type: 'file',
+    updatedAt: new Date(0),
+  }) as KnowledgeBaseItem;
 
-describe('KnowledgeBaseCrudAction', () => {
-  describe('createNewKnowledgeBase', () => {
-    it('should create knowledge base and refresh list', async () => {
-      const params: CreateKnowledgeBaseParams = {
-        name: 'Test KB',
-        description: 'Test Description',
-      };
+/** Never-resolving fetch: the first frame can only come from storage. */
+const pending = () => new Promise<never>(() => {});
 
-      vi.spyOn(knowledgeBaseService, 'createKnowledgeBase').mockResolvedValue('new-kb-id');
+const list = (visibility?: 'private' | 'public') =>
+  useKnowledgeBaseStore.getState().knowledgeBaseListMap[visibility ?? 'all'];
 
-      const { result } = renderHook(() => useKnowledgeBaseStore());
-      const refreshSpy = vi.spyOn(result.current, 'refreshKnowledgeBaseList').mockResolvedValue();
+const detail = (id: string) =>
+  knowledgeBaseSelectors.getKnowledgeBaseById(id)(useKnowledgeBaseStore.getState());
 
-      const id = await act(async () => {
-        return await result.current.createNewKnowledgeBase(params);
-      });
+const LIST_ALL_STORAGE_KEY = knowledgeBaseListResource.storageKey({ visibility: undefined });
+const LIST_PRIVATE_STORAGE_KEY = knowledgeBaseListResource.storageKey({ visibility: 'private' });
+const listStorageKeys = [LIST_ALL_STORAGE_KEY, LIST_PRIVATE_STORAGE_KEY, 'public'];
+const itemStorageKeys = ['kb-1', 'kb-9', 'p1', 'kb-gone'];
 
-      expect(knowledgeBaseService.createKnowledgeBase).toHaveBeenCalledWith(params);
-      expect(refreshSpy).toHaveBeenCalled();
-      expect(id).toBe('new-kb-id');
-    });
+describe('knowledgeBase crud replicas', () => {
+  const scopes = new Set<string>();
+  let scope = '';
+  const useScope = (next: string) => {
+    scope = next;
+    scopes.add(next);
+    vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
+    vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+  };
 
-    it('should handle errors during creation', async () => {
-      const params: CreateKnowledgeBaseParams = {
-        name: 'Test KB',
-      };
-
-      const error = new Error('Creation failed');
-      vi.spyOn(knowledgeBaseService, 'createKnowledgeBase').mockRejectedValue(error);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore());
-
-      await expect(
-        act(async () => {
-          await result.current.createNewKnowledgeBase(params);
-        }),
-      ).rejects.toThrow('Creation failed');
-    });
+  beforeEach(() => {
+    mocks.activeWorkspaceId = null;
+    useScope(`kb-user-${randomUUID()}:personal`);
+    act(() => useKnowledgeBaseStore.setState(initialKnowledgeBaseState));
   });
 
-  describe('internal_toggleKnowledgeBaseLoading', () => {
-    it('should add id to loading state when loading is true', () => {
-      const { result } = renderHook(() => useKnowledgeBaseStore());
+  afterEach(async () => {
+    await Promise.all(
+      [...scopes].flatMap((scope) => [
+        ...listStorageKeys.map((queryKey) =>
+          knowledgeBaseListResource.storage!.remove({ queryKey, scope }),
+        ),
+        ...itemStorageKeys.map((queryKey) =>
+          knowledgeBaseItemResource.storage!.remove({ queryKey, scope }),
+        ),
+      ]),
+    );
+    scopes.clear();
+    vi.restoreAllMocks();
+    vi.clearAllMocks();
+  });
 
-      act(() => {
-        result.current.internal_toggleKnowledgeBaseLoading('kb-1', true);
-      });
+  describe('reads', () => {
+    it('paints the persisted list before the network answers', async () => {
+      await knowledgeBaseListResource.storage!.set(
+        { queryKey: LIST_PRIVATE_STORAGE_KEY, scope },
+        { data: [item('kb-1', 'Cached')], updatedAt: 1 },
+      );
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseList).mockImplementation(pending);
 
-      expect(result.current.knowledgeBaseLoadingIds).toContain('kb-1');
+      const sync = renderHook(
+        () => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList)('private'),
+        { wrapper },
+      );
+      const view = renderHook(() =>
+        useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseList('private')),
+      );
+
+      await waitFor(() => expect(view.result.current?.map((kb) => kb.name)).toEqual(['Cached']));
+      expect(sync.result.current.isHydrated).toBe(true);
+      expect(sync.result.current.isValidating).toBe(true);
     });
 
-    it('should remove id from loading state when loading is false', () => {
-      act(() => {
-        useKnowledgeBaseStore.setState({
-          knowledgeBaseLoadingIds: ['kb-1', 'kb-2'],
+    it('replaces the list with the server response and persists it', async () => {
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseList).mockResolvedValue([
+        item('kb-1', 'Server'),
+      ] as any);
+
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList)('private'), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(list('private')?.[0]?.name).toBe('Server'));
+      await waitFor(async () => {
+        const cached = await knowledgeBaseListResource.storage!.get({
+          queryKey: LIST_PRIVATE_STORAGE_KEY,
+          scope,
         });
+        expect(cached?.data.map((kb) => kb.id)).toEqual(['kb-1']);
       });
-
-      const { result } = renderHook(() => useKnowledgeBaseStore());
-
-      act(() => {
-        result.current.internal_toggleKnowledgeBaseLoading('kb-1', false);
-      });
-
-      expect(result.current.knowledgeBaseLoadingIds).not.toContain('kb-1');
-      expect(result.current.knowledgeBaseLoadingIds).toContain('kb-2');
     });
 
-    it('should handle multiple toggle operations', () => {
-      const { result } = renderHook(() => useKnowledgeBaseStore());
+    it('keeps the private and workspace surfaces apart', async () => {
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseList).mockImplementation(
+        async (visibility?: 'private' | 'public') =>
+          (visibility === 'private' ? [item('p1', 'Private')] : [item('w1', 'Workspace')]) as any,
+      );
 
-      act(() => {
-        result.current.internal_toggleKnowledgeBaseLoading('kb-1', true);
-        result.current.internal_toggleKnowledgeBaseLoading('kb-2', true);
-        result.current.internal_toggleKnowledgeBaseLoading('kb-3', true);
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList)('private'), {
+        wrapper,
+      });
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList)('public'), {
+        wrapper,
       });
 
-      expect(result.current.knowledgeBaseLoadingIds).toEqual(['kb-1', 'kb-2', 'kb-3']);
+      await waitFor(() => expect(list('private')).toHaveLength(1));
+      await waitFor(() => expect(list('public')).toHaveLength(1));
+      expect(list('private')![0].name).toBe('Private');
+      expect(list('public')![0].name).toBe('Workspace');
+    });
 
-      act(() => {
-        result.current.internal_toggleKnowledgeBaseLoading('kb-2', false);
+    it('lands a KB fetched by id in the by-id projection', async () => {
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseById).mockResolvedValue(
+        item('kb-9', 'Detail') as any,
+      );
+
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseItem)('kb-9'), {
+        wrapper,
       });
 
-      expect(result.current.knowledgeBaseLoadingIds).toEqual(['kb-1', 'kb-3']);
+      await waitFor(() => expect(detail('kb-9')?.name).toBe('Detail'));
+      expect(
+        knowledgeBaseSelectors.getKnowledgeBaseNameById('kb-9')(useKnowledgeBaseStore.getState()),
+      ).toBe('Detail');
+      expect(useKnowledgeBaseStore.getState().activeKnowledgeBaseId).toBe('kb-9');
+    });
+
+    it('drops the cached by-id detail when the server reports it missing', async () => {
+      // A detail persisted by an earlier session (or another tab).
+      await knowledgeBaseItemResource.storage!.set(
+        { queryKey: 'kb-gone', scope },
+        { data: item('kb-gone', 'Cached') as any, updatedAt: 1 },
+      );
+
+      // The record was deleted elsewhere: the by-id fetch confirms the miss.
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseById).mockResolvedValue(undefined as any);
+
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseItem)('kb-gone'), {
+        wrapper,
+      });
+
+      // The stale cached row must not keep the route on a resolved detail.
+      await waitFor(() => expect(detail('kb-gone')).toBeUndefined());
+      expect(knowledgeBaseService.getKnowledgeBaseById).toHaveBeenCalledWith('kb-gone');
     });
   });
 
-  describe('refreshKnowledgeBaseList', () => {
-    it('should execute refresh without errors', async () => {
-      const { result } = renderHook(() => useKnowledgeBaseStore());
+  describe('mutations', () => {
+    /** Load `private` (and `all`) with two rows so the write paths have a target. */
+    const seedList = async (items: KnowledgeBaseItem[] = [item('p1', 'Original'), item('p2')]) => {
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseList).mockResolvedValue(items as any);
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList)('private'), {
+        wrapper,
+      });
+      await waitFor(() => expect(list('private')).toHaveLength(items.length));
+    };
 
-      await expect(
-        act(async () => {
-          await result.current.refreshKnowledgeBaseList();
-        }),
-      ).resolves.not.toThrow();
+    it('removes a KB optimistically and rolls the row back when the delete fails', async () => {
+      await seedList();
 
-      expect(mutate).toHaveBeenCalledWith(knowledgeBaseKeys.list());
+      let reject!: (error: unknown) => void;
+      vi.mocked(knowledgeBaseService.deleteKnowledgeBase).mockImplementation(
+        () => new Promise((_resolve, rej) => (reject = rej)) as any,
+      );
+
+      const operation = useKnowledgeBaseStore.getState().removeKnowledgeBase('p1');
+
+      await waitFor(() => expect(list('private')?.map((kb) => kb.id)).toEqual(['p2']));
+
+      reject(new Error('boom'));
+      await expect(operation).rejects.toThrow('boom');
+
+      expect(list('private')?.map((kb) => kb.id)).toEqual(['p1', 'p2']);
     });
 
-    it('should refresh the active workspace-scoped cache key', async () => {
-      mocks.activeWorkspaceId = 'workspace-1';
-      const { result } = renderHook(() => useKnowledgeBaseStore());
+    it('renames across the list and the by-id copy optimistically, then reconciles', async () => {
+      await seedList();
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseById).mockResolvedValue(item('p1') as any);
+      renderHook(() => useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseItem)('p1'), {
+        wrapper,
+      });
+      await waitFor(() => expect(detail('p1')).toBeDefined());
 
+      let resolve!: (value: unknown) => void;
+      vi.mocked(knowledgeBaseService.updateKnowledgeBaseList).mockImplementation(
+        () => new Promise((res) => (resolve = res)) as any,
+      );
+
+      const operation = useKnowledgeBaseStore.getState().updateKnowledgeBase('p1', {
+        name: 'Renamed',
+      });
+
+      // Both loaded copies show the new name before the server answers.
+      expect(list('private')?.find((kb) => kb.id === 'p1')?.name).toBe('Renamed');
+      expect(detail('p1')?.name).toBe('Renamed');
+      expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).toContain('p1');
+
+      // The refresh that follows the write sees the server's new state.
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseList).mockResolvedValue([
+        item('p1', 'Renamed'),
+        item('p2'),
+      ] as any);
       await act(async () => {
-        await result.current.refreshKnowledgeBaseList();
+        resolve(undefined);
+        await operation;
       });
 
-      expect(mutate).toHaveBeenCalledWith(knowledgeBaseKeys.list('workspace-1'));
-      expect(getActiveWorkspaceId).toHaveBeenCalled();
-    });
-  });
-
-  describe('removeKnowledgeBase', () => {
-    it('should delete knowledge base and refresh list', async () => {
-      vi.spyOn(knowledgeBaseService, 'deleteKnowledgeBase').mockResolvedValue(undefined as any);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore());
-      const refreshSpy = vi.spyOn(result.current, 'refreshKnowledgeBaseList').mockResolvedValue();
-
-      await act(async () => {
-        await result.current.removeKnowledgeBase('kb-to-delete');
-      });
-
-      expect(knowledgeBaseService.deleteKnowledgeBase).toHaveBeenCalledWith('kb-to-delete');
-      expect(refreshSpy).toHaveBeenCalled();
+      expect(list('private')?.find((kb) => kb.id === 'p1')?.name).toBe('Renamed');
+      expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).not.toContain('p1');
     });
 
-    it('should handle errors during deletion', async () => {
-      const error = new Error('Deletion failed');
-      vi.spyOn(knowledgeBaseService, 'deleteKnowledgeBase').mockRejectedValue(error);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore());
+    it('rolls the rename back and clears the loading flag when the write fails', async () => {
+      await seedList();
+      vi.mocked(knowledgeBaseService.updateKnowledgeBaseList).mockRejectedValue(new Error('boom'));
 
       await expect(
-        act(async () => {
-          await result.current.removeKnowledgeBase('kb-id');
-        }),
-      ).rejects.toThrow('Deletion failed');
-    });
-  });
+        useKnowledgeBaseStore.getState().updateKnowledgeBase('p1', { name: 'Renamed' }),
+      ).rejects.toThrow('boom');
 
-  describe('updateKnowledgeBase', () => {
-    it('should update knowledge base with loading states', async () => {
-      const updateParams: CreateKnowledgeBaseParams = {
-        name: 'Updated KB',
-        description: 'Updated Description',
-      };
-
-      vi.spyOn(knowledgeBaseService, 'updateKnowledgeBaseList').mockResolvedValue(undefined as any);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore());
-      const toggleLoadingSpy = vi.spyOn(result.current, 'internal_toggleKnowledgeBaseLoading');
-      const refreshSpy = vi.spyOn(result.current, 'refreshKnowledgeBaseList').mockResolvedValue();
-
-      await act(async () => {
-        await result.current.updateKnowledgeBase('kb-1', updateParams);
-      });
-
-      expect(toggleLoadingSpy).toHaveBeenCalledWith('kb-1', true);
-      expect(knowledgeBaseService.updateKnowledgeBaseList).toHaveBeenCalledWith(
-        'kb-1',
-        updateParams,
-      );
-      expect(refreshSpy).toHaveBeenCalled();
-      expect(toggleLoadingSpy).toHaveBeenCalledWith('kb-1', false);
+      expect(list('private')?.find((kb) => kb.id === 'p1')?.name).toBe('Original');
+      expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).not.toContain('p1');
     });
 
-    it('should toggle loading off even if update fails', async () => {
-      const error = new Error('Update failed');
-      vi.spyOn(knowledgeBaseService, 'updateKnowledgeBaseList').mockRejectedValue(error);
+    it('creates a KB and reconciles the list from the server', async () => {
+      await seedList();
+      vi.mocked(knowledgeBaseService.createKnowledgeBase).mockResolvedValue('kb-new' as any);
+      vi.mocked(knowledgeBaseService.getKnowledgeBaseList).mockResolvedValue([
+        item('kb-new', 'Fresh'),
+        item('p1', 'Original'),
+        item('p2'),
+      ] as any);
 
-      const { result } = renderHook(() => useKnowledgeBaseStore());
-      const toggleLoadingSpy = vi.spyOn(result.current, 'internal_toggleKnowledgeBaseLoading');
-
-      await expect(
-        act(async () => {
-          await result.current.updateKnowledgeBase('kb-1', { name: 'Test' });
-        }),
-      ).rejects.toThrow('Update failed');
-
-      expect(toggleLoadingSpy).toHaveBeenCalledWith('kb-1', true);
-      // The false toggle won't be called because the error interrupts the flow
-    });
-  });
-
-  describe('useFetchKnowledgeBaseItem', () => {
-    it('should fetch knowledge base item by id', async () => {
-      const mockItem: KnowledgeBaseItem = {
-        id: 'kb-1',
-        name: 'Test KB',
-        description: 'Test Description',
-        avatar: 'avatar-url',
-        type: 'file',
-        enabled: true,
-        isPublic: false,
-        settings: {},
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(mockItem);
-
-      const { result } = renderHook(
-        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-1'),
-        {
-          wrapper: withSWR,
-        },
+      const id = await act(() =>
+        useKnowledgeBaseStore.getState().createNewKnowledgeBase({ name: 'Fresh' }),
       );
 
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockItem);
-      });
-
-      expect(knowledgeBaseService.getKnowledgeBaseById).toHaveBeenCalledWith('kb-1');
+      expect(id).toBe('kb-new');
+      expect(knowledgeBaseService.createKnowledgeBase).toHaveBeenCalledWith({ name: 'Fresh' });
+      await waitFor(() => expect(list('private')?.[0]?.id).toBe('kb-new'));
     });
 
-    it('should update store state on successful fetch', async () => {
-      const mockItem: KnowledgeBaseItem = {
-        id: 'kb-2',
-        name: 'Another KB',
-        description: 'Another Description',
-        avatar: 'avatar-url-2',
-        type: 'file',
-        enabled: true,
-        isPublic: false,
-        settings: {},
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(mockItem);
-
-      const { result } = renderHook(
-        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-2'),
-        {
-          wrapper: withSWR,
-        },
+    it('publishes and flips visibility through the server, then refreshes', async () => {
+      await seedList();
+      vi.mocked(knowledgeBaseService.publishKnowledgeBaseToWorkspace).mockResolvedValue(
+        undefined as any,
+      );
+      vi.mocked(knowledgeBaseService.setKnowledgeBaseVisibility).mockResolvedValue(
+        undefined as any,
       );
 
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockItem);
-      });
+      await act(() => useKnowledgeBaseStore.getState().publishKnowledgeBaseToWorkspace('p1'));
+      await act(() => useKnowledgeBaseStore.getState().setKnowledgeBaseVisibility('p1', 'private'));
 
-      const state = useKnowledgeBaseStore.getState();
-      expect(state.activeKnowledgeBaseId).toBe('kb-2');
-      expect(state.activeKnowledgeBaseItems['kb-2']).toEqual(mockItem);
+      expect(knowledgeBaseService.publishKnowledgeBaseToWorkspace).toHaveBeenCalledWith('p1');
+      expect(knowledgeBaseService.setKnowledgeBaseVisibility).toHaveBeenCalledWith('p1', 'private');
     });
 
-    it('should not update store when item is undefined', async () => {
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(undefined);
+    it('toggles the row loading flag', () => {
+      act(() => useKnowledgeBaseStore.getState().internal_toggleKnowledgeBaseLoading('p1', true));
+      expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).toContain('p1');
 
-      act(() => {
-        useKnowledgeBaseStore.setState({
-          activeKnowledgeBaseId: 'original-id',
-          activeKnowledgeBaseItems: {},
-        });
-      });
-
-      const { result } = renderHook(
-        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-3'),
-        {
-          wrapper: withSWR,
-        },
-      );
-
-      await waitFor(() => {
-        expect(result.current.data).toBeUndefined();
-      });
-
-      const state = useKnowledgeBaseStore.getState();
-      expect(state.activeKnowledgeBaseId).toBe('original-id');
-      expect(state.activeKnowledgeBaseItems).toEqual({});
-    });
-
-    it('should preserve existing items when updating', async () => {
-      const existingItem: KnowledgeBaseItem = {
-        id: 'kb-existing',
-        name: 'Existing KB',
-        description: 'Existing',
-        avatar: 'avatar-existing',
-        type: 'file',
-        enabled: true,
-        isPublic: false,
-        settings: {},
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      const newItem: KnowledgeBaseItem = {
-        id: 'kb-new',
-        name: 'New KB',
-        description: 'New',
-        avatar: 'avatar-new',
-        type: 'file',
-        enabled: true,
-        isPublic: false,
-        settings: {},
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      act(() => {
-        useKnowledgeBaseStore.setState({
-          activeKnowledgeBaseItems: {
-            'kb-existing': existingItem,
-          },
-        });
-      });
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseById').mockResolvedValue(newItem);
-
-      const { result } = renderHook(
-        () => useKnowledgeBaseStore().useFetchKnowledgeBaseItem('kb-new'),
-        {
-          wrapper: withSWR,
-        },
-      );
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(newItem);
-      });
-
-      const state = useKnowledgeBaseStore.getState();
-      expect(state.activeKnowledgeBaseItems['kb-existing']).toEqual(existingItem);
-      expect(state.activeKnowledgeBaseItems['kb-new']).toEqual(newItem);
-    });
-  });
-
-  describe('useFetchKnowledgeBaseList', () => {
-    it('should fetch knowledge base list with default config', async () => {
-      const mockList: KnowledgeBaseItem[] = [
-        {
-          id: 'kb-1',
-          name: 'KB 1',
-          description: 'Description 1',
-          avatar: 'avatar-1',
-          type: 'file',
-          enabled: true,
-          isPublic: false,
-          settings: {},
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
-          id: 'kb-2',
-          name: 'KB 2',
-          description: 'Description 2',
-          avatar: 'avatar-2',
-          type: 'file',
-          enabled: false,
-          isPublic: false,
-          settings: {},
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
-        wrapper: withSWR,
-      });
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(knowledgeBaseService.getKnowledgeBaseList).toHaveBeenCalled();
-    });
-
-    it('should use fallback data when service returns empty', async () => {
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue([]);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
-        wrapper: withSWR,
-      });
-
-      // Wait for the SWR hook to settle
-      await waitFor(() => {
-        expect(result.current.data).toEqual([]);
-      });
-    });
-
-    it('should initialize knowledge base list on first success', async () => {
-      const mockList: KnowledgeBaseItem[] = [
-        {
-          id: 'kb-1',
-          name: 'KB 1',
-          description: 'Description 1',
-          avatar: 'avatar-1',
-          type: 'file',
-          enabled: true,
-          isPublic: false,
-          settings: {},
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-      ];
-
-      // Ensure initKnowledgeBaseList is false initially
-      act(() => {
-        useKnowledgeBaseStore.setState({
-          initKnowledgeBaseList: false,
-        });
-      });
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
-        wrapper: withSWR,
-      });
-
-      // Wait for the SWR hook to settle and onSuccess to be called
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      // Verify initKnowledgeBaseList is set to true after onSuccess
-      await waitFor(() => {
-        const state = useKnowledgeBaseStore.getState();
-        expect(state.initKnowledgeBaseList).toBe(true);
-      });
-    });
-
-    it('should not re-initialize if already initialized', async () => {
-      const mockList: KnowledgeBaseItem[] = [];
-
-      act(() => {
-        useKnowledgeBaseStore.setState({
-          initKnowledgeBaseList: true,
-        });
-      });
-
-      vi.spyOn(knowledgeBaseService, 'getKnowledgeBaseList').mockResolvedValue(mockList);
-
-      const { result } = renderHook(() => useKnowledgeBaseStore().useFetchKnowledgeBaseList(), {
-        wrapper: withSWR,
-      });
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      const state = useKnowledgeBaseStore.getState();
-      expect(state.initKnowledgeBaseList).toBe(true);
+      act(() => useKnowledgeBaseStore.getState().internal_toggleKnowledgeBaseLoading('p1', false));
+      expect(useKnowledgeBaseStore.getState().knowledgeBaseLoadingIds).not.toContain('p1');
     });
   });
 });
