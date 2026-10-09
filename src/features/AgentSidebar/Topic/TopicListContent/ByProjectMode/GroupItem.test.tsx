@@ -308,3 +308,56 @@ it('shows the directory title inside Project scope rather than repeating the pro
   expect(screen.getByText('repo-a')).toBeInTheDocument();
   expect(screen.queryByRole('link', { name: 'Shared Project' })).not.toBeInTheDocument();
 });
+
+it('resolves a merged project group through any directory of that project', () => {
+  // Merged `project-id:` groups span several directories of one project, and
+  // their most recent topic may not name a directory at all — the project
+  // identity must come from the group id, not from the first child's directory.
+  directoryRows.push(
+    {
+      id: 'binding-a',
+      projectName: 'LobeHub',
+      projectSlug: 'lobehub',
+      projectId: 'prj-merged',
+      projectAvatar: '📦',
+    },
+    {
+      id: 'binding-b',
+      projectName: 'LobeHub',
+      projectSlug: 'lobehub',
+      projectId: 'prj-merged',
+      projectAvatar: '📦',
+    },
+  );
+  render(
+    <AccordionRoot defaultValue={['project-id:prj-merged']}>
+      <GroupItem
+        expanded
+        group={{
+          id: 'project-id:prj-merged',
+          title: 'lobehub',
+          children: [
+            {
+              id: 'topic-conversation-only',
+              title: 'Chat',
+              createdAt: 3,
+              updatedAt: 3,
+              projectId: 'prj-merged',
+            },
+            {
+              id: 'topic-directory',
+              title: 'Work',
+              createdAt: 2,
+              updatedAt: 2,
+              projectId: 'prj-merged',
+              projectWorkingDirectoryId: 'binding-b',
+              metadata: { workingDirectory: '/other/lobehub' },
+            },
+          ],
+        }}
+      />
+    </AccordionRoot>,
+  );
+  fireEvent.click(screen.getByRole('link', { name: 'LobeHub' }));
+  expect(routerPushMock).toHaveBeenCalledWith('/project/lobehub');
+});

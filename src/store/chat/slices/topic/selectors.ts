@@ -14,6 +14,7 @@ import {
 } from '@/types/topic';
 import {
   getTopicSortTime,
+  groupTopicsByAgent,
   groupTopicsByProject,
   groupTopicsByStatus,
   groupTopicsByTime,
@@ -372,6 +373,12 @@ const getGroupFn = (
         ...group,
         title: t(`groupTitle.byStatus.${group.id}` as any, { ns: 'topic' }),
       }));
+  }
+  if (groupMode === 'byAgent') {
+    // Agent names come from row metadata (project feeds join them per topic);
+    // buckets without attribution stay title-less and the group item names
+    // them from its agent context.
+    return (topics: ChatTopic[]) => groupTopicsByAgent(topics, field);
   }
   return sortBy === 'updatedAt' ? groupTopicsByUpdatedTime : groupTopicsByTime;
 };

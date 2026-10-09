@@ -21,7 +21,7 @@ export const useTopicFilterDropdownMenu = (): (() => DropdownItem[]) => {
   ]);
 
   return useCallback(() => {
-    const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'flat'];
+    const groupModes: TopicGroupMode[] = ['byStatus', 'byTime', 'byProject', 'byAgent', 'flat'];
     const sortByOptions: TopicSortBy[] = ['createdAt', 'updatedAt'];
 
     return [

@@ -43,6 +43,7 @@ import {
 } from './statusCounts';
 
 const PROJECT_GROUP_PREFIX = 'project:';
+const PROJECT_ID_GROUP_PREFIX = 'project-id:';
 
 const styles = createStaticStyles(({ css }) => ({
   statusBadge: css`
@@ -170,12 +171,20 @@ const GroupItem = memo<GroupItemComponentProps>(({ group, expanded }) => {
   const { id, title, children } = group;
   const scope = useTopicListScope();
   const navigate = useWorkspaceAwareNavigate();
+  // `project-id:` groups merge every directory of one project — resolve the
+  // project through any of its directories; directory/path groups keep the
+  // first child's exact directory so a shared path can't cross projects.
+  const projectId = id.startsWith(PROJECT_ID_GROUP_PREFIX)
+    ? id.slice(PROJECT_ID_GROUP_PREFIX.length)
+    : undefined;
   useProjectDirectoryStore((s) => s.useFetchDirectories)(
     undefined,
-    !!children[0]?.projectWorkingDirectoryId,
+    !!children[0]?.projectWorkingDirectoryId || !!projectId,
   );
   const directories = useProjectDirectories();
-  const project = directories.find((d) => d.id === children[0]?.projectWorkingDirectoryId);
+  const project = projectId
+    ? directories.find((d) => d.projectId === projectId)
+    : directories.find((d) => d.id === children[0]?.projectWorkingDirectoryId);
 
   const workingDirectory = useMemo(
     () =>

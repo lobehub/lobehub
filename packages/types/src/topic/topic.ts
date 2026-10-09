@@ -16,7 +16,7 @@ export type ShareVisibility = 'private' | 'link';
 export type TimeGroupId =
   'today' | 'yesterday' | 'week' | 'month' | `${number}-${string}` | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus' | 'byAgent';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 /**

@@ -16,6 +16,7 @@ import AsyncError from '@/components/AsyncError';
 import Filter from '@/features/AgentSidebar/Topic/Filter';
 import { useAgentTopicGroupMode } from '@/features/AgentSidebar/Topic/hooks/useAgentTopicGroupMode';
 import ToggleGroups from '@/features/AgentSidebar/Topic/ToggleGroups';
+import ByAgentMode from '@/features/AgentSidebar/Topic/TopicListContent/ByAgentMode';
 import ByProjectMode from '@/features/AgentSidebar/Topic/TopicListContent/ByProjectMode';
 import ByStatusMode from '@/features/AgentSidebar/Topic/TopicListContent/ByStatusMode';
 import ByTimeMode from '@/features/AgentSidebar/Topic/TopicListContent/ByTimeMode';
@@ -209,6 +210,8 @@ function ProjectTopicList({
         <ByStatusMode />
       ) : topicGroupMode === 'byProject' ? (
         <ByProjectMode />
+      ) : topicGroupMode === 'byAgent' ? (
+        <ByAgentMode />
       ) : (
         <ByTimeMode />
       )}
