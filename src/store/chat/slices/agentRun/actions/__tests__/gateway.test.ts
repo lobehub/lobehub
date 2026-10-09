@@ -1408,7 +1408,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'user-msg-123',
           prompt: 'Original question',
         }),
-        expect.anything(),
       );
     });
 
@@ -1660,7 +1659,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: undefined,
           prompt: 'Hello',
         }),
-        expect.anything(),
       );
     });
 
@@ -1705,7 +1703,6 @@ describe('GatewayActionImpl', () => {
           agentId: 'target-agent',
           appContext: expect.objectContaining({ scope: 'sub_agent', topicId: 'topic-1' }),
         }),
-        expect.anything(),
       );
       expect(startOperation).toHaveBeenCalledWith(
         expect.objectContaining({ context: messageContext }),
@@ -1882,7 +1879,6 @@ describe('GatewayActionImpl', () => {
           prompt: 'Hello',
           trigger: 'onboarding',
         }),
-        expect.anything(),
       );
     });
 
@@ -1915,7 +1911,6 @@ describe('GatewayActionImpl', () => {
 
       expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
         expect.objectContaining({ prompt: 'Follow up', steer: true }),
-        expect.anything(),
       );
     });
 
@@ -1952,7 +1947,6 @@ describe('GatewayActionImpl', () => {
             approvalMode: 'allow-list',
           },
         }),
-        expect.anything(),
       );
     });
 
@@ -1993,7 +1987,6 @@ describe('GatewayActionImpl', () => {
             taskId: 'T-1',
           }),
         }),
-        expect.anything(),
       );
     });
 
@@ -2026,7 +2019,6 @@ describe('GatewayActionImpl', () => {
           parentMessageId: 'assistant-msg-456',
           prompt: '',
         }),
-        expect.anything(),
       );
     });
 
@@ -2037,10 +2029,11 @@ describe('GatewayActionImpl', () => {
       const connectToGateway = vi.fn();
       const moveQueuedMessages = vi.fn();
       const onOperationCancel = vi.fn();
-      const onMessageAccepted = vi.fn();
-      const replaceMessages = vi.fn();
-
       const controller = new AbortController();
+      // The Stop lands exactly as the persisted response arrives: the server
+      // task exists and this client already knows its operation id.
+      const onMessageAccepted = vi.fn(() => controller.abort('user cancelled'));
+      const replaceMessages = vi.fn();
 
       const mockClient = createMockClient();
       const internalDispatchTopic = vi.fn();
@@ -2126,15 +2119,10 @@ describe('GatewayActionImpl', () => {
         parentOperationId: 'parent-send-msg-op',
       });
       await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
-      controller.abort('user cancelled');
       resolvePersistence(persistedResult);
 
       await expect(execution).resolves.toEqual(persistedResult);
 
-      expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ signal: controller.signal }),
-      );
       // Server task was created before the signal flipped — best-effort
       // interrupt must fire so the agent run stops server-side.
       await vi.waitFor(() =>
@@ -2264,10 +2252,10 @@ describe('GatewayActionImpl', () => {
       const execution = action.executeGatewayAgent({
         context: { agentId: 'agent-1', scope: 'main', threadId: null, topicId: null },
         message: 'Hello',
+        onMessageAccepted: () => controller.abort('user cancelled'),
         parentOperationId: 'parent-send-msg-op',
       });
       await vi.waitFor(() => expect(aiAgentService.execAgentTask).toHaveBeenCalledOnce());
-      controller.abort('user cancelled');
       resolvePersistence(persisted);
       await execution;
 
@@ -2291,6 +2279,135 @@ describe('GatewayActionImpl', () => {
         }),
       );
     });
+
+    /**
+     * @example A Stop while the start request is in flight still stops the run the server creates.
+     */
+    it.each(['owner', 'share'] as const)(
+      'interrupts the %s server run when cancel aborts the in-flight start request',
+      async (surface) => {
+        // ROOT CAUSE:
+        //
+        // The caller abort signal was forwarded into the execAgentTask fetch.
+        // Aborting it rejected only the client promise; the server still
+        // persisted the turn and dispatched the run (for a connected device it
+        // spawned the native CLI). The client never learned the operation id,
+        // so nothing stopped that run, and the next send on the same Codex
+        // thread failed with "already has an active writer".
+        //
+        // Before: no interrupt ever reached the orphaned server run.
+        // After: the send still rejects at once, and the run is interrupted
+        // when the server result arrives.
+        const controller = new AbortController();
+        const connectToGateway = vi.fn();
+        const onMessageAccepted = vi.fn();
+        const state: Record<string, any> = { gatewayConnections: {}, topicDataMap: {} };
+        const set = vi.fn((updater: any) => {
+          if (typeof updater === 'function') Object.assign(state, updater(state));
+          else Object.assign(state, updater);
+        });
+        const get = vi.fn(() => ({
+          ...state,
+          associateMessageWithOperation: vi.fn(),
+          completeOperation: vi.fn(),
+          connectToGateway,
+          getOperationAbortSignal: vi.fn(() => controller.signal),
+          internal_dispatchTopic: vi.fn(),
+          internal_pinTopicStatus: vi.fn(),
+          moveQueuedMessages: vi.fn(),
+          moveVoiceMessages: vi.fn(),
+          onOperationCancel: vi.fn(),
+          replaceMessages: vi.fn(),
+          startOperation: vi.fn(() => ({ operationId: 'gw-op-local' })),
+          switchTopic: vi.fn(),
+        })) as any;
+        (globalThis as any).window = {
+          global_serverConfigStore: {
+            getState: () => ({ serverConfig: { agentGatewayUrl: 'https://gateway.test.com' } }),
+          },
+        };
+        const action = new GatewayActionImpl(set as any, get, undefined);
+        action.createClient = vi.fn(() => createMockClient());
+
+        const persisted = {
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-1',
+          autoStarted: true,
+          createdAt: new Date().toISOString(),
+          message: 'ok',
+          operationId: 'server-op-inflight',
+          status: 'created',
+          success: true,
+          timestamp: new Date().toISOString(),
+          token: 'test-token',
+          topicId: 'topic-1',
+          userMessageId: 'usr-1',
+        } as const;
+        let finishOnServer!: () => void;
+        const serverFinished = new Promise<void>((resolve) => {
+          finishOnServer = resolve;
+        });
+        // Models fetch: an abort rejects the client promise immediately, while
+        // the server keeps executing the request it already received.
+        const startRequest = (_params: unknown, options?: { signal?: AbortSignal }) =>
+          new Promise<typeof persisted>((resolve, reject) => {
+            options?.signal?.addEventListener('abort', () =>
+              reject(new DOMException('The operation was aborted.', 'AbortError')),
+            );
+            void serverFinished.then(() => resolve(persisted));
+          });
+        vi.mocked(aiAgentService.execAgentTask).mockImplementation(startRequest as any);
+        vi.mocked(shareChatService.execAgentTask).mockImplementation(startRequest as any);
+        vi.mocked(aiAgentService.interruptTask).mockResolvedValue({
+          deviceCancellationConfirmed: true,
+          operationId: 'server-op-inflight',
+          success: true,
+        });
+        vi.mocked(shareChatService.interruptTask).mockResolvedValue({ success: true } as any);
+
+        const execution = action.executeGatewayAgent({
+          context: {
+            agentId: 'agent-1',
+            ...(surface === 'share' ? { agentShareId: 'share-1' } : {}),
+            scope: 'main',
+            threadId: null,
+            topicId: 'topic-1',
+          },
+          message: 'Hello',
+          onMessageAccepted,
+          parentOperationId: 'parent-send-msg-op',
+        });
+        const start =
+          surface === 'share' ? shareChatService.execAgentTask : aiAgentService.execAgentTask;
+        await vi.waitFor(() => expect(start).toHaveBeenCalledOnce());
+
+        controller.abort('user cancelled');
+        /** @example The send still settles as cancelled right away. */
+        await expect(execution).rejects.toMatchObject({ name: 'AbortError' });
+        expect(connectToGateway).not.toHaveBeenCalled();
+        expect(onMessageAccepted).not.toHaveBeenCalled();
+
+        finishOnServer();
+        /** @example The orphaned server run is interrupted by its real operation id. */
+        if (surface === 'share') {
+          await vi.waitFor(() =>
+            expect(shareChatService.interruptTask).toHaveBeenCalledWith(
+              'share-1',
+              'topic-1',
+              'server-op-inflight',
+            ),
+          );
+          expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+        } else {
+          await vi.waitFor(() =>
+            expect(aiAgentService.interruptTask).toHaveBeenCalledWith({
+              operationId: 'server-op-inflight',
+              topicId: 'topic-1',
+            }),
+          );
+        }
+      },
+    );
 
     /**
      * @example Send now receives the server's physical device cancellation result.
@@ -3457,7 +3574,6 @@ describe('GatewayActionImpl', () => {
             deviceId: 'device-local-1',
             localDeviceId: 'device-local-1',
           }),
-          expect.anything(),
         );
       });
 
@@ -3521,7 +3637,6 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
           expect.objectContaining({ deviceId: 'device-local-member' }),
-          expect.anything(),
         );
       });
 
@@ -3561,7 +3676,6 @@ describe('GatewayActionImpl', () => {
 
         expect(aiAgentService.execAgentTask).toHaveBeenCalledWith(
           expect.objectContaining({ localDeviceId: 'this-desktop' }),
-          expect.anything(),
         );
         expect(vi.mocked(aiAgentService.execAgentTask).mock.calls.at(-1)?.[0]).not.toHaveProperty(
           'deviceId',
