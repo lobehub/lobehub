@@ -206,6 +206,39 @@ describe('mcpPluginList replica', () => {
     });
   });
 
+  it('keeps the newest query when a superseded search resolves last', async () => {
+    // Both queries share the `all` entry, so a response that resolves after the
+    // search term changed must not repaint the list with the old query's rows —
+    // that would leave the query-gated view showing the wrong search (or stuck).
+    const pendingByQuery = new Map<string, (value: McpListResponse) => void>();
+    fetchSpy.mockImplementation(
+      ({ q }: { q?: string }) =>
+        new Promise<McpListResponse>((resolve) => pendingByQuery.set(q ?? '', resolve)),
+    );
+
+    const hook = renderHook(
+      (props: { q?: string }) =>
+        useToolStore((s) => s.useFetchMCPPluginList)({ pageSize: 20, q: props.q }),
+      { initialProps: {} as { q?: string }, wrapper },
+    );
+
+    hook.rerender({ q: 'foo' });
+    await waitFor(() => expect(pendingByQuery.has('foo')).toBe(true));
+
+    await act(async () => {
+      pendingByQuery.get('foo')!(listPage([plugin('foo-1')], 1));
+    });
+    await waitFor(() => expect(ids(useToolStore.getState().mcpPluginList)).toEqual(['foo-1']));
+
+    // The superseded head request settles late.
+    await act(async () => {
+      pendingByQuery.get('')!(listPage(idsOf(20), 40));
+    });
+
+    expect(useToolStore.getState().mcpPluginList).toMatchObject({ q: 'foo', total: 1 });
+    expect(ids(useToolStore.getState().mcpPluginList)).toEqual(['foo-1']);
+  });
+
   it('drops the painted page set on reset but keeps the persisted row', async () => {
     fetchSpy.mockResolvedValue(listPage([plugin('a')], 1));
 
