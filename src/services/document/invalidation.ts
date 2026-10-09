@@ -1,9 +1,10 @@
 import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
+import { notebookDocumentsResource } from '@/store/notebook/projection';
 import { agentDocumentSkillsResource } from '@/store/tool/slices/agentDocumentSkills/projection';
 
-import { agentDocumentSWRKeys, documentSWRKeys, notebookSWRKeys } from './swrKeys';
+import { agentDocumentSWRKeys, documentSWRKeys } from './swrKeys';
 
 export type DocumentMutationCause =
   'agent-document' | 'document-service' | 'notebook' | 'page-title';
@@ -45,7 +46,11 @@ export const invalidateDocumentMutation = async (
   }
 
   if (topicId) {
-    revalidations.push(mutate(notebookSWRKeys.documents(topicId)));
+    // The topic's document list is a replica, so its sync lives outside the
+    // legacy `notebook:documents` SWR entry. Refresh the affected topic only: a
+    // create / update / delete must reach the notebook portal without waiting
+    // for a remount.
+    revalidations.push(revalidateReplica(notebookDocumentsResource, topicId));
   }
 
   if (agentId) {

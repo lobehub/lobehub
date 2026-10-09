@@ -14,17 +14,13 @@
  * Each factory also exposes `.root` (the namespace string) for `mutate`
  * matchers that compare `key[0]`.
  *
- * Document / page / notebook / agent-document keys are defined in
+ * Document / page / agent-document keys are defined in
  * `@/services/document/swrKeys` (already a factory, widely imported) and
  * re-exported here so the whole set is reachable from one place.
  */
 import { type ConversationContext } from '@lobechat/types';
 
-import {
-  agentDocumentSWRKeys,
-  documentSWRKeys,
-  notebookSWRKeys,
-} from '@/services/document/swrKeys';
+import { agentDocumentSWRKeys, documentSWRKeys } from '@/services/document/swrKeys';
 
 type KeyFactory<A extends unknown[]> = ((...args: A) => readonly unknown[]) & { root: string };
 
@@ -1482,7 +1478,6 @@ export const swrKeys = {
   message: messageKeys,
   messenger: messengerKeys,
   scm: scmKeys,
-  notebook: notebookSWRKeys,
   ollama: ollamaKeys,
   onboarding: onboardingKeys,
   openInApp: openInAppKeys,
