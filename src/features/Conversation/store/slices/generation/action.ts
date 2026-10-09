@@ -570,6 +570,128 @@ const regenerateUserMessageFromSource = async (
   }
 };
 
+/** A replacement prompt for an edited Codex user message. */
+export interface CodexMessageEdit {
+  content: string;
+  /** Updated rich editor state; omitted keeps the original message's state. */
+  editorData?: Record<string, unknown>;
+  /** Called once the copied message is ready, before the replacement run starts. */
+  onAccepted?: () => void;
+  /** Unsent destination retained by the open editor after a preparation failure. */
+  preparedTopic?: {
+    /** Last prompt persisted in the copied message. */
+    content: string;
+    /** Serialized editor state last persisted in the copied message. */
+    editorData?: string;
+    /** Destination user message, never the source message. */
+    messageId: string;
+    /** Source boundary used to prevent reuse by another editor. */
+    sourceMessageId: string;
+    /** Source conversation used to prevent cross-topic reuse. */
+    sourceTopicId: string;
+    /** Destination created for this editor but not yet dispatched. */
+    topicId: string;
+  };
+}
+
+/**
+ * Edit-and-resend for a Codex user message. Codex cannot rewind its native
+ * thread, so the server branches the conversation up to the message into a new
+ * topic carrying the edited prompt, and that topic's ordinary regenerate path
+ * runs it in a fresh session (the executor replays the copied history). The
+ * source topic and its native session are left untouched.
+ *
+ * Rejects until the copied message is ready so the editor keeps the draft;
+ * after acceptance, the run reports its own failures.
+ */
+const editCodexUserMessage = async (
+  messageId: string,
+  source: RegenerateUserMessageSource,
+  edit: CodexMessageEdit,
+) => {
+  const { context, hooks } = source;
+  const chatStore = useChatStore.getState();
+  if (!context.agentId || !context.topicId)
+    throw new Error(t('messageAction.codexEdit.sourceUnavailable', { ns: 'chat' }));
+
+  let branch = edit.preparedTopic;
+  if (branch?.sourceMessageId !== messageId || branch.sourceTopicId !== context.topicId) {
+    const created = await topicService
+      .branchTopicAtMessage({
+        content: edit.content,
+        editorData: edit.editorData,
+        messageId,
+        title: edit.content.slice(0, 80),
+        topicId: context.topicId,
+      })
+      .catch((error: unknown) => {
+        // Transport/parse errors are not user-facing; the editor toasts this and keeps the draft.
+        console.error('[Codex edit] Could not create the branch topic:', error);
+        throw new Error(t('messageAction.codexEdit.branchFailed', { ns: 'chat' }), {
+          cause: error,
+        });
+      });
+    branch = {
+      ...created,
+      content: edit.content,
+      editorData: JSON.stringify(edit.editorData),
+      sourceMessageId: messageId,
+      sourceTopicId: context.topicId,
+    };
+    edit.preparedTopic = branch;
+  }
+  const target: ConversationContext = { ...context, threadId: null, topicId: branch.topicId };
+  const key = messageMapKey(target);
+  if (branch.content !== edit.content || branch.editorData !== JSON.stringify(edit.editorData)) {
+    // The draft can change after a failed read. Update only its unsent copy,
+    // then refresh that bucket before accepting; the source row stays untouched.
+    await messageService.updateMessage(branch.messageId, {
+      content: edit.content,
+      editorData: edit.editorData,
+    });
+    await chatStore.refreshMessages(target);
+    branch.content = edit.content;
+    branch.editorData = JSON.stringify(edit.editorData);
+  }
+  await chatStore.prefetchMessages(target);
+  const displayMessages = useChatStore.getState().messagesMap[key] ?? [];
+  // Background warming may swallow a failed fetch or skip an in-flight request.
+  // Keep the source editor until the copied user message can actually start a run.
+  if (
+    !displayMessages.some(
+      (message) =>
+        message.id === branch.messageId &&
+        message.role === 'user' &&
+        message.content === edit.content,
+    )
+  ) {
+    throw new Error(t('messageAction.codexEdit.prepareFailed', { ns: 'chat' }));
+  }
+  edit.preparedTopic = undefined;
+  edit.onAccepted?.();
+
+  await chatStore.refreshTopic();
+  if (context.isolatedTopic) {
+    // Embedded hosts own their visible topic independently of global navigation.
+    hooks.onTopicCreated?.(branch.topicId);
+  } else {
+    await chatStore.switchTopic(branch.topicId, {
+      onlyIfActiveAgentId: context.agentId,
+      onlyIfActiveTopicIn: [context.topicId],
+    });
+  }
+
+  // The run outlives the editor; it surfaces its own errors.
+  void regenerateUserMessageFromSource(branch.messageId, {
+    context: target,
+    displayMessages,
+    hooks,
+    readDbMessages: () => useChatStore.getState().dbMessagesMap[key] ?? [],
+  }).catch((error: unknown) => {
+    toast.error(error instanceof Error ? error.message : String(error));
+  });
+};
+
 /**
  * Generation Actions
  *
@@ -682,9 +804,10 @@ export interface GenerationAction {
   regenerateAssistantMessage: (messageId: string) => Promise<void>;
 
   /**
-   * Regenerate a user message
+   * Regenerate a user message. With `edit`, resend an edited Codex prompt in a
+   * branched topic instead (see {@link editCodexUserMessage}).
    */
-  regenerateUserMessage: (messageId: string) => Promise<void>;
+  regenerateUserMessage: (messageId: string, edit?: CodexMessageEdit) => Promise<void>;
 
   /**
    * Resend a thread message
@@ -1298,8 +1421,11 @@ export const generationSlice: StateCreator<
     await get().regenerateUserMessage(userId);
   },
 
-  regenerateUserMessage: async (messageId: string) =>
-    regenerateUserMessageFromSource(messageId, captureRegenerateUserMessageSource(get)),
+  regenerateUserMessage: async (messageId: string, edit?: CodexMessageEdit) => {
+    const source = captureRegenerateUserMessageSource(get);
+    if (edit) return editCodexUserMessage(messageId, source, edit);
+    return regenerateUserMessageFromSource(messageId, source);
+  },
 
   resendThreadMessage: async (messageId: string) => {
     // Resend is essentially regenerating the user message in thread context

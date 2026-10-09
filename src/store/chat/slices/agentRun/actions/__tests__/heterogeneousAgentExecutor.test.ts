@@ -2278,6 +2278,80 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       expect(resumedSystemContext).not.toContain('/Users/me/repo');
     });
 
+    describe('edited topic replay', () => {
+      // Copied ancestry of an edited Codex topic: a tool round, then the edited prompt
+      // and this run's placeholder. The projected tool row cannot be restored here.
+      const editedRows = [
+        { content: 'Original question', id: 'u0', role: 'user' },
+        { content: '', id: 'a0', parentId: 'u0', role: 'assistant', tools: [{ id: 'call-1' }] },
+        { content: '', id: 't0', parentId: 'a0', payloadOmitted: true, role: 'tool' },
+        { content: 'Original answer', id: 'a1', parentId: 't0', role: 'assistant' },
+        { content: 'test prompt', id: 'u1', parentId: 'a1', role: 'user' },
+        { content: '...', id: 'ast-initial', parentId: 'u1', role: 'assistant' },
+      ];
+      const storeWith = (metadata: Record<string, unknown>) =>
+        createMockStore({
+          dbMessagesMap: { 'main_agent-1_topic-1': editedRows },
+          topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata }] } },
+        });
+      const codexParams = {
+        ...defaultParams,
+        heterogeneousProvider: { command: 'codex', type: 'codex' as const },
+      };
+
+      it('replays the copied ancestry when an edited topic starts without a native session', async () => {
+        // ROOT CAUSE:
+        // The edited topic copies history into the database but has no native
+        // session, so the local CLI started blank and lost the conversation.
+        const store = storeWith({ editedFrom: { messageId: 'u-source', topicId: 'source' } });
+
+        await executeHeterogeneousAgent(
+          vi.fn(() => store),
+          codexParams,
+        );
+
+        expect(mockSendPrompt.mock.calls[0][0].systemContext).toBe(
+          [
+            '<previous_conversation>',
+            '<user>\nOriginal question\n</user>',
+            '<assistant>\nOriginal answer\n</assistant>',
+            '</previous_conversation>',
+          ].join('\n'),
+        );
+      });
+
+      it('does not replay once the edited topic has its own native session', async () => {
+        const store = storeWith({ editedFrom: { messageId: 'u-source', topicId: 'source' } });
+
+        await executeHeterogeneousAgent(
+          vi.fn(() => store),
+          { ...codexParams, resumeSessionId: 'codex-thread-1' },
+        );
+
+        expect(mockSendPrompt.mock.calls[0][0].systemContext).toBeUndefined();
+      });
+
+      it.each([
+        ['codex', codexParams],
+        ['claude-code', defaultParams],
+      ])(
+        'leaves an ordinary fresh %s session without replay, even with an unrestorable tool row',
+        async (_type, params) => {
+          // A fresh session in an ordinary topic (new topic, cwd-change reset) keeps
+          // canary behavior: no history replay, no tool-payload restore, no throw.
+          const store = storeWith({});
+
+          await executeHeterogeneousAgent(
+            vi.fn(() => store),
+            params,
+          );
+
+          expect(mockSendPrompt).toHaveBeenCalledTimes(1);
+          expect(mockSendPrompt.mock.calls[0][0].systemContext).toBeUndefined();
+        },
+      );
+    });
+
     it('should forward context selections as heterogeneous system context', async () => {
       const store = createMockStore();
       const get = vi.fn(() => store);

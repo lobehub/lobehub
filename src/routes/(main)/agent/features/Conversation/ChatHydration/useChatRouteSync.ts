@@ -80,6 +80,9 @@ export const useChatRouteSync = (options: ChatRouteSyncOptions = {}) => {
     const unsubscribeThread = useChatStore.subscribe(
       (state) => state.activeThreadId,
       (state) => {
+        // A topic switch clears null to undefined. Avoid a redundant query update
+        // against the old pathname, which would undo navigation to the edited topic.
+        if ((state || null) === searchParamsRef.current.get('thread')) return;
         setThread(state || null);
       },
     );

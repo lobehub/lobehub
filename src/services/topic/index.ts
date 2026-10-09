@@ -68,6 +68,17 @@ export class TopicService {
     return lambdaClient.topic.forkTopic.mutate(params);
   };
 
+  /** Copies the conversation up to a user message into a new topic with edited content. */
+  branchTopicAtMessage = (params: {
+    content: string;
+    editorData?: Record<string, any> | null;
+    messageId: string;
+    title?: string;
+    topicId: string;
+  }): Promise<{ messageId: string; topicId: string }> => {
+    return lambdaClient.topic.branchTopicAtMessage.mutate(params);
+  };
+
   batchMoveTopics = (topicIds: string[], targetAgentId: string) => {
     return lambdaClient.topic.batchMoveTopics.mutate({ targetAgentId, topicIds });
   };
