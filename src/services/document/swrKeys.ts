@@ -13,7 +13,3 @@ export const agentDocumentSWRKeys = {
     ['agent:documentReader', agentId, documentId] as const,
   readDocument: (agentId: string, id: string) => ['agent:documentEditor', agentId, id] as const,
 };
-
-export const documentSWRKeys = {
-  editor: (documentId: string) => ['document:editor', documentId] as const,
-};

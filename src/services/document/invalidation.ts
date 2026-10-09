@@ -1,11 +1,12 @@
 import { revalidateReplica } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
 import { portalKeys } from '@/libs/swr/keys';
+import { documentDetailResource } from '@/store/document/slices/document/projection';
 import { notebookDocumentsResource } from '@/store/notebook/projection';
 import { pageDetailResource, pageListResource } from '@/store/page/projection';
 import { agentDocumentSkillsResource } from '@/store/tool/slices/agentDocumentSkills/projection';
 
-import { agentDocumentSWRKeys, documentSWRKeys } from './swrKeys';
+import { agentDocumentSWRKeys } from './swrKeys';
 
 export type DocumentMutationCause =
   'agent-document' | 'document-service' | 'notebook' | 'page-title';
@@ -35,7 +36,9 @@ export const invalidateDocumentMutation = async (
 
   if (documentId) {
     if (refreshDocumentEditor !== false) {
-      revalidations.push(mutate(documentSWRKeys.editor(documentId)));
+      // The document detail is a replica; its sync lives outside the SWR cache
+      // keyed by `document:editor`, so revalidate the replica instead.
+      revalidations.push(revalidateReplica(documentDetailResource, documentId));
     }
     // The page domain is a `@lobechat/replica` domain, so its by-id copy and
     // its list sync through `replica:sync` keys rather than the SWR cache:

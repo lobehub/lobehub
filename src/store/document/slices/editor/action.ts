@@ -8,9 +8,7 @@ import { t } from 'i18next';
 
 import { EMPTY_EDITOR_STATE } from '@/libs/editor/constants';
 import { isValidEditorData } from '@/libs/editor/isValidEditorData';
-import { mutate } from '@/libs/swr';
 import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
 import type { StoreSetter } from '@/store/types';
 import { composeSkillMarkdown, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
@@ -456,7 +454,9 @@ export class EditorActionImpl {
 
     const outcome = this.reconcileRemote(id, latest);
     if (outcome === 'adopted') {
-      void mutate(documentSWRKeys.editor(id), latest, { revalidate: false });
+      // Feed the adopted row back into the detail replica so the next sync
+      // reconciles against it instead of re-adopting a stale server read.
+      this.#get().internal_adoptDocumentDetail(id, latest);
     }
     if (outcome === 'adopted' || !canRetry) throw error;
 
