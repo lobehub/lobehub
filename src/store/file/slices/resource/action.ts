@@ -23,7 +23,7 @@ import {
   RESOURCE_LIST_KEY,
   resourceListResource,
 } from './projection';
-import { getResourceQueryKey } from './utils';
+import { getResourceQueryKey, isOptimisticRowInRequestedPool } from './utils';
 
 const log = debug('resource-manager:action');
 
@@ -126,9 +126,14 @@ export class ResourceActionImpl {
       isHydratable: (_cached, params) =>
         resourceListResource.storageKey(params) === this.#requestedListStorageKey,
       // Rows the explorer inserted locally (an in-flight upload / create) are
-      // the newest and have no server row yet, so a head response — initial,
-      // focus or reconnect — must keep them instead of replacing them away.
-      isClientOnly: (item: ResourceItem) => !!item._optimistic,
+      // the newest and have no server row yet, so a head response for their own
+      // pool — initial, focus or reconnect — must keep them instead of replacing
+      // them away. One from another pool must not: the singleton entry is reused
+      // by every query, so an unscoped predicate would paint folder A's upload
+      // in folder B.
+      isClientOnly: (item: ResourceItem) =>
+        !!item._optimistic &&
+        isOptimisticRowInRequestedPool(item._optimistic.queryKey, this.#requestedListParams),
       set,
       stateKey: 'resourceListReplica',
       view: resourceListLens,

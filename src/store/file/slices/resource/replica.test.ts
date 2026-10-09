@@ -413,6 +413,43 @@ describe('resourceList replica', () => {
     expect(createSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('does not surface an upload from another folder when the next folder answers', async () => {
+    querySpy.mockImplementation((params) =>
+      Promise.resolve(
+        params.parentId === 'folder-b' ? page([row('b-1')], 1) : page([row('a-1')], 1),
+      ),
+    );
+
+    const hook = renderHook(
+      (props: { parentId: string | null }) =>
+        useFileStore((s) => s.useFetchResources)({ parentId: props.parentId }),
+      { initialProps: { parentId: 'folder-a' as string | null }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['a-1']));
+
+    act(() =>
+      useFileStore.getState().insertLocalResource(
+        {
+          fileType: 'text/plain',
+          name: 'Uploading',
+          parentId: 'folder-a',
+          size: 3,
+          sourceType: 'file',
+          url: '',
+        },
+        'temp-upload',
+      ),
+    );
+    expect(ids()).toEqual(['temp-upload', 'a-1']);
+
+    // Folder B has no cache, so its head response merges against A's view: the
+    // upload belongs to A's pool and must not follow the user.
+    hook.rerender({ parentId: 'folder-b' });
+
+    await waitFor(() => expect(ids()).toEqual(['b-1']));
+  });
+
   it('confirms the page with the server after removing rows from a knowledge base view', async () => {
     querySpy.mockResolvedValueOnce(page(rows(50), 60)).mockResolvedValueOnce(page(rows(50, 1), 59));
 
