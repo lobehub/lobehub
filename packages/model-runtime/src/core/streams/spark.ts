@@ -165,6 +165,25 @@ export const transformSparkStream = (
     //  {"id":"demo","model":"deepl-en","choices":[{"index":0,"delta":{"role":"assistant","content":"Introduce yourself."},"finish_reason":"stop"}]}
 
     if (typeof item.delta?.content === 'string' && !!item.delta.content) {
+      if (typeof item.delta.reasoning_content === 'string' && item.delta.reasoning_content !== '') {
+        const chunks: StreamProtocolChunk[] = [
+          { data: item.delta.reasoning_content, id: chunk.id, type: 'reasoning' },
+          { data: item.delta.content, id: chunk.id, type: 'text' },
+        ];
+
+        if (chunk.usage) {
+          if (streamContext) delete streamContext.usageMissingDiagnostics;
+
+          chunks.push({
+            data: convertOpenAIUsage(chunk.usage, payload),
+            id: chunk.id,
+            type: 'usage',
+          });
+        }
+
+        return chunks;
+      }
+
       return appendUsageChunk({ data: item.delta.content, id: chunk.id, type: 'text' });
     }
 
@@ -179,7 +198,33 @@ export const transformSparkStream = (
     typeof item.delta.reasoning_content === 'string' &&
     item.delta.reasoning_content !== ''
   ) {
-    return { data: item.delta.reasoning_content, id: chunk.id, type: 'reasoning' };
+    const reasoningChunk: StreamProtocolChunk = {
+      data: item.delta.reasoning_content,
+      id: chunk.id,
+      type: 'reasoning',
+    };
+
+    if (typeof item.delta.content === 'string' && item.delta.content !== '') {
+      const textChunk: StreamProtocolChunk = {
+        data: item.delta.content,
+        id: chunk.id,
+        type: 'text',
+      };
+
+      if (chunk.usage) {
+        if (streamContext) delete streamContext.usageMissingDiagnostics;
+
+        return [
+          reasoningChunk,
+          textChunk,
+          { data: convertOpenAIUsage(chunk.usage, payload), id: chunk.id, type: 'usage' },
+        ];
+      }
+
+      return [reasoningChunk, textChunk];
+    }
+
+    return reasoningChunk;
   }
 
   if (typeof item.delta?.content === 'string') {
