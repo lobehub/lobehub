@@ -8,10 +8,10 @@ import { Spin } from '@lobehub/ui/base-ui';
 import { Fragment, memo, useCallback, useState } from 'react';
 
 import { Document, Page, pdfjs } from '@/libs/pdfjs';
-import { lambdaQuery } from '@/libs/trpc/client';
 
 import HighlightLayer from './HighlightLayer';
 import { styles } from './style';
+import { useChunkHighlights } from './useChunkHighlights';
 import useResizeObserver from './useResizeObserver';
 
 const options = {
@@ -23,10 +23,16 @@ const maxWidth = 1200;
 
 export interface PDFViewerProps {
   fileId: string;
+  /**
+   * Overlay the file's retrieval chunks on the pages. Turn off for a file the
+   * viewer does not own; see {@link useChunkHighlights}.
+   * @default true
+   */
+  showChunkHighlights?: boolean;
   url: string | null;
 }
 
-const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
+const PDFViewer = memo<PDFViewerProps>(({ url, fileId, showChunkHighlights = true }) => {
   const [numPages, setNumPages] = useState<number>(0);
   const [containerRef, setContainerRef] = useState<HTMLElement | null>(null);
   const [containerWidth, setContainerWidth] = useState<number>();
@@ -47,12 +53,7 @@ const PDFViewer = memo<PDFViewerProps>(({ url, fileId }) => {
     setIsLoaded(true);
   };
 
-  const { data } = lambdaQuery.chunk.getChunksByFileId.useInfiniteQuery(
-    { id: fileId },
-    { getNextPageParam: (lastPage) => lastPage.nextCursor },
-  );
-
-  const dataSource = data?.pages.flatMap((page) => page.items) || [];
+  const dataSource = useChunkHighlights(fileId, showChunkHighlights);
 
   return (
     <Flexbox className={styles.container}>

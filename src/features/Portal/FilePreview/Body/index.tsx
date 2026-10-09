@@ -90,8 +90,12 @@ const FilePreview = () => {
         <Markdown style={{ overflow: 'scroll', paddingInline: 8 }}>{chunkText}</Markdown>
       ) : (
         <Flexbox flex={1} paddingBlock={8} style={{ overflow: 'scroll' }}>
-          {/* Image editing writes back to the viewer's own library file. */}
-          <FileViewer {...data} imageTools={fromSource ? undefined : <ImageEditTools />} />
+          {/* Image editing and chunk highlights act on the viewer's own library file. */}
+          <FileViewer
+            {...data}
+            imageTools={fromSource ? undefined : <ImageEditTools />}
+            showChunkHighlights={!fromSource}
+          />
         </Flexbox>
       )}
     </Flexbox>
