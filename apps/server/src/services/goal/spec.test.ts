@@ -39,6 +39,7 @@ describe('evaluateHomogeneity', () => {
     recipeOutline: 'Replace the store with the replica-backed one',
     repeatable: true,
     unitCount: 50,
+    units: Array.from({ length: 50 }, (_, i) => `Migrate ${i + 1}`),
     variants: [],
   };
   const probes = [
@@ -65,6 +66,12 @@ describe('evaluateHomogeneity', () => {
     ]);
     expect(verdict.batch).toBe(false);
     expect(verdict.reasons.join(' ')).toContain('one reusable transformation');
+  });
+
+  it('refuses a claim whose roster does not list every claimed unit', () => {
+    const verdict = evaluateHomogeneity({ ...spec, units: ['Migrate 1', 'Migrate 2'] }, probes);
+    expect(verdict.batch).toBe(false);
+    expect(verdict.reasons.join(' ')).toContain('roster lists 4 of the 50 claimed units');
   });
 
   it('refuses a claim with no recipe outline', () => {

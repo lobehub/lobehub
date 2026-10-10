@@ -3846,19 +3846,22 @@ export class GoalService {
           };
           await goalModel.updateRolloutState(goalId, rolloutState);
 
-          if (!existingRollout) {
-            await goalModel.updateRolloutPolicy(goalId, {
-              canarySize: rolloutTrigger === 'full' ? undefined : canarySize,
-              spec: {
-                recipeOutline: rolloutClaim.recipeOutline,
-                repeatable: rolloutClaim.repeatable,
-                variantAxes: rolloutClaim.variants,
-              },
-              trigger: rolloutTrigger,
-              units: roster,
-              waveSize: ROLLOUT_WAVE_SIZE_DEFAULT,
-            });
-          }
+          // Always persist what the planner derived — later waves brief their
+          // tasks from the recipe and the gate checks its variant axes — while
+          // keeping whatever the caller chose (trigger, sizes) on top.
+          await goalModel.updateRolloutPolicy(goalId, {
+            ...existingRollout,
+            canarySize:
+              rolloutTrigger === 'full' ? undefined : (existingRollout?.canarySize ?? canarySize),
+            spec: {
+              recipeOutline: rolloutClaim.recipeOutline,
+              repeatable: rolloutClaim.repeatable,
+              variantAxes: rolloutClaim.variants,
+            },
+            trigger: rolloutTrigger,
+            units: roster,
+            waveSize: existingRollout?.waveSize ?? ROLLOUT_WAVE_SIZE_DEFAULT,
+          });
           return committedEffects;
         }
 
@@ -4032,8 +4035,8 @@ export class GoalService {
    *
    * The batch cannot advance on its own, so this opens a decision on the Assay
    * and pauses the goal with the pattern-break reason. The choice is the v3
-   * fork: revise the same recipe (repeat the v1 → v2 loop) or treat it as a new
-   * class and run it in parallel — never a silent park.
+   * fork: revise the same recipe (repeat the v1 → v2 loop) or fork a fresh
+   * recipe for the units that broke, inside this batch — never a silent park.
    */
   private openPatternBreakGate = async (
     graph: GoalGraphSnapshot,
@@ -4055,9 +4058,13 @@ export class GoalService {
           label: '修订配方并重探',
         },
         {
-          description: '把它当成另一个同构类型，与当前批次并排处理',
+          // One batch carries one roster and one gate, so this is not a second
+          // batch running in parallel: it forks the recipe (no `revises`
+          // chain) for the units that broke, inside this same batch.
+          description:
+            '不沿用当前方案的修订链，为出问题的这几项另起一份方案并重探；本批次其余单元在新闸门通过后照常继续',
           id: 'new_class',
-          label: '作为新类型并排处理',
+          label: '另起一份方案重探',
         },
       ],
       question: `${message}\n\n该如何处理这个批次？`,
@@ -4082,10 +4089,10 @@ export class GoalService {
    *
    * The person's answer is the single human judgment; the coordinator opens the
    * next recipe round from it. `revise` chains a new Template onto the old one
-   * (`revises`) and re-probes the next roster slice; `new_class` forks a fresh
-   * Template with no chain edge. In both cases the members that broke are
-   * retired and the rollout returns to the probe phase, so the class is proved
-   * again from a fresh canary instead of a manual rerun.
+   * (`revises`); `new_class` forks a fresh Template with no chain edge, still
+   * inside this batch. Either way the members that broke are retired and
+   * re-opened as the new canary, and the rollout returns to the probe phase, so
+   * the class is proved again instead of rerun by hand.
    */
   private restartRolloutLoop = async (
     goalId: string,
@@ -4185,6 +4192,9 @@ export class GoalService {
     await this.goalModel.updateRolloutState(goalId, {
       ...state,
       assayNodeId: assay.id,
+      // The new canary is a fresh round: the old waves' members — the broken
+      // ones now retired — must not count against its gate.
+      massNodeIds: undefined,
       phase: 'probe',
       probeNodeIds: probeIds,
       // A re-opened unit was already counted when it was first released.

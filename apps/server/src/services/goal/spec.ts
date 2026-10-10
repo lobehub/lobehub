@@ -121,9 +121,9 @@ export const uncoveredAxisValues = (
  *
  * Every condition must hold: the planner marked it repeatable, named the one
  * reusable transformation, counted at least the threshold of homogeneous units,
- * listed more than one probe, and the probes really read as one mould after
- * masking. Any failure keeps the ordinary one-unit-per-task decomposition and
- * records why.
+ * listed every one of them in the roster, listed more than one probe, and the
+ * probes really read as one mould after masking. Any failure keeps the ordinary
+ * one-unit-per-task decomposition and records why.
  */
 export const evaluateHomogeneity = (
   spec: BatchSpecDraft,
@@ -137,6 +137,15 @@ export const evaluateHomogeneity = (
   if (!spec.recipeOutline?.trim()) reasons.push('no reusable recipe outline');
   if (!Number.isFinite(spec.unitCount) || spec.unitCount < minUnits)
     reasons.push(`unitCount ${spec.unitCount} is below the threshold ${minUnits}`);
+  // The roster is what the waves deliver: a claim the roster cannot account for
+  // would exhaust it early and silently drop every unit it left out.
+  const roster = new Set(
+    [...briefs.map((brief) => brief.title), ...(spec.units ?? [])]
+      .map((title) => title.trim())
+      .filter(Boolean),
+  );
+  if (Number.isFinite(spec.unitCount) && roster.size < spec.unitCount)
+    reasons.push(`roster lists ${roster.size} of the ${spec.unitCount} claimed units`);
   if (briefs.length < 2) reasons.push('fewer than two probe units');
 
   if (briefs.length >= 2 && minPairwiseSimilarity(briefs) < HOMOGENEITY_MIN_SIMILARITY)

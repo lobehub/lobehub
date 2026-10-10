@@ -2131,6 +2131,13 @@ describe('GoalService', () => {
     const [broken, ...settled] = state.probeNodeIds;
     for (const id of settled) await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
     await graphModel.updateNodeStatus(graph.goal.id, broken, 'waiting');
+    // A wave the round already released, whose member broke and was retired.
+    const massMember = await graphModel.createNode(graph.goal.id, {
+      kind: 'task',
+      scopeId: state.batchNodeId,
+      title: 'Unit 6',
+    });
+    await graphModel.updateNodeStatus(graph.goal.id, massMember!.id, 'retired');
 
     const decision = await graphModel.createDecision(graph.goal.id, state.assayNodeId!, {
       authority: 'user',
@@ -2142,7 +2149,11 @@ describe('GoalService', () => {
       requestedUserId: userId,
     });
     await graphModel.updateNodeStatus(graph.goal.id, state.assayNodeId!, 'waiting');
-    await goalModel.updateRolloutState(graph.goal.id, { ...state, phase: 'pattern_break' });
+    await goalModel.updateRolloutState(graph.goal.id, {
+      ...state,
+      massNodeIds: [massMember!.id],
+      phase: 'pattern_break',
+    });
     await serverDB.update(goals).set({ status: 'paused' }).where(eq(goals.id, graph.goal.id));
 
     await service.decide(graph.goal.id, decision!.id, 'revise', '补上冷启动这一步');
@@ -2151,9 +2162,10 @@ describe('GoalService', () => {
     const next = after.goal.config!.rolloutState!;
     // Decision #4: the broken unit runs again as a new task, the old one retires.
     expect(after.nodes.find((n) => n.id === broken)?.status).toBe('retired');
-    expect(next.probeNodeIds).toHaveLength(1);
-    const reopened = after.nodes.find((n) => n.id === next.probeNodeIds[0])!;
-    expect(reopened.title).toBe('Unit 1');
+    // Both units that broke this round — the probe and the wave member — re-open.
+    const reopenedNodes = next.probeNodeIds.map((id) => after.nodes.find((n) => n.id === id)!);
+    expect(reopenedNodes.map((n) => n.title).sort()).toEqual(['Unit 1', 'Unit 6']);
+    const reopened = reopenedNodes.find((n) => n.title === 'Unit 1')!;
     expect(
       after.edges.some(
         (e) =>
@@ -2162,6 +2174,41 @@ describe('GoalService', () => {
     ).toBe(true);
     // Re-opening is not a new release: the roster cursor stays where it was.
     expect(next.releasedCount).toBe(state.releasedCount);
+    // The new canary is a fresh round: the old wave's retired member no longer
+    // counts against its gate (it would re-open the same break at once).
+    expect(next.massNodeIds).toBeUndefined();
+  });
+
+  it('persists the planned recipe when the caller already chose a canary rollout', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [{ axis: 'cold-start', values: ['yes', 'no'] }],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      config: { rollout: { canarySize: 3, trigger: 'canary', waveSize: 7 } },
+      title: 'Migrate stores',
+    });
+    await service.tick(graph.goal.id);
+
+    const policy = (await service.graph(graph.goal.id)).goal.config!.rollout!;
+    // What the planner derived is kept — later waves brief from it, the gate checks its axes…
+    expect(policy.spec?.recipeOutline).toBe('把 store 换成 replica 支撑的实现');
+    expect(policy.spec?.variantAxes).toEqual([{ axis: 'cold-start', values: ['yes', 'no'] }]);
+    expect(policy.units).toHaveLength(50);
+    // …and what the caller chose still wins.
+    expect(policy).toMatchObject({ canarySize: 3, trigger: 'canary', waveSize: 7 });
   });
 
   it('asks a blocking question before planning, then plans once with the answer', async () => {

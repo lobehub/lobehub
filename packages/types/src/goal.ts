@@ -455,7 +455,10 @@ export interface GoalRolloutState {
   assayNodeId?: string;
   /** The `batch` container node. */
   batchNodeId: string;
-  /** Node ids of the mass tasks released so far, oldest wave first. */
+  /**
+   * Node ids of the mass tasks the current round released, oldest wave first.
+   * A restarted canary starts a new round and clears it.
+   */
   massNodeIds?: string[];
   /** Phase the rollout is in; the coordinator reads this to pick its move. */
   phase: GoalRolloutPhase;
