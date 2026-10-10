@@ -147,6 +147,33 @@ describe('createReplicaSlice', () => {
       expect(failing.store.getState().lists.b).toBeUndefined();
     });
 
+    it('runs onHydrated with the hydrated value, and skips it when nothing was stored', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });
+      let resolveFetch!: (value: string[]) => void;
+      const fetcher = vi.fn(() => new Promise<string[]>((resolve) => (resolveFetch = resolve)));
+      const { slice, store } = setup({ fetcher, storage });
+      const seen: string[][] = [];
+      renderHook(() => slice.useSync({ id: 'a' }, { onHydrated: (data) => seen.push(data) }), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(store.getState().lists.a).toEqual(['cached']));
+      expect(seen).toEqual([['cached']]);
+
+      await act(async () => resolveFetch(['server']));
+      await waitFor(() => expect(store.getState().lists.a).toEqual(['server']));
+      // The network response stays `onSuccess`'s job; onHydrated does not fire for it.
+      expect(seen).toEqual([['cached']]);
+
+      // An empty slot has no persisted value, so nothing is replayed.
+      const empty = setup();
+      const missed = vi.fn();
+      renderHook(() => empty.slice.useSync({ id: 'b' }, { onHydrated: missed }), { wrapper });
+      await waitFor(() => expect(empty.store.getState().lists.b).toEqual(['server']));
+      expect(missed).not.toHaveBeenCalled();
+    });
+
     it('drops the prior persisted projection when `toPersisted` reports a confirmed absence', async () => {
       const storage = createMemoryStorage();
       storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });

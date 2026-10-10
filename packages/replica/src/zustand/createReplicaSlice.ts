@@ -48,7 +48,10 @@ export interface ReplicaSyncErrorContext {
   scope: string;
 }
 
-export interface ReplicaSyncOptions<TFetched = unknown> extends ReplicaSyncSchedule {
+export interface ReplicaSyncOptions<
+  TFetched = unknown,
+  TData = unknown,
+> extends ReplicaSyncSchedule {
   enabled?: boolean;
   /**
    * Side effects of a failed fetch (error side-maps); the store view is left as is.
@@ -57,6 +60,13 @@ export interface ReplicaSyncOptions<TFetched = unknown> extends ReplicaSyncSched
    * active once the callback runs.
    */
   onError?: (error: unknown, context: ReplicaSyncErrorContext) => void;
+  /**
+   * Side effects of a hydrated persisted value, run after it is folded into the
+   * replica. A cold start with no network (offline / slow) has no response for
+   * `onSuccess` to run on, so the same "success" handling must also run off the
+   * persisted value it paints.
+   */
+  onHydrated?: (data: TData) => void;
   /**
    * Side effects of a response, run after it is folded into the replica
    * (e.g. adopting an active id, or settling a "not found" state).
@@ -139,7 +149,13 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
    */
   const useSync = (
     params: TParams | null | undefined,
-    { enabled = true, onError, onSuccess, ...schedule }: ReplicaSyncOptions<TFetched> = {},
+    {
+      enabled = true,
+      onError,
+      onHydrated,
+      onSuccess,
+      ...schedule
+    }: ReplicaSyncOptions<TFetched, TData> = {},
   ): ReplicaSyncResult => {
     const scope = resource.scope.use();
     const key = params ? resource.key(params) : undefined;
@@ -162,7 +178,14 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
         ? replicaKeys.hydrate(resource.name, resource.version, scope, resource.storageKey(params!))
         : null,
       async () => {
-        await hydrate(params!, scope);
+        const didHydrate = await hydrate(params!, scope);
+        // A persisted row is a successful value with no network response: replay
+        // the success side effects off it, so an offline / slow first paint still
+        // adopts the roster and settles the flags the response path would.
+        if (didHydrate) {
+          const hydrated = view.get(get(), key!);
+          if (hydrated !== undefined) onHydrated?.(hydrated);
+        }
         return true;
       },
       { once: true },

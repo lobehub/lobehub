@@ -28,12 +28,15 @@ vi.mock('@/services/chatGroup', () => ({
   },
 }));
 
+/** Shared agent-store probe, so the detail side effects can be asserted. */
+const agentStoreMock = vi.hoisted(() => ({
+  agentMap: {} as Record<string, any>,
+  internal_dispatchAgentMap: vi.fn(),
+  setActiveAgentId: vi.fn(),
+}));
+
 vi.mock('@/store/agent', () => ({
-  getAgentStoreState: vi.fn(() => ({
-    agentMap: {},
-    internal_dispatchAgentMap: vi.fn(),
-    setActiveAgentId: vi.fn(),
-  })),
+  getAgentStoreState: vi.fn(() => agentStoreMock),
 }));
 
 vi.mock('@/store/chat', () => ({
@@ -90,6 +93,7 @@ describe('agentGroup store replica', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    agentStoreMock.agentMap = {};
     useAgentGroupStore.setState({ ...initialChatGroupState });
   });
 
@@ -98,6 +102,7 @@ describe('agentGroup store replica', () => {
       [...scopes].flatMap((scope) => [
         agentGroupListResource.storage!.remove({ queryKey: LIST_STORAGE_KEY, scope }),
         agentGroupDetailResource.storage!.remove({ queryKey: detailStorageKey('g1'), scope }),
+        agentGroupDetailResource.storage!.remove({ queryKey: detailStorageKey('g2'), scope }),
       ]),
     );
     cleanup();
@@ -390,5 +395,86 @@ describe('agentGroup store replica', () => {
     expect(
       await agentGroupListResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope: scopeB }),
     ).toBeUndefined();
+  });
+
+  // P1: the group list is the authoritative, complete set. A group it no longer
+  // returns was deleted or is no longer visible, so its detail must be dropped
+  // from `groupMap` (and the persisted replica) — otherwise selectors such as
+  // the supervisor fallback keep resolving a group the server does not list.
+  it('prunes a detail the authoritative list no longer carries, from memory and storage', async () => {
+    const scope = createScope();
+    getGroups.mockResolvedValue([groupRow('g1'), groupRow('g2')]);
+    getGroupDetail.mockImplementation(async (groupId: string) => groupDetail(groupId));
+
+    await useAgentGroupStore.getState().loadGroups();
+    await useAgentGroupStore.getState().internal_fetchGroupDetail('g1');
+    await useAgentGroupStore.getState().internal_fetchGroupDetail('g2');
+    expect(useAgentGroupStore.getState().groupMap.g2).toBeDefined();
+    await vi.waitFor(async () =>
+      expect(
+        (await agentGroupDetailResource.storage!.get({ queryKey: detailStorageKey('g2'), scope }))
+          ?.data,
+      ).toBeDefined(),
+    );
+
+    // `g2` is gone from the next authoritative list.
+    getGroups.mockResolvedValue([groupRow('g1')]);
+    await useAgentGroupStore.getState().loadGroups();
+
+    expect(useAgentGroupStore.getState().groups.map((group) => group.id)).toEqual(['g1']);
+    expect(useAgentGroupStore.getState().groupMap.g2).toBeUndefined();
+    // The group that is still listed keeps its detail.
+    expect(useAgentGroupStore.getState().groupMap.g1).toBeDefined();
+    await vi.waitFor(async () =>
+      expect(
+        await agentGroupDetailResource.storage!.get({ queryKey: detailStorageKey('g2'), scope }),
+      ).toBeUndefined(),
+    );
+  });
+
+  // P1: a persisted detail hydrates with no network response. Its success side
+  // effects must run off the hydrated value too, or an offline / slow first
+  // paint resolves tools / models through an empty (or previously active) agent
+  // and stays behind the 404 guard.
+  it('replays the group-detail side effects for a hydrated value', async () => {
+    const scope = createScope();
+    const roster = [
+      { id: 'a1', isSupervisor: false, title: 'Member', updatedAt: new Date('2030-01-01') },
+    ];
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      {
+        data: {
+          ...groupDetail('g1', 'Persisted detail'),
+          agents: roster,
+          supervisorAgentId: 'sup-1',
+        } as any,
+        updatedAt: 1,
+      },
+    );
+
+    // A stale not-found flag left by an earlier (failed) visit.
+    useAgentGroupStore.setState({ groupNotFoundMap: { g1: true } });
+
+    getGroupDetail.mockImplementation(pending);
+    const session = renderHook(() => useAgentGroupStore.getState().useFetchGroupDetail(true, 'g1'));
+
+    await vi.waitFor(() =>
+      expect(useAgentGroupStore.getState().groupMap.g1?.title).toBe('Persisted detail'),
+    );
+    // … roster copied into the agent store …
+    await vi.waitFor(() =>
+      expect(agentStoreMock.internal_dispatchAgentMap).toHaveBeenCalledWith(
+        'a1',
+        expect.objectContaining({ id: 'a1' }),
+      ),
+    );
+    // … supervisor adopted as the active agent …
+    expect(agentStoreMock.setActiveAgentId).toHaveBeenCalledWith('sup-1');
+    // … and the stale 404 cleared, all with no network response.
+    expect(useAgentGroupStore.getState().groupNotFoundMap.g1).toBeUndefined();
+
+    await vi.waitFor(() => expect(session.result.current.isHydrated).toBe(true));
+    session.unmount();
   });
 });

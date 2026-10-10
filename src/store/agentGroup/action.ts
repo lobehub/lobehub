@@ -188,6 +188,24 @@ class ChatGroupInternalAction implements ResetableStore {
     }
   };
 
+  /**
+   * The side effects of a group detail that resolved successfully, whether it
+   * came from the network or from the persisted replica: adopt the roster and
+   * supervisor, and settle the not-found state (`null` is the settled "gone /
+   * no access" state). Running it off the hydrated value too is what lets a
+   * cold start with a slow / failed / offline network paint a usable group page
+   * instead of an empty roster behind the 404 guard.
+   */
+  #applyGroupDetail = (groupId: string, groupDetail: AgentGroupDetail | null | undefined) => {
+    if (!groupDetail) {
+      this.#removeStaleGroup(groupId);
+      this.#markGroupNotFound(groupId);
+      return;
+    }
+    this.#clearGroupNotFound(groupId);
+    this.#syncGroupAgents(groupDetail, { onlyIfNewer: true });
+  };
+
   internal_fetchGroupDetail = async (groupId: string) => {
     const scope = this.#captureScope();
     const groupDetail = await chatGroupService.getGroupDetail(groupId);
@@ -238,6 +256,10 @@ class ChatGroupInternalAction implements ResetableStore {
    * `packages/replica/src/core/reducer.ts`). A plain local entry would have
    * blocked that hydrate, stranding the group page on default config and no
    * members whenever the network was slow, failed or offline.
+   *
+   * This only merges; it never prunes. It is also called with a partial set
+   * (the group sessions the session list carries), so a caller that holds the
+   * complete group list prunes through {@link #reconcileGroupMap} instead.
    */
   internal_updateGroupMaps = (groups: ChatGroupItem[]) => {
     for (const group of groups) {
@@ -262,6 +284,22 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   /**
+   * Fold the complete, authoritative group list into `groupMap`: a detail the
+   * list no longer carries (the group was deleted, or the caller lost access)
+   * is pruned from memory and from the persisted replica, then the returned rows
+   * are merged in. Without the prune a removed group keeps resolving its
+   * metadata and permissions through `groupMap` (e.g. the supervisor fallback)
+   * even though `getGroups()` stopped listing it.
+   */
+  #reconcileGroupMap = (groups: ChatGroupItem[]) => {
+    const listedIds = new Set(groups.map((group) => group.id));
+    for (const groupId of Object.keys(this.#get().groupMap)) {
+      if (!listedIds.has(groupId)) this.#groupRows.remove(groupId);
+    }
+    this.internal_updateGroupMaps(groups);
+  };
+
+  /**
    * Refresh the group list. The persisted projection paints as soon as it is
    * read, while the network confirms it in parallel, instead of blanking the
    * list first; the rows then seed `groupMap`.
@@ -277,7 +315,7 @@ class ChatGroupInternalAction implements ResetableStore {
     if (!this.#isStillInScope(scope)) return;
 
     this.#groupList.replace(LIST_PARAMS, groups, scope);
-    this.internal_updateGroupMaps(groups);
+    this.#reconcileGroupMap(groups);
   };
 
   refreshGroupDetail = async (groupId: string) => {
@@ -299,27 +337,24 @@ class ChatGroupInternalAction implements ResetableStore {
   /**
    * Fetch orchestration only; read the group through `groupMap` /
    * `agentGroupSelectors`. A response of `null` is the settled "gone / no
-   * access" state.
+   * access" state. The detail also hydrates from the persisted replica with no
+   * response, so the same side effects run off the hydrated value as well.
    */
   useFetchGroupDetail = (enabled: boolean, groupId: string): ReplicaSyncResult =>
     this.#groupDetail.useSync(groupId ? { groupId } : null, {
       enabled,
-      onSuccess: (groupDetail) => {
-        if (!groupDetail) {
-          this.#removeStaleGroup(groupId);
-          this.#markGroupNotFound(groupId);
-          return;
-        }
-        this.#clearGroupNotFound(groupId);
-        this.#syncGroupAgents(groupDetail, { onlyIfNewer: true });
-      },
+      onHydrated: (groupDetail) => this.#applyGroupDetail(groupId, groupDetail),
+      onSuccess: (groupDetail) => this.#applyGroupDetail(groupId, groupDetail),
     });
 
-  /** Fetch orchestration only; the list seeds `groupMap` through its `onSuccess`. */
+  /**
+   * Fetch orchestration only; the authoritative list reconciles `groupMap`
+   * through its `onSuccess`.
+   */
   useFetchGroups = (enabled: boolean, isLogin: boolean): ReplicaSyncResult =>
     this.#groupList.useSync(LIST_PARAMS, {
       enabled: enabled && isLogin,
-      onSuccess: (groups) => this.internal_updateGroupMaps(groups),
+      onSuccess: (groups) => this.#reconcileGroupMap(groups),
     });
 }
 
