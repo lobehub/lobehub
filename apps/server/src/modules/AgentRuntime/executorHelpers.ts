@@ -288,9 +288,16 @@ export const buildServerVirtualSubAgentRunner = (
       // 1. Create (or, after approval, reuse) the pending placeholder tool message (mirrors the normal
       //    tool-message shape in call_tool) that anchors the isolation thread
       //    and renders a loading state until the bridge backfills it.
-      const pendingState = subAgentId
-        ? { status: 'pending', threadId: subAgentId }
-        : { status: 'pending' };
+      // Async dispatch (the default) writes its own anchor state BEFORE forking
+      // the child, so a child that finishes first cannot have its result
+      // clobbered by a later runtime write (see the pre-created-anchor path in
+      // the agent-runtime `tool` executor). `wait:true` keeps the legacy empty
+      // `pending` park.
+      const asyncDispatch = wait !== true;
+      const pendingState = {
+        status: asyncDispatch ? 'dispatched' : 'pending',
+        ...(subAgentId && { threadId: subAgentId }),
+      };
       if (existingToolMessageId) {
         await ctx.messageModel.updatePluginState(existingToolMessageId, pendingState);
       }
@@ -298,7 +305,7 @@ export const buildServerVirtualSubAgentRunner = (
         ? { id: existingToolMessageId }
         : await ctx.messageModel.create({
             agentId,
-            content: '',
+            content: asyncDispatch ? 'Sub-agent dispatched — it runs in the background.' : '',
             groupId: state.origin?.groupId ?? undefined,
             parentId: parentMessageId,
             plugin: chatToolPayload as any,

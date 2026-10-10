@@ -613,9 +613,10 @@ describe('tool executors', () => {
 
   // Default async dispatch: a non-deferred result that carries
   // `state.toolMessageId` (a `callSubAgent` dispatch that pre-created its anchor
-  // card) must REUSE that row. Writing a second tool message would leave the
-  // dispatch card and the result disagreeing.
-  it('reuses a pre-created anchor row for a non-deferred result', async () => {
+  // card) must REUSE that row WITHOUT writing to it. The dispatch owns the
+  // anchor content and persists it before forking the child; an update here
+  // would race the completion bridge and could clobber a finished result.
+  it('reuses a pre-created anchor row for a non-deferred result without rewriting it', async () => {
     runTool.mockResolvedValue({
       attempts: 1,
       result: {
@@ -636,11 +637,8 @@ describe('tool executors', () => {
       createState(),
     );
 
-    expect(updateToolMessage).toHaveBeenCalledWith(
-      'tool-msg-anchor',
-      expect.objectContaining({ content: 'Sub-agent dispatched (threadId: thread-9)' }),
-    );
     expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).not.toHaveBeenCalled();
     // Non-deferred: the parent turn does NOT park.
     expect(result.newState.status).not.toBe('waiting_for_async_tool');
   });

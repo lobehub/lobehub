@@ -299,12 +299,6 @@ export const AgentManagementManifest: BuiltinToolManifest = {
               'If true (and in a group context), the orchestration will end after this agent responds, without calling the supervisor again. Only relevant when used within agent groups.',
             type: 'boolean',
           },
-          wait: {
-            default: false,
-            description:
-              'When true, BLOCK this turn until the called agent finishes and return its result inline (use only when the next step strictly needs it). Default false: dispatch and return immediately with the thread id — the agent runs in the background and its result is written back to the call agent card when it completes. Check progress anytime with `lh thread view <threadId>`.',
-            type: 'boolean',
-          },
         },
         required: ['agentId', 'instruction'],
         type: 'object',

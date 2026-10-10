@@ -691,8 +691,12 @@ export const callTool =
         toolMessageId = payload.parentMessageId;
         await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
       } else if (preCreatedId) {
+        // The tool already persisted this row (an async sub-agent dispatch owns
+        // its anchor content and writes it before forking the child). Updating it
+        // here would RACE the completion bridge: a child that finishes before this
+        // write would have its result overwritten by the dispatch notice. Reuse
+        // the id and write nothing.
         toolMessageId = preCreatedId;
-        await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
       } else {
         const toolMessage = await createToolMessage({
           host,
@@ -1016,8 +1020,8 @@ export const callToolsBatch =
           toolMessageId = existingMessageId;
           await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
         } else if (preCreatedId) {
+          // Same as the single-tool path: the tool owns this anchor's content.
           toolMessageId = preCreatedId;
-          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
         } else {
           const toolMessage = await createToolMessage({
             host,
