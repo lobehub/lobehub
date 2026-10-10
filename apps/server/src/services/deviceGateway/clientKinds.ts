@@ -1,4 +1,4 @@
-import { deviceRpcClients } from '@lobechat/device-control';
+import { deviceRpcClients } from '@lobechat/device-control/rpc-clients';
 import type { GatewayDispatchTarget } from '@lobechat/device-gateway-client';
 import { deviceToolClients } from '@lobechat/mecha';
 import type { DeviceClient } from '@lobechat/types';

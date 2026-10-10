@@ -36,7 +36,7 @@ import type {
   CreateDirectoryParams,
   CreateFileParams,
 } from '@lobechat/local-file-shell/types';
-import type { DeviceClient, DeviceCliRestartParams } from '@lobechat/types';
+import type { DeviceCliRestartParams } from '@lobechat/types';
 
 import { getClaudeCodeQuota, type GetClaudeCodeQuotaParams } from './claudeCodeQuota';
 import { getCodexQuota, type GetCodexQuotaParams } from './codexQuota';
@@ -141,35 +141,7 @@ export const DEVICE_RPC_METHODS = [
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
 
-/**
- * RPC methods only the desktop app implements: the CLI daemon passes no
- * handler for them (no recoverable trash, no self-update), so a call that lands
- * on `lh connect` is rejected.
- */
-const DESKTOP_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
-  'trashLocalFiles',
-  'getAppUpdateState',
-  'checkAppUpdate',
-  'installAppUpdate',
-]);
-
-/**
- * RPC methods only the CLI daemon (`lh connect`) implements: the desktop app
- * passes no CLI self-update or restart handler, so a call that lands on the
- * desktop is rejected.
- */
-const CLI_ONLY_RPC_METHODS: ReadonlySet<string> = new Set<DeviceRpcMethod>([
-  'getCliUpdateState',
-  'checkCliUpdate',
-  'restartCli',
-]);
-
-/** Device clients that can serve `method`; `undefined` means any client. */
-export const deviceRpcClients = (method: string): DeviceClient[] | undefined => {
-  if (DESKTOP_ONLY_RPC_METHODS.has(method)) return ['desktop'];
-  if (CLI_ONLY_RPC_METHODS.has(method)) return ['cli'];
-  return undefined;
-};
+export { deviceRpcClients } from './rpcClients';
 
 /** Why a client without the app-update handlers rejects those RPCs. */
 export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
