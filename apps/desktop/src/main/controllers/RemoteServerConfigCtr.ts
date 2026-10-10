@@ -133,6 +133,17 @@ export default class RemoteServerConfigCtr extends ControllerModule {
     const merged = this.normalizeConfig({ ...prev, ...config });
     storeManager.set('dataSyncConfig', merged);
 
+    // The device gateway connection belongs to the login it was opened for.
+    // Pointing at another server, or deactivating this one, ends that login:
+    // close it and drop whatever was resolved for it before anything reconnects.
+    const [prevServerUrl, nextServerUrl] = await Promise.all([
+      this.getRemoteServerUrl(prev),
+      this.getRemoteServerUrl(merged),
+    ]);
+    if (prevServerUrl !== nextServerUrl || (prev.active && !merged.active)) {
+      await this.app.getService(GatewayConnectionService)?.disconnect();
+    }
+
     this.broadcastRemoteServerConfigUpdated();
 
     return true;

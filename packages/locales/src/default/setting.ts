@@ -20,6 +20,20 @@ export default {
   'devices.cliUpdate.retryCommand': 'Retry same request',
   'devices.cliUpdate.ambiguous':
     'The request may have been accepted. Refresh status or retry the same request; do not start another operation.',
+  'devices.gateway.cleared': 'Device Gateway address cleared',
+  'devices.gateway.current': 'In use: {{url}} ({{source}})',
+  'devices.gateway.desc':
+    'Used first, for every server you sign in to. Leave it empty, or enter the LobeHub Cloud gateway, to use the address your server provides, or the LobeHub Cloud gateway if it provides none.',
+  'devices.gateway.invalid':
+    'Enter a full http(s) address without a username, password, query, or fragment, like https://gateway.example.com',
+  'devices.gateway.save': 'Save Address',
+  'devices.gateway.saveFailed': "Couldn't save the address. Try again.",
+  'devices.gateway.saved': 'Device Gateway address saved',
+  'devices.gateway.source.manual': 'saved in settings',
+  'devices.gateway.source.official': 'LobeHub Cloud default',
+  'devices.gateway.source.override': 'set by DEVICE_GATEWAY_URL',
+  'devices.gateway.source.server': 'provided by the server',
+  'devices.gateway.title': 'Device Gateway Address',
   'devices.keepAwake.desc':
     'Prevent automatic sleep while this computer is connected as a device, so it stays reachable. The display can still turn off; closing a laptop lid without an external display still puts it to sleep.',
   'devices.keepAwake.title': 'Keep Awake While Connected',

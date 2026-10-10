@@ -67,6 +67,32 @@ If you are deploying LobeHub using one-click deployment methods (such as Vercel,
 4. Click the "Connect" button.
 5. You will be redirected to the login page; after completing the authorization, you can use your self-hosted configuration.
 
+### Connecting the Device Gateway
+
+The Device Gateway lets agents run tools on this computer. The desktop app and CLI connect to `<gateway address>/ws` with a token from the instance they are signed in to, so they must use that instance's gateway. In Docker Compose this is the `gateway` service on port `8788`. Never give clients the server-internal `DEVICE_GATEWAY_URL` (`http://gateway:8788`).
+
+1. Publish port `8788` over HTTPS with WebSocket upgrades enabled. For example, in Nginx:
+
+   ```nginx
+   location / {
+       proxy_pass http://127.0.0.1:8788;
+       proxy_http_version 1.1;
+       proxy_set_header Upgrade $http_upgrade;
+       proxy_set_header Connection 'upgrade';
+       proxy_set_header Host $host;
+   }
+   ```
+
+   Running `curl https://device-gateway.example.com/health` on the client computer prints `OK`.
+
+2. Optional: set [`DEVICE_GATEWAY_PUBLIC_URL`](/docs/self-hosting/environment-variables/basic#device_gateway_public_url) to this address so clients that support discovery get it from your instance. You can also leave it unset and give each client the address.
+
+3. In the desktop app, click the **Device Gateway** icon in the title bar and turn on the switch. The app uses the first address it finds: its own `DEVICE_GATEWAY_URL` environment variable, a saved address other than `https://device-gateway.lobehub.com`, the address published by your instance, then `https://device-gateway.lobehub.com`.
+
+4. For the CLI, run `lh login --server https://lobe.example.com`, then `lh connect`. `lh` uses `--gateway <url>` (saved for later runs), the address saved for this instance, then the address published by your instance. If none exists, it asks for `--gateway <url>`.
+
+<Callout>Clients without discovery support ignore the published address. Give them the address with the desktop `DEVICE_GATEWAY_URL` or `lh connect --gateway <url>`.</Callout>
+
 ## Frequently Asked Questions
 
 ### 502 Bad Gateway
@@ -94,6 +120,15 @@ proxy_busy_buffers_size 32k;
 **Solution:**
 
 Check if the `APP_URL` environment variable matches the URL you are accessing.
+
+### Device Gateway Does Not Connect
+
+**Issue:** The Device Gateway switch turns off right after you turn it on, or the connection keeps retrying.
+
+**Solution:**
+
+- If `lh status` prints `FAILED - Authentication failed: crypto/rsa: verification error`, the gateway does not trust the instance that issued the token. Use the gateway of the instance the client is signed in to, and check that the gateway's `JWKS_PUBLIC_KEY` matches your current `JWKS_KEY`. Without a published or configured address, the desktop app uses the LobeHub Cloud gateway, which rejects self-hosted tokens.
+- If the connection times out, run the `/health` check above on the client computer, then check the reverse proxy's WebSocket settings and certificate.
 
 ### macOS Startup Hangs or Crashes
 

@@ -399,6 +399,47 @@ describe('AuthCtr', () => {
         expect(mockWindow.webContents.send).toHaveBeenCalledWith('authorizationSuccessful');
       });
 
+      it("replaces the previous login's gateway connection instead of joining it", async () => {
+        const gatewaySrv = {
+          connect: vi.fn().mockResolvedValue({ success: true }),
+          restart: vi.fn().mockResolvedValue({ success: true }),
+        };
+        vi.mocked(mockApp.getService).mockReturnValue(gatewaySrv as any);
+        const tokens = { access_token: 'new-access-token', expires_in: 3600, refresh_token: 'r' };
+        mockFetch.mockImplementation((url: string) => {
+          const { pathname } = new URL(url);
+          if (pathname.includes('/oidc/handoff'))
+            return Promise.resolve({
+              json: () =>
+                Promise.resolve({
+                  data: { payload: { code: 'mock-auth-code', state: 'mock-random-2' } },
+                  success: true,
+                }),
+              ok: true,
+              status: 200,
+            });
+          if (pathname.includes('/oidc/token'))
+            return Promise.resolve({
+              clone: () => ({ json: () => Promise.resolve(tokens) }),
+              ok: true,
+              status: 200,
+            });
+          return Promise.resolve({ ok: false, status: 404 });
+        });
+
+        try {
+          await authCtr.requestAuthorization({ active: false, storageMode: 'cloud' });
+          await vi.advanceTimersByTimeAsync(4000);
+        } finally {
+          vi.mocked(mockApp.getService).mockReturnValue(null);
+        }
+
+        // A still-connected socket of the previous account would otherwise
+        // satisfy `connect()` and survive the sign-in.
+        expect(gatewaySrv.restart).toHaveBeenCalledTimes(1);
+        expect(gatewaySrv.connect).not.toHaveBeenCalled();
+      });
+
       it('should validate state parameter and reject mismatched state', async () => {
         const config: DataSyncConfig = {
           active: false,

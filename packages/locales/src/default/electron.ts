@@ -106,6 +106,15 @@ export default {
   'proxy.validation.typeRequired': 'Proxy type is required when proxy is enabled',
   'proxy.validation.usernameRequired': 'Username is required when authentication is enabled',
   'gateway.enableConnection': 'Connect to Gateway',
+  'gateway.error.authFailed':
+    'Device Gateway rejected this sign-in. Retry, check the gateway address, or sign in again.',
+  'gateway.error.configUnavailable':
+    "Couldn't load this server's configuration. Check your connection and retry.",
+  'gateway.error.configure': 'Gateway Settings',
+  'gateway.error.invalidUrl':
+    'The Device Gateway address in use is invalid. Set a valid one in gateway settings.',
+  'gateway.error.notSignedIn': 'Sign in to connect this device.',
+  'gateway.retry': 'Retry',
   'gateway.manageDevices': 'Manage devices',
   'gateway.statusConnected': 'This device is connected to Gateway',
   'gateway.statusConnectedConnections_one': 'Online · {{count}} connection',

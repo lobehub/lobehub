@@ -1,6 +1,7 @@
 import {
   type DataSyncConfig,
   type ElectronAppState,
+  type GatewayConnectionError,
   type GatewayConnectionStatus,
   type NetworkProxySettings,
 } from '@lobechat/electron-client-ipc';
@@ -29,6 +30,8 @@ export interface ElectronState extends CurrentRouteMetaState, RecentPagesState, 
   appTrayVisible: boolean;
   dataSyncConfig: DataSyncConfig;
   desktopHotkeys: Record<string, string>;
+  /** Why the last connection attempt ended, as reported by the main process. */
+  gatewayConnectionError?: GatewayConnectionError;
   gatewayConnectionStatus: GatewayConnectionStatus;
   gatewayDeviceInfo?: GatewayDeviceInfo;
   isAppStateInit?: boolean;

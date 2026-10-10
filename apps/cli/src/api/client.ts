@@ -90,13 +90,17 @@ export async function getTrpcClient(workspaceId?: string): Promise<TrpcClient> {
   return client;
 }
 
-/** Create an anonymous client for public Lambda procedures, without credential discovery. */
-export function createPublicLambdaClient(): TrpcClient {
+/**
+ * Create an anonymous client for public Lambda procedures, without credential
+ * discovery. Pass `serverUrl` to stay on the server an already-resolved
+ * credential belongs to.
+ */
+export function createPublicLambdaClient(serverUrl: string = resolveServerUrl()): TrpcClient {
   return createTRPCClient<LambdaRouter>({
     links: [
       httpLink({
         transformer: superjson,
-        url: `${resolveServerUrl()}/trpc/lambda`,
+        url: `${serverUrl}/trpc/lambda`,
       }),
     ],
   });

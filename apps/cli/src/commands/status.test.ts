@@ -1,23 +1,34 @@
+import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { loadSettings, saveSettings } from '../settings';
+import { createPublicLambdaClient } from '../api/client';
+import { resolveToken } from '../auth/resolveToken';
+import { loadDeviceGatewayUrl, saveDeviceGatewayUrl } from '../settings';
 import { log } from '../utils/logger';
 import { registerStatusCommand } from './status';
 
+const OFFICIAL_AUTH = {
+  serverUrl: 'https://app.lobehub.com',
+  token: 'test-token',
+  tokenType: 'jwt' as const,
+  userId: 'test-user',
+};
+const SELF_HOSTED = 'https://self-hosted.example.com';
+
 // Mock resolveToken
-vi.mock('../auth/resolveToken', () => ({
-  resolveToken: vi.fn().mockResolvedValue({
-    serverUrl: 'https://app.lobehub.com',
-    token: 'test-token',
-    tokenType: 'jwt',
-    userId: 'test-user',
-  }),
-}));
+vi.mock('../auth/resolveToken', () => ({ resolveToken: vi.fn() }));
 vi.mock('../settings', () => ({
-  loadSettings: vi.fn().mockReturnValue(null),
-  normalizeUrl: vi.fn((url?: string) => (url ? url.replace(/\/$/, '') : undefined)),
-  saveSettings: vi.fn(),
+  loadDeviceGatewayUrl: vi.fn(),
+  saveDeviceGatewayUrl: vi.fn(),
+}));
+
+// `config.getGlobalConfig` on the server the token belongs to.
+const getGlobalConfig = vi.fn();
+vi.mock('../api/client', () => ({
+  createPublicLambdaClient: vi.fn(() => ({
+    config: { getGlobalConfig: { query: getGlobalConfig } },
+  })),
 }));
 
 // Track event handlers registered on GatewayClient instances
@@ -25,7 +36,9 @@ let clientEventHandlers: Record<string, (...args: any[]) => any> = {};
 let connectCalled = false;
 let clientOptions: any = {};
 
-vi.mock('@lobechat/device-gateway-client', () => ({
+vi.mock('@lobechat/device-gateway-client', async (importOriginal) => ({
+  // The address resolution is real; only the socket is faked.
+  ...(await importOriginal<typeof DeviceGatewayClientModule>()),
   // A plain function, not an arrow: the command calls `new GatewayClient(...)`,
   // and an arrow implementation is not constructible.
   GatewayClient: vi.fn().mockImplementation(function (opts: any) {
@@ -50,6 +63,10 @@ describe('status command', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
+    clientOptions = {};
+    vi.mocked(resolveToken).mockResolvedValue(OFFICIAL_AUTH);
+    vi.mocked(loadDeviceGatewayUrl).mockReturnValue(undefined);
+    getGlobalConfig.mockResolvedValue({ serverConfig: {} });
   });
 
   afterEach(() => {
@@ -77,38 +94,104 @@ describe('status command', () => {
     expect(clientOptions.autoReconnect).toBe(false);
   });
 
-  it('should require explicit gateway for custom login server', async () => {
-    vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://self-hosted.example.com' });
+  /** Run `lh status [...args]` until the probe connects. */
+  const runConnected = async (...args: string[]) => {
+    const parsePromise = createProgram().parseAsync(['node', 'test', 'status', ...args]);
+    await vi.advanceTimersByTimeAsync(0);
+    clientEventHandlers['connected']?.();
+    await parsePromise;
+  };
 
-    const program = createProgram();
-    await expect(program.parseAsync(['node', 'test', 'status'])).rejects.toThrow('process.exit');
-    expect(log.error).toHaveBeenCalledWith(
-      "Current login uses custom --server https://self-hosted.example.com. Please also provide '--gateway <url>' for the device gateway.",
+  it("probes the gateway advertised by the token's server when none is saved", async () => {
+    vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
+    getGlobalConfig.mockResolvedValue({
+      serverConfig: { deviceGatewayUrl: 'https://gw.example.com/edge/' },
+    });
+    // Another server's saved address is never borrowed.
+    vi.mocked(loadDeviceGatewayUrl).mockImplementation((server) =>
+      server === SELF_HOSTED ? undefined : 'http://localhost:8788',
     );
+
+    await runConnected();
+
+    // The server the token belongs to — never LOBEHUB_SERVER / settings on their own.
+    expect(createPublicLambdaClient).toHaveBeenCalledWith(SELF_HOSTED);
+    expect(clientOptions.gatewayUrl).toBe('https://gw.example.com/edge');
+    expect(clientOptions.serverUrl).toBe(SELF_HOSTED);
+    expect(log.info).toHaveBeenCalledWith(
+      'Gateway: https://gw.example.com/edge (advertised by the server)',
+    );
+  });
+
+  it('keeps the official gateway for official cloud when nothing is advertised or saved', async () => {
+    await runConnected();
+
+    expect(clientOptions.gatewayUrl).toBe('https://device-gateway.lobehub.com');
+  });
+
+  it.each([OFFICIAL_AUTH.serverUrl, SELF_HOSTED])(
+    'probes the address saved for the token’s server ahead of its advertisement (%s)',
+    async (serverUrl) => {
+      vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl });
+      vi.mocked(loadDeviceGatewayUrl).mockImplementation((server) =>
+        server === serverUrl ? 'https://gw.saved.example' : undefined,
+      );
+      getGlobalConfig.mockResolvedValue({
+        serverConfig: { deviceGatewayUrl: 'https://gw.example.com' },
+      });
+
+      await runConnected();
+
+      expect(getGlobalConfig).not.toHaveBeenCalled();
+      expect(clientOptions.gatewayUrl).toBe('https://gw.saved.example');
+      expect(log.info).toHaveBeenCalledWith(
+        'Gateway: https://gw.saved.example (saved for this server)',
+      );
+    },
+  );
+
+  it('asks for a gateway when a self-hosted server advertises none and none is saved', async () => {
+    vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
+
+    await expect(createProgram().parseAsync(['node', 'test', 'status'])).rejects.toThrow(
+      'process.exit',
+    );
+
+    expect(log.error).toHaveBeenCalledWith(
+      `FAILED - ${SELF_HOSTED} does not advertise a device gateway, and none is saved for it.`,
+    );
+    expect(log.error).toHaveBeenCalledWith(expect.stringContaining('--gateway <url>'));
+    expect(clientOptions).toEqual({});
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('should use explicit gateway for custom login server', async () => {
-    vi.mocked(loadSettings).mockReturnValueOnce({ serverUrl: 'https://self-hosted.example.com' });
+  it.each([true, false])(
+    'does not fall back when the config lookup fails (official: %s)',
+    async (official) => {
+      if (!official)
+        vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
+      getGlobalConfig.mockRejectedValue(new Error('Unexpected token < in JSON'));
 
-    const program = createProgram();
-    const parsePromise = program.parseAsync([
-      'node',
-      'test',
-      'status',
-      '--gateway',
-      'https://gateway.example.com/',
-    ]);
-    await vi.advanceTimersByTimeAsync(0);
+      await expect(createProgram().parseAsync(['node', 'test', 'status'])).rejects.toThrow(
+        'process.exit',
+      );
 
-    clientEventHandlers['connected']?.();
+      expect(log.error).toHaveBeenCalledWith(
+        expect.stringContaining('Could not read the device gateway address'),
+      );
+      expect(clientOptions).toEqual({});
+    },
+  );
 
-    await parsePromise;
+  it('uses --gateway without a lookup and saves it for that server', async () => {
+    vi.mocked(resolveToken).mockResolvedValue({ ...OFFICIAL_AUTH, serverUrl: SELF_HOSTED });
+    getGlobalConfig.mockRejectedValue(new Error('server down'));
+
+    await runConnected('--gateway', 'https://gateway.example.com/');
+
+    expect(getGlobalConfig).not.toHaveBeenCalled();
     expect(clientOptions.gatewayUrl).toBe('https://gateway.example.com');
-    expect(saveSettings).toHaveBeenCalledWith({
-      gatewayUrl: 'https://gateway.example.com',
-      serverUrl: 'https://self-hosted.example.com',
-    });
+    expect(saveDeviceGatewayUrl).toHaveBeenCalledWith(SELF_HOSTED, 'https://gateway.example.com');
   });
   it('should pass the resolved serverUrl to GatewayClient', async () => {
     const program = createProgram();

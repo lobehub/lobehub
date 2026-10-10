@@ -24,6 +24,15 @@ class GatewayConnectionService {
   getDeviceInfo = async () => {
     return ensureElectronIpc().gatewayConnection.getDeviceInfo();
   };
+
+  getGatewayEndpoint = async () => {
+    return ensureElectronIpc().gatewayConnection.getGatewayEndpoint();
+  };
+
+  /** Save (or clear, with `null`) the gateway address in settings. */
+  setGatewayManualUrl = async (url: string | null) => {
+    return ensureElectronIpc().gatewayConnection.setGatewayManualUrl({ url });
+  };
 }
 
 export const gatewayConnectionService = new GatewayConnectionService();
