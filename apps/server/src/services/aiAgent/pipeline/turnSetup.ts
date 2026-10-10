@@ -28,7 +28,7 @@ import { resolveModelExtendParamsForUser } from '@/server/modules/AgentRuntime/a
 import type { AgentConfigWithId } from '@/server/services/agent';
 import { enqueueAgentSignalSourceEvent } from '@/server/services/agentSignal';
 import { shouldSuppressSignal } from '@/server/services/agentSignal/suppressSignal';
-import { deviceGateway } from '@/server/services/deviceGateway';
+import { getScopedOnlineDevices } from '@/server/services/deviceGateway/scopedDevices';
 import { DocumentService } from '@/server/services/document';
 import { FileService } from '@/server/services/file';
 import { resolveAttachmentsByFileIds } from '@/server/services/file/resolveAttachments';
@@ -626,13 +626,22 @@ export const setupTurn = async (
           agentConfig.agencyConfig.boundDeviceId !== directory.deviceId
         )
           throw new Error('Agent is fixed to another execution target');
-        const stat = await deviceGateway.statPath({
-          deviceId: directory.deviceId,
-          path: directory.path,
-          userId: deps.userId,
-          workspaceId: deps.workspaceId,
-        });
-        if (!stat?.exists || !stat.isDirectory)
+        // The directory lives on one device, so only that device can honour the
+        // run. Reject an unavailable device *here*, before the user/assistant
+        // rows are persisted: the client treats a rejected send as never
+        // accepted, keeps the draft and rolls back its optimistic pair, so a
+        // later rejection would leave a failed turn durable server-side that the
+        // client disagrees with. Liveness comes from the gateway's device
+        // listing — not a device round trip — so the send path keeps the latency
+        // fix, and the dispatch remains the authority on whether the directory
+        // still exists on the device.
+        const { canUseDevice: canUseProjectDevice } = resolveDeviceAccessPolicy({ botContext });
+        const projectDevices = canUseProjectDevice
+          ? await getScopedOnlineDevices(deps.db, deps.userId, deps.workspaceId)
+          : [];
+        if (
+          !projectDevices.some((device) => device.deviceId === directory.deviceId && device.online)
+        )
           throw new Error('Device is offline or working directory is unavailable');
         resolvedRequestedDeviceId = directory.deviceId;
         effectiveRequestedDeviceId = directory.deviceId;

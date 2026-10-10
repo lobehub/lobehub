@@ -372,8 +372,8 @@ const ChatInput = memo<ChatInputProps>(
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
 
-        // A rejected directory preflight has no persisted message to recover from.
-        // Keep the composer and attachments intact until the target is usable.
+        // A rejected preflight has no persisted message to recover from. Keep
+        // the composer and attachments intact until the target is usable.
         const chatState = useChatStore.getState();
         const sendContext = storeApi.getState().context;
         const topic = sendContext.topicId
@@ -423,7 +423,13 @@ const ChatInput = memo<ChatInputProps>(
           files: currentFileList,
           message,
           onPreflightFailure: () => {
-            useFileStore.getState().restoreChatContextSelections(contextKey, currentContextList);
+            const store = useFileStore.getState();
+            // The composer was cleared up front; a send rejected before any
+            // message owned the content must hand every part of it back —
+            // uploads and context selections, not just the editor text the
+            // lifecycle restores on its own.
+            store.restoreChatUploadFileList(currentFileList);
+            store.restoreChatContextSelections(contextKey, currentContextList);
           },
           pageSelections,
         });

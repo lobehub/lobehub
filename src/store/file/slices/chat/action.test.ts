@@ -219,6 +219,26 @@ describe('useFileStore:chat', () => {
     expect(result.current.chatUploadFileList).toEqual([newerFile]);
   });
 
+  it('restoreChatUploadFileList puts cleared uploads back without duplicating newer drafts', () => {
+    const { result } = renderHook(() => useStore());
+    const submittedFile = { id: 'submitted', status: 'success' };
+    const newerFile = { id: 'new', status: 'uploading' };
+
+    // The composer cleared everything on send; a fresh draft arrived while the
+    // rejected send was still unwinding.
+    act(() => {
+      useStore.setState({ chatUploadFileList: [newerFile] as any });
+      result.current.restoreChatUploadFileList([submittedFile, newerFile] as any);
+    });
+
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+
+    act(() => {
+      result.current.restoreChatUploadFileList([]);
+    });
+    expect(result.current.chatUploadFileList).toEqual([newerFile, submittedFile]);
+  });
+
   it('uploadChatFiles should reject unsupported files before upload in chat mode', async () => {
     // chat mode: agent mode disabled and not a heterogeneous agent
     mockAgentMode({ enableAgentMode: false, heterogeneous: false });
