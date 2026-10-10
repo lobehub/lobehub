@@ -56,6 +56,7 @@ import {
 } from '@/store/chat/pendingSandboxSelection';
 import { consumePendingTopicRepos, getPendingTopicRepos } from '@/store/chat/pendingTopicRepos';
 import { topicSelectors } from '@/store/chat/selectors';
+import { operationSelectors } from '@/store/chat/slices/operation/selectors';
 import {
   SETTLEABLE_TOPIC_RUN_OPERATION_TYPES,
   TOPIC_VISIBLY_RUNNING_OPERATION_TYPES,
@@ -79,6 +80,7 @@ import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { resolveNewThreadIntent } from '../../dispatch/newThreadIntent';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
+import { scheduleQueuedFollowUp } from '../../lifecycle/queuedFollowUp';
 import type { RunScope } from '../../lifecycle/types';
 import { createGatewayEventBuffer } from './gatewayEventBuffer';
 import { createGatewayEventHandler, isCompletedRuntimeEnd } from './gatewayEventHandler';
@@ -2327,6 +2329,7 @@ export class GatewayActionImpl {
     const terminalStatus: ChatTopicStatus = viewing ? 'active' : (topic.status ?? 'active');
 
     let settled = 0;
+    const drainedContextKeys = new Set<string>();
     for (const op of candidates) {
       // A terminal frame may have landed while the read was in flight.
       if (this.#get().operations[op.id]?.status !== 'running') continue;
@@ -2364,9 +2367,66 @@ export class GatewayActionImpl {
         topicId,
       });
       settled++;
+
+      // Retiring the op is only half of what a lost terminal frame skipped: if a
+      // follow-up was queued behind the run, the same missing frame also skipped
+      // the queue drain. Close that gap on the queue-aware path.
+      await this.#drainQueuedFollowUpForSettledRun(op, drainedContextKeys);
     }
 
     return settled;
+  };
+
+  /**
+   * Drain the follow-up a user queued behind a leaked run the server COMPLETED.
+   *
+   * `buildRunLifecycle.completeRun` (on success) and
+   * `serverOperationReconciliation` (repairing a completed snapshot) both reach
+   * `scheduleQueuedFollowUp`, but a run whose terminal frame never landed
+   * reaches neither — the sweep retires the leaked op instead, and the queued
+   * message would stay stranded. This routes the sweep's retirement through the
+   * same queue-aware drain.
+   *
+   * Two gates keep it honest:
+   *
+   * 1. It needs a queued follow-up to rescue. That gate is checked FIRST, so the
+   *    common no-queue retirement pays neither the server read nor the drain.
+   * 2. Only a run the server recorded as COMPLETED drains. A failed / cancelled
+   *    run preserves its queue, exactly like the terminal paths. The outcome is
+   *    read from the server because the terminal frame — the only local carrier
+   *    of it — is what leaked; an unreadable / expired outcome counts as NOT
+   *    completed, so a queued follow-up is never auto-sent on an outcome we
+   *    cannot confirm.
+   */
+  #drainQueuedFollowUpForSettledRun = async (
+    op: ChatStore['operations'][string],
+    drainedContextKeys: Set<string>,
+  ): Promise<void> => {
+    if (!op.context.agentId) return;
+
+    const context = op.context as ConversationContext;
+    const contextKey = messageMapKey(context);
+
+    // Nothing queued behind this run → nothing to rescue, and no reason to pay
+    // for the server read below.
+    if (drainedContextKeys.has(contextKey)) return;
+    if (!this.#get().queuedMessages?.[contextKey]?.length) return;
+
+    // A newer turn in this context already owns the queue (the user sent it, or
+    // another run started) — leave the drain to it. Same guard the shared
+    // `scheduleQueuedFollowUp` applies on its send.
+    if (operationSelectors.hasNewerConversationOperation(op.id, context)(this.#get())) return;
+
+    const serverOperationId = op.metadata.serverOperationId;
+    if (!serverOperationId) return;
+
+    const outcome = await aiAgentService
+      .getOperationStatus({ operationId: serverOperationId })
+      .catch(() => null);
+    if (outcome?.isCompleted !== true) return;
+
+    drainedContextKeys.add(contextKey);
+    scheduleQueuedFollowUp(this.#get, context, op.id);
   };
 
   /**

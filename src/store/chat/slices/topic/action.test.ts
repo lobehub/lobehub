@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LOADING_FLAT } from '@/const/message';
 import { cacheScope, REPLICA_INDEX_KEY, replicaKeys } from '@/libs/replica';
 import { mutate } from '@/libs/swr';
+import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import { messageService } from '@/services/message';
@@ -102,6 +103,7 @@ beforeEach(() => {
       activeGroupId: undefined,
       activeTopicId: undefined,
       agentTopicsViewMap: {},
+      queuedMessages: {},
       searchTopics: [],
       topicDataMap: {},
       topicDetailMap: {},
@@ -3296,6 +3298,93 @@ describe('topic action', () => {
       expect(useChatStore.getState().operations[operationId].status).toBe('completed');
       expect(disconnect).toHaveBeenCalledTimes(1);
       expect(useChatStore.getState().gatewayConnections[serverOperationId]).toBeUndefined();
+    });
+
+    // A lost terminal frame skips BOTH halves of a run's completion: retiring the
+    // op AND draining the input queue (`buildRunLifecycle.completeRun` on success,
+    // `reconcileServerOperation` on a completed snapshot). The sweep now closes
+    // the second half too — but only for a run the server actually COMPLETED, on
+    // the same queue-aware path those two use.
+    it('drains a follow-up queued behind a leaked run the server completed', async () => {
+      const { serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      const contextKey = messageMapKey({ agentId, topicId });
+      const readOutcome = vi
+        .spyOn(aiAgentService, 'getOperationStatus')
+        .mockResolvedValue({ isCompleted: true } as never);
+      const sendMessage = vi
+        .spyOn(useChatStore.getState(), 'sendMessage')
+        .mockResolvedValue(undefined as never);
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+      act(() => {
+        useChatStore.setState({
+          queuedMessages: {
+            [contextKey]: [
+              { content: 'queued follow-up', createdAt: 1, id: 'q1', interruptMode: 'soft' },
+            ],
+          },
+        });
+      });
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      // The outcome is read by the SERVER operation id, and only because a
+      // follow-up actually needs rescuing.
+      expect(readOutcome).toHaveBeenCalledWith({ operationId: serverOperationId });
+      await waitFor(() => expect(sendMessage).toHaveBeenCalledTimes(1));
+      expect(sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'queued follow-up' }),
+      );
+      expect(useChatStore.getState().queuedMessages[contextKey] ?? []).toEqual([]);
+    });
+
+    // The counter-case: a failed / cancelled run PRESERVES its queued follow-up
+    // (every terminal path does), so the sweep must not auto-send it on an
+    // outcome that is not a completion.
+    it('keeps a follow-up queued behind a leaked run that did NOT complete', async () => {
+      const { serverRow } = seedLeakedRow();
+      const operationId = seedLeakedOp('execServerAgentRuntime');
+      const contextKey = messageMapKey({ agentId, topicId });
+      vi.spyOn(aiAgentService, 'getOperationStatus').mockResolvedValue({
+        isCompleted: false,
+      } as never);
+      const sendMessage = vi
+        .spyOn(useChatStore.getState(), 'sendMessage')
+        .mockResolvedValue(undefined as never);
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+      act(() => {
+        useChatStore.setState({
+          queuedMessages: {
+            [contextKey]: [
+              { content: 'queued follow-up', createdAt: 1, id: 'q1', interruptMode: 'soft' },
+            ],
+          },
+        });
+      });
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(useChatStore.getState().operations[operationId].status).toBe('completed');
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(sendMessage).not.toHaveBeenCalled();
+      expect(useChatStore.getState().queuedMessages[contextKey]).toHaveLength(1);
+    });
+
+    // Retiring a leaked op with an empty queue must not pay for the outcome read:
+    // there is nothing to drain, so the sweep stays as cheap as it was.
+    it('never reads the run outcome when nothing is queued behind it', async () => {
+      const { serverRow } = seedLeakedRow();
+      seedLeakedOp('execServerAgentRuntime');
+      const readOutcome = vi.spyOn(aiAgentService, 'getOperationStatus');
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue(serverRow);
+
+      const settled = await useChatStore.getState().settleAllUnbackedTopicRuns();
+
+      expect(settled).toBe(1);
+      expect(readOutcome).not.toHaveBeenCalled();
     });
 
     // The user-visible contract: opening the sidebar runs the watchdog, and the
