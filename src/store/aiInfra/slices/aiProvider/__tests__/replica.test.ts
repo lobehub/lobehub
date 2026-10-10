@@ -10,7 +10,12 @@ import type {
 } from '@/types/aiProvider';
 
 import { initialAIProviderState } from '../initialState';
-import { aiProviderRuntimeStateQueryKey } from '../projection';
+import {
+  aiProviderDetailResource,
+  aiProviderListResource,
+  aiProviderRuntimeStateQueryKey,
+  aiProviderRuntimeStateResource,
+} from '../projection';
 
 vi.mock('@/services/aiProvider', () => ({
   aiProviderService: {
@@ -87,6 +92,18 @@ const syncCalls = async (
 };
 
 describe('AiProviderSlice (replica)', () => {
+  describe('persistence policy', () => {
+    it('persists only the secret-free provider list', () => {
+      // The provider list is safe to store; the detail and the derived runtime
+      // state carry decrypted `keyVaults` and must stay memory-only. Omitting
+      // `storage` is NOT memory-only — the app wrapper defaults to IndexedDB —
+      // so this guards the explicit `storage: 'memory'` on both.
+      expect(aiProviderListResource.persisted).toBe(true);
+      expect(aiProviderDetailResource.persisted).toBe(false);
+      expect(aiProviderRuntimeStateResource.persisted).toBe(false);
+    });
+  });
+
   describe('useFetchAiProviderList', () => {
     it('fetches the secret-free provider list through the service', async () => {
       const { aiProviderService } = await import('@/services/aiProvider');
