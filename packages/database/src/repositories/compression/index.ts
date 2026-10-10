@@ -18,8 +18,28 @@ export interface CreateCompressionGroupParams {
 export interface FinalizeCompressionGroupParams {
   content: string;
   groupId: string;
+  /**
+   * Fail with {@link CompressionConflictError} instead of folding in whatever
+   * is left when the group or any source group is gone — i.e. a concurrent
+   * compaction of the same scope already finalized over them.
+   */
+  requireSourceGroups?: boolean;
   sourceGroupIds?: string[];
   topicId: string;
+}
+
+/** Content of a compression group whose summary is still being generated. */
+export const COMPRESSION_PLACEHOLDER_CONTENT = '...';
+
+/**
+ * Another compaction of the same conversation claimed these messages or
+ * superseded these groups first. Nothing was written by the losing call.
+ */
+export class CompressionConflictError extends Error {
+  constructor(message = 'Context compaction already in progress') {
+    super(message);
+    this.name = 'CompressionConflictError';
+  }
 }
 
 export interface CompressionGroupResult {
@@ -84,6 +104,63 @@ export class CompressionRepository {
     }
 
     return group.id;
+  }
+
+  /**
+   * Create a compression group only if every message is still uncompressed.
+   *
+   * Two compactions that read the same history both snapshot the same live
+   * ids; the plain {@link createCompressionGroup} would let the second steal
+   * the first one's members and leave an empty group behind. Here the claim is
+   * conditional (`message_group_id IS NULL`) and all-or-nothing: the row locks
+   * taken by the first claim make a concurrent second claim re-check after the
+   * first commits, so it sees the rows taken and rolls back.
+   *
+   * @returns the group id, or `null` when any message was already claimed.
+   */
+  async claimCompressionGroup(params: CreateCompressionGroupParams): Promise<string | null> {
+    const { topicId, content, editorData, metadata } = params;
+    const messageIds = [...new Set(params.messageIds)];
+
+    try {
+      return await this.db.transaction(async (trx) => {
+        const [group] = (await trx
+          .insert(messageGroups)
+          .values({
+            content,
+            description: JSON.stringify(metadata),
+            editorData,
+            topicId,
+            type: MessageGroupType.Compression,
+            userId: this.userId,
+            workspaceId: this.workspaceId ?? null,
+          })
+          .returning()) as MessageGroupItem[];
+
+        if (messageIds.length === 0) return group.id;
+
+        const claimed = await trx
+          .update(messages)
+          .set({ messageGroupId: group.id })
+          .where(
+            and(
+              this.messagesOwnership(),
+              eq(messages.topicId, topicId),
+              inArray(messages.id, messageIds),
+              isNull(messages.messageGroupId),
+            ),
+          )
+          .returning({ id: messages.id });
+
+        // Rolls back the group insert and any partial claim.
+        if (claimed.length !== messageIds.length) throw new CompressionConflictError();
+
+        return group.id;
+      });
+    } catch (error) {
+      if (error instanceof CompressionConflictError) return null;
+      throw error;
+    }
   }
 
   /**
@@ -153,7 +230,7 @@ export class CompressionRepository {
    * never removes conversation history.
    */
   async finalizeCompressionGroup(params: FinalizeCompressionGroupParams): Promise<void> {
-    const { content, groupId, topicId } = params;
+    const { content, groupId, requireSourceGroups, topicId } = params;
     const requestedSourceGroupIds = [
       ...new Set((params.sourceGroupIds ?? []).filter((id) => id !== groupId)),
     ];
@@ -173,12 +250,13 @@ export class CompressionRepository {
         .returning({ id: messageGroups.id });
 
       if (finalizedGroups.length === 0) {
+        if (requireSourceGroups) throw new CompressionConflictError();
         throw new Error(`Compression group not found: ${groupId}`);
       }
 
       if (requestedSourceGroupIds.length === 0) return;
 
-      const sourceGroups = await trx
+      const sourceGroupsQuery = trx
         .select({ id: messageGroups.id })
         .from(messageGroups)
         .where(
@@ -189,7 +267,16 @@ export class CompressionRepository {
             this.groupsOwnership(),
           ),
         );
+      // Locking the source groups makes a concurrent finalize over the same
+      // groups wait for this one, then see them deleted and give up.
+      const sourceGroups = requireSourceGroups
+        ? await sourceGroupsQuery.for('update')
+        : await sourceGroupsQuery;
       const sourceGroupIds = sourceGroups.map((group) => group.id);
+
+      if (requireSourceGroups && sourceGroupIds.length !== requestedSourceGroupIds.length) {
+        throw new CompressionConflictError();
+      }
 
       if (sourceGroupIds.length === 0) return;
 
@@ -275,6 +362,45 @@ export class CompressionRepository {
       .update(messages)
       .set({ metadata: newMetadata })
       .where(and(eq(messages.id, messageId), this.messagesOwnership()));
+  }
+
+  /**
+   * Narrow compression groups to those that belong to the given thread scope
+   * (`threadId` null = the topic's main line). Group rows only carry a
+   * `topicId`, so a topic-wide group list mixes the main line with its threads.
+   *
+   * A thread group may also hold the main-line parents the thread branched
+   * from, so ownership is decided by thread membership, not by any single row:
+   * a group belongs to thread T when any member is in T, and to the main line
+   * only when none of its members is in a thread.
+   */
+  async filterGroupIdsByThread(
+    groupIds: string[],
+    params: { threadId?: string | null; topicId: string },
+  ): Promise<string[]> {
+    if (groupIds.length === 0) return [];
+
+    const { threadId, topicId } = params;
+    const rows = await this.db
+      .selectDistinct({ messageGroupId: messages.messageGroupId, threadId: messages.threadId })
+      .from(messages)
+      .where(
+        and(
+          this.messagesOwnership(),
+          eq(messages.topicId, topicId),
+          inArray(messages.messageGroupId, groupIds),
+        ),
+      );
+
+    const inScope = new Set<string>();
+    const inAnyThread = new Set<string>();
+    for (const row of rows) {
+      if (!row.messageGroupId) continue;
+      if (row.threadId) inAnyThread.add(row.messageGroupId);
+      if (threadId ? row.threadId === threadId : !row.threadId) inScope.add(row.messageGroupId);
+    }
+
+    return groupIds.filter((id) => inScope.has(id) && (!!threadId || !inAnyThread.has(id)));
   }
 
   /**

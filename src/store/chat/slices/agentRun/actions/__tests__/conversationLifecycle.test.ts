@@ -325,6 +325,139 @@ describe('ConversationLifecycle actions', () => {
         });
       });
 
+      it('should compact on the server for gateway-runtime agents', async () => {
+        const { result } = renderHook(() => useChatStore());
+        const topicId = TEST_IDS.TOPIC_ID;
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId });
+        const existingMessages = [
+          createMockMessage({ id: 'user-1', role: 'user', topicId }),
+          createMockMessage({ id: 'assistant-1', role: 'assistant', topicId }),
+        ];
+        const settledGroup = {
+          id: 'group-1',
+          content: 'summary',
+          role: 'compressedGroup',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+        } as any;
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [key]: existingMessages },
+            isGatewayModeEnabled: () => true,
+            messagesMap: { [key]: existingMessages },
+          });
+        });
+
+        const compactContextSpy = vi.spyOn(messageService, 'compactContext').mockResolvedValue({
+          messageGroupId: 'group-1',
+          messages: [settledGroup],
+          skipped: false,
+        });
+        const createCompressionGroupSpy = vi.spyOn(messageService, 'createCompressionGroup');
+        const fetchPresetTaskResultSpy = vi.spyOn(chatService, 'fetchPresetTaskResult');
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, topicId, threadId: null },
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        actionCategory: 'command',
+                        actionLabel: 'Compact context',
+                        actionType: 'compact',
+                        type: 'action-tag',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message: '',
+          });
+        });
+
+        expect(compactContextSpy).toHaveBeenCalledWith(
+          { agentId, groupId: undefined, threadId: null, topicId },
+          { signal: expect.any(AbortSignal) },
+        );
+        // The summary is generated server-side: no client LLM call, no client-side group assembly.
+        expect(fetchPresetTaskResultSpy).not.toHaveBeenCalled();
+        expect(createCompressionGroupSpy).not.toHaveBeenCalled();
+        expect(useChatStore.getState().dbMessagesMap[key]).toEqual([settledGroup]);
+      });
+
+      it('should not compact on the server for a legacy heterogeneous agent in gateway mode', async () => {
+        // Legacy agents carry only `model: '<cli-type>'`; gateway mode leaves
+        // `heterogeneousProvider` unset, but the server model runtime cannot serve that id.
+        setupMockSelectors({ agentConfig: { model: 'claude-code' } });
+        const { result } = renderHook(() => useChatStore());
+        const topicId = TEST_IDS.TOPIC_ID;
+        const agentId = TEST_IDS.SESSION_ID;
+        const key = messageMapKey({ agentId, topicId });
+        const existingMessages = [
+          createMockMessage({ id: 'user-1', role: 'user', topicId }),
+          createMockMessage({ id: 'assistant-1', role: 'assistant', topicId }),
+        ];
+
+        await act(async () => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [key]: existingMessages },
+            isGatewayModeEnabled: () => true,
+            messagesMap: { [key]: existingMessages },
+          });
+        });
+
+        const compactContextSpy = vi.spyOn(messageService, 'compactContext');
+        const createCompressionGroupSpy = vi
+          .spyOn(messageService, 'createCompressionGroup')
+          .mockResolvedValue({
+            messageGroupId: 'group-1',
+            messages: [],
+            messagesToSummarize: existingMessages,
+          });
+        vi.spyOn(chatService, 'fetchPresetTaskResult').mockResolvedValue(undefined);
+        vi.spyOn(messageService, 'finalizeCompression').mockResolvedValue({ messages: [] });
+
+        await act(async () => {
+          await result.current.sendMessage({
+            context: { agentId, topicId, threadId: null },
+            editorData: {
+              root: {
+                children: [
+                  {
+                    children: [
+                      {
+                        actionCategory: 'command',
+                        actionLabel: 'Compact context',
+                        actionType: 'compact',
+                        type: 'action-tag',
+                      },
+                    ],
+                    type: 'paragraph',
+                  },
+                ],
+                type: 'root',
+              },
+            } as any,
+            message: '',
+          });
+        });
+
+        expect(compactContextSpy).not.toHaveBeenCalled();
+        expect(createCompressionGroupSpy).toHaveBeenCalled();
+      });
+
       it('should not process AI when onlyAddUserMessage is true', async () => {
         const { result } = renderHook(() => useChatStore());
         const onMessageAccepted = vi.fn();
