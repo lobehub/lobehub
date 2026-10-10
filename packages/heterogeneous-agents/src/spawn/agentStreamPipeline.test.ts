@@ -382,3 +382,28 @@ describe('AgentStreamPipeline', () => {
     });
   });
 });
+
+describe('AgentStreamPipeline — resumed Claude Code cost', () => {
+  it("emits the run's own cost when given the session's prior total", async () => {
+    const pipeline = new AgentStreamPipeline({
+      agentType: 'claude-code',
+      initialSessionCostUsd: 69.67,
+      operationId: 'op-cost',
+    });
+
+    const events = await pipeline.push(
+      `${init()}${JSON.stringify({
+        is_error: false,
+        result: 'done',
+        total_cost_usd: 76.43,
+        type: 'result',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      })}\n`,
+    );
+
+    const resultUsage = events.find(
+      (e) => e.type === 'step_complete' && (e.data as any)?.phase === 'result_usage',
+    );
+    expect((resultUsage?.data as any).costUsd).toBeCloseTo(6.76);
+  });
+});

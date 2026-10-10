@@ -327,7 +327,11 @@ export interface UsageData {
  *   - `result_usage`: authoritative grand total at the end of a session
  */
 export interface StepCompleteData {
-  /** Total session cost in USD (only on `result_usage`, if the CLI reports it). */
+  /**
+   * This run's cost in USD (only on `result_usage`, if the CLI reports it).
+   * Adapters whose CLI reports a session-cumulative figure across resume
+   * (Claude Code) convert it to the run's own spend before emitting.
+   */
   costUsd?: number;
   /** Model id for this turn (only meaningful on `turn_metadata`). */
   model?: string;

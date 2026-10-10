@@ -3,6 +3,39 @@ import { describe, expect, it } from 'vitest';
 import { ClaudeCodeAdapter, ClaudeCodeSdkAdapter } from './claudeCode';
 
 describe('ClaudeCodeAdapter', () => {
+  describe('run cost', () => {
+    // CC restores the session's cost tally on `--resume`, so `total_cost_usd`
+    // covers every earlier run of the session, not just this one.
+    const resultCost = (adapter: ClaudeCodeAdapter, totalCostUsd: number) =>
+      adapter
+        .adapt({
+          is_error: false,
+          result: 'done',
+          total_cost_usd: totalCostUsd,
+          type: 'result',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        })
+        .find((e) => e.type === 'step_complete' && e.data?.phase === 'result_usage')?.data.costUsd;
+
+    it('emits only what a resumed run added to the session total', () => {
+      const adapter = new ClaudeCodeAdapter();
+      expect(adapter.adapt({ initialSessionCostUsd: 69.67, type: 'session_configured' })).toEqual(
+        [],
+      );
+
+      expect(resultCost(adapter, 76.43)).toBeCloseTo(6.76);
+    });
+
+    it('keeps the reported total without a usable baseline', () => {
+      expect(resultCost(new ClaudeCodeAdapter(), 4)).toBeCloseTo(4);
+
+      // a total below the baseline means CC did not restore that tally
+      const reset = new ClaudeCodeAdapter();
+      reset.adapt({ initialSessionCostUsd: 9, type: 'session_configured' });
+      expect(resultCost(reset, 2)).toBeCloseTo(2);
+    });
+  });
+
   describe('lifecycle', () => {
     it('emits stream_start on init system event', () => {
       const adapter = new ClaudeCodeAdapter();

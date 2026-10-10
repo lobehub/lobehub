@@ -1006,6 +1006,117 @@ describe('spawnAgent', () => {
     expect(spawnCalls[0].args).toContain('--include-partial-messages');
   });
 
+  it("charges a resumed claude run against the transcript under the child's HOME", async () => {
+    // The child gets an overridden HOME, so the transcript `--resume` loads
+    // (and its last cost-state) lives there, not under the parent's homedir.
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-home-'));
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-cwd-'));
+    tempDirs.push(home, cwd);
+    const sessionId = '72f65fa9-0355-45d3-b903-8f41027ed5f2';
+    const { resolveClaudeCodeTranscriptPath } = await import('./ensureResumeTranscript');
+    const transcript = (await resolveClaudeCodeTranscriptPath({ cwd, home, sessionId }))!;
+    await mkdir(path.dirname(transcript), { recursive: true });
+    await writeFile(
+      transcript,
+      `${JSON.stringify({ sessionId, totalCostUSD: 69.67, type: 'cost-state' })}\n`,
+    );
+
+    const result = `${JSON.stringify({
+      is_error: false,
+      result: 'done',
+      total_cost_usd: 76.43,
+      type: 'result',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`;
+    const fake = createFakeProc({ stdoutChunks: [ccInit, result] });
+    nextFakeProc = fake.proc;
+    const configDir = process.env.CLAUDE_CONFIG_DIR;
+    delete process.env.CLAUDE_CONFIG_DIR;
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'claude-code',
+        cwd,
+        env: { HOME: home },
+        operationId: 'op-home',
+        prompt: 'continue',
+        resumeSessionId: sessionId,
+      });
+      fake.start();
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+      await handle.exit;
+
+      const resultUsage = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+      );
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
+    } finally {
+      if (configDir !== undefined) process.env.CLAUDE_CONFIG_DIR = configDir;
+    }
+  });
+
+  it('reads the cost baseline from the env the child actually receives', async () => {
+    // options.env unsets CLAUDE_CONFIG_DIR for the child, so the CLI resumes from
+    // HOME/.claude; the parent's config dir holds an unrelated transcript.
+    const home = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-home-'));
+    const parentConfigDir = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-parent-'));
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobe-cc-cwd-'));
+    tempDirs.push(home, parentConfigDir, cwd);
+    const sessionId = '72f65fa9-0355-45d3-b903-8f41027ed5f2';
+    const { resolveClaudeCodeTranscriptPath } = await import('./ensureResumeTranscript');
+    const writeCostState = async (params: { configDir?: string; home?: string }, cost: number) => {
+      const transcript = (await resolveClaudeCodeTranscriptPath({ ...params, cwd, sessionId }))!;
+      await mkdir(path.dirname(transcript), { recursive: true });
+      await writeFile(
+        transcript,
+        `${JSON.stringify({ sessionId, totalCostUSD: cost, type: 'cost-state' })}\n`,
+      );
+    };
+    await writeCostState({ home }, 69.67);
+    await writeCostState({ configDir: parentConfigDir }, 50);
+
+    const result = `${JSON.stringify({
+      is_error: false,
+      result: 'done',
+      total_cost_usd: 76.43,
+      type: 'result',
+      usage: { input_tokens: 10, output_tokens: 5 },
+    })}\n`;
+    const fake = createFakeProc({ stdoutChunks: [ccInit, result] });
+    nextFakeProc = fake.proc;
+    const configDir = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = parentConfigDir;
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'claude-code',
+        cwd,
+        // JS callers can spread an unset key; the child then has no config dir.
+        env: { CLAUDE_CONFIG_DIR: undefined as unknown as string, HOME: home },
+        operationId: 'op-child-env',
+        prompt: 'continue',
+        resumeSessionId: sessionId,
+      });
+      fake.start();
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+      await handle.exit;
+
+      const resultUsage = events.find(
+        (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+      );
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
+    } finally {
+      if (configDir === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = configDir;
+    }
+  });
+
   it('appends --resume <id> for claude when resuming a session', async () => {
     nextFakeProc = createFakeProc().proc;
     const { spawnAgent } = await import('./spawnAgent');

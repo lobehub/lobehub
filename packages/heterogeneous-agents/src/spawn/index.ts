@@ -150,6 +150,7 @@ export {
   sanitizeClaudeCodeDirectArgs,
   sanitizeClaudeCodeDirectEnv,
 } from './claudeCodeDirectEnv';
+export { readClaudeCodeSessionCost } from './claudeCodeSessionCost';
 export {
   ensureClaudeCodeResumeTranscript,
   type EnsureResumeTranscriptReason,
