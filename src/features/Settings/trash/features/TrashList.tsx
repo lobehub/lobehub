@@ -8,7 +8,16 @@ import type {
   TrashResourceType,
 } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Segmented, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  controlHeight,
+  Segmented,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui/base-ui';
 import { useSize } from 'ahooks';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
@@ -49,6 +58,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 16px;
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorBgContainer};
+  `,
+  /**
+   * Type chips on the small control height: with the track's 3px padding and
+   * 1px border the whole Segmented is `controlHeight.middle` tall, level with
+   * the project picker and the empty button beside it.
+   */
+  filterItem: css`
+    height: ${controlHeight.small}px;
   `,
   header: css`
     display: flex;
@@ -413,6 +430,7 @@ const TrashList = () => {
       <div className={styles.header}>
         <Flexbox horizontal align={'center'} gap={8} style={{ flexWrap: 'wrap', minWidth: 0 }}>
           <Segmented
+            classNames={{ item: styles.filterItem }}
             options={typeOptions}
             size={'small'}
             style={{ flexWrap: 'wrap', maxWidth: '100%' }}
