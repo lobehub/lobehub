@@ -330,12 +330,19 @@ export function createSubAgentBridgeHook(
   parentOperationId: string,
   toolMessageId: string,
   threadId: string,
+  /**
+   * `resume` (default) parks + resumes the parent op — the `wait:true` behavior.
+   * `settle` backfills the anchor and stops: the parent turn already finished
+   * (default async dispatch).
+   */
+  mode: 'resume' | 'settle' = 'resume',
 ): AgentHook {
   return {
     handler: async (event: AgentHookEvent) => {
       try {
         await agentRuntimeService.completeSubAgentBridge({
           finalState: event.finalState,
+          mode,
           operationId: event.operationId,
           parentOperationId,
           reason: event.reason ?? 'done',
@@ -353,7 +360,7 @@ export function createSubAgentBridgeHook(
     id: 'sub-agent-bridge',
     type: 'onComplete' as const,
     webhook: {
-      body: { parentOperationId, threadId, toolMessageId },
+      body: { mode, parentOperationId, threadId, toolMessageId },
       delivery: 'qstash' as const,
       // Keep the payload lean: the endpoint reloads the child's final state
       // from the coordinator, so everything beyond these ids is dead weight.

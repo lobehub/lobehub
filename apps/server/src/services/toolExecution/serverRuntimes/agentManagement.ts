@@ -24,6 +24,7 @@ import { PluginModel } from '@/database/models/plugin';
 import { AgentService } from '@/server/services/agent';
 import { DiscoverService } from '@/server/services/discover';
 
+import { buildAsyncSubAgentDispatchContent } from '../subAgentDispatch';
 import { type ToolExecutionContext, type ToolExecutionResult } from '../types';
 import {
   NEXT_RUN_NOTE,
@@ -66,7 +67,7 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
         params: CallAgentParams,
         ctx: ToolExecutionContext,
       ): Promise<ToolExecutionResult> => {
-        const { agentId, instruction } = params;
+        const { agentId, instruction, wait } = params;
 
         if (ctx.isSubAgent) {
           return {
@@ -95,11 +96,12 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           };
         }
 
-        const { started, error, subOperationId, threadId } = await ctx.subAgent.run({
+        const { started, error, subOperationId, threadId, toolMessageId } = await ctx.subAgent.run({
           agentId,
           description: `Call agent ${agentId}`,
           instruction,
           timeout: 1_800_000,
+          wait,
         });
 
         if (!started) {
@@ -109,6 +111,23 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
             content: message,
             error: { code: 'AGENT_CALL_START_FAILED', message },
             success: false,
+          };
+        }
+
+        // Default (wait !== true): dispatch and return immediately. The called
+        // agent runs in the background; the completion bridge backfills this row
+        // with its result but does NOT resume the finished parent turn.
+        if (wait !== true) {
+          return {
+            content: buildAsyncSubAgentDispatchContent(threadId),
+            state: {
+              status: 'dispatched',
+              subOperationId,
+              targetAgentId: agentId,
+              threadId,
+              toolMessageId,
+            },
+            success: true,
           };
         }
 

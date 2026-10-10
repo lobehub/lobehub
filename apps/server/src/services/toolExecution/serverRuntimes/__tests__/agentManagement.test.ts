@@ -155,7 +155,7 @@ describe('agentManagementRuntime', () => {
       expect(result.error).toMatchObject({ code: 'AGENT_CALL_UNAVAILABLE' });
     });
 
-    it('returns a deferred tool result and forks the target agent through the sub-agent runner', async () => {
+    it('dispatches the target agent asynchronously by default', async () => {
       const run = vi.fn().mockResolvedValue({
         started: true,
         subOperationId: 'op-child',
@@ -174,23 +174,42 @@ describe('agentManagementRuntime', () => {
         },
       );
 
-      expect(run).toHaveBeenCalledWith({
-        agentId: 'agent-target',
-        description: 'Call agent agent-target',
-        instruction: 'Do delegated work',
-        timeout: 1_800_000,
-      });
-      expect(result).toMatchObject({
-        content: '',
-        deferred: true,
-        success: true,
-      });
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-target',
+          description: 'Call agent agent-target',
+          instruction: 'Do delegated work',
+          timeout: 1_800_000,
+          wait: undefined,
+        }),
+      );
+      // Default is async: dispatch and return, do not park.
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ success: true });
       expect(result.state).toMatchObject({
-        status: 'pending',
+        status: 'dispatched',
         subOperationId: 'op-child',
         targetAgentId: 'agent-target',
         threadId: 'thread-child',
       });
+      expect(result.content).toContain('lh thread view thread-child');
+    });
+
+    it('wait:true keeps the deferred park + resume behavior', async () => {
+      const run = vi.fn().mockResolvedValue({
+        started: true,
+        subOperationId: 'op-child',
+        threadId: 'thread-child',
+      });
+      const runtime = createRuntime();
+
+      const result = await runtime.callAgent(
+        { agentId: 'agent-target', instruction: 'Do delegated work', wait: true },
+        { subAgent: { run }, toolManifestMap: {} },
+      );
+
+      expect(result).toMatchObject({ content: '', deferred: true, success: true });
+      expect(result.state).toMatchObject({ status: 'pending', threadId: 'thread-child' });
     });
 
     it('returns a non-deferred failure when the target agent cannot start', async () => {

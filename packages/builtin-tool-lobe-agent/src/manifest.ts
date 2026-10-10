@@ -267,6 +267,12 @@ export const LobeAgentManifest: BuiltinToolManifest = {
             description: 'Optional timeout in milliseconds. Default is 30 minutes.',
             type: 'number',
           },
+          wait: {
+            default: false,
+            description:
+              'When true, BLOCK this turn until the sub-agent finishes and return its result inline (use only when the next step strictly needs it). Default false: dispatch and return immediately with the thread id — the sub-agent runs in the background and its result is written back to the sub-agent card when it completes. Check progress anytime with `lh thread view <threadId>`.',
+            type: 'boolean',
+          },
         },
         required: ['description', 'instruction'],
         type: 'object',

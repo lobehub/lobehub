@@ -35,6 +35,12 @@ export interface ServerSubAgentRunParams {
   subAgentId?: string;
   /** Optional per-run timeout in milliseconds. */
   timeout?: number;
+  /**
+   * When true, the parent turn blocks on the child (park + resume). Default
+   * false: dispatch and return; the child completes in the background and the
+   * bridge settles its anchor without resuming.
+   */
+  wait?: boolean;
 }
 
 export interface ServerSubAgentRunResult {

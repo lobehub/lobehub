@@ -1561,6 +1561,72 @@ export class MessageModel {
   };
 
   /**
+   * The complete persisted transcript of ONE thread, with exact database
+   * pagination. Mirrors {@link queryTopicTranscript} for the `lh thread view`
+   * command: a caller that holds only a threadId (e.g. the id returned by an
+   * async `callSubAgent` dispatch) needs that thread's messages without loading
+   * a whole topic.
+   */
+  queryThreadTranscript = async ({
+    limit,
+    offset,
+    threadId,
+  }: {
+    limit: number;
+    offset: number;
+    threadId: string;
+  }): Promise<TopicTranscriptResult> => {
+    // Creator-facing only, same rationale as `queryTopicTranscript`:
+    // agent-share visitor messages live under the creator's `userId`, so
+    // ownership alone would hand the creator a visitor's transcript.
+    const where = and(this.ownership(), eq(messages.threadId, threadId), notShareVisitorMessage());
+
+    const [items, totalResult] = await Promise.all([
+      this.db
+        .select({
+          agentId: messages.agentId,
+          error: messages.error,
+          metadata: messages.metadata,
+          model: messages.model,
+          pluginError: messagePlugins.error,
+          provider: messages.provider,
+          reasoning: messages.reasoning,
+          toolCallId: messagePlugins.toolCallId,
+          usage: messages.usage,
+          content: messages.content,
+          createdAt: messages.createdAt,
+          id: messages.id,
+          messageGroupId: messages.messageGroupId,
+          parentId: messages.parentId,
+          role: messages.role,
+          threadId: messages.threadId,
+          tools: messages.tools,
+        })
+        .from(messages)
+        .leftJoin(messagePlugins, and(eq(messagePlugins.id, messages.id), this.pluginsOwnership()))
+        .where(where)
+        .orderBy(asc(messages.createdAt), asc(messages.id))
+        .limit(limit)
+        .offset(offset),
+      this.db
+        .select({ count: count(messages.id) })
+        .from(messages)
+        .where(where),
+    ]);
+
+    return {
+      items: items.map(({ tools, usage, ...message }) => ({
+        ...message,
+        error: message.error as ChatMessageError | null,
+        metadata: message.metadata as MessageMetadata | null,
+        tools: Array.isArray(tools) ? (tools as ChatToolPayload[]) : null,
+        usage: usage ?? message.metadata?.usage ?? null,
+      })),
+      total: totalResult[0]?.count ?? 0,
+    };
+  };
+
+  /**
    * Lightweight parent/group links for the FULL message tree of a topic,
    * INCLUDING messages hidden inside MessageGroups (compression / parallel).
    *

@@ -39,6 +39,7 @@ import {
   type VentRuntimeService,
 } from '@/server/services/vent';
 
+import { buildAsyncSubAgentDispatchContent } from '../subAgentDispatch';
 import type { ToolExecutionContext } from '../types';
 import { normalizeMultimodalImageItems } from './lobeAgentImage';
 import { createServerPlanRuntimeService } from './lobeAgentPlan';
@@ -266,7 +267,7 @@ class LobeAgentExecutionRuntime {
       );
     }
 
-    const { description, instruction, timeout } = params;
+    const { description, instruction, timeout, wait } = params;
     if (!instruction || typeof instruction !== 'string') {
       return buildError('instruction is required.', 'INVALID_ARGUMENTS');
     }
@@ -283,6 +284,7 @@ class LobeAgentExecutionRuntime {
       instruction,
       subAgentId,
       timeout,
+      wait,
     });
 
     // The child op failed to start — no completion bridge will ever fire to
@@ -297,8 +299,25 @@ class LobeAgentExecutionRuntime {
       );
     }
 
+    // Default (wait !== true): dispatch and return immediately. The sub-agent
+    // runs in the background; the completion bridge backfills this same row
+    // with its result but does NOT resume the (already finished) parent turn.
+    // The model is told how to poll and that a waking result will arrive.
+    if (wait !== true) {
+      return {
+        content: buildAsyncSubAgentDispatchContent(threadId, {
+          continuationHint: `Send it a follow-up: \`callSubAgent({ subAgentId: '${threadId}', ... })\``,
+        }),
+        // `toolMessageId` lets the runtime reuse the anchor row this runtime
+        // pre-created instead of writing a duplicate tool message.
+        state: { status: 'dispatched', subOperationId, threadId, toolMessageId },
+        success: true,
+      };
+    }
+
     return {
-      // No tool_result yet — the bridge fills this in when the sub-op completes.
+      // `wait:true` — no tool_result yet; the bridge fills this in when the
+      // sub-op completes and resumes the parked parent.
       content: '',
       deferred: true,
       // `toolMessageId` rides along so the runtime's pause chunk can tell the

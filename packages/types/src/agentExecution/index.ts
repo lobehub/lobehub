@@ -580,6 +580,13 @@ export interface ExecSubAgentParams {
   title?: string;
   /** The Topic ID */
   topicId: string;
+  /**
+   * When true, block the parent turn until the sub-agent finishes (park +
+   * resume — the legacy behavior). Default false: dispatch and return
+   * immediately; the caller polls via the thread id and the completion bridge
+   * backfills the anchor without resuming.
+   */
+  wait?: boolean;
 }
 
 /**
@@ -641,6 +648,13 @@ export interface ExecVirtualSubAgentParams {
   title?: string;
   /** The Topic ID */
   topicId: string;
+  /**
+   * When true, block the parent turn until the sub-agent finishes (park +
+   * resume — the legacy behavior). Default false: dispatch and return
+   * immediately; the caller polls via the thread id and the completion bridge
+   * backfills the anchor without resuming.
+   */
+  wait?: boolean;
 }
 
 /**

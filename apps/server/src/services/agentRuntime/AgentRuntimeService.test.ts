@@ -3786,6 +3786,23 @@ describe('AgentRuntimeService', () => {
       );
     });
 
+    it('settle mode backfills the anchor and does NOT resume the parent', async () => {
+      const won = await service.completeSubAgentBridge({
+        ...bridgeParams,
+        finalState: childState as any,
+        mode: 'settle',
+      });
+
+      // Default async dispatch: the parent turn already finished, so nothing is
+      // resumed and no verify watchdog is armed — the result rides the anchor.
+      expect(won).toBe(false);
+      expect(updateToolMessage).toHaveBeenCalledWith(
+        'tool-msg-1',
+        expect.objectContaining({ content: 'final answer' }),
+      );
+      expect(resumeSpy).not.toHaveBeenCalled();
+    });
+
     it('ends a callSubAgent result with the sub-agent id so the parent can continue it', async () => {
       (service as any).messageModel.findMessagePlugin = vi
         .fn()

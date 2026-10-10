@@ -874,7 +874,7 @@ describe('lobeAgentRuntime', () => {
       expect(run).not.toHaveBeenCalled();
     });
 
-    it('returns a deferred result and kicks off the sub-agent via the injected runner', async () => {
+    it('default dispatch: returns a non-deferred result carrying the thread id', async () => {
       const runtime = lobeAgentRuntime.factory(baseContext);
       const run = vi
         .fn()
@@ -885,11 +885,43 @@ describe('lobeAgentRuntime', () => {
         { ...baseContext, subAgent: { run } } as ToolExecutionContext,
       );
 
-      expect(run).toHaveBeenCalledWith({
-        description: 'Research',
-        instruction: 'Find the answer',
-        timeout: 1000,
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'Research',
+          instruction: 'Find the answer',
+          timeout: 1000,
+          wait: undefined,
+        }),
+      );
+      // Default is async: the tool must NOT defer/park the parent turn.
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({
+        state: { status: 'dispatched', subOperationId: 'sub-op-1', threadId: 'thread-1' },
+        success: true,
       });
+      // The result must tell the model how to poll the background sub-agent.
+      expect(result.content).toContain('lh thread view thread-1');
+    });
+
+    it('wait:true keeps the legacy deferred park + resume behavior', async () => {
+      const runtime = lobeAgentRuntime.factory(baseContext);
+      const run = vi
+        .fn()
+        .mockResolvedValue({ started: true, subOperationId: 'sub-op-1', threadId: 'thread-1' });
+
+      const result = await runtime.callSubAgent(
+        { description: 'Research', instruction: 'Find the answer', timeout: 1000, wait: true },
+        { ...baseContext, subAgent: { run } } as ToolExecutionContext,
+      );
+
+      expect(run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          description: 'Research',
+          instruction: 'Find the answer',
+          timeout: 1000,
+          wait: true,
+        }),
+      );
       expect(result).toMatchObject({
         content: '',
         deferred: true,
@@ -946,7 +978,9 @@ describe('lobeAgentRuntime', () => {
       );
 
       expect(run).toHaveBeenCalledWith(expect.objectContaining({ subAgentId: 'thread-1' }));
-      expect(result).toMatchObject({ deferred: true, state: { threadId: 'thread-1' } });
+      // Default async: dispatch, not park.
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ state: { threadId: 'thread-1' } });
     });
 
     it('explains why an earlier sub-agent could not be continued', async () => {
@@ -986,8 +1020,11 @@ describe('lobeAgentRuntime', () => {
         instruction: 'Find the answer',
         subAgentId: undefined,
         timeout: undefined,
+        wait: undefined,
       });
-      expect(result).toMatchObject({ deferred: true, success: true });
+      // Default async: dispatch and return, do not park.
+      expect(result.deferred).toBeUndefined();
+      expect(result).toMatchObject({ success: true });
     });
 
     it('rejects a non-string subAgentId', async () => {

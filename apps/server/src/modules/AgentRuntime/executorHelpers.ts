@@ -258,7 +258,14 @@ export const buildServerVirtualSubAgentRunner = (
   const parentDeviceId = resolveRunActiveDeviceId(state);
 
   return {
-    run: async ({ agentId: targetAgentId, description, instruction, subAgentId, timeout }) => {
+    run: async ({
+      agentId: targetAgentId,
+      description,
+      instruction,
+      subAgentId,
+      timeout,
+      wait,
+    }) => {
       // This runner serves two tools, and only one of them may swap the model:
       //   - `callSubAgent` names no agent, so the child is an anonymous clone of
       //     the parent — it takes the parent's `agencyConfig.subagent` override,
@@ -322,6 +329,7 @@ export const buildServerVirtualSubAgentRunner = (
         timeout,
         title: description,
         topicId,
+        wait,
       })) as
         { error?: string; operationId?: string; success?: boolean; threadId?: string } | undefined;
 

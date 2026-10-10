@@ -678,6 +678,10 @@ export const callTool =
       });
 
       let toolMessageId: string;
+      // An async tool that already created its own anchor row (e.g. a
+      // non-blocking `callSubAgent` dispatch that returns `state.toolMessageId`)
+      // reuses it here instead of writing a duplicate tool message.
+      const preCreatedId = deferredToolMessageId(execution.result);
       if (execution.toolMessageId) {
         toolMessageId = execution.toolMessageId;
         if (!execution.resultPersisted) {
@@ -685,6 +689,9 @@ export const callTool =
         }
       } else if (payload.skipCreateToolMessage) {
         toolMessageId = payload.parentMessageId;
+        await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+      } else if (preCreatedId) {
+        toolMessageId = preCreatedId;
         await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
       } else {
         const toolMessage = await createToolMessage({
@@ -995,6 +1002,8 @@ export const callToolsBatch =
         });
 
         let toolMessageId: string;
+        // Same pre-created-anchor reuse as the single-tool path.
+        const preCreatedId = deferredToolMessageId(execution.result);
         if (execution.toolMessageId) {
           toolMessageId = execution.toolMessageId;
           if (!execution.resultPersisted) {
@@ -1005,6 +1014,9 @@ export const callToolsBatch =
           // Creating a fresh row here would leave the approved-but-empty
           // original stranded under the same assistant.
           toolMessageId = existingMessageId;
+          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+        } else if (preCreatedId) {
+          toolMessageId = preCreatedId;
           await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
         } else {
           const toolMessage = await createToolMessage({
