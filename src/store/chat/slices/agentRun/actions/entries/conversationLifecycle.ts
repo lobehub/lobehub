@@ -1295,16 +1295,20 @@ export class ConversationLifecycleActionImpl {
     // kills the run (the spawn layer refuses to auto-create one), so fall back to
     // the repo it was linked from. Read-only: the topic keeps its record, so the
     // status bar can still explain it and offer its one-click reset.
-    const { path: workingDirectory } = resolvesRunCwd
-      ? await resolveReachableWorkingDirectory({
-          // This machine reads its own filesystem directly, which is the only
-          // unambiguous answer — a remote device has to be online to answer.
-          deviceId: runCwdDeviceId === currentDeviceId ? undefined : runCwdDeviceId,
-          recorded:
-            workingDirectoryConfig ??
-            (recordedWorkingDirectory ? { path: recordedWorkingDirectory } : undefined),
-        })
-      : { fellBackToSource: false, path: recordedWorkingDirectory };
+    let workingDirectory: string | undefined;
+    if (resolvesRunCwd) {
+      const reachable = await resolveReachableWorkingDirectory({
+        // This machine reads its own filesystem directly, which is the only
+        // unambiguous answer — a remote device has to be online to answer.
+        deviceId: runCwdDeviceId === currentDeviceId ? undefined : runCwdDeviceId,
+        recorded:
+          workingDirectoryConfig ??
+          (recordedWorkingDirectory ? { path: recordedWorkingDirectory } : undefined),
+      });
+      workingDirectory = reachable.path;
+    } else {
+      workingDirectory = recordedWorkingDirectory;
+    }
     // Record which machine a new conversation runs on, so its next turn — and
     // the device picker — stay on it after the agent default changes. `auto`
     // has not picked a machine yet; the server stamps the one it routes to.
