@@ -76,6 +76,10 @@ export interface SandboxSessionConfig {
  * {@link SandboxSessionSpecification}. Absent when the pick is empty, so a
  * definition that says nothing sends nothing rather than an empty object the
  * runtime would still adopt.
+ *
+ * `kind` is the clearest case of the first: it only picks which form the
+ * product shows, and an execution plane that saw it would digest it into every
+ * session of every environment that gained one.
  */
 const toSessionSpecification = (
   configuration: EnvironmentConfiguration | null | undefined,
