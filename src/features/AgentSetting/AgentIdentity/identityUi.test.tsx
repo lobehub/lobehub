@@ -102,4 +102,37 @@ describe('InboxSection', () => {
     await waitFor(() => expect(ui.createModal).toHaveBeenCalledTimes(1));
     expect(service.markInboxRead).toHaveBeenCalledWith(['msg_1']);
   });
+
+  it('pages older mail with a cursor instead of an ever-growing limit', async () => {
+    const page = (offset: number, size: number) =>
+      Array.from({ length: size }, (_, i) => ({
+        from: `sender${offset + i}@example.com`,
+        id: `msg_${offset + i}`,
+        readAt: new Date('2026-10-02T00:00:00Z'),
+        receivedAt: new Date(Date.UTC(2026, 9, 2, 0, 0, 0) - (offset + i) * 1000),
+        subject: `Mail ${offset + i}`,
+      }));
+    const first = page(0, 50);
+    const second = page(50, 50);
+    service.listInbox.mockImplementation(async ({ before }: { before?: unknown }) =>
+      before ? (before as any).id === 'msg_49' ? second : page(100, 3) : first,
+    );
+    service.getInboxUnreadCount.mockResolvedValue(0);
+
+    fresh(<InboxSection agentId={'agt_1'} />);
+
+    // Two clicks: beyond the server's 100-row cap if the window just grew.
+    fireEvent.click(await screen.findByRole('button', { name: 'identity.inbox.loadMore' }));
+    await screen.findByRole('button', { name: /sender99@example.com/ });
+    fireEvent.click(screen.getByRole('button', { name: 'identity.inbox.loadMore' }));
+    await screen.findByRole('button', { name: /sender102@example.com/ });
+
+    const limits = service.listInbox.mock.calls.map(([params]) => params.limit);
+    expect(Math.max(...limits)).toBe(50);
+    expect(service.listInbox).toHaveBeenCalledWith(
+      expect.objectContaining({ before: { id: 'msg_49', receivedAt: first[49].receivedAt } }),
+    );
+    // The short third page ends the list.
+    expect(screen.queryByRole('button', { name: 'identity.inbox.loadMore' })).toBeNull();
+  });
 });

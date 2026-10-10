@@ -125,7 +125,12 @@ export const getServerGlobalConfig = async () => {
   const config: GlobalServerConfig = {
     agentIdentityProviders: [
       agentIdentityEnv.ENABLED_AGENT_MAIL ? 'agent-mail' : null,
-      agentIdentityEnv.ENABLED_LINQ ? 'linq' : null,
+      // A key alone cannot open a number: provisioning binds one from the
+      // operator pool, so without any number the offer would always fail.
+      agentIdentityEnv.ENABLED_LINQ &&
+      (agentIdentityEnv.LINQ_FROM_NUMBER ?? '').split(',').some((number) => number.trim())
+        ? 'linq'
+        : null,
     ].filter((provider): provider is string => !!provider),
     aiProvider: await genServerAiProvidersConfig(aiProviderSpecificConfig),
     defaultAgent: {

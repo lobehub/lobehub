@@ -1,16 +1,14 @@
-import { useState } from 'react';
 import useSWR from 'swr';
+import useSWRInfinite from 'swr/infinite';
 
+import type { AgentInboxMessage } from '@lobechat/types';
 import { agentAccountService } from '@/services/agentAccount';
 
 const accountsKey = (agentId: string): [string, string] | null =>
   agentId ? ['agent-accounts', agentId] : null;
 
-/** How much of the inbox one read asks for; `loadMore` grows it from here. */
+/** One page of the inbox. Stays under the server's per-request cap (100). */
 export const INBOX_PAGE_SIZE = 50;
-
-const inboxKey = (agentId: string, limit: number): [string, number, string] | null =>
-  agentId ? ['agent-inbox', limit, agentId] : null;
 
 /** The addresses this agent owns. */
 export const useAgentAccounts = (agentId: string) =>
@@ -19,23 +17,40 @@ export const useAgentAccounts = (agentId: string) =>
 /**
  * What has arrived at those addresses, newest first.
  *
- * The read is newest-first and takes no cursor, so older mail is reached by
- * widening the window rather than by paging backwards — a fixed page made
- * everything past the 50th message permanently unreachable. The window only
- * grows, so rows already on screen stay where they are.
+ * Paged by a keyset cursor (the last row of the previous page), so every
+ * request asks for one fixed-size page however far back the user scrolls,
+ * and rows already on screen stay where they are.
  */
 export const useAgentInbox = (agentId: string) => {
-  const [limit, setLimit] = useState(INBOX_PAGE_SIZE);
-  const inbox = useSWR(inboxKey(agentId, limit), ([, size, id]) =>
-    agentAccountService.listInbox({ agentId: id, limit: size }),
+  const inbox = useSWRInfinite(
+    (pageIndex, previous: AgentInboxMessage[] | null) => {
+      if (!agentId) return null;
+      if (pageIndex === 0) return ['agent-inbox', agentId, null] as const;
+      const last = previous?.at(-1);
+      // The previous page came back short: there is nothing older to ask for.
+      if (!last || previous!.length < INBOX_PAGE_SIZE) return null;
+      return ['agent-inbox', agentId, { id: last.id, receivedAt: last.receivedAt }] as const;
+    },
+    ([, id, before]) =>
+      agentAccountService.listInbox({
+        agentId: id,
+        before: before ?? undefined,
+        limit: INBOX_PAGE_SIZE,
+      }),
   );
 
+  const pages = inbox.data;
+  const lastPage = pages?.at(-1);
+
   return {
-    ...inbox,
-    /** The window came back full, so the inbox may hold older mail. */
-    hasMore: (inbox.data?.length ?? 0) >= limit,
-    /** Ask for one more page without disturbing what is already on screen. */
-    loadMore: () => setLimit((current) => current + INBOX_PAGE_SIZE),
+    data: pages?.flat(),
+    error: inbox.error,
+    /** The last page came back full, so the inbox may hold older mail. */
+    hasMore: (lastPage?.length ?? 0) >= INBOX_PAGE_SIZE,
+    isLoading: inbox.isLoading,
+    /** Fetch the next page without disturbing what is already on screen. */
+    loadMore: () => void inbox.setSize((size) => size + 1),
+    mutate: inbox.mutate,
   };
 };
 

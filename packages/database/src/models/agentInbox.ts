@@ -1,4 +1,4 @@
-import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNull, or, sql } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gt, gte, ilike, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 
 import type { AgentInboxMessageItem, NewAgentInboxMessage } from '../schemas';
 import { agentInboxMessages } from '../schemas';
@@ -239,12 +239,27 @@ export class AgentInboxModel {
     accountId?: string;
     agentId?: string;
     limit?: number;
+    /**
+     * Keyset cursor for newest-first paging: only rows strictly older than
+     * this (receivedAt, id) pair, so pages never overlap or skip a row that
+     * shares a timestamp.
+     */
+    before?: { id: string; receivedAt: Date };
     /** Only messages received at or after this instant. */
     receivedAfter?: Date;
     threadKey?: string;
     unreadOnly?: boolean;
   }): Promise<AgentInboxMessageItem[]> => {
     const conditions = [this.ownership()];
+    if (params?.before) {
+      const { id, receivedAt } = params.before;
+      conditions.push(
+        or(
+          lt(agentInboxMessages.receivedAt, receivedAt),
+          and(eq(agentInboxMessages.receivedAt, receivedAt), lt(agentInboxMessages.id, id)),
+        )!,
+      );
+    }
     if (params?.agentId) conditions.push(eq(agentInboxMessages.agentId, params.agentId));
     if (params?.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
     if (params?.threadKey) conditions.push(eq(agentInboxMessages.threadKey, params.threadKey));
@@ -256,7 +271,7 @@ export class AgentInboxModel {
       .select()
       .from(agentInboxMessages)
       .where(and(...conditions))
-      .orderBy(desc(agentInboxMessages.receivedAt))
+      .orderBy(desc(agentInboxMessages.receivedAt), desc(agentInboxMessages.id))
       .limit(params?.limit ?? 20);
   };
 

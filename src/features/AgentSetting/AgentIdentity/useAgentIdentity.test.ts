@@ -26,25 +26,36 @@ describe('useAgentInbox', () => {
     const { result } = renderHook(() => useAgentInbox('agt_1'), { wrapper });
 
     await waitFor(() => expect(result.current.data).toHaveLength(3));
-    expect(service.listInbox).toHaveBeenCalledWith({ agentId: 'agt_1', limit: INBOX_PAGE_SIZE });
+    expect(service.listInbox).toHaveBeenCalledWith({
+      agentId: 'agt_1',
+      before: undefined,
+      limit: INBOX_PAGE_SIZE,
+    });
   });
 
-  it('widens the window so older mail stays reachable', async () => {
-    service.listInbox.mockResolvedValueOnce(page(INBOX_PAGE_SIZE));
-    service.listInbox.mockResolvedValue(page(INBOX_PAGE_SIZE * 2));
+  it('asks for the next page after the last row it has, never more than one page', async () => {
+    const first = page(INBOX_PAGE_SIZE).map((row, i) => ({
+      ...row,
+      receivedAt: new Date(Date.UTC(2026, 9, 2) - i * 1000),
+    }));
+    service.listInbox.mockImplementation(async ({ before }: { before?: unknown }) =>
+      before ? page(INBOX_PAGE_SIZE) : first,
+    );
 
     const { result } = renderHook(() => useAgentInbox('agt_1'), { wrapper });
 
-    // A window that came back full means the inbox may hold older mail, so the
+    // A page that came back full means the inbox may hold older mail, so the
     // reader is offered a way to reach it instead of a silent cut-off.
     await waitFor(() => expect(result.current.hasMore).toBe(true));
 
     act(() => result.current.loadMore());
 
+    const last = first.at(-1)!;
     await waitFor(() =>
       expect(service.listInbox).toHaveBeenLastCalledWith({
         agentId: 'agt_1',
-        limit: INBOX_PAGE_SIZE * 2,
+        before: { id: last.id, receivedAt: last.receivedAt },
+        limit: INBOX_PAGE_SIZE,
       }),
     );
     expect(result.current.data).toHaveLength(INBOX_PAGE_SIZE * 2);

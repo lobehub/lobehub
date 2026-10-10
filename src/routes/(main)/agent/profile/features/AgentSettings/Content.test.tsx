@@ -1,4 +1,5 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -47,6 +48,9 @@ vi.mock('@/features/AgentSetting', () => ({
     </div>
   ),
 }));
+
+const accountService = vi.hoisted(() => ({ list: vi.fn(async () => [] as unknown[]) }));
+vi.mock('@/services/agentAccount', () => ({ agentAccountService: accountService }));
 
 vi.mock('@/store/agent', () => {
   const useAgentStore = (selector: (state: typeof mocks.agentState) => unknown) =>
@@ -157,5 +161,27 @@ describe('AgentSettings Content', () => {
     render(<Content />);
 
     expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+  });
+
+  it('keeps identity reachable for an agent that already owns an address, even with no provider', async () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+    setIdentityLab(true);
+    accountService.list.mockResolvedValueOnce([
+      { id: 'acc_1', identifier: 'toby@lobe.id', status: 'active' },
+    ]);
+
+    render(
+      <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <Content />
+      </SWRConfig>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('layout')).toHaveAttribute(
+        'data-tabs',
+        `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
+      ),
+    );
+    expect(accountService.list).toHaveBeenCalledWith({ agentId: 'inbox-agent' });
   });
 });

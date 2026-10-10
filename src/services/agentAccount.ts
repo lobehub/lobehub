@@ -31,6 +31,8 @@ export interface ProvisionAgentAccountParams {
 export interface ListAgentInboxParams {
   accountId?: string;
   agentId: string;
+  /** Keyset cursor: the last row of the previous page. */
+  before?: { id: string; receivedAt: Date };
   limit?: number;
   unreadOnly?: boolean;
 }

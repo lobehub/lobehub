@@ -329,6 +329,8 @@ export const agentAccountRouter = router({
         z.object({
           accountId: z.string().min(1).optional(),
           agentId: z.string().min(1),
+          /** Keyset cursor: the last row of the previous page. */
+          before: z.object({ id: z.string().min(1), receivedAt: z.coerce.date() }).optional(),
           limit: z.number().int().min(1).max(100).optional(),
           unreadOnly: z.boolean().optional(),
         }),

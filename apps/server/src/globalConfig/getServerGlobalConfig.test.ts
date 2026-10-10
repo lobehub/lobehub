@@ -278,4 +278,17 @@ describe('getServerGlobalConfig', () => {
       'https://device-gateway.example.com',
     );
   });
+
+  it('should only advertise Linq when its number pool has a number to bind', async () => {
+    vi.stubEnv('AGENT_MAIL_API_KEY', undefined);
+    vi.stubEnv('LINQ_API_KEY', 'linq_test');
+
+    vi.stubEnv('LINQ_FROM_NUMBER', ' , ');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', []);
+
+    vi.stubEnv('LINQ_FROM_NUMBER', '+15550001111');
+    await expect(loadServerConfig(false)).resolves.toHaveProperty('agentIdentityProviders', [
+      'linq',
+    ]);
+  });
 });
