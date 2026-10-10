@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} копий",
   "environments.instances.create": "Новая копия",
   "environments.instances.createFailed": "Не удалось создать копию",
+  "environments.instances.defaultUndeletable": "Это копия среды по умолчанию, и её нельзя удалить отдельно — восстановите её или удалите среду",
   "environments.instances.desc": "Копия — это рабочая версия этой среды с собственной папкой и установленными пакетами. Разговоры проходят внутри копии, и несколько копий могут работать параллельно, не мешая друг другу.",
   "environments.instances.directoryHint": "Путь к папке. Нельзя изменить после создания.",
   "environments.instances.directoryLabel": "Каталог",
