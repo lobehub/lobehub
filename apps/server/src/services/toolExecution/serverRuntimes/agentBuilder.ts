@@ -292,6 +292,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         if (!agentId) return noEditingTargetResult;
 
         try {
+          // Existence guard: a Drizzle UPDATE on a missing/foreign agent row is a
+          // silent 0-row no-op, so the prompt write would "succeed" without
+          // persisting anything. updateConfig already fails loudly; align it.
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
           await agentModel.update(agentId, {
             editorData: null,
             systemRole: params.prompt,

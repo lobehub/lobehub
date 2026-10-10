@@ -375,6 +375,35 @@ describe('agentBuilderRuntime', () => {
     });
   });
 
+  describe('existence guard (0-row silent no-op)', () => {
+    it('updatePrompt fails loudly when the editing agent no longer exists', async () => {
+      mockGetAgentConfigById.mockResolvedValue(undefined);
+
+      const result = await createRuntime().updatePrompt(
+        { prompt: 'orphan prompt' },
+        { editingAgentId: 'agent-missing', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not found');
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+    });
+
+    it('updateConfig meta-only writes fail loudly when the editing agent no longer exists', async () => {
+      mockGetAgentConfigById.mockResolvedValue(undefined);
+
+      const result = await createRuntime().updateConfig(
+        { meta: { title: 'Ghost' } },
+        { editingAgentId: 'agent-missing', toolManifestMap: {} },
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.content).toContain('not found');
+      expect(mockUpdateConfig).not.toHaveBeenCalled();
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+    });
+  });
+
   describe('installPlugin', () => {
     it('flips an existing disabled builtin-tool entry back to pinned, without duplicating it', async () => {
       mockGetAgentConfigById.mockResolvedValue({

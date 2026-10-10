@@ -393,6 +393,14 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const { agentId } = params;
           let { config, meta } = params;
 
+          // Existence guard: a Drizzle UPDATE on a missing/foreign agent row is a
+          // silent 0-row no-op, so writes would "succeed" without persisting
+          // anything. Fail loudly like the config path already does.
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
           // Guard against LLM double-encoding: parse strings if needed
           if (typeof config === 'string') {
             try {
@@ -438,6 +446,13 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
       updatePrompt: async (params: UpdatePromptParams): Promise<ToolExecutionResult> => {
         try {
           const { agentId, prompt } = params;
+
+          // Existence guard: same 0-row silent no-op hazard as updateAgent.
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
           await agentModel.update(agentId, { editorData: null, systemRole: prompt } as Record<
             string,
             unknown
