@@ -214,6 +214,7 @@ const legacyRawRedisClientConsumers = [
   'apps/server/src/router-hono/agent/handlers/toolResult.ts',
   'apps/server/src/router-hono/webhooks/handlers/github.ts',
   'apps/server/src/routers/lambda/messenger.ts',
+  'apps/server/src/services/agentRuntime/opportunisticSweep.ts',
   'apps/server/src/services/agentSignal/store/adapters/redis/shared.ts',
   'apps/server/src/services/bot/BotCallbackService.ts',
   'apps/server/src/services/bot/BotMessageRouter.ts',

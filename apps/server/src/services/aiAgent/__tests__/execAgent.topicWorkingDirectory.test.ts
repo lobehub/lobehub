@@ -192,6 +192,12 @@ vi.mock('@/server/modules/Redis', async (importOriginal) => ({
   ...(await importOriginal<typeof RedisLib>()),
   tryInitializeRedisWithPrefix: mockTryInitializeRedisWithPrefix,
 }));
+// Without REDIS_URL the service never reaches the fake provider and claims fall
+// back to a process-local map that outlives `claimedKeys.clear()`, so one
+// test's claim would silently block every later stale-scan refresh.
+vi.mock('@/envs/redis', () => ({
+  getRedisConfig: () => ({ enabled: true, prefix: 'test', url: 'redis://test' }),
+}));
 
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
