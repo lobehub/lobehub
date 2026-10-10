@@ -21,6 +21,22 @@ const edges = [
 const graph = { nodes, edges };
 
 describe('experiment navigation', () => {
+  it('never folds a batch — not on a click, not on collapse all', () => {
+    const batchNodes = [
+      { id: 'batch', kind: 'batch' },
+      { id: 'exp', kind: 'experiment' },
+    ] as GoalGraphNode[];
+    const { result } = renderHook(() =>
+      useExplorationNavigation('g', { edges: [], nodes: batchNodes }),
+    );
+    expect([...result.current.collapsed]).toEqual(['exp']);
+    act(() => result.current.toggle('batch'));
+    expect([...result.current.collapsed]).toEqual(['exp']);
+    act(() => result.current.expandAll(true));
+    expect([...result.current.collapsed]).toEqual([]);
+    act(() => result.current.expandAll(false));
+    expect([...result.current.collapsed]).toEqual(['exp']);
+  });
   it('starts collapsed even after async data arrives, and new experiments do not reset manual expansion', () => {
     const { result, rerender } = renderHook(
       (nodes) => useExplorationNavigation('g', { nodes, edges }),

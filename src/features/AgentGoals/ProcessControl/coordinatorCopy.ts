@@ -1,5 +1,8 @@
 import {
   GOAL_ACCEPTANCE_TASK_TITLE,
+  GOAL_BATCH_ASSAY_TITLE,
+  GOAL_BATCH_TEMPLATE_TITLE,
+  GOAL_BATCH_TITLE,
   GOAL_CLARIFICATION_OPTION,
   GOAL_MACHINE_GATE_TITLE,
   GOAL_MANAGER_QUESTION_TITLE,
@@ -87,6 +90,12 @@ export const isGoalAcceptanceTask = (view: GoalNodeView): boolean =>
 export const coordinatorNodeTitleKey = (view: GoalNodeView): string | undefined => {
   const { node } = view;
   if (isGoalAcceptanceTask(view)) return 'goalProcess.node.terminalAcceptance';
+  // A batch's own nodes carry fixed English titles, like the gates below.
+  if (node.kind === 'batch' && node.title === GOAL_BATCH_TITLE) return 'goalBatch.title';
+  if (node.kind === 'finding' && node.title === GOAL_BATCH_TEMPLATE_TITLE)
+    return 'goalBatch.templatePlain';
+  if (node.kind === 'decision' && node.title === GOAL_BATCH_ASSAY_TITLE)
+    return 'goalBatch.gate.title';
   if (node.kind === 'decision' && node.title === GOAL_MANAGER_QUESTION_TITLE)
     return gateTitleKey('agentQuestion');
   if (node.kind === 'decision') {
