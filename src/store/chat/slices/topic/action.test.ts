@@ -578,6 +578,30 @@ describe('topic action', () => {
       });
     });
 
+    it('writes a speed-only selection to topic metadata without a model write', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const modelSpy = vi.spyOn(topicService, 'updateTopicModel');
+      const metadataSpy = vi
+        .spyOn(topicService, 'updateTopicMetadata')
+        .mockResolvedValue(undefined as any);
+      vi.spyOn(result.current, 'refreshTopic').mockResolvedValue(undefined);
+      seed();
+
+      await act(async () => {
+        await result.current.updateTopicHeteroPin('hetero-topic', {
+          provider: 'codex',
+          speed: 'fast',
+        });
+      });
+
+      expect(modelSpy).not.toHaveBeenCalled();
+      expect(metadataSpy).toHaveBeenCalledWith('hetero-topic', { heteroSpeed: 'fast' });
+      expect(useChatStore.getState().topicDataMap[KEY]?.items[0].metadata).toEqual({
+        heteroEffort: 'high',
+        heteroSpeed: 'fast',
+      });
+    });
+
     it.each(['heterogeneous', 'api'] as const)(
       'preserves the latest effort when a %s model write finishes later',
       async (kind) => {

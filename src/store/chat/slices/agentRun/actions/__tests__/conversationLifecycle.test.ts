@@ -2587,13 +2587,19 @@ describe('ConversationLifecycle actions', () => {
           window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
         });
 
-        it('snapshots the heterogeneous effort into the first-send topic', async () => {
+        it('snapshots the heterogeneous effort and speed into the first-send topic', async () => {
           const sendSpy = setupHeteroRun({
-            heterogeneousProvider: { command: 'codex', effort: 'high', type: 'codex' },
+            heterogeneousProvider: {
+              args: ['-c', 'service_tier="fast"'],
+              command: 'codex',
+              effort: 'high',
+              type: 'codex',
+            },
           });
           await sendHeteroMessage();
           expect(sendSpy.mock.calls[0][0].newTopic?.metadata).toMatchObject({
             heteroEffort: 'high',
+            heteroSpeed: 'fast',
           });
         });
 

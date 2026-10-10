@@ -2,7 +2,10 @@ import type { AiModelReasoningConfig } from 'model-bank';
 import { AiModelReasoningConfigSchema } from 'model-bank/aiModel';
 import { z } from 'zod';
 
-import type { HeterogeneousReasoningEffort } from '../agent/heteroSelectorCapabilities';
+import type {
+  HeterogeneousReasoningEffort,
+  HeterogeneousSpeedMode,
+} from '../agent/heteroSelectorCapabilities';
 import type { SerializedAgentHook } from '../agentHook';
 import type { WorkingDirConfig } from '../device';
 import { workingDirConfigSchema } from '../device';
@@ -205,6 +208,12 @@ export interface ChatTopicMetadata {
    * (message counts are not comparable across transcript records and DB rows).
    */
   heteroSourceEndAt?: string;
+  /**
+   * Topic-pinned speed for a heterogeneous agent, snapshotted and overwritten
+   * like `heteroEffort`. `default` is an explicit Standard pin that removes an
+   * inherited Fast flag; legacy topics without it inherit the agent's speed.
+   */
+  heteroSpeed?: HeterogeneousSpeedMode;
   /** origin marker for imported topics, e.g. `claude-code-local` / `codex-local` */
   importedFrom?: string;
   /**
@@ -565,6 +574,7 @@ export const chatTopicMetadataUpdateSchema = z.object({
   heteroSessionBindingKeyByWorkingDirectory: z.record(z.string(), z.string()).optional(),
   heteroSessionId: z.string().optional(),
   heteroSessionIdByWorkingDirectory: z.record(z.string(), z.string()).optional(),
+  heteroSpeed: z.enum(['default', 'fast']).optional(),
   model: z.string().optional(),
   onboardingFeedback: z
     .object({
@@ -638,6 +648,7 @@ export type UpdateTopicMetadataInput = z.input<typeof chatTopicMetadataUpdateSch
  */
 export const chatTopicCreateMetadataSchema = chatTopicMetadataUpdateSchema.pick({
   heteroEffort: true,
+  heteroSpeed: true,
   reasoningConfig: true,
 });
 
