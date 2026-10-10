@@ -988,6 +988,12 @@ export class ConversationLifecycleActionImpl {
       } else {
         targetInputEditor?.setDocument('markdown', message);
       }
+
+      // The editor snapshot covers only text. A send rejected after the composer
+      // was cleared (e.g. the server refusing an offline bound device) would
+      // otherwise still swallow the cleared uploads and context selections —
+      // hand them back to the caller that captured them before clearing.
+      onPreflightFailure?.();
     };
     const restoreUnacceptedVoiceMessageContext = () => {
       if (!optimisticUserMessageId || hasNotifiedMessageAccepted) return;
