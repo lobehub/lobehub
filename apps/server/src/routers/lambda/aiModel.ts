@@ -87,13 +87,18 @@ export const aiModelRouter = router({
     .use(withScopedPermission('ai_model:update'))
     .input(
       z.object({
+        forceType: AiModelTypeSchema.optional(),
         id: z.string(),
         // TODO: Complete validation schema
         models: z.array(z.any()),
       }),
     )
     .mutation(async ({ input, ctx }) => {
-      return ctx.aiModelModel.batchUpdateAiModels(input.id, input.models);
+      return ctx.aiModelModel.batchUpdateAiModels(
+        input.id,
+        input.models,
+        input.forceType ? { forceType: input.forceType } : undefined,
+      );
     }),
 
   // Model deletes are workspace-wide at the model layer (no per-user narrowing),

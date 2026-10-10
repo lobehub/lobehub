@@ -128,8 +128,8 @@ export const parseProtocolUrl = (url: string): ProtocolUrlParsed | null => {
       params,
       urlType,
     };
-  } catch (error) {
-    console.error('Failed to parse protocol URL:', error);
+  } catch {
+    console.error('Failed to parse protocol URL');
     return null;
   }
 };

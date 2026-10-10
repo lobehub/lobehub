@@ -226,6 +226,7 @@ export class AiProviderModel {
         enabled: aiProviders.enabled,
         fetchOnClient: aiProviders.fetchOnClient,
         id: aiProviders.id,
+        identity: aiProviders._id,
         keyVaults: aiProviders.keyVaults,
         logo: aiProviders.logo,
         name: aiProviders.name,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import type { McpSchema } from '../../types/protocol';
 import { generateRFCProtocolUrl, parseProtocolUrl } from '../protocol';
@@ -152,6 +152,16 @@ describe('Protocol', () => {
     it('should return null for URLs without action', () => {
       const result = parseProtocolUrl('lobehub://plugin/');
       expect(result).toBeNull();
+    });
+
+    it('does not expose malformed protocol credentials in parse-error logs', () => {
+      const secret = 'one-time-callback-token';
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      expect(parseProtocolUrl(`lobehub://[${secret}/import`)).toBeNull();
+      expect(JSON.stringify(consoleError.mock.calls)).not.toContain(secret);
+
+      consoleError.mockRestore();
     });
   });
 
