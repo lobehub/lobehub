@@ -19,7 +19,6 @@ const REGISTER_CHUNK_SIZE = 500;
 
 export interface TrashRegisterEntry {
   meta?: TrashItemMeta | null;
-  /** Captured from the source row by the server in the deletion transaction. */
   projectId: string | null;
   resourceId: string;
   resourceType: TrashResourceType;

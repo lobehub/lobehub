@@ -1084,7 +1084,6 @@ export interface SoftDeletedMessage {
    */
   ownerId: string | null;
   parentId: string | null;
-  /** Project of the owning topic, read in the soft-delete transaction. */
   projectId: string | null;
   role: string;
   topicId: string | null;
