@@ -1370,18 +1370,31 @@ export default {
   'sandboxStorage.persistentUpsellDesc': 'Keep files across runs and topics',
   'sandboxStorage.setUpEnvironmentDesc': 'A persistent directory lives in an environment',
   'sandboxStorage.setUpEnvironment': 'Set up an environment',
-  // The other empty state: environments exist, none has been materialized
-  // into a working copy yet. Naming the environment page rather than opening
-  // a dialog here — this menu picks between instances, it does not make them.
-  'sandboxStorage.noInstances': 'Create an instance',
-  'sandboxStorage.noInstancesDesc': 'Your environments have no working copy yet',
   'sandboxStorage.manage': 'Manage',
-  // The menu names the thing it picks — an instance of an environment —
-  // rather than the slot it fills. The explainer carries the distinction,
-  // because "environment" and "instance of one" is the whole model.
-  'sandboxStorage.pickerTitle': 'Environment Instance',
+  // The menu lists environments: a person picks the environment, and which
+  // copy (instance) of it the conversation lands in is only asked about when
+  // there is more than one. "Copy" is the product's word for an instance.
+  'sandboxStorage.pickerTitle': 'Environment',
   'sandboxStorage.pickerInfoTooltip':
-    'An environment describes what a run needs around it — repositories, setup, variables. An instance is one working copy of it, with its own folder and its own installed packages; conversations run inside an instance and keep what they leave there.',
+    'An environment describes what a run needs around it — files, or repositories, setup and variables. Conversations run inside one of its copies and keep what they leave there; a second copy only appears when two conversations need the same environment at once.',
+  'sandboxStorage.kind.files': 'Files',
+  'sandboxStorage.kind.code': 'Code',
+  'sandboxStorage.copies': 'Copies',
+  'sandboxStorage.copyCount_one': '{{count}} copy',
+  'sandboxStorage.copyCount_other': '{{count}} copies',
+  'sandboxStorage.defaultCopy': 'Default',
+  'sandboxStorage.showCopies': 'Show copies',
+  'sandboxStorage.allCopiesBusy': 'Every copy is in use',
+  // An environment from before every environment got a default copy. Its
+  // creator gets the copy made on first pick; a colleague cannot make one.
+  'sandboxStorage.noCopyYetDesc': 'A copy is created the first time you pick it',
+  'sandboxStorage.noCopyColleagueDesc': 'Its creator has not set it up yet',
+  'sandboxStorage.createCopyFailed': 'This environment could not be prepared',
+  // Built from the environment's specification rather than copied from the
+  // copy that is busy: that one is held by a run, and its state is that run's.
+  'sandboxStorage.reopenCopy': 'Open another copy',
+  'sandboxStorage.reopenCopyDesc': 'Rebuilt from the environment configuration',
+  'sandboxStorage.reopenCopyFailed': 'Another copy could not be opened',
   'sandboxStorage.environmentsUnavailable': 'Environments could not be loaded',
   // One conversation at a time per instance: the execution plane takes a
   // lease and answers the second writer with 409 INSTANCE_IN_USE, because
@@ -1390,10 +1403,10 @@ export default {
   // the first message meets the refusal.
   'sandboxStorage.running': 'Running',
   'sandboxStorage.runningHint':
-    'Something else is still running in this instance, so it cannot be picked here. It is released on its own roughly 15 minutes after that run goes quiet.',
-  'sandboxStorage.runningOwnHint': "This conversation's own run is using this instance.",
+    'Something else is still running in this copy, so it cannot be picked here. It is released on its own roughly 15 minutes after that run goes quiet.',
+  'sandboxStorage.runningOwnHint': "This conversation's own run is using this copy.",
   'sandboxStorage.runningHintStoppable':
-    'Something else is still running in this instance, so it cannot be picked here. It is released on its own roughly 15 minutes after that run goes quiet, or you can stop it now.',
+    'Something else is still running in this copy, so it cannot be picked here. It is released on its own roughly 15 minutes after that run goes quiet, or you can stop it now.',
   'sandboxStorage.stop': 'Stop',
   // A build holds the same single-writer lease a run does, so it is refused
   // for the same reason — but it is not a conversation, and saying "running"

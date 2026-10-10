@@ -1,26 +1,17 @@
 'use client';
 
+import { environmentKind } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import {
-  ActionIcon,
-  confirmModal,
-  DropdownMenu,
-  Popover,
-  Skeleton,
-  Text,
-  toast,
-} from '@lobehub/ui/base-ui';
+import { confirmModal, Popover, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,
-  CircleStopIcon,
   FolderClockIcon,
   FolderIcon,
   InfoIcon,
   LockIcon,
-  MoreVerticalIcon,
   PlusIcon,
   SettingsIcon,
   TimerIcon,
@@ -38,6 +29,14 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { sandboxStorageService } from '@/services/sandboxStorage';
 
 import OptionRow from './OptionRow';
+import SandboxEnvironmentRow from './SandboxEnvironmentRow';
+import {
+  copyChipLabel,
+  describeEnvironmentRow,
+  isCopyBuilding,
+  isCopyOccupied,
+} from './sandboxEnvironmentRows';
+import { useCreateCopy } from './useCreateCopy';
 import { usePendingIds } from './usePendingIds';
 import type { SandboxSelection } from './useSandboxMode';
 import { workingDirectoryChipStyles } from './workingDirectoryChipStyles';
@@ -189,17 +188,20 @@ interface SandboxInstancePickerProps {
 
 const INSTANCE_ICON = AppWindowMacIcon;
 
+/** How often a building copy is re-listed while the picker can see it. */
+const BUILD_REFRESH_MS = 4000;
+
 /**
  * Where a cloud-sandbox run keeps its files, offered the way the local picker
  * offers folders: the chip names the slot, the menu lists the places.
  *
  * The temporary directory comes first because it is what a run gets by
  * choosing nothing — naming it keeps that state visible and lets a run go back
- * to it. Below it, the instances themselves, flat: an instance is the only
- * thing here files can actually go into, and nesting each one under its
- * environment spent a line per environment to say what the instance's own
- * second line already says. Environments are named there, and made on the
- * environment page — this menu picks, it does not author.
+ * to it. Below it, the environments: what people choose is an environment, and
+ * the copy (instance) of it a conversation lands in is picked for them — the
+ * one it already uses, else the default, else the first free one. Copies only
+ * surface, in a second menu, when an environment has more than one. The topic
+ * still stores the copy's id, so a conversation's files never move.
  *
  * Names, not sizes: sizes live in the snapshot store, which needs a live sandbox
  * session to answer, and a picker that takes seconds to open is a picker people
@@ -212,14 +214,14 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // "working directory" would be one more pair to keep in step.
     const { t } = useTranslation(['chat', 'device', 'setting']);
     const [open, setOpen] = useState(false);
-    // Instances whose run is being stopped from this menu.
+    // Copies whose run is being stopped from this menu.
     const stopping = usePendingIds();
     const canEdit = useCanEditEnvironment();
     const navigate = useWorkspaceAwareNavigate();
 
     const boundInstanceId = value.mode === 'persistent' ? value.instanceId : undefined;
 
-    // Fetched while CLOSED whenever an instance is bound, because the chip names
+    // Fetched while CLOSED whenever a copy is bound, because the chip names
     // it by looking it up in this list: gating the list on `open` alone leaves
     // the closed chip with nothing to look up.
     const {
@@ -235,14 +237,23 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
       // which takes the topic from none to one, must not blank the chip: it
       // would flash a skeleton for a name that never changed. Kept until the
       // refetch lands; a moment of last-known occupancy is not worth that.
-      { keepPreviousData: true, revalidateOnFocus: false },
+      {
+        keepPreviousData: true,
+        // A building copy settles on a listing, so keep listing while one is
+        // building: "Building" has to turn into a usable row on its own.
+        refreshInterval: (latest) =>
+          latest?.instances.some((instance) => instance.status === 'pending')
+            ? BUILD_REFRESH_MS
+            : 0,
+        revalidateOnFocus: false,
+      },
     );
     const {
       data: environmentData,
       error: environmentError,
       isLoading: environmentsLoading,
-      // Also while closed when an instance is bound: whether that instance
-      // is still usable depends on its environment's visibility.
+      // Also while closed when a copy is bound: whether that copy is still
+      // usable depends on its environment's visibility.
     } = useSWR(entitled && (open || boundInstanceId) ? 'sandbox-environments' : null, () =>
       sandboxStorageService.listEnvironments(),
     );
@@ -271,43 +282,28 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     const environmentById = new Map(
       environments.map((environment) => [environment.id, environment]),
     );
+    const copiesOf = (environmentId: string) =>
+      instances.filter((instance) => instance.environmentId === environmentId);
+    const currentEnvironment = current ? environmentById.get(current.environmentId) : undefined;
 
-    // The menu lists instances, not environments. An environment is what an
-    // instance was made from — it names the instance and supplies its icon —
-    // but it is not itself a place files can go, so it no longer gets a row of
-    // its own to nest under. Making one is the environment page's job.
-    const selectableInstances = instances.filter((instance) => {
-      const environment = environmentById.get(instance.environmentId);
-      return Boolean(environment) && !isBlocked(instance.environmentId);
-    });
-
-    // Inside a workspace an instance belongs to one of two pools, through its
-    // environment, and which one decides who else can reach what a run leaves
-    // behind — so the menu says which pool it is looking at, the way the
-    // execution-target menu splits private from workspace devices. A personal
-    // account has one pool and no such question, so it stays flat.
+    // Inside a workspace an environment belongs to one of two pools, and which
+    // one decides who else can reach what a run leaves behind — so the menu
+    // says which pool it is looking at, the way the execution-target menu
+    // splits private from workspace devices. A personal account has one pool
+    // and no such question, so it stays flat.
     const inWorkspace = selectable.some((environment) => Boolean(environment.workspaceId));
-    const poolOf = (instance: (typeof instances)[number]) =>
-      environmentById.get(instance.environmentId)?.visibility === 'private'
-        ? 'private'
-        : 'workspace';
     const privatePool = inWorkspace
-      ? selectableInstances.filter((instance) => poolOf(instance) === 'private')
+      ? selectable.filter((environment) => environment.visibility === 'private')
       : [];
     const workspacePool = inWorkspace
-      ? selectableInstances.filter((instance) => poolOf(instance) === 'workspace')
+      ? selectable.filter((environment) => environment.visibility !== 'private')
       : [];
 
     // Only once BOTH lists have arrived: undefined is "not known yet", not
-    // "none", and instances alone cannot be judged — an instance whose
-    // environment is hidden from this agent is not one of this menu's choices.
+    // "none". With no environment at all there is nothing to pick, so the row
+    // says to set one up.
     const listsReady = Boolean(environmentData) && Boolean(data);
-    const hasNoInstances = listsReady && selectableInstances.length === 0;
-    // Which of the two empty states this is. With no environment at all there
-    // is nothing to make an instance of, so the row says to set one up; with
-    // an environment but no instance, the environment page is where the copy
-    // gets made.
-    const hasNoEnvironments = hasNoInstances && selectable.length === 0;
+    const hasNoEnvironments = listsReady && selectable.length === 0;
 
     const select = async (selection: SandboxSelection) => {
       setOpen(false);
@@ -320,13 +316,13 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     };
 
     // The same stop the settings row offers, from the place the person found
-    // the instance blocked. The dialog and its outcomes are that row's own
-    // words, so the two surfaces cannot drift into describing it differently.
-    // Keys are checked per namespace, and these are the settings row's.
+    // the copy blocked. The dialog and its outcomes are that row's own words,
+    // so the two surfaces cannot drift into describing it differently. Keys
+    // are checked per namespace, and these are the settings row's.
     const translate = t as (key: string, options?: Record<string, unknown>) => string;
     const tSetting = (key: string, options?: Record<string, unknown>) =>
       translate(key, { ...options, ns: 'setting' });
-    const confirmStop = (instance: (typeof instances)[number]) =>
+    const confirmStop = (instance: { id: string; name: string }) =>
       confirmModal({
         cancelText: t('cancel', { ns: 'common' }),
         content: tSetting('environments.instances.stopConfirmContent'),
@@ -358,119 +354,61 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         title: tSetting('environments.instances.stopConfirmTitle', { name: instance.name }),
       });
 
-    const renderInstance = (instance: (typeof instances)[number]) => {
-      const environment = environmentById.get(instance.environmentId);
-      // What the environment builds from, marked the way the settings list
-      // marks it. Read from the environment because that is where a checkout
-      // is declared, but shown here, because an instance is the row a person
-      // picks between and "which repo is this" is what they are asking. The
-      // instance's own directory cannot answer it: that is a folder inside the
-      // workspace, which a repository icon would misread.
-      const repository = repositoryPath(environment?.configuration);
-      // Somebody else's run. The execution plane allows one session per
-      // instance — the second writer meets a 409 INSTANCE_IN_USE — so
-      // offering it would be offering a choice the next message refuses. Its
-      // own topic's run is the opposite case: that conversation is the one
-      // running, and taking its instance away mid-run is the last thing to do.
-      const occupied = instance.inUse && !instance.inUseByThisTopic;
-      // A build holds the very same lease — it is the exclusive writer while
-      // it publishes — so it needs no rule of its own here, only its own word.
-      // "Running" on an instance that is still being assembled would send
-      // someone looking for the conversation that is using it.
-      const preparing = instance.status === 'pending';
-      // Nothing has been cloned or installed into it yet. Selectable all the
-      // same: a build that failed is retried from the settings page, and a
-      // conversation pointed at the instance is how someone gets back to it.
-      const unbuilt = instance.status === 'error';
-      // The way out of `occupied`, for whoever may end that run: the owner,
-      // as on the settings row. A colleague's run in a published environment
-      // is theirs to finish, and this menu only explains the wait.
-      const stoppable = occupied && !preparing && !!environment && canEdit(environment);
-      const isStopping = stopping.has(instance.id);
+    // Lazily for an environment with no copy yet, or as another copy when the
+    // ones there are taken — see `useCreateCopy`.
+    const { create: createCopy, isPreparing } = useCreateCopy({
+      onBuildError: (error) =>
+        toast.error(
+          describeError(error, tSetting, tSetting('environments.instances.buildStartFailed')),
+        ),
+      onChange,
+      refreshInstances,
+      topicId,
+    });
+    const createCopyAndBind = (environmentId: string, failedKey: string) =>
+      createCopy(environmentId, (error) =>
+        toast.error(describeError(error, tSetting, translate(failedKey))),
+      );
+
+    const renderEnvironment = (environment: (typeof environments)[number]) => {
+      const isCreator = canEdit(environment);
+      const kind = environmentKind(environment);
+      const row = describeEnvironmentRow({
+        boundInstanceId,
+        copies: copiesOf(environment.id),
+        isCreator,
+        kind,
+      });
 
       return (
-        <OptionRow
-          active={instance.id === boundInstanceId}
-          className={styles.option}
-          // Already this conversation's own instance: it stays selectable
-          // however the lease reads, because "you cannot pick what you are
-          // already using" is never the right thing to tell someone.
-          disabled={(occupied || preparing) && instance.id !== boundInstanceId}
-          icon={repository ? <Github size={16} /> : <Icon icon={INSTANCE_ICON} size={16} />}
-          key={instance.id}
-          label={instance.name}
-          desc={
-            <span className={styles.environmentRow}>
-              {environment
-                ? `${environment.name} · ${instance.workingDirectory}`
-                : instance.workingDirectory}
-            </span>
-          }
-          extra={
-            // Behind a menu rather than on the row: a picker row is for
-            // picking, and a bare stop icon beside it reads as part of that
-            // choice. The spinner stays on the trigger while a stop runs.
-            stoppable ? (
-              <DropdownMenu
-                items={[
-                  {
-                    disabled: isStopping,
-                    icon: CircleStopIcon,
-                    key: 'stop',
-                    label: t('sandboxStorage.stop'),
-                    onClick: () => confirmStop(instance),
-                  },
-                ]}
-              >
-                <ActionIcon
-                  disabled={isStopping}
-                  icon={MoreVerticalIcon}
-                  loading={isStopping}
-                  size={'small'}
-                />
-              </DropdownMenu>
-            ) : undefined
-          }
-          tag={
-            preparing ? (
-              t('sandboxStorage.building')
-            ) : unbuilt ? (
-              t('sandboxStorage.buildFailed')
-            ) : instance.inUse ? (
-              // "Running" alone reads as a state of the instance, not as
-              // the reason this row is the one that cannot be picked, and
-              // it says nothing about how long that lasts — or, for the
-              // owner, that it can be ended now with the button beside it.
-              // Only when somebody ELSE holds it, though: this conversation's
-              // own run leaves the row selectable, and telling the person to
-              // wait for a lease they already have describes a block that is
-              // not there.
-              <Tooltip
-                title={t(
-                  !occupied
-                    ? 'sandboxStorage.runningOwnHint'
-                    : stoppable
-                      ? 'sandboxStorage.runningHintStoppable'
-                      : 'sandboxStorage.runningHint',
-                )}
-              >
-                <span>{t('sandboxStorage.running')}</span>
-              </Tooltip>
-            ) : undefined
-          }
-          onClick={() => void select({ instanceId: instance.id, mode: 'persistent' })}
+        <SandboxEnvironmentRow
+          boundInstanceId={boundInstanceId}
+          busy={isPreparing(environment.id)}
+          environment={environment}
+          isCreator={isCreator}
+          key={environment.id}
+          kind={kind}
+          repository={repositoryPath(environment.configuration)}
+          row={row}
+          stopping={stopping.has}
+          onReopen={() => void createCopyAndBind(environment.id, 'sandboxStorage.reopenCopyFailed')}
+          onSelectCopy={(copy) => void select({ instanceId: copy.id, mode: 'persistent' })}
+          onStop={confirmStop}
+          onSelectLazy={() => {
+            setOpen(false);
+            void createCopyAndBind(environment.id, 'sandboxStorage.createCopyFailed');
+          }}
         />
       );
     };
 
-    // The chip names what was chosen — an instance, or the temporary directory
-    // once it has been picked on purpose — and otherwise the slot itself, the
-    // same words the local chip shows before a folder is chosen. The default
-    // is not a choice, so it does not get named as one.
+    // The chip names what was chosen — an environment (and its copy, when it
+    // has several), or the temporary directory once it has been picked on
+    // purpose — and otherwise the slot itself, the same words the local chip
+    // shows before a folder is chosen. The default is not a choice, so it does
+    // not get named as one.
     // A node rather than an icon component, because the repository mark is not
-    // a lucide glyph and the chip has to be able to show it: the chip names the
-    // instance the menu named, so a row that reads as a checkout cannot
-    // collapse back into a generic window once the menu closes.
+    // a lucide glyph and the chip has to be able to show it.
     const chipIcon = (() => {
       if (!current) {
         return value.mode === 'ephemeral' ? (
@@ -480,15 +418,17 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         );
       }
       if (currentBlocked) return <Icon icon={LockIcon} size={14} />;
+      if (repositoryPath(currentEnvironment?.configuration)) return <Github size={14} />;
 
-      return repositoryPath(environmentById.get(current.environmentId)?.configuration) ? (
-        <Github size={14} />
-      ) : (
-        <Icon icon={INSTANCE_ICON} size={14} />
+      return (
+        <Icon
+          icon={environmentKind(currentEnvironment) === 'files' ? FolderIcon : INSTANCE_ICON}
+          size={14}
+        />
       );
     })();
 
-    // An instance is bound and the list that names it has not arrived. The key
+    // A copy is bound and the list that names it has not arrived. The key
     // carries the topic, so the first send — the moment a conversation goes
     // from none to one — refetches it, and the fallback below would spend that
     // window saying the opposite of the truth: the chip read "working
@@ -496,7 +436,11 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // chose it and while the run was already using it.
     const resolvingInstance = !!boundInstanceId && !current && instancesLoading;
     const chipLabel = current
-      ? current.name
+      ? copyChipLabel({
+          copy: current,
+          copyCount: copiesOf(current.environmentId).length,
+          environmentName: currentEnvironment?.name,
+        })
       : value.mode === 'ephemeral'
         ? t('sandboxStorage.ephemeral')
         : t('workingDirectory.title', { ns: 'device' });
@@ -538,8 +482,10 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
 
         {/* This conversation's own instance, held by another one. It stays
             bound — the lease may well be free again by the next message — but
-            saying nothing would leave a 409 to do the explaining. */}
-        {current && !currentBlocked && current.inUse && !current.inUseByThisTopic && (
+            saying nothing would leave a 409 to do the explaining. A copy that
+            is still building holds the same lease, but no conversation is
+            running in it: its row already says "Building". */}
+        {current && !currentBlocked && isCopyOccupied(current) && !isCopyBuilding(current) && (
           <Text className={styles.blockedNotice}>
             {t('sandboxStorage.instanceBusy', { name: current.name })}
           </Text>
@@ -577,40 +523,31 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           <Text className={styles.notice}>{t('sandboxStorage.environmentsUnavailable')}</Text>
         )}
 
-        {entitled && hasNoInstances && (
-          // Nothing to choose from yet. Both roads lead to the same page —
-          // the row only changes which step it names, because "set up an
-          // environment" reads as a dead end to someone who already has one.
+        {entitled && hasNoEnvironments && (
+          // Nothing to choose from yet: environments are made on the
+          // environment page — this menu picks, it does not author.
           <OptionRow
             className={styles.option}
+            desc={t('sandboxStorage.setUpEnvironmentDesc')}
             icon={<Icon icon={PlusIcon} size={16} />}
-            desc={t(
-              hasNoEnvironments
-                ? 'sandboxStorage.setUpEnvironmentDesc'
-                : 'sandboxStorage.noInstancesDesc',
-            )}
-            label={t(
-              hasNoEnvironments ? 'sandboxStorage.setUpEnvironment' : 'sandboxStorage.noInstances',
-            )}
+            label={t('sandboxStorage.setUpEnvironment')}
             onClick={() => leaveTo(() => navigate('/settings/environments'))}
           />
         )}
 
-        {entitled &&
-          !inWorkspace &&
-          selectableInstances.map((instance) => renderInstance(instance))}
+        {entitled && listsReady && !inWorkspace && selectable.map(renderEnvironment)}
 
-        {entitled && inWorkspace && privatePool.length > 0 && (
+        {entitled && listsReady && inWorkspace && privatePool.length > 0 && (
           <>
             <div className={styles.groupLabel}>{t('sandboxStorage.privateGroup')}</div>
-            {privatePool.map((instance) => renderInstance(instance))}
+            {privatePool.map(renderEnvironment)}
           </>
         )}
 
-        {entitled && inWorkspace && workspacePool.length > 0 && (
+        {entitled && listsReady && inWorkspace && workspacePool.length > 0 && (
           <>
             <div className={styles.groupLabel}>{t('sandboxStorage.workspaceGroup')}</div>
-            {workspacePool.map((instance) => renderInstance(instance))}
+            {workspacePool.map(renderEnvironment)}
           </>
         )}
 
@@ -636,7 +573,14 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         open={open}
         placement={'topLeft'}
         trigger={'click'}
-        onOpenChange={setOpen}
+        onOpenChange={(next) => {
+          setOpen(next);
+          // Occupancy moves on its own — a run ends, a build releases its
+          // lease — and the list is not refetched on focus. Re-read it each
+          // time the menu opens, so a copy is not offered or refused on a
+          // stale answer. A Redis read on the server, never a sandbox.
+          if (next && data) void refreshInstances();
+        }}
       >
         <div>
           <Tooltip
