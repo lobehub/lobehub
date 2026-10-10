@@ -9,6 +9,11 @@ import {
   type GatewayMcpParams,
 } from '@lobechat/device-gateway-client';
 import type { HeterogeneousAgentType } from '@lobechat/heterogeneous-agents';
+import {
+  PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD,
+  PROVIDER_BOUND_AGENT_RUN_METHOD,
+  type ProviderBoundAgentRun,
+} from '@lobechat/heterogeneous-agents/protocol';
 import type {
   ClaudeCodeQuotaSnapshot,
   CodexQuotaSnapshot,
@@ -166,7 +171,13 @@ interface TerminalRpcScope {
 type TerminalRpcMethod =
   'closeTerminal' | 'createTerminalSession' | 'readTerminal' | 'resizeTerminal' | 'writeTerminal';
 
+/** Live sockets whose provider-binding probe answered, bounded per server instance. */
+const PROVIDER_BINDING_CAPABILITY_CACHE_LIMIT = 1024;
+
 export class DeviceGateway {
+  /** Probe answers per live socket set; see {@link findProviderBindingChannel}. */
+  private readonly providerBindingCapability = new Map<string, boolean>();
+
   private client: GatewayHttpClient | null = null;
 
   /**
@@ -1886,6 +1897,154 @@ export class DeviceGateway {
     } catch (error) {
       log('statPath: error for deviceId=%s — %O', deviceId, error);
       return undefined;
+    }
+  }
+
+  /**
+   * Find a live personal connection that implements provider-bound execution.
+   *
+   * Use when:
+   * - Validating the composer or routing a provider-bound device run.
+   * Expects:
+   * - The authenticated personal principal and its selected device ID.
+   * Returns:
+   * - The compatible connection's actual routing label, or undefined.
+   *
+   * Call stack:
+   * device.checkProviderBindingCapability / {@link dispatchProviderBoundAgentRun}
+   *   -> findProviderBindingChannel
+   *     -> GatewayHttpClient.invokeRpc (credential-free capability probe)
+   */
+  async findProviderBindingChannel(userId: string, deviceId: string): Promise<string | undefined> {
+    const client = this.getClient();
+    if (!client) return;
+    const devices = await this.queryDeviceList(userId);
+    const device = devices.find((candidate) => candidate.deviceId === deviceId);
+
+    // Labels are freeform and several connections can share one, so a label is
+    // identified by the live sockets behind it. A connector's protocol cannot
+    // change while one socket stays open, but `connectionId` is persisted per
+    // install: restarting `lh connect` (e.g. after a CLI downgrade) reuses it.
+    // The gateway stamps `connectedAt` when it accepts each socket, so the pair
+    // names one socket and any restart or reconnect is probed again.
+    const connectionsByChannel = new Map<string, Array<string | undefined>>();
+    for (const connection of device?.channels ?? []) {
+      if (!connection.channel) continue;
+      const ids = connectionsByChannel.get(connection.channel) ?? [];
+      ids.push(
+        connection.connectionId && connection.connectedAt
+          ? `${connection.connectionId}@${connection.connectedAt}`
+          : undefined,
+      );
+      connectionsByChannel.set(connection.channel, ids);
+    }
+    const candidates = [...connectionsByChannel].map(([channel, ids]) => ({
+      channel,
+      cacheKey: ids.every(Boolean)
+        ? [userId, deviceId, channel, ...(ids as string[]).sort()].join('\0')
+        : undefined,
+    }));
+
+    const cached = candidates.find(
+      (candidate) =>
+        candidate.cacheKey && this.providerBindingCapability.get(candidate.cacheKey) === true,
+    );
+    if (cached) return cached.channel;
+
+    // Probe every unknown label at once, so one silent socket costs one timeout
+    // rather than one per label. Old clients reject this read-only RPC.
+    const available = await Promise.all(
+      candidates.map(async ({ cacheKey, channel }) => {
+        if (cacheKey && this.providerBindingCapability.has(cacheKey)) {
+          return this.providerBindingCapability.get(cacheKey) === true;
+        }
+        try {
+          const result = await client.invokeRpc<{ available?: boolean; version?: number }>(
+            { channel, deviceId, userId, timeout: 3_000 },
+            { method: PROVIDER_BOUND_AGENT_RUN_CAPABILITY_METHOD, params: {} },
+          );
+          const supported =
+            result.success && result.data?.available === true && result.data.version === 1;
+          // Only a connector's own answer is final; a failed call may be a timeout.
+          if (cacheKey && result.success)
+            this.rememberProviderBindingCapability(cacheKey, supported);
+          return supported;
+        } catch {
+          // One stale socket must not hide another compatible live connection.
+          return false;
+        }
+      }),
+    );
+    // Channels arrive newest-first; prefer the newest compatible connection.
+    return candidates.find((_, index) => available[index])?.channel;
+  }
+
+  private rememberProviderBindingCapability(cacheKey: string, supported: boolean) {
+    if (this.providerBindingCapability.size >= PROVIDER_BINDING_CAPABILITY_CACHE_LIMIT) {
+      const oldest = this.providerBindingCapability.keys().next().value;
+      if (oldest !== undefined) this.providerBindingCapability.delete(oldest);
+    }
+    this.providerBindingCapability.set(cacheKey, supported);
+  }
+
+  /**
+   * Dispatch a provider-bound run only to a connector implementing the dedicated RPC.
+   *
+   * Use when:
+   * - A personal Codex agent explicitly targets an authorized device.
+   * Expects:
+   * - No provider secrets; the connector resolves its own authenticated provider.
+   * Returns:
+   * - Success only after the connector acknowledges a prepared child process.
+   *
+   * Call stack:
+   * heteroDispatch (../aiAgent/pipeline)
+   *   -> dispatchProviderBoundAgentRun
+   *     -> GatewayHttpClient.invokeRpc
+   */
+  async dispatchProviderBoundAgentRun(
+    params: ProviderBoundAgentRun & {
+      deviceId: string;
+      userId: string;
+      workspaceId?: string;
+      ingestWorkspaceId?: string;
+    },
+  ): Promise<{ error?: string; errorData?: DeviceUnavailableErrorData; success: boolean }> {
+    if (params.workspaceId || params.ingestWorkspaceId) {
+      return { error: 'Provider binding requires a personal device connection.', success: false };
+    }
+    const client = this.getClient();
+    if (!client) return { error: 'GATEWAY_NOT_CONFIGURED', success: false };
+    const {
+      deviceId,
+      userId,
+      workspaceId: _workspace,
+      ingestWorkspaceId: _ingest,
+      ...payload
+    } = params;
+    try {
+      const channel = await this.findProviderBindingChannel(userId, deviceId);
+      if (!channel) {
+        return {
+          error: 'Provider binding requires a compatible lh connect connection.',
+          success: false,
+        };
+      }
+      const result = await client.invokeRpc<{ status: 'accepted' | 'rejected'; reason?: string }>(
+        { channel, deviceId, userId, timeout: 30_000 },
+        { method: PROVIDER_BOUND_AGENT_RUN_METHOD, params: payload },
+      );
+      return result.success && result.data?.status === 'accepted'
+        ? { success: true }
+        : {
+            error:
+              result.error ??
+              result.data?.reason ??
+              'Device does not support provider-bound execution. Update lh connect.',
+            success: false,
+          };
+    } catch {
+      return { error: 'Provider-bound device dispatch failed.', success: false };
     }
   }
 

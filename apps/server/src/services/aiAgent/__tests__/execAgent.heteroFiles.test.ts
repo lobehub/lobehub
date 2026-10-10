@@ -11,6 +11,7 @@ const {
   mockBuildRemoteDeviceHeteroContext,
   mockCreateOperationMetadata,
   mockDispatchAgentRun,
+  mockDispatchProviderBoundAgentRun,
   mockExecuteToolCall,
   mockInterruptOperation,
   mockGetHeterogeneousResumeSessionId,
@@ -28,6 +29,7 @@ const {
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockDispatchProviderBoundAgentRun: vi.fn().mockResolvedValue({ success: true }),
   mockExecuteToolCall: vi.fn().mockResolvedValue({ success: true }),
   mockInterruptOperation: vi.fn().mockResolvedValue(true),
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
@@ -236,6 +238,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mockDispatchAgentRun,
+    dispatchProviderBoundAgentRun: mockDispatchProviderBoundAgentRun,
     executeToolCall: mockExecuteToolCall,
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
@@ -704,6 +707,105 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
       }),
     );
   });
+
+  /** @example A bound API model runs on the device without replacing a saved native model. */
+  it('dispatches personal Codex API binding separately and preserves native Topic pins', async () => {
+    // ROOT CAUSE:
+    // heteroDispatch rejected every API binding before reaching the device.
+    // Removing that guard alone would let older connectors ignore the binding
+    // and execute under native credentials. A separate acknowledged RPC is required.
+    Object.assign(heteroAgentConfig.agencyConfig, {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: {
+        apiConfig: { model: 'gpt-api', providerId: 'openai' },
+        authMode: 'api',
+        effort: 'medium',
+        type: 'codex',
+      },
+    });
+    topicMock.findById.mockResolvedValue({
+      id: 'topic-existing',
+      model: 'gpt-5.6-terra',
+      provider: 'codex',
+      metadata: { heteroEffort: 'low', heteroSpeed: 'default' },
+    });
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Use the selected API binding',
+      appContext: { topicId: 'topic-existing' },
+    });
+    /** @example The supported API dispatch is accepted, with no native-auth fallback. */
+    expect(result.success).toBe(true);
+    /** @example Old agent_run_request clients must never receive this API run. */
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    /** @example Only the credential-free provider/model reference crosses the gateway. */
+    expect(mockDispatchProviderBoundAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentType: 'codex',
+        deviceId: 'device-1',
+        providerBinding: expect.objectContaining({
+          apiConfig: { model: 'gpt-api', providerId: 'openai' },
+          kind: 'provider',
+        }),
+        topicId: 'topic-existing',
+      }),
+    );
+    /** @example Receipts and run markers never overwrite the Topic native model or provider. */
+    for (const [, update] of topicMock.updateMetadata.mock.calls) {
+      expect(update).not.toHaveProperty('model');
+      expect(update).not.toHaveProperty('provider');
+    }
+  });
+
+  /** @example Existing API Topics retain their binding when the Agent defaults change. */
+  it.each([undefined, 'api-session-a'])(
+    'dispatches the Topic API binding with resume %s',
+    async (sessionId) => {
+      // ROOT CAUSE:
+      // Wrapper args used Topic A, but the device RPC sent Agent B. The connector
+      // correctly treated the RPC binding as authoritative and sanitized away the
+      // model arg for A, so the run executed the Agent's binding.
+      Object.assign(heteroAgentConfig.agencyConfig, {
+        boundDeviceId: 'device-1',
+        executionTarget: 'device',
+        heterogeneousProvider: {
+          apiConfig: { model: 'agent-model-b', providerId: 'provider-b' },
+          authMode: 'api',
+          effort: 'medium',
+          type: 'codex',
+        },
+      });
+      topicMock.findById.mockResolvedValue({
+        agentId: 'agent-1',
+        id: 'topic-existing',
+        model: 'topic-model-a',
+        provider: 'provider-a',
+        metadata: { heteroEffort: 'low', heteroSpeed: 'default', heteroSessionId: sessionId },
+      });
+      mockGetHeterogeneousResumeSessionId.mockResolvedValue(sessionId);
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Continue the existing API Topic',
+        appContext: { topicId: 'topic-existing' },
+      });
+      /** @example The binding carries the Topic model; wrapper args carry its reasoning effort. */
+      expect(mockDispatchProviderBoundAgentRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--effort', 'low'],
+          providerBinding: expect.objectContaining({
+            apiConfig: { model: 'topic-model-a', providerId: 'provider-a' },
+          }),
+          resumeSessionId: sessionId,
+        }),
+      );
+      /** @example A Topic override must leave the Agent binding intact. */
+      expect(heteroAgentConfig.agencyConfig?.heterogeneousProvider?.apiConfig).toEqual({
+        model: 'agent-model-b',
+        providerId: 'provider-b',
+      });
+    },
+  );
 
   it.each(['claude-code', 'codex'] as const)(
     'should reject %s provider binding before sandbox or device dispatch',

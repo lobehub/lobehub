@@ -45,6 +45,222 @@ describe('DeviceGateway', () => {
     mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = undefined;
   });
 
+  /** @example Desktop online status does not imply a live CLI execution channel. */
+  describe('provider-bound execution channel', () => {
+    const params = {
+      agentType: 'codex' as const,
+      assistantMessageId: 'message',
+      deviceId: 'device-1',
+      jwt: 'operation-token',
+      operationId: 'operation',
+      prompt: 'hello',
+      topicId: 'topic',
+      userId: 'user-1',
+      providerBinding: {
+        kind: 'provider' as const,
+        apiConfig: { model: 'api-model', providerId: 'provider' },
+      },
+    };
+    beforeEach(() => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.invokeRpc.mockImplementation(
+        async (target: { channel?: string }, request: { method: string }) => ({
+          data:
+            request.method === 'getProviderBoundAgentRunCapability'
+              ? { available: target.channel !== 'desktop', version: 1 }
+              : { status: 'accepted' },
+          success: true,
+        }),
+      );
+    });
+
+    /** @example A labelled CLI without the supported protocol cannot receive execution. */
+    it('rejects a connection with an incompatible protocol version', async () => {
+      mockClient.queryDeviceList.mockResolvedValue([
+        {
+          deviceId: 'device-1',
+          connectedAt: Date.now(),
+          channels: [{ channel: 'cli-dev', connectionId: 'one', connectedAt: Date.now() }],
+        },
+      ]);
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { available: true, version: 2 },
+        success: true,
+      });
+      /** @example Positive availability alone cannot bypass version compatibility. */
+      await expect(
+        new DeviceGateway().dispatchProviderBoundAgentRun(params),
+      ).resolves.toMatchObject({ success: false });
+      /** @example The probe carries no operation payload, provider reference or token. */
+      expect(mockClient.invokeRpc).toHaveBeenCalledExactlyOnceWith(
+        { channel: 'cli-dev', deviceId: 'device-1', userId: 'user-1', timeout: 3_000 },
+        { method: 'getProviderBoundAgentRunCapability', params: {} },
+      );
+    });
+
+    // ROOT CAUSE:
+    // General online state includes Desktop, which cannot handle this CLI-only RPC.
+    /** @example A Desktop-only connection is rejected before sending the run RPC. */
+    it('requires a live CLI channel on the selected device', async () => {
+      mockClient.queryDeviceList.mockResolvedValue([
+        {
+          deviceId: 'device-1',
+          connectedAt: Date.now(),
+          channels: [{ channel: 'desktop', connectionId: 'desktop-1', connectedAt: Date.now() }],
+        },
+      ]);
+      /** @example No incompatible transport receives an API run. */
+      await expect(
+        new DeviceGateway().dispatchProviderBoundAgentRun(params),
+      ).resolves.toMatchObject({ success: false });
+      /** @example Online Desktop does not act as a fallback. */
+      expect(mockClient.invokeRpc).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({ method: 'dispatchProviderBoundAgentRun' }),
+      );
+    });
+
+    /** @example A live personal CLI channel keeps the acknowledged dispatch path. */
+    // ROOT CAUSE:
+    // Channel labels are freeform; literal cli guards and routing rejected supported connectors.
+    /** @example Default, development, and custom labels use the channel that proves capability. */
+    it.each(['cli', 'cli-dev', 'my-codex-device'])(
+      'dispatches through compatible channel %s',
+      async (channel) => {
+        mockClient.queryDeviceList.mockResolvedValue([
+          {
+            deviceId: 'device-1',
+            connectedAt: Date.now(),
+            channels: [{ channel, connectionId: 'cli-1', connectedAt: Date.now() }],
+          },
+        ]);
+        /** @example The connector still must acknowledge the dedicated RPC. */
+        await expect(new DeviceGateway().dispatchProviderBoundAgentRun(params)).resolves.toEqual({
+          success: true,
+        });
+        /** @example Presence is read from the same personal principal as the RPC. */
+        expect(mockClient.queryDeviceList).toHaveBeenCalledWith('user-1', undefined);
+        /** @example Generic Desktop channels cannot consume provider credentials. */
+        expect(mockClient.invokeRpc).toHaveBeenCalledWith(
+          expect.objectContaining({ channel, deviceId: 'device-1', userId: 'user-1' }),
+          expect.objectContaining({ method: 'dispatchProviderBoundAgentRun' }),
+        );
+      },
+    );
+  });
+
+  /** @example Dispatch does not pay a serial capability RPC per label on every run. */
+  describe('provider-binding capability probe', () => {
+    const probeCalls = () =>
+      mockClient.invokeRpc.mock.calls.filter(
+        ([, request]) => request.method === 'getProviderBoundAgentRunCapability',
+      );
+    const deviceWith = (
+      channels: Array<{ channel: string; connectedAt?: number; connectionId: string }>,
+    ) => [
+      {
+        connectedAt: Date.now(),
+        deviceId: 'device-1',
+        channels: channels.map((channel) => ({ connectedAt: Date.now(), ...channel })),
+      },
+    ];
+
+    beforeEach(() => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    });
+
+    it('probes a live connection once and re-probes after it reconnects', async () => {
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { available: true, version: 1 },
+        success: true,
+      });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectionId: 'conn-1' }]),
+      );
+      const gateway = new DeviceGateway();
+
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      expect(probeCalls()).toHaveLength(1);
+
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectionId: 'conn-2' }]),
+      );
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      expect(probeCalls()).toHaveLength(2);
+    });
+
+    // ROOT CAUSE:
+    // `lh connect` persists connectionId per install, so a restart onto an older
+    // CLI kept the same id and reused the cached "supported" answer.
+    it('re-probes when the same install reconnects with a different CLI', async () => {
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { available: true, version: 1 },
+        success: true,
+      });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectedAt: 1000, connectionId: 'install-1' }]),
+      );
+      const gateway = new DeviceGateway();
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+
+      // Restarted on a downgraded CLI: same persisted connectionId, new socket.
+      mockClient.invokeRpc.mockResolvedValue({ error: 'Unknown method', success: false });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectedAt: 2000, connectionId: 'install-1' }]),
+      );
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe(
+        undefined,
+      );
+      expect(probeCalls()).toHaveLength(2);
+    });
+
+    it('does not remember a failed probe, which may be a timeout', async () => {
+      mockClient.invokeRpc.mockResolvedValueOnce({ error: 'timeout', success: false });
+      mockClient.invokeRpc.mockResolvedValueOnce({
+        data: { available: true, version: 1 },
+        success: true,
+      });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectionId: 'conn-1' }]),
+      );
+      const gateway = new DeviceGateway();
+
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe(
+        undefined,
+      );
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+    });
+
+    it('probes every label concurrently instead of one timeout after another', async () => {
+      const pending: Array<() => void> = [];
+      mockClient.invokeRpc.mockImplementation(
+        (target: { channel?: string }) =>
+          new Promise((resolve) => {
+            pending.push(() =>
+              resolve({
+                data: { available: target.channel === 'cli', version: 1 },
+                success: true,
+              }),
+            );
+          }),
+      );
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([
+          { channel: 'desktop', connectionId: 'desktop-1' },
+          { channel: 'cli', connectionId: 'cli-1' },
+        ]),
+      );
+
+      const result = new DeviceGateway().findProviderBindingChannel('user-1', 'device-1');
+      await vi.waitFor(() => expect(probeCalls()).toHaveLength(2));
+      for (const resolve of pending) resolve();
+      await expect(result).resolves.toBe('cli');
+    });
+  });
+
   describe('remote app update', () => {
     const configure = () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';

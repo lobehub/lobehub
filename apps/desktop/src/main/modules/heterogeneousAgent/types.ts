@@ -1,9 +1,16 @@
 import type {
-  HeterogeneousProviderBindingReference,
-  HeterogeneousProviderBindingResolution,
-} from '@lobechat/heterogeneous-agents';
+  PrepareProviderBindingContext,
+  PrepareServerDefaultBindingContext,
+  ProviderBindingPlan,
+} from '@lobechat/heterogeneous-agents/providerBindingHost';
 import type { AgentInputPlan, AgentPromptInput } from '@lobechat/heterogeneous-agents/spawn';
-import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
+
+export type {
+  PrepareProviderBindingContext,
+  PrepareServerDefaultBindingContext,
+  ProviderBindingFilePlan,
+  ProviderBindingPlan,
+} from '@lobechat/heterogeneous-agents/providerBindingHost';
 
 export interface HeterogeneousAgentImageAttachment {
   id: string;
@@ -36,44 +43,6 @@ export interface HeterogeneousAgentBuildPlanParams {
   mcpConfigPath?: string;
   promptInput: AgentPromptInput;
   resumeSessionId?: string;
-}
-
-export interface ProviderBindingFilePlan {
-  content: string;
-  /** Path relative to the host-owned profile or run directory. */
-  path: string;
-}
-
-export interface PrepareProviderBindingContext {
-  args: string[];
-  env?: Record<string, string>;
-  profileDir: string;
-  reference: Extract<HeterogeneousProviderBindingReference, { kind: 'provider' }>;
-  resolution: HeterogeneousProviderBindingResolution;
-  runDir: string;
-}
-
-export interface PrepareServerDefaultBindingContext {
-  args: string[];
-  endpoint: string;
-  env?: Record<string, string>;
-  model: string;
-  /** The model's card as the deployment describes it; absent when it could not be read. */
-  modelDescriptor?: ServerDefaultHeterogeneousModelDescriptor;
-  profileDir: string;
-}
-
-export interface ProviderBindingPlan {
-  args: string[];
-  /** Release transient resources created while preparing the binding. */
-  cleanup?: () => Promise<void>;
-  /** Best-effort synchronous release for app shutdown. */
-  cleanupSync?: () => void;
-  env: Record<string, string>;
-  /** Environment variable that receives the per-prompt server operation token. */
-  operationTokenEnvKey?: string;
-  profileFiles?: ProviderBindingFilePlan[];
-  runFiles?: ProviderBindingFilePlan[];
 }
 
 /**

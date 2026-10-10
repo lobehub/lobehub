@@ -4,7 +4,7 @@ import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
 import { Flexbox } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui/base-ui';
+import { Alert, Button, Spin } from '@lobehub/ui/base-ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -21,9 +21,14 @@ import {
   isHeterogeneousSandboxExecutionAvailable,
   resolveExecutionTarget,
 } from '@/helpers/executionTarget';
-import { resolveProviderBindingGuard } from '@/helpers/providerBinding';
+import {
+  isProviderBindingTargetSupported,
+  resolveProviderBindingGuard,
+} from '@/helpers/providerBinding';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useRemoteAgentDeviceGuard } from '@/hooks/useRemoteAgentDeviceGuard';
+import { useAgentStore } from '@/store/agent';
+import { agentByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 
 import ApiModeModelBar from './ApiModeModelBar';
@@ -133,10 +138,18 @@ const HeterogeneousChatInput = memo(() => {
       isDesktopClient: isDesktop,
       providerType,
     });
-  const showApiModeModel = !!agentId && isApiAuth && executionTarget === 'local';
-  const apiModeTargetUnsupported = isApiAuth && executionTarget !== 'local';
+  const isWorkspaceAgent = useAgentStore((s) =>
+    Boolean(agentId && agentByIdSelectors.getAgentById(agentId)(s)?.workspaceId),
+  );
+  const apiModeTargetSupported = isProviderBindingTargetSupported(
+    executionTarget,
+    heterogeneousProvider,
+    isWorkspaceAgent,
+  );
+  const showApiModeModel = !!agentId && isApiAuth && apiModeTargetSupported;
+  const apiModeTargetUnsupported = isApiAuth && !apiModeTargetSupported;
   const validateProviderBinding =
-    (apiConfigMissing || !!providerApiConfig) && executionTarget === 'local';
+    (apiConfigMissing || !!providerApiConfig) && apiModeTargetSupported;
   const { blocked: apiModeBindingBlocked, error: apiModeBindingError } =
     resolveProviderBindingGuard({
       active: validateProviderBinding,
@@ -180,22 +193,44 @@ const HeterogeneousChatInput = memo(() => {
 
   const deviceBlocked =
     isDeviceExecution &&
-    (status === 'device-offline' || status === 'platform-unavailable' || status === 'no-device');
+    (status === 'device-offline' ||
+      status === 'platform-unavailable' ||
+      status === 'no-device' ||
+      status === 'cli-unavailable' ||
+      (isApiAuth && status === 'checking'));
 
   const renderDeviceGuard = () => {
     if (!deviceBlocked) return null;
+    if (status === 'checking') {
+      return (
+        <Flexbox
+          horizontal
+          align={'center'}
+          aria-live={'polite'}
+          gap={8}
+          paddingBlock={'0 8px'}
+          role={'status'}
+        >
+          <Spin size={'small'} />
+          <span>{t('platformAgent.deviceGuard.checking')}</span>
+        </Flexbox>
+      );
+    }
 
     let title: string;
     let desc: string;
 
-    if (status === 'no-device') {
+    if (status === 'cli-unavailable') {
+      title = t('platformAgent.deviceGuard.cliUnavailable.title');
+      desc = t('platformAgent.deviceGuard.cliUnavailable.desc');
+    } else if (status === 'no-device') {
       title = t('platformAgent.deviceGuard.noDevice.title');
       desc = t('platformAgent.deviceGuard.noDevice.desc');
     } else if (status === 'device-offline') {
       title = t('platformAgent.deviceGuard.deviceOffline.title');
       desc = t('platformAgent.deviceGuard.deviceOffline.desc');
     } else {
-      // `platform-unavailable` only arises for remote-typed agents (the guard's
+      // `platform-unavailable` arises for remote-typed agents (the guard's
       // capability check), so providerType is always set here — fall back safely.
       const name = (providerType && HETEROGENEOUS_TYPE_LABELS[providerType]) || providerType || '';
       title = t('platformAgent.deviceGuard.platformUnavailable.title', { name });

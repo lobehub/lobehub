@@ -7,6 +7,13 @@ type DeviceClient = typeof lambdaClient.device;
  * should call this instead of reaching into `lambdaClient.device.*` directly.
  */
 class DeviceService {
+  /** Probe a personal device for the compatible provider-binding protocol. */
+  checkProviderBindingCapability(
+    input: Parameters<DeviceClient['checkProviderBindingCapability']['query']>[0],
+  ) {
+    return lambdaClient.device.checkProviderBindingCapability.query(input);
+  }
+
   /** All devices the user has registered (incl. offline) + live gateway sessions. */
   listDevices() {
     return lambdaClient.device.listDevices.query();

@@ -487,3 +487,25 @@ describe('selectRuntimeType', () => {
     });
   });
 });
+
+/** @example A personal Codex API binding can be sent through an explicitly selected device. */
+describe('provider-bound Codex device routing', () => {
+  /** @example Web and Desktop both route the selected device through the server. */
+  it('routes personal Codex API bindings to the gateway on a connected device', () => {
+    for (const isDesktop of [false, true]) {
+      /** @example An explicit gateway parent remains a gateway device run. */
+      expect(
+        selectRuntimeType(
+          {
+            boundDeviceId: 'device-1',
+            executionTarget: 'device',
+            heterogeneousProvider: codexApiHeteroProvider,
+            isGatewayMode: true,
+            parentRuntime: 'gateway',
+          },
+          { isDesktop },
+        ),
+      ).toBe('gateway');
+    }
+  });
+});

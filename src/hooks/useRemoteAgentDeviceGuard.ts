@@ -5,7 +5,7 @@ import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { deviceService } from '@/services/device';
 
 export type RemoteAgentDeviceStatus =
-  'checking' | 'device-offline' | 'no-device' | 'ok' | 'platform-unavailable';
+  'checking' | 'cli-unavailable' | 'device-offline' | 'no-device' | 'ok' | 'platform-unavailable';
 
 interface UseRemoteAgentDeviceGuardOptions {
   /** The conversation's agent — validate this agent's bound device, not the global active one. */
@@ -34,7 +34,9 @@ export const useRemoteAgentDeviceGuard = ({
   const { agencyConfig, isPreferenceLoading } = useEffectiveAgencyConfig(agentId);
 
   const boundDeviceId = agencyConfig?.boundDeviceId;
-  const providerType = agencyConfig?.heterogeneousProvider?.type;
+  const provider = agencyConfig?.heterogeneousProvider;
+  const providerType = provider?.type;
+  const requiresCli = providerType === 'codex' && provider?.authMode === 'api';
 
   const [status, setStatus] = useState<RemoteAgentDeviceStatus>('checking');
 
@@ -65,12 +67,20 @@ export const useRemoteAgentDeviceGuard = ({
       // which is intentionally absent from the caller-scoped device list. The
       // server owns that routing decision; absence here is not proof of offline.
       if (!device) {
-        setStatus('ok');
+        setStatus(requiresCli ? 'cli-unavailable' : 'ok');
         return;
       }
 
       if (!device.online) {
         setStatus('device-offline');
+        return;
+      }
+
+      if (requiresCli) {
+        const capability = await deviceService.checkProviderBindingCapability({
+          deviceId: boundDeviceId,
+        });
+        setStatus(capability.available ? 'ok' : 'cli-unavailable');
         return;
       }
 
@@ -85,10 +95,11 @@ export const useRemoteAgentDeviceGuard = ({
         setStatus('ok');
       }
     } catch {
-      // On error, allow sending — don't block user on network issues
-      setStatus('ok');
+      // API bindings require positive CLI presence; native routing keeps its
+      // existing fail-open behavior and server-side device authorization.
+      setStatus(requiresCli ? 'cli-unavailable' : 'ok');
     }
-  }, [enabled, isPreferenceLoading, boundDeviceId, providerType]);
+  }, [enabled, isPreferenceLoading, boundDeviceId, providerType, requiresCli]);
 
   useEffect(() => {
     void check();

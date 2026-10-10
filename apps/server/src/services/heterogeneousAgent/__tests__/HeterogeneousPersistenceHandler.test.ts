@@ -2115,6 +2115,31 @@ describe('HeterogeneousPersistenceHandler', () => {
     });
   });
 
+  /** @example API identity is cleared when a legacy producer reports a native session. */
+  it('replaces binding identity atomically when a legacy stream replaces the session', async () => {
+    const h = createHarness({
+      assistantMessageId: 'asst-init',
+      operationId: 'op-1',
+      topicId: 'topic-1',
+    });
+    const persisted: Record<string, unknown> = {
+      heteroSessionId: 'api-session',
+      heteroSessionBindingKey: 'provider-binding:v1:old',
+    };
+    h.topicModel.updateMetadata.mockImplementation(async (_topic, patch) => {
+      Object.assign(persisted, patch);
+    });
+    await h.handler.ingest({
+      operationId: 'op-1',
+      topicId: 'topic-1',
+      events: [buildEvent('stream_start', 0, { sessionId: 'native-session' })],
+    });
+    /** @example Subsequent native dispatch no longer sees the old API profile marker. */
+    expect(persisted.heteroSessionBindingKey).toBeUndefined();
+    /** @example The new session itself remains resumable. */
+    expect(persisted.heteroSessionId).toBe('native-session');
+  });
+
   describe('per-message session provenance (heteroSessionId / heteroMessageId)', () => {
     it('stamps the CC session id + turn message id on the assistant, its tools, and its usage', async () => {
       const h = createHarness({

@@ -7,6 +7,7 @@ import {
 import { type DeviceExecutionTarget, type HeterogeneousProviderConfig } from '@lobechat/types';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
+import { isProviderBindingTargetSupported } from '@/helpers/providerBinding';
 
 /**
  * Which agent runtime should handle an operation.
@@ -151,6 +152,12 @@ export const selectRuntimeType = (
         workspaceScoped: ctx.workspaceScoped,
       },
     );
+    if (
+      target === 'device' &&
+      isProviderBindingTargetSupported(target, ctx.heterogeneousProvider, !!ctx.isWorkspaceAgent) &&
+      (!ctx.parentRuntime || ctx.parentRuntime === 'gateway')
+    )
+      return 'gateway';
     if (target !== 'local' || (ctx.parentRuntime && ctx.parentRuntime !== 'hetero')) {
       throw new Error(HETEROGENEOUS_PROVIDER_BINDING_LOCAL_ONLY_ERROR);
     }
