@@ -483,7 +483,6 @@ export const CACHE_TIERS = {
     'message:', // chat messages (conversation + legacy stores)
     'topic:', // topic lists / agent view / search
     'agent:', // sidebar agent list + agent documents
-    'builtinAgent:', // builtin identity and configuration used by the first paint
     'group:detail', // group detail (group list stays in localStorage)
     'task:', // task lists + detail
     'document:', // editor document content

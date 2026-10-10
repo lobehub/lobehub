@@ -23,7 +23,7 @@ import {
   revalidateReplica,
 } from '@/libs/replica';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
+import { agentConfigKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
@@ -818,12 +818,8 @@ export class AgentSliceActionImpl {
      * other mutations still need a network refresh.
      */
     if (updatedAgent) {
-      await Promise.all(
-        slugs.map((slug) =>
-          mutate(builtinAgentKeys.init(slug, scope), updatedAgent as AgentItem, {
-            revalidate: false,
-          }),
-        ),
+      slugs.forEach((slug) =>
+        this.#get().internal_replaceBuiltinAgent(slug, updatedAgent as AgentItem, scope),
       );
       return;
     }
