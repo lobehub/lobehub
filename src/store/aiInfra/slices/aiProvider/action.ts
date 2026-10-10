@@ -12,6 +12,7 @@ import type {
   Pricing,
 } from 'model-bank';
 import { isAiModelVisible } from 'model-bank/aiModel';
+import { useLayoutEffect } from 'react';
 import { type SWRResponse } from 'swr';
 
 import { mutate, useClientDataSWR } from '@/libs/swr';
@@ -523,6 +524,18 @@ export class AiProviderActionImpl {
   };
 
   useFetchAiProviderItem = (id: string): SWRResponse<AiProviderDetailItem | undefined> => {
+    // The routed provider becomes active as soon as the route changes, not when
+    // its detail request succeeds: the model-list selectors and the model
+    // toggle/delete actions key on `activeAiProvider`, so waiting for the detail
+    // would keep showing (and writing to) the previous provider's models while
+    // the request is in flight, or forever if it fails. A layout effect commits
+    // the switch before paint.
+    useLayoutEffect(() => {
+      if (!id || this.#get().activeAiProvider === id) return;
+
+      this.#set({ activeAiProvider: id }, false, 'useFetchAiProviderItem/activate');
+    }, [id]);
+
     return useClientDataSWR<AiProviderDetailItem | undefined>(
       [AiProviderSwrKey.fetchAiProviderItem, id],
       () => aiProviderService.getAiProviderById(id),
