@@ -15,6 +15,7 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-mode-flags`                    | warn     | `src/**/*.tsx`                                                | `compose-atoms` skill                                                   |
 | `no-unguarded-response-field`      | error    | `src/**/*.tsx`                                                | a newer client must survive an older server omitting a response field   |
 | `no-node-in-browser`               | error    | browser code in `src/` (not `app/`, `libs/`), package `*.tsx` | no Node-only npm package where the SPA runs it (paths: ESLint)          |
+| `no-benchmark-in-tests`            | warn     | `**/*.test.ts(x)` except `packages/database`                  | a unit test asserts on behaviour, not on a wall-clock measurement       |
 | `no-unsafe-user-url-fetch`         | warn     | `apps/server/src`                                             | user-controlled URLs must use SSRF-safe transport (#16601)              |
 | `no-unscoped-resource-mutation`    | warn     | database models/repositories                                  | ownership checks for resource and junction mutations (#13683, #16586)   |
 | `no-untrusted-path-io`             | warn     | server and Electron main process                              | confine uploaded/remote filenames before filesystem IO (#13684, #13937) |
