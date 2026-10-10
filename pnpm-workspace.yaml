@@ -48,7 +48,6 @@ childConcurrency: 1
 allowBuilds:
   '@google/genai': true
   '@lobehub/editor': true
-  '@lobehub/editor@https://pkg.pr.new/%40lobehub%2Feditor%406a85671': true
   '@sentry/cli': true
   '@vercel/speed-insights': true
   core-js: false
@@ -62,12 +61,12 @@ allowBuilds:
   workerd: true
 
 overrides:
-  '@lobehub/ui': https://pkg.pr.new/@lobehub/ui@7f8f8c2
-  '@lobehub/icons': https://pkg.pr.new/@lobehub/icons@51fdd35
-  '@lobehub/editor': https://pkg.pr.new/%40lobehub%2Feditor%406a85671
-  '@lobehub/charts': https://pkg.pr.new/@lobehub/charts@7299e60
-  '@lobehub/tts': https://pkg.pr.new/@lobehub/tts@8d29894
-  '@lobehub/fluent-emoji': https://pkg.pr.new/@lobehub/fluent-emoji@ad41eee
+  '@lobehub/ui': ^6.0.0-beta.1
+  '@lobehub/icons': ^6.0.0-beta.1
+  '@lobehub/editor': ^5.0.0-beta.1
+  '@lobehub/charts': ^6.0.0-beta.1
+  '@lobehub/tts': ^6.0.0-beta.1
+  '@lobehub/fluent-emoji': ^5.0.0-beta.1
   '@react-pdf/image': 3.0.4
   '@types/react': 19.2.13
   '@vitest/coverage-v8': 5.0.0
