@@ -4,6 +4,7 @@ import { getTestDB } from '@lobechat/database/test-utils';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AcceptanceModel } from '@/database/models/acceptance';
+import { ProjectModel } from '@/database/models/project';
 import { TaskModel } from '@/database/models/task';
 import { TaskTopicModel } from '@/database/models/taskTopic';
 import { TaskService } from '@/server/services/task';
@@ -118,6 +119,46 @@ describe('Task Router Integration', () => {
   });
 
   describe('create + find + detail', () => {
+    it.each(['personal', 'workspace'])(
+      'ignores legacy prefixes and inherits project numbering in %s',
+      async (scope) => {
+        let workspaceId: string | undefined;
+        if (scope === 'workspace') {
+          workspaceId = 'task-prefix-integration-workspace';
+          const { workspaces, workspaceMembers } = await import('@/database/schemas');
+          await serverDB.insert(workspaces).values({
+            id: workspaceId,
+            name: 'Task prefixes',
+            primaryOwnerId: userId,
+            slug: workspaceId,
+          });
+          await serverDB.insert(workspaceMembers).values({ role: 'owner', userId, workspaceId });
+        }
+        const scopedCaller = taskRouter.createCaller({ ...createTestContext(userId), workspaceId });
+        const model = new TaskModel(serverDB, userId, workspaceId);
+        const project = await new ProjectModel(serverDB, userId, workspaceId).create({
+          identifier: 'PROJ',
+          name: 'Prefix project',
+        });
+        for (const identifierPrefix of ['T', 'CUSTOM', '', null, 42]) {
+          const legacyInput = { identifierPrefix, instruction: 'Standalone' };
+          const standalone = await scopedCaller.create(legacyInput);
+          expect(standalone.success).toBe(true);
+          expect(standalone.data.identifier).toBe(`T-${standalone.data.seq}`);
+          const projectInput = { ...legacyInput, projectId: project.id };
+          const parent = await scopedCaller.create(projectInput);
+          expect(parent.data.identifier).toBe(`PROJ-${parent.data.seq}`);
+          for (const parentTaskId of [parent.data.id, parent.data.identifier]) {
+            const childInput = { ...legacyInput, parentTaskId };
+            const child = await scopedCaller.create(childInput);
+            expect(child.data.projectId).toBe(project.id);
+            expect(child.data.identifier).toBe(`PROJ-${child.data.seq}`);
+            expect((await model.findById(child.data.id))?.identifier).toBe(child.data.identifier);
+          }
+        }
+      },
+    );
+
     it('should create a task and retrieve it', async () => {
       const result = await caller.create({
         instruction: 'Write a book',

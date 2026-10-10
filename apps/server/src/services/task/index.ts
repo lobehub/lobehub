@@ -83,7 +83,6 @@ export interface CreateTaskInput {
   description?: string;
   editorData?: unknown;
   fileIds?: string[];
-  identifierPrefix?: string;
   instruction: string;
   name?: string;
   parentTaskId?: string;
@@ -174,7 +173,6 @@ export class TaskService {
     if (createData.projectId) {
       const project = await this.projectModel.findManageableById(createData.projectId);
       if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
-      createData.identifierPrefix ??= project.identifier;
     }
 
     // Pull the model/provider snapshot and the agent's visibility in a single

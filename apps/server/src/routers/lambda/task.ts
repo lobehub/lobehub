@@ -85,6 +85,9 @@ const taskVerifyConfigPatchSchema = z.object({
 });
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
+// Unknown fields are stripped, including the removed identifierPrefix. Released
+// CLI clients send 'T' by default; ignore it so project subtasks use their project
+// identifier without breaking ordinary creates from those clients.
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
   assigneeUserId: z.string().optional(),
@@ -96,7 +99,6 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
-  identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
   parentTaskId: z.string().optional(),

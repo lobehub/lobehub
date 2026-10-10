@@ -63,6 +63,9 @@ import { acceptances } from '../schemas/verify';
 import { works } from '../schemas/work';
 import type { LobeChatDatabase } from '../type';
 import { buildWorkspaceWhere } from '../utils/workspace';
+import { ProjectModel } from './project';
+
+const DEFAULT_TASK_IDENTIFIER_PREFIX = 'T';
 
 /** Columns whose change is worth a line in the task activity feed. */
 const TRACKED_TASK_COLUMNS = [
@@ -436,12 +439,34 @@ export class TaskModel {
   // ========== CRUD ==========
 
   async create(
-    data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'> & {
-      identifierPrefix?: string;
-    },
+    data: Omit<NewTask, 'id' | 'identifier' | 'seq' | 'createdByUserId'>,
     options: { maxRetries?: number } = {},
   ): Promise<TaskItem> {
-    const { identifierPrefix = 'T', ...rest } = normalizeTaskRefs(data);
+    const createData = normalizeTaskRefs(data);
+
+    // Keep the invariant at the write boundary, including direct model callers.
+    // Parent references here are canonical database ids; the service resolves
+    // display identifiers before calling the model.
+    if (createData.parentTaskId) {
+      const parent = await this.findById(createData.parentTaskId);
+      if (!parent) throw new Error('Task not found');
+      if (createData.projectId && createData.projectId !== parent.projectId) {
+        throw new Error('Subtask must belong to the same project as its parent');
+      }
+      createData.projectId ??= parent.projectId;
+    }
+
+    // A prefix is derived from placement, never accepted as a creation field.
+    let identifierPrefix = DEFAULT_TASK_IDENTIFIER_PREFIX;
+    if (createData.projectId) {
+      const project = await new ProjectModel(
+        this.db,
+        this.userId,
+        this.workspaceId,
+      ).findManageableById(createData.projectId);
+      if (!project) throw new Error('Project not found');
+      identifierPrefix = project.identifier;
+    }
 
     // Retry loop to handle concurrent creates (parallel tool calls)
     const maxRetries = options.maxRetries ?? 5;
@@ -468,7 +493,7 @@ export class TaskModel {
         const [task] = await this.db
           .insert(tasks)
           .values({
-            ...rest,
+            ...createData,
             createdByUserId: this.userId,
             identifier,
             seq: nextSeq,
@@ -2596,7 +2621,7 @@ export class TaskModel {
         const newParentId =
           currentId === taskId ? null : (idMap.get(original.parentTaskId!) ?? null);
 
-        const identifier = `T-${seq}`;
+        const identifier = `${DEFAULT_TASK_IDENTIFIER_PREFIX}-${seq}`;
         const inserted = (await (trx as LobeChatDatabase)
           .insert(tasks)
           .values({
