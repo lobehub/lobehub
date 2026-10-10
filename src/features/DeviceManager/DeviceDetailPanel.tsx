@@ -304,6 +304,26 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
 
         {tab === 'overview' && (
           <>
+            {/* ─── Name ─── */}
+            <Flexbox gap={8}>
+              <FieldLabel>{t('devices.edit.friendlyName')}</FieldLabel>
+              {canEdit ? (
+                <Input
+                  placeholder={t('devices.edit.friendlyNamePlaceholder')}
+                  value={name}
+                  onBlur={commitName}
+                  onChange={(e) => setName(e.target.value)}
+                  onPressEnter={commitName}
+                />
+              ) : device.friendlyName ? (
+                // Read-only: render the canonical value (not the local draft), so a
+                // value the caller can't actually commit never bleeds through.
+                <Text>{device.friendlyName}</Text>
+              ) : (
+                <Text type={'secondary'}>—</Text>
+              )}
+            </Flexbox>
+
             {/* ─── Enrolled by (workspace only) ─── */}
             {device.scope === 'workspace' && device.enroller && (
               <Flexbox gap={8}>
@@ -351,26 +371,6 @@ const DeviceDetailPanel = memo<DeviceDetailPanelProps>(({ device, isCurrent, onC
             <Flexbox gap={8}>
               <FieldLabel extra={<HealthLegend />}>{t('devices.health.title')}</FieldLabel>
               <DeviceHealth deviceId={device.deviceId} />
-            </Flexbox>
-
-            {/* ─── Name ─── */}
-            <Flexbox gap={8}>
-              <FieldLabel>{t('devices.edit.friendlyName')}</FieldLabel>
-              {canEdit ? (
-                <Input
-                  placeholder={t('devices.edit.friendlyNamePlaceholder')}
-                  value={name}
-                  onBlur={commitName}
-                  onChange={(e) => setName(e.target.value)}
-                  onPressEnter={commitName}
-                />
-              ) : device.friendlyName ? (
-                // Read-only: render the canonical value (not the local draft), so a
-                // value the caller can't actually commit never bleeds through.
-                <Text>{device.friendlyName}</Text>
-              ) : (
-                <Text type={'secondary'}>—</Text>
-              )}
             </Flexbox>
           </>
         )}

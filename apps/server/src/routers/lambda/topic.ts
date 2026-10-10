@@ -22,6 +22,7 @@ import { AgentOperationModel } from '@/database/models/agentOperation';
 import { ChatGroupModel } from '@/database/models/chatGroup';
 import { FileModel } from '@/database/models/file';
 import { MessageModel } from '@/database/models/message';
+import { ProjectWorkingDirectoryModel } from '@/database/models/projectWorkingDirectory';
 import { RbacModel } from '@/database/models/rbac';
 import { TopicModel } from '@/database/models/topic';
 import { TopicShareModel } from '@/database/models/topicShare';
@@ -490,6 +491,9 @@ export const topicRouter = router({
           // The topic's pinned model snapshot, persisted to the top-level
           // `topics.model`/`provider` columns (config source of truth).
           model: z.string().optional(),
+          // Bind the new row to a project working directory. Resolved and
+          // pinned below, mirroring `projectWorkingDirectory.startTopic`.
+          projectWorkingDirectoryId: z.string().optional(),
           provider: z.string().optional(),
           title: z.string(),
           trigger: z.string().optional(),
@@ -497,7 +501,7 @@ export const topicRouter = router({
         .extend(basicContextSchema.shape),
     )
     .mutation(async ({ input, ctx }) => {
-      const { agentId, ...rest } = input;
+      const { agentId, projectWorkingDirectoryId, ...rest } = input;
       const resolved = await resolveContextWithAgentId(
         { agentId, groupId: rest.groupId, sessionId: rest.sessionId },
         ctx.serverDB,
@@ -510,10 +514,44 @@ export const topicRouter = router({
       // See batchCreateTopics — reparenting a visitor message would leak it.
       await assertCreatorMessageTargets(guardCtx(ctx), rest.messages ?? []);
 
+      // A topic started from a project group's "+" defers its row to the first
+      // message. Pin the directory here so the row is born inside the project —
+      // list, sidebar group and execution routing — instead of dropping into a
+      // path-only conversation. A directory that can no longer be resolved
+      // (deleted, unlinked from its environment, or another user's) is logged
+      // and skipped: losing the binding must not fail the user's first send.
+      const directory = projectWorkingDirectoryId
+        ? await new ProjectWorkingDirectoryModel(
+            ctx.serverDB,
+            ctx.userId,
+            ctx.workspaceId ?? undefined,
+          )
+            .resolve(projectWorkingDirectoryId)
+            .catch((error) => {
+              console.error(
+                '[topic.createTopic] Failed to resolve the project directory binding:',
+                error,
+              );
+              return undefined;
+            })
+        : undefined;
+
       const data = await ctx.topicModel.create({
         ...rest,
         agentId: resolved.agentId,
         sessionId: resolved.sessionId,
+        ...(directory
+          ? {
+              metadata: {
+                ...rest.metadata,
+                boundDeviceId: directory.deviceId,
+                workingDirectory: directory.path,
+                workingDirectoryConfig: { path: directory.path },
+              },
+              projectId: directory.projectId,
+              projectWorkingDirectoryId: directory.id,
+            }
+          : {}),
       });
 
       return data.id;

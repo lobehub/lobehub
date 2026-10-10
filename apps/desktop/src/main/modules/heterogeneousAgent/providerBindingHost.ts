@@ -7,6 +7,7 @@ import type {
   HeterogeneousProviderBindingReference,
   HeterogeneousProviderBindingResolution,
 } from '@lobechat/heterogeneous-agents';
+import type { ServerDefaultHeterogeneousModelDescriptor } from '@lobechat/types';
 
 import { HETERO_AGENT_BINDINGS_DIR, HETERO_AGENT_RUNS_DIR } from '@/const/heteroAgent';
 
@@ -175,6 +176,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
   endpoint: string;
   env?: Record<string, string>;
   model: string;
+  modelDescriptor?: ServerDefaultHeterogeneousModelDescriptor;
   sessionId: string;
 }): Promise<HostedProviderBinding> => {
   if (!params.driver.prepareServerDefaultBinding) {
@@ -209,6 +211,7 @@ export const prepareHostedServerDefaultBinding = async (params: {
       endpoint: params.endpoint,
       env: params.env,
       model: params.model,
+      modelDescriptor: params.modelDescriptor,
       profileDir,
     });
     await writeManagedFiles(profileDir, runDir, plan.profileFiles);

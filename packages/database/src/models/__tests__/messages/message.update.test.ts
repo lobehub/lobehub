@@ -696,16 +696,19 @@ describe('MessageModel Update Tests', () => {
     it('preserves sealed operation/batch identity while applying a claim patch', async () => {
       await seedPendingTool('approval-preserves-identity');
 
-      await messageModel.resolveHumanApproval([
-        {
-          id: 'approval-preserves-identity',
-          intervention: {
-            resolutionRequestId: 'resolution-1',
-            status: 'approved',
+      await messageModel.resolveHumanApproval(
+        [
+          {
+            id: 'approval-preserves-identity',
+            intervention: {
+              resolutionRequestId: 'resolution-1',
+              status: 'approved',
+            },
+            pluginState: { approvedBy: 'review' },
           },
-          pluginState: { approvedBy: 'review' },
-        },
-      ]);
+        ],
+        { publishResult: true },
+      );
 
       const [plugin] = await serverDB
         .select()
@@ -728,17 +731,20 @@ describe('MessageModel Update Tests', () => {
       });
 
       await expect(
-        messageModel.resolveHumanApproval([
-          {
-            content: 'must not commit',
-            id: 'approval-atomic-pending',
-            intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
-          },
-          {
-            id: 'approval-atomic-settled',
-            intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
-          },
-        ]),
+        messageModel.resolveHumanApproval(
+          [
+            {
+              content: 'must not commit',
+              id: 'approval-atomic-pending',
+              intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+            },
+            {
+              id: 'approval-atomic-settled',
+              intervention: { resolutionRequestId: 'resolution-loser', status: 'approved' },
+            },
+          ],
+          { publishResult: true },
+        ),
       ).rejects.toBeInstanceOf(HumanApprovalAlreadyResolvedError);
 
       const [message] = await serverDB
@@ -762,8 +768,8 @@ describe('MessageModel Update Tests', () => {
       };
 
       const results = await Promise.all([
-        messageModel.resolveHumanApproval([resolution]),
-        messageModel.resolveHumanApproval([resolution]),
+        messageModel.resolveHumanApproval([resolution], { publishResult: true }),
+        messageModel.resolveHumanApproval([resolution], { publishResult: true }),
       ]);
 
       expect(results.sort()).toEqual(['applied', 'idempotent']);
@@ -791,14 +797,17 @@ describe('MessageModel Update Tests', () => {
         pluginState: { preserved: true },
       };
 
-      await messageModel.resolveHumanApproval([
-        {
-          content: 'approved content',
-          id: original.id,
-          intervention: { resolutionRequestId: 'resolution-owner', status: 'approved' },
-          pluginState: { approvedBy: 'review' },
-        },
-      ]);
+      await messageModel.resolveHumanApproval(
+        [
+          {
+            content: 'approved content',
+            id: original.id,
+            intervention: { resolutionRequestId: 'resolution-owner', status: 'approved' },
+            pluginState: { approvedBy: 'review' },
+          },
+        ],
+        { publishResult: true },
+      );
       await messageModel.restoreHumanApproval([
         { ...original, claimedResolutionRequestId: 'resolution-loser' },
       ]);
@@ -915,6 +924,221 @@ describe('MessageModel Update Tests', () => {
         existingState: 'value1',
         newState: 'value2',
       });
+    });
+
+    it('claims a source answer without publishing it before the runtime hook completes', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'source-claim', userId, role: 'tool', content: '' });
+      await serverDB
+        .insert(messagePlugins)
+        .values({ id: 'source-claim', userId, intervention: { status: 'pending' } });
+      await messageModel.resolveHumanApproval([
+        {
+          id: 'source-claim',
+          content: 'unreviewed answer',
+          pluginState: { answer: 'unreviewed answer' },
+          intervention: { status: 'approved', resolutionRequestId: 'source-request' },
+        },
+      ]);
+      expect((await messageModel.findById('source-claim'))?.content).toBe('');
+      expect(
+        (await messageModel.findMessagePlugin('source-claim'))?.state ?? {},
+      ).not.toHaveProperty('answer');
+    });
+
+    it('keeps the first deferred completion when callbacks race', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'completion-race', userId, role: 'tool', content: '' });
+      await serverDB.insert(messagePlugins).values({ id: 'completion-race', userId });
+      const results = await Promise.all(
+        ['first', 'late'].map((content) =>
+          messageModel.updateToolMessage('completion-race', {
+            content,
+            pluginState: { content },
+            onlyIfEmpty: true,
+          }),
+        ),
+      );
+      expect(results.filter((result) => result.applied)).toHaveLength(1);
+      expect((await messageModel.findById('completion-race'))?.content).toBe('first');
+      expect((await messageModel.findMessagePlugin('completion-race'))?.state).toEqual({
+        content: 'first',
+      });
+    });
+
+    it('publishes an already claimed answer atomically and retains it on replay', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'answer-once', userId, role: 'tool', content: '' });
+      await serverDB.insert(messagePlugins).values({
+        id: 'answer-once',
+        userId,
+        state: { old: true },
+        intervention: { status: 'pending' },
+      });
+      const intervention = { status: 'approved', resolutionRequestId: 'answer-request' };
+      await messageModel.resolveHumanApproval([
+        { id: 'answer-once', intervention, content: 'raw answer' },
+      ]);
+      expect((await messageModel.queryByIds(['answer-once']))[0].content).toBe('');
+      await messageModel.resolveHumanApproval(
+        [
+          {
+            id: 'answer-once',
+            intervention,
+            content: 'Tool result withheld.',
+            pluginError: 'hook_denied',
+            pluginState: { type: 'blocked', phase: 'afterToolCall' },
+            replacePluginState: true,
+          },
+        ],
+        { publishResult: true },
+      );
+      expect(
+        await messageModel.resolveHumanApproval(
+          [
+            {
+              id: 'answer-once',
+              intervention,
+              content: 'raw replay',
+              pluginError: null,
+              pluginState: { answer: 'raw replay' },
+            },
+          ],
+          { publishResult: true },
+        ),
+      ).toBe('idempotent');
+      expect((await messageModel.findById('answer-once'))?.content).toBe('Tool result withheld.');
+      expect(await messageModel.findMessagePlugin('answer-once')).toMatchObject({
+        error: 'hook_denied',
+        state: { type: 'blocked', phase: 'afterToolCall' },
+      });
+      expect((await messageModel.queryByIds(['answer-once']))[0].metadata ?? {}).not.toHaveProperty(
+        'toolResultControl',
+      );
+    });
+
+    it.each([null, { message: 'original tool error' }])(
+      'restores the error snapshot after a denied approval continuation fails: %j',
+      async (originalError) => {
+        await serverDB.insert(messages).values({
+          id: 'review-retry',
+          userId,
+          role: 'tool',
+          content: '',
+        });
+        await serverDB.insert(messagePlugins).values({
+          id: 'review-retry',
+          userId,
+          identifier: 'tool',
+          toolCallId: 'retry-call',
+          error: originalError,
+          state: { awaitingAnswer: true },
+          intervention: { status: 'pending' },
+        });
+        await messageModel.resolveHumanApproval([
+          {
+            id: 'review-retry',
+            content: 'answer',
+            intervention: { status: 'approved', resolutionRequestId: 'denied-attempt' },
+          },
+        ]);
+        await messageModel.updateToolMessage('review-retry', {
+          content: 'Tool result withheld by afterToolCall hook.',
+          pluginError: 'hook_denied',
+          pluginState: { phase: 'afterToolCall', type: 'blocked' },
+          replacePluginState: true,
+        });
+        await messageModel.restoreHumanApproval([
+          {
+            id: 'review-retry',
+            content: '',
+            pluginState: { awaitingAnswer: true },
+            pluginError: originalError,
+            intervention: { status: 'pending' },
+            claimedResolutionRequestId: 'denied-attempt',
+          },
+        ]);
+        const [plugin] = await serverDB
+          .select()
+          .from(messagePlugins)
+          .where(eq(messagePlugins.id, 'review-retry'));
+        expect(plugin.error).toEqual(originalError);
+        expect(plugin.state).toEqual({ awaitingAnswer: true });
+        expect((await messageModel.findById('review-retry'))?.content).toBe('');
+      },
+    );
+
+    it('replaces denied result state and prevents a later completion replay from restoring it', async () => {
+      await serverDB
+        .insert(messages)
+        .values({ id: 'tool-withheld', userId, role: 'tool', content: '' });
+      await serverDB.insert(messagePlugins).values({
+        id: 'tool-withheld',
+        toolCallId: 'withheld-call',
+        identifier: 'tool',
+        state: { private: 'private output' },
+        error: { message: 'private output' },
+        userId,
+      });
+      const blocked = { phase: 'afterToolCall', type: 'blocked', reason: 'Tool result withheld.' };
+      expect(
+        await messageModel.updateToolMessage('tool-withheld', {
+          content: 'Tool result withheld.',
+          pluginError: 'hook_denied',
+          pluginState: blocked,
+          replacePluginState: true,
+          onlyIfEmpty: true,
+        }),
+      ).toMatchObject({ success: true, applied: true });
+      expect(
+        await messageModel.updateToolMessage('tool-withheld', {
+          content: 'private output',
+          pluginError: null,
+          pluginState: { private: 'private output' },
+          onlyIfEmpty: true,
+        }),
+      ).toMatchObject({ success: true, applied: false });
+      const [message] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'tool-withheld'));
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'tool-withheld'));
+      expect(message.content).toBe('Tool result withheld.');
+      expect(plugin.state).toEqual(blocked);
+      expect(plugin.error).toBe('hook_denied');
+    });
+
+    it('does not let result replacement modify another user’s tool message', async () => {
+      await serverDB.insert(messages).values({
+        id: 'foreign-withheld',
+        userId: otherUserId,
+        role: 'tool',
+        content: 'foreign output',
+      });
+      await serverDB.insert(messagePlugins).values({
+        id: 'foreign-withheld',
+        identifier: 'tool',
+        state: { private: 'foreign output' },
+        userId: otherUserId,
+      });
+      const result = await messageModel.updateToolMessage('foreign-withheld', {
+        content: 'withheld',
+        pluginState: { phase: 'afterToolCall', type: 'blocked' },
+        replacePluginState: true,
+        onlyIfEmpty: true,
+      });
+      expect(result.success).toBe(false);
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, 'foreign-withheld'));
+      expect(plugin.state).toEqual({ private: 'foreign output' });
     });
 
     it('preserves independent pluginState patches across concurrent tool-message updates', async () => {

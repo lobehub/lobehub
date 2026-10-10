@@ -1043,6 +1043,41 @@ export type DeviceAppUpdateStateResult =
 export type DeviceAppUpdateInstallResult =
   { status: 'ok'; targetVersion: string } | { message: string; status: DeviceAppUpdateFailure };
 
+// ─── Interactive terminal (PTY) ───
+//
+// Server-side mirror of `@lobechat/device-control`'s terminal types. An
+// interactive shell over a request/response RPC is a session plus a cursor:
+// the device holds the PTY's output, the caller drains it. Runnable bytes are
+// base64 in both directions — PTY output is not valid UTF-8 at every chunk
+// boundary, and JSON strings cannot carry arbitrary bytes.
+
+/** Result of the `createTerminalSession` device RPC. */
+export interface DeviceCreateTerminalSessionResult {
+  /** Directory the shell actually started in (a missing `cwd` falls back home). */
+  cwd: string;
+  id: string;
+  pid: number;
+  /** Absolute path of the shell binary the device spawned. */
+  shell: string;
+}
+
+/** Result of the `readTerminal` device RPC. */
+export interface DeviceReadTerminalResult {
+  /** Base64 output produced since the caller's cursor; empty when nothing new. */
+  chunk: string;
+  /** Present once the shell has exited. */
+  exitCode?: number;
+  exited: boolean;
+  /** Cursor to pass to the next read. */
+  nextCursor: number;
+}
+
+/** Result of the `closeTerminal` device RPC. */
+export interface DeviceCloseTerminalResult {
+  /** False when the session was already gone (exited, reaped, or never existed). */
+  closed: boolean;
+}
+
 /** A CLI maintenance request is acknowledged before the connection goes away. */
 export interface DeviceCliUpdateOperation {
   error?: string;

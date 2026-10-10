@@ -176,8 +176,8 @@ export default {
   'compression.cancel': 'Uncompress',
   'compression.cancelConfirm':
     'Are you sure you want to uncompress? This will restore the original messages.',
-  'compression.history': 'History',
-  'compression.summary': 'Summary',
+  'compression.history': 'Original conversation',
+  'compression.summary': 'History summary',
   'confirmClearCurrentMessages':
     'You are about to clear the current conversation messages. Once cleared, they cannot be retrieved. Please confirm your action.',
   'confirmRemoveChatGroupItemAlert':
@@ -1392,6 +1392,9 @@ export default {
   'sandboxStorage.runningHint':
     'Something else is still running in this instance, so it cannot be picked here. It is released on its own roughly 15 minutes after that run goes quiet.',
   'sandboxStorage.runningOwnHint': "This conversation's own run is using this instance.",
+  'sandboxStorage.runningHintStoppable':
+    'Something else is still running in this instance, so it cannot be picked here. It is released on its own roughly 15 minutes after that run goes quiet, or you can stop it now.',
+  'sandboxStorage.stop': 'Stop',
   // A build holds the same single-writer lease a run does, so it is refused
   // for the same reason — but it is not a conversation, and saying "running"
   // would send someone looking for one.
@@ -2725,6 +2728,7 @@ export default {
   'terminalPanel.createFailed': 'Failed to start the terminal session',
   'terminalPanel.newTab': 'New terminal',
   'terminalPanel.split': 'Split terminal',
+  'terminalPanel.targetLocal': 'This computer',
   'terminalPanel.title': 'Terminal',
   'thread.threadMessageCount': '{{messageCount}} messages',
   'thread.title': 'Subtopic',

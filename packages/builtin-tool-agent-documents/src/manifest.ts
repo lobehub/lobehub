@@ -21,7 +21,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         properties: {
           content: {
             description:
-              'Document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```); outside code, Markdown syntax such as `\\`, `__` or `*` is interpreted.',
+              'Document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```); outside code, Markdown syntax such as `\\`, `__` or `*` is interpreted. Do not open with an H1 (`#`) heading — the title renders as the document header and the leading H1 is removed automatically; start directly with the body and use `##` or deeper for sections.',
             type: 'string',
           },
           hintIsSkill: {
@@ -95,7 +95,7 @@ export const AgentDocumentsManifest: BuiltinToolManifest = {
         properties: {
           content: {
             description:
-              'New full document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```).',
+              'New full document content in Markdown. Put JSON, code or any text that must stay byte-exact inside a fenced code block (```json … ```). Do not open with an H1 (`#`) heading — the title renders as the document header and the leading H1 is removed automatically; use `##` or deeper for sections.',
             type: 'string',
           },
           id: {

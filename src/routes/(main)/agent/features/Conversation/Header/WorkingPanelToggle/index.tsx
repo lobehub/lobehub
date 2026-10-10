@@ -22,7 +22,7 @@ const WorkingPanelToggle = memo(() => {
     isStatusInit,
   ] = useGlobalStore((s) => [
     systemStatusSelectors.showRightPanel(s),
-    s.status.showWorkingOverview ?? !s.status.showRightPanel,
+    systemStatusSelectors.showWorkingOverview(s),
     s.toggleRightPanel,
     s.openWorkingSidebar,
     s.updateSystemStatus,

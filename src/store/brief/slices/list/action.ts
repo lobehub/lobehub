@@ -1,17 +1,24 @@
 import dayjs from 'dayjs';
-import isEqual from 'fast-deep-equal';
-import { useEffect } from 'react';
 import { type SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaSyncResult,
+  revalidateReplica,
+} from '@/libs/replica';
+import { mutate, useClientDataSWR } from '@/libs/swr';
 import { briefKeys, goalKeys } from '@/libs/swr/keys';
-import { getCacheScope } from '@/libs/swr/useCacheScope';
 import { briefService } from '@/services/brief';
 import { taskService } from '@/services/task';
 import { type BriefStore } from '@/store/brief/store';
 import { type BriefItem } from '@/store/brief/types';
+import { goalGraphResource, homeGoalListResource } from '@/store/goal/projection';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
+
+import { BRIEF_LIST_KEY, briefEntity, briefListResource } from './projection';
 
 const n = setNamespace('briefList');
 
@@ -28,6 +35,17 @@ export interface NewsDay {
   news: BriefItem[];
 }
 
+/** Sync flags of the unresolved feed, plus the aliases the inbox reads. */
+export interface BriefListSyncResult extends ReplicaSyncResult {
+  /** A request is in flight and the feed has no value for this scope yet. */
+  isLoading: boolean;
+  /** Alias of `revalidate`. */
+  mutate: () => Promise<unknown>;
+}
+
+/** The feed has one entry per scope (the replica partitions by identity), so its params are constant. */
+const LIST_PARAMS = {} as Record<string, never>;
+
 type Setter = StoreSetter<BriefStore>;
 
 export const createBriefListSlice = (set: Setter, get: () => BriefStore, _api?: unknown) =>
@@ -35,89 +53,86 @@ export const createBriefListSlice = (set: Setter, get: () => BriefStore, _api?: 
 
 export class BriefListActionImpl {
   readonly #get: () => BriefStore;
-  readonly #set: Setter;
+  readonly #briefList;
+  readonly #briefs;
 
   constructor(set: Setter, get: () => BriefStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+    this.#briefList = createReplicaSlice(briefListResource, {
+      actionPrefix: n('list'),
+      entity: briefEntity,
+      fetcher: () => briefService.listUnresolved(),
+      get,
+      // The server row keeps `actions` as a json column (`unknown`); the card
+      // narrows it to `BriefAction[]`, so the view adopts the client `BriefItem`.
+      merge: (response) => response.data as unknown as BriefItem[],
+      set,
+      stateKey: 'briefListReplica',
+      view: recordLens<BriefStore, BriefItem[]>('briefListMap'),
+    });
+    // Every brief mutation runs through the entity link: the optimistic overlay
+    // applies right away, a failed write rolls back to the confirmed base, and a
+    // confirmed write reaches the persisted row too — so a reload never hydrates
+    // a value the server has already moved past.
+    this.#briefs = linkReplicaEntity<BriefItem>([this.#briefList]);
   }
 
-  internal_updateBrief = (id: string, data: Partial<BriefItem>) => {
-    const briefs = this.#get().briefs;
-    const index = briefs.findIndex((b) => b.id === id);
-    if (index === -1) return;
+  #syncResult = (sync: ReplicaSyncResult): BriefListSyncResult => ({
+    ...sync,
+    isLoading: sync.isValidating && this.#get().briefListMap[BRIEF_LIST_KEY] === undefined,
+    mutate: sync.revalidate,
+  });
 
-    const updated = [...briefs];
-    updated[index] = { ...briefs[index], ...data };
-    this.#set({ briefs: updated }, false, n('internal_updateBrief'));
+  /** Show the read state at once; the server confirms in the background. */
+  markBriefRead = async (id: string) => {
+    await this.#briefs.optimistic(
+      id,
+      (brief) => ({ ...brief, readAt: new Date().toISOString() }),
+      () => briefService.markRead(id),
+    );
   };
 
   deleteBrief = async (id: string) => {
-    await briefService.delete(id);
-
-    const previous = this.#get().briefs;
-    const briefs = previous.filter((b) => b.id !== id);
-    // Nothing removed — the brief was already gone, or the list has since been
-    // replaced by another scope's (a workspace switch while the request was in
-    // flight). Either way, writing an identical list only churns subscribers.
-    if (briefs.length === previous.length) return;
-
-    this.#set({ briefs }, false, n('deleteBrief'));
-  };
-
-  markBriefRead = async (id: string) => {
-    await briefService.markRead(id);
-    this.internal_updateBrief(id, { readAt: new Date().toISOString() });
+    await this.#briefs.optimistic(id, 'remove', () => briefService.delete(id));
   };
 
   /**
-   * "Mark all read" resolves news briefs with the neutral `read` action and drops
-   * them from both Zustand and its backing SWR snapshot. Route remounts hydrate
-   * Zustand from SWR before revalidation, so the cache write prevents stale briefs
-   * from reappearing after navigation.
+   * "Mark all read" resolves news briefs with the neutral `read` action and
+   * drops them from the unresolved feed. The removal is written to the store
+   * and its persisted row, so a route remount hydrates the already-cleared list
+   * instead of resurrecting the briefs.
    */
   resolveBriefsAsRead = async (ids: string[]) => {
     if (ids.length === 0) return;
 
-    // Capture the scope these ids belong to *before* awaiting. Unlike the
-    // id-keyed mutations above, this one rewrites the whole list and patches an
-    // SWR entry, so a workspace switch mid-request would splice the previous
-    // partition's briefs into the next one's bucket and cache key — the exact
-    // leak this slice exists to prevent.
-    const scope = this.#get().briefsScope;
-
     const result = await briefService.resolveManyAsRead(ids);
-    const resolvedIds = new Set(result.data);
-    if (resolvedIds.size === 0) return;
-
-    const state = this.#get();
-    // Unstamped, or the scope moved while the request was in flight: the switch
-    // already cleared the bucket, so there is nothing of ours left to patch.
-    if (scope === undefined || state.briefsScope !== scope) return;
-
-    const briefs = state.briefs.filter((b) => !resolvedIds.has(b.id));
-    this.#set({ briefs }, false, n('resolveBriefsAsRead'));
-    void mutate(briefKeys.list(true, scope), briefs, { revalidate: false });
+    for (const id of result.data) this.#briefs.remove(id);
   };
 
   resolveBrief = async (id: string, action?: string, comment?: string) => {
-    const goal = this.#get().briefs.find((brief) => brief.id === id)?.metadata?.goal;
-    await briefService.resolve(id, { action, comment });
-    this.internal_updateBrief(id, {
-      resolvedAction: action,
-      resolvedAt: new Date().toISOString(),
-    });
+    const goal = this.#get().briefListMap[BRIEF_LIST_KEY]?.find((brief) => brief.id === id)
+      ?.metadata?.goal;
+    await this.#briefs.optimistic(
+      id,
+      (brief) => ({
+        ...brief,
+        resolvedAction: action ?? null,
+        resolvedAt: new Date().toISOString(),
+      }),
+      () => briefService.resolve(id, { action, comment }),
+    );
     // A goal brief answered the goal itself: the island and the goal views
     // asking the same question have to drop it too.
     if (goal)
-      void mutate(
-        (key) =>
-          Array.isArray(key) &&
-          (key[0] === goalKeys.pendingForIsland()[0] ||
-            key[0] === 'task:homeGoals' ||
-            (key[0] === 'goal:graph' && key[1] === goal.goalId)),
-      );
+      void Promise.all([
+        mutate((key) => Array.isArray(key) && key[0] === goalKeys.pendingForIsland()[0]),
+        // The goal's own reads are replicas now: their sync entries live outside
+        // the `goal:` / `task:` SWR cache, so they are refreshed through the
+        // resource rather than a key prefix match.
+        revalidateReplica(homeGoalListResource),
+        revalidateReplica(goalGraphResource, goal.goalId),
+      ]);
   };
 
   // Free-form feedback from the brief card: resolve the brief with the
@@ -161,54 +176,12 @@ export class BriefListActionImpl {
     );
 
   /**
-   * `scope` is the identity partition (`${userId}:${workspaceId}`) the caller is
-   * rendering. Briefs are per-user AND per-workspace rows, so carrying a list
-   * across a scope change hands the user cards whose ids the server can no
-   * longer resolve — every action on them 404s, and the tRPC client only logs
-   * non-401 failures, so the surface just stops responding. Dropping the bucket
-   * the moment the scope changes is what keeps that from happening.
+   * The unresolved feed of the active scope. Read the rows with
+   * `briefListSelectors.briefs`; the replica hydrates the persisted copy on the
+   * first frame and converges on the server's head page in the background.
    */
-  useFetchBriefs = (isLogin: boolean | undefined, scope: string): SWRResponse<BriefItem[]> => {
-    // Effect (not render-time set) because this writes another store; the
-    // scope-aware selectors already keep the foreign list off screen in the
-    // frame before it runs.
-    useEffect(() => {
-      const { briefsScope } = this.#get();
-      if (briefsScope === undefined || briefsScope === scope) return;
-
-      this.#set(
-        { briefs: [], briefsScope: undefined, isBriefsInit: false },
-        false,
-        n('useFetchBriefs/scopeChanged'),
-      );
-    }, [scope]);
-
-    return useClientDataSWRWithSync<BriefItem[]>(
-      isLogin === true ? briefKeys.list(isLogin, scope) : null,
-      async () => {
-        const result = await briefService.listUnresolved();
-        return result.data as BriefItem[];
-      },
-      {
-        onData: (data) => {
-          // A response in flight across a scope switch answers for the previous
-          // partition — writing it back would re-seed exactly the unreachable
-          // list this hook exists to clear.
-          if (getCacheScope() !== scope) return;
-
-          const state = this.#get();
-          if (state.isBriefsInit && state.briefsScope === scope && isEqual(state.briefs, data))
-            return;
-
-          this.#set(
-            { briefs: data, briefsScope: scope, isBriefsInit: true },
-            false,
-            n('useFetchBriefs/onData'),
-          );
-        },
-      },
-    );
-  };
+  useFetchBriefs = (isLogin: boolean | undefined): BriefListSyncResult =>
+    this.#syncResult(this.#briefList.useSync(LIST_PARAMS, { enabled: isLogin === true }));
 }
 
 export type BriefListAction = Pick<BriefListActionImpl, keyof BriefListActionImpl>;

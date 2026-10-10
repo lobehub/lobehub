@@ -2,7 +2,8 @@ import { isEqual } from 'es-toolkit/compat';
 import { useRef } from 'react';
 import { type SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import { useClientDataSWR } from '@/libs/swr';
 import { imageKeys } from '@/libs/swr/keys';
 import { type GetGenerationStatusResult } from '@/server/routers/lambda/generation';
 import { generationService } from '@/services/generation';
@@ -14,47 +15,58 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { type ImageStore } from '../../store';
 import { generationTopicSelectors } from '../generationTopic/selectors';
+import { generationBatchesResource } from './projection';
 import { type GenerationBatchDispatch } from './reducer';
 import { generationBatchReducer } from './reducer';
 
 const n = setNamespace('generationBatch');
 
-// ====== SWR key ====== //
-
-// ====== action interface ====== //
-
-// ====== action implementation ====== //
+/**
+ * Result of the per-topic batch sync. `data` mirrors the SWR-era shape the
+ * shared generation workspace reads (`error` / `mutate`); read the batches
+ * through `generationBatchSelectors` and treat `mutate` as an alias of
+ * `revalidate`.
+ */
+export interface GenerationBatchesSyncResult extends ReplicaSyncResult {
+  data?: GenerationBatch[];
+  /** A request is in flight and this topic has never loaded. */
+  isLoading: boolean;
+  /** Alias of `revalidate`. */
+  mutate: () => Promise<unknown>;
+}
 
 type Setter = StoreSetter<ImageStore>;
 export const createGenerationBatchSlice = (set: Setter, get: () => ImageStore, _api?: unknown) =>
   new GenerationBatchActionImpl(set, get, _api);
 
 export class GenerationBatchActionImpl {
+  readonly #batches;
   readonly #get: () => ImageStore;
-  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ImageStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+    this.#batches = createReplicaSlice(generationBatchesResource, {
+      actionPrefix: n('generationBatches'),
+      fetcher: ({ topicId }) => generationBatchService.getGenerationBatches(topicId, 'image'),
+      get,
+      // An unchanged topic list must not re-render the feed.
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'generationBatchesReplica',
+      view: recordLens<ImageStore, GenerationBatch[]>('generationBatchesMap'),
+    });
   }
 
+  /**
+   * Seed an empty list for a just-created topic so the workspace paints the
+   * empty state instead of a skeleton while the first batch request is in
+   * flight. Memory-only: the server confirmation persists the real value.
+   */
   setTopicBatchLoaded = (topicId: string): void => {
-    const nextMap = {
-      ...this.#get().generationBatchesMap,
-      [topicId]: [],
-    };
-
-    // no need to update map if the map is the same
-    if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
-
-    this.#set(
-      {
-        generationBatchesMap: nextMap,
-      },
-      false,
-      n('setTopicBatchLoaded'),
-    );
+    this.#batches.update(topicId, (batches) => (Array.isArray(batches) ? batches : []), {
+      persist: false,
+    });
   };
 
   removeGeneration = async (generationId: string): Promise<void> => {
@@ -80,32 +92,34 @@ export class GenerationBatchActionImpl {
     }
   };
 
+  /**
+   * Remove a generation optimistically (the whole empty batch is cleaned up by
+   * `removeGeneration`), roll back if the server rejects, and revalidate so the
+   * confirmed list wins.
+   */
   internal_deleteGeneration = async (generationId: string): Promise<void> => {
-    const { activeGenerationTopicId, refreshGenerationBatches, internal_dispatchGenerationBatch } =
-      this.#get();
-
+    const activeGenerationTopicId = this.#get().activeGenerationTopicId;
     if (!activeGenerationTopicId) return;
 
     // Find the batch containing this generation
-    const currentBatches = this.#get().generationBatchesMap[activeGenerationTopicId] || [];
+    const currentBatches = this.#get().generationBatchesMap[activeGenerationTopicId] ?? [];
     const targetBatch = currentBatches.find((batch) =>
       batch.generations.some((gen) => gen.id === generationId),
     );
 
     if (!targetBatch) return;
 
-    // 1. Immediately update frontend state (optimistic update)
-    internal_dispatchGenerationBatch(
+    await this.#batches.optimistic(
       activeGenerationTopicId,
-      { type: 'deleteGenerationInBatch', batchId: targetBatch.id, generationId },
-      'internal_deleteGeneration',
+      (batches) =>
+        generationBatchReducer(batches, {
+          batchId: targetBatch.id,
+          generationId,
+          type: 'deleteGenerationInBatch',
+        }),
+      () => generationService.deleteGeneration(generationId),
+      { revalidate: true },
     );
-
-    // 2. Call backend service to delete generation
-    await generationService.deleteGeneration(generationId);
-
-    // 3. Refresh data to ensure consistency
-    await refreshGenerationBatches();
   };
 
   removeGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
@@ -114,80 +128,51 @@ export class GenerationBatchActionImpl {
   };
 
   internal_deleteGenerationBatch = async (batchId: string, topicId: string): Promise<void> => {
-    const { internal_dispatchGenerationBatch, refreshGenerationBatches } = this.#get();
-
-    // 1. Immediately update frontend state (optimistic update)
-    internal_dispatchGenerationBatch(
+    await this.#batches.optimistic(
       topicId,
-      { type: 'deleteBatch', id: batchId },
-      'internal_deleteGenerationBatch',
+      (batches) => generationBatchReducer(batches, { id: batchId, type: 'deleteBatch' }),
+      () => generationBatchService.deleteGenerationBatch(batchId),
+      { revalidate: true },
     );
-
-    // 2. Call backend service
-    await generationBatchService.deleteGenerationBatch(batchId);
-
-    // 3. Refresh data to ensure consistency
-    await refreshGenerationBatches();
   };
 
-  internal_dispatchGenerationBatch = (
-    topicId: string,
-    payload: GenerationBatchDispatch,
-    action?: string,
-  ): void => {
-    const currentBatches = this.#get().generationBatchesMap[topicId] || [];
-    const nextBatches = generationBatchReducer(currentBatches, payload);
-
-    const nextMap = {
-      ...this.#get().generationBatchesMap,
-      [topicId]: nextBatches,
-    };
-
-    // no need to update map if the map is the same
-    if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
-
-    this.#set(
-      {
-        generationBatchesMap: nextMap,
-      },
-      false,
-      action ?? n(`dispatchGenerationBatch/${payload.type}`),
+  /**
+   * Optimistic write into the batch replica of one topic. Memory-only — live
+   * status updates are confirmed by the follow-up `refreshGenerationBatches`.
+   * A topic that has not loaded yet is left untouched.
+   */
+  internal_dispatchGenerationBatch = (topicId: string, payload: GenerationBatchDispatch): void => {
+    this.#batches.update(
+      topicId,
+      (batches) => (batches ? generationBatchReducer(batches, payload) : batches),
+      { persist: false },
     );
   };
 
   refreshGenerationBatches = async (): Promise<void> => {
     const { activeGenerationTopicId } = this.#get();
     if (activeGenerationTopicId) {
-      await mutate(imageKeys.generationBatches(activeGenerationTopicId));
+      await this.#batches.revalidate(activeGenerationTopicId);
     }
   };
 
-  useFetchGenerationBatches = (topicId?: string | null): SWRResponse<GenerationBatch[]> => {
-    return useClientDataSWR<GenerationBatch[]>(
-      topicId ? imageKeys.generationBatches(topicId) : null,
-      async ([, topicId]: [string, string]) => {
-        return generationBatchService.getGenerationBatches(topicId, 'image');
-      },
-      {
-        onSuccess: (data) => {
-          const nextMap = {
-            ...this.#get().generationBatchesMap,
-            [topicId!]: data,
-          };
+  /**
+   * Fetch orchestration for the active topic's batches. The batches are read
+   * through `generationBatchSelectors`, not from this return value.
+   */
+  useFetchGenerationBatches = (topicId?: string | null): GenerationBatchesSyncResult => {
+    const sync = this.#batches.useSync(topicId ? { topicId } : undefined, { enabled: !!topicId });
+    const data = topicId ? this.#get().generationBatchesMap[topicId] : undefined;
 
-          // no need to update map if the map is the same
-          if (isEqual(nextMap, this.#get().generationBatchesMap)) return;
-
-          this.#set(
-            {
-              generationBatchesMap: nextMap,
-            },
-            false,
-            n('useFetchGenerationBatches(success)', { topicId }),
-          );
-        },
-      },
-    );
+    return {
+      data,
+      error: sync.error,
+      isHydrated: sync.isHydrated,
+      isLoading: sync.isValidating && data === undefined,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+      revalidate: sync.revalidate,
+    };
   };
 
   useCheckGenerationStatus = (
@@ -263,31 +248,21 @@ export class GenerationBatchActionImpl {
 
             if (data.generation) {
               // Update generation data
-              this.#get().internal_dispatchGenerationBatch(
-                topicId,
-                {
-                  type: 'updateGenerationInBatch',
-                  batchId: targetBatch.id,
-                  generationId,
-                  value: data.generation,
-                },
-                n(
-                  `useCheckGenerationStatus/${data.status === AsyncTaskStatus.Success ? 'success' : 'error'}`,
-                ),
-              );
+              this.#get().internal_dispatchGenerationBatch(topicId, {
+                batchId: targetBatch.id,
+                generationId,
+                type: 'updateGenerationInBatch',
+                value: data.generation,
+              });
 
-              // If generation succeeds and has a thumbnail, check if the current topic has an imageUrl
+              // The server fills an empty topic cover before reporting success; refresh to show it
               if (data.status === AsyncTaskStatus.Success && data.generation.asset?.thumbnailUrl) {
                 const currentTopic = generationTopicSelectors.getGenerationTopicById(topicId)(
                   this.#get(),
                 );
 
-                // If the current topic doesn't have an imageUrl, update it with this generation's thumbnailUrl
                 if (currentTopic && !currentTopic.coverUrl) {
-                  await this.#get().updateGenerationTopicCover(
-                    topicId,
-                    data.generation.asset.thumbnailUrl,
-                  );
+                  await this.#get().refreshGenerationTopics();
                 }
               }
             }

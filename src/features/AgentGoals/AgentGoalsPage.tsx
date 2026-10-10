@@ -13,7 +13,8 @@ import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import type { GoalListFilter } from '@/store/goal';
-import { useGoalStore } from '@/store/goal';
+import { goalSelectors, useGoalStore } from '@/store/goal';
+import { goalListKey } from '@/store/goal/projection';
 
 import { createGoalModal } from './CreateGoalModal';
 import { GoalCardItem } from './GoalCardItem';
@@ -102,46 +103,56 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
   const setFilter = useGoalStore((s) => s.setGoalListFilter);
   const setViewMode = useGoalStore((s) => s.setGoalViewMode);
   const loadMoreGoals = useGoalStore((s) => s.loadMoreGoals);
-  // Branch off the SWR response, not the store: the store sync (even via the
-  // sync wrapper) lands an effect after first paint, and a cache hit — which
-  // never fires a network callback — would render one empty-state frame in
-  // between. `data?.goals` keeps the settled-empty and hydrated shapes aligned.
-  const { data, error, isLoading } = useFetchGoals(agentId, projectId);
-  const goals = useMemo(() => data?.goals ?? [], [data]);
+  // The rows live in the replica view; the hook only orchestrates the fetch, so
+  // a revisit paints the persisted projection on the first frame instead of an
+  // empty-state frame while the sync lands.
+  const { error, isLoading } = useFetchGoals(agentId, projectId);
   // The active tab reads its own statuses from the server. `all` shares the
-  // window read's cache entry, so the page only pays for an extra request once
-  // the user opens a narrow tab.
-  const tabSWR = useFetchGoals(agentId, projectId, filter);
+  // window read's entry, so the page only pays for an extra request once the
+  // user opens a narrow tab.
+  const tabSync = useFetchGoals(agentId, projectId, filter);
   // `delivered` is a whole-set count, not a count of the page the list happens
   // to hold: read the review set's own total so the header can never disagree
   // with what the Needs-review tab shows once a goal sits past the list's page.
-  const reviewSWR = useFetchGoals(agentId, projectId, 'review');
+  // The read has to run whichever tab is active, since the header shows it
+  // regardless — the rows themselves come from the view below.
+  useFetchGoals(agentId, projectId, 'review');
+  const listView = useGoalStore(goalSelectors.goalListView(scopeId));
+  const tabView = useGoalStore(
+    goalSelectors.goalListView(
+      filter === 'all' ? scopeId : goalListKey({ agentId, filter, projectId }),
+    ),
+  );
+  const reviewView = useGoalStore(
+    goalSelectors.goalListView(goalListKey({ agentId, filter: 'review', projectId })),
+  );
+  const goals = useMemo(() => listView?.goals ?? [], [listView]);
   const summary = useMemo(() => {
-    const total = data?.total ?? goals.length;
+    const total = listView?.total ?? goals.length;
     // An aggregate that has not answered is unknown, not zero. Falling back to
     // the review goals visible in the list's page would understate it for
     // exactly the accounts this page reads past one page, and present that
     // partial count as the delivered total.
-    const delivered = reviewSWR.data?.total;
+    const delivered = reviewView?.total;
 
     return {
       delivered,
       pursuing: delivered === undefined ? undefined : total - delivered,
       total,
     };
-  }, [data, goals.length, reviewSWR.data]);
+  }, [goals.length, listView?.total, reviewView?.total]);
   // A page of the newest goals cannot prove a tab empty, and neither can a read
   // that failed: hold the list's shape while the tab's own read is in flight,
   // and surface its failure rather than spinning on it.
-  const isTabUnresolved = filter !== 'all' && tabSWR.data === undefined;
-  const isTabPending = isTabUnresolved && !tabSWR.error;
-  const isTabError = isTabUnresolved && Boolean(tabSWR.error);
+  const isTabUnresolved = filter !== 'all' && tabView === undefined;
+  const isTabPending = isTabUnresolved && !tabSync.error;
+  const isTabError = isTabUnresolved && Boolean(tabSync.error);
   // The rows are the tab's own read, with no client-side fallback: a page of the
   // newest goals cannot stand in for the tab's answer, and presenting it as if
   // it could is what let a tab claim an outcome it had no way to know.
   const filteredGoals = useMemo(
-    () => (filter === 'all' ? goals : (tabSWR.data?.goals ?? [])),
-    [filter, goals, tabSWR.data],
+    () => (filter === 'all' ? goals : (tabView?.goals ?? [])),
+    [filter, goals, tabView],
   );
   const isFilterEmpty = !isTabUnresolved && filteredGoals.length === 0;
   // The tab's count is the server's answer for that tab. Until it arrives — or
@@ -190,9 +201,13 @@ const AgentGoalsPage = memo<AgentGoalsPageProps>(({ agentId, projectId }) => {
         paddingInline={16}
         wrapperStyle={{ flex: 1, overflowY: 'auto' }}
       >
-        {isLoading && data === undefined ? (
+        {isLoading ? (
           <GoalSkeleton chrome={'body'} />
-        ) : error ? (
+        ) : error && listView === undefined ? (
+          // Only a read that left nothing to show becomes the page: a failed
+          // revalidation keeps the hydrated rows on screen (the same guard the
+          // home rail, the goal portal and the detail page use), so a network
+          // blip no longer hides goals the user already has locally.
           <GoalLoadError onRetry={() => void refreshGoals(scopeId)} />
         ) : goals.length === 0 ? (
           <GoalEmptyState onCreate={openCreateGoal} />

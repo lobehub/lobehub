@@ -258,6 +258,67 @@ describe('topic action', () => {
         await summaryPromise;
       });
     });
+
+    it('binds a deferred new topic to the staged project directory', async () => {
+      // ROOT CAUSE: "+" on a project group defers the row to the first message.
+      // Creating it with only the working-directory path left the topic outside
+      // its project — missing from the project list, mis-grouped in the sidebar
+      // and skipping the project-directory execution routing. The staged
+      // directory must ride along on the create call.
+      const { result } = renderHook(() => useChatStore());
+      const messages = [{ id: 'message1' }] as UIChatMessage[];
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session-id',
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id' })]: messages,
+          },
+          pendingNewTopicDirectory: {
+            agentId: 'session-id',
+            projectWorkingDirectoryId: 'binding-1',
+          },
+        });
+      });
+
+      const createTopicSpy = vi
+        .spyOn(topicService, 'createTopic')
+        .mockResolvedValue('new-topic-id');
+
+      await result.current.saveToTopic();
+
+      expect(createTopicSpy).toHaveBeenCalledWith(
+        expect.objectContaining({ projectWorkingDirectoryId: 'binding-1' }),
+      );
+      // Consumed, so it cannot leak onto a later, unrelated topic.
+      expect(useChatStore.getState().pendingNewTopicDirectory).toBeUndefined();
+    });
+
+    it('does not apply a staged directory that belongs to another agent', async () => {
+      const { result } = renderHook(() => useChatStore());
+      const messages = [{ id: 'message1' }] as UIChatMessage[];
+      act(() => {
+        useChatStore.setState({
+          activeAgentId: 'session-id',
+          messagesMap: {
+            [messageMapKey({ agentId: 'session-id' })]: messages,
+          },
+          pendingNewTopicDirectory: {
+            agentId: 'another-agent',
+            projectWorkingDirectoryId: 'binding-1',
+          },
+        });
+      });
+
+      const createTopicSpy = vi
+        .spyOn(topicService, 'createTopic')
+        .mockResolvedValue('new-topic-id');
+
+      await result.current.saveToTopic();
+
+      expect(createTopicSpy).toHaveBeenCalledWith(
+        expect.not.objectContaining({ projectWorkingDirectoryId: expect.anything() }),
+      );
+    });
   });
   describe('refreshTopic', () => {
     afterEach(() => {
@@ -3391,6 +3452,38 @@ describe('topic action', () => {
     });
   });
   describe('summaryTopicTitle', () => {
+    it('summarizes an uncached Project topic using its own Agent messages', async () => {
+      const topicId = 'project-uncached-topic';
+      const messages = [
+        { id: 'project-message', content: 'Work in my project', role: 'user' },
+      ] as UIChatMessage[];
+      useChatStore.setState({
+        activeAgentId: 'unrelated-agent',
+        topicDataMap: {},
+        topicDetailMap: {},
+      });
+      vi.spyOn(topicService, 'getTopicDetail').mockResolvedValue({
+        id: topicId,
+        title: 'Old title',
+        createdAt: 1,
+        updatedAt: 1,
+      });
+      vi.spyOn(messageService, 'getMessages').mockResolvedValue(messages);
+      vi.spyOn(aiChatService, 'generateJSON').mockResolvedValue({
+        data: { title: 'Project summary' },
+      } as never);
+      const update = vi
+        .spyOn(useChatStore.getState(), 'internal_updateTopic')
+        .mockResolvedValue(undefined);
+      await useChatStore.getState().autoRenameTopicTitle(topicId, 'project-agent');
+      expect(messageService.getMessages).toHaveBeenCalledWith({
+        agentId: 'project-agent',
+        topicId,
+      });
+      expect(update).toHaveBeenCalledWith(topicId, { title: 'Project summary' });
+      expect(useChatStore.getState().activeAgentId).toBe('unrelated-agent');
+    });
+
     it('should wait for assistant text before summarizing an audio-only conversation', async () => {
       const topicId = 'topic-1';
       const messages = [

@@ -92,6 +92,9 @@ export const createEphemeralResetState = (): Partial<State> => ({
   heteroOverloadWaitOpIds: {},
   inputMessage: '',
   isLoadingEarlierMessages: false,
+  // The paging of the previous conversation's transcript must not describe
+  // the next one's rows.
+  messagePaging: undefined,
   refreshingRowId: undefined,
   isScrolling: false,
   messageEditingIds: [],

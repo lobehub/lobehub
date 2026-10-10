@@ -29,6 +29,7 @@ vi.mock('@/libs/trpc/client', () => ({
           success: false,
         }),
       },
+      stopPendingApproval: { mutate: vi.fn().mockResolvedValue({ success: true }) },
       submitHeteroIntervention: { mutate: vi.fn().mockResolvedValue({ success: true }) },
     },
     shareChat: {
@@ -1128,7 +1129,7 @@ describe('ConversationControl actions', () => {
           batchId: 'batch-durable',
           operationId: 'operation-durable',
           resolutionRequestId: expect.any(String),
-          streamFeatures: ['member_runtime_end'],
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: 'call-durable', toolMessageId: 'tool-msg-durable' }],
         });
         expect(result.current.dbMessagesMap[chatKey][0].plugin?.arguments).toBe(
@@ -1795,6 +1796,7 @@ describe('ConversationControl actions', () => {
     it('retires the paused operation only when Stop wins the durable claim', async () => {
       const { result } = renderHook(() => useChatStore());
       const pausedOperationId = seedDurableTerminalCard(result);
+      vi.spyOn(result.current, 'refreshMessages').mockResolvedValue(undefined);
       const executeGatewayAgentSpy = vi
         .spyOn(result.current, 'executeGatewayAgent')
         .mockResolvedValue({} as any);
@@ -3263,7 +3265,7 @@ describe('ConversationControl actions', () => {
           batchId: `batch-${interactionKind}`,
           operationId: `server-operation-${interactionKind}`,
           resolutionRequestId: expect.any(String),
-          streamFeatures: ['member_runtime_end'],
+          streamFeatures: ['file_works', 'member_runtime_end'],
           targets: [{ toolCallId: `call-${interactionKind}`, toolMessageId: toolMessage.id }],
         });
         const resolvingIntervention = {

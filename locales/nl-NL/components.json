@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Openen",
   "LocalFile.action.preview": "Voorbeeld",
   "LocalFile.action.showInFolder": "In map tonen",
+  "LocalFile.action.startTopic": "Begin hier een nieuw onderwerp",
+  "LocalFile.action.startTopicFailed": "Het starten van een nieuw onderwerp in deze map is mislukt.",
   "MaxTokenSlider.unlimited": "Onbeperkt",
   "ModelSelect.featureTag.audio": "Dit model ondersteunt audio-invoerherkenning.",
   "ModelSelect.featureTag.custom": "Aangepast model ondersteunt standaard zowel functieaanroepen als visuele herkenning. Controleer de beschikbaarheid van deze functies op basis van de situatie.",

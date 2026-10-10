@@ -1,14 +1,16 @@
 import type { UIChatMessage } from '@lobechat/types';
-import { act, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { useClientDataSWRWithSync } from '@/libs/swr';
+import { cacheScope } from '@/libs/replica';
+import { useClientDataSWR } from '@/libs/swr';
 import { messageService } from '@/services/message';
 import {
   clearMessageListClientCacheState,
   MESSAGE_LIST_VERIFICATION_INTERVAL,
   runMessageListQuery,
 } from '@/services/message/cache';
+import { conversationMessagesResource } from '@/services/message/replica';
 import { useChatStore } from '@/store/chat';
 import { operationSelectors } from '@/store/chat/selectors';
 import { LOCAL_MESSAGE_SCOPE } from '@/store/chat/utils/localMessages';
@@ -44,19 +46,40 @@ vi.mock('@/services/message', () => {
   };
 });
 
+vi.mock('@/business/client/hooks/useActiveWorkspaceId', () => ({
+  getActiveWorkspaceId: () => undefined,
+  useActiveWorkspaceId: () => undefined,
+}));
+
 // Mock SWR
 vi.mock('@/libs/swr', () => ({
-  useClientDataSWRWithSync: vi.fn((key, fetcher, options) => {
-    // Simulate SWR behavior for testing
+  mutate: vi.fn(),
+  useClientDataSWR: vi.fn((key, fetcher, options) => {
+    // Simulate SWR behavior for testing: fetch once, report success
     if (key) {
-      fetcher?.().then((data: UIChatMessage[]) => {
-        options?.onData?.(data);
+      fetcher?.().then((data: unknown) => {
+        options?.onSuccess?.(data);
       });
     }
 
-    return { data: undefined, isLoading: true };
+    return { data: undefined, isValidating: true, mutate: vi.fn() };
   }),
 }));
+
+/** The transcript sync's SWR keys (the replica's hydration read is a separate query). */
+const messageSyncKeys = () =>
+  vi
+    .mocked(useClientDataSWR)
+    .mock.calls.map(([key]) => key as any[] | null)
+    .filter((key) => key?.[0] === 'message:list');
+
+/** `useFetchMessages` is a hook: run it inside a component. */
+const fetchMessagesOf =
+  (store: ReturnType<typeof createStore>) =>
+  (
+    ...args: Parameters<ReturnType<ReturnType<typeof createStore>['getState']>['useFetchMessages']>
+  ) =>
+    renderHook(() => store.getState().useFetchMessages(...args)).result.current;
 
 // Create a test store
 const createTestStore = () =>
@@ -290,6 +313,30 @@ describe('DataSlice', () => {
       expect(store.getState().isLoadingEarlierMessages).toBe(false);
     });
 
+    it('hands the extended transcript to the host, so its next sync keeps the older rows', async () => {
+      const onMessagesChange = vi.fn();
+      const context = {
+        agentId: 'agent-earlier',
+        threadId: 'thread-earlier',
+        topicId: 'topic-earlier-host',
+      };
+      const store = createStore({ context });
+      store.setState({ onMessagesChange });
+      store.getState().replaceMessages(windowMessages, { skipOnMessagesChange: true });
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({ messages: earlierPage });
+
+      await store.getState().loadEarlierMessages();
+
+      expect(onMessagesChange).toHaveBeenCalledTimes(1);
+      expect(onMessagesChange.mock.calls[0][0].map((m: UIChatMessage) => m.id)).toEqual([
+        'u1',
+        'a1',
+        'u2',
+        'a2',
+      ]);
+      expect(onMessagesChange.mock.calls[0][1]).toEqual(context);
+    });
+
     it('stops fetching once a page comes back empty (beginning reached)', async () => {
       const store = createStore({
         context: {
@@ -452,6 +499,154 @@ describe('DataSlice', () => {
       await store.getState().loadEarlierMessages();
 
       expect(store.getState().isLoadingEarlierMessages).toBe(true);
+    });
+  });
+
+  describe('loadEarlierMessages on a round-cursor topic', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      clearMessageListClientCacheState();
+    });
+
+    const context = { agentId: 'agent-round', threadId: null, topicId: 'topic-round' };
+    const windowMessages: UIChatMessage[] = [
+      { id: 'u2', content: 'q2', role: 'user', createdAt: 1000, updatedAt: 1000 } as any,
+    ];
+    const windowCursor = { createdAt: '1970-01-01T00:00:01.000123Z', id: 'u2' };
+
+    it('waits for the window cursor instead of deriving a lossy one', async () => {
+      const store = createStore({ context });
+      store.getState().replaceMessages(windowMessages);
+
+      await store.getState().loadEarlierMessages();
+
+      expect(messageService.getEarlierMessages).not.toHaveBeenCalled();
+    });
+
+    it("pages from the window's lossless cursor and stops at the topic start", async () => {
+      await runMessageListQuery(context, async () => ({
+        messages: windowMessages,
+        olderCursor: windowCursor,
+      }));
+      const store = createStore({ context });
+      store.getState().replaceMessages(windowMessages);
+      vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({
+        messages: [{ id: 'u1', content: 'q1', role: 'user', createdAt: 1, updatedAt: 1 } as any],
+        olderCursor: null,
+      });
+
+      await store.getState().loadEarlierMessages();
+      await store.getState().loadEarlierMessages();
+
+      expect(messageService.getEarlierMessages).toHaveBeenCalledTimes(1);
+      expect(messageService.getEarlierMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ topicId: 'topic-round' }),
+        windowCursor,
+      );
+      expect(store.getState().dbMessages.map((m) => m.id)).toEqual(['u1', 'u2']);
+    });
+
+    it('never fetches when the window already holds the topic start', async () => {
+      await runMessageListQuery(context, async () => ({
+        messages: windowMessages,
+        olderCursor: null,
+      }));
+      const store = createStore({ context });
+      store.getState().replaceMessages(windowMessages);
+
+      await store.getState().loadEarlierMessages();
+
+      expect(messageService.getEarlierMessages).not.toHaveBeenCalled();
+    });
+  });
+
+  it('echoes the committed extended transcript after head revalidation', async () => {
+    clearMessageListClientCacheState();
+    const context = { agentId: 'review-agent', topicId: 'review-topic', threadId: null };
+    const old = { id: 'old', role: 'user', content: 'older', createdAt: 1 } as UIChatMessage;
+    const head = { id: 'head', role: 'user', content: 'newest', createdAt: 2 } as UIChatMessage;
+    const cursor = { id: 'head', createdAt: '1970-01-01T00:00:00.002Z' };
+    await runMessageListQuery(context, async () => ({ messages: [head], olderCursor: cursor }));
+    const onMessagesChange = vi.fn();
+    const store = createStore({ context });
+    store.setState({ onMessagesChange });
+    store.getState().replaceMessages([head]);
+    vi.mocked(messageService.getEarlierMessages).mockResolvedValueOnce({
+      messages: [old],
+      olderCursor: null,
+    });
+    await store.getState().loadEarlierMessages();
+    onMessagesChange.mockClear();
+    vi.mocked(messageService.getMessageListPage).mockResolvedValueOnce({
+      messages: [head],
+      olderCursor: cursor,
+    });
+    fetchMessagesOf(store)(context);
+    await waitFor(() =>
+      expect(onMessagesChange).toHaveBeenCalledWith([old, head], context, { source: 'fetch' }),
+    );
+    expect(store.getState().dbMessages).toEqual([old, head]);
+  });
+
+  it('resets paging after an unpaged replacement but keeps it for an unchanged host echo', () => {
+    const context = { agentId: 'replace-agent', topicId: 'replace-topic', threadId: null };
+    const store = createStore({ context });
+    const rows = ['older', 'head'].map((id, i) => ({
+      id,
+      role: 'user',
+      content: id,
+      createdAt: i,
+    })) as UIChatMessage[];
+    const paging = {
+      currentPage: 2,
+      pageSize: 1,
+      hasMore: true,
+      anchorId: 'head',
+      nextCursor: { id: 'older', createdAt: 'old' },
+      pages: [{ count: 1 }, { count: 1 }],
+    };
+    store.setState({ dbMessages: rows, messagePaging: paging });
+    store.getState().replaceMessages([...rows], { skipOnMessagesChange: true });
+    expect(store.getState().messagePaging).toEqual(paging);
+    store.getState().replaceMessages([rows[1]]);
+    expect(store.getState().messagePaging).toEqual({ currentPage: 0, pageSize: 1, hasMore: true });
+  });
+
+  describe('transcript persistence', () => {
+    it('keeps streamed writes in memory and persists once the run settles', async () => {
+      let running = true;
+      vi.spyOn(operationSelectors, 'isAgentRuntimeRunningByContext').mockImplementation(
+        () => () => running,
+      );
+      vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+      const storageSet = vi
+        .spyOn(conversationMessagesResource.storage!, 'set')
+        .mockResolvedValue(undefined);
+      const store = createStore({
+        context: { agentId: 'agent-persist', threadId: null, topicId: 'topic-persist' },
+      });
+
+      for (const id of ['m1', 'm2']) {
+        store.getState().internal_dispatchMessage({
+          id,
+          type: 'createMessage',
+          value: { content: id, role: 'assistant' } as any,
+        });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      expect(storageSet.mock.calls.some(([, row]) => Array.isArray((row.data as any)?.items))).toBe(
+        false,
+      );
+
+      running = false;
+      store.getState().replaceMessages(store.getState().dbMessages);
+
+      // The engine also tracks its stored keys in an index row.
+      const transcriptWrites = () =>
+        storageSet.mock.calls.filter(([, row]) => Array.isArray((row.data as any)?.items));
+      await waitFor(() => expect(transcriptWrites()).toHaveLength(1));
+      const [[, row]] = transcriptWrites();
+      expect((row.data as any).items.map((m: UIChatMessage) => m.id)).toEqual(['m1', 'm2']);
     });
   });
 
@@ -861,14 +1056,14 @@ describe('DataSlice', () => {
           { ...streaming, content: '...' },
         ]);
 
-        store.getState().useFetchMessages(context, { refreshInterval: 2000 });
+        fetchMessagesOf(store)(context, { refreshInterval: 2000 });
 
         await waitFor(() => expect(store.getState().dbMessages[0]).toEqual(answered));
         expect(store.getState().dbMessages[1]).toBe(streaming);
         expect(onMessagesChange).toHaveBeenCalledWith([answered, streaming], context, {
           source: 'fetch',
         });
-        expect(useClientDataSWRWithSync).toHaveBeenCalledWith(
+        expect(useClientDataSWR).toHaveBeenCalledWith(
           expect.any(Array),
           expect.any(Function),
           expect.objectContaining({
@@ -901,13 +1096,13 @@ describe('DataSlice', () => {
       const store = createStore({ context });
       store.setState({ dbMessages: [pending] });
       vi.mocked(messageService.getMessages).mockResolvedValue([answered]);
-      store.getState().useFetchMessages(context);
+      fetchMessagesOf(store)(context);
       await waitFor(() => expect(store.getState().dbMessages).toEqual([answered]));
 
       clearMessageListClientCacheState();
       const rollback = { ...pending, updatedAt: 1 };
       vi.mocked(messageService.getMessages).mockResolvedValue([rollback]);
-      store.getState().useFetchMessages(context);
+      fetchMessagesOf(store)(context);
       await act(async () => {
         await Promise.resolve();
       });
@@ -932,7 +1127,7 @@ describe('DataSlice', () => {
       });
 
       // Call useFetchMessages - this triggers the SWR mock
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: 'test-thread',
@@ -964,7 +1159,7 @@ describe('DataSlice', () => {
       const onMessagesChange = vi.fn();
       store.setState({ onMessagesChange });
 
-      store.getState().useFetchMessages(context);
+      fetchMessagesOf(store)(context);
 
       await waitFor(() => {
         expect(onMessagesChange).toHaveBeenCalledWith(mockMessages, context, { source: 'fetch' });
@@ -993,7 +1188,7 @@ describe('DataSlice', () => {
         const store = createStore({ context });
         store.setState({ messagesInit: false });
 
-        store.getState().useFetchMessages(context);
+        fetchMessagesOf(store)(context);
 
         await waitFor(() => {
           expect(store.getState().messagesInit).toBe(true);
@@ -1031,7 +1226,7 @@ describe('DataSlice', () => {
         const store = createStore({ context });
         store.setState({ dbMessages: [...fetched, streamed], messagesInit: true });
 
-        store.getState().useFetchMessages(context);
+        fetchMessagesOf(store)(context);
 
         await waitFor(() => {
           expect(store.getState().dbMessages.map((m) => m.id)).toContain('msg-member-tool');
@@ -1051,7 +1246,7 @@ describe('DataSlice', () => {
         const loaded = [{ ...fetched[0], content: 'local' }];
         store.setState({ dbMessages: loaded, messagesInit: true });
 
-        store.getState().useFetchMessages(context);
+        fetchMessagesOf(store)(context);
 
         await waitFor(() => {
           expect(messageService.getMessages).toHaveBeenCalled();
@@ -1085,7 +1280,7 @@ describe('DataSlice', () => {
       const onMessagesChange = vi.fn();
       store.setState({ onMessagesChange });
 
-      store.getState().useFetchMessages(oldContext);
+      fetchMessagesOf(store)(oldContext);
       store.setState({
         context: currentContext,
         dbMessages: currentMessages,
@@ -1127,7 +1322,7 @@ describe('DataSlice', () => {
         context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1148,14 +1343,14 @@ describe('DataSlice', () => {
         context: { agentId: '', topicId: null, threadId: null },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: '',
         topicId: null,
         threadId: null,
       });
 
       // SWR should be called with null key (disabled)
-      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+      expect(vi.mocked(useClientDataSWR)).toHaveBeenCalledWith(
         null,
         expect.any(Function),
         expect.any(Object),
@@ -1167,7 +1362,7 @@ describe('DataSlice', () => {
         context: { agentId: 'test-session', topicId: null, threadId: null },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: null,
         threadId: null,
@@ -1175,7 +1370,7 @@ describe('DataSlice', () => {
 
       // SWR should be called with null key when topicId is null
       // This prevents fetching empty data that would overwrite local optimistic updates
-      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+      expect(vi.mocked(useClientDataSWR)).toHaveBeenCalledWith(
         null,
         expect.any(Function),
         expect.any(Object),
@@ -1190,14 +1385,14 @@ describe('DataSlice', () => {
         context: { agentId: 'test-session', topicId: null, threadId: null },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: undefined as any,
         threadId: null,
       });
 
       // SWR should be called with null key when topicId is undefined
-      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+      expect(vi.mocked(useClientDataSWR)).toHaveBeenCalledWith(
         null,
         expect.any(Function),
         expect.any(Object),
@@ -1209,25 +1404,25 @@ describe('DataSlice', () => {
         context: { agentId: 'session-1', topicId: 'topic-1', threadId: 'thread-1' },
       });
 
-      store1.getState().useFetchMessages({
+      fetchMessagesOf(store1)({
         agentId: 'session-1',
         topicId: 'topic-1',
         threadId: 'thread-1',
       });
 
-      const firstCallKey = vi.mocked(useClientDataSWRWithSync).mock.calls[0][0];
+      const firstCallKey = messageSyncKeys()[0];
 
       const store2 = createStore({
         context: { agentId: 'session-1', topicId: 'topic-1', threadId: 'thread-2' },
       });
 
-      store2.getState().useFetchMessages({
+      fetchMessagesOf(store2)({
         agentId: 'session-1',
         topicId: 'topic-1',
         threadId: 'thread-2',
       });
 
-      const secondCallKey = vi.mocked(useClientDataSWRWithSync).mock.calls[1][0];
+      const secondCallKey = messageSyncKeys()[1];
 
       // Keys should be different because threadIds are different
       expect(firstCallKey).not.toEqual(secondCallKey);
@@ -1240,13 +1435,13 @@ describe('DataSlice', () => {
         context: { agentId: 'test-session', topicId: 'test-topic', threadId: 'test-thread' },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: 'test-thread',
       });
 
-      const swrKey = vi.mocked(useClientDataSWRWithSync).mock.calls[0][0] as any[];
+      const swrKey = messageSyncKeys()[0]!;
 
       // Key should be an array with prefix and context object
       expect(Array.isArray(swrKey)).toBe(true);
@@ -1269,9 +1464,9 @@ describe('DataSlice', () => {
       vi.mocked(messageService.getMessages).mockResolvedValue([]);
 
       const store = createStore({ context });
-      store.getState().useFetchMessages(context);
+      fetchMessagesOf(store)(context);
 
-      expect(vi.mocked(useClientDataSWRWithSync)).toHaveBeenCalledWith(
+      expect(vi.mocked(useClientDataSWR)).toHaveBeenCalledWith(
         expect.any(Array),
         expect.any(Function),
         expect.objectContaining({
@@ -1315,7 +1510,7 @@ describe('DataSlice', () => {
       });
 
       // Call useFetchMessages with groupId - this triggers the SWR mock
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'supervisor-agent',
         topicId: 'test-topic',
         threadId: null,
@@ -1350,7 +1545,7 @@ describe('DataSlice', () => {
         context: { agentId: 'test-session', topicId: 'test-topic', threadId: null },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1400,7 +1595,7 @@ describe('DataSlice', () => {
         ],
       } as any);
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1442,7 +1637,7 @@ describe('DataSlice', () => {
         },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1483,7 +1678,7 @@ describe('DataSlice', () => {
         },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1519,7 +1714,7 @@ describe('DataSlice', () => {
       });
       store.setState({ dbMessages: [settledLocalVoiceMessage] });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1563,7 +1758,7 @@ describe('DataSlice', () => {
         },
       });
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,
@@ -1606,7 +1801,7 @@ describe('DataSlice', () => {
         ],
       } as any);
 
-      store.getState().useFetchMessages({
+      fetchMessagesOf(store)({
         agentId: 'test-session',
         topicId: 'test-topic',
         threadId: null,

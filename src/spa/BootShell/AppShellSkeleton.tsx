@@ -4,9 +4,10 @@ import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { Flexbox } from '@lobehub/ui';
 import { LobeHub } from '@lobehub/ui/brand';
 import { createStaticStyles, keyframes } from '@lobehub/ui';
-import { memo, useEffect, useState } from 'react';
+import { memo, useEffect, useLayoutEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { retainSkeleton } from '@/components/Skeleton/skeletonHandover';
 import { isDesktop } from '@/const/version';
 import {
   getInnerCssVariables,
@@ -118,6 +119,8 @@ interface AppShellSkeletonProps {
 const AppShellSkeleton = memo<AppShellSkeletonProps>(({ id }) => {
   const { isDark, navPanelBackground, navPanelWidth, showLeftPanel } = readBootShellGeometry();
   const [waiting, setWaiting] = useState(false);
+
+  useLayoutEffect(retainSkeleton, []);
 
   useEffect(() => {
     const timer = setTimeout(() => setWaiting(true), HINT_DELAY);

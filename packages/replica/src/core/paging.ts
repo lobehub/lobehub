@@ -465,7 +465,13 @@ export const toPersistedPage = <TItem, TCursor, TData extends ReplicaPagedData<T
   const { server } = splitClientOnly(data.items, ctx);
   const pageLimit = Math.max(1, config.persist?.pages ?? 1);
   const maxItems = config.persist?.maxItems ?? Number.POSITIVE_INFINITY;
-  const pages = data.pages?.length ? data.pages : [{ count: server.length, next: data.nextCursor }];
+  // The head page absorbs every row written since it was fetched (a sent
+  // message, a streamed reply): older pages keep their fetched size, so the
+  // head is whatever they do not account for.
+  const olderCount = (data.pages ?? []).slice(1).reduce((sum, page) => sum + page.count, 0);
+  const pages = data.pages?.length
+    ? [{ ...data.pages[0], count: Math.max(0, server.length - olderCount) }, ...data.pages.slice(1)]
+    : [{ count: server.length, next: data.nextCursor }];
 
   let count = 0;
   let keptPages = 0;

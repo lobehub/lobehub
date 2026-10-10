@@ -20,6 +20,7 @@ import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { GenerationModel } from '@/database/models/generation';
 import { asyncAuthedProcedure, asyncRouter as router } from '@/libs/trpc/async';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { GenerationService } from '@/server/services/generation';
 import { VideoGenerationService } from '@/server/services/generation/video';
 import { buildVideoGenerationFilePayload } from '@/server/services/generation/videoFile';
 import { measureVideoOutputUsage } from '@/server/services/generation/videoOutputUsage';
@@ -214,6 +215,12 @@ export const videoRouter = router({
         );
 
         log('Asset and file created successfully for generation: %s', generationId);
+
+        // Before marking Success so the client's post-success topic refresh sees it
+        await new GenerationService(ctx.serverDB, ctx.userId, workspaceId).ensureTopicCover(
+          generationTopicId,
+          processResult.thumbnailKey,
+        );
 
         const duration = Date.now() - asyncTaskCreatedAt.getTime();
 

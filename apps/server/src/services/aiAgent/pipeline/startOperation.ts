@@ -26,6 +26,8 @@ export interface StartOperationDeps {
 }
 
 export interface StartOperationInput {
+  /** See {@link InternalExecAgentParams.acceptsFileWorks}. */
+  acceptsFileWorks?: boolean;
   /** See {@link InternalExecAgentParams.acceptsMemberRuntimeEnd}. */
   acceptsMemberRuntimeEnd?: boolean;
   approvalClaim: ApprovalClaimState;
@@ -100,6 +102,7 @@ export const startOperation = async (
     userMessageId,
   } = ctx;
   const {
+    acceptsFileWorks,
     acceptsMemberRuntimeEnd,
     approvalClaim,
     approvalSourceOperationId,
@@ -169,7 +172,15 @@ export const startOperation = async (
       (approvalSourceOperationId
         ? await deps.agentRuntimeService.getLlmExecutor(approvalSourceOperationId)
         : undefined);
+    // Its `file_works` declaration too, or the continuation's terminal push
+    // would drop the file Work card the parked client can render.
+    const fileWorksAccepted =
+      acceptsFileWorks ??
+      (approvalSourceOperationId
+        ? await deps.agentRuntimeService.acceptsFileWorks(approvalSourceOperationId)
+        : undefined);
     const result = await deps.agentRuntimeService.createOperation({
+      acceptsFileWorks: fileWorksAccepted,
       acceptsMemberRuntimeEnd: memberRuntimeEndAccepted,
       clientProtocol: input.clientProtocol,
       includeFinalState: input.includeFinalState,
@@ -184,7 +195,7 @@ export const startOperation = async (
             // Mirrors `shareConfig.allowReadMemory` so `BuiltinToolsExecutor`
             // can re-check the memory tool's grant at dispatch time (the
             // actual chokepoint) via `isShareBlockedDataToolCall` — see
-            // `shareGate.ts`.
+            // `shareGate/dispatch.ts`.
             allowReadMemory: shareGate.shareConfig.allowReadMemory,
             // Mirrors `shareConfig.toolGrants` so tool runtimes resolved
             // outside `toolManifestMap` (e.g. `activateSkill`, which queries

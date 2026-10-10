@@ -256,6 +256,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   pageShare: rw('chat:read', 'chat:write'),
   plugin: rw('agent:read', 'agent:write'),
   project: rw('agent:read', 'agent:write'),
+  // project environments and working directories: same agent domain as `project`
+  projectWorkingDirectory: rw('agent:read', 'agent:write'),
   pushToken: 'blocked',
   ragEval: 'blocked',
   recent: rw('chat:read', null),

@@ -1201,6 +1201,26 @@ export const sandboxStorageRouter = router({
     }),
 
   /**
+   * End the run holding an instance, so it can be picked, rebuilt or deleted
+   * now instead of after the idle sweep.
+   *
+   * The owner's, like a rebuild or a delete: in a published environment the
+   * run holding the instance is usually a colleague's conversation, and
+   * cutting it off is not something reading access should allow. The
+   * execution plane does the stop properly — snapshot first, lease released
+   * only once the stop is confirmed — and its refusals (still saving, still
+   * starting, being built) travel as codes the client turns into sentences.
+   */
+  stopInstance: instanceProcedure
+    .input(z.object({ id: idSchema }))
+    .mutation(async ({ ctx, input }) => {
+      const instance = await ctx.instanceModel.findOwnedById(input.id);
+      if (!instance) throw new TRPCError({ code: 'NOT_FOUND', message: 'Instance not found' });
+
+      return ctx.client.stopInstance({ name: instance.id }).catch(mapStorageError);
+    }),
+
+  /**
    * Every repository this account can build an environment from, newest
    * activity first, each carrying the owner it belongs to so the caller can
    * group them without a second request per organization.

@@ -5,17 +5,38 @@ import {
   type SidebarGroup,
 } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
-import { useEffect } from 'react';
-import { type SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { agentLabelKeys } from '@/libs/swr/keys';
+import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
 import { agentLabelService } from '@/services/agentLabel';
 import { type HomeStore } from '@/store/home/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
+import { AGENT_LABELS_KEY, agentLabelsResource } from './projection';
+
 const n = setNamespace('label');
+
+const LIST_PARAMS = {} as Record<string, never>;
+
+/**
+ * The registry keeps its long-standing flat field (`agentLabels`) as the
+ * replica view, gated by `isAgentLabelsInit` so a loaded-but-empty registry
+ * stays distinguishable from one that was never fetched.
+ *
+ * The cache scope (`${userId}:${workspaceId}`) owns the partition now: a switch
+ * clears the view before paint (the replica's `useSync` resets the scope in a
+ * layout effect), so the previous workspace's label ids can never be applied to
+ * an agent here.
+ */
+const agentLabelsLens: ReplicaLens<HomeStore, AgentLabelListItem[]> = {
+  clear: () => ({ agentLabels: [], isAgentLabelsInit: false }),
+  get: (state) => (state.isAgentLabelsInit ? state.agentLabels : undefined),
+  keys: (state) => (state.isAgentLabelsInit ? [AGENT_LABELS_KEY] : []),
+  set: (_state, _key, data) =>
+    data
+      ? { agentLabels: data, isAgentLabelsInit: true }
+      : { agentLabels: [], isAgentLabelsInit: false },
+};
 
 type Setter = StoreSetter<HomeStore>;
 export const createLabelSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
@@ -23,12 +44,23 @@ export const createLabelSlice = (set: Setter, get: () => HomeStore, _api?: unkno
 
 export class LabelActionImpl {
   readonly #get: () => HomeStore;
+  readonly #labels;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#labels = createReplicaSlice(agentLabelsResource, {
+      actionPrefix: n('agentLabels'),
+      fetcher: () => agentLabelService.getLabels(),
+      get,
+      // An unchanged registry must not re-render the picker / settings table.
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      set,
+      stateKey: 'agentLabelsReplica',
+      view: agentLabelsLens,
+    });
   }
 
   createAgentLabel = async (params: {
@@ -41,11 +73,13 @@ export class LabelActionImpl {
     return id;
   };
 
+  /**
+   * Revalidate the registry of the current identity. The replica scope carries
+   * the workspace, so this always refreshes the registry the caller is in —
+   * never another scope's.
+   */
   refreshAgentLabels = async (): Promise<void> => {
-    // Revalidate the key for the scope the registry was loaded for, not a
-    // hardcoded one — the key carries the workspace, so mutating inside a
-    // workspace must not refresh the personal list instead.
-    await mutate(agentLabelKeys.list(true, this.#get().agentLabelsWorkspaceId));
+    await this.#labels.revalidate();
   };
 
   removeAgentLabel = async (id: string): Promise<void> => {
@@ -145,48 +179,14 @@ export class LabelActionImpl {
     await Promise.all([this.refreshAgentLabels(), this.#get().refreshAgentList()]);
   };
 
-  useFetchAgentLabels = (
-    isLogin: boolean | undefined,
-    workspaceId: string | null | undefined,
-  ): SWRResponse<AgentLabelListItem[]> => {
-    const scopeId = workspaceId ?? null;
-
-    // Changing the SWR key refetches, but the store keeps serving the previous
-    // scope's registry until that request lands. Drop it immediately instead:
-    // an empty picker is a moment of missing UI, while a picker holding
-    // foreign label ids is a destructive write waiting to happen.
-    useEffect(() => {
-      if (this.#get().agentLabelsWorkspaceId === scopeId) return;
-
-      this.#set(
-        { agentLabels: [], agentLabelsWorkspaceId: scopeId, isAgentLabelsInit: false },
-        false,
-        n('useFetchAgentLabels/scopeChanged'),
-      );
-    }, [scopeId]);
-
-    return useClientDataSWR<AgentLabelListItem[]>(
-      isLogin === true ? agentLabelKeys.list(isLogin, scopeId) : null,
-      () => agentLabelService.getLabels(),
-      {
-        onSuccess: (data) => {
-          const state = this.#get();
-          if (
-            state.isAgentLabelsInit &&
-            state.agentLabelsWorkspaceId === scopeId &&
-            isEqual(state.agentLabels, data)
-          )
-            return;
-
-          this.#set(
-            { agentLabels: data, agentLabelsWorkspaceId: scopeId, isAgentLabelsInit: true },
-            false,
-            n('useFetchAgentLabels/onSuccess'),
-          );
-        },
-      },
-    );
-  };
+  /**
+   * Fetch orchestration for every surface that renders labels (sidebar, view-all
+   * page, settings). The registry is read through `agentLabelSelectors`, not
+   * from this return value; the layout effect inside `useSync` drops the
+   * previous scope's registry before paint on a workspace switch.
+   */
+  useFetchAgentLabels = (isLogin: boolean | undefined): ReplicaSyncResult =>
+    this.#labels.useSync(LIST_PARAMS, { enabled: isLogin === true });
 }
 
 export type LabelAction = Pick<LabelActionImpl, keyof LabelActionImpl>;

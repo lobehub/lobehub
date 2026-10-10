@@ -12,8 +12,10 @@ import { userProfileSelectors } from '@/store/user/selectors';
 
 import { useAgentMeta } from '../../hooks';
 import ContentBlock from '../AssistantGroup/components/ContentBlock';
+import Group from '../AssistantGroup/components/Group';
 import UserMessageContent from '../User/components/MessageContent';
 import { getBotSender, resolveSenderIdentity } from '../User/resolveSenderIdentity';
+import { resolveCompressedMessageView } from './resolveCompressedMessageView';
 
 interface CompressedMessageItemProps {
   message: UIChatMessage;
@@ -28,10 +30,11 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   const userAvatar = useUserAvatar();
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const agentAvatar = useAgentMeta(message.agentId);
-  const { role, children, sender } = message;
+  const { children, sender } = message;
+  const view = resolveCompressedMessageView(message);
 
   // Render user message
-  if (role === 'user') {
+  if (view === 'user') {
     // A shared (workspace) topic's compressed history may hold messages from
     // other members — render the sender's identity, not the viewer's.
     const { avatar, title } = resolveSenderIdentity({
@@ -52,7 +55,7 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
   }
 
   // Render assistant message (standalone without tools)
-  if (role === 'assistant') {
+  if (view === 'assistant-content') {
     return (
       <Flexbox horizontal gap={8} paddingBlock={4}>
         <Avatar {...agentAvatar} name={agentDisplayName(agentAvatar)} size={28} />
@@ -68,15 +71,26 @@ const CompressedMessageItem = memo<CompressedMessageItemProps>(({ message }) => 
     );
   }
 
-  // Render assistantGroup (assistant message with tool calls)
-  if (role === 'assistantGroup' && children) {
+  // Render a turn that used tools through the same chain renderer as the live
+  // conversation, so its process (reasoning + tool calls + intermediate prose)
+  // folds under the same turn-process header ("共运行 {n} 步") instead of
+  // expanding every step.
+  if (view === 'assistant-turn-chain') {
     return (
       <Flexbox horizontal gap={8} paddingBlock={4}>
         <Avatar {...agentAvatar} name={agentDisplayName(agentAvatar)} size={28} />
-        <Flexbox flex={1} gap={8} style={{ overflow: 'hidden' }}>
-          {children.map((block) => (
-            <ContentBlock {...block} disableEditing assistantId={message.id} key={block.id} />
-          ))}
+        <Flexbox flex={1} style={{ overflow: 'hidden' }}>
+          <Group
+            disableEditing
+            enableProcessFold
+            blocks={children ?? []}
+            id={message.id}
+            // Compressed history is never the conversation's live tail, so it
+            // must not wait for the latest turn's "final answer exists" guard.
+            isLatestItem={false}
+            // Only feeds the (disabled) edit affordance.
+            messageIndex={0}
+          />
         </Flexbox>
       </Flexbox>
     );

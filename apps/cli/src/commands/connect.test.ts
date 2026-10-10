@@ -156,6 +156,7 @@ describe('connect command', () => {
         if (!existing.has(listener)) process.removeListener(signal, listener);
       }
     }
+    exitSpy.mockRestore();
     vi.restoreAllMocks();
     vi.clearAllMocks();
   });
@@ -211,6 +212,31 @@ describe('connect command', () => {
     const samples = [{ observedAt: 1 }] as any;
     await metricsSampler.options.upload(samples);
     expect(clientReportMetrics).toHaveBeenCalledWith(samples);
+  });
+
+  it('records the request on arrival and retains its timestamp across connection updates', async () => {
+    const pending = Promise.withResolvers<{ content: string; success: boolean }>();
+    vi.mocked(executeToolCall).mockImplementationOnce(() => pending.promise);
+    await createProgram().parseAsync(['node', 'test', 'connect', '--daemon-child']);
+
+    const running = clientEventHandlers.tool_call_request?.({
+      requestId: 'req-1',
+      toolCall: { apiName: 'readLocalFile', arguments: '{}', identifier: 'test' },
+      type: 'tool_call_request',
+    });
+    const received = vi.mocked(writeStatus).mock.lastCall?.[0];
+    expect(received).toEqual(
+      expect.objectContaining({ deviceId: 'mock-device-id', lastRequestAt: expect.any(String) }),
+    );
+    clientEventHandlers.connected?.();
+    expect(vi.mocked(writeStatus).mock.lastCall?.[0]).toEqual(
+      expect.objectContaining({
+        connectionStatus: 'connected',
+        lastRequestAt: received?.lastRequestAt,
+      }),
+    );
+    pending.resolve({ content: 'ok', success: true });
+    await running;
   });
 
   it('should connect to gateway', async () => {

@@ -11,6 +11,7 @@ import { canUseWorkspaceApiKeys } from '@/business/server/workspaceApiKey';
 import { getServerDB } from '@/database/core/db-adaptor';
 import { ApiKeyModel } from '@/database/models/apiKey';
 import { hasActiveWorkspaceMembership } from '@/database/models/workspace';
+import { normalizeWorkspaceId } from '@/database/utils/workspace';
 import { authEnv, LOBE_CHAT_OIDC_AUTH_HEADER } from '@/envs/auth';
 import { extractTraceContext } from '@/libs/observability/traceparent';
 import { assertOIDCUserActive, isOIDCUserInactiveError } from '@/libs/oidc-provider/access-control';
@@ -156,7 +157,12 @@ export const createContextInner = async (params?: {
     traceContext: params?.traceContext,
     userAgent: params?.userAgent,
     userId: params?.userId,
-    workspaceId: params?.workspaceId,
+    // A blank scope is not a workspace. Callers that "resolve" one (an empty
+    // header, a blank env var, a `?? ''` on the way through) would otherwise
+    // hand `''` to every model, and each write would fail on the `workspaces`
+    // foreign key instead of landing in personal data. `undefined` is how the
+    // rest of the context already spells "no workspace".
+    workspaceId: normalizeWorkspaceId(params?.workspaceId) ?? undefined,
   };
 };
 

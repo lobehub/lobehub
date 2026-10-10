@@ -7,6 +7,42 @@ const dataFor = (events: HeterogeneousAgentEvent[], type: HeterogeneousAgentEven
   events.filter((event) => event.type === type).map((event) => event.data);
 
 describe('DevinAcpAdapter', () => {
+  it.each(['completed', 'failed', 'running', 'pending'])(
+    'preserves empty read content only after successful completion (%s)',
+    (status) => {
+      const adapter = new DevinAcpAdapter();
+      adapter.adapt({
+        name: 'read',
+        rawInput: { file_path: '/repo/empty.txt' },
+        sessionUpdate: 'tool_call',
+        toolCallId: 'read-empty',
+      });
+
+      const events = adapter.adapt({
+        content: [{ content: { text: '', type: 'text' }, type: 'content' }],
+        sessionUpdate: 'tool_call_update',
+        status,
+        toolCallId: 'read-empty',
+      });
+      const results = dataFor(events, 'tool_result');
+
+      if (status === 'completed') {
+        expect(results).toEqual([
+          {
+            content: '',
+            isError: false,
+            pluginState: { content: '' },
+            toolCallId: 'read-empty',
+          },
+        ]);
+      } else if (status === 'failed') {
+        expect(results).toEqual([{ content: '', isError: true, toolCallId: 'read-empty' }]);
+      } else {
+        expect(results).toEqual([]);
+      }
+    },
+  );
+
   it('emits step_complete with turn_metadata from session/prompt result usage', () => {
     const adapter = new DevinAcpAdapter();
 

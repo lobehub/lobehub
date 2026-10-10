@@ -1,5 +1,6 @@
 {
   "actions.confirmRemoveThread": "即將刪除該子話題，刪除後將無法恢復，請謹慎操作。",
   "newPortalThread.includeContext": "包含主題上下文",
-  "newPortalThread.title": "開啟新的子主題"
+  "newPortalThread.title": "開啟新的子主題",
+  "portal.openInMain": "在主要對話中開啟"
 }

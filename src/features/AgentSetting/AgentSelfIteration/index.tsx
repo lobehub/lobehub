@@ -23,7 +23,7 @@ const AgentSelfIteration = memo(() => {
     onSubmit: (values) => {
       if (disabled) return;
 
-      updateConfig(values);
+      updateConfig({ selfIteration: values.selfIteration });
     },
   });
 

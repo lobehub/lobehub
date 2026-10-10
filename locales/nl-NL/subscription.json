@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Verbind WeChat na een upgrade",
   "plansModal.modelAccess.desc": "Dit model is beschikbaar in betaalde abonnementen. Upgrade om toegang te krijgen tot de volledige modelreeks.",
   "plansModal.modelAccess.title": "Ontgrendel alle modellen",
+  "plansModal.persistentSandbox.desc": "Bestanden die je agent schrijft in de cloud-sandbox worden verwijderd wanneer de sessie eindigt. Upgrade om een permanente werkmap te behouden die sessies overleeft en gedeeld wordt tussen je onderwerpen.",
+  "plansModal.persistentSandbox.title": "Bewaar je sandbox-bestanden",
   "qa.desc": "Staat je vraag er niet bij? Bekijk de <1>Productdocumentatie</1> voor meer antwoorden of neem contact met ons op.",
   "qa.detail": "Bekijk Details",
   "qa.list.credit.a": "Rekenkracht is een maatstaf die {{cloud}} gebruikt om AI-modelgebruik te meten. Verschillende modellen verbruiken verschillende hoeveelheden credits.",
@@ -631,8 +633,16 @@
   "switchPlan": "Wissel Abonnement",
   "switchToMonthly.desc": "Na overschakeling wordt maandelijkse facturatie actief na afloop van het huidige jaarabonnement.",
   "switchToMonthly.title": "Overschakelen naar Maandelijkse Facturatie",
+  "switchToYearly.after": "Na overschakelen",
+  "switchToYearly.billedYearly": "{{price}} jaarlijks gefactureerd",
+  "switchToYearly.credit": "Krediet voor deze maand",
   "switchToYearly.desc": "Na betaling van het verschil wordt jaarlijkse facturatie direct actief. Startdatum blijft behouden.",
+  "switchToYearly.dueToday": "Vandaag verschuldigd",
+  "switchToYearly.now": "Nu",
+  "switchToYearly.period": "Factureringsperiode",
+  "switchToYearly.price": "Prijs",
   "switchToYearly.title": "Overschakelen naar Jaarlijkse Facturatie",
+  "switchToYearly.yearlyPlan": "Jaarlijks plan",
   "tab.billing": "Facturatiebeheer",
   "tab.budget": "Budget",
   "tab.credits": "Kredietbeheer",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Gebruiksoverzicht",
   "usage.remaining": "Resterend",
   "usage.storage.embeddings.used": "Vectoropslag",
-  "usage.storage.file.used": "Bestandsgebruik"
+  "usage.storage.file.used": "Bestandsgebruik",
+  "usage.storage.sandboxStorage.used": "Sandbox-opslag"
 }

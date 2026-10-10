@@ -212,6 +212,10 @@ export class CursorAcpSession extends AcpAgentSession<
     await this.emitEvents(await this.pipeline.flush());
   }
 
+  protected async onRunCancelled(): Promise<void> {
+    await this.pushToPipeline({ stopReason: 'cancelled', type: 'cursor_prompt_completed' });
+  }
+
   protected async handleAgentMessage(message: AcpRpcMessage): Promise<void> {
     if (!this.acceptUpdates || message.method !== 'session/update') return;
     const params = isRecord(message.params) ? message.params : undefined;

@@ -4,7 +4,7 @@ services:
   postgresql:
     image: paradedb/paradedb:latest-pg17
     ports:
-      - '${EVAL_POSTGRES_PORT:-15433}:5432'
+      - '127.0.0.1:${EVAL_POSTGRES_PORT:-15433}:5432'
     volumes:
       - 'postgresql-data:/var/lib/postgresql/data'
     command: ['postgres', '-c', 'shared_preload_libraries=pg_search']
@@ -24,7 +24,7 @@ services:
   redis:
     image: redis:7-alpine
     ports:
-      - '${EVAL_REDIS_PORT:-6380}:6379'
+      - '127.0.0.1:${EVAL_REDIS_PORT:-6380}:6379'
     command: ['redis-server', '--save', '60', '1000', '--appendonly', 'yes']
     volumes:
       - 'redis-data:/data'
@@ -40,8 +40,7 @@ services:
   rustfs:
     image: rustfs/rustfs:latest
     ports:
-      - '${EVAL_RUSTFS_PORT:-9100}:9000'
-      - '${EVAL_RUSTFS_ADMIN_PORT:-9101}:9001'
+      - '127.0.0.1:${EVAL_RUSTFS_PORT:-9100}:9000'
     environment:
       RUSTFS_ACCESS_KEY: ${EVAL_RUSTFS_ACCESS_KEY:-admin}
       RUSTFS_CONSOLE_ENABLE: 'true'
@@ -88,6 +87,7 @@ services:
 
   # Host networking lets local QStash call an APP_URL on localhost without a tunnel.
   # This eval stack targets the same Linux environment used by Harbor task containers.
+  # qstash dev has no bind-address option, so host firewall isolation remains required.
   qstash:
     image: public.ecr.aws/upstash/qstash:2.37.18
     network_mode: host
@@ -108,8 +108,10 @@ services:
       rustfs-init:
         condition: service_completed_successfully
     ports:
-      - '${EVAL_DEVICE_GATEWAY_PORT:-8787}:8787'
-      - '${EVAL_AGENT_GATEWAY_PORT:-8788}:8788'
+      - '127.0.0.1:${EVAL_DEVICE_GATEWAY_PORT:-8787}:8787'
+      - '${EVAL_DOCKER_BRIDGE_ADDRESS:-172.17.0.1}:${EVAL_DEVICE_GATEWAY_PORT:-8787}:8787'
+      - '127.0.0.1:${EVAL_AGENT_GATEWAY_PORT:-8788}:8788'
+      - '${EVAL_DOCKER_BRIDGE_ADDRESS:-172.17.0.1}:${EVAL_AGENT_GATEWAY_PORT:-8788}:8788'
     environment:
       AGENT_PORT: 8788
       DEVICE_PORT: 8787

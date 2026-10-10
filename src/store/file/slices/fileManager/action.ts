@@ -7,12 +7,18 @@ import {
 import { toast, type ToastInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 import pMap from 'p-map';
-import { type SWRResponse } from 'swr';
 
 import { FILE_UPLOAD_BLACKLIST, MAX_UPLOAD_FILE_COUNT } from '@/const/file';
 import { isChunkingSupported } from '@/libs/document-loaders/loaderType';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { fileKeys } from '@/libs/swr/keys';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  type ReplicaEntityAdapter,
+  type ReplicaLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { documentService } from '@/services/document';
 import { FileService, fileService } from '@/services/file';
 import { ragService } from '@/services/rag';
@@ -21,22 +27,93 @@ import { uploadFileListReducer } from '@/store/file/reducers/uploadFileList';
 import { type StoreSetter } from '@/store/types';
 import { type FileListItem, type QueryFileListParams } from '@/types/files';
 import { type ResourceItem } from '@/types/resource';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 import { unzipFile } from '@/utils/unzipFile';
 
-import { type FileStore } from '../../store';
+import { type FileStore, useFileStore } from '../../store';
+import {
+  DEFAULT_FILE_LIST_PAGE_SIZE,
+  FILE_LIST_KEY,
+  fileDetailResource,
+  type FileDetailValue,
+  type FileListData,
+  type FileListParams,
+  fileListResource,
+  folderBreadcrumbResource,
+  type FolderCrumb,
+} from './projection';
 import { fileManagerSelectors } from './selectors';
 
 const serverFileService = new FileService();
 
-export interface FolderCrumb {
-  id: string;
-  name: string;
-  slug: string;
-}
-
 interface RefreshFileListOptions {
   revalidateResources?: boolean;
 }
+
+/**
+ * Result of {@link FileManageActionImpl.useFetchKnowledgeItem}.
+ *
+ * `data` is the replica view, read from the store (not from the hook's return)
+ * so a reload or a return to the route paints the persisted projection first and
+ * the network only confirms it: `undefined` = nothing loaded for this id yet,
+ * `null` on the server is mapped to `undefined`.
+ */
+export interface UseFetchKnowledgeItemResult {
+  data: FileListItem | undefined;
+  error: unknown;
+  /** SWR's `isLoading` semantics: no value yet and no error. */
+  isLoading: boolean;
+  isValidating: boolean;
+  /** Re-run the network sync for this item. */
+  mutate: () => Promise<unknown>;
+}
+
+/** Result of {@link FileManageActionImpl.useFetchFolderBreadcrumb}. */
+export interface UseFetchFolderBreadcrumbResult {
+  /** The ancestor chain; `[]` while nothing is loaded or the folder is at the root. */
+  data: FolderCrumb[];
+  error: unknown;
+  isLoading: boolean;
+  isValidating: boolean;
+  mutate: () => Promise<unknown>;
+}
+
+const EMPTY_CRUMBS: FolderCrumb[] = [];
+
+/**
+ * The knowledge-item list lives in a flat array (`fileList`) with its paging
+ * bookkeeping in a sibling field (`fileListMeta`), so every reader of the list
+ * keeps the shape it already had while the replica owns hydration, paging and
+ * optimistic overlays.
+ */
+const fileListLens: ReplicaLens<FileStore, FileListData> = {
+  clear: () => ({ fileList: [], fileListMeta: undefined }),
+  get: (state) => {
+    if (!state.fileListMeta) return undefined;
+    return { ...state.fileListMeta, items: state.fileList };
+  },
+  set: (_state, _key, data) => {
+    if (data === undefined) return { fileList: [], fileListMeta: undefined };
+    const { items, ...meta } = data;
+    return { fileList: items, fileListMeta: meta };
+  },
+};
+
+/**
+ * How one knowledge item sits in `fileDetailMap[id]`. A "not found" answer
+ * (`file: null`) is a page state, not a row: deleting the entity drops the whole
+ * value, and patching it maps the row it wraps.
+ */
+const fileDetailEntity: ReplicaEntityAdapter<FileDetailValue, FileListItem> = {
+  has: (data, id) => !!data.file && data.file.id === id,
+  map: (data, _id, fn) => {
+    if (!data.file) return data;
+    const next = fn(data.file);
+    if (next === undefined) return undefined;
+    if (next === data.file) return data;
+    return { ...data, file: next };
+  },
+};
 
 type Setter = StoreSetter<FileStore>;
 export const createFileManageSlice = (set: Setter, get: () => FileStore, _api?: unknown) =>
@@ -44,12 +121,58 @@ export const createFileManageSlice = (set: Setter, get: () => FileStore, _api?: 
 
 export class FileManageActionImpl {
   readonly #get: () => FileStore;
+  /**
+   * The knowledge-item list is a `@lobechat/replica` paged resource: the
+   * persisted head page paints before the network answers and "load more"
+   * appends further pages through the engine instead of a hand-rolled offset.
+   */
+  readonly #fileList;
+  /**
+   * By-id knowledge-item detail. Linked with the list below, so a rename or a
+   * move updates every copy of the same file the client holds.
+   */
+  readonly #fileDetail;
+  readonly #folderBreadcrumb;
+  /** The same file lives in the list and in every loaded detail entry. */
+  readonly #fileEntity;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => FileStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+
+    this.#fileList = createReplicaSlice(fileListResource, {
+      actionPrefix: 'fileList',
+      fetcher: (params, cursor) => this.#fetchFileListPage(params, cursor),
+      get,
+      set,
+      stateKey: 'fileListReplica',
+      view: fileListLens,
+    });
+    this.#fileDetail = createReplicaSlice(fileDetailResource, {
+      actionPrefix: 'fileDetail',
+      entity: fileDetailEntity,
+      fetcher: async (id) => ({ file: await this.#fetchFileDetail(id) }),
+      get,
+      set,
+      stateKey: 'fileDetailReplica',
+      // A "not found" answer is a page state, not a row: the view keeps it so
+      // consumers stop rendering, but the prior persisted projection must go.
+      // `null` drops any stored row, so a reload cannot paint a file the server
+      // has already confirmed missing.
+      toPersisted: (data) => (data.file ? data : null),
+      view: recordLens<FileStore, FileDetailValue>('fileDetailMap'),
+    });
+    this.#folderBreadcrumb = createReplicaSlice(folderBreadcrumbResource, {
+      actionPrefix: 'folderBreadcrumb',
+      fetcher: (slug) => serverFileService.getFolderBreadcrumb(slug),
+      get,
+      set,
+      stateKey: 'folderBreadcrumbReplica',
+      view: recordLens<FileStore, FolderCrumb[]>('folderBreadcrumbMap'),
+    });
+    this.#fileEntity = linkReplicaEntity<FileListItem>([this.#fileList, this.#fileDetail]);
   }
 
   #resolveChunkTargetId = async (id: string): Promise<string> => {
@@ -69,6 +192,52 @@ export class FileManageActionImpl {
 
   #resolveChunkTargetIds = async (ids: string[]): Promise<string[]> =>
     Promise.all(ids.map((id) => this.#resolveChunkTargetId(id)));
+
+  /**
+   * One knowledge item, with the server's "not found" mapped to a confirmed
+   * absence (`{ file: null }`) instead of a rejection. `getKnowledgeItem` throws
+   * `NOT_FOUND` for a deleted or inaccessible `file_*` id, which would otherwise
+   * leave the hydrated projection in place and surface only a revalidation
+   * error — consumers ignore that error and keep rendering the stale file.
+   */
+  #fetchFileDetail = async (id: string): Promise<FileListItem | null> => {
+    try {
+      return (await serverFileService.getKnowledgeItem(id)) ?? null;
+    } catch (error) {
+      if (isTrpcErrorCode(error, 'NOT_FOUND')) return null;
+      throw error;
+    }
+  };
+
+  /**
+   * One page of the knowledge-item list; `cursor` is the raw window start
+   * (`undefined` = head page), which the next request continues from.
+   */
+  #fetchFileListPage = async (
+    params: FileListParams,
+    cursor?: number,
+  ): Promise<ReplicaPageResult<FileListItem, number>> => {
+    const { pageSize, ...filters } = params;
+    const offset = cursor ?? 0;
+    const response = await serverFileService.getKnowledgeItems({
+      ...filters,
+      includeContentPreview: filters.includeContentPreview ?? false,
+      limit: pageSize,
+      offset,
+    });
+
+    return {
+      items: response.items,
+      // The endpoint pages by row offset, reports `hasMore` rather than a total,
+      // and drops rows *after* paging (Inbox folders), so `items.length` counts
+      // visible rows while the next window starts at a raw offset. Carry the raw
+      // offset forward — the whole server window was consumed, filtered or not —
+      // and let exhaustion be exactly the server's `hasMore`. Anything derived
+      // from `items.length` would both stall on a filtered page and keep
+      // "load more" alive past the end of the list.
+      nextCursor: response.hasMore ? offset + pageSize : null,
+    };
+  };
 
   #buildOptimisticUploadResource = (
     file: File,
@@ -234,59 +403,22 @@ export class FileManageActionImpl {
     this.#get().toggleEmbeddingIds(chunkTargetIds, false);
   };
 
+  /**
+   * Append the next page of the knowledge-item list. The engine reads the loaded
+   * head params and de-dupes by id, so a shifted offset never repeats a row.
+   */
   loadMoreKnowledgeItems = async (): Promise<void> => {
-    const { queryListParams, fileList, fileListOffset, fileListHasMore } = this.#get();
-
-    // Don't load if there's no more data or no params
-    if (!fileListHasMore || !queryListParams) return;
-
-    try {
-      const response = await serverFileService.getKnowledgeItems({
-        ...queryListParams,
-        includeContentPreview: queryListParams.includeContentPreview ?? false,
-        limit: queryListParams.limit ?? 50,
-        offset: fileListOffset,
-      });
-
-      // Deduplicate items by ID to prevent duplicate items at page boundaries
-      const existingIds = new Set(fileList.map((item) => item.id));
-      const newItems = response.items.filter((item) => !existingIds.has(item.id));
-      const updatedFileList = [...fileList, ...newItems];
-
-      // Update Zustand store
-      this.#set({
-        fileList: updatedFileList,
-        fileListHasMore: response.hasMore,
-        fileListOffset: fileListOffset + newItems.length,
-      });
-
-      // Update SWR cache so the component sees the new items
-      await mutate(fileKeys.knowledgeItems(queryListParams), updatedFileList, {
-        revalidate: false,
-      });
-    } catch (error) {
-      console.error('Failed to load more knowledge items:', error);
-    }
+    await this.#fileList.loadMore(FILE_LIST_KEY);
   };
 
   moveFileToFolder = async (fileId: string, parentId: string | null): Promise<void> => {
-    // Optimistically update all file list caches
-    await mutate(
-      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
-      async (currentData: FileListItem[] | undefined) => {
-        if (!currentData) return currentData;
-        // Update the moved file's parentId in the cache
-        return currentData.map((item) => (item.id === fileId ? { ...item, parentId } : item));
-      },
-      {
-        revalidate: false, // Don't revalidate yet
-      },
+    // Move optimistically in every loaded list / detail, then confirm from the server.
+    await this.#fileEntity.optimistic(
+      fileId,
+      (item) => ({ ...item, parentId }),
+      () => fileService.updateFile(fileId, { parentId }),
     );
 
-    // Perform the actual update
-    await fileService.updateFile(fileId, { parentId });
-
-    // Revalidate to get fresh data from server
     await this.#get().refreshFileList();
   };
 
@@ -456,22 +588,8 @@ export class FileManageActionImpl {
     this.#get().toggleParsingIds([chunkTargetId], false);
   };
 
-  #refreshKnowledgeListCaches = async (): Promise<void> => {
-    // Invalidate all queries under the file:knowledgeItems namespace
-    // This ensures all file lists (explorer, tree, etc.) are refreshed
-    // Note: We don't pass data as undefined to avoid clearing the cache,
-    // which would cause isLoading to become true and show skeleton screen
-    await mutate(
-      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
-      async (currentData) => currentData,
-      {
-        revalidate: true,
-      },
-    );
-  };
-
   refreshFileList = async (options?: RefreshFileListOptions): Promise<void> => {
-    await this.#refreshKnowledgeListCaches();
+    await this.#fileList.revalidate();
 
     if (options?.revalidateResources === false) return;
 
@@ -481,44 +599,49 @@ export class FileManageActionImpl {
 
   publishFileToWorkspace = async (id: string): Promise<void> => {
     await fileService.publishFileToWorkspace(id);
+    this.#fileEntity.update(id, (item) => ({ ...item, visibility: 'public' }));
     await this.#get().refreshFileList();
   };
 
   setFileVisibility = async (id: string, visibility: 'private' | 'public'): Promise<void> => {
     await fileService.setFileVisibility(id, visibility);
+    this.#fileEntity.update(id, (item) => ({ ...item, visibility }));
     await this.#get().refreshFileList();
   };
 
   removeFileItem = async (id: string): Promise<void> => {
     await fileService.removeFile(id);
+    // Drop it from every loaded list / detail at once, then confirm from the server.
+    this.#fileEntity.remove(id);
     await this.#get().refreshFileList();
   };
 
   removeFiles = async (ids: string[]): Promise<void> => {
     await fileService.removeFiles(ids);
+    for (const id of ids) this.#fileEntity.remove(id);
     await this.#get().refreshFileList();
   };
 
+  /**
+   * Drop cached knowledge items without calling the server, for a deletion that
+   * was already confirmed elsewhere (the resource explorer has its own delete
+   * paths). Both of this slice's replicas persist by id, so leaving a deleted
+   * row behind lets a later direct visit repaint it until a NOT_FOUND answer
+   * arrives — and offline that answer never comes. Evicts the list row and every
+   * loaded detail together, exactly like a local delete.
+   */
+  forgetKnowledgeItems = (ids: string[]): void => {
+    for (const id of ids) this.#fileEntity.remove(id);
+  };
+
   renameFolder = async (folderId: string, newName: string): Promise<void> => {
-    // Optimistically update all file list caches
-    await mutate(
-      (key) => Array.isArray(key) && key[0] === fileKeys.knowledgeItems.root,
-      async (currentData: FileListItem[] | undefined) => {
-        if (!currentData) return currentData;
-        // Update the folder's name in the cache
-        return currentData.map((item) =>
-          item.id === folderId ? { ...item, name: newName } : item,
-        );
-      },
-      {
-        revalidate: false, // Don't revalidate yet
-      },
+    // Rename optimistically in every loaded list / detail, then confirm from the server.
+    await this.#fileEntity.optimistic(
+      folderId,
+      (item) => ({ ...item, name: newName }),
+      () => documentService.updateDocument({ id: folderId, title: newName }),
     );
 
-    // Perform the actual update
-    await documentService.updateDocument({ id: folderId, title: newName });
-
-    // Revalidate to get fresh data from server
     await this.#get().refreshFileList();
   };
 
@@ -752,45 +875,57 @@ export class FileManageActionImpl {
     }
   };
 
-  useFetchFolderBreadcrumb = (slug?: string | null): SWRResponse<FolderCrumb[]> => {
-    return useClientDataSWR<FolderCrumb[]>(
-      !slug ? null : ['useFetchFolderBreadcrumb', slug],
-      async () => {
-        const response = await serverFileService.getFolderBreadcrumb(slug!);
-        return response;
-      },
-    );
+  /**
+   * Fetch orchestration for a folder's ancestor chain. Hydrates the persisted
+   * projection, then revalidates; the chain lands in `folderBreadcrumbMap` and
+   * this hook returns it for the breadcrumb surfaces.
+   */
+  useFetchFolderBreadcrumb = (slug?: string | null): UseFetchFolderBreadcrumbResult => {
+    const entry = useFileStore((s) => (slug ? s.folderBreadcrumbMap[slug] : undefined));
+    const sync = this.#folderBreadcrumb.useSync(slug ?? null);
+
+    return {
+      data: entry ?? EMPTY_CRUMBS,
+      error: sync.error,
+      isLoading: Boolean(slug) && entry === undefined && sync.error == null,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    };
   };
 
-  useFetchKnowledgeItem = (id?: string): SWRResponse<FileListItem | undefined> => {
-    return useClientDataSWR<FileListItem | undefined>(
-      !id ? null : ['useFetchKnowledgeItem', id],
-      async () => {
-        const response = await serverFileService.getKnowledgeItem(id!);
-        return response ?? undefined;
-      },
-    );
+  /**
+   * Sync one knowledge item through its replica. The view is the source of
+   * truth, so a reload or a return to the route paints from the persisted
+   * projection on the first frame and the network only confirms it.
+   *
+   * Keeps SWR's `{ data, error, isLoading, mutate }` shape for its callers while
+   * reading `data` from the store view — a "not found" answer reads as `undefined`.
+   */
+  useFetchKnowledgeItem = (id?: string): UseFetchKnowledgeItemResult => {
+    const entry = useFileStore((s) => (id ? s.fileDetailMap[id] : undefined));
+    const sync = this.#fileDetail.useSync(id ?? null);
+
+    return {
+      data: entry?.file ?? undefined,
+      error: sync.error,
+      isLoading: Boolean(id) && entry === undefined && sync.error == null,
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    };
   };
 
-  useFetchKnowledgeItems = (params: QueryFileListParams): SWRResponse<FileListItem[]> => {
-    return useClientDataSWR<FileListItem[]>(fileKeys.knowledgeItems(params), async () => {
-      const response = await serverFileService.getKnowledgeItems({
-        ...params,
-        includeContentPreview: params.includeContentPreview ?? false,
-        limit: params.limit ?? 50,
-        offset: 0,
-      });
-
-      // Update store immediately with response data (no duplicate fetch!)
-      this.#set({
-        fileList: response.items,
-        fileListHasMore: response.hasMore,
-        fileListOffset: response.items.length,
-        queryListParams: params,
-      });
-
-      return response.items;
-    });
+  /**
+   * Fetch orchestration for the knowledge-item list. Hydrates the persisted head
+   * page, then revalidates; the rows land in `fileList` — read them from the
+   * store, never from this hook.
+   */
+  useFetchKnowledgeItems = (params: QueryFileListParams): ReplicaSyncResult => {
+    const { limit, offset, ...filters } = params;
+    void offset;
+    return this.#fileList.useSync({
+      ...filters,
+      pageSize: limit ?? DEFAULT_FILE_LIST_PAGE_SIZE,
+    } satisfies FileListParams);
   };
 }
 

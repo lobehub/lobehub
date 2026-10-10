@@ -6,6 +6,7 @@ import pc from 'picocolors';
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
 import { log } from '../utils/logger';
+import { registerTopicExportCommand } from './topic/export';
 import { registerTopicViewCommand } from './topic/view';
 
 export function registerTopicCommand(program: Command) {
@@ -334,5 +335,6 @@ export function registerTopicCommand(program: Command) {
       printTable(rows, ['ID', 'TITLE', 'UPDATED']);
     });
 
+  registerTopicExportCommand(topic);
   registerTopicViewCommand(topic);
 }

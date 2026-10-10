@@ -1,8 +1,8 @@
 'use client';
 
-import { type ReactNode, useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useLayoutEffect, useState } from 'react';
 
-import { isSkeletonHandover } from './skeletonHandover';
+import { isSkeletonHandover, retainSkeleton } from './skeletonHandover';
 
 /**
  * Matches `BOOT_SHELL_DELAY`: below this, a placeholder is on screen for less
@@ -16,12 +16,7 @@ interface DelayedFallbackProps {
   delay?: number;
 }
 
-/**
- * Holds a page-level skeleton back until the wait is long enough to be worth
- * showing. A segment that resolves faster renders nothing at all — the
- * previous screen simply stays until the next one paints.
- */
-const DelayedFallback = ({ children, delay = FALLBACK_DELAY }: DelayedFallbackProps) => {
+export const useDelayedVisible = (delay = FALLBACK_DELAY) => {
   const [elapsed, setElapsed] = useState(() => isSkeletonHandover());
 
   useEffect(() => {
@@ -30,8 +25,21 @@ const DelayedFallback = ({ children, delay = FALLBACK_DELAY }: DelayedFallbackPr
     return () => clearTimeout(timer);
   }, [delay, elapsed]);
 
-  return elapsed ? children : null;
+  useLayoutEffect(() => {
+    if (!elapsed) return;
+    return retainSkeleton();
+  }, [elapsed]);
+
+  return elapsed;
 };
+
+/**
+ * Holds a page-level skeleton back until the wait is long enough to be worth
+ * showing. A segment that resolves faster renders nothing at all — the
+ * previous screen simply stays until the next one paints.
+ */
+const DelayedFallback = ({ children, delay }: DelayedFallbackProps) =>
+  useDelayedVisible(delay) ? children : null;
 
 /** Wraps a route fallback element so it inherits the same 200ms gate. */
 export const delayed = (fallback: ReactNode) => <DelayedFallback>{fallback}</DelayedFallback>;

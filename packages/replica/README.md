@@ -47,6 +47,8 @@ slice.loadMore(key);
 slice.optimistic(key, apply, serverCall);
 ```
 
+A persisted read is asynchronous, so a list hydrated only by `useSync` paints its loading state for a few frames on a cold start. When that list must paint without a skeleton, seed it from the route loader before the route commits: `slice.ensureScope(scope)` + `slice.hydrate(params, scope)`, bounded by `settleWithin(…, PRE_PAINT_HYDRATE_TIMEOUT)` from `@/libs/replica/prePaint`. A later `useSync` hydrate is a no-op once the slot is filled.
+
 Inside LobeHub, use `@/libs/replica`. It presets the cache scope, IndexedDB / localStorage storage and the app's SWR driver.
 
 ## Transcripts and other irregular pages

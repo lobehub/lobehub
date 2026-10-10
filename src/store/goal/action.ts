@@ -1,25 +1,40 @@
 import { GOAL_ACCEPTANCE_TASK_TITLE, type GoalStatus } from '@lobechat/const/goal';
-import type { GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
+import type { GoalGraphSnapshot, GoalMetricCriterion, GoalTickResult } from '@lobechat/types';
 
-import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { goalKeys, taskKeys } from '@/libs/swr/keys';
-import { goalService } from '@/services/goal';
-import { metricService } from '@/services/metric';
+import {
+  createReplicaSlice,
+  linkReplicaEntity,
+  recordLens,
+  revalidateReplica,
+} from '@/libs/replica';
+import { mutate, useClientDataSWR } from '@/libs/swr';
+import { goalKeys } from '@/libs/swr/keys';
+import { type GoalListItem, goalService } from '@/services/goal';
+import { type MetricSeriesWithPoints, metricService } from '@/services/metric';
 import type { StoreSetter } from '@/store/types';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { goalStatusesForFilter } from './goalListFilter';
+import { useGoalStore } from './index';
 import type { GoalListFilter, GoalState, GoalViewMode } from './initialState';
-
-/** The list page's tabs, in render order. `refreshGoals` revalidates every one. */
-const GOAL_LIST_FILTERS: GoalListFilter[] = ['all', 'review', 'running', 'achieved'];
+import {
+  GOAL_LIST_FILTERS,
+  goalGraphResource,
+  goalListEntity,
+  goalListKey,
+  type GoalListParams,
+  goalListResource,
+  goalListScopeParams,
+  type GoalListValue,
+  goalMetricSeriesResource,
+  homeGoalListResource,
+} from './projection';
 
 /**
- * Cache scope of one tab's list. `all` keeps the scope's own entry — it is the
- * page-level window the project dashboard and the overview metrics read — while
- * a narrow tab gets its own entry, so each tab caches its own server answer.
+ * The goals page reads one wide page and reveals more of it client-side, so the
+ * server read is a single window rather than a paged walk.
  */
-const goalListCacheScope = (scopeId: string, filter: GoalListFilter): string =>
-  filter === 'all' ? `${scopeId}:goals-page` : `${scopeId}:goals-page:${filter}`;
+const GOAL_LIST_FETCH_LIMIT = 100;
 
 /**
  * The home roll-up only ever renders goals that are still open, so it asks for
@@ -85,16 +100,46 @@ const SETTLED_ACCEPTANCE_STATUSES = new Set([
  * reloaded. Keep reading until the acceptance settles; the settled snapshot is
  * the one the page can rest on.
  */
-const goalAcceptanceUnsettled = (graph: {
-  acceptances?: Record<string, { status: string }>;
-  nodes?: { id: string; kind: string; title: string }[];
-}): boolean => {
+const goalAcceptanceUnsettled = (graph: GoalGraphSnapshot): boolean => {
   const terminal = graph.nodes?.find(
     (node) => node.kind === 'task' && node.title === GOAL_ACCEPTANCE_TASK_TITLE,
   );
   const acceptance = terminal ? graph.acceptances?.[terminal.id] : undefined;
   return !!acceptance && !SETTLED_ACCEPTANCE_STATUSES.has(acceptance.status);
 };
+
+/**
+ * Whether an open graph still has a server-side write coming — the poll driver
+ * for the graph snapshot itself.
+ */
+const goalGraphShouldPoll = (graph: GoalGraphSnapshot): boolean =>
+  SERVER_ADVANCING_STATUSES.has(graph.goal.status) ||
+  graph.report?.status === 'running' ||
+  (graph.goal.status === 'achieved' && goalAcceptanceUnsettled(graph));
+
+/**
+ * Whether the *coordinator* is still moving — the poll driver for the north-star
+ * series, which is only re-sampled while the goal is advancing.
+ */
+const goalCoordinatorAdvancing = (graph: GoalGraphSnapshot | undefined): boolean =>
+  !!graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status);
+
+/**
+ * Polling is driven from the store view, not from SWR's function-form
+ * `refreshInterval`: a replica's sync hook is a plain number, and the goal
+ * graph lands in the view after the first response, which re-renders this
+ * subscription and arms the timer.
+ */
+const useGoalGraphAdvancing = (goalId?: string | null): boolean =>
+  useGoalStore((state) => {
+    const graph = goalId ? state.goalGraphById[goalId] : undefined;
+    return graph ? goalGraphShouldPoll(graph) : false;
+  });
+
+const useGoalCoordinatorAdvancing = (goalId?: string | null): boolean =>
+  useGoalStore((state) =>
+    goalCoordinatorAdvancing(goalId ? state.goalGraphById[goalId] : undefined),
+  );
 
 /** A conversation rarely plans more than one goal; this only bounds a runaway topic. */
 const TOPIC_GOAL_FETCH_LIMIT = 20;
@@ -112,12 +157,79 @@ type Setter = StoreSetter<GoalStore>;
 
 export class GoalActionImpl {
   readonly #get: () => GoalStore;
+  readonly #goalGraph;
+  readonly #goalList;
+  /** The list rows wherever they are held: the scope's tabs and the home rail. */
+  readonly #goalListRows;
+  readonly #goalMetricSeries;
+  readonly #homeGoalList;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => GoalStore, _api?: unknown) {
     void _api;
     this.#get = get;
     this.#set = set;
+
+    this.#goalList = createReplicaSlice(goalListResource, {
+      actionPrefix: 'goalList',
+      entity: goalListEntity,
+      fetcher: ({ agentId, filter, projectId }) =>
+        goalService.list({
+          agentId,
+          limit: GOAL_LIST_FETCH_LIMIT,
+          projectId,
+          statuses: goalStatusesForFilter(filter),
+        }),
+      get,
+      set,
+      stateKey: 'goalListReplica',
+      view: recordLens<GoalStore, GoalListValue>('goalListByAgentId'),
+    });
+
+    this.#homeGoalList = createReplicaSlice(homeGoalListResource, {
+      actionPrefix: 'homeGoalList',
+      entity: goalListEntity,
+      fetcher: () =>
+        goalService.list({ limit: HOME_GOAL_FETCH_LIMIT, statuses: HOME_GOAL_STATUSES }),
+      get,
+      set,
+      stateKey: 'homeGoalsReplica',
+      view: recordLens<GoalStore, GoalListValue>('homeGoalsByScope'),
+    });
+
+    // One goal row is rendered by a scope's tabs and by the home rail; a change
+    // to it has to reach every list holding it, loaded or only persisted.
+    this.#goalListRows = linkReplicaEntity<GoalListItem>([this.#goalList, this.#homeGoalList]);
+
+    this.#goalGraph = createReplicaSlice(goalGraphResource, {
+      actionPrefix: 'goalGraph',
+      fetcher: (goalId) => goalService.getGraph(goalId),
+      get,
+      set,
+      stateKey: 'goalGraphReplica',
+      view: recordLens<GoalStore, GoalGraphSnapshot>('goalGraphById'),
+    });
+
+    this.#goalMetricSeries = createReplicaSlice(goalMetricSeriesResource, {
+      actionPrefix: 'goalMetricSeries',
+      // Only the declared keys are fetched — the same goal can accumulate any
+      // number of other sampled series, and none of them can affect this view.
+      // Keys are read at fetch time; the declare path revalidates this cache
+      // key right after refreshing the graph, so a newly declared clause is
+      // fetched against fresh criteria.
+      fetcher: (goalId) =>
+        metricService.listSeriesWithPoints(
+          'goal',
+          goalId,
+          (this.#get().goalGraphById[goalId]?.goal.config?.acceptance?.metrics ?? []).map(
+            (criterion) => criterion.key,
+          ),
+        ),
+      get,
+      set,
+      stateKey: 'goalMetricSeriesReplica',
+      view: recordLens<GoalStore, MetricSeriesWithPoints[]>('goalMetricSeriesById'),
+    });
   }
 
   /**
@@ -132,19 +244,15 @@ export class GoalActionImpl {
     scopeId?: string,
   ): Promise<void> => {
     await goalService.delete(goalId);
-    if (agentId) {
-      const current = this.#get().goalListByAgentId[agentId] ?? [];
-      this.#set(
-        ({ goalListByAgentId }) => ({
-          goalListByAgentId: {
-            ...goalListByAgentId,
-            [agentId]: current.filter(({ goal }) => goal.id !== goalId),
-          },
-        }),
-        false,
-        'deleteGoal/success',
-      );
-    }
+    // Fan out across every list that holds the row — every tab of the scope the
+    // caller was rendering, the home rail, and persisted rows of lists that are
+    // not loaded: a list the user navigated away from must not repaint it.
+    this.#goalListRows.remove(goalId);
+    // The graph and the metric series are their own per-goal replicas: the
+    // deleted id is never fetched again, so a persisted row left behind is an
+    // orphan that only consumes local storage. Drop both with the lists.
+    this.#goalGraph.remove(goalId);
+    this.#goalMetricSeries.remove(goalId);
     const scope = scopeId ?? agentId;
     if (scope) await this.refreshGoals(scope);
   };
@@ -165,9 +273,8 @@ export class GoalActionImpl {
     await Promise.all([
       this.refreshGoalGraph(goalId),
       mutate(goalKeys.pendingForIsland()),
-      mutate(
-        (key) => Array.isArray(key) && (key[0] === 'brief:list' || key[0] === 'task:homeGoals'),
-      ),
+      revalidateReplica(homeGoalListResource),
+      mutate((key) => Array.isArray(key) && key[0] === 'brief:list'),
     ]);
   };
 
@@ -191,7 +298,7 @@ export class GoalActionImpl {
   };
 
   refreshGoalGraph = async (goalId: string): Promise<void> => {
-    await mutate(goalKeys.graph(goalId));
+    await this.#goalGraph.revalidate(goalId);
   };
 
   resumeGoal = async (goalId: string): Promise<void> => {
@@ -257,29 +364,32 @@ export class GoalActionImpl {
       { refreshInterval: PENDING_CLARIFICATIONS_POLL_INTERVAL, revalidateOnFocus: true },
     );
 
-  /** The Goal Graph snapshot behind the process-control surface. */
-  useFetchGoalGraph = (goalId?: string | null) =>
-    useClientDataSWR(goalId ? goalKeys.graph(goalId) : null, () => goalService.getGraph(goalId!), {
-      onSuccess: (graph) => {
-        this.#set(
-          ({ goalGraphById }) => ({ goalGraphById: { ...goalGraphById, [goalId!]: graph } }),
-          false,
-          'useFetchGoalGraph/success',
-        );
+  /**
+   * The Goal Graph snapshot behind the process-control surface. Read it through
+   * `goalSelectors.goalGraph`, never from this hook — the replica owns the
+   * value, the hook only orchestrates the fetch.
+   */
+  useFetchGoalGraph = (goalId?: string | null) => {
+    const shouldPoll = useGoalGraphAdvancing(goalId);
+    // Freshness while a graph is polling is the point; the first frame paints
+    // the persisted snapshot, so nothing has to wait for the network.
+    const sync = this.#goalGraph.useSync(goalId || null, {
+      // A goal deleted by another client answers NOT_FOUND on every read, and a
+      // cached snapshot is enough for the page to keep painting the gone goal —
+      // and, while it still reads as advancing, to keep polling the missing
+      // endpoint. NOT_FOUND is definitive, so drop the goal's cached rows (the
+      // snapshot and its metric series) and let the page settle on its 404; any
+      // transient failure keeps the persisted snapshot on screen.
+      onError: (error) => {
+        if (!goalId || !isTrpcErrorCode(error, 'NOT_FOUND')) return;
+        this.#goalGraph.remove(goalId);
+        this.#goalMetricSeries.remove(goalId);
       },
-      // The wrap-up report is written after the Goal settles, so a finished
-      // Goal keeps polling until its report run ends and the storyline lands.
-      // A Goal that already reads terminal while its own acceptance has not
-      // settled is mid-transition too — the verdict is still coming.
-      refreshInterval: (graph) =>
-        graph &&
-        (SERVER_ADVANCING_STATUSES.has(graph.goal.status) ||
-          graph.report?.status === 'running' ||
-          (graph.goal.status === 'achieved' && goalAcceptanceUnsettled(graph)))
-          ? GOAL_GRAPH_POLL_INTERVAL
-          : 0,
+      refreshInterval: shouldPoll ? GOAL_GRAPH_POLL_INTERVAL : 0,
       revalidateOnFocus: true,
     });
+    return { ...sync, isLoading: sync.isValidating, mutate: sync.revalidate };
+  };
 
   /**
    * Goals created from one conversation. A goal a CLI agent creates through
@@ -301,48 +411,22 @@ export class GoalActionImpl {
     );
 
   /**
-   * North-star data of the goal detail header. Polls on the same cadence logic
-   * as the graph: while the server is advancing, a probe Work or an agent
+   * North-star data of the goal detail header, read through
+   * `goalSelectors.goalMetricSeries`. Polls on the same cadence logic as the
+   * graph: while the server is advancing, a probe Work or an agent
    * `recordObservation` can land a fresh point at any time.
    */
-  useFetchGoalMetricSeries = (goalId?: string | null) =>
-    useClientDataSWR(
-      goalId ? goalKeys.metricSeries(goalId) : null,
-      // Only the declared keys are fetched — the same goal can accumulate any
-      // number of other sampled series, and none of them can affect this view.
-      // Keys are read at fetch time; the declare path revalidates this cache
-      // key right after refreshing the graph, so a newly declared clause is
-      // fetched against fresh criteria.
-      () =>
-        metricService.listSeriesWithPoints(
-          'goal',
-          goalId!,
-          (this.#get().goalGraphById[goalId!]?.goal.config?.acceptance?.metrics ?? []).map(
-            (criterion) => criterion.key,
-          ),
-        ),
-      {
-        onSuccess: (series) => {
-          this.#set(
-            ({ goalMetricSeriesById }) => ({
-              goalMetricSeriesById: { ...goalMetricSeriesById, [goalId!]: series },
-            }),
-            false,
-            'useFetchGoalMetricSeries/success',
-          );
-        },
-        refreshInterval: () => {
-          const graph = this.#get().goalGraphById[goalId!];
-          return graph && SERVER_ADVANCING_STATUSES.has(graph.goal.status)
-            ? GOAL_GRAPH_POLL_INTERVAL
-            : 0;
-        },
-        revalidateOnFocus: true,
-      },
-    );
+  useFetchGoalMetricSeries = (goalId?: string | null) => {
+    const shouldPoll = useGoalCoordinatorAdvancing(goalId);
+    const sync = this.#goalMetricSeries.useSync(goalId || null, {
+      refreshInterval: shouldPoll ? GOAL_GRAPH_POLL_INTERVAL : 0,
+      revalidateOnFocus: true,
+    });
+    return { ...sync, isLoading: sync.isValidating, mutate: sync.revalidate };
+  };
 
   refreshGoalMetricSeries = async (goalId: string): Promise<void> => {
-    await mutate(goalKeys.metricSeries(goalId));
+    await this.#goalMetricSeries.revalidate(goalId);
   };
 
   /** Append one clause to the goal's measured acceptance and refresh both reads. */
@@ -377,16 +461,17 @@ export class GoalActionImpl {
     );
   };
 
+  /** Re-read every tab of one scope's list (a create / delete moves any of them). */
   refreshGoals = async (scopeId: string): Promise<void> => {
     await Promise.all(
       GOAL_LIST_FILTERS.map((filter) =>
-        mutate(taskKeys.sidebarGroups(goalListCacheScope(scopeId, filter))),
+        this.#goalList.revalidate(goalListKey(goalListScopeParams(scopeId, filter))),
       ),
     );
   };
 
   refreshHomeGoals = async (scope: string): Promise<void> => {
-    await mutate(taskKeys.homeGoals(scope));
+    await this.#homeGoalList.revalidate(scope);
   };
 
   setGoalListFilter = (filter: GoalListFilter): void => {
@@ -398,88 +483,47 @@ export class GoalActionImpl {
   };
 
   /**
-   * The goal list page's read, one entry per tab.
+   * The goal list page's read, one entry per tab — read the rows through
+   * `goalSelectors.goalListView` (`all`) or the tab's own entry key.
    *
    * A narrow tab asks the server for its own statuses rather than filtering the
    * `all` page on the client: the read only loads the newest `limit` goals, so a
    * client-side filter would let a busy agent's older matching goal fall past
    * the page and the tab would report itself empty while the goal exists.
    *
-   * The sync wrapper matters here: this list is persisted in the `task:`
-   * IndexedDB tier, and a cache hit never fires `onSuccess` — without `onData`
-   * the store would stay uninitialized on a revisit and the page would flash its
-   * empty state over hydrated data.
+   * The persisted projection is what makes a revisit paint the rows before the
+   * network answers, so the page never flashes its empty state over hydrated
+   * data.
    */
   useFetchGoals = (agentId?: string, projectId?: string, filter: GoalListFilter = 'all') => {
-    const scopeId = projectId ? `project:${projectId}` : agentId;
+    const params: GoalListParams | undefined =
+      agentId || projectId ? { agentId, filter, projectId } : undefined;
+    const key = params ? goalListKey(params) : undefined;
+    const sync = this.#goalList.useSync(params ?? null, { revalidateOnFocus: true });
 
-    return useClientDataSWRWithSync(
-      scopeId ? taskKeys.sidebarGroups(goalListCacheScope(scopeId, filter)) : null,
-      () =>
-        goalService.list({
-          agentId,
-          limit: 100,
-          projectId,
-          statuses: goalStatusesForFilter(filter),
-        }),
-      {
-        onData: ({ goals }) => {
-          // Only `all` feeds the shared slice: it is the page-level window the
-          // project dashboard reads, and a filtered list stored under the plain
-          // scope would make that reader render a subset as if it were the list.
-          if (filter !== 'all') return;
-
-          this.#set(
-            ({ goalListByAgentId, goalListInitializedAgentIds }) => ({
-              goalListByAgentId: {
-                ...goalListByAgentId,
-                [scopeId!]: goals,
-              },
-              goalListInitializedAgentIds: goalListInitializedAgentIds.includes(scopeId!)
-                ? goalListInitializedAgentIds
-                : [...goalListInitializedAgentIds, scopeId!],
-            }),
-            false,
-            'useFetchGoals/success',
-          );
-        },
-        revalidateOnFocus: true,
-      },
-    );
+    return {
+      ...sync,
+      // A request in flight with nothing to show for this key yet — the store
+      // view, not the network, decides whether there is something on screen.
+      isLoading: sync.isValidating && !(key && this.#get().goalListByAgentId[key]),
+      mutate: sync.revalidate,
+    };
   };
 
   /**
    * Every agent's goals in one read — the home rail is a cross-agent roll-up,
    * so it cannot go through the per-agent list. Same server query minus the
-   * assignee filter; the rail buckets and truncates client-side.
-   *
-   * Sync-wrapper for the same reason as `useFetchGoals`: this roll-up is
-   * persisted under the `task:` tier and must initialize from a cache hit.
+   * assignee filter; the rail buckets and truncates client-side. Read the rows
+   * through `goalSelectors.homeGoals(scope)`.
    */
-  useFetchHomeGoals = (enabled: boolean, scope: string) =>
-    useClientDataSWRWithSync(
-      enabled ? taskKeys.homeGoals(scope) : null,
-      () =>
-        goalService.list({
-          limit: HOME_GOAL_FETCH_LIMIT,
-          statuses: HOME_GOAL_STATUSES,
-        }),
-      {
-        onData: ({ goals }) => {
-          this.#set(
-            ({ homeGoalsByScope, homeGoalsInitializedScopes }) => ({
-              homeGoalsByScope: { ...homeGoalsByScope, [scope]: goals },
-              homeGoalsInitializedScopes: homeGoalsInitializedScopes.includes(scope)
-                ? homeGoalsInitializedScopes
-                : [...homeGoalsInitializedScopes, scope],
-            }),
-            false,
-            'useFetchHomeGoals/success',
-          );
-        },
-        revalidateOnFocus: true,
-      },
-    );
+  useFetchHomeGoals = (enabled: boolean, scope: string) => {
+    const sync = this.#homeGoalList.useSync({ scope }, { enabled, revalidateOnFocus: true });
+    return {
+      ...sync,
+      isLoading: sync.isValidating && !this.#get().homeGoalsByScope[scope],
+      mutate: sync.revalidate,
+    };
+  };
 }
 
 export type GoalAction = Pick<GoalActionImpl, keyof GoalActionImpl>;

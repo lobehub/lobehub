@@ -484,6 +484,11 @@ export class ResourceActionImpl {
     tx.mutation = () => resourceService.deleteResource(id);
 
     await tx.commit<void>();
+
+    // The file manager's by-id detail replica persists, so a confirmed deletion
+    // has to evict it as well: otherwise a direct visit to the deleted id
+    // repaints it until a NOT_FOUND answer arrives, and offline it never does.
+    this.#get().forgetKnowledgeItems([id]);
   };
 
   deleteResources = async (ids: string[]) => {
@@ -502,6 +507,10 @@ export class ResourceActionImpl {
     tx.mutation = () => resourceService.deleteResources(ids);
 
     await tx.commit<void>();
+
+    // See `deleteResource`: the detail replica persists by id, so it must be
+    // evicted here too.
+    this.#get().forgetKnowledgeItems(ids);
   };
 
   flushSync = async (): Promise<void> => {

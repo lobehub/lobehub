@@ -1,24 +1,18 @@
 import type {
   CreateTopicCommentInput,
   TopicCommentItem,
-  TopicCommentReplyPage,
-  TopicCommentSummary,
-  TopicCommentThreadPage,
   UpdateTopicCommentInput,
 } from '@lobechat/types';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { unstable_serialize, useSWRConfig } from 'swr';
-import type { ScopedMutator } from 'swr/_internal';
-import useSWRInfinite from 'swr/infinite';
 
 import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { topicCommentKeys } from '@/libs/swr/keys';
 import { topicCommentService } from '@/services/topicComment';
 import { useChatStore } from '@/store/chat';
 import {
   createTopicCommentDraftKey,
+  TOPIC_COMMENT_PAGE_SIZE,
   topicCommentSelectors,
+  topicCommentThreadsKey,
   useTopicCommentStore,
 } from '@/store/topicComment';
 import type {
@@ -29,15 +23,19 @@ import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/slices/auth/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
-const PAGE_SIZE = 30;
-const PREFETCH_CONCURRENCY = 4;
-const EMPTY_TOPIC_COMMENT_THREAD_PAGES: TopicCommentThreadPage[] = [
-  { items: [], nextCursor: null },
-];
+/**
+ * Topic comments are replicas: the feed of a topic, the replies of a root
+ * comment, the per-topic counts and one comment by id each paint their
+ * persisted copy on the first frame and are confirmed by the network in the
+ * background. The hooks below read the store views and layer the client-only
+ * optimistic overlays on top; `useSync` only orchestrates fetching.
+ */
+
 const topicCommentClientKey = ({
   authorUserId,
   clientId,
 }: Pick<TopicCommentItem, 'authorUserId' | 'clientId'>) => `${authorUserId ?? ''}:${clientId}`;
+
 const isOptimisticMutationReconciled = (
   mutation: OptimisticTopicCommentMutation,
   remoteComment: TopicCommentItem | undefined,
@@ -78,54 +76,11 @@ const resolveReplyCount = (
   return Math.max(0, lastMutation.baselineCount + lastMutation.delta);
 };
 
-const fetchTopicCommentThreads = ([
-  ,
-  ,
-  currentTopicId,
-  currentMessageId,
-  cursor,
-]: readonly string[]) =>
-  topicCommentService.listThreads({
-    cursor: cursor || undefined,
-    limit: PAGE_SIZE,
-    messageId: currentMessageId || undefined,
-    topicId: currentTopicId,
-  });
-
-const fetchTopicCommentReplies = ([, , currentRootCommentId, cursor]: readonly string[]) =>
-  topicCommentService.listReplies({
-    cursor: cursor || undefined,
-    limit: PAGE_SIZE,
-    rootCommentId: currentRootCommentId,
-  });
-
-const preloadTopicCommentThreads = (
-  populateCache: ScopedMutator,
-  workspaceId: string,
-  topicId: string,
-  messageId?: string,
-) => {
-  const key = topicCommentKeys.threads(workspaceId, topicId, messageId);
-  return fetchTopicCommentThreads(key as readonly string[]).then(async (page) => {
-    await populateCache(key, page, { revalidate: false });
-    return page;
-  });
-};
-
-const preloadTopicCommentReplies = (
-  populateCache: ScopedMutator,
-  workspaceId: string,
-  rootCommentId: string,
-) => {
-  const key = topicCommentKeys.replies(workspaceId, rootCommentId);
-  return fetchTopicCommentReplies(key as readonly string[]).then(async (page) => {
-    await populateCache(key, page, { revalidate: false });
-    return page;
-  });
-};
-
 export const useTopicCommentSummary = (topicId?: string | null) => {
   const workspaceId = useActiveWorkspaceId();
+  const useFetchSummary = useTopicCommentStore((s) => s.useFetchTopicCommentSummary);
+  const sync = useFetchSummary(topicId);
+  const stored = useTopicCommentStore((s) => (topicId ? s.commentSummaryMap[topicId] : undefined));
   const pendingComments = useTopicCommentStore(
     topicCommentSelectors.summaryPendingComments(workspaceId, topicId),
   );
@@ -135,19 +90,14 @@ export const useTopicCommentSummary = (topicId?: string | null) => {
   const pendingRestores = useTopicCommentStore(
     topicCommentSelectors.summaryPendingRestores(workspaceId, topicId),
   );
-  const response = useClientDataSWR<TopicCommentSummary>(
-    topicId ? topicCommentKeys.summary(topicId) : null,
-    () => topicCommentService.summary(topicId!),
-    { dedupingInterval: 30_000 },
-  );
   const data = useMemo(() => {
     if (
-      !response.data ||
+      !stored ||
       (pendingComments.length === 0 && pendingDeletes.length === 0 && pendingRestores.length === 0)
     )
-      return response.data;
+      return stored;
 
-    const countByMessage = { ...response.data.countByMessage };
+    const countByMessage = { ...stored.countByMessage };
     for (const { comment } of pendingComments) {
       if (comment.messageId)
         countByMessage[comment.messageId] = (countByMessage[comment.messageId] ?? 0) + 1;
@@ -168,15 +118,12 @@ export const useTopicCommentSummary = (topicId?: string | null) => {
       countByMessage,
       total: Math.max(
         0,
-        response.data.total +
-          pendingComments.length -
-          pendingDeletes.length +
-          pendingRestores.length,
+        stored.total + pendingComments.length - pendingDeletes.length + pendingRestores.length,
       ),
     };
-  }, [pendingComments, pendingDeletes, pendingRestores, response.data]);
+  }, [pendingComments, pendingDeletes, pendingRestores, stored]);
 
-  return { ...response, data };
+  return { ...sync, data };
 };
 
 export const useMessageCommentCount = (messageId: string) => {
@@ -194,64 +141,49 @@ export const useTopicCommentDetail = (
   commentId?: string | null,
   fallbackData?: TopicCommentItem,
 ) => {
+  const useFetchDetail = useTopicCommentStore((s) => s.useFetchTopicCommentDetail);
+  const revalidateDetail = useTopicCommentStore((s) => s.revalidateTopicCommentDetail);
+  const sync = useFetchDetail(commentId);
+  const stored = useTopicCommentStore((s) =>
+    commentId ? s.commentDetailMap[commentId] : undefined,
+  );
   const optimisticMutation = useTopicCommentStore(
     topicCommentSelectors.optimisticMutation(commentId),
   );
-  const response = useClientDataSWR(
-    commentId ? topicCommentKeys.detail(commentId) : null,
-    () => topicCommentService.get(commentId!),
-    { fallbackData },
-  );
   const isDeleting =
     optimisticMutation?.kind === 'delete' && optimisticMutation.deleteMode === 'hard';
-  const isNotFound = isTrpcErrorCode(response.error, 'NOT_FOUND');
+  const isNotFound = isTrpcErrorCode(sync.error, 'NOT_FOUND');
+  const data =
+    isNotFound || (isDeleting && !optimisticMutation?.pending)
+      ? undefined
+      : (optimisticMutation?.comment ?? stored ?? fallbackData);
+  const mutate = useCallback(
+    () => (commentId ? revalidateDetail(commentId) : Promise.resolve()),
+    [commentId, revalidateDetail],
+  );
 
   return {
-    ...response,
-    data:
-      isNotFound || (isDeleting && !optimisticMutation?.pending)
-        ? undefined
-        : (optimisticMutation?.comment ?? response.data),
+    data,
+    error: sync.error,
     isDeleting,
+    // A validating sync with nothing to show for it is the loading state.
+    isLoading: sync.isValidating && data === undefined,
+    isValidating: sync.isValidating,
+    mutate,
   };
 };
 
 export const usePrefetchTopicCommentsOnTopicLoad = (topicId: string | null | undefined) => {
   const workspaceId = useActiveWorkspaceId();
-  const { mutate: populateCache } = useSWRConfig();
-  const topicParams = topicId && workspaceId ? { topicId, workspaceId } : undefined;
+  const prefetchTopicComments = useTopicCommentStore((s) => s.prefetchTopicComments);
 
-  useClientDataSWR(
-    topicParams ? topicCommentKeys.warmup(topicParams.workspaceId, topicParams.topicId) : null,
-    topicParams
-      ? async () => {
-          // Let the initial topic/message queries flush their tRPC batch first so this
-          // background warmup starts immediately without delaying the primary payload.
-          await new Promise<void>((resolve) => setTimeout(resolve, 0));
-          const page = await preloadTopicCommentThreads(
-            populateCache,
-            topicParams.workspaceId,
-            topicParams.topicId,
-          );
-          const rootCommentIds = page.items.flatMap(({ replyCount, root }) =>
-            replyCount > 0 ? [root.id] : [],
-          );
-          for (let index = 0; index < rootCommentIds.length; index += PREFETCH_CONCURRENCY) {
-            await Promise.all(
-              rootCommentIds
-                .slice(index, index + PREFETCH_CONCURRENCY)
-                .map((rootCommentId) =>
-                  preloadTopicCommentReplies(populateCache, topicParams.workspaceId, rootCommentId),
-                ),
-            );
-          }
-          return true;
-        }
-      : null,
-    {
-      revalidateOnFocus: false,
-    },
-  );
+  useEffect(() => {
+    if (!topicId || !workspaceId) return;
+    // Let the initial topic/message queries flush their tRPC batch first so this
+    // background warmup starts immediately without delaying the primary payload.
+    const timer = setTimeout(() => void prefetchTopicComments(topicId), 0);
+    return () => clearTimeout(timer);
+  }, [prefetchTopicComments, topicId, workspaceId]);
 };
 
 export const useTopicCommentReplyCount = (
@@ -276,8 +208,13 @@ export const useTopicCommentReplyCount = (
 
 export const useTopicCommentThreads = (topicId?: string | null, messageId?: string) => {
   const workspaceId = useActiveWorkspaceId();
-  const { cache } = useSWRConfig();
+  const useFetchThreads = useTopicCommentStore((s) => s.useFetchTopicCommentThreads);
+  const loadMoreThreads = useTopicCommentStore((s) => s.loadMoreTopicCommentThreads);
+  const revalidateThreads = useTopicCommentStore((s) => s.revalidateTopicCommentThreads);
   const { data: summary } = useTopicCommentSummary(workspaceId ? topicId : undefined);
+  const feed = useTopicCommentStore((s) =>
+    topicId ? s.threadFeedMap[topicCommentThreadsKey({ messageId, topicId })] : undefined,
+  );
   const optimisticComments = useTopicCommentStore(
     topicCommentSelectors.optimisticThreads(workspaceId, topicId, messageId),
   );
@@ -295,47 +232,24 @@ export const useTopicCommentThreads = (topicId?: string | null, messageId?: stri
   const isKnownEmpty = Boolean(
     summary && (messageId ? (summary.countByMessage[messageId] ?? 0) === 0 : summary.total === 0),
   );
-  const firstPageKey =
-    topicId && workspaceId
-      ? unstable_serialize(topicCommentKeys.threads(workspaceId, topicId, messageId))
-      : undefined;
-  const cachedFirstPage = firstPageKey
-    ? (cache.get(firstPageKey)?.data as TopicCommentThreadPage | undefined)
-    : undefined;
-  const getKey = useCallback(
-    (_index: number, previous: TopicCommentThreadPage | null) => {
-      if (!topicId || !workspaceId || previous?.nextCursor === null) return null;
-      return topicCommentKeys.threads(
-        workspaceId,
-        topicId,
-        messageId,
-        previous?.nextCursor ?? undefined,
-      );
-    },
-    [messageId, topicId, workspaceId],
+  const active = Boolean(topicId && workspaceId);
+  const params = useMemo(
+    () => (active ? { messageId, pageSize: TOPIC_COMMENT_PAGE_SIZE, topicId: topicId! } : null),
+    [active, messageId, topicId],
   );
-  const response = useSWRInfinite<TopicCommentThreadPage>(getKey, fetchTopicCommentThreads, {
-    fallbackData: isKnownEmpty
-      ? EMPTY_TOPIC_COMMENT_THREAD_PAGES
-      : cachedFirstPage
-        ? [cachedFirstPage]
-        : undefined,
-    revalidateFirstPage: false,
-    revalidateOnMount: true,
-  });
-  const data = response.data;
+  const sync = useFetchThreads(params);
+
+  const data = feed;
   useEffect(() => {
     if (!data || optimisticComments.length === 0) return;
-    const remoteClientKeys = new Set(
-      data.flatMap((page) => page?.items.map(({ root }) => topicCommentClientKey(root)) ?? []),
-    );
+    const remoteClientKeys = new Set(data.items.map(({ root }) => topicCommentClientKey(root)));
     for (const { comment, targetKey } of optimisticComments) {
       if (remoteClientKeys.has(topicCommentClientKey(comment))) {
         removeOptimisticComment(targetKey, comment.clientId);
       }
     }
   }, [data, optimisticComments, removeOptimisticComment]);
-  const remoteItems = data?.flatMap((page) => page?.items ?? []) ?? [];
+  const remoteItems = data?.items ?? [];
   useEffect(() => {
     if (!data || optimisticMutations.length === 0) return;
     const remoteById = new Map(remoteItems.map(({ root }) => [root.id, root]));
@@ -405,27 +319,34 @@ export const useTopicCommentThreads = (topicId?: string | null, messageId?: stri
   const pendingCommentIds = new Set(
     optimisticComments.filter(({ pending }) => pending).map(({ comment }) => comment.id),
   );
-  const lastPage = data?.findLast(Boolean);
-  const hasLoadedPages = data !== undefined || optimisticComments.length > 0;
-  const isInitialError = Boolean(response.error) && !hasLoadedPages;
-  const isLoadingInitial = !response.error && response.isLoading && !hasLoadedPages;
-  const isLoadingMore =
-    !response.error &&
-    hasLoadedPages &&
-    response.size > 0 &&
-    typeof data?.[response.size - 1] === 'undefined';
+  const hasLoadedPages = data !== undefined || optimisticComments.length > 0 || isKnownEmpty;
+  const error = sync.error ?? data?.loadMoreError;
+  const isInitialError = Boolean(sync.error) && !hasLoadedPages;
+  const isLoadingInitial = !sync.error && sync.isValidating && !hasLoadedPages;
+  const isLoadingMore = !sync.error && (data?.isLoadingMore ?? false);
+  const hasTailError = Boolean(data?.loadMoreError);
+  const loadMore = useCallback(
+    () => (params ? loadMoreThreads(params) : Promise.resolve()),
+    [loadMoreThreads, params],
+  );
+  const reload = useCallback(() => {
+    if (!params) return Promise.resolve();
+    // A failed cursor request is retried with its own cursor: a head-only
+    // revalidation cannot reach the page that failed.
+    return hasTailError ? loadMoreThreads(params) : revalidateThreads(params);
+  }, [hasTailError, loadMoreThreads, params, revalidateThreads]);
 
   return {
-    ...response,
-    hasMore: !response.error && (lastPage ? lastPage.nextCursor !== null : false),
+    error,
+    hasMore: !error && (data?.hasMore ?? false),
     isInitialError,
     isLoadingInitial,
     isLoadingMore,
-    isRetrying: Boolean(response.error) && response.isValidating,
+    isRetrying: Boolean(error) && (sync.isValidating || Boolean(data?.isLoadingMore)),
     items,
-    loadMore: () => response.setSize((size) => size + 1),
+    loadMore,
     pendingCommentIds,
-    reload: response.mutate,
+    reload,
   };
 };
 
@@ -434,7 +355,12 @@ export const useTopicCommentReplies = (
   initialReplyCount?: number,
 ) => {
   const workspaceId = useActiveWorkspaceId();
-  const { cache } = useSWRConfig();
+  const useFetchReplies = useTopicCommentStore((s) => s.useFetchTopicCommentReplies);
+  const loadMoreReplies = useTopicCommentStore((s) => s.loadMoreTopicCommentReplies);
+  const revalidateReplies = useTopicCommentStore((s) => s.revalidateTopicCommentReplies);
+  const feed = useTopicCommentStore((s) =>
+    rootCommentId ? s.replyFeedMap[rootCommentId] : undefined,
+  );
   const optimisticComments = useTopicCommentStore(
     topicCommentSelectors.optimisticReplies(workspaceId, rootCommentId),
   );
@@ -443,47 +369,24 @@ export const useTopicCommentReplies = (
   );
   const removeOptimisticComment = useTopicCommentStore((s) => s.removeOptimisticComment);
   const removeOptimisticMutation = useTopicCommentStore((s) => s.removeOptimisticMutation);
-  const getKey = useCallback(
-    (_index: number, previous: TopicCommentReplyPage | null) => {
-      if (!rootCommentId || !workspaceId || previous?.nextCursor === null) return null;
-      return topicCommentKeys.replies(
-        workspaceId,
-        rootCommentId,
-        previous?.nextCursor ?? undefined,
-      );
-    },
-    [rootCommentId, workspaceId],
+  const active = Boolean(rootCommentId && workspaceId);
+  const params = useMemo(
+    () => (active ? { pageSize: TOPIC_COMMENT_PAGE_SIZE, rootCommentId: rootCommentId! } : null),
+    [active, rootCommentId],
   );
-  const firstPageKey =
-    rootCommentId && workspaceId
-      ? unstable_serialize(topicCommentKeys.replies(workspaceId, rootCommentId))
-      : undefined;
-  const cachedFirstPage = firstPageKey
-    ? (cache.get(firstPageKey)?.data as TopicCommentReplyPage | undefined)
-    : undefined;
-  const response = useSWRInfinite<TopicCommentReplyPage>(getKey, fetchTopicCommentReplies, {
-    fallbackData:
-      initialReplyCount === 0
-        ? [{ items: [], nextCursor: null, total: 0 }]
-        : cachedFirstPage
-          ? [cachedFirstPage]
-          : undefined,
-    revalidateFirstPage: false,
-    revalidateOnMount: true,
-  });
-  const data = response.data;
+  const sync = useFetchReplies(params);
+
+  const data = feed;
   useEffect(() => {
     if (!data || optimisticComments.length === 0) return;
-    const remoteClientKeys = new Set(
-      data.flatMap((page) => page?.items.map(topicCommentClientKey) ?? []),
-    );
+    const remoteClientKeys = new Set(data.items.map(topicCommentClientKey));
     for (const { comment, targetKey } of optimisticComments) {
       if (remoteClientKeys.has(topicCommentClientKey(comment))) {
         removeOptimisticComment(targetKey, comment.clientId);
       }
     }
   }, [data, optimisticComments, removeOptimisticComment]);
-  const remoteItems = data?.flatMap((page) => page?.items ?? []) ?? [];
+  const remoteItems = data?.items ?? [];
   useEffect(() => {
     if (!data || optimisticMutations.length === 0) return;
     const remoteById = new Map(remoteItems.map((comment) => [comment.id, comment]));
@@ -514,28 +417,35 @@ export const useTopicCommentReplies = (
   const pendingCommentIds = new Set(
     optimisticComments.filter(({ pending }) => pending).map(({ comment }) => comment.id),
   );
-  const lastPage = data?.findLast(Boolean);
   const hasLoadedPages = data !== undefined || optimisticComments.length > 0;
-  const isInitialError = Boolean(response.error) && !hasLoadedPages;
-  const isLoadingInitial = !response.error && response.isLoading && !hasLoadedPages;
-  const isLoadingMore =
-    !response.error &&
-    hasLoadedPages &&
-    response.size > 0 &&
-    typeof data?.[response.size - 1] === 'undefined';
+  const error = sync.error ?? data?.loadMoreError;
+  const isInitialError = Boolean(sync.error) && !hasLoadedPages;
+  const isLoadingInitial = !sync.error && sync.isValidating && !hasLoadedPages;
+  const isLoadingMore = !sync.error && (data?.isLoadingMore ?? false);
+  const hasTailError = Boolean(data?.loadMoreError);
+  const loadMore = useCallback(
+    () => (params ? loadMoreReplies(params) : Promise.resolve()),
+    [loadMoreReplies, params],
+  );
+  const reload = useCallback(() => {
+    if (!params) return Promise.resolve();
+    // A failed cursor request is retried with its own cursor: a head-only
+    // revalidation cannot reach the page that failed.
+    return hasTailError ? loadMoreReplies(params) : revalidateReplies(params);
+  }, [hasTailError, loadMoreReplies, params, revalidateReplies]);
 
   return {
-    ...response,
-    hasMore: !response.error && (lastPage ? lastPage.nextCursor !== null : false),
+    error,
+    hasMore: !error && (data?.hasMore ?? false),
     isInitialError,
     isLoadingInitial,
     isLoadingMore,
-    isRetrying: Boolean(response.error) && response.isValidating,
+    isRetrying: Boolean(error) && (sync.isValidating || Boolean(data?.isLoadingMore)),
     items,
-    loadMore: () => response.setSize((size) => size + 1),
+    loadMore,
     pendingCommentIds,
-    reload: response.mutate,
-    total: data?.[0]?.total,
+    reload,
+    total: data?.total ?? (initialReplyCount === 0 ? 0 : undefined),
   };
 };
 
@@ -555,6 +465,14 @@ export const useTopicCommentMutations = () => {
     s.removeOptimisticComment,
     s.upsertOptimisticComment,
   ]);
+  const [applySummary, revalidateSummary, upsertDetail, removeDetail] = useTopicCommentStore(
+    (s) => [
+      s.applyTopicCommentSummary,
+      s.revalidateTopicCommentSummary,
+      s.upsertTopicCommentDetail,
+      s.removeTopicCommentDetail,
+    ],
+  );
   const [creating, setCreating] = useState(false);
   const [mutatingIds, setMutatingIds] = useState<ReadonlySet<string>>(new Set());
 
@@ -627,21 +545,16 @@ export const useTopicCommentMutations = () => {
         const result = await topicCommentService.create(input);
         if (targetKey && optimisticComment) {
           if (!result.isDuplicate) {
-            void mutate(
-              topicCommentKeys.summary(input.topicId),
-              (current: TopicCommentSummary | undefined) => {
-                if (!current) return current;
-                const countByMessage = { ...current.countByMessage };
-                if (input.messageId) {
-                  countByMessage[input.messageId] = (countByMessage[input.messageId] ?? 0) + 1;
-                }
-                return { countByMessage, total: current.total + 1 };
-              },
-              { revalidate: true },
-            ).catch(() => undefined);
-          } else {
-            void mutate(topicCommentKeys.summary(input.topicId)).catch(() => undefined);
+            applySummary(input.topicId, (current) => {
+              if (!current) return current;
+              const countByMessage = { ...current.countByMessage };
+              if (input.messageId) {
+                countByMessage[input.messageId] = (countByMessage[input.messageId] ?? 0) + 1;
+              }
+              return { countByMessage, total: current.total + 1 };
+            });
           }
+          void revalidateSummary(input.topicId).catch(() => undefined);
           upsertOptimisticComment({
             comment: result.comment,
             pending: false,
@@ -662,8 +575,10 @@ export const useTopicCommentMutations = () => {
       }
     },
     [
+      applySummary,
       removeOptimisticComment,
       removeOptimisticReplyCountMutation,
+      revalidateSummary,
       upsertOptimisticComment,
       upsertOptimisticReplyCountMutation,
       user,
@@ -703,9 +618,7 @@ export const useTopicCommentMutations = () => {
         try {
           const result = await topicCommentService.update(input);
           upsertOptimisticMutation({ comment: result, kind: 'update', pending: false });
-          void mutate(topicCommentKeys.detail(result.id), result, { revalidate: false }).catch(
-            () => undefined,
-          );
+          upsertDetail(result);
           return result;
         } catch (error) {
           if (previousMutation) upsertOptimisticMutation(previousMutation);
@@ -713,7 +626,7 @@ export const useTopicCommentMutations = () => {
           throw error;
         }
       }),
-    [removeOptimisticMutation, runForId, upsertOptimisticMutation],
+    [removeOptimisticMutation, runForId, upsertDetail, upsertOptimisticMutation],
   );
   const remove = useCallback(
     (
@@ -780,32 +693,26 @@ export const useTopicCommentMutations = () => {
             pending: true,
           };
           upsertOptimisticMutation(confirmedMutation);
-          void mutate(
-            topicCommentKeys.summary(comment.topicId),
-            (current: TopicCommentSummary | undefined) => {
-              if (!current) return current;
-              const countByMessage = { ...current.countByMessage };
-              const removesMessageCount =
-                result.mode === 'hard' ||
-                (result.mode === 'moderated' && optimisticDeleteMode === 'hard');
-              if (removesMessageCount && comment.messageId) {
-                const nextCount = Math.max(0, (countByMessage[comment.messageId] ?? 0) - 1);
-                if (nextCount > 0) countByMessage[comment.messageId] = nextCount;
-                else delete countByMessage[comment.messageId];
-              }
-              return { countByMessage, total: Math.max(0, current.total - 1) };
-            },
-            { revalidate: true },
-          ).catch(() => undefined);
+          applySummary(comment.topicId, (current) => {
+            if (!current) return current;
+            const countByMessage = { ...current.countByMessage };
+            const removesMessageCount =
+              result.mode === 'hard' ||
+              (result.mode === 'moderated' && optimisticDeleteMode === 'hard');
+            if (removesMessageCount && comment.messageId) {
+              const nextCount = Math.max(0, (countByMessage[comment.messageId] ?? 0) - 1);
+              if (nextCount > 0) countByMessage[comment.messageId] = nextCount;
+              else delete countByMessage[comment.messageId];
+            }
+            return { countByMessage, total: Math.max(0, current.total - 1) };
+          });
+          void revalidateSummary(comment.topicId).catch(() => undefined);
           upsertOptimisticMutation({ ...confirmedMutation, pending: false });
           if (replyCountMutation) {
             upsertOptimisticReplyCountMutation({ ...replyCountMutation, pending: false });
           }
-          void mutate(
-            topicCommentKeys.detail(comment.id),
-            result.mode === 'hard' ? undefined : confirmedMutation.comment,
-            { revalidate: false },
-          ).catch(() => undefined);
+          if (result.mode === 'hard') removeDetail(comment.id);
+          else upsertDetail(confirmedMutation.comment);
           return result;
         } catch (error) {
           if (previousMutation) upsertOptimisticMutation(previousMutation);
@@ -815,9 +722,13 @@ export const useTopicCommentMutations = () => {
         }
       }),
     [
+      applySummary,
+      removeDetail,
       removeOptimisticMutation,
       removeOptimisticReplyCountMutation,
+      revalidateSummary,
       runForId,
+      upsertDetail,
       upsertOptimisticMutation,
       upsertOptimisticReplyCountMutation,
       workspaceId,
@@ -851,21 +762,16 @@ export const useTopicCommentMutations = () => {
             kind: 'restore',
             pending: false,
           });
-          void mutate(
-            topicCommentKeys.summary(comment.topicId),
-            (current: TopicCommentSummary | undefined) => {
-              if (!current) return current;
-              const countByMessage = { ...current.countByMessage };
-              if (comment.messageId && options.rootReplyCount === 0) {
-                countByMessage[comment.messageId] = (countByMessage[comment.messageId] ?? 0) + 1;
-              }
-              return { countByMessage, total: current.total + 1 };
-            },
-            { revalidate: true },
-          ).catch(() => undefined);
-          void mutate(topicCommentKeys.detail(comment.id), result, { revalidate: false }).catch(
-            () => undefined,
-          );
+          applySummary(comment.topicId, (current) => {
+            if (!current) return current;
+            const countByMessage = { ...current.countByMessage };
+            if (comment.messageId && options.rootReplyCount === 0) {
+              countByMessage[comment.messageId] = (countByMessage[comment.messageId] ?? 0) + 1;
+            }
+            return { countByMessage, total: current.total + 1 };
+          });
+          void revalidateSummary(comment.topicId).catch(() => undefined);
+          upsertDetail(result);
           return result;
         } catch (error) {
           if (previousMutation) upsertOptimisticMutation(previousMutation);
@@ -873,7 +779,14 @@ export const useTopicCommentMutations = () => {
           throw error;
         }
       }),
-    [removeOptimisticMutation, runForId, upsertOptimisticMutation],
+    [
+      applySummary,
+      removeOptimisticMutation,
+      revalidateSummary,
+      runForId,
+      upsertDetail,
+      upsertOptimisticMutation,
+    ],
   );
 
   return { create, creating, mutatingIds, remove, restore, update };

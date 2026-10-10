@@ -4,7 +4,7 @@ import { ActionIcon, Spin } from '@lobehub/ui';
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { PinIcon } from 'lucide-react';
 import { type CSSProperties, type DragEvent } from 'react';
-import { memo, useCallback, useMemo, useState } from 'react';
+import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
@@ -88,7 +88,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   const unreadCount = item.unreadCount ?? 0;
   const { t } = useTranslation('chat');
   const { openCreateGroupModal } = useAgentModal();
-  const [anchor, setAnchor] = useState<HTMLElement | null>(null);
   const openAgentInNewWindow = useGlobalStore((s) => s.openAgentInNewWindow);
 
   const prefetchAgent = usePrefetchAgent();
@@ -181,11 +180,11 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   }, [isUpdating, isLoading, avatar, backgroundColor, displayTitle, unreadCount]);
 
   const dropdownMenu = useAgentDropdownMenu({
-    anchor,
     avatar: typeof avatar === 'string' ? avatar : undefined,
     backgroundColor: backgroundColor || undefined,
     group: undefined, // TODO: pass group from parent if needed
     id,
+    name: item.name,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
     slug,
@@ -197,7 +196,6 @@ const AgentItem = memo<AgentItemProps>(({ item, style, className, onNavigate, se
   return (
     <WorkspaceLink
       aria-label={displayTitle}
-      ref={setAnchor}
       to={agentUrl}
       onClick={onNavigate}
       onMouseEnter={handleMouseEnter}

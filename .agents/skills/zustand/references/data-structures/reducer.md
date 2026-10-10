@@ -1,5 +1,7 @@
 # Reducer Pattern (for Detail Map)
 
+Legacy stores only. Replica-backed data gets optimistic writes and rollback from the engine; do not add a reducer for it.
+
 ## Why Use a Reducer?
 
 - **Immutable updates** — Immer makes immutability easy
@@ -66,51 +68,19 @@ export const benchmarkDetailReducer = (
 };
 ```
 
-## Internal Dispatch Methods
+## Wiring It to the Store
 
-The slice exposes two `internal_*` methods so the reducer and the loading state stay encapsulated behind a stable contract:
+The action class exposes one dispatch method that runs the reducer and skips `set` when nothing changed (`src/store/eval/slices/benchmark/action.ts`):
 
 ```typescript
-// In action.ts
-export interface BenchmarkAction {
-  // ... other methods ...
+internal_dispatchBenchmarkDetail = (payload: BenchmarkDetailDispatch): void => {
+  const currentMap = this.#get().benchmarkDetailMap;
+  const nextMap = benchmarkDetailReducer(currentMap, payload);
 
-  // Internal — not for direct UI use
-  internal_dispatchBenchmarkDetail: (payload: BenchmarkDetailDispatch) => void;
-  internal_updateBenchmarkDetailLoading: (id: string, loading: boolean) => void;
-}
+  if (isEqual(nextMap, currentMap)) return;
 
-export const createBenchmarkSlice: StateCreator<...> = (set, get) => ({
-  // ... other methods ...
-
-  // Dispatch to reducer
-  internal_dispatchBenchmarkDetail: (payload) => {
-    const currentMap = get().benchmarkDetailMap;
-    const nextMap = benchmarkDetailReducer(currentMap, payload);
-
-    // Skip set when nothing changed — avoids unnecessary re-renders
-    if (isEqual(nextMap, currentMap)) return;
-
-    set(
-      { benchmarkDetailMap: nextMap },
-      false,
-      `dispatchBenchmarkDetail/${payload.type}`,
-    );
-  },
-
-  // Update loading state for a specific id
-  internal_updateBenchmarkDetailLoading: (id, loading) => {
-    set(
-      (state) => ({
-        loadingBenchmarkDetailIds: loading
-          ? [...state.loadingBenchmarkDetailIds, id]
-          : state.loadingBenchmarkDetailIds.filter((i) => i !== id),
-      }),
-      false,
-      'updateBenchmarkDetailLoading',
-    );
-  },
-});
+  this.#set({ benchmarkDetailMap: nextMap }, false, `dispatchBenchmarkDetail/${payload.type}`);
+};
 ```
 
-The `internal_` prefix is a convention — UI components should call the public mutation methods (e.g. `updateBenchmark`), which in turn call `internal_dispatch*`. This keeps reducer dispatch shapes out of the component layer.
+Components call public mutations (`updateBenchmark`), which call `internal_dispatch*`; the dispatch payload shapes stay out of the component layer.

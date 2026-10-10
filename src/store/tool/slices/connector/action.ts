@@ -1,56 +1,215 @@
 import { isDesktop } from '@lobechat/const';
 import { isLocalOrPrivateUrl } from '@lobechat/utils';
 
-import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import type { ConnectorToolPermission } from '@/database/schemas';
+import {
+  cacheScope,
+  createReplicaSlice,
+  linkReplicaEntity,
+  type ReplicaLens,
+} from '@/libs/replica';
+import { subscribeCacheScope } from '@/libs/replica/cacheScopeEvents';
 import { lambdaClient } from '@/libs/trpc/client';
 import { mcpService } from '@/services/mcp';
 import type { StoreSetter } from '@/store/types';
 
 import type { ToolStore } from '../../store';
+import {
+  agentBoundConnectorsEntity,
+  agentBoundConnectorsResource,
+  agentConnectorsResource,
+  CONNECTOR_LIST_KEY,
+  connectorsEntity,
+  connectorsResource,
+  withoutConnectorSecrets,
+} from './projection';
+import type { AgentBoundConnector, ConnectorWithTools } from './types';
 
 type Setter = StoreSetter<ToolStore>;
+
+/** The connector lists are one entry per scope, so every sync shares these params. */
+const LIST_PARAMS = {} as Record<string, never>;
+
+/**
+ * The base connector list keeps its long-standing flat `connectors` field as
+ * the replica view, so every selector keeps reading what it did. The init flag
+ * gates `get`: before the first hydrate/replace the view must read `undefined`,
+ * otherwise the empty default would block hydration from storage.
+ */
+const connectorsLens: ReplicaLens<ToolStore, ConnectorWithTools[]> = {
+  clear: () => ({ connectors: [], isConnectorsInit: false }),
+  get: (state) => (state.isConnectorsInit ? state.connectors : undefined),
+  keys: (state) => (state.isConnectorsInit ? [CONNECTOR_LIST_KEY] : []),
+  set: (_state, _key, data) =>
+    data === undefined
+      ? { connectors: [], isConnectorsInit: false }
+      : { connectors: data, isConnectorsInit: true },
+};
+
+/** The agent-bound aggregate is one entry, gated by `isAgentBoundInit`. */
+const agentBoundConnectorsLens: ReplicaLens<ToolStore, AgentBoundConnector[]> = {
+  clear: () => ({ agentBoundConnectors: [], isAgentBoundInit: false }),
+  get: (state) => (state.isAgentBoundInit ? state.agentBoundConnectors : undefined),
+  keys: (state) => (state.isAgentBoundInit ? [CONNECTOR_LIST_KEY] : []),
+  set: (_state, _key, data) =>
+    data === undefined
+      ? { agentBoundConnectors: [], isAgentBoundInit: false }
+      : { agentBoundConnectors: data, isAgentBoundInit: true },
+};
+
+/**
+ * Per-agent lists live in `agentConnectors[agentId]`; the per-agent bucket of
+ * `agentConnectorsInit` carries the same gate the flat lists use.
+ */
+const agentConnectorsLens: ReplicaLens<ToolStore, ConnectorWithTools[]> = {
+  clear: () => ({ agentConnectors: {}, agentConnectorsInit: {} }),
+  get: (state, key) => (state.agentConnectorsInit[key] ? state.agentConnectors[key] : undefined),
+  keys: (state) => Object.keys(state.agentConnectors ?? {}),
+  set: (state, key, data) => {
+    const agentConnectors = { ...state.agentConnectors };
+    const agentConnectorsInit = { ...state.agentConnectorsInit };
+    if (data === undefined) {
+      delete agentConnectors[key];
+      delete agentConnectorsInit[key];
+    } else {
+      agentConnectors[key] = data;
+      agentConnectorsInit[key] = true;
+    }
+    return { agentConnectors, agentConnectorsInit };
+  },
+};
+
+/** The connector lists of the active scope (their entry params are constant). */
+const fetchConnectorList = (): Promise<ConnectorWithTools[]> =>
+  lambdaClient.connector.list.query() as unknown as Promise<ConnectorWithTools[]>;
+
+const fetchAgentBoundConnectorList = (): Promise<AgentBoundConnector[]> =>
+  lambdaClient.connector.listAgentBound.query() as unknown as Promise<AgentBoundConnector[]>;
+
+const fetchAgentConnectorList = ({ agentId }: { agentId: string }): Promise<ConnectorWithTools[]> =>
+  lambdaClient.connector.listByAgent.query({ agentId }) as unknown as Promise<ConnectorWithTools[]>;
 
 export const createConnectorSlice = (set: Setter, get: () => ToolStore, _api?: unknown) =>
   new ConnectorActionImpl(set, get, _api);
 
+/**
+ * The connector slice is a set of `@lobechat/replica` resources: the base
+ * list, the agent-bound aggregate and the per-agent buckets. The store fields
+ * keep their historical shape (`connectors`, `agentBoundConnectors`,
+ * `agentConnectors`) as the replica views, so every selector and consumer is
+ * unchanged; the slab below only orchestrates fetching and writes.
+ */
 export class ConnectorActionImpl {
-  readonly #set: Setter;
+  readonly #agentBoundConnectors;
+  readonly #agentConnectors;
+  /** One connector lives in the base list, the aggregate and per-agent buckets. */
+  readonly #connectorRows;
+  readonly #connectors;
   readonly #get: () => ToolStore;
+  readonly #set: Setter;
 
   constructor(set: Setter, get: () => ToolStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#connectors = createReplicaSlice(connectorsResource, {
+      actionPrefix: 'connectors',
+      entity: connectorsEntity,
+      fetcher: fetchConnectorList,
+      get,
+      set,
+      stateKey: 'connectorsReplica',
+      toPersisted: withoutConnectorSecrets,
+      view: connectorsLens,
+    });
+    this.#agentBoundConnectors = createReplicaSlice(agentBoundConnectorsResource, {
+      actionPrefix: 'agentBoundConnectors',
+      entity: agentBoundConnectorsEntity,
+      fetcher: fetchAgentBoundConnectorList,
+      get,
+      set,
+      stateKey: 'agentBoundConnectorsReplica',
+      toPersisted: withoutConnectorSecrets,
+      view: agentBoundConnectorsLens,
+    });
+    this.#agentConnectors = createReplicaSlice(agentConnectorsResource, {
+      actionPrefix: 'agentConnectors',
+      entity: connectorsEntity,
+      fetcher: fetchAgentConnectorList,
+      get,
+      set,
+      stateKey: 'agentConnectorsReplica',
+      toPersisted: withoutConnectorSecrets,
+      view: agentConnectorsLens,
+    });
+    this.#connectorRows = linkReplicaEntity<ConnectorWithTools>([
+      this.#connectors,
+      this.#agentBoundConnectors,
+      this.#agentConnectors,
+    ]);
+
+    // These three resources have no `useSync` mount, so nothing re-renders them
+    // on a cache-scope switch and the engine only resets on its *next* dispatch
+    // — which the gated consumers never make, because the init flag they check
+    // is still set. Drop the previous identity's views the moment the scope
+    // changes. The store is an app-lifetime singleton, so the subscription is
+    // never torn down.
+    subscribeCacheScope((scope) => this.#dropStaleScope(scope));
   }
 
   /**
-   * Whether the scope captured when a request was issued is still the active
-   * one. Connector lists are workspace-scoped server-side (the request carries
-   * the active workspace as a header), but the store bucket is a single global
-   * one — so a late response must not be written after the scope moved on.
-   *
-   * Booting straight into a workspace URL is exactly that case: the tree mounts
-   * once in personal context before the URL→store sync resolves the slug, so a
-   * personal `list` query is already in flight when the workspace switch fires
-   * its own. Whichever lands last wins, and when that is the personal one the
-   * workspace's own tools vanish from the tool picker for the rest of the
-   * session. In the open-source build there are no workspaces and
-   * `getActiveWorkspaceId()` is always `null`, so this is a no-op.
-   *
-   * Dropping a response deliberately leaves the one-shot init flag alone
-   * rather than marking the bucket loaded: a scope change remounts the
-   * workspace context slot's subtree, so the consumers gated on that flag
-   * re-issue their fetch under the new scope and the discarded result is not
-   * one anybody still needs.
+   * Drop every connector view of the previous identity (rows *and* the init
+   * flag that lets consumers skip their fetch). A no-op when the scope has not
+   * moved on, which is the common case on the imperative refresh paths.
    */
-  #isStillInScope = (scope: string | null): boolean => getActiveWorkspaceId() === scope;
+  #dropStaleScope = (scope: string): void => {
+    this.#connectors.ensureScope(scope);
+    this.#agentBoundConnectors.ensureScope(scope);
+    this.#agentConnectors.ensureScope(scope);
+  };
 
+  /**
+   * Refresh the base connector list. The persisted projection paints as soon
+   * as it is read while the network confirms it in parallel, instead of
+   * blanking to an empty array first.
+   *
+   * The identity scope is captured when the request is issued and handed to
+   * `hydrate` / `replace` explicitly, because the replica reads the *active*
+   * scope at call time — i.e. after the response has already landed. A response
+   * that resolves after the scope moved on is then dropped by the replica
+   * itself (`dispatch` discards actions whose scope is no longer active),
+   * instead of being written into the next identity's partition.
+   *
+   * The whole cache scope (user + workspace) is captured, not just the
+   * workspace: two different signed-in users in personal context both have a
+   * `null` workspace, so a workspace-only guard cannot tell them apart and
+   * would store user A's connector inventory in user B's partition after an
+   * account switch. Booting straight into a workspace URL is the other case
+   * this covers — the tree mounts once in personal context before the URL→store
+   * sync resolves the slug, so a personal `list` query is already in flight
+   * when the workspace switch fires its own, and the personal one landing last
+   * is what made a business workspace list the user's PERSONAL tools.
+   *
+   * Dropping the response is only half of it. A dropped response must not leave
+   * the *previous* scope's hydration behind either: the persisted personal
+   * projection can have painted (and set `isConnectorsInit`) during that same
+   * personal window, and every consumer gates its fetch on that flag — so the
+   * workspace would keep showing the personal inventory and never load its own.
+   * `#dropStaleScope` clears the views the moment the scope moves (see the
+   * `subscribeCacheScope` wiring in the constructor).
+   *
+   * No reset is needed here for the fetch itself: the engine folds the scope
+   * reset into the same commit as the response, so a stale view can never be
+   * replaced into — and doing it here would commit store state synchronously
+   * before the caller's in-flight guard is up, which multiplies the requests a
+   * single scope switch launches.
+   */
   fetchConnectors = async (): Promise<void> => {
-    const scope = getActiveWorkspaceId();
-    const data = await lambdaClient.connector.list.query();
-    if (!this.#isStillInScope(scope)) return;
-    this.#set({ connectors: data as any, isConnectorsInit: true }, false, 'fetchConnectors');
+    const scope = cacheScope.get();
+    const pending = this.#connectors.fetcher!(LIST_PARAMS);
+    if (!this.#get().isConnectorsInit) await this.#connectors.hydrate(LIST_PARAMS, scope);
+    const data = await pending;
+    this.#connectors.replace(LIST_PARAMS, data, scope);
   };
 
   /**
@@ -70,35 +229,30 @@ export class ConnectorActionImpl {
    * Fetch every agent-owned connector across all agents (the flat aggregate for
    * the unified connector-settings page). Each row is enriched
    * server-side with the owning agent's title/avatar. Scope-correct: a workspace
-   * context only returns that workspace's agent connectors.
+   * context only returns that workspace's agent connectors. See
+   * {@link ConnectorActionImpl.fetchConnectors} for the captured-scope rule.
    */
   fetchAgentBoundConnectors = async (): Promise<void> => {
-    const scope = getActiveWorkspaceId();
-    const data = await lambdaClient.connector.listAgentBound.query();
-    if (!this.#isStillInScope(scope)) return;
-    this.#set(
-      { agentBoundConnectors: data as any, isAgentBoundInit: true },
-      false,
-      'fetchAgentBoundConnectors',
-    );
+    const scope = cacheScope.get();
+    const pending = this.#agentBoundConnectors.fetcher!(LIST_PARAMS);
+    if (!this.#get().isAgentBoundInit) await this.#agentBoundConnectors.hydrate(LIST_PARAMS, scope);
+    const data = await pending;
+    this.#agentBoundConnectors.replace(LIST_PARAMS, data, scope);
   };
 
   /**
    * Fetch an agent's own tools (agent-owned + mounted) for the "Agent Tools"
-   * tab. Stored keyed by agentId.
+   * tab. Stored keyed by agentId. See
+   * {@link ConnectorActionImpl.fetchConnectors} for the captured-scope rule.
    */
   fetchAgentConnectors = async (agentId: string): Promise<void> => {
-    const scope = getActiveWorkspaceId();
-    const data = await lambdaClient.connector.listByAgent.query({ agentId });
-    if (!this.#isStillInScope(scope)) return;
-    this.#set(
-      (s) => ({
-        agentConnectors: { ...s.agentConnectors, [agentId]: data as any },
-        agentConnectorsInit: { ...s.agentConnectorsInit, [agentId]: true },
-      }),
-      false,
-      'fetchAgentConnectors',
-    );
+    const scope = cacheScope.get();
+    const params = { agentId };
+    const pending = this.#agentConnectors.fetcher!(params);
+    if (!this.#get().agentConnectorsInit[agentId])
+      await this.#agentConnectors.hydrate(params, scope);
+    const data = await pending;
+    this.#agentConnectors.replace(params, data, scope);
   };
 
   /** Copy a user connector into an agent-owned, independently editable row. */
@@ -166,8 +320,17 @@ export class ConnectorActionImpl {
     return authorizationUrl;
   };
 
+  /**
+   * Delete a connector. The row leaves every list that holds it (base,
+   * agent-bound and per-agent buckets) in one fan-out — but only once the
+   * server has confirmed the delete. The row must stay mounted while the
+   * request is in flight: a detail pane bound to it would otherwise blank for
+   * every deletion (and blink back if the delete is rejected), which is why the
+   * removal is confirmed rather than optimistic.
+   */
   deleteConnector = async (id: string): Promise<void> => {
     await lambdaClient.connector.delete.mutate({ id });
+    this.#connectorRows.remove(id);
     await this.#refreshConnectorLists();
   };
 
@@ -340,8 +503,9 @@ export class ConnectorActionImpl {
     toolId: string,
     permission: ConnectorToolPermission,
   ): Promise<void> => {
-    // Optimistic update — patch the tool in whichever list holds it (base
-    // connectors and agent-bound connectors are separate arrays).
+    // Optimistic update — patch the tool in whichever list holds it. The base
+    // list and the agent-bound aggregate are separate replicas, so each gets
+    // its own overlay and both settle together.
     const patchTools = <
       T extends { tools: Array<{ id: string; permission: ConnectorToolPermission }> },
     >(
@@ -351,19 +515,18 @@ export class ConnectorActionImpl {
         ...c,
         tools: c.tools.map((t) => (t.id === toolId ? { ...t, permission } : t)),
       }));
-    this.#set(
-      (s) => ({
-        agentBoundConnectors: patchTools(s.agentBoundConnectors ?? []),
-        connectors: patchTools(s.connectors),
-      }),
-      false,
-      'updateToolPermission/optimistic',
-    );
+
+    const base = this.#connectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools);
+    const bound = this.#agentBoundConnectors.beginOptimistic(CONNECTOR_LIST_KEY, patchTools);
 
     try {
       await lambdaClient.connector.updateToolPermission.mutate({ permission, toolId });
+      base.commit();
+      bound.commit();
     } catch {
-      // Roll back on error
+      // Roll back the overlays, then rebuild from the server.
+      base.rollback();
+      bound.rollback();
       await this.#refreshConnectorLists();
     }
   };

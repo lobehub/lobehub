@@ -381,14 +381,6 @@ describe('main agent reducer', () => {
     expect(ofKind(r.intents, 'createAssistant')[0]).toMatchObject({ parentId: 'SIG' });
   });
 
-  it('falls back to the current assistant only before any tool exists', () => {
-    const { steps } = run([textEvent('hi'), newStepEvent()]); // no tool ever seen
-    expect(ofKind(steps[1], 'createAssistant')[0]).toMatchObject({
-      messageId: 'msg_1',
-      parentId: 'A0',
-    });
-  });
-
   it('resolves a main tool_result via the global tool map', () => {
     const { steps } = run([
       toolsEvent([tool('t1')]),

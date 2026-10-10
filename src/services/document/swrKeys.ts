@@ -1,6 +1,4 @@
 // Domain-namespaced SWR key roots. See the central registry in `@/libs/swr/keys`.
-export const SWR_USE_FETCH_NOTEBOOK_DOCUMENTS = 'notebook:documents';
-
 export const agentDocumentSWRKeys = {
   documents: (agentId: string) => ['agent:documents', agentId] as const,
   /**
@@ -9,13 +7,6 @@ export const agentDocumentSWRKeys = {
    * under that key, which drops those fields.
    */
   documentsList: (agentId: string) => ['agent:documentsList', agentId] as const,
-  /**
-   * Hot-path variant that excludes unbounded `sourceType: 'web'` clips. Shares
-   * the `agent:documentsList` prefix so `invalidateDocumentMutation` revalidates
-   * it (and the full list) together via a prefix matcher. Used by consumers that
-   * never render web docs (slash menu / skills) so the homepage batch stays slim.
-   */
-  documentsNonWebList: (agentId: string) => ['agent:documentsList', agentId, 'non-web'] as const,
   documentChatTopic: (agentId: string, documentId: string) =>
     ['agent:documentChatTopic', agentId, documentId] as const,
   readerDocument: (agentId: string, documentId: string) =>
@@ -25,11 +16,4 @@ export const agentDocumentSWRKeys = {
 
 export const documentSWRKeys = {
   editor: (documentId: string) => ['document:editor', documentId] as const,
-  pageDetail: (documentId: string) => ['page:detail', documentId] as const,
-  pageDocuments: () => ['page:list'] as const,
-  pageMeta: (documentId: string) => ['page:meta', documentId] as const,
-};
-
-export const notebookSWRKeys = {
-  documents: (topicId: string) => [SWR_USE_FETCH_NOTEBOOK_DOCUMENTS, topicId] as const,
 };

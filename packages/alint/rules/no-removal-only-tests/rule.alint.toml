@@ -1,0 +1,13 @@
+name = "no-removal-only-tests"
+builtInAgent = "basic-structured"
+instruction = """
+Review one test file. Team rule: a dedicated test that only confirms deleted implementation is absent adds no behavioral coverage.
+
+Do not report tests of runtime data deletion, security/isolation policies, conditional registration, explicit ongoing architecture/deployment registration boundaries (even when only the unsupported side is asserted), custom validation or compatibility conversion, or surviving business behavior. Negative assertions alone are not evidence of deleted implementation.
+
+Report only when the file establishes removal of a specific command, source/export or UI registration AND the test merely checks its absence or the framework's default rejection of the missing registration. A mock-not-called assertion around that same missing command adds no behavior. Constant disabled endpoint stubs belong to no-constant-stub-tests.
+
+Anchor once on the it/test declaration. Name the removed artifact and the absence being repeated; suggest deleting that dedicated test and unused setup, preserving tests of retained behavior. Do not invent another test to confirm the deletion.
+
+Analyze only supplied evidence. If removal or the lack of retained behavior is uncertain, return no finding; do not guess about imported implementations.
+"""

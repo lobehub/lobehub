@@ -1,20 +1,35 @@
-import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
 import { useHomeStore } from '@/store/home';
+import { agentLabelSelectors } from '@/store/home/selectors';
 import { useUserStore } from '@/store/user';
 import { authSelectors } from '@/store/user/slices/auth/selectors';
 
 /**
- * Hook to fetch the agent label registry into the home store. Mounted by
- * every surface that renders labels (sidebar list, view-all page, settings) —
- * SWR dedupes concurrent mounts.
+ * Sync the agent label registry into the home store (the labels are read
+ * through `agentLabelSelectors`). Mounted by every surface that renders labels
+ * (sidebar list, view-all page, settings) — the replica's sync hook dedupes
+ * concurrent mounts.
  *
- * Scoped by workspace: the registries are disjoint, so a switch must refetch
- * rather than reuse the previous scope's cache.
+ * The scope (personal / workspace) is owned by the replica, so the caller no
+ * longer passes a workspace id: a switch drops the previous registry and
+ * refetches on its own.
+ *
+ * @returns isLoading - registry not loaded yet and a fetch is in flight (drives
+ *   the settings page skeleton instead of an empty "no labels" state)
+ * @returns error - the network error, so consumers can surface a failure state
+ *   instead of a permanent skeleton
+ * @returns mutate - retry the same request (wired into the error state's Retry)
  */
 export const useFetchAgentLabels = () => {
   const isLogin = useUserStore(authSelectors.isLogin);
-  const workspaceId = useActiveWorkspaceId();
   const useFetchAgentLabelsHook = useHomeStore((s) => s.useFetchAgentLabels);
 
-  return useFetchAgentLabelsHook(isLogin, workspaceId);
+  const isAgentLabelsInit = useHomeStore(agentLabelSelectors.isLabelsInit);
+
+  const { error, isValidating, revalidate } = useFetchAgentLabelsHook(isLogin);
+
+  return {
+    error,
+    isLoading: !isAgentLabelsInit && isValidating,
+    mutate: revalidate,
+  };
 };

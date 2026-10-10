@@ -4,8 +4,11 @@ import { type FileChunkState } from './slices/chunk';
 import { initialFileChunkState } from './slices/chunk';
 import { type DocumentState } from './slices/document';
 import { initialDocumentState } from './slices/document';
-import { type FileManagerState } from './slices/fileManager';
-import { initialFileManagerState } from './slices/fileManager';
+// Leaf module on purpose: the slice barrel also pulls in `action.ts`, which
+// imports this store back — reaching it from here would close the cycle before
+// the store is initialized.
+import { type FileManagerState } from './slices/fileManager/initialState';
+import { initialFileManagerState } from './slices/fileManager/initialState';
 import { type ResourceState } from './slices/resource/initialState';
 import { initialResourceState } from './slices/resource/initialState';
 

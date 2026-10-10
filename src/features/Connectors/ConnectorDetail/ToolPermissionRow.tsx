@@ -2,6 +2,7 @@ import { Tooltip } from '@lobehub/ui';
 import { createStaticStyles } from '@lobehub/ui';
 import { BanIcon, CheckIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ConnectorToolPermission } from '@/database/schemas';
 import type { ConnectorTool } from '@/store/tool/slices/connector';
@@ -88,6 +89,7 @@ interface ToolPermissionRowProps {
 }
 
 const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPermissionChange }) => {
+  const { t } = useTranslation('tool');
   const btnClass = (permission: ConnectorToolPermission) =>
     tool.permission === permission ? `${styles.btn} ${styles.btnActive}` : styles.btn;
 
@@ -117,7 +119,7 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPerm
         <div
           className={btnClass(ConnectorToolPermission.auto)}
           style={disabled ? { pointerEvents: 'none' } : undefined}
-          title="Auto — AI calls directly"
+          title={t('connector.permission.auto')}
           onClick={() => handleChange(ConnectorToolPermission.auto)}
         >
           <CheckIcon size={15} />
@@ -125,7 +127,7 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPerm
         <div
           className={btnClass(ConnectorToolPermission.needs_approval)}
           style={disabled ? { pointerEvents: 'none' } : undefined}
-          title="Needs approval"
+          title={t('connector.permission.needsApproval')}
           onClick={() => handleChange(ConnectorToolPermission.needs_approval)}
         >
           <HandIcon size={15} />
@@ -133,7 +135,7 @@ const ToolPermissionRow = memo<ToolPermissionRowProps>(({ disabled, tool, onPerm
         <div
           className={btnClass(ConnectorToolPermission.disabled)}
           style={disabled ? { pointerEvents: 'none' } : undefined}
-          title="Disabled — hidden from AI"
+          title={t('connector.permission.disabled')}
           onClick={() => handleChange(ConnectorToolPermission.disabled)}
         >
           <BanIcon size={15} />

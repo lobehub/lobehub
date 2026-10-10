@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Dalı yeniden adlandır",
   "workingDirectory.renameBranchTitle": "Dalı yeniden adlandır",
   "workingDirectory.renameFailed": "Yeniden adlandırma başarısız oldu",
+  "workingDirectory.rollBranchName": "Başka bir dal adı oluştur",
   "workingDirectory.searchPlaceholder": "Dizinleri ara",
   "workingDirectory.selectFolder": "Klasör seç",
   "workingDirectory.setDefault": "Varsayılan olarak ayarla",

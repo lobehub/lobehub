@@ -93,6 +93,7 @@ vi.mock('@/store/agent/selectors', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
+  operationSelectors: { isAgentRuntimeRunningByContext: () => () => false },
   topicSelectors: {
     getTopicById: () => () => mockTopic,
     getTopicHeteroPinById: () => () =>

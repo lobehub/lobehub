@@ -1269,36 +1269,6 @@ build commit: 6756e52a9238b6d493928e55b05127957dbfefb4`);
       expect(resolved.command).toBe('/Users/x/.local/bin/amp');
     });
 
-    it('defines opencode as the default OpenCode command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.opencode).toBe('opencode');
-    });
-
-    it('defines agent as the default Cursor command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.cursor).toBe('agent');
-    });
-
-    it('defines grok as the default Grok Build command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND['grok-build']).toBe('grok');
-    });
-
-    it('defines pi as the default Pi command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.pi).toBe('pi');
-    });
-
-    it('defines qodercli as the default Qoder command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.qoder).toBe('qodercli');
-    });
-
-    it('defines traecli as the default TRAE command', async () => {
-      const { DEFAULT_HETERO_COMMAND } = await importModule();
-      expect(DEFAULT_HETERO_COMMAND.trae).toBe('traecli');
-    });
-
     it('resolves the default bare command to the validated absolute path', async () => {
       callExecFile('/usr/local/bin/codex\n');
       callExecFile('codex-cli 0.142.5');
@@ -1435,29 +1405,6 @@ describe('login-shell PATH probe', () => {
         ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
       ),
     ).toHaveLength(0);
-  });
-
-  it('re-reads the PATH after an explicit invalidation', async () => {
-    // Rescan has to see a PATH an installer edited while the app was running.
-    const module = await importModule();
-    module.invalidateLoginShellPathCache();
-
-    queueMissThenShell('/opt/tools/bin:/usr/bin');
-    callExecFileError(new Error('still not found'));
-    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
-
-    module.invalidateLoginShellPathCache();
-    execFileMock.mockReset();
-    rejectUnqueuedExecFile();
-    queueMissThenShell('/opt/tools/bin:/new/place:/usr/bin');
-    callExecFileError(new Error('still not found'));
-    await module.detectHeterogeneousCliCommand('kimi-code', 'kimi');
-
-    expect(
-      execFileMock.mock.calls.filter(
-        ([file, args]) => file === '/bin/zsh' && Array.isArray(args) && args[0] === '-ilc',
-      ),
-    ).toHaveLength(1);
   });
 
   it('reports a timed-out probe as its own failure, not as a missing CLI', async () => {

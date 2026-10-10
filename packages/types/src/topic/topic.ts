@@ -16,7 +16,7 @@ export type ShareVisibility = 'private' | 'link';
 export type TimeGroupId =
   'today' | 'yesterday' | 'week' | 'month' | `${number}-${string}` | `${number}`;
 
-export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus';
+export type TopicGroupMode = 'byTime' | 'byProject' | 'flat' | 'byStatus' | 'byAgent';
 export type TopicSortBy = 'createdAt' | 'updatedAt';
 
 /**
@@ -765,6 +765,14 @@ export interface CreateTopicParams {
   metadata?: ChatTopicMetadata;
   /** Pinned model snapshot for the new topic (see `ChatTopic.model`). */
   model?: string;
+  /**
+   * Bind the new topic to a project working directory. The server resolves the
+   * directory and pins its project, device and paths onto the topic — the same
+   * binding `projectWorkingDirectory.startTopic` writes. Carried by the first
+   * message of a conversation started from a project group's "+", so deferring
+   * the topic creation does not drop the project membership.
+   */
+  projectWorkingDirectoryId?: string;
   provider?: string;
   sessionId?: string | null;
   title: string;

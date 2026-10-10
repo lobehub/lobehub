@@ -1,0 +1,75 @@
+diff --git a/dev/lib/create-tokenizer.js b/dev/lib/create-tokenizer.js
+--- a/dev/lib/create-tokenizer.js
++++ b/dev/lib/create-tokenizer.js
+@@ -5,6 +5,7 @@
+  *   ConstructRecord,
+  *   Construct,
+  *   Effects,
++ *   Event,
+  *   InitialConstruct,
+  *   ParseContext,
+  *   Point,
+@@ -101,9 +102,12 @@
+   /**
+    * State and tools for resolving and serializing.
+    *
+-   * @type {TokenizeContext}
++   * @type {TokenizeContext & {_resolveAll: (events: Array<Event>) => Array<Event>}}
+    */
+   const context = {
++    // Private contract with the patched literal-autolink extension: resolve
++    // detached events in registration order without replacing live events.
++    _resolveAll: (events) => resolveAll(resolveAllConstructs, events, context),
+     code: codes.eof,
+     containerState: {},
+     defineSkip,
+@@ -150,7 +154,7 @@
+     addResult(initialize, 0)
+
+     // Otherwise, resolve, and exit.
+-    context.events = resolveAll(resolveAllConstructs, context.events, context)
++    context.events = context._resolveAll(context.events)
+
+     return context.events
+   }
+diff --git a/lib/create-tokenizer.js b/lib/create-tokenizer.js
+--- a/lib/create-tokenizer.js
++++ b/lib/create-tokenizer.js
+@@ -5,6 +5,7 @@
+  *   ConstructRecord,
+  *   Construct,
+  *   Effects,
++ *   Event,
+  *   InitialConstruct,
+  *   ParseContext,
+  *   Point,
+@@ -97,9 +98,12 @@
+   /**
+    * State and tools for resolving and serializing.
+    *
+-   * @type {TokenizeContext}
++   * @type {TokenizeContext & {_resolveAll: (events: Array<Event>) => Array<Event>}}
+    */
+   const context = {
++    // Private contract with the patched literal-autolink extension: resolve
++    // detached events in registration order without replacing live events.
++    _resolveAll: events => resolveAll(resolveAllConstructs, events, context),
+     code: null,
+     containerState: {},
+     defineSkip,
+@@ -142,7 +146,7 @@
+     addResult(initialize, 0);
+
+     // Otherwise, resolve, and exit.
+-    context.events = resolveAll(resolveAllConstructs, context.events, context);
++    context.events = context._resolveAll(context.events);
+     return context.events;
+   }
+
+@@ -610,4 +614,4 @@
+     result.push(value);
+   }
+   return result.join('');
+-}
+\ No newline at end of file
++}

@@ -1,17 +1,12 @@
 import { Flexbox } from '@lobehub/ui';
 import { Skeleton, Text } from '@lobehub/ui';
 
-import { useChatStore } from '@/store/chat';
-import { chatPortalSelectors } from '@/store/chat/selectors';
-import { useFileStore } from '@/store/file';
 import { oneLineEllipsis } from '@/styles';
 
+import { usePreviewFileItem } from './usePreviewFileItem';
+
 const Title = () => {
-  const previewFileId = useChatStore(chatPortalSelectors.previewFileId);
-
-  const useFetchFileItem = useFileStore((s) => s.useFetchKnowledgeItem);
-
-  const { data, isLoading } = useFetchFileItem(previewFileId);
+  const { data, isLoading } = usePreviewFileItem();
 
   return (
     <Flexbox horizontal align={'center'} gap={4} style={{ minWidth: 0, overflow: 'hidden' }}>

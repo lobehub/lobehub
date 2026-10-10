@@ -12,6 +12,7 @@ import { openConnectorOAuthPopup } from '@/utils/connectorOAuth';
 
 import MCPManifestForm from './MCPManifestForm';
 import PluginPreview from './PluginPreview';
+import { pruneHiddenFields } from './pruneHiddenFields';
 import { getSaveErrorToast } from './saveErrorToast';
 
 const INITIAL_VALUES = {
@@ -83,7 +84,7 @@ const DevModal = memo<DevModalProps>(
       }
       setSubmitting(true);
       try {
-        await onSave(values, ctx);
+        await onSave(pruneHiddenFields(values), ctx);
         toast.success(t(isEditMode ? 'dev.updateSuccess' : 'dev.saveSuccess'));
         onOpenChange(false);
       } catch (error) {

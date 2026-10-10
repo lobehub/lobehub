@@ -69,6 +69,18 @@ export interface ChatTopicState {
   creatingTopicIds: string[];
   inSearchingMode?: boolean;
   isSearchingTopic: boolean;
+  /**
+   * Project working directory the *next* topic creation should bind to.
+   *
+   * Set when a project group's "+" opens a blank conversation and cleared by
+   * any later switch to a real topic (or by the creation itself), so it can
+   * only ever describe that one pending new topic. `internal_createTopic` folds
+   * it into the create call, which is what keeps the deferred row inside the
+   * project instead of dropping it into a path-only conversation. The agent id
+   * is part of the value: switching agents must not let one agent's pending
+   * directory land on another agent's topic.
+   */
+  pendingNewTopicDirectory?: { agentId: string; projectWorkingDirectoryId: string };
   searchTopics: ChatTopic[];
   /**
    * Unified topic data map for each agent

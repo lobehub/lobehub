@@ -107,6 +107,16 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
   const { ensureScope, fetcher, hydrate, replace } = engine;
 
   /**
+   * Row key of the head query each entry last asked for. One entry backs a
+   * single view, so a response that belongs to a query the entry has already
+   * moved past must not repaint it — it would show a superseded query, and a
+   * view gated on the current query would then wait forever. Making this an
+   * invariant of the slice (not of one driver) keeps it true for drivers that
+   * leave a request's own callback live after the query changed.
+   */
+  const headQuery = new Map<string, string>();
+
+  /**
    * Hydrates the persisted row once per scope/key/query, then lets the driver
    * fetch and revalidate the head. Read the data from the store.
    */
@@ -117,12 +127,18 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
     const scope = resource.scope.use();
     const key = params ? resource.key(params) : undefined;
     const active = enabled && !!params && key !== undefined;
+    const queryKey = params ? resource.storageKey(params) : undefined;
 
     // Layout effect: runs before paint, so a scope switch never shows a frame
     // of the previous identity's data.
     useLayoutEffect(() => {
       if (active) ensureScope(scope);
     }, [active, scope]);
+
+    // Remember the query this entry now asks for (see `headQuery`).
+    useLayoutEffect(() => {
+      if (active && key !== undefined && queryKey !== undefined) headQuery.set(key, queryKey);
+    }, [active, key, queryKey]);
 
     const hydration = driver.useQuery<boolean>(
       active && resource.persisted && resource.persistKey(key!)
@@ -137,13 +153,17 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
 
     const sync = driver.useQuery<TFetched>(
       active && fetcher
-        ? replicaKeys.sync(resource.name, resource.version, scope, key!, params)
+        ? (resource.syncKey?.(params!) ??
+            replicaKeys.sync(resource.name, resource.version, scope, key!, params))
         : null,
       () => fetcher!(params!, undefined),
       {
         ...schedule,
         onError,
         onSuccess: (data) => {
+          // Discard a head response the entry has moved past: the newer query
+          // owns the view (see `headQuery`).
+          if (queryKey === undefined || headQuery.get(key!) !== queryKey) return;
           replace(params!, data, scope);
           onSuccess?.(data);
         },

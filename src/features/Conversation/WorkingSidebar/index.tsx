@@ -83,6 +83,7 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
 import Files from './Files';
 import { sidebarWidthBudget } from './fitsBesidePortal';
+import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDTH } from './layout';
 import Overview from './Overview';
 import OverviewSlot from './OverviewSlot';
 import PullRequest from './PullRequest';
@@ -187,10 +188,7 @@ const styles = createStaticStyles(({ css }) => ({
 const REVIEW_TREE_STORAGE_KEY = 'lobechat-review-tree';
 const OPEN_TABS_STORAGE_KEY = 'lobechat-working-sidebar-open-tabs-v1';
 const PINNED_TABS_STORAGE_KEY = 'lobechat-working-sidebar-pinned-tabs-v1';
-const OVERVIEW_PANEL_WIDTH = 340;
 const OVERVIEW_TRANSITION = { duration: 0.25, ease: [0.32, 0.72, 0, 1] } as const;
-const MIN_PANEL_WIDTH = 300;
-const MAX_PANEL_WIDTH = 1200;
 // Two-pane Review (diff list + file-tree rail) is cramped below this.
 const TWO_PANE_MIN_WIDTH = 560;
 
@@ -250,7 +248,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
     // the resources pane's document fetch so a collapsed sidebar doesn't pull the
     // full agent-document list into the conversation's initial batch.
     s.status.showRightPanel,
-    s.status.showWorkingOverview ?? !s.status.showRightPanel,
+    systemStatusSelectors.showWorkingOverview(s),
     s.status.workingSidebarTab,
     s.status.workingSidebarTabRequest,
   ]);

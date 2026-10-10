@@ -1,31 +1,30 @@
 import type { TrashCountByType, TrashItem, TrashResourceType } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaPagedData, type ReplicaState } from '@/libs/replica';
+
+/** One type-filter's recycle-bin page: the generic local-first paged view. */
+export type TrashListData = ReplicaPagedData<TrashItem, string>;
+
 export interface TrashState {
   /** Type filter the recycle-bin page is currently showing (`undefined` = everything). */
   activeType?: TrashResourceType;
-  countByType: TrashCountByType;
-  /** A load-more page request is in flight — a second click must not fetch the same cursor. */
-  isLoadingMore: boolean;
-  isTrashInit: boolean;
-  items: TrashItem[];
   /** Registry ids with an in-flight restore / purge — drives per-row spinners. */
   loadingIds: string[];
-  nextCursor: string | null;
-  /**
-   * Cache scope (`user:workspace`) the list above was fetched for. SWR keys are
-   * partitioned per workspace but this list is not, so a scope switch resets
-   * it rather than showing the previous workspace's rows.
-   */
-  scope?: string;
+  /** Per-type counts (`trashCountMap.all`): the filter chips and the empty total. */
+  trashCountMap: Record<string, TrashCountByType>;
+  /** Local-first bookkeeping for `trashCountMap`. */
+  trashCountReplica: ReplicaState<TrashCountByType>;
+  /** Recycle-bin rows per filter (`trashListMap[resourceType ?? 'all']`). */
+  trashListMap: Record<string, TrashListData>;
+  /** Local-first bookkeeping for `trashListMap`. */
+  trashListReplica: ReplicaState<TrashListData>;
 }
 
 export const initialState: TrashState = {
   activeType: undefined,
-  countByType: {},
-  isLoadingMore: false,
-  isTrashInit: false,
-  items: [],
   loadingIds: [],
-  nextCursor: null,
-  scope: undefined,
+  trashCountMap: {},
+  trashCountReplica: createReplicaState(),
+  trashListMap: {},
+  trashListReplica: createReplicaState(),
 };

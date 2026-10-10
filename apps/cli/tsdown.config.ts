@@ -9,6 +9,12 @@ export default defineConfig({
     // production dependency inside the bundle so the embedded CLI is truly
     // self-contained instead of failing at startup with ERR_MODULE_NOT_FOUND.
     alwaysBundle: ['ws'],
+    // `@lydell/node-pty` is deliberately NOT bundled: it loads a prebuilt
+    // native binary per platform, which bundling would break. It stays a real
+    // runtime dependency and is imported lazily (see `src/device/terminal.ts`),
+    // so only a process that actually opens a remote terminal resolves it —
+    // the desktop-embedded CLI keeps working without it.
+    neverBundle: ['@lydell/node-pty'],
   },
   entry: ['src/index.ts'],
   fixedExtension: false,

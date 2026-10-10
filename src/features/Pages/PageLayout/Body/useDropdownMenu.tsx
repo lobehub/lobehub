@@ -13,7 +13,6 @@ import { usePageStore } from '@/store/page';
 export const useDropdownMenu = (): DropdownItem[] => {
   const { t } = useTranslation();
   const showOnlyPagesNotInLibrary = usePageStore((s) => s.showOnlyPagesNotInLibrary);
-  const setShowOnlyPagesNotInLibrary = usePageStore((s) => s.setShowOnlyPagesNotInLibrary);
 
   const [pagePageSize, updateSystemStatus] = useGlobalStore((s) => [
     systemStatusSelectors.pagePageSize(s),
@@ -40,11 +39,5 @@ export const useDropdownMenu = (): DropdownItem[] => {
         label: t('common:navPanel.displayItems'),
       },
     ];
-  }, [
-    t,
-    setShowOnlyPagesNotInLibrary,
-    showOnlyPagesNotInLibrary,
-    pagePageSize,
-    updateSystemStatus,
-  ]);
+  }, [t, showOnlyPagesNotInLibrary, pagePageSize, updateSystemStatus]);
 };

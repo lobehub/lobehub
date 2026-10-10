@@ -709,6 +709,9 @@ importers:
       file-type:
         specifier: ^21.3.4
         version: 21.3.4(supports-color@9.4.0)
+      gpt-tokenizer:
+        specifier: ^3.4.0
+        version: 3.4.0
       mime:
         specifier: ^4.1.0
         version: 4.1.0
@@ -758,6 +761,9 @@ importers:
 
   ../cli:
     dependencies:
+      '@lydell/node-pty':
+        specifier: 1.2.0-beta.15
+        version: 1.2.0-beta.15
       ws:
         specifier: ^8.21.0
         version: 8.22.0

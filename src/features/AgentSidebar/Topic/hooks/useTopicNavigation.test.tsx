@@ -4,6 +4,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { TopicListScopeContext } from '../TopicListScope';
 import { useNavigateToAgentTopics, useTopicNavigation } from './useTopicNavigation';
 
 const switchTopicMock = vi.hoisted(() => vi.fn());
@@ -65,6 +66,20 @@ describe('useTopicNavigation', () => {
     chatStoreStateMock.activeTopicId = undefined;
     chatStoreStateMock.switchTopic = switchTopicMock;
     workspaceStoreStateMock.activeWorkspaceId = null;
+  });
+
+  it('keeps project topics in their project route instead of switching the active Agent', async () => {
+    pathnameMock.mockReturnValue('/project/project-1/settings');
+    workspaceStoreStateMock.activeWorkspaceId = 'workspace-1';
+    const { result } = renderHook(() => useTopicNavigation(), {
+      wrapper: ({ children }) => (
+        <TopicListScopeContext value={{ projectId: 'project-1' }}>{children}</TopicListScopeContext>
+      ),
+    });
+    await act(async () => result.current.navigateToTopic('topic-other-agent'));
+    expect(pushMock).toHaveBeenCalledWith('/team/project/project-1/conversation/topic-other-agent');
+    expect(switchTopicMock).not.toHaveBeenCalled();
+    expect(focusTopicPopupMock).not.toHaveBeenCalled();
   });
 
   it('focuses the popup and still navigates back to the chat route when the topic is detached', async () => {

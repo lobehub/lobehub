@@ -251,6 +251,56 @@ describe('recordWorktreeAdd', () => {
   });
 });
 
+describe('recordGitCommandEffects — worktree outside the source filesystem', () => {
+  const WSL_SOURCE = '\\\\wsl.localhost\\Ubuntu-22.04\\home\\zhy\\PROJECT\\RefRWKV';
+
+  it('ignores a worktree created inside WSL for a Windows-side source', async () => {
+    chatMocks.topics = {
+      t1: { metadata: { workingDirectoryConfig: { path: WSL_SOURCE, repoType: 'git' } } },
+    };
+
+    // Verbatim production command: runCommand on a Windows device shells into WSL.
+    await recordGitCommandEffects({
+      command:
+        'wsl.exe -d Ubuntu-22.04 -- bash -lc "cd /home/zhy/PROJECT/RefRWKV && git rev-parse 27f78b6^ && git worktree add --detach /tmp/RefRWKV-lsh 27f78b6^"',
+      resultContent: 'Preparing worktree (detached HEAD 6692cd5)',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('ignores a POSIX worktree the device reports for a Windows source', async () => {
+    chatMocks.topics = {
+      t1: { metadata: { workingDirectoryConfig: { path: 'C:\\repo', repoType: 'git' } } },
+    };
+    gitServiceMocks.listGitWorktrees.mockResolvedValue([{ branch: 'feat/x', path: '/mnt/c/wt' }]);
+
+    await recordGitCommandEffects({
+      command: 'git worktree add -b feat/x "$WT"',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).not.toHaveBeenCalled();
+  });
+
+  it('still records a Windows worktree for a Windows source', async () => {
+    chatMocks.topics = {
+      t1: { metadata: { workingDirectoryConfig: { path: 'C:\\repo', repoType: 'git' } } },
+    };
+
+    await recordGitCommandEffects({ command: 'git worktree add C:\\wt', topicId: 't1' });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectoryConfig: {
+        git: { activeWorktree: 'C:\\wt', isWorktree: true },
+        path: 'C:\\repo',
+        repoType: 'git',
+      },
+    });
+  });
+});
+
 describe('recordGitCommandEffects', () => {
   it('refreshes the local branch cache when the run is bound to this device', async () => {
     chatMocks.topics = {

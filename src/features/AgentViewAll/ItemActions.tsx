@@ -145,13 +145,13 @@ const AgentItemActions = memo<ItemActionsProps>(({ anchor, item, ...rest }) => {
   }, [id, openCreateGroupModal, visibility]);
 
   const getAgentMenu = useAgentDropdownMenu({
-    anchor,
     avatar: customAvatar,
     backgroundColor: backgroundColor || undefined,
     group: undefined,
     id,
     labels: item.labels,
     labelsEnabled: true,
+    name: item.name,
     openCreateGroupModal: handleOpenCreateGroupModal,
     pinned: pinned ?? false,
     slug,

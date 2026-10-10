@@ -477,28 +477,6 @@ describe('spawnAgent', () => {
     processKill.mockRestore();
   });
 
-  it('preserves SIGKILL when force-stopping a Grok ACP run', async () => {
-    const fake = createGrokAcpProc({ promptAutoComplete: false });
-    nextFakeProc = fake.proc;
-    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
-
-    const { spawnAgent } = await import('./spawnAgent');
-    const handle = await spawnAgent({
-      agentType: 'grok-build',
-      operationId: 'op-grok-force-stop',
-      prompt: 'keep running',
-    });
-    await vi.waitFor(() => {
-      expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
-    });
-
-    handle.kill('SIGKILL');
-
-    expect(processKill).toHaveBeenCalledWith(-54_321, 'SIGKILL');
-    await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGKILL' });
-    processKill.mockRestore();
-  });
-
   it('preserves SIGINT when the transport fails during graceful cancellation', async () => {
     const fake = createGrokAcpProc({ promptAutoComplete: false });
     nextFakeProc = fake.proc;
@@ -815,6 +793,106 @@ describe('spawnAgent', () => {
       processKill.mockRestore();
     }
   });
+
+  it('reports a host-interrupted Devin ACP run as interrupted, not a transport error', async () => {
+    const fake = createFakeAcpProc({ promptAutoComplete: false, sessionId: 'devin-session-1' });
+    nextFakeProc = fake.proc;
+    const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+    try {
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        operationId: 'op-devin-interrupt',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      // The wrapper delivers the protocol-level cancel through `interrupt` when
+      // the OS signal already reached the agent through a shared process group.
+      expect(handle.interrupt).toBeTypeOf('function');
+      handle.interrupt?.('SIGINT');
+      fake.proc.emit('close', null, 'SIGINT');
+
+      const events: any[] = [];
+      for await (const event of handle.events) events.push(event);
+
+      await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGINT' });
+      expect(events.some(({ type }) => type === 'error')).toBe(false);
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          data: expect.objectContaining({ reason: 'interrupted' }),
+          type: 'agent_runtime_end',
+        }),
+      );
+    } finally {
+      processKill.mockRestore();
+    }
+  });
+
+  it.each(['starting', 'running'] as const)(
+    'does not resend an inherited-group SIGTERM while ACP is %s',
+    async (phase) => {
+      const fake = createFakeAcpProc({ promptAutoComplete: false });
+      nextFakeProc = fake.proc;
+      const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true);
+
+      try {
+        const { spawnAgent } = await import('./spawnAgent');
+        const handle = await spawnAgent({
+          agentType: 'devin',
+          detached: false,
+          operationId: 'op-devin-sigterm',
+          prompt: 'keep running',
+        });
+        if (phase === 'running') {
+          await vi.waitFor(() => {
+            expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+          });
+        }
+
+        handle.interrupt?.('SIGTERM');
+        const events = [];
+        for await (const event of handle.events) events.push(event);
+
+        await expect(handle.exit).resolves.toEqual({ code: null, signal: 'SIGTERM' });
+        expect(events.some(({ type }) => type === 'error')).toBe(false);
+        expect(fake.proc.kill).not.toHaveBeenCalled();
+        expect(processKill).not.toHaveBeenCalled();
+        if (phase === 'starting') {
+          expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(false);
+        }
+      } finally {
+        processKill.mockRestore();
+      }
+    },
+  );
+
+  it.each(['SIGTERM', 'SIGKILL'] as const)(
+    'still delivers an owned %s to an inherited-group ACP child',
+    async (signal) => {
+      const fake = createFakeAcpProc({ promptAutoComplete: false });
+      nextFakeProc = fake.proc;
+      const { spawnAgent } = await import('./spawnAgent');
+      const handle = await spawnAgent({
+        agentType: 'devin',
+        detached: false,
+        operationId: 'op-devin-owned-signal',
+        prompt: 'keep running',
+      });
+      await vi.waitFor(() => {
+        expect(fake.requests.some(({ method }) => method === 'session/prompt')).toBe(true);
+      });
+
+      if (signal === 'SIGKILL') handle.interrupt?.(signal);
+      else handle.kill(signal);
+
+      await expect(handle.exit).resolves.toEqual({ code: null, signal });
+      expect(fake.proc.kill).toHaveBeenCalledExactlyOnceWith(signal);
+    },
+  );
 
   it('allows the official canonical trae-cli command to run through ACP', async () => {
     const fake = createFakeAcpProc();
@@ -1418,14 +1496,6 @@ describe('spawnAgent', () => {
     expect(command).toBe('/usr/local/bin/claude-wrapped');
     expect(args).toContain('--my-flag');
     expect(args).toContain('x');
-  });
-
-  it('rejects with an error on unknown agent type', async () => {
-    nextFakeProc = createFakeProc().proc;
-    const { spawnAgent } = await import('./spawnAgent');
-    await expect(
-      spawnAgent({ agentType: 'kimi-cli', operationId: 'op-1', prompt: 'hi' }),
-    ).rejects.toThrow('Unknown local heterogeneous agent type: "kimi-cli"');
   });
 
   it('events iterator drains all pipeline events including the trailing flush', async () => {

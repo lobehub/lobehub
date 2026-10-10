@@ -1,12 +1,12 @@
 'use client';
 
-import { useSortable } from '@dnd-kit/sortable';
 import { ContextMenuTrigger, type DropdownItem, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, cx  } from '@lobehub/ui';
+import { ActionIcon } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
 import { X } from 'lucide-react';
-import { useMotionValue, useSpring, useTransform } from 'motion/react';
+import { type MotionValue, useMotionValue, useSpring, useTransform } from 'motion/react';
 import * as m from 'motion/react-m';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import Avatar from '@/components/Avatar';
@@ -19,6 +19,7 @@ import { useTabUnread } from './hooks/useTabUnread';
 import { TAB_SPRING } from './motion';
 import { useStyles } from './styles';
 import { buildTabContextMenuItems } from './tabContextMenu';
+import { rubberBand } from './tabDrag';
 import { resolveTabInset, type TabTier } from './tabLayout';
 
 // 20px box on an 8px-round tab, inset a uniform 3px: 8 - 3 = 5 keeps the button's curve
@@ -29,7 +30,14 @@ import { resolveTabInset, type TabTier } from './tabLayout';
 // falls back to a 24px glyph inside the 20px box.
 const CLOSE_BUTTON_STYLE = { borderRadius: 5, height: 20, width: 20 } as const;
 
+interface TabDragFollow {
+  grabFraction: number;
+  maxX: number;
+  pointerX: MotionValue<number>;
+}
+
 interface TabItemProps {
+  drag?: TabDragFollow;
   /**
    * Where the tab's offset spring starts on the very first render — the strip's previous
    * total width, i.e. the point a newly opened tab is appended at. Seeding it at the
@@ -49,6 +57,8 @@ interface TabItemProps {
   onCloseOthers: (id: string) => void;
   onCloseRight: (id: string) => void;
   onCloseSplitView: () => void;
+  onDragStart: (id: string, event: React.PointerEvent<HTMLElement>) => void;
+  onMoveBy: (id: string, delta: -1 | 1) => void;
   onOpenInSplitView: (id: string) => void;
   onTogglePin: (id: string) => void;
   pinnedCount: number;
@@ -71,6 +81,7 @@ const TabItem = memo<TabItemProps>(
     totalCount,
     width,
     x,
+    drag,
     enterWidth,
     enterX,
     onActivate,
@@ -79,6 +90,8 @@ const TabItem = memo<TabItemProps>(
     onCloseLeft,
     onCloseRight,
     onCloseSplitView,
+    onDragStart,
+    onMoveBy,
     onOpenInSplitView,
     onTogglePin,
   }) => {
@@ -97,9 +110,7 @@ const TabItem = memo<TabItemProps>(
     const closable = totalCount > 1;
     const closeInert = tier !== 'full' && tier !== 'compact';
 
-    const { attributes, listeners, setNodeRef, transform, isDragging, isSorting } = useSortable({
-      id,
-    });
+    const isDragging = !!drag;
 
     // A newly opened tab springs out from zero rather than popping in at full width; the
     // motion value starts collapsed and is set to the real width on mount.
@@ -116,35 +127,77 @@ const TabItem = memo<TabItemProps>(
     const targetInset = useMotionValue(resolveTabInset(width));
     const springInset = useSpring(targetInset, TAB_SPRING);
     const inset = useTransform(springInset, (value) => `${value}px`);
-    const wasSorting = useRef(false);
+    const zIndex = useMotionValue(pinned ? 1 : 0);
 
     useEffect(() => {
       targetWidth.set(width);
       targetInset.set(resolveTabInset(width));
     }, [width, targetWidth, targetInset]);
 
-    // Dropping a drag must jump, not animate. dnd-kit clears its transform in the same
-    // commit that the reordered store lands, and up to that frame the tab is already
-    // sitting at its new offset (springX at the old slot plus dnd-kit's displacement).
-    // Animating from there would send it back to where it was picked up and re-slide it.
     useEffect(() => {
-      const settledFromDrag = wasSorting.current && !isSorting;
-      wasSorting.current = isSorting;
-
-      if (!settledFromDrag) {
+      if (!drag) {
         targetX.set(x);
         return;
       }
 
-      targetX.jump(x);
-      springX.jump(x);
-    }, [x, isSorting, targetX, springX]);
+      // Held from the same spot of the tab while its width springs between pill and full,
+      // so it re-follows on width changes as well as pointer moves.
+      const follow = () => {
+        const next = rubberBand(
+          drag.pointerX.get() - drag.grabFraction * springWidth.get(),
+          0,
+          drag.maxX,
+        );
+        targetX.jump(next);
+        springX.jump(next);
+      };
+      follow();
+      const offPointer = drag.pointerX.on('change', follow);
+      const offWidth = springWidth.on('change', follow);
 
-    const handleClick = useCallback(() => {
-      if (!isActive || isSplitVisible) {
-        onActivate(id, tab.url);
+      return () => {
+        offPointer();
+        offWidth();
+      };
+    }, [drag, x, targetX, springX, springWidth]);
+
+    // A dropped tab springs from the release point into its slot; it stays above its
+    // neighbours until it lands, or it would slide underneath the one it overlaps.
+    useEffect(() => {
+      const resting = pinned ? 1 : 0;
+      if (isDragging) {
+        zIndex.set(2);
+        return;
       }
-    }, [isActive, isSplitVisible, onActivate, id, tab.url]);
+
+      const settle = () => {
+        if (Math.abs(springX.get() - x) < 1) zIndex.set(resting);
+      };
+      settle();
+      return springX.on('change', settle);
+    }, [isDragging, pinned, x, springX, zIndex]);
+
+    const handlePointerDown = useCallback(
+      (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0 || e.ctrlKey) return;
+        if ((e.target as HTMLElement).closest('[data-tab-close]')) return;
+
+        if (!isActive || isSplitVisible) onActivate(id, tab.url);
+        onDragStart(id, e);
+      },
+      [isActive, isSplitVisible, onActivate, onDragStart, id, tab.url],
+    );
+
+    const handleKeyDown = useCallback(
+      (e: React.KeyboardEvent) => {
+        if (!e.altKey || !e.shiftKey) return;
+        if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+
+        e.preventDefault();
+        onMoveBy(id, e.key === 'ArrowLeft' ? -1 : 1);
+      },
+      [onMoveBy, id],
+    );
 
     const handleClose = useCallback(
       (e: React.MouseEvent) => {
@@ -227,7 +280,8 @@ const TabItem = memo<TabItemProps>(
       <m.div
         data-active={isActive ? 'true' : undefined}
         data-tier={tier}
-        ref={setNodeRef}
+        role="button"
+        tabIndex={0}
         className={cx(
           electronStylish.nodrag,
           styles.tab,
@@ -238,20 +292,15 @@ const TabItem = memo<TabItemProps>(
         )}
         style={{
           paddingInlineStart: inset,
-          // dnd-kit's displacement rides the standalone `translate` property while the
-          // offset spring owns `transform`. Both are pure x translations, so they
-          // compose, and neither has to be folded into the other's value.
-          translate: transform ? `${transform.x}px` : undefined,
           width: springWidth,
           x: springX,
-          zIndex: isDragging ? 2 : pinned ? 1 : undefined,
+          zIndex,
         }}
         onAuxClick={handleAuxClick}
-        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onPointerDown={handlePointerDown}
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => setHovered(false)}
-        {...attributes}
-        {...listeners}
       >
         {indicator}
         <span data-tab-title className={styles.tabTitle}>
@@ -280,7 +329,7 @@ const TabItem = memo<TabItemProps>(
     return (
       <ContextMenuTrigger items={contextMenuItems}>
         <Tooltip
-          disabled={tier === 'full' && !preview}
+          disabled={isDragging || (tier === 'full' && !preview)}
           title={
             preview ? (
               <span className={styles.previewCard}>

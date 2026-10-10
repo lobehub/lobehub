@@ -21,9 +21,11 @@ const mocks = vi.hoisted(() => ({
     removeAgent: vi.fn(),
     toggleAgentLabel: vi.fn(),
     updateAgentGroup: vi.fn(),
+    updateAgentMeta: vi.fn(),
   },
   navigate: vi.fn(),
   openAgentInNewWindow: vi.fn(),
+  openRenameModal: vi.fn(),
   setSidebarItemVisible: vi.fn(),
   transferMenuItems: null as null | { key: string; label: string }[],
 }));
@@ -55,7 +57,7 @@ vi.mock('@/business/client/hooks/useAgentTransferMenuItem', () => ({
   useAgentTransferMenuItem: () => mocks.transferMenuItems,
 }));
 
-vi.mock('@/features/EditingPopover/store', () => ({ openEditingPopover: vi.fn() }));
+vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
 
 vi.mock('@/features/ResourcePermission/useResourceAccess', () => ({
   useResourceAccess: () => ({
@@ -138,6 +140,17 @@ const getMenuLayout = (items: ReturnType<ReturnType<typeof useAgentDropdownMenu>
     return [];
   });
 
+const getMenuItem = (
+  items: ReturnType<ReturnType<typeof useAgentDropdownMenu>>,
+  key: string,
+): { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } => {
+  const found = (items ?? []).find(
+    (item) => item && typeof item === 'object' && 'key' in item && item.key === key,
+  ) as { onClick: (info: { domEvent: { stopPropagation: () => void } }) => void } | undefined;
+  if (!found) throw new Error(`Expected ${key} menu item`);
+  return found;
+};
+
 describe('useAgentDropdownMenu', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -153,7 +166,6 @@ describe('useAgentDropdownMenu', () => {
   it('keeps non-config actions available to a use-only Workspace member', () => {
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -176,7 +188,6 @@ describe('useAgentDropdownMenu', () => {
   it('shows the Labels submenu only where it is enabled (the agents list page)', () => {
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         labelsEnabled: true,
@@ -199,7 +210,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         labelsEnabled: true,
@@ -221,7 +231,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         labelsEnabled: true,
@@ -242,7 +251,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -259,7 +267,6 @@ describe('useAgentDropdownMenu', () => {
   it('hides an Agent through the caller sidebar preference', async () => {
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -296,7 +303,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -324,7 +330,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -346,7 +351,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -379,7 +383,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -399,7 +402,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -427,7 +429,6 @@ describe('useAgentDropdownMenu', () => {
 
     const { result } = renderHook(() =>
       useAgentDropdownMenu({
-        anchor: null,
         group: undefined,
         id: 'agent-1',
         openCreateGroupModal: vi.fn(),
@@ -439,5 +440,63 @@ describe('useAgentDropdownMenu', () => {
     );
 
     expect(getMenuKeys(result.current())).not.toContain('permission');
+  });
+  it('renames through the shared modal, writing the field the row label came from', async () => {
+    mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'agent-1',
+        name: 'Claude Code',
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Claude Code',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    getMenuItem(result.current(), 'rename').onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    expect(mocks.openRenameModal).toHaveBeenCalledOnce();
+    const { defaultValue, onSave } = mocks.openRenameModal.mock.calls[0][0] as {
+      defaultValue: string;
+      onSave: (next: string) => Promise<void>;
+    };
+    expect(defaultValue).toBe('Claude Code');
+
+    await onSave('Claude Code 2');
+
+    // The row shows `name`, so that is what a rename writes — never the role.
+    expect(mocks.home.updateAgentMeta).toHaveBeenCalledWith('agent-1', { name: 'Claude Code 2' });
+  });
+
+  it('renames the role only when there is no name to show', async () => {
+    mocks.canEditResource = true;
+
+    const { result } = renderHook(() =>
+      useAgentDropdownMenu({
+        group: undefined,
+        id: 'agent-1',
+        name: null,
+        openCreateGroupModal: vi.fn(),
+        pinned: false,
+        title: 'Health Assistant',
+        userId: 'member-1',
+        visibility: 'public',
+      }),
+    );
+
+    getMenuItem(result.current(), 'rename').onClick({ domEvent: { stopPropagation: vi.fn() } });
+
+    const { onSave } = mocks.openRenameModal.mock.calls[0][0] as {
+      onSave: (next: string) => Promise<void>;
+    };
+    await onSave('Care Assistant');
+
+    expect(mocks.home.updateAgentMeta).toHaveBeenCalledWith('agent-1', {
+      title: 'Care Assistant',
+    });
   });
 });

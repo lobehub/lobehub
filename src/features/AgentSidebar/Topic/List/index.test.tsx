@@ -87,6 +87,7 @@ vi.mock('@/store/chat', () => ({
 }));
 
 vi.mock('@/store/chat/selectors', () => ({
+  operationSelectors: { visiblyRunningTopicIds: () => [] },
   topicSelectors: {
     currentTopicLength: (state: { topicLength: number }) => state.topicLength,
     displayTopicsForSidebar: () => (state: typeof chatStoreStateMock) => state.topics,
@@ -114,11 +115,13 @@ vi.mock('@/store/user', () => ({
 }));
 
 vi.mock('@/store/user/selectors', () => ({
+  authSelectors: { isLoaded: () => true },
   preferenceSelectors: {
     topicIncludeCompleted: (state: { topicIncludeCompleted: boolean }) =>
       state.topicIncludeCompleted,
     topicSortBy: (state: { topicSortBy: string }) => state.topicSortBy,
   },
+  userProfileSelectors: { userId: () => 'test-user-id' },
 }));
 
 vi.mock('../AllTopicsDrawer', () => ({

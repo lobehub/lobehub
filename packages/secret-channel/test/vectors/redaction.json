@@ -1,0 +1,70 @@
+{
+  "description": "Output redaction placeholder and known-value variants (spec §7.4). Placeholder = \"«secret:\" || sanitize(label) || \"»\".",
+  "generator": "spec/test-vectors/generate.ts (packages/asc-core reference implementation)",
+  "placeholders": [
+    {
+      "label": "sudo-password",
+      "sanitized": "sudo-password",
+      "placeholder": "«secret:sudo-password»"
+    },
+    {
+      "label": "ssh passphrase",
+      "sanitized": "ssh-passphrase",
+      "placeholder": "«secret:ssh-passphrase»"
+    },
+    {
+      "label": "git/token",
+      "sanitized": "git-token",
+      "placeholder": "«secret:git-token»"
+    },
+    {
+      "label": "../../etc",
+      "sanitized": "..-..-etc",
+      "placeholder": "«secret:..-..-etc»"
+    },
+    {
+      "label": "",
+      "sanitized": "secret",
+      "placeholder": "«secret:secret»"
+    },
+    {
+      "label": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "sanitized": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+      "placeholder": "«secret:xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx»"
+    },
+    {
+      "label": "ﬁle-ＴＯＫＥＮ",
+      "sanitized": "file-TOKEN",
+      "placeholder": "«secret:file-TOKEN»"
+    }
+  ],
+  "variants": [
+    {
+      "value": "hunter2-TEST",
+      "variants": [
+        "hunter2-TEST",
+        "aHVudGVyMi1URVNU",
+        "68756e746572322d54455354",
+        "68756E746572322D54455354"
+      ]
+    },
+    {
+      "value": "p@ss w/rd+TEST",
+      "variants": [
+        "p@ss w/rd+TEST",
+        "p%40ss%20w%2Frd%2BTEST",
+        "cEBzcyB3L3JkK1RFU1Q",
+        "cEBzcyB3L3JkK1RFU1Q=",
+        "7040737320772f72642b54455354",
+        "7040737320772F72642B54455354"
+      ]
+    },
+    {
+      "value": "abc",
+      "variants": [
+        "YWJj",
+        "616263"
+      ]
+    }
+  ]
+}

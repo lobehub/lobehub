@@ -84,6 +84,15 @@ describe('systemStatusSelectors', () => {
       expect(systemStatusSelectors.portalWidth(noPortalWidth)).toBe(400);
     });
 
+    it('should show the working overview by default only while the right panel is closed', () => {
+      const at = (status: { showRightPanel?: boolean; showWorkingOverview?: boolean }) =>
+        systemStatusSelectors.showWorkingOverview(merge(initialState, { status }));
+
+      expect(at({ showRightPanel: false, showWorkingOverview: undefined })).toBe(true);
+      expect(at({ showRightPanel: true, showWorkingOverview: undefined })).toBe(false);
+      expect(at({ showRightPanel: true, showWorkingOverview: true })).toBe(true);
+    });
+
     it('should return workingSidebarWidth from status, defaulting to 360', () => {
       expect(
         systemStatusSelectors.workingSidebarWidth(

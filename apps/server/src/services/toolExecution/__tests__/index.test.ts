@@ -772,6 +772,57 @@ describe('ToolExecutionService', () => {
       expect((result.error as any)?.code).toBe('MCP_DEVICE_UNAVAILABLE');
     });
 
+    describe('Agent Share visitor runs', () => {
+      const visitor = { agentShareVisitor: { shareId: 'share-1' } };
+
+      it.each([
+        ['stdio', { args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }],
+        ['local-network HTTP', { name: 'my-mcp', type: 'http', url: 'http://10.0.0.5:8000/mcp' }],
+      ])(
+        'refuses a %s MCP call instead of tunneling to the creator device',
+        async (_, mcpParams) => {
+          vi.mocked(getScopedOnlineDevices).mockResolvedValue([
+            { channels: [{ channel: 'desktop' }], deviceId: 'creator-desktop', online: true },
+          ] as any);
+          const callTool = vi.fn();
+          const service = makeService({ callTool });
+
+          const result = await service.executeTool(mcpPayload, contextWith(mcpParams, visitor));
+
+          expect(result.success).toBe(false);
+          expect((result.error as any)?.code).toBe('SHARE_GATE_BLOCKED');
+          expect(deviceGateway.executeMcpCall).not.toHaveBeenCalled();
+          expect(callTool).not.toHaveBeenCalled();
+        },
+      );
+
+      it('refuses a stdio MCP call when no gateway is configured', async () => {
+        (deviceGateway as any).isConfigured = false;
+        const callTool = vi.fn();
+        const service = makeService({ callTool });
+
+        const result = await service.executeTool(
+          mcpPayload,
+          contextWith({ args: [], command: 'npx', name: 'my-mcp', type: 'stdio' }, visitor),
+        );
+
+        expect((result.error as any)?.code).toBe('SHARE_GATE_BLOCKED');
+        expect(callTool).not.toHaveBeenCalled();
+      });
+
+      it('still calls a public HTTP MCP server', async () => {
+        const callTool = vi.fn().mockResolvedValue({ ok: true });
+        const service = makeService({ callTool });
+
+        await service.executeTool(
+          mcpPayload,
+          contextWith({ name: 'my-mcp', type: 'http', url: 'https://mcp.example.com' }, visitor),
+        );
+
+        expect(callTool).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('runs stdio in-process when no gateway is configured (standalone Electron)', async () => {
       (deviceGateway as any).isConfigured = false;
       const callTool = vi.fn().mockResolvedValue({ ok: true });

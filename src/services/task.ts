@@ -104,8 +104,6 @@ class TaskService {
     createdByAgentId?: string;
     description?: string;
     editorData?: unknown;
-    /** Bind a goal entity (`goals` row) to the created task. */
-    identifierPrefix?: string;
     instruction: string;
     name?: string;
     parentTaskId?: string;

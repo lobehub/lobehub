@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerProjectCommand } from './project';
 
@@ -13,7 +13,6 @@ const { mockClient, mockResolveWorkspaceId } = vi.hoisted(() => ({
       delete: { mutate: vi.fn() },
       detail: { query: vi.fn() },
       list: { query: vi.fn() },
-      moveTask: { mutate: vi.fn() },
       rejectCompletion: { mutate: vi.fn() },
       removeAgent: { mutate: vi.fn() },
       removeKnowledgeBase: { mutate: vi.fn() },
@@ -46,6 +45,10 @@ describe('project command', () => {
     vi.clearAllMocks();
     mockResolveWorkspaceId.mockReturnValue(undefined);
     vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it('creates a project', async () => {

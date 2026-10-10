@@ -19,7 +19,7 @@ import { buildLlmExecutorDeclaration } from '@/services/llmRelay';
 export type { ExecAgentResult, ScheduleAgentRunParams, ScheduleAgentRunResult };
 
 /** Gateway stream features every run started from this client handles. */
-const STREAM_FEATURES: AgentStreamClientFeature[] = ['member_runtime_end'];
+const STREAM_FEATURES: AgentStreamClientFeature[] = ['file_works', 'member_runtime_end'];
 
 /** An older server's strict input schema rejected the `streamFeatures` key. */
 const isUnknownStreamFeaturesError = (error: unknown): boolean => {

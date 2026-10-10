@@ -103,11 +103,11 @@ vi.mock('@/store/page', () => ({
   pageSelectors: {
     getDocumentById: (_id: string) => (_s: unknown) => undefined,
   },
-  usePageStore: (selector: (state: Record<string, unknown>) => unknown) =>
-    selector({
-      publishPageToWorkspace: vi.fn(),
-      setPageVisibility: vi.fn(),
-    }),
+  pageActions: {
+    publishPageToWorkspace: vi.fn(),
+    setPageVisibility: vi.fn(),
+  },
+  usePageStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/user', () => ({

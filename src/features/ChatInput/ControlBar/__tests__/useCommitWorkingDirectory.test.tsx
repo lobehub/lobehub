@@ -1,3 +1,4 @@
+import type { ChatTopic } from '@lobechat/types';
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +14,7 @@ const testState = vi.hoisted(() => ({
   },
   chat: {
     activeTopicId: undefined as string | undefined,
-    topic: undefined as { metadata?: Record<string, unknown> } | undefined,
+    topic: undefined as ChatTopic | undefined,
     updateTopicMetadata: vi.fn(),
   },
   currentDeviceId: 'this-machine' as string | undefined,
@@ -61,6 +62,7 @@ vi.mock('@/helpers/heteroSessionByWorkingDirectory', () => ({
 describe('useCommitWorkingDirectory — localTarget', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    testState.chat.topic = undefined;
     testState.agent.agencyConfig = undefined;
     testState.agent.agentMap = {};
     testState.agent.localAgentWorkingDirectoryMap = {};
@@ -75,6 +77,21 @@ describe('useCommitWorkingDirectory — localTarget', () => {
       isPreferenceLoading: false,
       workspaceScoped: false,
     };
+  });
+
+  it('keeps a project-bound source directory while allowing worktree selection', async () => {
+    testState.chat.activeTopicId = 'topic';
+    testState.chat.topic = {
+      id: 'topic',
+      projectWorkingDirectoryId: 'directory',
+      metadata: { workingDirectory: '/repo', workingDirectoryConfig: { path: '/repo' } },
+    } as ChatTopic;
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+    await expect(result.current.commit({ path: '/elsewhere' })).rejects.toThrow();
+    await expect(result.current.clear()).rejects.toThrow();
+    expect(testState.chat.updateTopicMetadata).not.toHaveBeenCalled();
+    await result.current.commit({ path: '/repo', git: { activeWorktree: '/repo-worktree' } });
+    expect(testState.chat.updateTopicMetadata).toHaveBeenCalled();
   });
 
   it('files a workspace member’s first sandbox pick against their own machine', async () => {
@@ -147,7 +164,7 @@ describe('useCommitWorkingDirectory — topic device provenance', () => {
     // A conversation first pinned on device A, now running on device B.
     testState.chat.topic = {
       metadata: { boundDeviceId: 'device-a', workingDirectory: '/Users/me/repo-a' },
-    };
+    } as ChatTopic;
     testState.chat.updateTopicMetadata = vi.fn();
     testState.currentDeviceId = 'this-machine';
     testState.effective = {

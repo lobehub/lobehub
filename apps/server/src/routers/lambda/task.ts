@@ -85,6 +85,9 @@ const taskVerifyConfigPatchSchema = z.object({
 });
 
 // Priority: 0=None, 1=Urgent, 2=High, 3=Normal, 4=Low
+// Unknown fields are stripped, including the removed identifierPrefix. Released
+// CLI clients send 'T' by default; ignore it so project subtasks use their project
+// identifier without breaking ordinary creates from those clients.
 const createSchema = z.object({
   assigneeAgentId: z.string().optional(),
   assigneeUserId: z.string().optional(),
@@ -96,7 +99,6 @@ const createSchema = z.object({
   createdByAgentId: z.string().optional(),
   description: z.string().optional(),
   editorData: z.unknown().optional(),
-  identifierPrefix: z.string().optional(),
   instruction: z.string().min(1),
   name: z.string().optional(),
   parentTaskId: z.string().optional(),
@@ -1039,6 +1041,7 @@ export const taskRouter = router({
       idInput.merge(
         z.object({
           continueTopicId: z.string().optional(),
+          deviceId: z.string().optional(),
           prompt: z.string().optional(),
         }),
       ),
@@ -1054,6 +1057,7 @@ export const taskRouter = router({
         );
         return await runner.runTask({
           continueTopicId: input.continueTopicId,
+          deviceId: input.deviceId,
           extraPrompt: input.prompt,
           taskId: task.id,
         });
@@ -1699,6 +1703,26 @@ export const taskRouter = router({
         });
       }
     }),
+
+  usage: taskProcedure.input(idInput).query(async ({ input, ctx }) => {
+    try {
+      const task = await resolveOrThrow(ctx.taskModel, input.id);
+      const usage = await ctx.taskTopicModel.sumRunCostByTaskIds([task.id]);
+
+      return {
+        data: { ...usage, taskId: task.id, taskIdentifier: task.identifier },
+        success: true,
+      };
+    } catch (error) {
+      if (error instanceof TRPCError) throw error;
+      console.error('[task:usage]', error);
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Failed to get task usage',
+      });
+    }
+  }),
 
   // Cross-workspace task *transfer* is intentionally not supported anymore:
   // moving a task drags its whole subtree plus history (dependencies,

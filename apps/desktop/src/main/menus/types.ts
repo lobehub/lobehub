@@ -47,4 +47,6 @@ export interface IMenuPlatform {
    * Refresh menu
    */
   refresh: (options?: MenuOptions) => void;
+
+  updateDockMenu?: (snapshot: TrayNavigationSnapshot) => void;
 }

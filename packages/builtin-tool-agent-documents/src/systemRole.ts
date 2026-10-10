@@ -47,6 +47,7 @@ Only use listDocuments/readDocument when the user is asking about agent document
 - Use renameDocument for title-only changes; avoid rewriting content unnecessarily.
 - Use copyDocument before major edits when user may want a backup version.
 - Keep load-rule changes explicit and summarize their effect, especially when they change permissions, sharing scope, load location, or load strategy.
+- Start content directly with the body. Do NOT open with an H1 (\`#\`) heading — the title field already renders as the document header, so the leading H1 is removed automatically; use \`##\` or deeper for in-document sections.
 </best_practices>
 
 <response_format>

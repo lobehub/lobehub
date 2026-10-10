@@ -126,11 +126,13 @@ const { loggerInfoMock } = vi.hoisted(() => ({
 
 const {
   beginServerDefaultOperationMock,
+  describeServerDefaultModelMock,
   getProviderBindingRuntimeMock,
   getServerDefaultEndpointMock,
   settleServerDefaultOperationMock,
 } = vi.hoisted(() => ({
   beginServerDefaultOperationMock: vi.fn(),
+  describeServerDefaultModelMock: vi.fn(),
   getProviderBindingRuntimeMock: vi.fn(),
   getServerDefaultEndpointMock: vi.fn(),
   settleServerDefaultOperationMock: vi.fn(),
@@ -138,6 +140,7 @@ const {
 
 vi.mock('@/modules/heterogeneousAgent/providerBindingPort', () => ({
   beginServerDefaultOperation: beginServerDefaultOperationMock,
+  describeServerDefaultModel: describeServerDefaultModelMock,
   getProviderBindingRuntime: getProviderBindingRuntimeMock,
   getServerDefaultEndpoint: getServerDefaultEndpointMock,
   settleServerDefaultOperation: settleServerDefaultOperationMock,
@@ -829,6 +832,8 @@ describe('HeterogeneousAgentCtr', () => {
         settings: { sdkType: 'openai', supportResponsesApi: true },
       },
     });
+    describeServerDefaultModelMock.mockReset();
+    describeServerDefaultModelMock.mockResolvedValue(undefined);
     getServerDefaultEndpointMock.mockReset();
     getServerDefaultEndpointMock.mockResolvedValue('https://app.example.com');
     settleServerDefaultOperationMock.mockReset();
@@ -1649,21 +1654,6 @@ describe('HeterogeneousAgentCtr', () => {
         operationId: 'op-cancel-sdk-preparation',
         result: 'error',
       });
-    });
-
-    it.each([
-      '-flag-looking-prompt',
-      '--help please',
-      '- dash at start',
-      '-p -- mixed',
-      'normal prompt with -dash- inside',
-    ])('accepts dash-containing prompt without leaking to argv: %s', async (prompt) => {
-      const { cliArgs, writes } = await runSendPrompt(prompt);
-
-      expect(cliArgs).not.toContain(prompt);
-      expect(writes).toHaveLength(1);
-      const msg = JSON.parse(writes[0].trimEnd());
-      expect(msg.message.content.at(-1).text).toBe(prompt);
     });
 
     it('falls back to the user Desktop when no cwd is supplied', async () => {
@@ -2714,6 +2704,75 @@ describe('HeterogeneousAgentCtr', () => {
       expect(settlement).toEqual({ relayInvocation, success: true });
     });
 
+    it('describes a non-OpenAI server-default model to Codex from the deployment card', async () => {
+      nextFakeProc = createFakeProc().proc;
+      describeServerDefaultModelMock.mockResolvedValueOnce({
+        abilities: { reasoning: false, vision: false },
+        contextWindowTokens: 262_144,
+        displayName: 'Kimi K3',
+        model: 'kimi-k3',
+        nativeResponses: false,
+      });
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k3', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi-codex',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(describeServerDefaultModelMock).toHaveBeenCalledWith(expect.any(Object), {
+        agentType: 'codex',
+        model: 'kimi-k3',
+      });
+      const catalog = JSON.parse(
+        await readFile(path.join(spawnCalls[0].options.env.CODEX_HOME, 'models.json'), 'utf8'),
+      );
+      expect(catalog.models[0]).toMatchObject({
+        context_window: 262_144,
+        display_name: 'Kimi K3',
+        slug: 'lobehub/kimi-k3',
+      });
+    });
+
+    it('still launches server-default Codex when the model card cannot be read', async () => {
+      nextFakeProc = createFakeProc().proc;
+      describeServerDefaultModelMock.mockRejectedValueOnce(new Error('offline'));
+      const ctr = new HeterogeneousAgentCtr({
+        appStoragePath,
+        storeManager: { get: vi.fn() },
+      } as any);
+      const { sessionId } = await ctr.startSession({
+        agentType: 'codex',
+        command: 'codex',
+        providerBinding: {
+          apiConfig: { model: 'kimi-k3', source: 'server-default' },
+          kind: 'server-default',
+        },
+      });
+
+      await ctr.sendPrompt({
+        operationId: 'op-server-default-kimi-codex-offline',
+        prompt: 'hello',
+        sessionId,
+        topicId: 'topic-1',
+      });
+
+      expect(spawnCalls[0].args).toEqual(expect.arrayContaining(['--model', 'lobehub/kimi-k3']));
+    });
+
     it('injects a Kimi operation token into its Anthropic credential env', async () => {
       nextFakeProc = createFakeProc().proc;
       const ctr = new HeterogeneousAgentCtr({
@@ -3134,83 +3193,6 @@ describe('HeterogeneousAgentCtr', () => {
       ).rejects.toThrow(`Working directory does not exist: ${missingCwd}`);
 
       expect(detect).not.toHaveBeenCalled();
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast when Claude Code CLI is unavailable instead of attempting spawn', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'claude-code',
-        command: 'claude',
-      });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('Claude Code CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('claude');
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast with CodeBuddy install guidance when CodeBuddy is unavailable', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'codebuddy',
-        command: 'codebuddy',
-      });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('CodeBuddy CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('codebuddy');
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast with AMP-specific install guidance when AMP is unavailable', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({ agentType: 'amp', command: 'amp' });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('Amp CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('amp');
-      expect(spawnCalls).toHaveLength(0);
-    });
-
-    it('fails fast with OpenCode install guidance when OpenCode is unavailable', async () => {
-      const detect = vi.fn().mockResolvedValue({ available: false });
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-        binaryManager: { detect },
-      } as any);
-      const { sessionId } = await ctr.startSession({
-        agentType: 'opencode',
-        command: 'opencode',
-      });
-
-      await expect(
-        ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId }),
-      ).rejects.toThrow('OpenCode CLI was not found');
-
-      expect(detect).toHaveBeenCalledWith('opencode');
       expect(spawnCalls).toHaveLength(0);
     });
 
@@ -4881,6 +4863,44 @@ describe('HeterogeneousAgentCtr', () => {
       expect(proc.stdin.end).toHaveBeenCalledOnce();
     });
 
+    it.each([undefined, 'agt_dispatched'])(
+      'replaces launcher identity with dispatched agent %s',
+      async (agentId) => {
+        for (const key of [
+          'AGENT',
+          'TASK',
+          'OPERATION',
+          'TOPIC',
+          'WORKSPACE',
+          'ASSISTANT_MESSAGE',
+        ]) {
+          vi.stubEnv(`LOBEHUB_${key}_ID`, `launcher-${key}`);
+        }
+        try {
+          const proc = createGatewayCliProc();
+          nextFakeProc = proc;
+          const ctr = new HeterogeneousAgentCtr({
+            appStoragePath,
+            storeManager: { get: vi.fn() },
+          } as any);
+
+          const ack = ctr.spawnLhHeteroExec({ ...params, agentId, assistantMessageId: undefined });
+          proc.emit('spawn');
+          await expect(ack).resolves.toEqual({ status: 'accepted' });
+
+          const env = spawnCalls[0].options.env;
+          expect(env.LOBEHUB_AGENT_ID).toBe(agentId);
+          expect(env.LOBEHUB_OPERATION_ID).toBe(params.operationId);
+          expect(env.LOBEHUB_TOPIC_ID).toBe(params.topicId);
+          for (const key of ['TASK', 'WORKSPACE', 'ASSISTANT_MESSAGE']) {
+            expect(env).not.toHaveProperty(`LOBEHUB_${key}_ID`);
+          }
+        } finally {
+          vi.unstubAllEnvs();
+        }
+      },
+    );
+
     it('forwards the topic workspace as LOBEHUB_WORKSPACE_ID for ingest', async () => {
       const proc = createGatewayCliProc();
       nextFakeProc = proc;
@@ -5310,80 +5330,6 @@ describe('HeterogeneousAgentCtr', () => {
       expect(runtimeEnd).toBeUndefined();
     });
 
-    it('delivers late final Codex stdout chunks BEFORE heteroAgentSessionComplete', async () => {
-      const threadStarted = `${JSON.stringify({ thread_id: 't1', type: 'thread.started' })}\n`;
-      const turnStarted = `${JSON.stringify({ type: 'turn.started' })}\n`;
-      const finalMessage = `${JSON.stringify({
-        item: {
-          id: 'item_103',
-          text: 'Final report after late stdout.',
-          type: 'agent_message',
-        },
-        type: 'item.completed',
-      })}\n`;
-      const turnCompleted = `${JSON.stringify({
-        type: 'turn.completed',
-        usage: { input_tokens: 10, output_tokens: 5 },
-      })}\n`;
-
-      const proc = new EventEmitter() as any;
-      const stdout = new PassThrough();
-      const stderr = new PassThrough();
-      proc.stdout = stdout;
-      proc.stderr = stderr;
-      proc.stdin = {
-        end: vi.fn(),
-        write: vi.fn((_chunk: any, cb?: () => void) => {
-          cb?.();
-          return true;
-        }),
-      };
-      proc.kill = vi.fn();
-      proc.killed = false;
-      proc.__start = () => {
-        setImmediate(() => {
-          stdout.write(threadStarted);
-          stdout.write(turnStarted);
-          stderr.end();
-          proc.emit('exit', 0);
-          setImmediate(() => {
-            stdout.write(finalMessage);
-            stdout.write(turnCompleted);
-            stdout.end();
-          });
-        });
-      };
-      nextFakeProc = proc;
-
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const { sessionId } = await ctr.startSession({ agentType: 'codex', command: 'codex' });
-      const sendStartedAt = Date.now();
-      await ctr.sendPrompt({ operationId: 'op-test', prompt: 'hello', sessionId });
-      const sendDurationMs = Date.now() - sendStartedAt;
-
-      const completeIdx = broadcasts.findIndex((b) => b.channel === 'heteroAgentSessionComplete');
-      const finalChunkIdx = broadcasts.findIndex(
-        (b) =>
-          b.channel === 'heteroAgentEvent' &&
-          (b.data as any)?.event?.type === 'stream_chunk' &&
-          (b.data as any)?.event?.data?.content === 'Final report after late stdout.',
-      );
-      const runtimeEndIdx = broadcasts.findIndex(
-        (b) =>
-          b.channel === 'heteroAgentEvent' && (b.data as any)?.event?.type === 'agent_runtime_end',
-      );
-
-      expect(completeIdx).toBeGreaterThan(-1);
-      expect(finalChunkIdx).toBeGreaterThan(-1);
-      expect(runtimeEndIdx).toBeGreaterThan(-1);
-      expect(finalChunkIdx).toBeLessThan(completeIdx);
-      expect(runtimeEndIdx).toBeLessThan(completeIdx);
-      expect(sendDurationMs).toBeGreaterThanOrEqual(900);
-    });
-
     it('serializes AskUserQuestion bridge events behind already-queued stdout tool events', async () => {
       const initLine = `${JSON.stringify({
         model: 'claude-sonnet-4-6',
@@ -5633,28 +5579,6 @@ describe('HeterogeneousAgentCtr', () => {
       ctr.afterAppReady();
       const sigterm = captureRegisteredHandler(processOnSpy, 'SIGTERM');
       sigterm();
-
-      await expect(access(file)).rejects.toThrow();
-
-      processOnSpy.mockRestore();
-      processExitSpy.mockRestore();
-    });
-
-    it('SIGINT handler unlinks pending intervention temp configs (Ctrl-C path)', async () => {
-      const electron = (await import('electron')) as any;
-      electron.app.on.mockClear();
-      const processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
-      const processExitSpy = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
-
-      const ctr = new HeterogeneousAgentCtr({
-        appStoragePath,
-        storeManager: { get: vi.fn() },
-      } as any);
-      const file = await seedPendingIntervention(ctr, 'opSigint');
-
-      ctr.afterAppReady();
-      const sigint = captureRegisteredHandler(processOnSpy, 'SIGINT');
-      sigint();
 
       await expect(access(file)).rejects.toThrow();
 

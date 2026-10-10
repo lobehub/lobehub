@@ -27,6 +27,20 @@ type ExitListener = (sessionId: string, exitCode: number) => void;
 type PaneNavListener = (sessionId: string, direction: -1 | 1) => void;
 
 /**
+ * How one session's terminal talks to its shell.
+ *
+ * The default sink is this machine's Electron main process. A session opened on
+ * a remote device registers its own sink instead — the panel, the xterm
+ * instance and the tab bookkeeping are identical either way, only the wire
+ * differs.
+ */
+export interface TerminalSessionSink {
+  close: (sessionId: string) => void;
+  resize: (sessionId: string, cols: number, rows: number) => void;
+  write: (sessionId: string, data: string) => void;
+}
+
+/**
  * Module-level registry of live xterm instances, keyed by PTY session id.
  *
  * The PTY lives in the main process; this registry keeps the renderer-side
@@ -39,6 +53,48 @@ class XtermManager {
   private paneNavListeners = new Set<PaneNavListener>();
   private ipcBound = false;
   private webglUnavailable = false;
+  /** Per-session overrides; absent means the local Electron sink below. */
+  private sinks = new Map<string, TerminalSessionSink>();
+
+  /**
+   * The sink every session uses unless it registers its own: this machine's
+   * Electron main process, which owns the PTY.
+   */
+  private localSink: TerminalSessionSink = {
+    close: (sessionId) => {
+      // Best-effort: the session may already be gone (shell exited / reaped).
+      // The main process logs kill failures on its side too.
+      void electronTerminalService.killSession({ id: sessionId }).catch((error) => {
+        log('killSession %s failed: %O', sessionId, error);
+      });
+    },
+    resize: (sessionId, cols, rows) => {
+      void electronTerminalService.resizeSession({ cols, id: sessionId, rows });
+    },
+    write: (sessionId, data) => {
+      void electronTerminalService.writeSession({ data, id: sessionId });
+    },
+  };
+
+  /** Route one session's input and resize to a shell that is not on this machine. */
+  setSessionSink(sessionId: string, sink: TerminalSessionSink) {
+    this.sinks.set(sessionId, sink);
+  }
+
+  private sinkFor(sessionId: string): TerminalSessionSink {
+    return this.sinks.get(sessionId) ?? this.localSink;
+  }
+
+  /** Write output into a session's terminal. Called by a remote transport. */
+  write(sessionId: string, data: string) {
+    this.instances.get(sessionId)?.term.write(data);
+  }
+
+  /** A remote session ended: drop the view and let the store close its pane. */
+  notifyExit(sessionId: string, exitCode: number) {
+    this.disposeInstance(sessionId);
+    for (const listener of this.exitListeners) listener(sessionId, exitCode);
+  }
 
   private bindIpc() {
     if (this.ipcBound) return;
@@ -119,7 +175,7 @@ class XtermManager {
       return false;
     });
     term.onData((data) => {
-      void electronTerminalService.writeSession({ data, id: sessionId });
+      this.sinkFor(sessionId).write(sessionId, data);
     });
 
     const instance: TermInstance = { container, fit, opened: false, term };
@@ -177,11 +233,7 @@ class XtermManager {
     if (width <= 0 || height <= 0) return;
 
     instance.fit.fit();
-    void electronTerminalService.resizeSession({
-      cols: instance.term.cols,
-      id: sessionId,
-      rows: instance.term.rows,
-    });
+    this.sinkFor(sessionId).resize(sessionId, instance.term.cols, instance.term.rows);
   }
 
   applyTheme(theme: ITheme, fontFamily: string) {
@@ -192,13 +244,9 @@ class XtermManager {
     }
   }
 
-  /** Kill the PTY in the main process and drop the local instance. */
+  /** End the shell (wherever it runs) and drop the local instance. */
   close(sessionId: string) {
-    // Best-effort: the session may already be gone (shell exited / reaped).
-    // The main process logs kill failures on its side too.
-    void electronTerminalService.killSession({ id: sessionId }).catch((error) => {
-      log('killSession %s failed: %O', sessionId, error);
-    });
+    this.sinkFor(sessionId).close(sessionId);
     this.disposeInstance(sessionId);
   }
 
@@ -217,6 +265,9 @@ class XtermManager {
   }
 
   private disposeInstance(sessionId: string) {
+    // Drop the routing either way: a session whose transport died must not keep
+    // a stale sink alive for an id that could be reused.
+    this.sinks.delete(sessionId);
     const instance = this.instances.get(sessionId);
     if (!instance) return;
     this.instances.delete(sessionId);

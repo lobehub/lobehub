@@ -1,2 +1,4 @@
+export { pageActions, type PageUpdateParams } from './action';
+export { type PageState } from './initialState';
 export * from './selectors';
-export { getPageStoreState, type PageStore, usePageStore } from './store';
+export { usePageStore } from './store';

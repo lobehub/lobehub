@@ -93,5 +93,7 @@ export interface ReplicaResource<TParams, TData, TFetched = TData, TCursor = any
   storage?: ReplicaStorage<TData>;
   /** Row key in `storage` for these params (`key`, plus `?query` when set). */
   storageKey: (params: TParams) => string;
+  /** Custom query-cache key of the network sync (see `DefineReplicaOptions.syncKey`). */
+  syncKey?: (params: TParams) => readonly unknown[];
   version: number;
 }

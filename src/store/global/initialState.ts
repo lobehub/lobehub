@@ -615,6 +615,18 @@ export const createInitialSystemStatus = (): SystemStatus => {
       typeof persistedStatus.showLeftPanel === 'boolean'
         ? persistedStatus.showLeftPanel
         : INITIAL_STATUS.showLeftPanel,
+    showRightPanel:
+      typeof persistedStatus.showRightPanel === 'boolean'
+        ? persistedStatus.showRightPanel
+        : INITIAL_STATUS.showRightPanel,
+    showWorkingOverview:
+      typeof persistedStatus.showWorkingOverview === 'boolean'
+        ? persistedStatus.showWorkingOverview
+        : undefined,
+    workingSidebarWidth:
+      typeof persistedStatus.workingSidebarWidth === 'number'
+        ? persistedStatus.workingSidebarWidth
+        : INITIAL_STATUS.workingSidebarWidth,
   };
 };
 

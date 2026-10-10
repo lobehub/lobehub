@@ -3,9 +3,18 @@ import { create } from 'zustand';
 
 import { electronTerminalService } from '@/services/electron/terminal';
 
+import { DeviceTerminalSession } from './deviceTerminal';
 import { xtermManager } from './xtermManager';
 
 const log = debug('lobe-desktop:chat-terminal');
+
+/** What a freshly spawned session reports back, from either transport. */
+interface SpawnedSession {
+  cwd: string;
+  id: string;
+  pid: number;
+  shell: string;
+}
 
 export interface TerminalPane {
   /** Relative width inside the tab — only meaningful against sibling panes */
@@ -29,6 +38,12 @@ interface ChatTerminalState {
   createErrors: Record<string, string | undefined>;
   /** Per topic key, so a create in-flight for one topic doesn't block another */
   creatingByTopic: Record<string, boolean>;
+  /**
+   * Device a topic's NEW terminals run on. Absent means this machine: the
+   * Electron main process on desktop, or no target at all on the web. Sessions
+   * already opened keep running where they started.
+   */
+  deviceByTopic: Record<string, string | undefined>;
   /** Terminal tabs per topic key — sessions created in a topic only show in that topic */
   tabsByTopic: Record<string, TerminalTab[]>;
 }
@@ -41,6 +56,8 @@ interface ChatTerminalActions {
   setActivePane: (topicKey: string, tabId: string, paneId: string) => void;
   setActiveTab: (topicKey: string, tabId: string) => void;
   setPaneFlex: (topicKey: string, tabId: string, flex: number[]) => void;
+  /** Point a topic's next terminal at a device; `undefined` means this machine. */
+  setTerminalDevice: (topicKey: string, deviceId?: string) => void;
   splitPane: (topicKey: string, tabId: string, cwd?: string) => Promise<void>;
 }
 
@@ -86,7 +103,13 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
       creatingByTopic: { ...s.creatingByTopic, [topicKey]: true },
     }));
     try {
-      const info = await electronTerminalService.createSession({ cols: 80, cwd, rows: 24 });
+      const deviceId = get().deviceByTopic[topicKey];
+      // A device session owns its own polling transport, which also registers
+      // the sink routing this terminal's input back to that device. Without a
+      // target the shell is local, and only the desktop app has one.
+      const info: SpawnedSession = deviceId
+        ? (await DeviceTerminalSession.open(deviceId, { cols: 80, cwd, rows: 24 })).info
+        : await electronTerminalService.createSession({ cols: 80, cwd, rows: 24 });
       xtermManager.ensure(info.id);
       return info;
     } catch (error) {
@@ -190,6 +213,8 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
 
     creatingByTopic: {},
 
+    deviceByTopic: {},
+
     setActivePane: (topicKey, tabId, paneId) => {
       updateTab(topicKey, tabId, (tab) =>
         tab.activePaneId === paneId || !tab.panes.some((pane) => pane.id === paneId)
@@ -208,6 +233,10 @@ export const useChatTerminalStore = create<ChatTerminalActions & ChatTerminalSta
           ? { ...tab, panes: tab.panes.map((pane, index) => ({ ...pane, flex: flex[index] })) }
           : tab,
       );
+    },
+
+    setTerminalDevice: (topicKey, deviceId) => {
+      set((s) => ({ deviceByTopic: { ...s.deviceByTopic, [topicKey]: deviceId } }));
     },
 
     splitPane: async (topicKey, tabId, cwd) => {

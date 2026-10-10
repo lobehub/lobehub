@@ -7,7 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
 import Item from './Item';
 
@@ -27,7 +27,7 @@ interface PageListProps {
 const PageList = memo<PageListProps>(({ visibility }) => {
   const { t } = useTranslation(['file', 'common']);
 
-  const [filteredDocuments, hasMore, isLoadingMore, openAllPagesDrawer] = usePageStore((s) => {
+  const [filteredDocuments, hasMore, isLoadingMore] = usePageStore((s) => {
     let docs;
     let more;
     if (visibility === 'private') {
@@ -40,7 +40,7 @@ const PageList = memo<PageListProps>(({ visibility }) => {
       docs = pageSelectors.getFilteredDocumentsLimited(s);
       more = pageSelectors.hasMoreFilteredDocuments(s);
     }
-    return [docs, more, pageSelectors.isLoadingMoreDocuments(s), s.openAllPagesDrawer] as const;
+    return [docs, more, pageSelectors.isLoadingMoreDocuments(s)] as const;
   });
 
   return (
@@ -53,7 +53,7 @@ const PageList = memo<PageListProps>(({ visibility }) => {
         <NavItem
           icon={MoreHorizontal}
           title={t('more', { ns: 'common' })}
-          onClick={openAllPagesDrawer}
+          onClick={pageActions.openAllPagesDrawer}
         />
       )}
     </Flexbox>

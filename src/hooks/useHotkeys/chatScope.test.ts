@@ -64,4 +64,17 @@ describe('useToggleTerminalPanelHotkey', () => {
       scopes: [HotkeyScopeEnum.Chat],
     });
   });
+
+  it('leaves the binding off when the caller has no shell to open', () => {
+    renderHook(() => useToggleTerminalPanelHotkey(false));
+
+    expect(mocks.useHotkeyById).toHaveBeenCalledWith(
+      HotkeyEnum.ToggleTerminalPanel,
+      expect.any(Function),
+      {
+        enableOnContentEditable: true,
+        enabled: false,
+      },
+    );
+  });
 });

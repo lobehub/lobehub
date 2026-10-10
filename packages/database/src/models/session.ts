@@ -22,6 +22,17 @@ import { isTrashed, notTrashed } from '../utils/softDelete';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
+ * ParadeDB's BM25 (`@@@`) ordering rejects a `LIMIT` above 8192 with
+ * `error: min > max. min = 9999, max = 8192`.
+ *
+ * A page size used as "no pagination" therefore has to be clamped instead of
+ * passed through: `findSessionsByKeywords` swallows database errors, so an
+ * over-limit page size does not degrade gracefully — it silently returns *no*
+ * matches at all.
+ */
+const BM25_MAX_LIMIT = 8192;
+
+/**
  * @deprecated Sessions are the legacy shell of an agent — see the `sessions`
  * schema note. Reads here still exist for the mobile session list and legacy
  * data; write paths should go through `AgentModel` / `TopicModel`.
@@ -745,7 +756,9 @@ export class SessionModel {
     keyword: string;
     pageSize?: number;
   }) => {
-    const { keyword, pageSize = 9999, current = 0 } = params;
+    const { keyword, current = 0 } = params;
+    // "No pagination" must stay under ParadeDB's BM25 ceiling — see BM25_MAX_LIMIT.
+    const pageSize = Math.min(params.pageSize ?? BM25_MAX_LIMIT, BM25_MAX_LIMIT);
     const offset = current * pageSize;
 
     if (this.ftsSearchCandidateSource?.ftsSearchCandidateEnabled) {

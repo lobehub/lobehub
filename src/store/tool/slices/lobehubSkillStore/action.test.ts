@@ -1,18 +1,30 @@
+import { randomUUID } from 'node:crypto';
+
 import type * as LobechatConstModule from '@lobechat/const';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope, createReplicaState } from '@/libs/replica';
 import { toolsClient } from '@/libs/trpc/client';
 import { useUserStore } from '@/store/user';
 
 import { useToolStore } from '../../store';
+import { initialLobehubSkillStoreState } from './initialState';
 import { LobehubSkillStatus } from './types';
+
+// Each test owns a fresh replica scope, so the store's replica entries and the
+// connections list's local intent never leak from one case to the next.
+let scope = '';
+vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
+vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  scope = `lobehub-skill-action-${randomUUID()}:personal`;
   useUserStore.setState({ isSignedIn: false });
+  act(() => useToolStore.setState(initialLobehubSkillStoreState));
 });
 
 vi.mock('@lobechat/const', async (importOriginal) => {
@@ -460,8 +472,10 @@ describe('lobehubSkillStore actions', () => {
       });
 
       expect(result.current.lobehubSkillServers).toHaveLength(1);
-      expect(result.current.lobehubSkillServers[0].isConnected).toBe(true);
-      expect(result.current.lobehubSkillServers[0].status).toBe(LobehubSkillStatus.CONNECTED);
+      expect((result.current.lobehubSkillServers ?? [])[0].isConnected).toBe(true);
+      expect((result.current.lobehubSkillServers ?? [])[0].status).toBe(
+        LobehubSkillStatus.CONNECTED,
+      );
     });
 
     it('should track loading state during status check', async () => {
@@ -606,7 +620,7 @@ describe('lobehubSkillStore actions', () => {
         });
       });
 
-      expect(result.current.lobehubSkillServers[0]).toMatchObject({
+      expect((result.current.lobehubSkillServers ?? [])[0]).toMatchObject({
         identifier: 'linear',
         status: LobehubSkillStatus.ERROR,
         errorMessage: 'Token expired',
@@ -668,8 +682,12 @@ describe('lobehubSkillStore actions', () => {
       });
 
       expect(refreshed).toBe(true);
-      expect(result.current.lobehubSkillServers[0].tokenExpiresAt).toBe('2024-12-31T00:00:00Z');
-      expect(result.current.lobehubSkillServers[0].status).toBe(LobehubSkillStatus.CONNECTED);
+      expect((result.current.lobehubSkillServers ?? [])[0].tokenExpiresAt).toBe(
+        '2024-12-31T00:00:00Z',
+      );
+      expect((result.current.lobehubSkillServers ?? [])[0].status).toBe(
+        LobehubSkillStatus.CONNECTED,
+      );
     });
 
     it('should return false when refresh fails', async () => {
@@ -758,9 +776,9 @@ describe('lobehubSkillStore actions', () => {
         await result.current.refreshLobehubSkillTools('linear');
       });
 
-      expect(result.current.lobehubSkillServers[0].tools).toHaveLength(2);
-      expect(result.current.lobehubSkillServers[0].tools![0].name).toBe('createIssue');
-      expect(result.current.lobehubSkillServers[0].tools![1].name).toBe('listIssues');
+      expect((result.current.lobehubSkillServers ?? [])[0].tools).toHaveLength(2);
+      expect((result.current.lobehubSkillServers ?? [])[0].tools![0].name).toBe('createIssue');
+      expect((result.current.lobehubSkillServers ?? [])[0].tools![1].name).toBe('listIssues');
     });
 
     it('should do nothing when server not found', async () => {
@@ -811,7 +829,7 @@ describe('lobehubSkillStore actions', () => {
       });
 
       // Should not crash and server should remain unchanged
-      expect(result.current.lobehubSkillServers[0].tools).toBeUndefined();
+      expect((result.current.lobehubSkillServers ?? [])[0].tools).toBeUndefined();
     });
   });
 
@@ -847,7 +865,7 @@ describe('lobehubSkillStore actions', () => {
       });
 
       expect(result.current.lobehubSkillServers).toHaveLength(1);
-      expect(result.current.lobehubSkillServers[0].identifier).toBe('github');
+      expect((result.current.lobehubSkillServers ?? [])[0].identifier).toBe('github');
       expect(toolsClient.market.connectRevoke.mutate).toHaveBeenCalledWith({
         provider: 'linear',
       });
@@ -927,7 +945,7 @@ describe('lobehubSkillStore actions', () => {
   });
 
   describe('useFetchLobehubSkillConnections', () => {
-    it('should not fetch when disabled', () => {
+    it('should not fetch when disabled', async () => {
       act(() => {
         useToolStore.setState({
           lobehubSkillServers: [],
@@ -938,12 +956,16 @@ describe('lobehubSkillStore actions', () => {
 
       vi.mocked(toolsClient.market.connectListConnections.query).mockClear();
 
-      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(false));
+      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(false), {
+        wrapper: createSWRWrapper(),
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
       expect(toolsClient.market.connectListConnections.query).not.toHaveBeenCalled();
     });
 
-    it('should not fetch when user is not signed in', () => {
+    it('should not fetch when user is not signed in', async () => {
       act(() => {
         useToolStore.setState({
           lobehubSkillServers: [],
@@ -955,12 +977,16 @@ describe('lobehubSkillStore actions', () => {
 
       vi.mocked(toolsClient.market.connectListConnections.query).mockClear();
 
-      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(true));
+      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(true), {
+        wrapper: createSWRWrapper(),
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
       expect(toolsClient.market.connectListConnections.query).not.toHaveBeenCalled();
     });
 
-    it('should fetch connections when enabled', async () => {
+    it('should sync the connections into the replica view when enabled', async () => {
       act(() => {
         useToolStore.setState({
           lobehubSkillServers: [],
@@ -989,16 +1015,34 @@ describe('lobehubSkillStore actions', () => {
         tools: [],
       });
 
-      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(true));
+      renderHook(() => useToolStore.getState().useFetchLobehubSkillConnections(true), {
+        wrapper: createSWRWrapper(),
+      });
 
       await waitFor(() => {
         expect(toolsClient.market.connectListConnections.query).toHaveBeenCalled();
       });
+
+      await waitFor(() => {
+        expect(useToolStore.getState().lobehubSkillServers).toHaveLength(1);
+      });
+      expect(useToolStore.getState().lobehubSkillServers?.[0].identifier).toBe('linear');
+      expect(useToolStore.getState().lobehubSkillServers?.[0].name).toBe('Linear');
+      expect(useToolStore.getState().lobehubSkillServers?.[0].status).toBe(
+        LobehubSkillStatus.CONNECTED,
+      );
     });
   });
 
   describe('useFetchProviderTools', () => {
-    it('should fetch and normalize provider tools', async () => {
+    it('should fetch, normalize and expose provider tools through the replica view', async () => {
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillToolsMap: {},
+          lobehubSkillToolsReplica: createReplicaState(),
+        });
+      });
+
       vi.mocked(toolsClient.market.connectListTools.query).mockResolvedValue({
         provider: 'posthog',
         tools: [
@@ -1016,86 +1060,46 @@ describe('lobehubSkillStore actions', () => {
       );
 
       await waitFor(() => {
-        expect(toolsClient.market.connectListTools.query).toHaveBeenCalledWith({
-          provider: 'posthog',
+        expect(useToolStore.getState().lobehubSkillToolsMap.posthog).toEqual([
+          {
+            description: 'Run a PostHog query',
+            inputSchema: { properties: { query: { type: 'string' } }, type: 'object' },
+            name: 'query',
+          },
+        ]);
+      });
+
+      expect(toolsClient.market.connectListTools.query).toHaveBeenCalledWith({
+        provider: 'posthog',
+      });
+      expect(typeof result.current.revalidate).toBe('function');
+    });
+
+    it('should not fetch tools when provider is undefined', async () => {
+      vi.mocked(toolsClient.market.connectListTools.query).mockClear();
+
+      act(() => {
+        useToolStore.setState({
+          lobehubSkillToolsMap: {},
+          lobehubSkillToolsReplica: createReplicaState(),
         });
       });
 
-      const normalized = await result.current.mutate();
+      renderHook(() => useToolStore.getState().useFetchProviderTools(undefined), {
+        wrapper: createSWRWrapper(),
+      });
 
-      expect(normalized).toEqual([
-        {
-          description: 'Run a PostHog query',
-          inputSchema: { properties: { query: { type: 'string' } }, type: 'object' },
-          name: 'query',
-        },
-      ]);
-    });
+      await new Promise((resolve) => setTimeout(resolve, 20));
 
-    it('should not fetch tools when provider is undefined', () => {
-      vi.mocked(toolsClient.market.connectListTools.query).mockClear();
-
-      const { result } = renderHook(
-        () => useToolStore.getState().useFetchProviderTools(undefined),
-        {
-          wrapper: createSWRWrapper(),
-        },
-      );
-
-      expect(result.current.data).toEqual([]);
       expect(toolsClient.market.connectListTools.query).not.toHaveBeenCalled();
+      expect(useToolStore.getState().lobehubSkillToolsMap).toEqual({});
     });
   });
 
-  describe('server deduplication logic', () => {
-    it('should deduplicate servers by identifier when adding new servers', () => {
-      act(() => {
-        useToolStore.setState({
-          lobehubSkillServers: [
-            {
-              identifier: 'linear',
-              name: 'Linear',
-              isConnected: true,
-              status: LobehubSkillStatus.CONNECTED,
-            },
-          ],
-          lobehubSkillLoadingIds: new Set(),
-          lobehubSkillExecutingToolIds: new Set(),
-        });
-      });
+  describe('connection list identity', () => {
+    it('keeps one row when the same provider connects twice', async () => {
+      const { result } = renderHook(() => useToolStore());
 
-      const incomingServers = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-        {
-          identifier: 'github',
-          name: 'GitHub',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
-
-      act(() => {
-        const existingServers = useToolStore.getState().lobehubSkillServers;
-        const existingIdentifiers = new Set(existingServers.map((s) => s.identifier));
-        const newServers = incomingServers.filter((s) => !existingIdentifiers.has(s.identifier));
-
-        useToolStore.setState({
-          lobehubSkillServers: [...existingServers, ...newServers],
-        });
-      });
-
-      const finalServers = useToolStore.getState().lobehubSkillServers;
-      expect(finalServers).toHaveLength(2);
-      expect(finalServers.find((s) => s.identifier === 'linear')).toBeDefined();
-      expect(finalServers.find((s) => s.identifier === 'github')).toBeDefined();
-    });
-
-    it('should add all servers when none exist', () => {
       act(() => {
         useToolStore.setState({
           lobehubSkillServers: [],
@@ -1104,26 +1108,24 @@ describe('lobehubSkillStore actions', () => {
         });
       });
 
-      const incomingServers = [
-        {
-          identifier: 'linear',
-          name: 'Linear',
-          isConnected: true,
-          status: LobehubSkillStatus.CONNECTED,
-        },
-      ];
-
-      act(() => {
-        const existingServers = useToolStore.getState().lobehubSkillServers;
-        const existingIdentifiers = new Set(existingServers.map((s) => s.identifier));
-        const newServers = incomingServers.filter((s) => !existingIdentifiers.has(s.identifier));
-
-        useToolStore.setState({
-          lobehubSkillServers: [...existingServers, ...newServers],
-        });
+      vi.mocked(toolsClient.market.connectGetStatus.query).mockResolvedValue({
+        connected: true,
+        icon: 'linear-icon',
+      } as any);
+      vi.mocked(toolsClient.market.connectListTools.query).mockResolvedValue({
+        provider: 'linear',
+        tools: [],
       });
 
-      expect(useToolStore.getState().lobehubSkillServers).toHaveLength(1);
+      await act(async () => {
+        await result.current.checkLobehubSkillStatus('linear');
+      });
+      await act(async () => {
+        await result.current.checkLobehubSkillStatus('linear');
+      });
+
+      expect(result.current.lobehubSkillServers).toHaveLength(1);
+      expect(result.current.lobehubSkillServers?.[0].identifier).toBe('linear');
     });
   });
 });

@@ -12,7 +12,14 @@ import { processBackgroundVideoPolling } from '@/server/services/generation/vide
 import { AsyncTaskError, AsyncTaskStatus } from '@/types/asyncTask';
 import { FileSource } from '@/types/files';
 
+const { mockEnsureTopicCover } = vi.hoisted(() => ({ mockEnsureTopicCover: vi.fn() }));
+
 vi.mock('@/database/models/asyncTask');
+vi.mock('@/server/services/generation', () => ({
+  GenerationService: vi.fn(function () {
+    return { ensureTopicCover: mockEnsureTopicCover };
+  }),
+}));
 vi.mock('@/database/models/generation');
 vi.mock('@/server/services/generation/video');
 vi.mock('@/business/server/video-generation/chargeAfterGenerate', () => ({
@@ -177,6 +184,11 @@ describe('videoBackgroundPolling', () => {
         duration: expect.any(Number),
         status: AsyncTaskStatus.Success,
       });
+      // The topic cover is filled before Success so a refreshing client sees it
+      expect(mockEnsureTopicCover).toHaveBeenCalledWith('topic-789', 'thumb-key-456');
+      expect(mockEnsureTopicCover.mock.invocationCallOrder[0]).toBeLessThan(
+        mockAsyncTaskModel.update.mock.invocationCallOrder.at(-1)!,
+      );
       expect(notifyVideoCompleted).toHaveBeenCalledWith(
         expect.objectContaining({
           generationBatchId: 'batch-123',

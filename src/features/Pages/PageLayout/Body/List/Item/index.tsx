@@ -10,7 +10,7 @@ import { isDesktop } from '@/const/version';
 import NavItem from '@/features/NavPanel/components/NavItem';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { useElectronStore } from '@/store/electron';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
 import Actions from './Actions';
 import Editing from './Editing';
@@ -28,8 +28,6 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
     return [s.renamingPageId === pageId, s.selectedPageId, doc] as const;
   });
 
-  const selectPage = usePageStore((s) => s.selectPage);
-  const setRenamingPageId = usePageStore((s) => s.setRenamingPageId);
   const addTab = useElectronStore((s) => s.addTab);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
 
@@ -39,9 +37,9 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
 
   const toggleEditing = useCallback(
     (visible?: boolean) => {
-      setRenamingPageId(visible ? pageId : null);
+      pageActions.setRenamingPageId(visible ? pageId : null);
     },
-    [pageId, setRenamingPageId],
+    [pageId],
   );
 
   const clickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,14 +52,14 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
         if (isDesktop) {
           clickTimerRef.current = setTimeout(() => {
             clickTimerRef.current = null;
-            selectPage(pageId);
+            pageActions.selectPage(pageId);
           }, 250);
         } else {
-          selectPage(pageId);
+          pageActions.selectPage(pageId);
         }
       }
     },
-    [editing, selectPage, pageId],
+    [editing, pageId],
   );
 
   const handleDoubleClick = useCallback(() => {
@@ -71,8 +69,8 @@ const PageListItem = memo<DocumentItemProps>(({ pageId, className }) => {
       clickTimerRef.current = null;
     }
     addTab(buildWorkspaceAwarePath(`/page/${pageId}`, activeWorkspaceSlug));
-    selectPage(pageId);
-  }, [pageId, activeWorkspaceSlug, addTab, selectPage]);
+    pageActions.selectPage(pageId);
+  }, [pageId, activeWorkspaceSlug, addTab]);
 
   // Icon with emoji support
   const icon = useMemo(() => {

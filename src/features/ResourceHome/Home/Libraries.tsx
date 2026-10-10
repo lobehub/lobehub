@@ -16,7 +16,7 @@ import { useCreateNewModal } from '@/features/LibraryModal';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { usePermission } from '@/hooks/usePermission';
-import { useKnowledgeBaseStore } from '@/store/library';
+import { knowledgeBaseSelectors, useKnowledgeBaseStore } from '@/store/library';
 
 import { getLibraryListAsyncState } from '../Layout/Body/LibraryList/state';
 import SectionTitle from './SectionTitle';
@@ -111,12 +111,14 @@ const Libraries = memo(() => {
   const visibility = listVisibility === 'private' ? ('private' as const) : ('public' as const);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
-  const { data, error, isLoading, isValidating, mutate } = useFetchKnowledgeBaseList(visibility);
-  // The hook uses fallbackData: []; for a new workspace/visibility key SWR therefore
-  // reports isLoading=false while the request is still validating.
+  const { error, isHydrated, isValidating, revalidate } = useFetchKnowledgeBaseList(visibility);
+  // The rows are read from the replica view; the hook only orchestrates fetching.
+  const data = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseList(visibility));
+  // A fresh scope has no persisted row yet, so `!isHydrated` keeps the skeleton
+  // up until the first local read completes and the network sync lands.
   const { isLoading: showSkeleton } = getLibraryListAsyncState({
     data,
-    isLoading,
+    isLoading: !isHydrated,
     isValidating,
   });
 
@@ -136,7 +138,7 @@ const Libraries = memo(() => {
     <Flexbox gap={12}>
       <SectionTitle title={t('home.libraries')} />
       {error && !data?.length ? (
-        <AsyncError error={error} variant={'inline'} onRetry={() => void mutate()} />
+        <AsyncError error={error} variant={'inline'} onRetry={() => void revalidate()} />
       ) : showSkeleton ? (
         <ResourceSectionSkeleton {...RESOURCE_HOME_SECTIONS.libraries} />
       ) : (

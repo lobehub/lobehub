@@ -13,7 +13,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { usePermission } from '@/hooks/usePermission';
 import { useElectronStore } from '@/store/electron';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
@@ -31,10 +31,6 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
   const { allowed: canCreatePage } = usePermission('create_content');
   const { allowed: canEditPage } = usePermission('edit_own_content');
   const addTab = useElectronStore((s) => s.addTab);
-  const removePage = usePageStore((s) => s.removePage);
-  const duplicatePage = usePageStore((s) => s.duplicatePage);
-  const publishPageToWorkspace = usePageStore((s) => s.publishPageToWorkspace);
-  const setPageVisibility = usePageStore((s) => s.setPageVisibility);
   const document = usePageStore((s) => pageSelectors.getDocumentById(pageId)(s));
   const transferMenuItems = useDocumentTransferMenuItem(pageId, {
     transferLabel: t('pageEditor.menu.move', { ns: 'file' }),
@@ -59,7 +55,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       okText: t('delete'),
       onOk: async () => {
         try {
-          await removePage(pageId);
+          await pageActions.removePage(pageId);
           toast.success(t('pageEditor.deleteSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to delete page:', error);
@@ -68,17 +64,17 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       },
       title: t('pageEditor.deleteConfirm.title', { ns: 'file' }),
     });
-  }, [canEditPage, pageId, removePage, t]);
+  }, [canEditPage, pageId, t]);
 
   const handleDuplicate = useCallback(async () => {
     if (!canCreatePage) return;
 
     try {
-      await duplicatePage(pageId);
+      await pageActions.duplicatePage(pageId);
     } catch (error) {
       console.error('Failed to duplicate page:', error);
     }
-  }, [canCreatePage, pageId, duplicatePage]);
+  }, [canCreatePage, pageId]);
 
   const handlePublish = useCallback(() => {
     if (!canPublish) return;
@@ -93,7 +89,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       okText: t('continue'),
       onOk: async () => {
         try {
-          await publishPageToWorkspace(pageId);
+          await pageActions.publishPageToWorkspace(pageId);
           toast.success(t('pageList.publishSuccess', { ns: 'file' }));
         } catch (error) {
           console.error('Failed to publish page:', error);
@@ -102,7 +98,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       },
       title: t('pageList.publishConfirm.title', { ns: 'file' }),
     });
-  }, [canPublish, pageId, publishPageToWorkspace, t]);
+  }, [canPublish, pageId, t]);
 
   const handleMakePrivate = useCallback(() => {
     if (!canMakePrivate) return;
@@ -113,7 +109,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       okText: t('continue'),
       onOk: async () => {
         try {
-          await setPageVisibility(pageId, 'private');
+          await pageActions.setPageVisibility(pageId, 'private');
           toast.success(t('makePrivate.success'));
         } catch (error) {
           console.error('Failed to make page private:', error);
@@ -122,7 +118,7 @@ export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => 
       },
       title: t('makePrivate.confirm.title'),
     });
-  }, [canMakePrivate, pageId, setPageVisibility, t]);
+  }, [canMakePrivate, pageId, t]);
 
   return useCallback(
     () =>

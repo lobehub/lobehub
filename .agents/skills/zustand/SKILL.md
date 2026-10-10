@@ -1,6 +1,6 @@
 ---
 name: zustand
-description: 'Use for Zustand stores: list/detail splits, state type sources, slices, actions, reducers, selectors, optimistic updates and class-action composition.'
+description: 'Use for Zustand stores: state shapes and type sources, state-only stores with xActions classes, replica-backed list/detail data (@lobechat/replica), selectors, optimistic writes, and legacy slice/internal_* action composition.'
 user-invocable: false
 ---
 
@@ -10,200 +10,40 @@ user-invocable: false
 
 - Import shared store types from `@lobechat/types`, not `@lobechat/database`.
 - Keep lightweight list-item types separate from full detail types; list types must not extend heavy detail types.
-- Use arrays for whole-list display and id-keyed maps for cached details, with per-item loading state where needed.
-- Before choosing list/detail shapes, normalized maps or state type sources, read [Data structures](references/data-structures.md). Its worked examples load only when relevant.
+- Key cached details by id (`xxxDetailMap: Record<string, Detail>`); never hold a single `currentDetail` object.
+- Read through `xxxSelectors` aggregates (`selectors.ts`), not ad-hoc lambdas repeated across components.
+- Before choosing list/detail shapes or type sources, read [Data structures](references/data-structures.md).
 
-## Action Type Hierarchy
+## State-Only Stores (default for new and migrated stores)
 
-### 1. Public Actions
+Actions stay out of the Zustand state. Reference: `src/store/page`.
 
-Main interfaces for UI components:
+| File               | Owns                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------ |
+| `store.ts`         | `useXStore = createWithEqualityFn<XState>()(devtools(() => initialState), shallow)`: state only, no methods              |
+| `privateAction.ts` | `XPrivateAction`: replica slices, entity links, and write helpers shared by public actions. Not exported from `index.ts` |
+| `action.ts`        | `XActionImpl` (the public API) and the singleton `xActions = new XActionImpl(setState, getState, new XPrivateAction(…))` |
 
-- Naming: Verb form (`createTopic`, `sendMessage`)
-- Responsibilities: Parameter validation, flow orchestration
+- Components read state with `useXStore(selector)` and call `xActions.foo()` directly. Never select an action out of the store.
+- Sync hooks live on the public class and are called as `xActions.useFetchX(params)`.
+- Public actions call each other through `this.foo()`. Private helpers are reached through `this.#private`. Do not add `internal_*` methods to the store to share logic between classes.
+- Label every write: `this.#set(partial, false, n('actionName'))` with `const n = setNamespace('x')`.
+- Put `reset()` on the public class and register `xActions` in `resetableActions` in `src/store/utils/userDataStores.ts`.
+- Tests drive `xActions` and assert on `useXStore.getState()`. To mock in component tests: `vi.mock('@/store/x', () => ({ xActions: { foo: vi.fn() }, useXStore: … }))`.
 
-### 2. Internal Actions (`internal_*`)
+## Replica-Backed Server Data
 
-Core business logic implementation:
+Server lists and details the UI paints go through `@/libs/replica`, not a hand-written SWR `onSuccess` + reducer. The engine owns hydration from IndexedDB, head revalidation, paging, optimistic overlays with rollback, and scope (user + workspace) isolation. API reference: [`packages/replica/README.md`](../../../packages/replica/README.md).
 
-- Naming: `internal_` prefix (`internal_createTopic`)
-- Responsibilities: Optimistic updates, service calls, error handling
-- Should not be called directly by UI
+1. Define the resource (`defineReplica` / `definePagedReplica`) in the store's `projection.ts`, converting server rows at the boundary.
+2. Add two state fields per replica: the view (`xxxMap: Record<key, TData>`) and its bookkeeping (`xxxReplica: createReplicaState()`).
+3. Bind it in the private class: `createReplicaSlice(resource, { get, set, stateKey: 'xxxReplica', view: recordLens('xxxMap'), … })`. When the same entity lives in several replicas (list row + detail), link them with `linkReplicaEntity([list, detail])`.
+4. Read: `slice.useSync(params)` returns only fetch flags (`isHydrated`, `isValidating`, `error`, `revalidate`). Data comes from selectors over `xxxMap`. "Entry is `undefined`" is the loading signal — do not add `xxxInit` flags or `loadingXxxIds`.
+5. Cold start without a skeleton: `useSync` hydrates only after the component mounts. For a list that must paint from the local copy, add a `preHydrate` action (`ensureScope` + `hydrate`) and call it from the route's `loader` through a lazy wrapper (`src/spa/router/pageListLoader.ts`, `agentChatTopicListLoader.ts`) bounded by `PRE_PAINT_HYDRATE_TIMEOUT`.
+6. Write: `slice.optimistic(key, apply, serverCall)` or `entity.optimistic(id, fn | 'remove', serverCall)`. A failed call rolls back to the confirmed value, so deletes are optimistic too. Rows that exist only on the client (temp ids) are declared with `isClientOnly` and seeded with `update(key, fn, { persist: false })`.
 
-### 3. Dispatch Methods (`internal_dispatch*`)
+Outside test seeding, write a replica's view only through its slice. A plain `set` bypasses the engine's bookkeeping (persistence, rollback base, entity links).
 
-State update handlers:
+## Legacy Stores
 
-- Naming: `internal_dispatch` + entity (`internal_dispatchTopic`)
-- Responsibilities: Calling reducers, updating store
-
-## When to Use Reducer vs Simple `set`
-
-**Use Reducer Pattern:**
-
-- Managing object lists/maps (`messagesMap`, `topicMaps`)
-- Optimistic updates
-- Complex state transitions
-
-**Use Simple `set`:**
-
-- Toggling booleans
-- Updating simple values
-- Setting single state fields
-
-## Optimistic Update Pattern
-
-```typescript
-internal_createTopic: async (params) => {
-  const tmpId = Date.now().toString();
-
-  // 1. Immediately update frontend (optimistic)
-  get().internal_dispatchTopic(
-    { type: 'addTopic', value: { ...params, id: tmpId } },
-    'internal_createTopic'
-  );
-
-  // 2. Call backend service
-  const topicId = await topicService.createTopic(params);
-
-  // 3. Refresh for consistency
-  await get().refreshTopic();
-  return topicId;
-},
-```
-
-**Delete operations**: Don't use optimistic updates (destructive, complex recovery)
-
-## Naming Conventions
-
-**Actions:**
-
-- Public: `createTopic`, `sendMessage`
-
-- Internal: `internal_createTopic`, `internal_updateMessageContent`
-
-- Dispatch: `internal_dispatchTopic`
-  **State:**
-
-- ID arrays: `topicEditingIds`
-
-- Maps: `topicMaps`, `messagesMap`
-
-- Active: `activeTopicId`
-
-- Init flags: `topicsInit`
-
-## Detailed Guides
-
-- Action patterns: `references/action-patterns.md`
-- Slice organization: `references/slice-organization.md`
-
-## Class-Based Action Implementation
-
-We are migrating slices from plain `StateCreator` objects to **class-based actions**.
-
-### Pattern
-
-- Define a class that encapsulates actions and receives `(set, get, api)` in the constructor.
-- Use `#private` fields (e.g., `#set`, `#get`) to avoid leaking internals.
-- Prefer shared typing helpers:
-  - `StoreSetter<T>` from `@/store/types` for `set`.
-  - `Pick<ActionImpl, keyof ActionImpl>` to expose only public methods.
-- Export a `create*Slice` helper that returns a class instance.
-
-```ts
-type Setter = StoreSetter<HomeStore>;
-export const createRecentSlice = (set: Setter, get: () => HomeStore, _api?: unknown) =>
-  new RecentActionImpl(set, get, _api);
-
-export class RecentActionImpl {
-  readonly #get: () => HomeStore;
-  readonly #set: Setter;
-
-  constructor(set: Setter, get: () => HomeStore, _api?: unknown) {
-    void _api;
-    this.#set = set;
-    this.#get = get;
-  }
-
-  useFetchRecentTopics = () => {
-    // ...
-  };
-}
-
-export type RecentAction = Pick<RecentActionImpl, keyof RecentActionImpl>;
-```
-
-### Composition
-
-- In store files, merge class instances with `flattenActions` (do not spread class instances).
-- `flattenActions` binds methods to the original class instance and supports prototype methods and class fields.
-
-```ts
-const createStore: StateCreator<HomeStore, [['zustand/devtools', never]]> = (...params) => ({
-  ...initialState,
-  ...flattenActions<HomeStoreAction>([
-    createRecentSlice(...params),
-    createHomeInputSlice(...params),
-  ]),
-});
-```
-
-### Multi-Class Slices
-
-- For large slices that need multiple action classes, compose them in the slice entry using `flattenActions`.
-- Use a local `PublicActions<T>` helper if you need to combine multiple classes and hide private fields.
-
-```ts
-type PublicActions<T> = { [K in keyof T]: T[K] };
-
-export type ChatGroupAction = PublicActions<
-  ChatGroupInternalAction & ChatGroupLifecycleAction & ChatGroupMemberAction & ChatGroupCurdAction
->;
-
-export const chatGroupAction: StateCreator<
-  ChatGroupStore,
-  [['zustand/devtools', never]],
-  [],
-  ChatGroupAction
-> = (...params) =>
-  flattenActions<ChatGroupAction>([
-    new ChatGroupInternalAction(...params),
-    new ChatGroupLifecycleAction(...params),
-    new ChatGroupMemberAction(...params),
-    new ChatGroupCurdAction(...params),
-  ]);
-```
-
-### Store-Access Types
-
-- For class methods that depend on actions in other classes, define explicit store augmentations:
-  - `ChatGroupStoreWithSwitchTopic` for lifecycle `switchTopic`
-  - `ChatGroupStoreWithRefresh` for member refresh
-  - `ChatGroupStoreWithInternal` for curd `internal_dispatchChatGroup`
-
-### Slices That Don't Currently Need `set`
-
-When a slice doesn't write local state (e.g. it delegates to another store or just runs hooks), drop `#set` and mark the constructor param as `_set` with `void _set` to keep the `(set, get, api)` shape:
-
-```ts
-export class ToolActionImpl {
-  readonly #get: () => ConversationStore;
-
-  constructor(_set: Setter, get: () => ConversationStore, _api?: unknown) {
-    void _set;
-    void _api;
-    this.#get = get;
-  }
-
-  approveToolCall = async (id: string) => {
-    const { context, hooks } = this.#get();
-    await useChatStore.getState().approveToolCalling(id, '', context);
-    hooks.onToolCallComplete?.(id, undefined);
-  };
-}
-```
-
-- Drop `#set` when unused; restore it when a later edit needs `set` — re-adding costs nothing.
-- Don't add `setNamespace` for slices that don't write state.
-- Don't keep both old slice objects and class actions active at the same time during migration.
+Stores that still flatten action classes into state (`flattenActions`, `create*Slice`, `internal_*`, `internal_dispatch*` + reducers, SWR `onSuccess` syncing) follow [Legacy slices](references/legacy-slices.md). Use that layout only when editing one of those stores; migrate to the layouts above when moving its data onto a replica.

@@ -129,6 +129,8 @@
   "LocalFile.action.open": "Mở",
   "LocalFile.action.preview": "Xem trước",
   "LocalFile.action.showInFolder": "Hiển thị trong thư mục",
+  "LocalFile.action.startTopic": "Bắt đầu chủ đề mới tại đây",
+  "LocalFile.action.startTopicFailed": "Không thể bắt đầu chủ đề mới trong thư mục này.",
   "MaxTokenSlider.unlimited": "Không giới hạn",
   "ModelSelect.featureTag.audio": "Mô hình này hỗ trợ nhận dạng đầu vào âm thanh.",
   "ModelSelect.featureTag.custom": "Mô hình tùy chỉnh, mặc định hỗ trợ gọi hàm và nhận diện hình ảnh. Vui lòng xác minh khả năng thực tế.",

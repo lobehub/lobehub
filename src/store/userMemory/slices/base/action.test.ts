@@ -91,3 +91,30 @@ describe('userMemory base actions', () => {
     });
   });
 });
+
+describe('deletePersona', () => {
+  const persona = { content: 'My persona', summary: 'Summary' };
+
+  beforeEach(() => {
+    useUserMemoryStore.setState({ persona, personaInit: true });
+    vi.mocked(mutate).mockImplementation(async (_key: any, update: any) => update());
+  });
+
+  it('clears the persona cache while retaining the memory lists', async () => {
+    vi.spyOn(memoryCRUDService, 'deletePersona').mockResolvedValue({ success: true });
+    await useUserMemoryStore.getState().deletePersona();
+    expect(useUserMemoryStore.getState().persona).toBeUndefined();
+    expect(useUserMemoryStore.getState().preferences).toEqual([preferenceMemory]);
+    expect(useUserMemoryStore.getState().preferencesTotal).toBe(1);
+    expect(mutate).toHaveBeenCalledWith(userMemoryKeys.persona(), expect.any(Function), {
+      revalidate: false,
+    });
+  });
+
+  it('retains the persona and memories when deletion fails', async () => {
+    vi.spyOn(memoryCRUDService, 'deletePersona').mockRejectedValue(new Error('offline'));
+    await expect(useUserMemoryStore.getState().deletePersona()).rejects.toThrow('offline');
+    expect(useUserMemoryStore.getState().persona).toEqual(persona);
+    expect(useUserMemoryStore.getState().preferences).toEqual([preferenceMemory]);
+  });
+});

@@ -384,6 +384,7 @@ export function registerAgentCommand(program: Command) {
       "Disable headless mode: tool calls that need approval park the run for a human (default: headless — tools auto-run, matching the CLI's non-interactive nature). The CLI does not wait for that approval; it returns with exit code 2 and the run continues once it is answered in LobeHub",
     )
     .option('--json', 'Output full JSON event stream')
+    .option('--detach', 'Start the operation and return its IDs without waiting for events')
     .option('-v, --verbose', 'Show detailed tool call info')
     .option('--replay <file>', 'Replay events from a saved JSON file (offline)')
     .option('--sse', 'Force SSE stream instead of WebSocket gateway')
@@ -406,6 +407,7 @@ Exit codes:
         agentId?: string;
         autoStart?: boolean;
         device?: string;
+        detach?: boolean;
         headless?: boolean;
         json?: boolean;
         prompt?: string;
@@ -502,6 +504,17 @@ Exit codes:
         }
 
         const operationId = r.operationId;
+        if (options.detach) {
+          const started = {
+            autoStarted: r.autoStarted,
+            operationId,
+            status: r.status,
+            topicId: r.topicId,
+          };
+          if (options.json) outputJson(started);
+          else log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
+          return;
+        }
         if (!options.json) {
           log.info(`Operation: ${pc.dim(operationId)} · Topic: ${pc.dim(r.topicId || 'n/a')}`);
         }

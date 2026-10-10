@@ -89,6 +89,10 @@ const requireToolTransport = (host: AgentRuntimeHost) => {
 
 const toolNameOf = (tool: ChatToolPayload) => `${tool.identifier}/${tool.apiName}`;
 
+// Execution-entry denial is free; withholding an already executed result is not.
+const isBlockedBeforeExecution = (result: ToolRunResult) =>
+  result.state?.type === 'blocked' && result.state.phase !== 'afterToolCall';
+
 const resolveToolSource = (state: AgentState, tool: ChatToolPayload): string | undefined =>
   selectToolSourceMap(state)[tool.identifier];
 
@@ -464,12 +468,14 @@ const createToolMessage = async ({
   host,
   parentMessageId,
   result,
+  resultBlocked,
   state,
   tool,
 }: {
   host: AgentRuntimeHost;
   parentMessageId: string;
   result: ToolRunResult;
+  resultBlocked?: boolean;
   state: AgentState;
   tool: ChatToolPayload;
 }) => {
@@ -488,9 +494,9 @@ const createToolMessage = async ({
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
       parentId: parentMessageId,
       plugin: tool as any,
-      pluginError: result.error,
-      ...(result.state?.type === 'blocked' && {
-        pluginIntervention: { rejectedReason: result.state.reason, status: 'rejected' },
+      pluginError: result.error ?? null,
+      ...((isBlockedBeforeExecution(result) || resultBlocked) && {
+        pluginIntervention: { rejectedReason: result.state?.reason, status: 'rejected' },
       }),
       pluginState: result.state,
       role: 'tool',
@@ -507,22 +513,25 @@ const createToolMessage = async ({
 const updateExistingToolMessage = async ({
   host,
   result,
+  resultBlocked,
   toolMessageId,
 }: {
   host: AgentRuntimeHost;
   result: ToolRunResult;
+  resultBlocked?: boolean;
   toolMessageId: string;
 }) => {
   try {
     await host.transports.messages.updateToolMessage(toolMessageId, {
       content: result.content,
       metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
-      pluginError: result.error,
+      pluginError: result.error ?? null,
       pluginState: result.state,
+      ...(resultBlocked && { replacePluginState: true }),
     });
-    if (result.state?.type === 'blocked') {
+    if (isBlockedBeforeExecution(result) || resultBlocked) {
       await host.transports.messages.updateToolIntervention(toolMessageId, {
-        rejectedReason: result.state.reason,
+        rejectedReason: result.state?.reason,
         status: 'rejected',
       });
     }
@@ -665,10 +674,9 @@ export const callTool =
           executionTime,
           isSuccess,
           attempts: execution.attempts,
-          maxAttempts:
-            executionResult.state?.type === 'blocked'
-              ? 0
-              : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+          maxAttempts: isBlockedBeforeExecution(executionResult)
+            ? 0
+            : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
           payload,
           phase: TOOL_EXECUTION_PHASE,
           result: redactResultForEvents(executionResult),
@@ -681,16 +689,27 @@ export const callTool =
       if (execution.toolMessageId) {
         toolMessageId = execution.toolMessageId;
         if (!execution.resultPersisted) {
-          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+          await updateExistingToolMessage({
+            host,
+            result: executionResult,
+            toolMessageId,
+            resultBlocked: execution.resultBlocked,
+          });
         }
       } else if (payload.skipCreateToolMessage) {
         toolMessageId = payload.parentMessageId;
-        await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+        await updateExistingToolMessage({
+          host,
+          result: executionResult,
+          toolMessageId,
+          resultBlocked: execution.resultBlocked,
+        });
       } else {
         const toolMessage = await createToolMessage({
           host,
           parentMessageId: payload.parentMessageId,
           result: executionResult,
+          resultBlocked: execution.resultBlocked,
           state,
           tool,
         });
@@ -729,8 +748,9 @@ export const callTool =
         type: 'tool_result',
       });
 
-      const toolCost =
-        executionResult.state?.type === 'blocked' ? 0 : (tools.getCost?.(runContext.toolName) ?? 0);
+      const toolCost = isBlockedBeforeExecution(executionResult)
+        ? 0
+        : (tools.getCost?.(runContext.toolName) ?? 0);
       const { usage, cost } = UsageCounter.accumulateTool({
         cost: newState.cost,
         executionTime,
@@ -982,10 +1002,9 @@ export const callToolsBatch =
             executionTime,
             isSuccess,
             attempts: execution.attempts,
-            maxAttempts:
-              executionResult.state?.type === 'blocked'
-                ? 0
-                : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
+            maxAttempts: isBlockedBeforeExecution(executionResult)
+              ? 0
+              : (tools.maxRetries ?? DEFAULT_TOOL_MAX_RETRIES) + 1,
             payload: { parentMessageId, toolCalling: tool },
             phase: TOOL_EXECUTION_PHASE,
             result: redactResultForEvents(executionResult),
@@ -998,19 +1017,30 @@ export const callToolsBatch =
         if (execution.toolMessageId) {
           toolMessageId = execution.toolMessageId;
           if (!execution.resultPersisted) {
-            await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+            await updateExistingToolMessage({
+              host,
+              result: executionResult,
+              toolMessageId,
+              resultBlocked: execution.resultBlocked,
+            });
           }
         } else if (existingMessageId) {
           // Batch approval resume: fill the pending placeholder in place.
           // Creating a fresh row here would leave the approved-but-empty
           // original stranded under the same assistant.
           toolMessageId = existingMessageId;
-          await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+          await updateExistingToolMessage({
+            host,
+            result: executionResult,
+            toolMessageId,
+            resultBlocked: execution.resultBlocked,
+          });
         } else {
           const toolMessage = await createToolMessage({
             host,
             parentMessageId,
             result: executionResult,
+            resultBlocked: execution.resultBlocked,
             state,
             tool,
           });
@@ -1036,10 +1066,9 @@ export const callToolsBatch =
           type: 'tool_result',
         });
 
-        const toolCost =
-          executionResult.state?.type === 'blocked'
-            ? 0
-            : (tools.getCost?.(runContext.toolName) ?? 0);
+        const toolCost = isBlockedBeforeExecution(executionResult)
+          ? 0
+          : (tools.getCost?.(runContext.toolName) ?? 0);
         resultEntry.usageParams = {
           executionTime,
           success: isSuccess,

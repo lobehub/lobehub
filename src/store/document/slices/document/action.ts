@@ -9,7 +9,7 @@ import type { SWRResponse } from 'swr';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
 import { documentSWRKeys } from '@/services/document/swrKeys';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 import type { StoreSetter } from '@/store/types';
 import { isSkillMarkdownDocument, parseSkillMarkdownFrontmatter } from '@/utils/skillMarkdown';
 import { setNamespace } from '@/utils/storeDebug';
@@ -259,7 +259,7 @@ export class DocumentActionImpl {
               this.#rememberTopicDocument(topicId, documentId);
             }
             if (sourceType === 'page') {
-              usePageStore.getState().upsertDocument(document);
+              pageActions.upsertDocument(document);
             }
             return;
           }
@@ -280,7 +280,7 @@ export class DocumentActionImpl {
           // selectors resolve correctly when the page is opened from a context
           // that didn't pre-load the documents list (e.g. task workspace modal).
           if (sourceType === 'page') {
-            usePageStore.getState().upsertDocument(document);
+            pageActions.upsertDocument(document);
           }
         },
         revalidateOnFocus: true,

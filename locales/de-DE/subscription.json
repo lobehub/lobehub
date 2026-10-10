@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "WeChat nach dem Upgrade verbinden",
   "plansModal.modelAccess.desc": "Dieses Modell ist in kostenpflichtigen Plänen verfügbar. Aktualisieren Sie, um die vollständige Modellauswahl zu nutzen.",
   "plansModal.modelAccess.title": "Alle Modelle freischalten",
+  "plansModal.persistentSandbox.desc": "Dateien, die Ihr Agent im Cloud-Sandbox schreibt, werden gelöscht, wenn die Sitzung endet. Upgraden Sie, um ein persistentes Arbeitsverzeichnis zu behalten, das Sitzungen überdauert und über Ihre Themen hinweg geteilt wird.",
+  "plansModal.persistentSandbox.title": "Behalten Sie Ihre Sandbox-Dateien",
   "qa.desc": "Wenn Ihre Frage nicht beantwortet wurde, besuchen Sie die <1>Produktdokumentation</1> für weitere FAQs oder kontaktieren Sie uns.",
   "qa.detail": "Details anzeigen",
   "qa.list.credit.a": "Rechen-Credits sind eine Metrik von {{cloud}}, um die Nutzung von KI-Modellen zu messen. Verschiedene Modelle verbrauchen unterschiedlich viele Credits.",
@@ -631,8 +633,16 @@
   "switchPlan": "Plan wechseln",
   "switchToMonthly.desc": "Nach dem Wechsel wird die monatliche Abrechnung nach Ablauf des aktuellen Jahresplans aktiv.",
   "switchToMonthly.title": "Zu monatlicher Abrechnung wechseln",
+  "switchToYearly.after": "Nach dem Wechsel",
+  "switchToYearly.billedYearly": "{{price}} jährlich abgerechnet",
+  "switchToYearly.credit": "Gutschrift für diesen Monat",
   "switchToYearly.desc": "Nach dem Wechsel wird die jährliche Abrechnung sofort nach Zahlung der Differenz aktiv. Startdatum bleibt erhalten.",
+  "switchToYearly.dueToday": "Heute fällig",
+  "switchToYearly.now": "Jetzt",
+  "switchToYearly.period": "Abrechnungszeitraum",
+  "switchToYearly.price": "Preis",
   "switchToYearly.title": "Zu jährlicher Abrechnung wechseln",
+  "switchToYearly.yearlyPlan": "Jahresplan",
   "tab.billing": "Rechnungsverwaltung",
   "tab.budget": "Budget",
   "tab.credits": "Guthabenverwaltung",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Nutzungsübersicht",
   "usage.remaining": "Verbleibend",
   "usage.storage.embeddings.used": "Vektorspeicher",
-  "usage.storage.file.used": "Dateinutzung"
+  "usage.storage.file.used": "Dateinutzung",
+  "usage.storage.sandboxStorage.used": "Sandbox-Speicher"
 }

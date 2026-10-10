@@ -101,7 +101,9 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
 
     background-color: transparent;
 
-    transition: background-color 0.15s ${cssVar.motionEaseInOut};
+    transition:
+      background-color 0.15s ${cssVar.motionEaseInOut},
+      box-shadow 0.15s ${cssVar.motionEaseInOut};
 
     &:hover {
       background-color: ${cssVar.colorFillQuaternary};
@@ -214,7 +216,6 @@ export const useStyles = createStaticStyles(({ css, cssVar }) => ({
   `,
   tabDragging: css`
     cursor: grabbing;
-    z-index: 1;
     background-color: ${cssVar.colorBgElevated};
     box-shadow: ${cssVar.boxShadowSecondary};
   `,

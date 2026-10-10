@@ -22,10 +22,12 @@ import type {
   DeviceCliRestartParams,
   DeviceCliUpdateState,
   DeviceCliUpdateStateResult,
+  DeviceCloseTerminalResult,
   DeviceCopyAssetForPublishResult,
   DeviceCopyProjectFileItem,
   DeviceCopyProjectFileResultItem,
   DeviceCreateProjectEntryResult,
+  DeviceCreateTerminalSessionResult,
   DeviceDirectoryBrowseResult,
   DeviceExternalAssetForPublishResult,
   DeviceGitAddWorktreeResult,
@@ -59,6 +61,7 @@ import type {
   DeviceProjectDirectoryListResult,
   DeviceProjectFileIndexResult,
   DeviceProjectFileSearchResult,
+  DeviceReadTerminalResult,
   DeviceRenameProjectFileResult,
   DeviceTrashProjectFilesResult,
   DeviceUnavailableErrorData,
@@ -150,6 +153,18 @@ interface AppUpdateRpcParams {
 /** One extra attempt for a device read; see `readDevices`. */
 const DEVICE_READ_ATTEMPTS = 2;
 const DEVICE_READ_RETRY_DELAY_MS = 250;
+
+/** Scope every terminal RPC carries; mirrors {@link AppUpdateRpcParams}. */
+interface TerminalRpcScope {
+  deviceId: string;
+  timeout?: number;
+  userId: string;
+  workspaceId?: string;
+}
+
+/** The five device RPCs that make up one interactive terminal session. */
+type TerminalRpcMethod =
+  'closeTerminal' | 'createTerminalSession' | 'readTerminal' | 'resizeTerminal' | 'writeTerminal';
 
 export class DeviceGateway {
   private client: GatewayHttpClient | null = null;
@@ -1847,7 +1862,10 @@ export class DeviceGateway {
     timeout?: number;
     userId: string;
     workspaceId?: string;
-  }): Promise<{ exists: boolean; isDirectory: boolean; repoType?: 'git' | 'github' } | undefined> {
+  }): Promise<
+    | { exists: boolean; isDirectory: boolean; repositoryUrl?: string; repoType?: 'git' | 'github' }
+    | undefined
+  > {
     const { userId, deviceId, path, timeout = 8000, workspaceId } = params;
     const client = this.getClient();
     if (!client) return undefined;
@@ -2091,6 +2109,81 @@ export class DeviceGateway {
     return result.status === 'ok'
       ? { status: 'ok', targetVersion: result.data.targetVersion }
       : result;
+  }
+
+  // ─── Interactive terminal (PTY) ───
+  //
+  // A terminal is a session the caller drives, not a one-shot read, so these
+  // deliberately THROW on failure instead of returning `undefined` the way the
+  // best-effort readers above do: the panel has to say why a shell did not open
+  // (device offline, a client without PTY support) rather than wait forever on
+  // one that will never exist.
+
+  async createTerminalSession(
+    params: TerminalRpcScope & { cols: number; cwd?: string; rows: number },
+  ): Promise<DeviceCreateTerminalSessionResult> {
+    return this.invokeTerminalRpc('createTerminalSession', params, {
+      cols: params.cols,
+      cwd: params.cwd,
+      rows: params.rows,
+    });
+  }
+
+  async writeTerminal(params: TerminalRpcScope & { data: string; id: string }): Promise<void> {
+    await this.invokeTerminalRpc('writeTerminal', params, { data: params.data, id: params.id });
+  }
+
+  async readTerminal(
+    params: TerminalRpcScope & { cursor: number; id: string },
+  ): Promise<DeviceReadTerminalResult> {
+    return this.invokeTerminalRpc('readTerminal', params, {
+      cursor: params.cursor,
+      id: params.id,
+    });
+  }
+
+  async resizeTerminal(
+    params: TerminalRpcScope & { cols: number; id: string; rows: number },
+  ): Promise<void> {
+    await this.invokeTerminalRpc('resizeTerminal', params, {
+      cols: params.cols,
+      id: params.id,
+      rows: params.rows,
+    });
+  }
+
+  async closeTerminal(
+    params: TerminalRpcScope & { id: string },
+  ): Promise<DeviceCloseTerminalResult> {
+    return this.invokeTerminalRpc('closeTerminal', params, { id: params.id });
+  }
+
+  /**
+   * Relay one terminal RPC and unwrap its result.
+   *
+   * Every call carries the `cli` channel hint: the PTY lives in the `lh
+   * connect` process, so on a machine also running the desktop app the RPC has
+   * to reach that connection — the desktop's own terminal is local-only and
+   * would refuse these. A gateway that predates the hint ignores it, which is
+   * why the refusal below still has to surface as an error.
+   */
+  private async invokeTerminalRpc<T>(
+    method: TerminalRpcMethod,
+    params: TerminalRpcScope,
+    rpcParams: Record<string, unknown>,
+  ): Promise<T> {
+    const { deviceId, timeout = 15_000, userId, workspaceId } = params;
+    const client = this.getClient();
+    if (!client) throw new Error('Device gateway is not configured on this deployment.');
+
+    const result = await client.invokeRpc<T>(
+      { channel: 'cli', deviceId, timeout, userId, workspaceId },
+      { method, params: rpcParams },
+    );
+    // `writeTerminal` / `resizeTerminal` answer with no payload, so absence of
+    // `data` is not a failure — only an explicit `success: false` is.
+    if (!result.success) throw new Error(result.error || `${method} failed`);
+    return result.data as T;
   }
 
   /**

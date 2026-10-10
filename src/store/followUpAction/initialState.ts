@@ -1,5 +1,7 @@
 import type { FollowUpChip } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
 export type FollowUpActionStatus = 'idle' | 'loading' | 'ready';
 
 /** Per-conversation slot — concurrent surfaces (inbox, popup, thread) own their own slot. */
@@ -15,9 +17,13 @@ export interface FollowUpActionSlot {
 }
 
 export interface FollowUpActionState {
+  /** The replica view: one slot per conversation key. */
   slots: Record<string, FollowUpActionSlot>;
+  /** Replica bookkeeping for `slots` (see `followUpSlotResource`). */
+  slotsReplica: ReplicaState<FollowUpActionSlot>;
 }
 
 export const initialFollowUpActionState: FollowUpActionState = {
   slots: {},
+  slotsReplica: createReplicaState(),
 };

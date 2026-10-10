@@ -64,6 +64,11 @@ Dockerfile*
 # add other ignore file below
 .next
 
+# vendored unchanged from the Agent Secret Channel reference implementation
+packages/secret-channel/src/asc/
+packages/secret-channel/test/vectors/
+packages/secret-channel/test/vectors.test.ts
+
 # generated files (regenerate with `bun generate` in packages/sdk)
 packages/sdk/src/generated/
 

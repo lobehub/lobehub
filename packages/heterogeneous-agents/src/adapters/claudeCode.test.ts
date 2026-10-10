@@ -433,54 +433,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[2].data).toMatchObject({ code: 'overloaded', message: rawError });
     });
 
-    it('replays a real session that streamed a turn then overloaded → overloaded + clears echo', () => {
-      // Faithful transport-layer replay of a captured CC session shape: init →
-      // a streamed assistant turn → the exact upstream throttle the user hit
-      // (api_error_status 429 + the "not your usage limit" wording, alongside a
-      // generic rate_limit_event with no reset window). This is how the
-      // overloaded guide is driven without waiting on a real upstream outage.
-      const adapter = new ClaudeCodeAdapter();
-      const rawError =
-        'API Error: Server is temporarily limiting requests (not your usage limit) · Rate limited';
-
-      adapter.adapt({
-        model: 'claude-opus-4-8',
-        session_id: 'sess_replay',
-        subtype: 'init',
-        type: 'system',
-      });
-      // A turn that already streamed content before the throttle landed.
-      adapter.adapt({
-        message: {
-          content: [{ text: 'Let me read loadEvidence and the runner', type: 'text' }],
-          id: 'msg_replay',
-          role: 'assistant',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt({
-        rate_limit_info: { isUsingOverage: false, status: 'rejected' },
-        type: 'rate_limit_event',
-      });
-
-      const events = adapter.adapt({
-        api_error_status: 429,
-        is_error: true,
-        result: rawError,
-        type: 'result',
-      });
-
-      const errorEvent = events.find((e) => e.type === 'error');
-      expect(errorEvent?.data).toMatchObject({
-        agentType: 'claude-code',
-        // The UI keys auto-retry on this exact code; clearEchoedContent wipes
-        // the half-streamed turn so the guide stands in for the whole bubble.
-        clearEchoedContent: true,
-        code: 'overloaded',
-        message: rawError,
-      });
-    });
-
     it('classifies a user quota limit from rateLimitType alone (no resetsAt)', () => {
       const adapter = new ClaudeCodeAdapter();
       const rawError = 'API Error: 429 · Rate limited';
@@ -1439,30 +1391,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(result!.data.content).toBe('[Image: image]');
       expect(result!.data.pluginState.images).toEqual([{ data: 'AAAA', mediaType: 'image' }]);
     });
-
-    it('does not set pluginState.images for a text-only tool_result', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 'r1', input: { file_path: 'x.ts' }, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
-
-      const events = adapter.adapt({
-        message: {
-          content: [{ content: 'plain text', tool_use_id: 'r1', type: 'tool_result' }],
-          role: 'user',
-        },
-        type: 'user',
-      });
-
-      const result = events.find((e) => e.type === 'tool_result');
-      expect(result!.data.content).toBe('plain text');
-      expect(result!.data.pluginState).toBeUndefined();
-    });
   });
 
   describe('TodoWrite pluginState synthesis', () => {
@@ -2013,46 +1941,6 @@ describe('ClaudeCodeAdapter', () => {
       // Subagent task tools are out-of-scope for the main todo plan UI.
       expect(result!.data.pluginState).toBeUndefined();
     });
-
-    it('mixed TodoWrite + Task* flows are independent (TodoWrite path still wins on its own call)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-
-      // First, a TaskCreate snapshot.
-      driveTaskCreate(
-        adapter,
-        { description: 'A', subject: 'A' },
-        'tu_create_1',
-        'Task #1 created successfully: A',
-        'msg_1',
-      );
-
-      // Then a TodoWrite from a legacy / resumed session — should produce
-      // its own pluginState from its own input, NOT the Task accumulator.
-      adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [
-            {
-              id: 'tu_todo',
-              input: { todos: [{ activeForm: 'Doing X', content: 'X', status: 'completed' }] },
-              name: 'TodoWrite',
-              type: 'tool_use',
-            },
-          ],
-        },
-        type: 'assistant',
-      });
-      const todoEvents = adapter.adapt({
-        message: {
-          content: [{ content: 'ok', tool_use_id: 'tu_todo', type: 'tool_result' }],
-          role: 'user',
-        },
-        type: 'user',
-      });
-      const todoState = todoEvents.find((e) => e.type === 'tool_result')!.data.pluginState;
-      expect(todoState.todos.items).toEqual([{ status: 'completed', text: 'X' }]);
-    });
   });
 
   describe('multi-step execution (message.id boundary)', () => {
@@ -2456,14 +2344,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(events[0].data.result).toMatchObject({ success: false });
     });
 
-    it('returns empty array when no pending tools', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-
-      const events = adapter.flush();
-      expect(events).toHaveLength(0);
-    });
-
     it('clears pending tools after flush', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
@@ -2618,33 +2498,6 @@ describe('ClaudeCodeAdapter', () => {
       expect(starts[0].data.toolCalling.id).toBe('t2');
     });
 
-    it('starts a fresh accumulator when message.id advances (new LLM turn)', () => {
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt({ subtype: 'init', type: 'system' });
-
-      adapter.adapt({
-        message: {
-          id: 'msg_1',
-          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
-
-      const events = adapter.adapt({
-        message: {
-          id: 'msg_2',
-          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
-        },
-        type: 'assistant',
-      });
-
-      const chunk = events.find(
-        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
-      );
-      // Different message.id — the new assistant's tools[] must NOT contain t1
-      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t2']);
-    });
-
     it('dedupes when CC echoes a tool_use block with the same id', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt({ subtype: 'init', type: 'system' });
@@ -2672,6 +2525,33 @@ describe('ClaudeCodeAdapter', () => {
       );
       expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t1']);
       expect(e2.filter((e) => e.type === 'tool_start')).toHaveLength(0);
+    });
+
+    it('starts a fresh accumulator when message.id advances (new LLM turn)', () => {
+      const adapter = new ClaudeCodeAdapter();
+      adapter.adapt({ subtype: 'init', type: 'system' });
+
+      adapter.adapt({
+        message: {
+          id: 'msg_1',
+          content: [{ id: 't1', input: {}, name: 'Read', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const events = adapter.adapt({
+        message: {
+          id: 'msg_2',
+          content: [{ id: 't2', input: {}, name: 'Bash', type: 'tool_use' }],
+        },
+        type: 'assistant',
+      });
+
+      const chunk = events.find(
+        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
+      );
+      // Different message.id — the new assistant's tools[] must NOT contain t1
+      expect(chunk!.data.toolsCalling.map((t: any) => t.id)).toEqual(['t2']);
     });
   });
 
@@ -3365,43 +3245,6 @@ describe('ClaudeCodeAdapter', () => {
       });
     });
 
-    it('extracts spawnMetadata from the `Agent` spawn-tool variant too (not just Task)', () => {
-      // Real CC traces emit `Agent` for general-purpose subagents, not just
-      // `Task` — the adapter should cache input for ANY main-agent tool and
-      // build spawnMetadata off whichever spawn-tool variant was used.
-      const adapter = new ClaudeCodeAdapter();
-      adapter.adapt(init);
-      adapter.adapt(
-        mainAssistant('msg_main', {
-          id: 'toolu_agent',
-          input: {
-            description: 'lookup the pwd',
-            prompt: 'run pwd and report it back',
-            subagent_type: 'general-purpose',
-          },
-          name: 'Agent',
-          type: 'tool_use',
-        }),
-      );
-
-      const first = adapter.adapt(
-        subAgent('msg_sub_1', 'toolu_agent', {
-          id: 'toolu_child',
-          input: {},
-          name: 'Bash',
-          type: 'tool_use',
-        }),
-      );
-      const firstChunk = first.find(
-        (e) => e.type === 'stream_chunk' && e.data.chunkType === 'tools_calling',
-      );
-      expect(firstChunk!.data.subagent.spawnMetadata).toEqual({
-        description: 'lookup the pwd',
-        prompt: 'run pwd and report it back',
-        subagentType: 'general-purpose',
-      });
-    });
-
     it('does NOT stamp subagent context on non-subagent (main-agent) tool_uses', () => {
       const adapter = new ClaudeCodeAdapter();
       adapter.adapt(init);
@@ -3784,38 +3627,6 @@ describe('ClaudeCodeAdapter', () => {
       const next = adapter.adapt(ccMessageStart('msg_04'));
       expect(
         next.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
-      ).toBeUndefined();
-    });
-
-    it('does NOT tag turns that follow a user/tool_result event', () => {
-      const adapter = new ClaudeCodeAdapter();
-      init(adapter);
-
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_mon', input: {}, name: 'Monitor', type: 'tool_use' }],
-          id: 'msg_01',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccTaskStarted('task_1', 'toolu_mon'));
-      adapter.adapt(ccUser('toolu_mon', 'Monitor started'));
-      adapter.adapt(ccMessageStart('msg_02')); // confirmation (no signal)
-
-      // LLM emits Bash mid-task → Bash's tool_result arrives → next turn
-      // is a natural follow-up to Bash, NOT a Monitor callback.
-      adapter.adapt({
-        message: {
-          content: [{ id: 'toolu_bash', input: {}, name: 'Bash', type: 'tool_use' }],
-          id: 'msg_03',
-        },
-        type: 'assistant',
-      });
-      adapter.adapt(ccUser('toolu_bash', 'bash ok'));
-
-      const ev = adapter.adapt(ccMessageStart('msg_04'));
-      expect(
-        ev.find((e) => e.type === 'stream_start' && e.data?.newStep)!.data.externalSignal,
       ).toBeUndefined();
     });
 

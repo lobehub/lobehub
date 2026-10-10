@@ -22,7 +22,7 @@ execAgent({ hooks })
   │     ├─ [call_tool]
   │     │     ├─ beforeToolCall ── Before tool executes (supports mocking)
   │     │     ├─ (tool execution)
-  │     │     ├─ afterToolCall ─── After tool completes (observation only)
+  │     │     ├─ afterToolCall ─── After tool completes (optional result control)
   │     │     └─ onToolCallError ─ Tool threw an exception
   │     │
   │     ├─ [request_human_approve]
@@ -103,9 +103,28 @@ const hook: AgentHook = {
 - Header environment templates resolve only at send time from `allowedEnvVars`; persist templates, never resolved secrets.
 - Notifications ignore response content and may return HTTP 204.
 - `beforeToolCall` with `responseHandling: 'toolCall'` awaits an HTTP control response before tool execution. Return HTTP 200 JSON with `{ "decision": "allow" }` or `{ "decision": "deny", "reason": "禁止执行该操作" }`. The type is `{ decision: 'allow' } | { decision: 'deny'; reason?: string }`; a deny without reason uses `Blocked by beforeToolCall hook.`. Denials preserve the reason in the tool result/card with classification `hook_denied`.
+- `afterToolCall` also accepts `responseHandling: 'toolCall'`. It synchronously checks the full request/result before archival and model consumption; deny substitutes a neutral result and never echoes receiver reasons. It does not undo tool side effects, retries, or charges. See [the result-control contract](../../../docs/development/agent-tool-result-hooks.md) for deferred completions and runtime boundaries.
+- Environment response modes preserve compatibility: `toolCall` controls only before; opt into `toolResult` for after-only or `toolCallAndResult` for both. The per-hook decision protocol remains `responseHandling: 'toolCall'`.
 - Empty bodies, HTTP 204 or other non-200 status, invalid JSON, missing/invalid decisions, and responses containing only the old nested `hookSpecificOutput` format are protocol errors. They follow the control hook's `onError: 'continue' | 'block'` policy (default `continue`); an empty response is never an allow decision.
 - Extra response fields are allowed and discarded. Only `decision` and a deny's optional string `reason` are consumed; `updatedInput`/`additionalContext` do not change tool arguments or conversation context.
 - Configuration: `packages/types/src/agentHook.ts`; response parsing: `packages/types/src/agentHookResponse.ts`; HTTP delivery: `apps/server/src/services/agentRuntime/hooks/httpWebhook.ts`.
+
+### Hook configuration lifetime
+
+- Environment hooks (`AGENT_HOOK_WEBHOOK_*`) always come from the executing worker's **current environment**, including after human approval and deferred completion. Never persist their configuration or restore a previous environment's hooks.
+- Code-supplied webhook hooks (`execAgent({ hooks })`) retain the existing per-operation serialization and persistence. Recover these caller hooks from the runtime snapshot or durable operation record; preserve environment-variable templates without expanding secrets into storage.
+- Evaluate each operation's recovered caller hooks in order, then evaluate current environment hooks once in the final round. Do not deduplicate caller hook IDs across operations. Environment-only hooks do not require durable operation storage. Removing an environment hook stops it from controlling subsequent results; when no matching result control remains, allow the result. Do not freeze a previous environment policy across an approval or restart.
+- Deferred completion publishes into its empty placeholder once; duplicate callbacks retain that first final result, including a denial. Propagate caller-policy storage errors rather than treating failed reads as an empty hook list. Do not extend default allow to configured-hook delivery failures: those follow `onError`.
+- Cover environment removal/addition across approval and snapshot expiry, publication without review markers, and continued enforcement of persisted caller hooks in regression tests.
+
+### Publish after the result hook
+
+- Await result control before archival, message content/state writes, streaming, and model consumption. Persist the allowed result or the sanitized denial directly; do not add `toolResultControl` pending/allowed/blocked metadata or hide raw output through history projections.
+- Human approval sources claim the decision and retain the answer in their private resolution/outbox. `MessageModel.resolveHumanApproval` defaults to claim-only; only the runtime calls it with `publishResult: true` after result control. Stop/rejection receipts can publish directly because they contain no executed tool output.
+- Recover original caller hooks through the existing intervention operation identity or deferred callback's parent operation. Keep the in-memory hook verdict separate from tool-owned state; a tool returning `type: 'blocked'` is not a hook verdict.
+- Every deferred backfill, including a member that fails to start, follows the same hook-before-write order. Use the existing empty placeholder to arbitrate duplicate final writes; do not introduce a replacement review state machine.
+- When a thread has a sub-agent or group-member completion bridge, that bridge exclusively publishes its tool result. Thread lifecycle hooks update thread metadata only; never prefill the tool message with an ungated summary, including after approval recovery.
+- Cover an answer held while a hook runs, atomic publication and rollback, duplicate callbacks after policy removal, and partial member startup failure. History readers should need no result-review logic.
 
 ## Events
 
@@ -154,7 +173,7 @@ Tool observation payloads use `BeforeToolCallObservationEvent`; the callback bel
 
 ## Webhook Payloads
 
-`createWebhookPayloadBuilder()` selects `eventFields`, adds `hookId`/`hookType`, then merges `webhook.body`. The body determines the final value of overlapping fields. Tool-result payloads use `redactResultForEvents()` to trim raw skill Work data; Work registration retains the full in-process result. `finalState` is available to local handlers; serialized payloads carry the event's data fields.
+`createWebhookPayloadBuilder()` selects `eventFields`, adds `hookId`/`hookType`, then merges `webhook.body`. The body determines the final value of overlapping fields. Tool-result notification payloads use `redactResultForEvents()` to trim raw skill Work data; controls receive the full result. Work registration retains the full in-process result. `finalState` is available to local handlers; serialized payloads carry the event's data fields.
 
 When email is selected, the builder resolves `userEmail` from the final effective `userId`, replacing supplied email values. Email-only projections use the event ID. An explicit invalid ID, missing email or lookup error leaves email omitted.
 

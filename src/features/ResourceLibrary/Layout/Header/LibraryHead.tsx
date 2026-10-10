@@ -47,7 +47,9 @@ const Head = memo<{ id: string }>(({ id }) => {
   const [isDropZoneActive, setIsDropZoneActive] = useState(false);
 
   const useFetchKnowledgeBaseList = useKnowledgeBaseStore((s) => s.useFetchKnowledgeBaseList);
-  const { data: libraries } = useFetchKnowledgeBaseList();
+  // Fetch orchestration only; the rows are read from the replica view below.
+  useFetchKnowledgeBaseList();
+  const libraries = useKnowledgeBaseStore(knowledgeBaseSelectors.getKnowledgeBaseList());
   const activeLibrary = libraries?.find((library) => library.id === id) as
     (NonNullable<typeof libraries>[number] & { memberRestricted?: boolean }) | undefined;
 

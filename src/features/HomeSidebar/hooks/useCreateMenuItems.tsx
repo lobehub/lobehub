@@ -29,7 +29,7 @@ import { chatGroupService } from '@/services/chatGroup';
 import { useAgentStore } from '@/store/agent';
 import { useAgentGroupStore } from '@/store/agentGroup';
 import { useHomeStore } from '@/store/home';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 
 type MenuItem = NonNullable<ItemType> & { sfSymbol?: SFSymbol };
 
@@ -65,7 +65,6 @@ export const useCreateMenuItems = () => {
     s.switchToGroup,
   ]);
   const [createGroup, loadGroups] = useAgentGroupStore((s) => [s.createGroup, s.loadGroups]);
-  const createNewPage = usePageStore((s) => s.createNewPage);
 
   const [isCreatingGroup, setIsCreatingGroup] = useState(false);
   const [isCreatingSessionGroup, setIsCreatingSessionGroup] = useState(false);
@@ -419,13 +418,13 @@ export const useCreateMenuItems = () => {
       // rows to `'private'`; pass it explicitly so the optimistic row lands in
       // 私人 too, instead of flashing in 工作区 and jumping when the server replies.
       const defaultVisibility = activeWorkspaceId ? 'private' : undefined;
-      const newPageId = await createNewPage(untitledTitle, defaultVisibility);
+      const newPageId = await pageActions.createNewPage(untitledTitle, defaultVisibility);
       navigate(`/page/${newPageId}`);
     } catch (error) {
       console.error('Failed to create page:', error);
       toast.error('Failed to create page');
     }
-  }, [canCreate, createNewPage, tFile, navigate, activeWorkspaceId]);
+  }, [canCreate, tFile, navigate, activeWorkspaceId]);
 
   /**
    * Create page menu item

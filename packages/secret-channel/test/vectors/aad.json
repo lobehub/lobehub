@@ -1,0 +1,119 @@
+{
+  "description": "Canonical AAD (spec §6.4): encodeFields of 14 fields in fixed order. displayHash (spec §6.4.3) = base64url(SHA-256(encodeFields([argvDisplay, promptText or \"\", verification, systemObserved, executorName, label]))). purpose.agentClaim is intentionally NOT bound.",
+  "generator": "spec/test-vectors/generate.ts (packages/asc-core reference implementation)",
+  "magic": "asc/v1/aad",
+  "request": {
+    "createdAt": 1790000000000,
+    "executor": {
+      "ephPub": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ",
+      "executorId": "exec-TEST-0001",
+      "executorName": "Test Laptop",
+      "identityKeyFp": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo",
+      "identityPublicKey": "fSnXk-TZ_DhB5zyHjCO10xEI2LAcfgvUmhNBal-50Qw",
+      "sig": "o9eUJ5NAINDIBvQswzg8ABezi1oa8cysv3fcO3tfK6PCo7HR9uiZa0vWUWSBW5ZLMBPnA9TdPArsU0BYp__qCA"
+    },
+    "expiresAt": 1790000300000,
+    "id": "AAECAwQFBgcICQoLDA0ODw",
+    "kind": "password",
+    "label": "sudo-password",
+    "persistence": "once",
+    "purpose": {
+      "agentClaim": "Install the example package (agent claim, unverified)",
+      "systemObserved": "sudo: installer -pkg example-TEST.pkg -target /"
+    },
+    "requester": {
+      "runId": "run-TEST-0001",
+      "source": "askpass"
+    },
+    "target": {
+      "argvDisplay": "installer -pkg example-TEST.pkg -target /",
+      "argvHash": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ",
+      "exePath": "/usr/bin/sudo",
+      "kind": "sudo",
+      "promptText": "Password:",
+      "verification": "verified"
+    },
+    "v": 1
+  },
+  "displayHashPreimageHex": "0000000600000029696e7374616c6c6572202d706b67206578616d706c652d544553542e706b67202d746172676574202f0000000950617373776f72643a0000000876657269666965640000002f7375646f3a20696e7374616c6c6572202d706b67206578616d706c652d544553542e706b67202d746172676574202f0000000b54657374204c6170746f700000000d7375646f2d70617373776f7264",
+  "displayHash": "tPyUmVaDjGe3wiGPJoxn-EivemiYsgDU6i9Nh_6y9JE",
+  "fields": [
+    {
+      "index": 0,
+      "name": "magic",
+      "value": "asc/v1/aad"
+    },
+    {
+      "index": 1,
+      "name": "v",
+      "value": "1"
+    },
+    {
+      "index": 2,
+      "name": "suite",
+      "value": "DHKEM-X25519-HKDF-SHA256/HKDF-SHA256/AES-256-GCM"
+    },
+    {
+      "index": 3,
+      "name": "requestId",
+      "value": "AAECAwQFBgcICQoLDA0ODw"
+    },
+    {
+      "index": 4,
+      "name": "runId",
+      "value": "run-TEST-0001"
+    },
+    {
+      "index": 5,
+      "name": "executorId",
+      "value": "exec-TEST-0001"
+    },
+    {
+      "index": 6,
+      "name": "identityKeyFp",
+      "value": "SHA256:ida-hslpA5tlXWtJJhu192ZTPSsLb0BEPDTtPqKnARo"
+    },
+    {
+      "index": 7,
+      "name": "ephPub",
+      "value": "G_bgY5-tRXDLlb7q11vhGe2jlJHGReDB0B9NMNJoxiQ"
+    },
+    {
+      "index": 8,
+      "name": "targetKind",
+      "value": "sudo"
+    },
+    {
+      "index": 9,
+      "name": "exePath",
+      "value": "/usr/bin/sudo"
+    },
+    {
+      "index": 10,
+      "name": "argvHash",
+      "value": "80xtF3I1QkCb-_L8jDc0yzF5AZNVOwchVXjtLE_fxVQ"
+    },
+    {
+      "index": 11,
+      "name": "kind",
+      "value": "password"
+    },
+    {
+      "index": 12,
+      "name": "displayHash",
+      "value": "tPyUmVaDjGe3wiGPJoxn-EivemiYsgDU6i9Nh_6y9JE"
+    },
+    {
+      "index": 13,
+      "name": "expiresAt",
+      "value": "1790000300000"
+    }
+  ],
+  "aadHex": "0000000e0000000a6173632f76312f61616400000001310000003044484b454d2d5832353531392d484b44462d5348413235362f484b44462d5348413235362f4145532d3235362d47434d0000001641414543417751464267634943516f4c4441304f44770000000d72756e2d544553542d303030310000000e657865632d544553542d30303031000000325348413235363a6964612d68736c704135746c5857744a4a68753139325a545053734c623042455044547450714b6e41526f0000002b475f626759352d745258444c6c623771313176684765326a6c4a4847526544423042394e4d4e4a6f786951000000047375646f0000000d2f7573722f62696e2f7375646f0000002b3830787446334931516b43622d5f4c386a446330797a4635415a4e564f77636856586a744c455f667856510000000870617373776f72640000002b745079556d5661446a476533776947504a6f786e2d456976656d6959736744553669394e685f3679394a450000000d31373930303030333030303030",
+  "aadSha256Hex": "b10530b9fba231c08947946865c5e392a4264a9cc6193f707b4934d2e3fcdeab",
+  "promptTextAbsent": {
+    "note": "target.promptText absent encodes as the empty string",
+    "displayHash": "8grwvzsgPxHZT8tpacD8v9orvPrPo7LPIP9pIpkVEJI",
+    "equalsEmptyString": true
+  }
+}

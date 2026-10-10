@@ -72,6 +72,7 @@ import { signHeteroOperationJWT, signUserJWT } from '@/libs/trpc/utils/internalJ
 import { createStreamEventManager } from '@/server/modules/AgentRuntime/factory';
 import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
 import {
+  describeServerDefaultHeterogeneousModel,
   getServerDefaultHeterogeneousModels,
   initModelRuntimeFromServerConfig,
   resolveServerDefaultHeterogeneousModel,
@@ -102,6 +103,8 @@ import {
   HeteroOperationPrincipalError,
   resolveActiveHeteroOperationPrincipal,
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
+import { createTaskRunHooks } from '@/server/services/task/runHooks';
+import { type TopicRunReopenOutcome, TopicRunService } from '@/server/services/task/topicRun';
 
 const log = debug('lobe-server:ai-agent-router');
 
@@ -550,9 +553,10 @@ export const dispatchClaimedAgentIntervention = async (
    * `acceptsMemberRuntimeEnd`: the resolving client's own declaration when that
    * client is the one subscribing to the continuation (the Web source bridge).
    * Left unset for a resolver that isn't (token Review), so the continuation
-   * inherits the parked operation's declaration.
+   * inherits the parked operation's declaration. `acceptsFileWorks` follows
+   * the same rule.
    */
-  options: { acceptsMemberRuntimeEnd?: boolean } = {},
+  options: { acceptsFileWorks?: boolean; acceptsMemberRuntimeEnd?: boolean } = {},
 ): Promise<{ execution?: ExecAgentResult; status: AgentInterventionReviewStatus }> => {
   const { runtimeAction } = resolution;
   let execution: ExecAgentResult | undefined;
@@ -636,6 +640,7 @@ export const dispatchClaimedAgentIntervention = async (
             const skipped = customAction.type === 'skipped';
             execution = await ctx.aiAgentService.execAgent({
               agentId: runtimeAction.agentId,
+              acceptsFileWorks: options.acceptsFileWorks,
               acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
               approvalResolutionRequestId: resolution.resolutionRequestId,
               approvalSourceOperationId: runtimeAction.operationId,
@@ -672,6 +677,7 @@ export const dispatchClaimedAgentIntervention = async (
           const [singleDecision] = runtimeAction.decisions;
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsFileWorks: options.acceptsFileWorks,
             acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
@@ -694,6 +700,7 @@ export const dispatchClaimedAgentIntervention = async (
         case 'resume_tool_result': {
           execution = await ctx.aiAgentService.execAgent({
             agentId: runtimeAction.agentId,
+            acceptsFileWorks: options.acceptsFileWorks,
             acceptsMemberRuntimeEnd: options.acceptsMemberRuntimeEnd,
             approvalResolutionRequestId: resolution.resolutionRequestId,
             approvalSourceOperationId: runtimeAction.operationId,
@@ -1053,6 +1060,14 @@ const StartExecutionSchema = z.object({
 const acceptsMemberRuntimeEndOf = (streamFeatures: string[] | undefined): boolean =>
   streamFeatures?.includes('member_runtime_end') ?? false;
 
+/**
+ * Whether the calling client declared it renders `file` Works in pushed
+ * snapshots (`streamFeatures`). Same boolean contract as
+ * {@link acceptsMemberRuntimeEndOf}.
+ */
+const acceptsFileWorksOf = (streamFeatures: string[] | undefined): boolean =>
+  streamFeatures?.includes('file_works') ?? false;
+
 /** A client's declaration that it can run relayed LLM attempts (`agent_llm_relay`). */
 const LlmExecutorSchema = z.object({
   capabilities: z.array(z.string()).max(16),
@@ -1173,7 +1188,8 @@ const ExecAgentSchema = z
     /**
      * Gateway stream features the calling client handles. `member_runtime_end`:
      * a group member's terminal arrives on the supervisor's channel under that
-     * name instead of `agent_runtime_end`. Free-form strings so an older server
+     * name instead of `agent_runtime_end`. `file_works`: pushed snapshots may
+     * carry `file` Work summaries. Free-form strings so an older server
      * ignores features it does not know rather than rejecting the run.
      */
     streamFeatures: z.array(z.string()).optional(),
@@ -1373,7 +1389,7 @@ export const bridgeLegacyResumeToSourceIntervention = async (
   },
   ctx: AgentInterventionDispatchContext,
   /** Forwarded to {@link dispatchClaimedAgentIntervention}; see its `options`. */
-  options: { acceptsMemberRuntimeEnd?: boolean } = {},
+  options: { acceptsFileWorks?: boolean; acceptsMemberRuntimeEnd?: boolean } = {},
 ): Promise<ExecAgentResult | undefined> => {
   const {
     messageModel,
@@ -2086,6 +2102,31 @@ export const aiAgentRouter = router({
     resolveServerDefaultHeterogeneousCapability(),
   ),
 
+  /**
+   * Model-card facts Desktop writes into a CLI's model catalog for a model the
+   * CLI has no entry for. Read with `mutation` semantics so Desktop main can
+   * reach it over its plain-POST tRPC helper; it changes nothing.
+   */
+  describeServerDefaultHeterogeneousModel: aiAgentBaseProcedure
+    .input(
+      z.object({
+        agentType: z.enum(SERVER_DEFAULT_HETEROGENEOUS_AGENT_TYPES),
+        model: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      assertServerDefaultControlAuth(ctx.oidcAuth);
+      return describeServerDefaultHeterogeneousModel(input.agentType, input.model).catch(
+        (error) => {
+          throw new TRPCError({
+            cause: error,
+            code: 'BAD_REQUEST',
+            message: 'The selected server model is not available for this heterogeneous agent',
+          });
+        },
+      );
+    }),
+
   beginServerDefaultHeterogeneousOperation: aiAgentBaseProcedure
     .input(
       z.object({
@@ -2527,11 +2568,34 @@ export const aiAgentRouter = router({
           resumeToolResult,
         },
         ctx,
-        { acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures) },
+        {
+          acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
+          acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+        },
       );
       if (bridged) return bridged;
 
+      // A message typed into a Task's own conversation continues that Task's
+      // run — and the composer dispatches it, not `runTask`. Everything the Task
+      // side needs for this run is attached here: the hook that settles the run
+      // when it ends, and the reopen that puts its run row back in flight.
+      // Without the pair, an answered run is invisible to the Task: the run card
+      // keeps the finished state of the run it replied to, `cancelTopic` refuses
+      // to stop the live one, and the detail page stops polling for it.
+      const topicRunService = new TopicRunService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const topicRun = appContext?.topicId
+        ? await topicRunService.resolveOwnableRun(appContext.topicId)
+        : undefined;
+      // Recorded on the operation-created boundary and acted on once the
+      // dispatch has returned.
+      let reopenOutcome: TopicRunReopenOutcome | undefined;
+
       const result = await ctx.aiAgentService.execAgent({
+        acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
         agentId,
         appContext,
@@ -2556,6 +2620,29 @@ export const aiAgentRouter = router({
         deviceId,
         localDeviceId,
         existingMessageIds,
+        ...(topicRun && {
+          hooks: createTaskRunHooks({
+            db: ctx.serverDB,
+            taskId: topicRun.taskId,
+            taskIdentifier: topicRun.taskIdentifier,
+            trigger: 'manual',
+            // The Task's creator, not the caller: the completion callback
+            // resolves the workspace from `tasks.createdByUserId`, so passing a
+            // workspace member would make that lookup miss and strand the run.
+            userId: topicRun.ownerUserId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          }),
+          // Before the run's first step, so a short run can never finish — and
+          // have its own completion hook settle the row — ahead of the reopen.
+          onOperationCreated: async (operationId) => {
+            reopenOutcome = await topicRunService
+              .reopen({ link: topicRun, operationId })
+              .catch((error) => {
+                console.error('[aiAgent.execAgent] failed to reopen the task run: %O', error);
+                return 'refused' as const;
+              });
+          },
+        }),
         fileIds,
         mentionedAgents,
         parentMessageId,
@@ -2574,6 +2661,36 @@ export const aiAgentRouter = router({
         userAgent: ctx.userAgent ?? undefined,
         userInterventionConfig,
       });
+      // The run was dispatched but it did not take the Task's run row over. Two
+      // ways that happens: the Task was retired while the run was starting (the
+      // write failed or there is no row to keep honest), or a concurrent send on
+      // the same topic won the reopen and already owns the row. In both cases
+      // the run's hooks are already attached for the whole run, and
+      // `onTopicComplete` settles the topic row by id without checking which
+      // operation owns it — so letting this run continue would let the loser
+      // settle a row it does not own, finishing the winner's run ahead of it and
+      // overwriting its handoff/result. Stop it, exactly as the runner stops the
+      // run it dispatched under the same race.
+      if (reopenOutcome === 'refused' || reopenOutcome === 'already-running') {
+        const lostTheRow = reopenOutcome === 'already-running';
+        const stop = await ctx.aiAgentService
+          .interruptTask({ operationId: result.operationId })
+          .catch((error) => {
+            console.error('[aiAgent.execAgent] failed to stop the orphaned task run: %O', error);
+            return undefined;
+          });
+        // Same confirmation gate as `TaskService.interruptTaskOperation`.
+        const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
+        throw new TRPCError({
+          code: stopped ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
+          message: stopped
+            ? lostTheRow
+              ? 'Another run is already live on this task; this duplicate send was stopped.'
+              : 'This task run could not be recorded while it was starting; the run was stopped.'
+            : `This task run could not be recorded while it was starting, and stopping it (operation ${result.operationId}) could not be confirmed.`,
+        });
+      }
+
       return toClientExecAgentResult(result);
     } catch (error: any) {
       console.error('execAgent failed: %O', error);
@@ -2700,6 +2817,7 @@ export const aiAgentRouter = router({
           workspaceId: ctx.workspaceId,
         });
         const result = await ctx.aiAgentService.execAgent({
+          acceptsFileWorks: acceptsFileWorksOf(task.streamFeatures),
           acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(task.streamFeatures),
           clientProtocol: task.clientProtocol,
           includeFinalState: task.includeFinalState,
@@ -3653,6 +3771,7 @@ export const aiAgentRouter = router({
       }
 
       const dispatch = await dispatchClaimedAgentIntervention(resolution, ctx, {
+        acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
         acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
       });
       return {

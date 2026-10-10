@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Yükselttikten sonra WeChat'i bağlayın",
   "plansModal.modelAccess.desc": "Bu model ücretli planlarda mevcuttur. Tüm model seçeneklerini kullanmak için yükseltin.",
   "plansModal.modelAccess.title": "Tüm modellerin kilidini açın",
+  "plansModal.persistentSandbox.desc": "Ajanınızın bulut sandbox'ında yazdığı dosyalar oturum sona erdiğinde silinir. Oturumları aşan ve konularınız arasında paylaşılan kalıcı bir çalışma dizini tutmak için yükseltin.",
+  "plansModal.persistentSandbox.title": "Sandbox dosyalarınızı saklayın",
   "qa.desc": "Sorunuz yanıtlanmadıysa, daha fazla SSS için <1>Ürün Belgeleri</1>'ni kontrol edin veya bizimle iletişime geçin.",
   "qa.detail": "Detayları Görüntüle",
   "qa.list.credit.a": "Hesaplama kredileri, {{cloud}} tarafından model kullanımını ölçmek için kullanılan bir metriktir. Farklı yapay zeka modelleri farklı miktarda kredi tüketir.",
@@ -631,8 +633,16 @@
   "switchPlan": "Plan Değiştir",
   "switchToMonthly.desc": "Geçişten sonra, mevcut yıllık plan sona erdiğinde aylık faturalama devreye girecektir.",
   "switchToMonthly.title": "Aylık Faturalamaya Geç",
+  "switchToYearly.after": "Geçiş yaptıktan sonra",
+  "switchToYearly.billedYearly": "{{price}} yıllık olarak faturalandırılır",
+  "switchToYearly.credit": "Bu ay için kredi",
   "switchToYearly.desc": "Geçişten sonra, fark ödemesi yapıldıktan sonra yıllık faturalama hemen devreye girer. Başlangıç tarihi önceki plandan devralınır.",
+  "switchToYearly.dueToday": "Bugün ödenecek",
+  "switchToYearly.now": "Şimdi",
+  "switchToYearly.period": "Fatura Dönemi",
+  "switchToYearly.price": "Fiyat",
   "switchToYearly.title": "Yıllık Faturalamaya Geç",
+  "switchToYearly.yearlyPlan": "Yıllık plan",
   "tab.billing": "Fatura Yönetimi",
   "tab.budget": "Bütçe",
   "tab.credits": "Kredi Yönetimi",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Kullanım Genel Bakış",
   "usage.remaining": "Kalan",
   "usage.storage.embeddings.used": "Vektör Depolama",
-  "usage.storage.file.used": "Dosya Kullanımı"
+  "usage.storage.file.used": "Dosya Kullanımı",
+  "usage.storage.sandboxStorage.used": "Sandbox Depolama"
 }

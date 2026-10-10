@@ -55,6 +55,8 @@ vi.mock('@/server/services/file', () => ({
 vi.mock('@/database/models/message', () => ({
   MessageModel: vi.fn().mockImplementation(function () {
     return {
+      findById: vi.fn().mockResolvedValue(undefined),
+      findMessagePlugin: vi.fn().mockResolvedValue(undefined),
       query: vi.fn().mockResolvedValue([]),
     };
   }),
@@ -536,6 +538,34 @@ describe('AgentRuntimeService', () => {
       },
     );
 
+    describe('file Works declaration (host.acceptsFileWorks)', () => {
+      it('stores the declaration the client made', async () => {
+        await service.createOperation({ ...mockParams, acceptsFileWorks: true, autoStart: false });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host.acceptsFileWorks).toBe(true);
+      });
+
+      it("lets a group member inherit its supervisor's declaration", async () => {
+        await mockCoordinator.saveAgentState('parent-op', { host: { acceptsFileWorks: true } });
+        mockCoordinator.saveAgentState.mockClear();
+
+        await service.createOperation({
+          ...mockParams,
+          appContext: { ...mockParams.appContext, orchestrationRole: 'member' },
+          autoStart: false,
+          parentOperationId: 'parent-op',
+        });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host.acceptsFileWorks).toBe(true);
+      });
+
+      it.each([undefined, false])('carries no declaration for %s', async (acceptsFileWorks) => {
+        await service.createOperation({ ...mockParams, acceptsFileWorks, autoStart: false });
+        const savedState = mockCoordinator.saveAgentState.mock.calls[0][1];
+        expect(savedState.host).not.toHaveProperty('acceptsFileWorks');
+      });
+    });
+
     describe('relay executor (host.llmExecutor)', () => {
       const executor = { capabilities: ['llm_relay@1'], clientId: 'tab-a', providers: ['ollama'] };
 
@@ -673,6 +703,40 @@ describe('AgentRuntimeService', () => {
       for (const mirror of ['toolExecutorMap', 'toolManifestMap', 'toolSourceMap', 'tools']) {
         expect(mirror in state).toBe(false);
       }
+    });
+
+    it('does not require durable storage for an environment-only result hook', async () => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('db down'),
+      );
+
+      await expect(service.createOperation(mockParams)).resolves.toBeDefined();
+    });
+
+    it('requires durable storage for a caller result hook', async () => {
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('db down'),
+      );
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          hooks: [
+            {
+              id: 'caller',
+              type: 'afterToolCall',
+              webhook: {
+                url: 'https://hooks.example/caller',
+                responseHandling: 'toolCall',
+              },
+            },
+          ],
+        }),
+      ).rejects.toThrow('Failed to durably persist afterToolCall');
     });
 
     // Codex P1 on #20093: the member bridge lived only in the 2h runtime
@@ -2873,6 +2937,60 @@ describe('AgentRuntimeService', () => {
       expect(result).toEqual(stubMessages);
     });
 
+    it('assembles a share visitor run snapshot under the visitor share Work scope', async () => {
+      // Regression: the visitor's Works are registered under their share scope,
+      // which the ordinary scope never resolves. Without it the terminal
+      // snapshot carried no Work card, so a sandbox-exported pptx only showed
+      // its card after the visitor reloaded the page.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+        principal: {
+          actor: { shareVisitor: { shareId: 'share_1', visitorUserId: 'visitor_1' } },
+        },
+      } as any);
+
+      expect(queryMessages).toHaveBeenCalledWith(
+        expect.objectContaining({ includeFileWorks: true, topicId: 'tpc_1' }),
+        {
+          allowShareVisitor: true,
+          workAccessScope: {
+            shareId: 'share_1',
+            topicId: 'tpc_1',
+            type: 'agentShare',
+            visitorUserId: 'visitor_1',
+          },
+        },
+      );
+    });
+
+    it('keeps the ordinary Work scope and file-Work gate for a non-share run', async () => {
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({ origin: { agentId: 'agt_1', topicId: 'tpc_1' } } as any);
+
+      expect(queryMessages.mock.calls[0][0].includeFileWorks).toBeUndefined();
+      expect(queryMessages.mock.calls[0][1]).toEqual({ allowShareVisitor: true });
+    });
+
+    it('includes file Works for an ordinary run whose client declared it renders them', async () => {
+      // Regression: an ordinary run's terminal snapshot/patch dropped the
+      // exported pptx card until the user reloaded the conversation.
+      const queryMessages = vi.fn().mockResolvedValue([]);
+      stubMessageService(service, queryMessages);
+
+      await service.queryUiMessages({
+        host: { acceptsFileWorks: true },
+        origin: { agentId: 'agt_1', topicId: 'tpc_1' },
+      } as any);
+
+      expect(queryMessages.mock.calls[0][0].includeFileWorks).toBe(true);
+      expect(queryMessages.mock.calls[0][1]).toEqual({ allowShareVisitor: true });
+    });
+
     it.each([undefined, 'visitor_1'])(
       'includes visitor rows (visitor=%s)',
       async (visitorUserId) => {
@@ -2892,7 +3010,10 @@ describe('AgentRuntimeService', () => {
         // The pushed snapshot always carries whole tool payloads now: it only
         // reaches a client that did not ask for protocol 2, which has no way to
         // fetch an omitted payload back.
-        expect(queryMessages).toHaveBeenCalledWith(expect.anything(), { allowShareVisitor: true });
+        expect(queryMessages).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.objectContaining({ allowShareVisitor: true }),
+        );
       },
     );
 
@@ -3343,6 +3464,9 @@ describe('AgentRuntimeService', () => {
     let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
 
     beforeEach(() => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        metadata: { _hooks: [] },
+      });
       updateToolMessage = vi.fn().mockResolvedValue({ success: true });
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
@@ -3672,6 +3796,9 @@ describe('AgentRuntimeService', () => {
     let resumeSpy: MockInstance<AgentRuntimeService['tryResumeParentFromAsyncTool']>;
 
     beforeEach(() => {
+      vi.spyOn((service as any).agentOperationModel, 'findById').mockResolvedValue({
+        metadata: { _hooks: [] },
+      });
       updateToolMessage = vi.fn().mockResolvedValue({ success: true });
       (service as any).messageModel.updateToolMessage = updateToolMessage;
       resumeSpy = vi.spyOn(service, 'tryResumeParentFromAsyncTool').mockResolvedValue(true);
@@ -3685,8 +3812,9 @@ describe('AgentRuntimeService', () => {
 
       expect(won).toBe(true);
       expect(updateToolMessage).toHaveBeenCalledWith('tool-msg-1', {
+        onlyIfEmpty: true,
         content: 'final answer',
-        pluginError: undefined,
+        pluginError: null,
         pluginState: {
           model: 'gpt-test',
           status: 'completed',
@@ -3699,6 +3827,87 @@ describe('AgentRuntimeService', () => {
         { parentOperationId: 'parent-op-1' },
         { knownFulfilledMessageId: 'tool-msg-1', scheduleVerifyOnHold: true },
       );
+    });
+
+    it('gates deferred output before backfill and parent resume, including callback replay', async () => {
+      const privateContent = 'synthetic-private-child-answer';
+      const stored = {
+        id: 'tool-msg-1',
+        identifier: 'lobe-agent',
+        apiName: 'callSubAgent',
+        arguments: '{"instruction":"original"}',
+        toolCallId: 'native-child',
+        state: {},
+      };
+      (service as any).messageModel.findMessagePlugin = vi.fn(async () => stored);
+      (service as any).messageModel.findById = vi
+        .fn()
+        .mockResolvedValue({ id: 'tool-msg-1', parentId: 'assistant' });
+      const fetchHook = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(
+          async () => new Response(JSON.stringify({ decision: 'deny', reason: privateContent })),
+        );
+      const hooks = [
+        {
+          id: 'after-control',
+          type: 'afterToolCall',
+          webhook: { url: 'https://hooks.example/control', responseHandling: 'toolCall' },
+        },
+      ];
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'parent-op-1',
+        stepCount: 3,
+        host: { hooks },
+      });
+      updateToolMessage.mockImplementation(async (_id, value) => {
+        if ((stored as any).content && value.onlyIfEmpty) return { success: true, applied: false };
+        (stored as any).content = value.content;
+        stored.state = value.pluginState;
+        (service as any).messageModel.findById.mockResolvedValue({
+          id: 'tool-msg-1',
+          parentId: 'assistant',
+          content: value.content,
+        });
+        return { success: true };
+      });
+      try {
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: {
+            ...childState,
+            messages: [{ role: 'assistant', content: privateContent }],
+          } as any,
+        });
+        expect(JSON.parse(String(fetchHook.mock.calls[0][1]?.body))).toMatchObject({
+          args: { instruction: 'original' },
+          toolCallId: 'native-child',
+          result: { content: expect.stringContaining(privateContent) },
+        });
+        expect(JSON.stringify(updateToolMessage.mock.calls)).not.toContain(privateContent);
+        expect(updateToolMessage).toHaveBeenCalledWith(
+          'tool-msg-1',
+          expect.objectContaining({
+            content: 'Tool result withheld by afterToolCall hook.',
+            replacePluginState: true,
+            onlyIfEmpty: true,
+          }),
+        );
+        expect(resumeSpy).toHaveBeenCalledTimes(1);
+        // A duplicate callback cannot restore the raw child answer after configuration removal.
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        await service.completeSubAgentBridge({
+          ...bridgeParams,
+          finalState: {
+            ...childState,
+            messages: [{ role: 'assistant', content: privateContent }],
+          } as any,
+        });
+        expect(fetchHook).toHaveBeenCalledTimes(1);
+        expect((stored as any).content).toBe('Tool result withheld by afterToolCall hook.');
+      } finally {
+        fetchHook.mockRestore();
+      }
     });
 
     it('ends a callSubAgent result with the sub-agent id so the parent can continue it', async () => {

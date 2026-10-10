@@ -15,7 +15,7 @@ import { useRegisterFilesHotkeys } from '@/hooks/useHotkeys';
 import { usePermission } from '@/hooks/usePermission';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 import { StyleSheet } from '@/utils/styles';
 
 import DocumentComments from './DocumentComments';
@@ -474,7 +474,6 @@ export const PageEditor: FC<PageEditorProps> = ({
   syncPageAgentActiveState,
 }) => {
   const { allowed: canEdit } = usePermission('edit_own_content');
-  const deletePage = usePageStore((s) => s.deletePage);
 
   return (
     <PageAgentProvider pageId={pageId} syncActiveAgent={syncPageAgentActiveState}>
@@ -490,7 +489,7 @@ export const PageEditor: FC<PageEditorProps> = ({
           onDelete={() => {
             if (!canEdit) return;
 
-            deletePage(pageId || '');
+            pageActions.deletePage(pageId || '');
           }}
           onEmojiChange={(emoji) => {
             if (!canEdit) return;

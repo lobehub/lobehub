@@ -1,9 +1,11 @@
 // @vitest-environment node
 import { type Message, parse } from '@lobechat/conversation-flow';
 import { ChatErrorType, RequestTrigger } from '@lobechat/types';
+import debug from 'debug';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { NotifyAgentInterventionRequiredParams } from '@/business/server/agent-run/agentInterventionReview';
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { WorkModel } from '@/database/models/work';
 import * as agentSignalService from '@/server/services/agentSignal';
 import * as verifyServices from '@/server/services/verify';
@@ -63,6 +65,50 @@ vi.mock('@/server/services/workRegistration', async (importOriginal) => ({
 const flushMicrotasks = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const buildLifecycle = () => new CompletionLifecycle({} as any, 'user-1');
+
+describe('CompletionLifecycle.recordStart diagnostics', () => {
+  let debugNamespaces: string;
+
+  beforeEach(() => {
+    debugNamespaces = debug.disable();
+    debug.enable('lobe-server:completion-lifecycle');
+  });
+
+  afterEach(() => {
+    debug.enable(debugNamespaces);
+    vi.restoreAllMocks();
+  });
+
+  it.each([undefined, { _hooks: [] }])(
+    'retains the database failure cause without persisted hooks: %j',
+    async (metadata) => {
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('connection refused'),
+      );
+      const output = vi.spyOn(debug, 'log').mockImplementation(() => {});
+
+      expect(await buildLifecycle().recordStart({ operationId: 'op-1', metadata })).toBe(false);
+      expect(output.mock.calls.flat().join(' ')).toContain('connection refused');
+    },
+  );
+
+  it('does not log database parameters containing hook credentials', async () => {
+    const secret = 'synthetic-hook-authorization';
+    vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+      new Error(`Failed query; params: ${secret}`),
+    );
+    const output = vi.spyOn(debug, 'log').mockImplementation(() => {});
+
+    expect(
+      await buildLifecycle().recordStart({
+        operationId: 'op-1',
+        metadata: { _hooks: [{ webhook: { headers: { Authorization: secret } } }] },
+      }),
+    ).toBe(false);
+    expect(output.mock.calls.flat().join(' ')).toContain('Failed to record operation start');
+    expect(output.mock.calls.flat().join(' ')).not.toContain(secret);
+  });
+});
 
 describe('isSuccessLikeCompletionReason', () => {
   // Regression: file-Work registration was gated on `reason === 'done'` alone,

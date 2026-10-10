@@ -48,7 +48,6 @@ describe('GenerationTopic ServerService', () => {
     const id = 'test-topic-id';
     const data: UpdateTopicValue = {
       title: 'Updated Topic',
-      coverUrl: 'https://example.com/cover.jpg',
     };
 
     await service.updateTopic(id, data);

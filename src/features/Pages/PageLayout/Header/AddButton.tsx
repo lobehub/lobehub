@@ -6,7 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 
 interface AddButtonProps {
   /**
@@ -29,13 +29,11 @@ const AddButton = memo<AddButtonProps>(({ compact, visibility }) => {
   const { t } = useTranslation('file');
   const { allowed: canCreate } = usePermission('create_content');
 
-  const createNewPage = usePageStore((s) => s.createNewPage);
-
   const handleNewDocument = () => {
     if (!canCreate) return;
 
     const untitledTitle = t('pageList.untitled');
-    createNewPage(untitledTitle, visibility);
+    pageActions.createNewPage(untitledTitle, visibility);
   };
 
   return (

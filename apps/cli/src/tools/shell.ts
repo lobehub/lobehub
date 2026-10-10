@@ -10,6 +10,8 @@ import { log } from '../utils/logger';
 
 const processManager = new ShellProcessManager();
 
+export const getActiveShellCount = () => processManager.activeCount;
+
 export function cleanupAllProcesses() {
   processManager.cleanupAll();
 }

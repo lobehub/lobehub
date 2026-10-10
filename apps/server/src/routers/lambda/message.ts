@@ -124,7 +124,7 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
     value: z.object({
       content: z.string().optional(),
       heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
-      metadata: z.record(z.string(), z.any()).optional(),
+      metadata: z.object({}).passthrough().optional(),
       pluginError: z.any().optional(),
       pluginState: z.record(z.string(), z.any()).optional(),
     }),

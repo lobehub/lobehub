@@ -8,6 +8,7 @@ import { IMAGE_GENERATION_CONFIG } from 'model-bank';
 import { nanoid } from 'nanoid';
 import sharp from 'sharp';
 
+import { GenerationTopicModel } from '@/database/models/generationTopic';
 import { FileService } from '@/server/services/file';
 import { calculateThumbnailDimensions } from '@/utils/number';
 import { getYYYYmmddHHMMss } from '@/utils/time';
@@ -131,9 +132,11 @@ interface ImageForGeneration {
  */
 export class GenerationService {
   private fileService: FileService;
+  private generationTopicModel: GenerationTopicModel;
 
   constructor(db: LobeChatDatabase, userId: string, workspaceId?: string) {
     this.fileService = new FileService(db, userId, workspaceId);
+    this.generationTopicModel = new GenerationTopicModel(db, userId, workspaceId);
   }
 
   /**
@@ -312,8 +315,63 @@ export class GenerationService {
     log('Creating cover image from URL:', coverUrl.startsWith('data:') ? 'base64 data' : coverUrl);
 
     // Fetch image buffer using utility function
-    const { buffer: originalImageBuffer } = await fetchImageFromUrl(coverUrl);
+    const { buffer } = await fetchImageFromUrl(coverUrl);
 
+    return this.createCoverFromBuffer(buffer);
+  }
+
+  /**
+   * Fill an empty topic cover from a generated asset stored in S3.
+   *
+   * Runs on the server success path so topics get a cover no matter where the
+   * generation was started (image/video page, agent tools) or whether any
+   * client is still polling. Failures are logged and swallowed: the generation
+   * itself already succeeded.
+   *
+   * @param topicId - The generation topic to fill
+   * @param sourceKey - S3 key of the generated image or video thumbnail
+   */
+  async ensureTopicCover(topicId: string, sourceKey: string): Promise<void> {
+    let coverKey: string | undefined;
+    try {
+      const topic = await this.generationTopicModel.findById(topicId);
+      if (!topic || topic.coverUrl) return;
+
+      // Read the object directly instead of fetching its URL, which may be an
+      // internal S3 endpoint rejected by the SSRF-safe fetch in self-hosted setups.
+      const source = await this.fileService.getFileByteArray(sourceKey);
+      coverKey = await this.createCoverFromBuffer(Buffer.from(source));
+
+      const updated = await this.generationTopicModel.updateCoverIfEmpty(topicId, coverKey);
+      if (updated) return;
+
+      log('Topic %s got a cover from a concurrent generation, removing %s', topicId, coverKey);
+    } catch (error) {
+      console.error('[generation] Failed to set topic cover:', error);
+      if (!coverKey) return;
+
+      // The update may have committed before failing (e.g. the connection dropped
+      // before returning). Deleting a committed cover would leave a broken
+      // reference that later generations never repair, so only delete when the
+      // topic provably does not use it; keep the object if that cannot be checked.
+      try {
+        const topic = await this.generationTopicModel.findById(topicId);
+        if (topic?.coverUrl === coverKey) return;
+      } catch (checkError) {
+        console.error('[generation] Failed to verify topic cover, keeping upload:', checkError);
+        return;
+      }
+    }
+
+    // The uploaded cover was not saved on the topic; delete it so it is not orphaned
+    try {
+      await this.fileService.deleteFile(coverKey);
+    } catch (error) {
+      console.error('[generation] Failed to delete unused topic cover:', error);
+    }
+  }
+
+  private async createCoverFromBuffer(originalImageBuffer: Buffer): Promise<string> {
     // Get image metadata to calculate proper cover dimensions
     const sharpInstance = sharp(originalImageBuffer);
     const { width, height } = await sharpInstance.metadata();

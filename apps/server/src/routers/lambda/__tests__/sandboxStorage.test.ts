@@ -74,6 +74,7 @@ const mockReadOccupancy = vi.fn();
 const mockBuildInstance = vi.fn();
 const mockBuildStatus = vi.fn();
 const mockListEnvironments = vi.fn();
+const mockStopInstance = vi.fn();
 
 vi.mock('@/server/services/market', () => ({
   MarketService: vi.fn(function () {
@@ -90,6 +91,7 @@ vi.mock('@/server/services/market', () => ({
         readFile: mockReadFile,
         readOccupancy: mockReadOccupancy,
         refreshUsage: mockRefreshUsage,
+        stopInstance: mockStopInstance,
         writeFile: mockWriteFile,
       }),
     };
@@ -219,6 +221,44 @@ describe('sandboxStorageRouter', () => {
       ).rejects.toMatchObject({ code: 'CONFLICT' });
 
       expect(mockInstanceDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('stopInstance', () => {
+    const instanceId = '5f0c3a2e-8b1d-4e6f-9a7c-1d2e3f4a5b6c';
+
+    it("stops the run holding the caller's own instance", async () => {
+      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId });
+      mockStopInstance.mockResolvedValue({ stopped: true });
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).stopInstance({ id: instanceId }),
+      ).resolves.toEqual({ stopped: true });
+
+      expect(mockStopInstance).toHaveBeenCalledWith({ name: instanceId });
+    });
+
+    it('refuses an instance the caller does not own, before reaching the execution plane', async () => {
+      // A published instance is usually held by a colleague's conversation;
+      // reading access must not be enough to cut that run off.
+      mockInstanceFindOwnedById.mockResolvedValue(undefined);
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).stopInstance({ id: instanceId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect(mockStopInstance).not.toHaveBeenCalled();
+    });
+
+    it("forwards the execution plane's refusal code for the client to translate", async () => {
+      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId });
+      mockStopInstance.mockRejectedValue(
+        new SandboxStorageFilesError('still saving', 503, 'SNAPSHOT_IN_PROGRESS'),
+      );
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).stopInstance({ id: instanceId }),
+      ).rejects.toMatchObject({ code: 'BAD_GATEWAY', message: 'SNAPSHOT_IN_PROGRESS' });
     });
   });
 

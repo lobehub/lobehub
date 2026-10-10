@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Переименовать ветку",
   "workingDirectory.renameBranchTitle": "Переименовать ветку",
   "workingDirectory.renameFailed": "Не удалось переименовать",
+  "workingDirectory.rollBranchName": "Переключить другое имя ветки",
   "workingDirectory.searchPlaceholder": "Поиск каталогов",
   "workingDirectory.selectFolder": "Выбрать папку",
   "workingDirectory.setDefault": "Установить по умолчанию",

@@ -11,6 +11,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useAiInfraStore } from '@/store/aiInfra/store';
 
+import { PROVIDER_MENU_WIDTH } from '../const';
 import AddNew from './AddNew';
 import ProviderList from './List';
 import SearchResult from './SearchResult';
@@ -24,7 +25,7 @@ const Layout = memo(({ children, mobile }: ProviderMenuProps) => {
 
   const providerSearchKeyword = useAiInfraStore((s) => s.providerSearchKeyword);
 
-  const width = mobile ? undefined : 280;
+  const width = mobile ? undefined : PROVIDER_MENU_WIDTH;
   return (
     <Flexbox
       width={width}

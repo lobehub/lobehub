@@ -294,7 +294,7 @@ const TopicListView = memo<TopicListViewProps>(({ groups, agentId, showGroupTitl
         if (group.children.length === 0) return null;
         const title =
           groupBy === 'byProject'
-            ? getProjectGroupTitle(group.id, group.title, t)
+            ? getProjectGroupTitle(group, t)
             : group.title || getTimeGroupTitle(group.id, t);
         return (
           <Fragment key={group.id}>

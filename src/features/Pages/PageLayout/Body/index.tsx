@@ -21,7 +21,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
 import { usePermission } from '@/hooks/usePermission';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 
 import AddButton from '../Header/AddButton';
 import Actions from './Actions';
@@ -46,26 +46,22 @@ export enum GroupKey {
 const Body = memo(() => {
   const { t } = useTranslation('file');
 
-  // Initialize documents list via SWR; keep `isValidating` so the accordion
-  // header can show a subtle in-flight indicator (mirrors the Private Agent
-  // pattern in `home/_layout/Body/Private`).
-  const useFetchDocuments = usePageStore((s) => s.useFetchDocuments);
-  // Use the SWR result as the settled signal: `data` is `undefined` until the
-  // first fetch succeeds, so a failed load surfaces error + Retry instead of a
-  // permanent skeleton. The store's `documents` field can't be the signal — it
-  // initializes to `[]` (a settled-looking empty), so a failed fetch would fall
-  // through to the "no pages" empty rather than the error.
-  const { data, error, isLoading, isValidating, mutate } = useFetchDocuments();
+  // Drive the list's replica sync; keep `isValidating` so the accordion header
+  // can show a subtle in-flight indicator (mirrors the Private Agent pattern in
+  // `home/_layout/Body/Private`).
+  // The sync hook only returns flags — the rows live in the store. Use the list
+  // entry itself as the settled signal: it is `undefined` until IndexedDB
+  // hydration or the first server page lands, so a failed load surfaces error +
+  // Retry instead of a permanent skeleton.
+  const { error, isValidating, revalidate } = pageActions.useFetchDocuments();
+  const isPageListInit = usePageStore(pageSelectors.isPageListInit);
 
   const filteredDocumentsCount = usePageStore(pageSelectors.filteredDocumentsCount);
   const privateCount = usePageStore(pageSelectors.privateFilteredDocumentsCount);
   const workspaceCount = usePageStore(pageSelectors.workspaceFilteredDocumentsCount);
   const searchKeywords = usePageStore((s) => s.searchKeywords);
   const dropdownMenu = useDropdownMenu();
-  const [allPagesDrawerOpen, closeAllPagesDrawer] = usePageStore((s) => [
-    s.allPagesDrawerOpen,
-    s.closeAllPagesDrawer,
-  ]);
+  const allPagesDrawerOpen = usePageStore((s) => s.allPagesDrawerOpen);
 
   const activeWorkspaceId = useActiveWorkspaceId();
   const searchActive = Boolean(searchKeywords.trim());
@@ -73,7 +69,6 @@ const Body = memo(() => {
   // Empty-bucket call-to-action: a single "New Page" row that creates directly
   // into the right visibility. Mirrors the Home sidebar's "创建助理" affordance
   // — the bucket is empty but still actionable.
-  const createNewPage = usePageStore((s) => s.createNewPage);
   const { allowed: canCreate } = usePermission('create_content');
   const untitledLabel = t('pageList.untitled');
   const newPageLabel = t('addPage');
@@ -88,7 +83,7 @@ const Body = memo(() => {
       paddingInline={4}
       style={canCreate ? { height: 36 } : { cursor: 'not-allowed', height: 36, opacity: 0.5 }}
       variant={'borderless'}
-      onClick={() => canCreate && createNewPage(untitledLabel, visibility)}
+      onClick={() => canCreate && pageActions.createNewPage(untitledLabel, visibility)}
     >
       <Center flex={'none'} height={28} width={28}>
         <Icon icon={PlusIcon} size={'small'} />
@@ -147,12 +142,12 @@ const Body = memo(() => {
       </ContextMenuTrigger>
       <AccordionPanel>
         <AsyncBoundary
-          data={data}
+          data={isPageListInit || undefined}
           error={error}
           errorVariant={'inline'}
-          isLoading={isLoading}
+          isLoading={!isPageListInit && !error}
           loading={<SkeletonList />}
-          onRetry={() => mutate()}
+          onRetry={() => revalidate()}
         >
           <Flexbox gap={1} paddingBlock={1}>
             {section.children}
@@ -223,7 +218,7 @@ const Body = memo(() => {
           })}
         </AccordionRoot>
       )}
-      <AllPagesDrawer open={allPagesDrawerOpen} onClose={closeAllPagesDrawer} />
+      <AllPagesDrawer open={allPagesDrawerOpen} onClose={pageActions.closeAllPagesDrawer} />
     </Flexbox>
   );
 });

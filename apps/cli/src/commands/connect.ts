@@ -33,10 +33,12 @@ import {
   CLI_PRIMARY_BIN,
 } from '../constants/identity';
 import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
+import { CliMaintenance } from '../daemon/maintenance';
 import {
   appendLog,
   getLogPath,
   getRunningDaemonPid,
+  isProcessAlive,
   readStatus,
   removePid,
   removeStatus,
@@ -45,6 +47,7 @@ import {
   stopDaemon,
   writeStatus,
 } from '../daemon/manager';
+import { listTasks } from '../daemon/taskRegistry';
 import { spawnHeteroAgentRun } from '../device/agentRun';
 import {
   mintWorkspaceConnectToken,
@@ -53,6 +56,7 @@ import {
   resolveDeviceIdentity,
   resolveWorkspaceDeviceIdentity,
 } from '../device/register';
+import { TerminalSessionManager } from '../device/terminal';
 import {
   installConnectService,
   readConnectServiceStatus,
@@ -72,7 +76,7 @@ import {
   saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
-import { cleanupAllProcesses } from '../tools/shell';
+import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { sweepLocalTraces } from '../utils/traceMaintenance';
 
@@ -417,14 +421,22 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   info('───────────────────');
 
   // Update local connection status so other CLI commands can resolve the current device
-  const updateStatus = (connectionStatus: string) => {
+  let connectionStatus = 'connecting';
+  let lastRequestAt: string | undefined;
+  const updateStatus = (status: string) => {
+    connectionStatus = status;
     writeStatus({
       connectionStatus,
       deviceId: client.currentDeviceId,
       gatewayUrl: resolvedGatewayUrl,
+      lastRequestAt,
       pid: process.pid,
       startedAt: startedAt.toISOString(),
     });
+  };
+  const recordRequest = () => {
+    lastRequestAt = new Date().toISOString();
+    updateStatus(connectionStatus);
   };
 
   const startedAt = new Date();
@@ -446,7 +458,29 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   // mode-specific `enrollWorkspace` / `unenrollWorkspace` handlers are attached
   // further below once the workspace-share machinery is in scope — every bound
   // connection reads this object by reference, so late attachment is safe.
+  //
+  // Interactive shells for the remote terminal. One manager per process, read
+  // by reference by every gateway connection this daemon owns, so a
+  // workspace-share connection reaches the same sessions as the personal one.
+  // Constructing it is cheap — the native PTY binding is only loaded when a
+  // session is actually created, so a daemon that never opens a terminal never
+  // touches it.
+  const terminals = new TerminalSessionManager({ logger: { warn: (message) => info(message) } });
+
+  const maintenance = new CliMaintenance({
+    activeTasks: () =>
+      getActiveShellCount() + listTasks().filter((task) => isProcessAlive(task.pid)).length,
+    daemon:
+      !!options.daemonChild && !options.serviceChild && process.env.LOBEHUB_CONNECT_SERVICE !== '1',
+    restartArgs: buildDaemonArgs(options).slice(1),
+    shutdown: () => shutdown(),
+  });
+
   const deviceControlDeps: DeviceControlDeps = {
+    checkCliUpdate: maintenance.check,
+    closeTerminal: (params) => Promise.resolve(terminals.close(params)),
+    createTerminalSession: (params) => terminals.create(params),
+    getCliUpdateState: maintenance.getState,
     getLocalFilePreview: defaultGetLocalFilePreview,
     getProjectFileIndex: defaultGetProjectFileIndex,
     listHeterogeneousAgentModels: (params) =>
@@ -454,7 +488,11 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
         ...params,
         env: { ...process.env, ...params.env },
       }),
+    readTerminal: (params) => Promise.resolve(terminals.read(params)),
+    resizeTerminal: (params) => Promise.resolve(terminals.resize(params)),
+    restartCli: maintenance.restart,
     searchProjectFiles: defaultSearchProjectFiles,
+    writeTerminal: (params) => Promise.resolve(terminals.write(params)),
   };
 
   const handlerContext: GatewayHandlerContext = {
@@ -464,6 +502,8 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     getServerUrl: () => auth.serverUrl,
     info,
     isDaemonChild,
+    maintenance,
+    recordRequest,
   };
 
   // Request handlers (system info / tool calls / device RPCs / agent runs) —
@@ -798,6 +838,9 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     info('Shutting down...');
     cancelRefreshTimer?.();
     cleanupAllProcesses();
+    // Kill every remote-terminal shell this daemon started, so a stopping
+    // `lh connect` does not leave orphaned PTYs behind on the machine.
+    terminals.dispose();
     // Close share connections but keep the persisted enrollments — the next
     // startup restores them (or clears them if revoked meanwhile).
     for (const wsId of workspaceConnections.keys()) closeWorkspaceConnection(wsId);
@@ -875,6 +918,8 @@ interface GatewayHandlerContext {
   getServerUrl: () => string;
   info: (msg: string) => void;
   isDaemonChild: boolean;
+  maintenance: CliMaintenance;
+  recordRequest: () => void;
 }
 
 /**
@@ -888,7 +933,7 @@ function bindGatewayClientHandlers(
   ctx: GatewayHandlerContext,
   connectionWorkspaceId?: string,
 ) {
-  const { deps, error, getServerUrl, info, isDaemonChild } = ctx;
+  const { deps, error, getServerUrl, info, isDaemonChild, maintenance, recordRequest } = ctx;
 
   // Handle system info requests
   client.on('system_info_request', (request: SystemInfoRequestMessage) => {
@@ -902,6 +947,7 @@ function bindGatewayClientHandlers(
 
   // Handle tool call requests
   client.on('tool_call_request', async (request: ToolCallRequestMessage) => {
+    recordRequest();
     const { operationId, requestId, timeout, toolCall } = request;
     if (isDaemonChild) {
       appendLog(
@@ -915,7 +961,14 @@ function bindGatewayClientHandlers(
     // round trip, so reporting this back is what separates a slow tool from
     // slow transport.
     const startedAt = performance.now();
-    const result = await executeToolCall(toolCall.apiName, toolCall.arguments, timeout);
+    const result = await maintenance
+      .run(() => executeToolCall(toolCall.apiName, toolCall.arguments, timeout))
+      .catch((err: Error) => ({
+        content: '',
+        error: err.message,
+        state: undefined,
+        success: false,
+      }));
     const executionTimeMs = Math.round(performance.now() - startedAt);
 
     if (isDaemonChild) {
@@ -947,8 +1000,11 @@ function bindGatewayClientHandlers(
     else info(`Received rpc_request: method=${method} (${requestId})`);
 
     try {
-      const data = await executeDeviceRpc(method, params, deps);
+      const run = () => executeDeviceRpc(method, params, deps);
+      const isMaintenance = ['getCliUpdateState', 'checkCliUpdate', 'restartCli'].includes(method);
+      const data = await (isMaintenance ? run() : maintenance.run(run));
       client.sendRpcResponse({ requestId, result: { data, success: true } });
+      if (method === 'restartCli') maintenance.afterResponse();
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       if (isDaemonChild) appendLog(`[RPC ERROR] ${method}: ${message} (${requestId})`);
@@ -963,28 +1019,32 @@ function bindGatewayClientHandlers(
   // once the child starts, `rejected` if it fails to spawn (e.g. bad cwd) — so
   // a failed dispatch surfaces as an error instead of a stuck assistant message.
   client.on('agent_run_request', async (request: AgentRunRequestMessage) => {
+    recordRequest();
     info(
       `Received agent_run_request: operationId=${request.operationId} type=${request.agentType}`,
     );
     try {
-      const ack = await spawnHeteroAgentRun(
-        {
-          agentType: request.agentType,
-          assistantMessageId: request.assistantMessageId,
-          args: request.args,
-          cwd: request.cwd,
-          imageList: request.imageList,
-          jwt: request.jwt,
-          operationId: request.operationId,
-          prompt: request.prompt,
-          resumeFallbackSystemContext: request.resumeFallbackSystemContext,
-          resumeSessionId: request.resumeSessionId,
-          serverUrl: getServerUrl(),
-          systemContext: request.systemContext,
-          topicId: request.topicId,
-          workspaceId: request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId,
-        },
-        { error, info },
+      const ack = await maintenance.run(() =>
+        spawnHeteroAgentRun(
+          {
+            agentId: request.agentId,
+            agentType: request.agentType,
+            assistantMessageId: request.assistantMessageId,
+            args: request.args,
+            cwd: request.cwd,
+            imageList: request.imageList,
+            jwt: request.jwt,
+            operationId: request.operationId,
+            prompt: request.prompt,
+            resumeFallbackSystemContext: request.resumeFallbackSystemContext,
+            resumeSessionId: request.resumeSessionId,
+            serverUrl: getServerUrl(),
+            systemContext: request.systemContext,
+            topicId: request.topicId,
+            workspaceId: request.ingestWorkspaceId ?? request.workspaceId ?? connectionWorkspaceId,
+          },
+          { error, info },
+        ),
       );
       client.sendAgentRunAck({ operationId: request.operationId, ...ack });
     } catch (err) {

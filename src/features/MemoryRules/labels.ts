@@ -36,10 +36,16 @@ export const appendException = (existing: string | undefined, exception: string)
  * conversation must not claim the reviewer rejected anything.
  */
 export const ruleOrigin = (
-  rule: Pick<RuleItem, 'authored' | 'conversationHitCount' | 'rejectionHitCount'>,
+  rule: Pick<
+    RuleItem,
+    'authored' | 'conversationHitCount' | 'materialHitCount' | 'rejectionHitCount'
+  >,
 ) => {
   const { conversationHitCount: conversations, rejectionHitCount: rejections } = rule;
   if (rule.authored) return { key: 'authored' } as const;
+  // Read out of a material the reviewer brought, and not seen in practice since.
+  if (rule.materialHitCount > 0 && rejections === 0 && conversations === 0)
+    return { key: 'fromMaterial', params: { count: rule.materialHitCount } } as const;
   if (rejections > 0 && conversations > 0)
     return { key: 'distilledAndObserved', params: { conversations, rejections } } as const;
   if (rejections > 0) return { key: 'distilled', params: { hits: rejections } } as const;

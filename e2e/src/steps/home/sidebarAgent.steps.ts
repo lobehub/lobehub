@@ -25,10 +25,9 @@ async function inputNewName(
 ): Promise<void> {
   await this.page.waitForTimeout(300);
 
-  // Primary: find input inside EditingPopover (data-testid) or antd Popover
-  const renameInput = this.page
-    .locator('[data-testid="editing-popover"] input, .ant-popover input')
-    .first();
+  // Rename opens the shared rename dialog, not an inline popover input.
+  const dialog = this.page.getByRole('dialog').first();
+  const renameInput = dialog.locator('input').first();
 
   await renameInput.waitFor({ state: 'visible', timeout: 5000 });
   await renameInput.click();
@@ -38,10 +37,7 @@ async function inputNewName(
   if (pressEnter) {
     await renameInput.press('Enter');
   } else {
-    // Click the save button (ActionIcon with Check icon) next to the input
-    const saveButton = this.page
-      .locator('[data-testid="editing-popover"] svg.lucide-check, .ant-popover svg.lucide-check')
-      .first();
+    const saveButton = dialog.getByRole('button', { name: /^(save|保存)$/i });
     try {
       await saveButton.waitFor({ state: 'visible', timeout: 2000 });
       await saveButton.click();

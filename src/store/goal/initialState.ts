@@ -1,7 +1,10 @@
 import type { GoalGraphSnapshot } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
 import type { GoalListItem } from '@/services/goal';
 import type { MetricSeriesWithPoints } from '@/services/metric';
+
+import type { GoalListValue } from './projection';
 
 export type { GoalListItem };
 /**
@@ -16,11 +19,22 @@ export type GoalListFilter = 'all' | 'review' | 'running' | 'achieved';
 export type GoalViewMode = 'card' | 'list';
 
 export interface GoalState {
-  /** Goal Graph snapshots keyed by `goals.id` — the process-control surface's read model. */
+  /**
+   * Goal Graph snapshots keyed by `goals.id` — the process-control surface's
+   * read model.
+   */
   goalGraphById: Record<string, GoalGraphSnapshot>;
-  goalListByAgentId: Record<string, GoalListItem[]>;
+  /** Local-first bookkeeping for `goalGraphById`. */
+  goalGraphReplica: ReplicaState<GoalGraphSnapshot>;
+  /**
+   * Goal lists keyed by the tab's entry key: the scope's own entry for `all`
+   * (what the project dashboard and the route meta read) and one sibling entry
+   * per narrow tab (`goalListKey`).
+   */
+  goalListByAgentId: Record<string, GoalListValue>;
   goalListFilter: GoalListFilter;
-  goalListInitializedAgentIds: string[];
+  /** Local-first bookkeeping for `goalListByAgentId`. */
+  goalListReplica: ReplicaState<GoalListValue>;
   goalListVisibleLimit: number;
   /**
    * North-star series of a goal (subjectType 'goal'), points included. Keyed
@@ -28,6 +42,8 @@ export interface GoalState {
    * same row and refresh together.
    */
   goalMetricSeriesById: Record<string, MetricSeriesWithPoints[]>;
+  /** Local-first bookkeeping for `goalMetricSeriesById`. */
+  goalMetricSeriesReplica: ReplicaState<MetricSeriesWithPoints[]>;
   goalViewMode: GoalViewMode;
   /**
    * Every agent's goals, for the home rail's cross-agent roll-up — keyed by
@@ -35,18 +51,21 @@ export interface GoalState {
    * slower response from the workspace you just left overwrite this one's, and
    * render titles and links that cannot resolve here.
    */
-  homeGoalsByScope: Record<string, GoalListItem[]>;
-  homeGoalsInitializedScopes: string[];
+  homeGoalsByScope: Record<string, GoalListValue>;
+  /** Local-first bookkeeping for `homeGoalsByScope`. */
+  homeGoalsReplica: ReplicaState<GoalListValue>;
 }
 
 export const initialState: GoalState = {
-  goalMetricSeriesById: {},
   goalGraphById: {},
+  goalGraphReplica: createReplicaState(),
   goalListByAgentId: {},
   goalListFilter: 'all',
-  goalListInitializedAgentIds: [],
+  goalListReplica: createReplicaState(),
   goalListVisibleLimit: 10,
+  goalMetricSeriesById: {},
+  goalMetricSeriesReplica: createReplicaState(),
   goalViewMode: 'list',
   homeGoalsByScope: {},
-  homeGoalsInitializedScopes: [],
+  homeGoalsReplica: createReplicaState(),
 };

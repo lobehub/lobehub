@@ -76,10 +76,29 @@ export interface ReplicaEngineOptions<TParams, TData, TFetched> {
   merge?: (incoming: TFetched, confirmed: TData | undefined, params: TParams) => TData | undefined;
   /** Where the engine reads and commits the view. */
   port: ReplicaStorePort<TData>;
+  /**
+   * Reconcile a server response with the value currently shown before it is
+   * folded in — e.g. keep a row the client knows is newer, or ignore a
+   * response that raced a newer local state. Return `undefined` to drop the
+   * response entirely.
+   */
+  prepareHead?: (
+    incoming: TFetched,
+    current: TData | undefined,
+    params: TParams,
+  ) => TFetched | undefined;
   /** Re-run the network sync of one entry (or all); wired by the fetch adapter. */
   revalidate?: (key?: string) => Promise<unknown>;
-  /** Strip transient / client-only parts before persisting; `undefined` skips. */
-  toPersisted?: (data: TData) => TData | undefined;
+  /**
+   * Strip transient / client-only parts before persisting.
+   *
+   * - a value → persisted
+   * - `undefined` → skip this write (keep whatever is already stored)
+   * - `null` → the entry is a server-confirmed absence: drop any prior
+   *   persisted projection, so a later hydrate cannot paint a value the server
+   *   no longer has (the view keeps the confirmed value).
+   */
+  toPersisted?: (data: TData) => TData | null | undefined;
   /** Paged: domain fields derived from params, written with every head page. */
   viewFields?: (params: TParams) => Partial<TData>;
 }
@@ -126,7 +145,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     queryKey: replicaStorageKey(key, query),
   });
 
-  const toPersisted = (data: TData): TData | undefined => {
+  const toPersisted = (data: TData): TData | null | undefined => {
     const paged = paging ? (toPersistedPage(data as any, paging, pagingCtx) as TData) : data;
     return options.toPersisted ? options.toPersisted(paged) : paged;
   };
@@ -175,6 +194,13 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       }
       const data = toPersisted(effect.data);
       if (data === undefined) continue;
+      if (data === null) {
+        // Server-confirmed absence: remove the prior projection rather than
+        // leaving it to be hydrated as if the value were still current.
+        writeQueue.remove(key);
+        trackStorageKey(effect.scope, key.queryKey, false);
+        continue;
+      }
       writeQueue.set(key, { data, updatedAt: Date.now() });
       trackStorageKey(effect.scope, key.queryKey, true);
     }
@@ -278,8 +304,12 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     return confirmed !== undefined && isEqual(next, confirmed) ? undefined : next;
   };
 
-  const replace = (params: TParams, incoming: TFetched, scope = resource.scope.get()) => {
+  const replace = (params: TParams, fetched: TFetched, scope = resource.scope.get()) => {
     const key = resource.key(params);
+    const incoming = options.prepareHead
+      ? options.prepareHead(fetched, port.read(key), params)
+      : fetched;
+    if (incoming === undefined) return false;
     const query = resource.query(params);
     const entry = getSlot().entries[key];
     // A different query (filters, sort) must not merge with loaded pages. A

@@ -11,12 +11,23 @@ import { cacheScope, createReplicaState } from '@/libs/replica';
 import { useClientDataSWR } from '@/libs/swr';
 import { taskService } from '@/services/task';
 import { workService } from '@/services/work';
+import { goalGraphResource } from '@/store/goal/projection';
 import { taskDetailSelectors } from '@/store/task/selectors';
 import { useUserStore } from '@/store/user';
 
 import { useTaskStore } from '../../store';
 import { taskDetailResource } from './projection';
 import { taskDetailRefreshes } from './testUtils';
+
+/** A goal graph's replica sync key, as the refresh matcher has to recognise it. */
+const goalGraphSyncKey = (goalId: string) => [
+  'replica:sync',
+  goalGraphResource.name,
+  goalGraphResource.version,
+  goalGraphResource.scope.get(),
+  goalId,
+  {},
+];
 
 vi.mock('@/services/task', () => ({
   taskService: {
@@ -500,8 +511,10 @@ describe('TaskDetailSliceAction', () => {
         .mock.calls.map(([key]) => key)
         .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
       const matchesGoalGraph = (key: unknown) => matchers.some((match) => match(key));
-      expect(matchesGoalGraph(['goal:graph', 'goal-1'])).toBe(true);
-      expect(matchesGoalGraph(['goal:graph', 'goal-1', 'ws-1'])).toBe(true);
+      // The goal graph is a replica: its sync keys live outside the SWR `goal:`
+      // cache, so the refresh matches through the resource.
+      expect(matchesGoalGraph(goalGraphSyncKey('goal-1'))).toBe(true);
+      expect(matchesGoalGraph(['goal:graph', 'goal-1'])).toBe(false);
       expect(matchesGoalGraph(['task:detail', 'T-1'])).toBe(false);
     });
 
@@ -518,7 +531,7 @@ describe('TaskDetailSliceAction', () => {
         .mocked(mutate)
         .mock.calls.map(([key]) => key)
         .filter((key): key is (key: unknown) => boolean => typeof key === 'function');
-      expect(matchers.some((match) => match(['goal:graph', 'goal-1']))).toBe(false);
+      expect(matchers.some((match) => match(goalGraphSyncKey('goal-1')))).toBe(false);
     });
 
     it('should clear stale editorData for instruction-only optimistic updates', async () => {

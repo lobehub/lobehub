@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Преименуване на клон",
   "workingDirectory.renameBranchTitle": "Преименуване на клон",
   "workingDirectory.renameFailed": "Неуспешно преименуване",
+  "workingDirectory.rollBranchName": "Завърти друго име на клон",
   "workingDirectory.searchPlaceholder": "Търсене на директории",
   "workingDirectory.selectFolder": "Изберете папка",
   "workingDirectory.setDefault": "Задай като по подразбиране",

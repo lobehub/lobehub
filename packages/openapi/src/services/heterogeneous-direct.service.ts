@@ -10,11 +10,11 @@ import {
   getErrorCodeSpec,
   refineErrorCode,
 } from '@lobechat/model-runtime/errors';
+import { isResponsesAPIModel } from '@lobechat/model-runtime/providers/openai/modelId';
 import type { CodexReasoningEffort } from '@lobechat/types';
 import {
   AgentRuntimeErrorType,
   getCodexReasoningEffortLevels,
-  isCodexServerDefaultCustomModel,
   RequestTrigger,
   SERVER_DEFAULT_HETEROGENEOUS_MODEL_ALIAS,
 } from '@lobechat/types';
@@ -985,13 +985,13 @@ export const invokeServerDefaultModel = async (params: {
     ...(routedReasoningEffort ? { reasoning_effort: routedReasoningEffort } : {}),
   };
   if (params.agentType === 'codex') {
-    payload = isCodexServerDefaultCustomModel(params.model)
-      ? {
+    payload = isResponsesAPIModel(params.model)
+      ? { ...normalizedPayload, apiMode: 'responses' }
+      : {
           ...chatCompletionsPayload,
           apiMode: 'chatCompletion' as const,
           reasoning_effort: normalizedPayload.reasoning_effort ?? reasoningEffort,
-        }
-      : { ...normalizedPayload, apiMode: 'responses' };
+        };
   }
   const response = await runtime.chat(
     {

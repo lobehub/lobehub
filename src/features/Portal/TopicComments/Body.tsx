@@ -7,10 +7,9 @@ import { useTranslation } from 'react-i18next';
 import AsyncError from '@/components/AsyncError';
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
 import { useTopicCommentThreads } from '@/features/TopicComment/hooks';
-import { mutate } from '@/libs/swr';
-import { topicCommentKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useTopicCommentStore } from '@/store/topicComment';
 
 import CommentCard from './CommentCard';
 import Composer from './Composer';
@@ -34,12 +33,13 @@ const Body = memo(() => {
     reload,
   } = useTopicCommentThreads(view?.topicId, view?.messageId);
   const topicId = view?.topicId;
+  const revalidateSummary = useTopicCommentStore((s) => s.revalidateTopicCommentSummary);
   const refresh = useCallback(
     () =>
       topicId
-        ? Promise.all([reload(), mutate(topicCommentKeys.summary(topicId))]).then(() => undefined)
+        ? Promise.all([reload(), revalidateSummary(topicId)]).then(() => undefined)
         : Promise.resolve(),
-    [reload, topicId],
+    [reload, revalidateSummary, topicId],
   );
   useTopicCommentEvents(topicId, refresh);
 

@@ -44,7 +44,19 @@ const AGENT_MEMBER_UNAVAILABLE = buildError(
   'AGENT_MEMBER_UNAVAILABLE',
 );
 
-const START_FAILED = buildError('Agent member(s) failed to start.', 'AGENT_MEMBER_START_FAILED');
+/**
+ * Inline start-failure error. When the runner reports per-member reasons
+ * (e.g. "The model provider returned an empty completion."), surface them so
+ * the supervisor can diagnose and adapt instead of retrying blind — mirrors
+ * `ServerSubAgentRunResult.error` for callSubAgent (issue #16257).
+ */
+const startFailed = (errors?: string[]): BuiltinServerRuntimeOutput =>
+  errors && errors.length > 0
+    ? buildError(
+        `Agent member(s) failed to start.\n${errors.map((e) => `- ${e}`).join('\n')}`,
+        'AGENT_MEMBER_START_FAILED',
+      )
+    : buildError('Agent member(s) failed to start.', 'AGENT_MEMBER_START_FAILED');
 
 class GroupManagementExecutionRuntime {
   // ==================== Communication Coordination ====================
@@ -57,12 +69,12 @@ class GroupManagementExecutionRuntime {
     if (!ctx.agentMember) return AGENT_MEMBER_UNAVAILABLE;
     if (!params.agentId) return buildError('agentId is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: [{ agentId: params.agentId, instruction: params.instruction }],
       mode: 'in_group',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -81,13 +93,13 @@ class GroupManagementExecutionRuntime {
     const agentIds = params.agentIds ?? [];
     if (agentIds.length === 0) return buildError('agentIds is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       disableTools: true,
       members: agentIds.map((agentId) => ({ agentId, instruction: params.instruction })),
       mode: 'in_group',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -105,13 +117,13 @@ class GroupManagementExecutionRuntime {
     if (!ctx.agentMember) return AGENT_MEMBER_UNAVAILABLE;
     if (!params.agentId) return buildError('agentId is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: [{ agentId: params.agentId, instruction: params.reason }],
       mode: 'in_group',
       // Delegate hands control to the member — finish without another supervisor turn.
       onComplete: 'finish',
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -137,13 +149,13 @@ class GroupManagementExecutionRuntime {
       return buildError('agentId and instruction are required.', 'INVALID_ARGUMENTS');
     }
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: [{ agentId: params.agentId, instruction: params.instruction }],
       mode: 'isolated',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
       timeout: params.timeout,
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',
@@ -162,14 +174,14 @@ class GroupManagementExecutionRuntime {
     const tasks = params.tasks ?? [];
     if (tasks.length === 0) return buildError('tasks is required.', 'INVALID_ARGUMENTS');
 
-    const { started } = await ctx.agentMember.run({
+    const { errors, started } = await ctx.agentMember.run({
       members: tasks.map((task) => ({ agentId: task.agentId, instruction: task.instruction })),
       mode: 'isolated',
       onComplete: params.skipCallSupervisor ? 'finish' : 'resume',
       // Per-task timeouts collapse to the longest; the barrier waits for all.
       timeout: tasks.reduce((max, task) => Math.max(max, task.timeout ?? 0), 0) || undefined,
     });
-    if (!started) return START_FAILED;
+    if (!started) return startFailed(errors);
 
     return {
       content: '',

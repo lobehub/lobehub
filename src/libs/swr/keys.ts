@@ -14,17 +14,13 @@
  * Each factory also exposes `.root` (the namespace string) for `mutate`
  * matchers that compare `key[0]`.
  *
- * Document / page / notebook / agent-document keys are defined in
+ * Document / page / agent-document keys are defined in
  * `@/services/document/swrKeys` (already a factory, widely imported) and
  * re-exported here so the whole set is reachable from one place.
  */
 import { type ConversationContext } from '@lobechat/types';
 
-import {
-  agentDocumentSWRKeys,
-  documentSWRKeys,
-  notebookSWRKeys,
-} from '@/services/document/swrKeys';
+import { agentDocumentSWRKeys, documentSWRKeys } from '@/services/document/swrKeys';
 
 type KeyFactory<A extends unknown[]> = ((...args: A) => readonly unknown[]) & { root: string };
 
@@ -140,36 +136,6 @@ export const topicKeys = {
   ]),
 };
 
-// ---- topic comment ------------------------------------------------------
-export const topicCommentKeys = {
-  detail: def('topicComment:detail', (commentId: string) => ['topicComment:detail', commentId]),
-  replies: def(
-    'topicComment:replies',
-    (workspaceId: string | null, rootCommentId: string, cursor?: string) => [
-      'topicComment:replies',
-      workspaceId ?? '',
-      rootCommentId,
-      cursor ?? '',
-    ],
-  ),
-  summary: def('topicComment:summary', (topicId: string) => ['topicComment:summary', topicId]),
-  threads: def(
-    'topicComment:threads',
-    (workspaceId: string | null, topicId: string, messageId?: string, cursor?: string) => [
-      'topicComment:threads',
-      workspaceId ?? '',
-      topicId,
-      messageId ?? '',
-      cursor ?? '',
-    ],
-  ),
-  warmup: def('topicComment:warmup', (workspaceId: string, topicId: string) => [
-    'topicComment:warmup',
-    workspaceId,
-    topicId,
-  ]),
-};
-
 // ---- acceptance comment -------------------------------------------------
 export const acceptanceCommentKeys = {
   list: def('acceptanceComment:list', (acceptanceId: string) => [
@@ -243,20 +209,6 @@ export const isDocumentCommentKeyForEvent = (
   return false;
 };
 
-// ---- agent labels -------------------------------------------------------
-export const agentLabelKeys = {
-  /**
-   * Agent label registry (workspace-shared, or personal). Keyed by workspace:
-   * the registries are disjoint per scope, so a shared key would serve the
-   * previous workspace's labels across a switch.
-   */
-  list: def('agentLabel:list', (isLogin: boolean, workspaceId: string | null | undefined) => [
-    'agentLabel:list',
-    isLogin,
-    workspaceId ?? null,
-  ]),
-};
-
 // ---- agent builder (opening-suggestion chips) ---------------------------
 // Persisted to the localStorage tier (see `CACHE_TIERS.local`) so revisits skip
 // the LLM generation instead of paying a skeleton + a generateJSON call every
@@ -312,6 +264,11 @@ export const recentKeys = {
     scope,
     view,
   ]),
+  trayList: def('recent:trayList', (limit: number, scope: string) => [
+    'recent:trayList',
+    limit,
+    scope,
+  ]),
 };
 
 // ---- task ---------------------------------------------------------------
@@ -322,12 +279,14 @@ export const isMyTaskListKey = (key: unknown): boolean =>
   Array.isArray(key) && key[0] === 'task:myList';
 
 /**
- * Goal Graph reads. Keyed by the `goals` row id (not the carrier task's
- * identifier) because that is what every `goal.*` procedure takes.
+ * Goal reads that have no local-first projection: the pending queues are live
+ * "what needs you" feeds, and the topic link is a discovery poll.
+ *
+ * The goal list, the home roll-up, the graph snapshot and the metric series
+ * used to live here — they are `@lobechat/replica` resources now (see
+ * `src/store/goal/projection.ts`), so their sync keys are not SWR cache keys.
  */
 export const goalKeys = {
-  graph: def('goal:graph', (goalId: string) => ['goal:graph', goalId]),
-  metricSeries: def('goal:metricSeries', (goalId: string) => ['goal:metricSeries', goalId]),
   /** Clarifications waiting on the user across every goal they own. */
   pendingClarifications: def('goal:pendingClarifications', () => ['goal:pendingClarifications']),
   /** Gates and sign-offs waiting on the user across every goal, for the approval island. */
@@ -337,12 +296,6 @@ export const goalKeys = {
 };
 
 export const taskKeys = {
-  /**
-   * The home rail's cross-agent goal roll-up. Scoped by cache scope like the
-   * other home feeds — goals are workspace rows, so a list left over from the
-   * previous workspace holds ids this one cannot open.
-   */
-  homeGoals: def('task:homeGoals', (scope: string) => ['task:homeGoals', scope]),
   /**
    * Home's automated-task roll-up: the tasks that fire on a schedule or a
    * heartbeat. Kept off `list` because it is a different result set entirely —
@@ -413,13 +366,10 @@ export const workKeys = {
 };
 
 // ---- brief --------------------------------------------------------------
+// The unresolved brief feed no longer has an SWR key: it moved onto
+// `@lobechat/replica` (`briefList`, partitioned by identity scope). Only the
+// day-scoped news digest still reads through SWR.
 export const briefKeys = {
-  /**
-   * Unresolved brief feed, keyed by login + identity scope. Briefs are per-user
-   * AND per-workspace rows, so an entry fetched in one scope must never be
-   * served in another — its ids are unreachable there.
-   */
-  list: def('brief:list', (isLogin: boolean, scope: string) => ['brief:list', isLogin, scope]),
   /**
    * Day-scoped news digest (`insight` + `result`, resolved included), keyed by
    * the viewer's local day (`YYYY-MM-DD`) on top of the identity scope.
@@ -463,31 +413,27 @@ export const aiModelKeys = {
 };
 
 // ---- image generation ---------------------------------------------------
+// The topic list and the per-topic batches live in `@lobechat/replica`
+// resources now (see `src/store/image/slices/*/projection.ts`); only the
+// generation-status poll is still an SWR key.
 export const imageKeys = {
-  generationBatches: def('image:generationBatches', (topicId: string) => [
-    'image:generationBatches',
-    topicId,
-  ]),
   generationStatus: def('image:generationStatus', (generationId: string, asyncTaskId?: string) => [
     'image:generationStatus',
     generationId,
     asyncTaskId,
   ]),
-  generationTopics: def('image:generationTopics', () => ['image:generationTopics']),
 };
 
 // ---- video generation ---------------------------------------------------
+// The topic list and the per-topic batches live in `@lobechat/replica`
+// resources now (see `src/store/video/slices/*/projection.ts`); only the
+// generation-status poll is still an SWR key.
 export const videoKeys = {
-  generationBatches: def('video:generationBatches', (topicId: string) => [
-    'video:generationBatches',
-    topicId,
-  ]),
   generationStatus: def('video:generationStatus', (generationId: string, asyncTaskId?: string) => [
     'video:generationStatus',
     generationId,
     asyncTaskId,
   ]),
-  generationTopics: def('video:generationTopics', () => ['video:generationTopics']),
 };
 
 // ---- serverConfig -------------------------------------------------------
@@ -728,25 +674,13 @@ export const ragEvalKeys = {
   ]),
 };
 
-// ---- knowledge base -----------------------------------------------------
-export const knowledgeBaseKeys = {
-  item: def('knowledgeBase:item', (id: string) => ['knowledgeBase:item', id]),
-  list: def(
-    'knowledgeBase:list',
-    (workspaceId?: string | null, visibility?: 'private' | 'public') => {
-      const base = workspaceId ? ['knowledgeBase:list', workspaceId] : ['knowledgeBase:list'];
-      return visibility ? [...base, visibility] : base;
-    },
-  ),
-};
-
 // ---- device -------------------------------------------------------------
-export const trashKeys = {
-  countByType: def('trash:countByType', () => ['trash:countByType']),
-  list: def('trash:list', (resourceType?: string | null) => ['trash:list', resourceType ?? 'all']),
-};
-
 export const deviceKeys = {
+  cliUpdateState: def('device:cliUpdateState', (workspaceId: string | null, deviceId: string) => [
+    'device:cliUpdateState',
+    workspaceId,
+    deviceId,
+  ]),
   appUpdateState: def('device:appUpdateState', (workspaceId: string | null, deviceId: string) => [
     'device:appUpdateState',
     workspaceId,
@@ -892,30 +826,12 @@ export const userMemoryKeys = {
 
 // ---- tool (skills / plugins / builtin / mcp / composio stores) -------------
 export const toolKeys = {
-  agentSkillDetail: def('tool:agentSkillDetail', (id: string) => ['tool:agentSkillDetail', id]),
-  agentSkills: def('tool:agentSkills', () => ['tool:agentSkills']),
   composioAppTools: def('tool:composioAppTools', (appSlug: string) => [
     'tool:composioAppTools',
     appSlug,
   ]),
   composioConnections: def('tool:composioConnections', () => ['tool:composioConnections']),
   installedPlugins: def('tool:installedPlugins', () => ['tool:installedPlugins']),
-  lobehubSkillConnections: def('tool:lobehubSkillConnections', () => [
-    'tool:lobehubSkillConnections',
-  ]),
-  lobehubSkillTools: def('tool:lobehubSkillTools', (provider: string) => [
-    'tool:lobehubSkillTools',
-    provider,
-  ]),
-  mcpPluginList: def('tool:mcpPluginList', (locale: string, params: unknown) => [
-    'tool:mcpPluginList',
-    locale,
-    params,
-  ]),
-  uninstalledBuiltins: def('tool:uninstalledBuiltins', (workspaceId: string | null | undefined) => [
-    'tool:uninstalledBuiltins',
-    workspaceId,
-  ]),
 };
 
 // ---- global -------------------------------------------------------------
@@ -944,7 +860,6 @@ export const agentBotKeys = {
 
 // ---- file ---------------------------------------------------------------
 export const fileKeys = {
-  knowledgeItems: def('file:knowledgeItems', (params: unknown) => ['file:knowledgeItems', params]),
   ttsFile: def('file:ttsFile', (messageId: string) => ['file:ttsFile', messageId]),
 };
 
@@ -1178,6 +1093,11 @@ export const inboxKeys = {
 // ---- share (shared agent / topic / page) ---------------------------------
 export const shareKeys = {
   agentInfo: def('share:agentInfo', (slugOrId: string) => ['share:agentInfo', slugOrId]),
+  /** Connector lists the creator-side AGENT share tool picker screens, keyed by agentId. */
+  agentShareConnectors: def('share:agentShareConnectors', (agentId: string) => [
+    'share:agentShareConnectors',
+    agentId,
+  ]),
   /** Candidates for the creator-side AGENT share skill picker, keyed by agentId. */
   agentShareGrantableSkills: def('share:agentShareGrantableSkills', (agentId: string) => [
     'share:agentShareGrantableSkills',
@@ -1453,7 +1373,6 @@ export const swrKeys = {
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
   agentKnowledge: agentKnowledgeKeys,
-  agentLabel: agentLabelKeys,
   agentProfile: agentProfileKeys,
   agentSignal: agentSignalKeys,
   aiModel: aiModelKeys,
@@ -1479,12 +1398,10 @@ export const swrKeys = {
   image: imageKeys,
   imessage: imessageKeys,
   inbox: inboxKeys,
-  knowledgeBase: knowledgeBaseKeys,
   localFile: localFileKeys,
   message: messageKeys,
   messenger: messengerKeys,
   scm: scmKeys,
-  notebook: notebookSWRKeys,
   ollama: ollamaKeys,
   onboarding: onboardingKeys,
   openInApp: openInAppKeys,
@@ -1503,12 +1420,10 @@ export const swrKeys = {
   thread: threadKeys,
   tool: toolKeys,
   topic: topicKeys,
-  topicComment: topicCommentKeys,
   acceptanceComment: acceptanceCommentKeys,
   documentComment: documentCommentKeys,
   documentLike: documentLikeKeys,
   topicAction: topicActionKeys,
-  trash: trashKeys,
   user: userKeys,
   userMemory: userMemoryKeys,
   verify: verifyKeys,

@@ -7,7 +7,7 @@ import { VList } from 'virtua';
 
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import PageEmpty from '@/features/PageEmpty';
-import { pageSelectors, usePageStore } from '@/store/page';
+import { pageActions, pageSelectors, usePageStore } from '@/store/page';
 import { type LobeDocument } from '@/types/document';
 
 import Item from '../List/Item';
@@ -20,10 +20,9 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
   const virtuaRef = useRef<VListHandle>(null);
   const fetchedCountRef = useRef(-1);
 
-  const [hasMore, isLoadingMore, loadMoreDocuments] = usePageStore((s) => [
+  const [hasMore, isLoadingMore] = usePageStore((s) => [
     pageSelectors.hasMoreDocuments(s),
     pageSelectors.isLoadingMoreDocuments(s),
-    s.loadMoreDocuments,
   ]);
 
   const allFilteredDocuments = usePageStore(pageSelectors.getFilteredDocuments);
@@ -57,9 +56,9 @@ const Content = memo<ContentProps>(({ searchKeyword }) => {
     // When scrolled near the end (within 5 items), load more
     if (fetchedCountRef.current < count && bottomVisibleIndex + 5 > count) {
       fetchedCountRef.current = count;
-      await loadMoreDocuments();
+      await pageActions.loadMoreDocuments();
     }
-  }, [hasMore, loadMoreDocuments, count, isSearching]);
+  }, [hasMore, count, isSearching]);
 
   const showLoading = isLoadingMore && !isSearching;
 

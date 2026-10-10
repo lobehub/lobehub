@@ -10,6 +10,7 @@ import useSWR from 'swr';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import ImperativeModal from '@/components/ImperativeModal';
+import { MessengerPlatformDetailSkeleton } from '@/components/Skeleton/Settings/MessengerDetail';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { messengerKeys } from '@/libs/swr/keys';
 import { messengerService } from '@/services/messenger';
@@ -129,7 +130,9 @@ const MessengerSettings = memo(() => {
   return (
     <div className={styles.page}>
       <Flexbox gap={20}>
-        {selected && selectedMeta ? (
+        {selected && !selectedMeta && platformsSWR.isLoading ? (
+          <MessengerPlatformDetailSkeleton platform={selected} />
+        ) : selected && selectedMeta ? (
           <IntegrationDetail
             access={selectedMeta.access}
             appId={selectedMeta.appId}

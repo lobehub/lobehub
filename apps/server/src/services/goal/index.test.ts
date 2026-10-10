@@ -1028,7 +1028,14 @@ describe('GoalService', () => {
     // The cost panel lists WHERE the money went, so the same read carries the
     // per-Task split rather than only the total the budget is checked against.
     expect(spend?.byTask).toEqual([
-      { runs: 2, taskId: created.taskId!, totalCost: 6.4, totalTokens: 1200 },
+      {
+        runs: 2,
+        taskId: created.taskId!,
+        totalCost: 6.4,
+        totalInputTokens: 0,
+        totalOutputTokens: 0,
+        totalTokens: 1200,
+      },
     ]);
   });
 

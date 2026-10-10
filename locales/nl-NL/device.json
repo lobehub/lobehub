@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Hernoem tak",
   "workingDirectory.renameBranchTitle": "Tak hernoemen",
   "workingDirectory.renameFailed": "Hernoemen mislukt",
+  "workingDirectory.rollBranchName": "Rol een andere taknaam",
   "workingDirectory.searchPlaceholder": "Zoek mappen",
   "workingDirectory.selectFolder": "Map selecteren",
   "workingDirectory.setDefault": "Instellen als standaard",

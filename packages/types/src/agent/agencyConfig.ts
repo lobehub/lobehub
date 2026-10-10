@@ -124,6 +124,20 @@ export const isServerDefaultHeterogeneousModel = (
   operationModel: string,
 ): boolean => requestModel === formatServerDefaultHeterogeneousModel(operationModel);
 
+/**
+ * Model-card facts a CLI needs to describe a deployment model it has no
+ * built-in entry for (context window, modalities, reasoning). Credential-free.
+ */
+export interface ServerDefaultHeterogeneousModelDescriptor {
+  abilities: { reasoning: boolean; vision: boolean };
+  contextWindowTokens?: number;
+  displayName?: string;
+  maxOutput?: number;
+  model: string;
+  /** Served on the OpenAI Responses API natively; Codex ships its own entry for it. */
+  nativeResponses: boolean;
+}
+
 export interface ServerDefaultHeterogeneousRelayInvocation {
   acceptedAt: string;
   agentType: string;

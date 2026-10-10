@@ -3,6 +3,7 @@ import type { OpenAIChatMessage, UIChatMessage } from '@lobechat/types';
 import type { PlaceholderVariant } from '@/features/ChatInput/InputEditor/Placeholder';
 import type { SendButtonProps } from '@/features/ChatInput/store/initialState';
 import { chatHelpers } from '@/store/chat/helpers';
+import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
 
 type SupportedChatInputRole = Extract<OpenAIChatMessage['role'], 'assistant' | 'tool' | 'user'>;
 
@@ -120,4 +121,27 @@ export const getConversationChatInputUiState = ({
     showSendWhileGenerating: isInputLoading && !isInputEmpty && !disableQueue,
     showStopButton: isInputLoading,
   };
+};
+
+/**
+ * Resolve the text the send-failure notice should show for a raw error message.
+ *
+ * Use when:
+ * - Rendering `inputSendErrorMsg`, which is the failed call's message verbatim.
+ *   On any surface that does not go through the server's `databaseError`
+ *   middleware it can still be Drizzle's `Failed query: <sql>` / `params:
+ *   <values>` dump — the whole statement plus every bound parameter, including
+ *   the user's own message body.
+ *
+ * Returns:
+ * - The message to display, or `undefined` when the caller must substitute its
+ *   own localized copy — i.e. the raw message was machine output, not a
+ *   sentence written for the person.
+ */
+export const toDisplayableSendErrorMessage = (message?: string): string | undefined => {
+  const trimmed = message?.trim();
+  if (!trimmed) return undefined;
+  if (isMachineErrorMessage(trimmed)) return undefined;
+
+  return trimmed;
 };

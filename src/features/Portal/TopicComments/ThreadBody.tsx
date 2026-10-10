@@ -11,10 +11,9 @@ import {
   useTopicCommentReplies,
   useTopicCommentReplyCount,
 } from '@/features/TopicComment/hooks';
-import { mutate } from '@/libs/swr';
-import { topicCommentKeys } from '@/libs/swr/keys';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
+import { useTopicCommentStore } from '@/store/topicComment';
 
 import CommentCard from './CommentCard';
 import Composer from './Composer';
@@ -44,15 +43,16 @@ const ThreadBody = memo(() => {
     view?.rootCommentId,
     replies.total ?? view?.initialReplyCount ?? replies.items.length,
   );
+  const revalidateSummary = useTopicCommentStore((s) => s.revalidateTopicCommentSummary);
   const refresh = useCallback(async () => {
     if (!topicId) return;
     await Promise.all([
       rootMutate(),
       hasFocusedReply ? focusedReplyMutate() : Promise.resolve(),
       repliesReload(),
-      mutate(topicCommentKeys.summary(topicId)),
+      revalidateSummary(topicId),
     ]);
-  }, [focusedReplyMutate, hasFocusedReply, repliesReload, rootMutate, topicId]);
+  }, [focusedReplyMutate, hasFocusedReply, repliesReload, revalidateSummary, rootMutate, topicId]);
   useTopicCommentEvents(topicId, refresh);
   const listRef = useRef<HTMLDivElement>(null);
   const visibleReplies = useMemo(() => {

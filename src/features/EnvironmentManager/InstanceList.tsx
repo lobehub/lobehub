@@ -7,6 +7,7 @@ import { createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   CircleAlertIcon,
   CircleDashedIcon,
+  CircleStopIcon,
   FolderOpenIcon,
   LayersIcon,
   Loader2Icon,
@@ -86,6 +87,8 @@ interface InstanceListProps {
   occupancyUnavailable: boolean;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Ends the run holding an instance; `stopped: false` when nothing was. */
+  onStop: (id: string) => Promise<{ stopped: boolean }>;
   /** `owner/name` of the environment's checkout, when it builds from one. */
   repository?: string;
 }
@@ -95,6 +98,7 @@ interface InstanceRowProps {
   instance: SandboxInstance;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  onStop: (id: string) => Promise<{ stopped: boolean }>;
   repository?: string;
 }
 
@@ -180,7 +184,7 @@ BuildLine.displayName = 'InstanceBuildLine';
  * so the one thing worth explaining was the one thing an inline editor hid.
  */
 const InstanceRow = memo<InstanceRowProps>(
-  ({ editable, instance, onBuild, onRemove, repository }) => {
+  ({ editable, instance, onBuild, onRemove, onStop, repository }) => {
     const { t } = useTranslation('setting');
 
     // Worth following only while something is in flight. A settled instance
@@ -208,6 +212,44 @@ const InstanceRow = memo<InstanceRowProps>(
     // and then removes the whole archive, gigabytes of it. The row says so and
     // comes back if the execution plane refuses.
     const [removing, setRemoving] = useState(false);
+    // And for a stop, which saves the run's snapshot before it ends it — a few
+    // seconds at best. Until the refreshed row lands the badge still reads
+    // Running, so the row says the stop is under way rather than looking like
+    // the click did nothing.
+    const [stopping, setStopping] = useState(false);
+    // A build holds the same lease, but it is the instance's writer until it
+    // publishes and the execution plane will not cut it off; its own line
+    // already says it is building.
+    const stoppable = editable && instance.inUse && instance.status !== 'pending';
+
+    // Asked first: the run it ends may be a conversation in the middle of a
+    // step, and the icon sits beside the badge that only meant to explain.
+    const confirmStop = () =>
+      confirmModal({
+        cancelText: t('cancel', { ns: 'common' }),
+        content: t('environments.instances.stopConfirmContent'),
+        okText: t('environments.instances.stop'),
+        // Not awaited, like the build and the delete: the row carries the
+        // progress, and a refusal comes back as a toast that says why — most
+        // often that the snapshot is still saving, which is worth retrying.
+        onOk: () => {
+          setStopping(true);
+          void onStop(instance.id)
+            .then(({ stopped }) =>
+              toast.success(
+                t(
+                  stopped ? 'environments.instances.stopped' : 'environments.instances.stopNothing',
+                  { name: instance.name },
+                ),
+              ),
+            )
+            .catch((error: unknown) =>
+              toast.error(describeError(error, t, t('environments.instances.stopFailed'))),
+            )
+            .finally(() => setStopping(false));
+        },
+        title: t('environments.instances.stopConfirmTitle', { name: instance.name }),
+      });
 
     // Every build started from the row is asked first, the first one included:
     // a build replaces the folder with a fresh checkout, and an instance that
@@ -289,14 +331,32 @@ const InstanceRow = memo<InstanceRowProps>(
         each row quietly implying it is free. */}
           {instance.inUse && (
             // The badge says what is true; the hint says what it means for the
-            // person looking at it. There is no way to end the run from here,
-            // so how long the hold lasts is the actionable part — and Run
-            // history is where the conversation holding it can be found.
-            <Tooltip title={t('environments.instances.runningHint')}>
+            // person looking at it: how long the hold lasts, that the owner
+            // can end it now, and that Run history is where the conversation
+            // holding it can be found.
+            <Tooltip
+              title={t(
+                stoppable
+                  ? 'environments.instances.runningHintStoppable'
+                  : 'environments.instances.runningHint',
+              )}
+            >
               <Tag color={'processing'} size={'small'}>
                 {t('environments.instances.running')}
               </Tag>
             </Tooltip>
+          )}
+          {/* Beside the badge it ends. The owner's, like a rebuild: in a
+            published environment the run is usually a colleague's. */}
+          {stoppable && (
+            <ActionIcon
+              disabled={stopping}
+              icon={CircleStopIcon}
+              loading={stopping}
+              size={'small'}
+              title={t('environments.instances.stop')}
+              onClick={confirmStop}
+            />
           )}
           {/* Reading what an instance kept is not an edit, so it stays
         available in an environment someone else published — that is
@@ -392,11 +452,11 @@ const InstanceRow = memo<InstanceRowProps>(
             fits in a column. Also there for an instance never built, whose
             folder is empty however settled the row looks. Absent once an
             instance is ready, which is where it spends its life. */}
-        {removing && (
+        {(removing || stopping) && (
           <Flexbox horizontal align={'center'} gap={8}>
             <Icon spin icon={Loader2Icon} size={13} />
             <Text fontSize={12} type={'secondary'}>
-              {t('environments.instances.removing')}
+              {t(removing ? 'environments.instances.removing' : 'environments.instances.stopping')}
             </Text>
           </Flexbox>
         )}
@@ -436,7 +496,16 @@ InstanceRow.displayName = 'InstanceRow';
  * have them overwrite each other's work.
  */
 const InstanceList = memo<InstanceListProps>(
-  ({ editable, environmentId, instances, occupancyUnavailable, onBuild, onRemove, repository }) => {
+  ({
+    editable,
+    environmentId,
+    instances,
+    occupancyUnavailable,
+    onBuild,
+    onRemove,
+    onStop,
+    repository,
+  }) => {
     const { t } = useTranslation('setting');
 
     const add = () => openCreateInstanceModal({ environmentId });
@@ -481,6 +550,7 @@ const InstanceList = memo<InstanceListProps>(
                 repository={repository}
                 onBuild={onBuild}
                 onRemove={onRemove}
+                onStop={onStop}
               />
             ))}
           </Flexbox>

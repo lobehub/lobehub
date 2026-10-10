@@ -1,304 +1,60 @@
 # LobeHub Store Data Structures
 
-How to structure data in Zustand stores for fast list rendering, multi-detail caching, and ergonomic optimistic updates.
+How to shape list and detail data in Zustand stores. Request lifecycle, loading and error rendering belong to [data-fetching-architecture](../../data-fetching-architecture/SKILL.md).
 
-These examples illustrate state shapes. For request lifecycle, loading, errors and retries,
-follow [data-fetching-architecture](../../data-fetching-architecture/SKILL.md).
+## Rules
 
-## Core Principles
+1. **Types come from `@lobechat/types`**, one entity per file. Never use `@lobechat/database` row types in store state; convert at the boundary.
+2. **List item and detail are separate types.** The list item is a subset that drops heavy fields (`content`, `editorData`, `rubrics`, large arrays) and may add computed UI fields (`testCaseCount`). It never `extends` the detail type — that pulls the heavy fields back in. Worked examples: [types](data-structures/types.md).
+3. **Details are cached by id** in `xxxDetailMap: Record<string, Detail>`, so switching between detail pages does not refetch and per-row updates stay local. Never hold a single `xxxDetail` object.
+4. **Read through selectors** (`xxxSelectors.getXxxDetail(id)`) so components do not repeat map lookups.
 
-### ✅ DO
+## Replica-Backed Shape
 
-1. **Separate List and Detail** — different structures for list pages and detail pages
-2. **Use Map for Details** — cache multiple detail pages with `Record<string, Detail>`
-3. **Use Array for Lists** — simple arrays for list display
-4. **Types from `@lobechat/types`** — never use `@lobechat/database` types in stores
-5. **Distinguish List and Detail types** — List types may have computed UI fields
+A replica's view is always a map keyed by the resource's `key(params)`:
 
-### ❌ DON'T
-
-1. **Don't use a single detail object** — can't cache multiple pages
-2. **Don't mix List and Detail types** — they have different purposes
-3. **Don't use database types** — use types from `@lobechat/types`
-4. **Don't use Map for lists** — simple arrays are sufficient
-
----
-
-## Type Definitions
-
-Each entity gets its own file under `@lobechat/types/`. Each file exports two types:
-
-- **Detail type** — full entity, including heavy fields (rubrics, content, editor state, …)
-- **List item type** — a **subset** that excludes heavy fields, may add computed UI fields (counts, timestamps formatted for display)
-
-**Important:** the List type is a **subset**, not an `extends` of Detail. Extending pulls the heavy fields right back in.
-
-> See [`data-structures/types.md`](./data-structures/types.md) for full worked examples (Benchmark, Document) and the heavy-field exclusion checklist.
-
----
-
-## When to Use Map vs Array
-
-### Use Map + Reducer — for Detail Data
-
-✅ Detail page data caching — multiple detail pages cached simultaneously
-✅ Optimistic updates — update UI before API responds
-✅ Per-item loading states — track which items are being updated
-✅ Multi-page navigation — user can switch between details without refetching
-
-```typescript
-benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
+```ts
+export interface PageListSliceState {
+  pageListMap: Record<string, ReplicaPagedData<LobeDocument, number>>; // one entry per list query
+  pageListReplica: ReplicaState<ReplicaPagedData<LobeDocument, number>>;
+  pageDetailMap: Record<string, LobeDocument>; // one entry per id
+  pageDetailReplica: ReplicaState<LobeDocument>;
+}
 ```
 
-Examples: benchmark detail pages, dataset detail pages, user profiles.
+- A list is a map entry too (`pageListMap.all`, `topicDataMap[containerKey]`): paging bookkeeping (`hasMore`, `currentPage`, `isLoadingMore`, `total`) lives on the entry.
+- No `xxxListInit` and no `loadingXxxDetailIds`: an `undefined` entry means "not settled yet", and `useSync` reports `isValidating` / `error`.
+- When existing readers expect a plain row array, `splitPagedLens` (see the replica README) keeps the rows in their old field and the paging bookkeeping beside it.
 
-### Use Simple Array — for List Data
+## Legacy Shape
 
-✅ List display — lists, tables, cards
-✅ Refresh as a whole — entire list refreshes together
-✅ No per-item updates — no need to mutate individual rows in place
-✅ Simple data flow — fewer moving parts
+Stores not on a replica keep a whole-list array plus a detail map, with explicit flags:
 
-```typescript
-benchmarkList: AgentEvalBenchmarkListItem[];
-```
-
-Examples: benchmark list, dataset list, user list.
-
----
-
-## State Structure Pattern
-
-```typescript
+```ts
 // src/store/eval/slices/benchmark/initialState.ts
-import type { AgentEvalBenchmark, AgentEvalBenchmarkListItem } from '@lobechat/types';
-
 export interface BenchmarkSliceState {
-  // List — simple array
-  benchmarkList: AgentEvalBenchmarkListItem[];
+  benchmarkList: AgentEvalBenchmarkListItem[]; // refreshed as a whole
   benchmarkListInit: boolean;
-
-  // Detail — map for multi-entity caching
   benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
-  loadingBenchmarkDetailIds: string[]; // per-item loading
-
-  // Mutation states (drive form-level UI)
-  isCreatingBenchmark: boolean;
-  isUpdatingBenchmark: boolean;
-  isDeletingBenchmark: boolean;
-}
-
-export const benchmarkInitialState: BenchmarkSliceState = {
-  benchmarkList: [],
-  benchmarkListInit: false,
-  benchmarkDetailMap: {},
-  loadingBenchmarkDetailIds: [],
-  isCreatingBenchmark: false,
-  isUpdatingBenchmark: false,
-  isDeletingBenchmark: false,
-};
-```
-
----
-
-## Reducer Pattern (for Detail Map)
-
-When the Detail Map needs optimistic updates (i.e. the user edits a row and the UI should reflect it before the server confirms), wire a typed reducer instead of inlining `set` calls. This keeps mutations testable and the dispatch surface small.
-
-> See [`data-structures/reducer.md`](./data-structures/reducer.md) for the full discriminated-union action types, the `produce`-based reducer, and the `internal_dispatch*` slice methods that connect them to Zustand.
-
----
-
-## Data Structure Comparison
-
-### ❌ WRONG — Single Detail Object
-
-```typescript
-interface BenchmarkSliceState {
-  benchmarkDetail: AgentEvalBenchmark | null;
-  isLoadingBenchmarkDetail: boolean;
-}
-```
-
-Problems:
-
-- Can only cache one detail page at a time
-- Switching between details forces refetch
-- No optimistic updates
-- No per-item loading states
-
-### ✅ CORRECT — Separate List and Detail
-
-```typescript
-interface BenchmarkSliceState {
-  benchmarkList: AgentEvalBenchmarkListItem[];
-  benchmarkListInit: boolean;
-
-  benchmarkDetailMap: Record<string, AgentEvalBenchmark>;
-  loadingBenchmarkDetailIds: string[];
-
-  isCreatingBenchmark: boolean;
+  loadingBenchmarkDetailIds: string[]; // per-row pending
+  isCreatingBenchmark: boolean; // form-level mutation flags
   isUpdatingBenchmark: boolean;
   isDeletingBenchmark: boolean;
 }
 ```
 
-Benefits:
+The detail map is written through a reducer when it takes optimistic updates — see [reducer](data-structures/reducer.md) and [Legacy slices](legacy-slices.md).
 
-- Cache multiple detail pages
-- Fast navigation between cached details
-- Optimistic updates via reducer
-- Per-item loading states
-- Clear separation of concerns
+## Selectors
 
----
-
-## Component Usage
-
-### Accessing List Data
-
-```tsx
-const BenchmarkList = () => {
-  const benchmarks = useEvalStore((s) => s.benchmarkList);
-  const isInit = useEvalStore((s) => s.benchmarkListInit);
-
-  if (!isInit) return <Loading />;
-  return (
-    <div>
-      {benchmarks.map((b) => (
-        <BenchmarkCard key={b.id} name={b.name} testCaseCount={b.testCaseCount} />
-      ))}
-    </div>
-  );
-};
-```
-
-### Accessing Detail Data
-
-```tsx
-const BenchmarkDetail = () => {
-  const { benchmarkId } = useParams<{ benchmarkId: string }>();
-
-  const benchmark = useEvalStore((s) =>
-    benchmarkId ? s.benchmarkDetailMap[benchmarkId] : undefined,
-  );
-  const isLoading = useEvalStore((s) =>
-    benchmarkId ? s.loadingBenchmarkDetailIds.includes(benchmarkId) : false,
-  );
-
-  if (!benchmark) return <Loading />;
-  return (
-    <div>
-      <h1>{benchmark.name}</h1>
-      {isLoading && <Spinner />}
-    </div>
-  );
-};
-```
-
-### Using Selectors (Recommended)
-
-```typescript
-// src/store/eval/slices/benchmark/selectors.ts
+```ts
 export const benchmarkSelectors = {
   getBenchmarkDetail: (id: string) => (s: EvalStore) => s.benchmarkDetailMap[id],
   isLoadingBenchmarkDetail: (id: string) => (s: EvalStore) =>
     s.loadingBenchmarkDetailIds.includes(id),
 };
 
-// In component
-const benchmark = useEvalStore(benchmarkSelectors.getBenchmarkDetail(benchmarkId!));
-const isLoading = useEvalStore(benchmarkSelectors.isLoadingBenchmarkDetail(benchmarkId!));
+const benchmark = useEvalStore(benchmarkSelectors.getBenchmarkDetail(benchmarkId));
 ```
 
----
-
-## Decision Tree
-
-```text
-Need to store data?
-│
-├─ Is it a LIST for display?
-│  └─ ✅ Use simple array: `xxxList: XxxListItem[]`
-│     - May include computed fields
-│     - Refreshed as a whole
-│     - No optimistic updates needed
-│
-└─ Is it DETAIL page data?
-   └─ ✅ Use Map: `xxxDetailMap: Record<string, Xxx>`
-      - Cache multiple details
-      - Support optimistic updates
-      - Per-item loading states
-      - Requires reducer for mutations
-```
-
----
-
-## Checklist
-
-When designing store state structure:
-
-- [ ] **Organize types by entity** in separate files (e.g. `benchmark.ts`, `agentEvalDataset.ts`)
-- [ ] Create **Detail** type (full entity with all fields including heavy ones)
-- [ ] Create **ListItem** type:
-  - [ ] Subset of Detail (exclude heavy fields)
-  - [ ] May include computed statistics for UI
-  - [ ] **NOT** `extends` Detail
-- [ ] Use **array** for list data: `xxxList: XxxListItem[]`
-- [ ] Use **Map** for detail data: `xxxDetailMap: Record<string, Xxx>`
-- [ ] Per-item loading: `loadingXxxDetailIds: string[]`
-- [ ] **Reducer** for detail map if optimistic updates needed (see [`data-structures/reducer.md`](./data-structures/reducer.md))
-- [ ] **Internal dispatch** and **loading** methods
-- [ ] **Selectors** for clean access (optional but recommended)
-- [ ] Document in comments which fields are excluded from List and why
-
----
-
-## Best Practices
-
-1. **File organization** — one entity per file, not mixed
-2. **List is a subset** — ListItem excludes heavy fields, does not `extends` Detail
-3. **Clear naming** — `xxxList` for arrays, `xxxDetailMap` for maps
-4. **Consistent patterns** — all detail maps follow the same shape
-5. **Type safety** — never use `any`, always use proper types
-6. **Document exclusions** — comment which fields are excluded and why
-7. **Selectors** — encapsulate access patterns
-8. **Loading states** — per-item for details, global for mutations
-9. **Immutability** — use Immer in reducers
-
-### Common Mistakes to Avoid
-
-❌ **DON'T extend Detail in List:**
-
-```typescript
-// Wrong — pulls heavy fields back in
-export interface BenchmarkListItem extends Benchmark {
-  testCaseCount?: number;
-}
-```
-
-✅ **DO create separate subset:**
-
-```typescript
-export interface BenchmarkListItem {
-  id: string;
-  name: string;
-  // ... only necessary fields
-  testCaseCount?: number; // Computed
-}
-```
-
-❌ **DON'T mix entities in one file:**
-
-```text
-// Wrong — all entities in agentEvalEntities.ts
-```
-
-✅ **DO separate by entity:**
-
-```text
-// Correct — separate files
-// benchmark.ts
-// agentEvalDataset.ts
-// agentEvalRun.ts
-```
+Stores are created with `shallow` equality, so a selector may return a fresh array of the same row objects (filter, sort). Returning freshly built objects per row (`.map((r) => ({ ...r }))`) defeats `shallow` and re-renders on every store change.

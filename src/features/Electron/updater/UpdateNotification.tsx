@@ -5,10 +5,11 @@ import { Button as BaseButton, createModal, toast, useModalContext } from '@lobe
 import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { t } from 'i18next';
 import { X } from 'lucide-react';
-import React, { memo, useState } from 'react';
+import React, { memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { autoUpdateService } from '@/services/electron/autoUpdate';
+import { rendererOtaService } from '@/services/electron/rendererOta';
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/selectors';
 
@@ -142,9 +143,46 @@ export const UpdateNotification: React.FC = () => {
     'unconfirm' | 'installLater' | 'installNow' | null
   >('unconfirm');
   const [isInstalling, setIsInstalling] = useState(false);
+  const [appliedVersion, setAppliedVersion] = useState<string | null>(null);
+  const receivedUpdateEvent = useRef(false);
+  useEffect(() => {
+    let active = true;
+    rendererOtaService
+      .getStatus()
+      .then((status) => {
+        if (!active || receivedUpdateEvent.current) return;
+        setAppliedVersion((version) => version ?? status.appliedVersion ?? null);
+        if (status.staged && status.applyMode) {
+          setUpdateInfo(
+            (current) =>
+              current ?? {
+                kind: status.applyMode === 'relaunch' ? 'core-relaunch' : 'core-reload',
+                version: status.staged!,
+              },
+          );
+        }
+      })
+      .catch(console.error);
+    return () => {
+      active = false;
+    };
+  }, []);
+  useWatchBroadcast('coreUpdateApplied', (version) => {
+    receivedUpdateEvent.current = true;
+    setAppliedVersion(version);
+    setUpdateInfo((current) =>
+      current?.version === version && current.kind !== 'app' ? null : current,
+    );
+    setIsInstalling(false);
+  });
+  useWatchBroadcast('coreUpdateDeferred', () => {
+    setIsInstalling(false);
+    toast.info(tElectron('updater.rendererUpdateDeferred'));
+  });
   const isDevMode = useUserStore((s) => userGeneralSettingsSelectors.config(s).isDevMode);
 
   useWatchBroadcast('updateReady', (info) => {
+    receivedUpdateEvent.current = true;
     setUpdateInfo((current) => selectUpdateInfo(current, info));
     if (info.kind === 'app' || info.kind === 'core-relaunch') setInstallConfirmMode('unconfirm');
   });
@@ -204,7 +242,15 @@ export const UpdateNotification: React.FC = () => {
     );
   }
 
-  if (!updateInfo) return null;
+  if (!updateInfo)
+    return appliedVersion ? (
+      <div className={styles.installLaterToast}>
+        <span>{tElectron('updater.rendererUpdated', { version: appliedVersion })}</span>
+        <BaseButton size={'small'} type={'text'} onClick={() => setAppliedVersion(null)}>
+          {tElectron('updater.ignore')}
+        </BaseButton>
+      </div>
+    ) : null;
 
   if (installConfirmMode === 'installLater') {
     return (

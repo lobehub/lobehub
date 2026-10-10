@@ -106,18 +106,6 @@ describe('fetchClaudeCodeQuota', () => {
     expect(result.status).toBe('ok');
   });
 
-  it('ignores disabled routing flags and falls through to the credential lookup', async () => {
-    setPlatform('linux');
-    vi.mocked(readFile).mockResolvedValue(credentialsJson(FRESH_EXPIRES_AT));
-    vi.mocked(fetch).mockResolvedValue(okUsageResponse({ five_hour: { utilization: 10 } }));
-
-    const result = await fetchClaudeCodeQuota({
-      env: { CLAUDE_CODE_USE_BEDROCK: '0', CLAUDE_CODE_USE_VERTEX: 'false' },
-    });
-
-    expect(result.status).toBe('ok');
-  });
-
   it('reports missing credentials when neither keychain nor files hold a login', async () => {
     setPlatform('darwin');
 

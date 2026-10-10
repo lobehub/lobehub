@@ -169,6 +169,13 @@ export interface AgentRunPlan {
  */
 export interface AgentRunHostEnvelope {
   /**
+   * The client that started this run renders `file` Works, so the pushed
+   * `uiMessages` snapshots and `message_patch` revisions may carry them.
+   * Declared by the client, like `clientProtocol`; absent keeps them out, which
+   * is what a released desktop build without the `file` descriptor needs.
+   */
+  acceptsFileWorks?: boolean;
+  /**
    * Wire protocol the client that started this run asked for. `2` means that
    * client reconciles its message list from `message_patch` revisions, so the
    * host may stop pushing whole `uiMessages` snapshots with the step and

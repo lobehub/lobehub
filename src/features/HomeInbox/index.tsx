@@ -138,14 +138,16 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const myId = useUserStore(userProfileSelectors.userId);
 
-  // Briefs are per-user AND per-workspace rows, so the feed is read through the
-  // active cache scope — a list left over from the previous workspace holds ids
-  // this one cannot resolve, and every action on it would fail silently.
+  // Briefs are per-user AND per-workspace rows: a list left over from the
+  // previous workspace holds ids this one cannot resolve, and every action on it
+  // would fail silently. The `briefList` replica partitions by identity scope
+  // and clears its view on a scope switch, so the selectors only ever surface
+  // the active scope's feed.
   const cacheScope = useCacheScope();
   const useFetchBriefs = useBriefStore((s) => s.useFetchBriefs);
-  const briefsSWR = useFetchBriefs(isLogin, cacheScope);
-  const briefs = useBriefStore(briefListSelectors.briefs(cacheScope));
-  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit(cacheScope));
+  const briefsSWR = useFetchBriefs(isLogin);
+  const briefs = useBriefStore(briefListSelectors.briefs);
+  const isBriefsInit = useBriefStore(briefListSelectors.isBriefsInit);
 
   // The news digest is day-scoped: it fetches only briefs *created* on the
   // viewed local day (today by default), resolved or not, with ‹ › paging into
@@ -175,10 +177,11 @@ const HomeInbox = memo<HomeInboxProps>((props) => {
   const showGoals = isLogin === true && goalsEnabled && showRailSections;
   const useFetchHomeGoals = useGoalStore((s) => s.useFetchHomeGoals);
   const goalsSWR = useFetchHomeGoals(showGoals, cacheScope);
-  // Branch off the SWR response: a persisted-cache hit never fires a network
-  // callback, so the store-backed selector lags a frame and the rail would
-  // render nothing until the revalidate lands.
-  const goals = goalsSWR.data?.goals; // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
+  // Read the replica view, not the hook: the persisted roll-up paints the rail
+  // on the first frame and the sync only confirms it, so a cache hit no longer
+  // renders one empty frame before the revalidate lands.
+  const goals = useGoalStore((s) => s.homeGoalsByScope[cacheScope]?.goals);
+  // The goal rail reads the goal's own lifecycle state (`goals.status`), so it
   // no longer needs a separate acceptance read to decide each pile.
   const goalEntries = useMemo(
     () => (showGoals ? buildHomeGoalEntries(goals) : []),

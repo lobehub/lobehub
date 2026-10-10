@@ -574,6 +574,7 @@
     "p-map": "^7.0.6",
     "prettier": "^3.9.6",
     "raw-loader": "^4.0.2",
+    "remark-cjk-friendly": "^2.3.1",
     "remark-cli": "^12.0.1",
     "remark-frontmatter": "^5.0.0",
     "remark-mdx": "^3.1.1",

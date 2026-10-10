@@ -256,6 +256,8 @@ vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: {
     portalWidth: (s: typeof globalStore) => s.status.portalWidth || 400,
     portalWidths: (s: typeof globalStore) => s.status.portalWidths,
+    showWorkingOverview: (s: typeof globalStore) =>
+      s.status.showWorkingOverview ?? !s.status.showRightPanel,
     workingSidebarWidth: (s: typeof globalStore) => s.status.workingSidebarWidth || 360,
   },
 }));

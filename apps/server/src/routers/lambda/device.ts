@@ -96,6 +96,29 @@ const assertTunnelDeviceWritable = (
   deviceId: string,
 ) => assertDeviceOperable(ctx, deviceId, 'expose a port');
 
+/**
+ * Base64 characters accepted by one `writeTerminal` call. A keystroke is a
+ * handful of bytes; this only bounds what a malicious caller can push through
+ * in a single request.
+ */
+const MAX_TERMINAL_WRITE_CHARS = 65_536;
+
+/**
+ * Relay a terminal call, surfacing the device's own reason. A device that is
+ * offline — or a client without PTY support — answers with a message the user
+ * needs to read; a bare 500 would make it look like a LobeHub bug.
+ */
+const relayTerminal = async <T>(run: () => Promise<T>): Promise<T> => {
+  try {
+    return await run();
+  } catch (error) {
+    throw new TRPCError({
+      code: 'BAD_GATEWAY',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+};
+
 /** Append a freshly minted access token to a tunnel URL. */
 const buildTunnelOpenUrl = async (
   url: string,
@@ -1429,6 +1452,109 @@ export const deviceRouter = router({
         userId: ctx.userId,
         workspaceId: ctx.workspaceId,
       });
+    }),
+
+  // ─── Interactive terminal ───
+  //
+  // A terminal hands the caller a shell on the device, so it is gated exactly
+  // like exposing a port. The check runs on the polling reads too, not just on
+  // create — otherwise a session would outlive the permission that opened it.
+
+  createTerminalSession: deviceProcedure
+    .input(
+      z.object({
+        cols: z.number().int().min(1).max(1000),
+        cwd: z.string().optional(),
+        deviceId: z.string(),
+        rows: z.number().int().min(1).max(1000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'open a terminal on');
+      return relayTerminal(() =>
+        deviceGateway.createTerminalSession({
+          cols: input.cols,
+          cwd: input.cwd,
+          deviceId: input.deviceId,
+          rows: input.rows,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
+    }),
+
+  writeTerminal: deviceProcedure
+    .input(
+      z.object({
+        /** Base64 keystrokes. */
+        data: z.string().max(MAX_TERMINAL_WRITE_CHARS),
+        deviceId: z.string(),
+        id: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
+      return relayTerminal(() =>
+        deviceGateway.writeTerminal({
+          data: input.data,
+          deviceId: input.deviceId,
+          id: input.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
+    }),
+
+  readTerminal: deviceProcedure
+    .input(z.object({ cursor: z.number().int().min(0), deviceId: z.string(), id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
+      return relayTerminal(() =>
+        deviceGateway.readTerminal({
+          cursor: input.cursor,
+          deviceId: input.deviceId,
+          id: input.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
+    }),
+
+  resizeTerminal: deviceProcedure
+    .input(
+      z.object({
+        cols: z.number().int().min(1).max(1000),
+        deviceId: z.string(),
+        id: z.string(),
+        rows: z.number().int().min(1).max(1000),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
+      return relayTerminal(() =>
+        deviceGateway.resizeTerminal({
+          cols: input.cols,
+          deviceId: input.deviceId,
+          id: input.id,
+          rows: input.rows,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
+    }),
+
+  closeTerminal: deviceProcedure
+    .input(z.object({ deviceId: z.string(), id: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertDeviceOperable(ctx, input.deviceId, 'use a terminal on');
+      return relayTerminal(() =>
+        deviceGateway.closeTerminal({
+          deviceId: input.deviceId,
+          id: input.id,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        }),
+      );
     }),
 
   getCliUpdateState: deviceProcedure

@@ -7,8 +7,8 @@ import { useOverlayDropdownPortalProps } from '@/features/NavPanel/OverlayContai
 
 import { type TopicItemDropdownMenuProps, useTopicItemDropdownMenu } from './useDropdownMenu';
 
-const Actions = memo<TopicItemDropdownMenuProps>(({ fav, id, status, title }) => {
-  const { dropdownMenu } = useTopicItemDropdownMenu({ fav, id, status, title });
+const Actions = memo<TopicItemDropdownMenuProps>(({ completionLabel, fav, id, status, title }) => {
+  const { dropdownMenu } = useTopicItemDropdownMenu({ completionLabel, fav, id, status, title });
   const dropdownPortalProps = useOverlayDropdownPortalProps();
 
   return (

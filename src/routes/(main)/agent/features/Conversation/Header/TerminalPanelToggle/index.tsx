@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@/const/layoutTokens';
 import { isDesktop } from '@/const/version';
+import { deviceSelectors, useDeviceStore } from '@/store/device';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { useUserStore } from '@/store/user';
@@ -21,7 +22,13 @@ const TerminalPanelToggle = memo(() => {
   ]);
   const hotkey = useUserStore(settingsSelectors.getHotkeyById(HotkeyEnum.ToggleTerminalPanel));
 
-  if (!isDesktop) return null;
+  // On the web the panel has no local shell to fall back on: it renders only
+  // while a device that can host one is connected, so the toggle would be a
+  // dead button without one. The device list is fetched by the panel itself,
+  // which is mounted alongside this header.
+  const hasDevice = useDeviceStore(deviceSelectors.hasTerminalTarget);
+
+  if (!isDesktop && !hasDevice) return null;
 
   return (
     <ActionIcon

@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Renommer la branche",
   "workingDirectory.renameBranchTitle": "Renommer la branche",
   "workingDirectory.renameFailed": "Échec du renommage",
+  "workingDirectory.rollBranchName": "Changer un autre nom de branche",
   "workingDirectory.searchPlaceholder": "Rechercher des répertoires",
   "workingDirectory.selectFolder": "Sélectionner un dossier",
   "workingDirectory.setDefault": "Définir comme par défaut",

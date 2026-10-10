@@ -340,6 +340,8 @@ const config = {
         "Application requests access to the user's Documents folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder.",
+      NSLocalNetworkUsageDescription:
+        'LobeHub connects to self-hosted servers, model providers, and other services on your local network.',
       NSMicrophoneUsageDescription: "Application requests access to the device's microphone.",
       NSScreenCaptureUsageDescription:
         'Application requests access to record and analyze screen content for AI assistance.',

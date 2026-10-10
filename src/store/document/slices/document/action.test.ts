@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as SwrModule from '@/libs/swr';
 import { useClientDataSWRWithSync } from '@/libs/swr';
 import { documentService } from '@/services/document';
-import { usePageStore } from '@/store/page';
+import { pageActions } from '@/store/page';
 
 import { useDocumentStore } from '../../store';
 
@@ -29,7 +29,7 @@ vi.mock('@/libs/swr', async (importOriginal) => {
 });
 
 vi.mock('@/store/page', () => ({
-  usePageStore: { getState: vi.fn(() => ({ upsertDocument: vi.fn() })) },
+  pageActions: { upsertDocument: vi.fn() },
 }));
 
 const createEditor = () => ({
@@ -214,8 +214,7 @@ describe('useFetchDocument onData', () => {
   });
 
   it('mirrors page metadata into the page store on the reconcile path', () => {
-    const upsertDocument = vi.fn();
-    vi.mocked(usePageStore.getState).mockReturnValue({ upsertDocument } as any);
+    const upsertDocument = vi.mocked(pageActions.upsertDocument);
     const editor = createEditor();
     const onData = captureOnData('doc-1', editor, { sourceType: 'page' });
     const row = {

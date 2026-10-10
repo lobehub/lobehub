@@ -1,16 +1,5 @@
 'use client';
 
-import {
-  closestCenter,
-  DndContext,
-  type DragEndEvent,
-  KeyboardSensor,
-  type Modifier,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from '@dnd-kit/core';
-import { horizontalListSortingStrategy, SortableContext } from '@dnd-kit/sortable';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu } from '@lobehub/ui';
@@ -34,25 +23,20 @@ import { electronStylish } from '@/styles/electron';
 
 import { useResolvedTabs } from './hooks/useResolvedTabs';
 import { useStripWidth } from './hooks/useStripWidth';
+import { useTabDrag } from './hooks/useTabDrag';
 import { TAB_SPRING } from './motion';
 import { resolveTabScope } from './scope';
 import { useStyles } from './styles';
 import TabItem from './TabItem';
 import {
-  allocateTabWidths,
+  layoutStrip,
   OVERFLOW_CONTROL_WIDTH,
-  PINNED_DIVIDER_WIDTH,
-  PINNED_TAB_WIDTH,
-  resolvePlacements,
   resolveTabTier,
+  type StripTab,
   TAB_GAP,
 } from './tabLayout';
 
 const NEW_TAB_URL = '/';
-const NEW_TAB_BUTTON_WIDTH = 26 + TAB_GAP;
-
-// Tabs only reorder along the horizontal axis, so lock the drag transform to X.
-const restrictToHorizontalAxis: Modifier = ({ transform }) => ({ ...transform, y: 0 });
 
 const TabBar = () => {
   const styles = useStyles;
@@ -70,44 +54,43 @@ const TabBar = () => {
   const closeOtherTabs = useElectronStore((s) => s.closeOtherTabs);
   const closeLeftTabs = useElectronStore((s) => s.closeLeftTabs);
   const closeRightTabs = useElectronStore((s) => s.closeRightTabs);
-  const reorderTabs = useElectronStore((s) => s.reorderTabs);
+  const moveTab = useElectronStore((s) => s.moveTab);
   const pinTab = useElectronStore((s) => s.pinTab);
   const unpinTab = useElectronStore((s) => s.unpinTab);
   const closeSplitView = useElectronStore((s) => s.closeSplitView);
   const openTabInSplitView = useElectronStore((s) => s.openTabInSplitView);
 
-  const sensors = useSensors(
-    // Require a small drag distance so a plain click still activates the tab.
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor),
-  );
-
   const tabIds = useMemo(() => tabs.map((tab) => tab.tab.id), [tabs]);
-  const pinnedTabs = useMemo(() => tabs.filter((tab) => tab.tab.pinned), [tabs]);
-  const flowTabs = useMemo(() => tabs.filter((tab) => !tab.tab.pinned), [tabs]);
-
-  const layout = useMemo(() => {
-    const pinnedWidth = pinnedTabs.length
-      ? pinnedTabs.length * (PINNED_TAB_WIDTH + TAB_GAP) + PINNED_DIVIDER_WIDTH
-      : 0;
-
-    return allocateTabWidths({
-      activeIndex: flowTabs.findIndex((tab) => tab.tab.id === activeTabId),
-      count: flowTabs.length,
-      usableWidth: Math.max(0, stripWidth - pinnedWidth - NEW_TAB_BUTTON_WIDTH),
-    });
-  }, [flowTabs, pinnedTabs.length, activeTabId, stripWidth]);
-
-  const { dividerX, placements, total } = useMemo(
-    () =>
-      resolvePlacements({
-        flowIds: flowTabs.map((tab) => tab.tab.id),
-        pinnedIds: pinnedTabs.map((tab) => tab.tab.id),
-        visibleIndices: layout.visibleIndices,
-        widths: layout.widths,
-      }),
-    [flowTabs, pinnedTabs, layout],
+  const pinnedCount = useMemo(() => tabs.filter((tab) => tab.tab.pinned).length, [tabs]);
+  const storeOrder = useMemo<StripTab[]>(
+    () => tabs.map((tab) => ({ id: tab.tab.id, pinned: !!tab.tab.pinned })),
+    [tabs],
   );
+
+  const innerStripRef = useRef<HTMLDivElement>(null);
+  const drag = useTabDrag({
+    activeTabId,
+    onDrop: moveTab,
+    stripRef: innerStripRef,
+    stripWidth,
+    tabs: storeOrder,
+  });
+
+  const stripOrder = useMemo(() => {
+    if (!drag.session) return storeOrder;
+
+    const { id, pinned, toIndex } = drag.session;
+    const rest = storeOrder.filter((tab) => tab.id !== id);
+    if (rest.length === storeOrder.length) return storeOrder;
+
+    return [...rest.slice(0, toIndex), { id, pinned }, ...rest.slice(toIndex)];
+  }, [storeOrder, drag.session]);
+
+  const { dividerX, hiddenCount, placements, total, visibleIndices } = useMemo(
+    () => layoutStrip({ activeId: activeTabId, stripWidth, tabs: stripOrder }),
+    [activeTabId, stripWidth, stripOrder],
+  );
+  const stripPinnedCount = stripOrder.filter((tab) => tab.pinned).length;
 
   const tabsById = useMemo(() => new Map(tabs.map((tab) => [tab.tab.id, tab])), [tabs]);
 
@@ -155,19 +138,27 @@ const TabBar = () => {
     return buildWorkspaceAwarePath(NEW_TAB_URL, activeSlug);
   }, [location.pathname, location.search]);
 
-  const handleDragEnd = useCallback(
-    (event: DragEndEvent) => {
-      const { active, over } = event;
-      if (!over || active.id === over.id) return;
+  const handleMoveBy = useCallback(
+    (id: string, delta: -1 | 1) => {
+      const index = storeOrder.findIndex((tab) => tab.id === id);
+      const neighbour = storeOrder[index + delta];
+      if (index < 0 || !neighbour || neighbour.pinned !== storeOrder[index].pinned) return;
 
-      const fromIndex = tabIds.indexOf(active.id as string);
-      const toIndex = tabIds.indexOf(over.id as string);
-      if (fromIndex < 0 || toIndex < 0) return;
-
-      reorderTabs(fromIndex, toIndex);
+      moveTab(id, index + delta, neighbour.pinned);
     },
-    [tabIds, reorderTabs],
+    [storeOrder, moveTab],
   );
+
+  const dragFollow = useMemo(() => {
+    const placement = placements.find((item) => item.id === drag.session?.id);
+    if (!drag.session || !placement) return undefined;
+
+    return {
+      grabFraction: drag.session.grabFraction,
+      maxX: total - placement.width,
+      pointerX: drag.pointerX,
+    };
+  }, [drag.session, drag.pointerX, placements, total]);
 
   const handleActivate = useCallback(
     (id: string) => {
@@ -238,17 +229,16 @@ const TabBar = () => {
   });
 
   const overflowItems = useCallback((): DropdownItem[] => {
-    const visible = new Set(layout.visibleIndices);
+    const visible = new Set(visibleIndices);
 
-    return flowTabs
-      .map((tab, index) => ({ index, tab }))
-      .filter(({ index }) => !visible.has(index))
-      .map(({ tab }) => ({
-        key: tab.tab.id,
-        label: tab.meta.title,
-        onClick: () => handleActivate(tab.tab.id),
-      }));
-  }, [flowTabs, layout.visibleIndices, handleActivate]);
+    return stripOrder
+      .filter((tab) => !tab.pinned)
+      .filter((_, index) => !visible.has(index))
+      .flatMap(({ id }) => {
+        const tab = tabsById.get(id);
+        return tab ? [{ key: id, label: tab.meta.title, onClick: () => handleActivate(id) }] : [];
+      });
+  }, [stripOrder, visibleIndices, tabsById, handleActivate]);
 
   if (tabs.length === 0) return null;
 
@@ -268,58 +258,52 @@ const TabBar = () => {
     >
       {measured && (
         <>
-          <DndContext
-            collisionDetection={closestCenter}
-            modifiers={[restrictToHorizontalAxis]}
-            sensors={sensors}
-            onDragEnd={handleDragEnd}
-          >
-            <SortableContext items={tabIds} strategy={horizontalListSortingStrategy}>
-              {/* One keyed list for pinned and flowing tabs alike. Rendering them as two
-              sibling arrays scoped their keys separately, so pinning unmounted the tab
-              from one and mounted a fresh one in the other — losing its springs, which
-              is why the tab used to pop rather than travel. */}
-              <m.div className={styles.strip} style={{ width: springTotal }}>
-                {placements.map((placement) => {
-                  const tab = tabsById.get(placement.id);
-                  if (!tab) return null;
+          {/* One keyed list for pinned and flowing tabs alike. Rendering them as two
+          sibling arrays scoped their keys separately, so pinning unmounted the tab
+          from one and mounted a fresh one in the other — losing its springs, which
+          is why the tab used to pop rather than travel. */}
+          <m.div className={styles.strip} ref={innerStripRef} style={{ width: springTotal }}>
+            {placements.map((placement) => {
+              const tab = tabsById.get(placement.id);
+              if (!tab) return null;
 
-                  return (
-                    <TabItem
-                      enterWidth={settleInstantly ? placement.width : 0}
-                      enterX={settleInstantly ? placement.x : previousTotal.current}
-                      index={tabIds.indexOf(placement.id)}
-                      isActive={placement.id === activeTabId}
-                      item={tab}
-                      key={placement.id}
-                      pinnedCount={pinnedTabs.length}
-                      splitViewEnabled={splitViewEnabled}
-                      tier={resolveTabTier(placement.width)}
-                      totalCount={tabs.length}
-                      width={placement.width}
-                      x={placement.x}
-                      isSplitVisible={
-                        splitView?.primaryTabId === placement.id ||
-                        splitView?.secondaryTabId === placement.id
-                      }
-                      onActivate={handleActivate}
-                      onClose={handleClose}
-                      onCloseLeft={handleCloseLeft}
-                      onCloseOthers={handleCloseOthers}
-                      onCloseRight={handleCloseRight}
-                      onCloseSplitView={closeSplitView}
-                      onOpenInSplitView={openTabInSplitView}
-                      onTogglePin={handleTogglePin}
-                    />
-                  );
-                })}
-                <m.span
-                  className={styles.pinnedDivider}
-                  style={{ opacity: pinnedTabs.length > 0 ? 1 : 0, x: springDividerX }}
+              return (
+                <TabItem
+                  drag={drag.session?.id === placement.id ? dragFollow : undefined}
+                  enterWidth={settleInstantly ? placement.width : 0}
+                  enterX={settleInstantly ? placement.x : previousTotal.current}
+                  index={tabIds.indexOf(placement.id)}
+                  isActive={placement.id === activeTabId}
+                  item={tab}
+                  key={placement.id}
+                  pinnedCount={pinnedCount}
+                  splitViewEnabled={splitViewEnabled}
+                  tier={resolveTabTier(placement.width)}
+                  totalCount={tabs.length}
+                  width={placement.width}
+                  x={placement.x}
+                  isSplitVisible={
+                    splitView?.primaryTabId === placement.id ||
+                    splitView?.secondaryTabId === placement.id
+                  }
+                  onActivate={handleActivate}
+                  onClose={handleClose}
+                  onCloseLeft={handleCloseLeft}
+                  onCloseOthers={handleCloseOthers}
+                  onCloseRight={handleCloseRight}
+                  onCloseSplitView={closeSplitView}
+                  onDragStart={drag.startDrag}
+                  onMoveBy={handleMoveBy}
+                  onOpenInSplitView={openTabInSplitView}
+                  onTogglePin={handleTogglePin}
                 />
-              </m.div>
-            </SortableContext>
-          </DndContext>
+              );
+            })}
+            <m.span
+              className={styles.pinnedDivider}
+              style={{ opacity: stripPinnedCount > 0 ? 1 : 0, x: springDividerX }}
+            />
+          </m.div>
           <ActionIcon
             className={cx(electronStylish.nodrag, styles.newTabButton)}
             disabled={!canCreate}
@@ -328,7 +312,7 @@ const TabBar = () => {
             title={canCreate ? t('tab.newTab') : reason}
             onClick={canCreate ? () => handleNewTab() : undefined}
           />
-          {layout.hiddenCount > 0 && (
+          {hiddenCount > 0 && (
             <DropdownMenu items={overflowItems} placement={'bottomRight'}>
               <Flexbox
                 horizontal
@@ -336,10 +320,10 @@ const TabBar = () => {
                 className={cx(electronStylish.nodrag, styles.overflowButton)}
                 gap={2}
                 style={{ width: OVERFLOW_CONTROL_WIDTH }}
-                title={t('tab.overflow', { count: layout.hiddenCount })}
+                title={t('tab.overflow', { count: hiddenCount })}
               >
                 <ChevronDown size={12} />
-                {layout.hiddenCount}
+                {hiddenCount}
               </Flexbox>
             </DropdownMenu>
           )}

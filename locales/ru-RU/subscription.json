@@ -516,6 +516,8 @@
   "plansModal.messengerWechat.title": "Подключите WeChat после обновления",
   "plansModal.modelAccess.desc": "Эта модель доступна в платных планах. Обновите план, чтобы использовать весь набор моделей.",
   "plansModal.modelAccess.title": "Откройте доступ ко всем моделям",
+  "plansModal.persistentSandbox.desc": "Файлы, которые ваш агент записывает в облачную песочницу, удаляются после завершения сеанса. Обновите план, чтобы сохранить постоянный рабочий каталог, который сохраняется между сеансами и используется для всех ваших тем.",
+  "plansModal.persistentSandbox.title": "Сохраните файлы песочницы",
   "qa.desc": "Если вы не нашли ответ, ознакомьтесь с <1>документацией</1> или свяжитесь с нами.",
   "qa.detail": "Подробнее",
   "qa.list.credit.a": "Вычислительные кредиты — это единицы, используемые {{cloud}} для измерения использования ИИ-моделей. Разные модели потребляют разное количество кредитов.",
@@ -631,8 +633,16 @@
   "switchPlan": "Сменить план",
   "switchToMonthly.desc": "После переключения ежемесячная оплата начнётся после окончания текущего годового плана.",
   "switchToMonthly.title": "Перейти на ежемесячную оплату",
+  "switchToYearly.after": "После переключения",
+  "switchToYearly.billedYearly": "{{price}} выставляется ежегодно",
+  "switchToYearly.credit": "Кредит за этот месяц",
   "switchToYearly.desc": "После переключения годовая оплата начнётся сразу после доплаты. Дата начала сохраняется.",
+  "switchToYearly.dueToday": "К оплате сегодня",
+  "switchToYearly.now": "Сейчас",
+  "switchToYearly.period": "Платежный период",
+  "switchToYearly.price": "Цена",
   "switchToYearly.title": "Перейти на ежегодную оплату",
+  "switchToYearly.yearlyPlan": "Годовой план",
   "tab.billing": "Управление счетами",
   "tab.budget": "Бюджет",
   "tab.credits": "Управление кредитами",
@@ -665,5 +675,6 @@
   "usage.overview.title": "Обзор использования",
   "usage.remaining": "Осталось",
   "usage.storage.embeddings.used": "Векторное хранилище",
-  "usage.storage.file.used": "Использование файлов"
+  "usage.storage.file.used": "Использование файлов",
+  "usage.storage.sandboxStorage.used": "Используемое хранилище песочницы"
 }

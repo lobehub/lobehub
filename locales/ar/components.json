@@ -129,6 +129,8 @@
   "LocalFile.action.open": "فتح",
   "LocalFile.action.preview": "معاينة",
   "LocalFile.action.showInFolder": "عرض في المجلد",
+  "LocalFile.action.startTopic": "ابدأ موضوعًا جديدًا هنا",
+  "LocalFile.action.startTopicFailed": "فشل في بدء موضوع جديد في هذا المجلد.",
   "MaxTokenSlider.unlimited": "غير محدود",
   "ModelSelect.featureTag.audio": "يدعم هذا النموذج التعرف على إدخال الصوت.",
   "ModelSelect.featureTag.custom": "نموذج مخصص، يدعم افتراضيًا استدعاء الوظائف والتعرف البصري. يرجى التحقق من توفر هذه القدرات حسب الحالة الفعلية.",

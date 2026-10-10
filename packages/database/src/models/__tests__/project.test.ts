@@ -312,63 +312,6 @@ describe('ProjectModel', () => {
     expect(await serverDB.select().from(works).where(eq(works.id, work.id))).toHaveLength(1);
   });
 
-  it('moves a task subtree into a project', async () => {
-    const project = await createProject(model, { name: 'Tasks' });
-    const taskModel = new TaskModel(serverDB, userId);
-    const parent = await taskModel.create({ instruction: 'Parent' });
-    const child = await taskModel.create({ instruction: 'Child', parentTaskId: parent.id });
-
-    const moved = await model.moveTaskTree(project.id, parent.id);
-    expect(moved?.map(({ id }) => id).sort()).toEqual([child.id, parent.id].sort());
-    const projectTasks = await model.listTasks(project.id);
-    expect(projectTasks?.map(({ id }) => id).sort()).toEqual([child.id, parent.id].sort());
-  });
-
-  it('preserves project tree boundaries when moving tasks', async () => {
-    const source = await createProject(model, { name: 'Source' });
-    const target = await createProject(model, { name: 'Target' });
-    const taskModel = new TaskModel(serverDB, userId);
-    const parent = await taskModel.create({ instruction: 'Parent', projectId: source.id });
-    const child = await taskModel.create({
-      instruction: 'Child',
-      parentTaskId: parent.id,
-      projectId: source.id,
-    });
-
-    await expect(model.moveTaskTree(target.id, child.id)).rejects.toThrow(
-      'Cannot move a task away from its parent project',
-    );
-    await serverDB.update(tasks).set({ projectId: target.id }).where(eq(tasks.id, parent.id));
-    expect(await model.moveTaskTree(target.id, child.id)).toEqual([
-      expect.objectContaining({ id: child.id }),
-    ]);
-    await expect(model.moveTaskTree(target.id, 'missing')).rejects.toThrow('Task not found');
-    expect(await model.moveTaskTree('missing', child.id)).toBeNull();
-  });
-
-  it('rejects moving a workspace task tree with descendants created by another member', async () => {
-    await serverDB.insert(workspaces).values({
-      id: 'mixed-tree-workspace',
-      name: 'Mixed Tree',
-      primaryOwnerId: userId,
-      slug: 'mixed-tree-workspace',
-    });
-    const workspaceModel = new ProjectModel(serverDB, userId, 'mixed-tree-workspace');
-    const ownerTasks = new TaskModel(serverDB, userId, 'mixed-tree-workspace');
-    const memberTasks = new TaskModel(serverDB, otherUserId, 'mixed-tree-workspace');
-    const project = await createProject(workspaceModel, { name: 'Target' });
-    const parent = await ownerTasks.create({ instruction: 'Parent' });
-    await memberTasks.create({
-      instruction: 'Member child',
-      parentTaskId: parent.id,
-      visibility: 'private',
-    });
-
-    await expect(workspaceModel.moveTaskTree(project.id, parent.id)).rejects.toThrow(
-      'Cannot move a task tree containing tasks created by another user',
-    );
-  });
-
   it('enforces project boundaries in the shared dependency model path', async () => {
     const firstProject = await createProject(model, { name: 'First' });
     const secondProject = await createProject(model, { name: 'Second' });

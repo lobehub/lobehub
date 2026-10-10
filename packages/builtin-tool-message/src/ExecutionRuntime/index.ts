@@ -300,6 +300,47 @@ const describeAttachmentOutcome = (
   return { content, success: !nothingDelivered };
 };
 
+/** Discord has no has_more flag: expose real IDs, not an inferred availability claim. */
+const describeDiscordPagination = (
+  params: ReadMessagesParams,
+  result: ReadMessagesState,
+): string => {
+  const messages = result.messages;
+  if (!Array.isArray(messages)) {
+    return '\n\n[Pagination blocked: the response did not contain a message page. Do not claim history is complete.]';
+  }
+  if (messages.length === 0) {
+    return '\n\n[No messages returned for this request. Stop this traversal of visible history; this does not prove the channel has no inaccessible history.]';
+  }
+
+  // Snowflakes exceed Number.MAX_SAFE_INTEGER. Do not depend on response ordering.
+  if (messages.some((message) => typeof message.id !== 'string' || !/^\d+$/.test(message.id))) {
+    return '\n\n[Pagination blocked: a message ID is not a decimal string. Do not invent a cursor.]';
+  }
+  const ids = messages.map((message) => message.id);
+  const oldest = ids.reduce((a, b) => (BigInt(a) < BigInt(b) ? a : b));
+  const newest = ids.reduce((a, b) => (BigInt(a) > BigInt(b) ? a : b));
+  const direction = params.after !== undefined ? 'after' : 'before';
+  const cursor = direction === 'after' ? newest : oldest;
+  const previous = params[direction];
+  if (
+    previous !== undefined &&
+    /^\d+$/.test(previous) &&
+    (direction === 'after'
+      ? BigInt(cursor) <= BigInt(previous)
+      : BigInt(cursor) >= BigInt(previous))
+  ) {
+    return '\n\n[Pagination blocked: the cursor did not advance. Stop and investigate; do not claim history is complete.]';
+  }
+  const next = JSON.stringify({
+    platform: params.platform,
+    channelId: params.channelId,
+    [direction]: cursor,
+    ...(params.limit !== undefined ? { limit: params.limit } : {}),
+  });
+  return `\n\n[Discord pagination: oldest message ID: "${oldest}"; newest message ID: "${newest}". Within the 3–5-call readMessages budget, to continue toward ${direction === 'before' ? 'older' : 'newer'} messages, call readMessages with ${next}. Use only one of before/after. More messages are unknown, regardless of page size; stop on a successful empty page, or stop and investigate errors/non-advancing cursors. For large-volume requests or tasks needing more calls, use the lobehub skill to batch read via the CLI (lh bot message read) outside the conversation context instead of repeatedly calling readMessages.]`;
+};
+
 export class MessageExecutionRuntime {
   private botProvider?: BotProviderQuery;
   private service: MessageRuntimeService;
@@ -329,20 +370,42 @@ export class MessageExecutionRuntime {
   }
 
   async readMessages(params: ReadMessagesParams): Promise<BuiltinServerRuntimeOutput> {
+    if (params.platform === 'discord') {
+      if (params.before !== undefined && params.after !== undefined) {
+        return {
+          content: 'readMessages error: Discord before and after are mutually exclusive.',
+          success: false,
+        };
+      }
+      for (const direction of ['before', 'after'] as const) {
+        const cursor = params[direction];
+        if (cursor !== undefined && (typeof cursor !== 'string' || !/^\d+$/.test(cursor))) {
+          return {
+            content: `readMessages error: Discord ${direction} must be a non-empty decimal message ID string. Omit it when not needed.`,
+            success: false,
+          };
+        }
+      }
+    }
     try {
       const result = await this.service.readMessages(params);
       const count = result.messages?.length ?? 0;
       const formatted = result.messages
-        ?.map((m) => `[${m.timestamp}] ${m.author.name}: ${m.content}`)
+        ?.map(
+          (m) =>
+            `[${m.timestamp}] [messageId: ${JSON.stringify(m.id)}] ${m.author.name}: ${m.content}`,
+        )
         .join('\n');
 
       const paginationHint =
-        result.hasMore && result.nextCursor
-          ? `\n\n[More messages available — pass cursor: "${result.nextCursor}" to fetch next page]`
-          : '';
+        params.platform === 'discord'
+          ? describeDiscordPagination(params, result)
+          : result.hasMore && result.nextCursor
+            ? `\n\n[More messages available — pass cursor: "${result.nextCursor}" to fetch next page]`
+            : '';
 
       return {
-        content: `Fetched ${count} messages from ${params.platform}:${params.channelId}\n\n${formatted ?? '(no messages)'}${paginationHint}`,
+        content: `Fetched ${count} messages from ${params.platform}:${params.channelId}${params.platform === 'discord' ? paginationHint : ''}\n\n${formatted ?? '(no messages)'}${params.platform === 'discord' ? '' : paginationHint}`,
         state: result,
         success: true,
       };
@@ -431,7 +494,10 @@ export class MessageExecutionRuntime {
       const result = await this.service.searchMessages(params);
       const count = result.totalFound ?? result.messages?.length ?? 0;
       const formatted = result.messages
-        ?.map((m) => `[${m.timestamp}] ${m.author.name}: ${m.content}`)
+        ?.map(
+          (m) =>
+            `[${m.timestamp}] [messageId: ${JSON.stringify(m.id)}] ${m.author.name}: ${m.content}`,
+        )
         .join('\n');
 
       return {

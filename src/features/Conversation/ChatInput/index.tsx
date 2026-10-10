@@ -3,8 +3,8 @@
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { type DropdownItem,Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui';
+import { Flexbox, type DropdownItem } from '@lobehub/ui';
+import { Alert, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,10 +19,11 @@ import {
   type SendButtonHandler,
   type SendButtonProps,
 } from '@/features/ChatInput/store/initialState';
+import { checkProjectExecution } from '@/features/Projects/WorkingDirectories/checkExecution';
 import { useAgentStore } from '@/store/agent';
 import { chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
-import { operationSelectors } from '@/store/chat/selectors';
+import { operationSelectors, topicSelectors } from '@/store/chat/selectors';
 import { selectCurrentTurnTodosFromMessages } from '@/store/chat/slices/message/selectors/dbMessage';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { fileChatSelectors, useFileStore } from '@/store/file';
@@ -49,6 +50,7 @@ import {
   getConversationChatInputUiState,
   getConversationSendButtonProps,
   toChatInputMessages,
+  toDisplayableSendErrorMessage,
 } from './utils';
 import {
   canSendVoiceMessage,
@@ -270,6 +272,22 @@ const ChatInput = memo<ChatInputProps>(
     const sendMessageErrorMsg = useConversationStore(messageStateSelectors.sendMessageError);
     const clearSendMessageError = useChatStore((s) => s.clearSendMessageError);
 
+    // `inputSendErrorMsg` is the failed call's `error.message` verbatim, so it
+    // can still be a raw database dump on servers predating the databaseError
+    // middleware. That text is SQL plus every bound parameter — including the
+    // user's own input — so it is never echoed; generic copy stands in for it.
+    const sendMessageErrorTitle = useMemo(
+      () =>
+        sendMessageErrorMsg
+          ? t('input.errorMsg', {
+              errorMsg:
+                toDisplayableSendErrorMessage(sendMessageErrorMsg) ??
+                t('unknownError', { ns: 'common' }),
+            })
+          : undefined,
+      [sendMessageErrorMsg, t],
+    );
+
     // File store - for UI state only (disabled button, etc.)
     const fileList = useFileStore(fileChatSelectors.chatUploadFileList);
     const contextList = useFileStore(fileChatSelectors.chatContextSelections(contextKey));
@@ -359,6 +377,21 @@ const ChatInput = memo<ChatInputProps>(
         const message = getMarkdownContent();
         if (!message.trim() && currentFileList.length === 0 && currentContextList.length === 0)
           return;
+
+        // A rejected directory preflight has no persisted message to recover from.
+        // Keep the composer and attachments intact until the target is usable.
+        const chatState = useChatStore.getState();
+        const sendContext = storeApi.getState().context;
+        const topic = sendContext.topicId
+          ? topicSelectors.getTopicById(sendContext.topicId)(chatState)
+          : undefined;
+        try {
+          await checkProjectExecution(topic, chatState.isGatewayModeEnabled(sendContext.agentId));
+        } catch (error) {
+          console.error('Project execution preflight failed', error);
+          toast.error(error instanceof Error ? error.message : String(error));
+          return;
+        }
 
         // Capture editor JSON state before clearing for rich text rendering
         const editorData = getEditorData();
@@ -452,11 +485,11 @@ const ChatInput = memo<ChatInputProps>(
         {/* Keep the chat input mounted while an intervention panel is showing —
             unmounting would wipe the Lexical editor's in-memory document. */}
         <div style={{ display: hasPendingInterventions ? 'none' : 'contents' }}>
-          {sendMessageErrorMsg && (
+          {sendMessageErrorTitle && (
             <Flexbox paddingBlock={'0 6px'} paddingInline={12}>
               <Alert
                 closable
-                title={t('input.errorMsg', { errorMsg: sendMessageErrorMsg })}
+                title={sendMessageErrorTitle}
                 type={'secondary'}
                 onClose={clearSendMessageError}
               />

@@ -18,6 +18,7 @@ import { useUserStore } from '@/store/user';
 import { preferenceSelectors } from '@/store/user/selectors';
 
 import GroupItem from './GroupItem';
+import { resolveGroupSidebarMode } from './resolveGroupSidebarMode';
 
 const ByTimeMode = memo(() => {
   const { t } = useTranslation('topic');
@@ -25,6 +26,7 @@ const ByTimeMode = memo(() => {
   const topicSortBy = useUserStore(preferenceSelectors.topicSortBy);
   const topicGroupMode = useUserStore(preferenceSelectors.topicGroupMode);
   const topicIncludeCompleted = useUserStore(preferenceSelectors.topicIncludeCompleted);
+  const groupMode = resolveGroupSidebarMode(topicGroupMode);
 
   const [hasMore, isExpandingPageSize, openAllTopicsDrawer] = useChatStore((s) => [
     topicSelectors.hasMoreTopicsForSidebar(s),
@@ -38,15 +40,15 @@ const ByTimeMode = memo(() => {
       topicSelectors.groupedTopicsForSidebar(
         topicPageSize,
         topicSortBy,
-        topicGroupMode,
+        groupMode,
         topicIncludeCompleted,
       ),
-    [topicPageSize, topicSortBy, topicGroupMode, topicIncludeCompleted],
+    [topicPageSize, topicSortBy, groupMode, topicIncludeCompleted],
   );
   const groupTopics = useChatStore(groupSelector, isEqual);
 
   const groupIds = useMemo(() => groupTopics.map((group) => group.id), [groupTopics]);
-  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(topicGroupMode, groupIds);
+  const { expandedKeys, setExpandedKeys } = useTopicGroupCollapse(groupMode, groupIds);
 
   return (
     <Flexbox gap={2}>

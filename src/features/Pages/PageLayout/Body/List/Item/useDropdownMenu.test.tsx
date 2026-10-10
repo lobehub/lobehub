@@ -67,21 +67,13 @@ vi.mock('@/store/page', () => ({
     getDocumentById: (_id: string) => (_s: unknown) => storeMock.document,
     getFilteredDocuments: (_s: unknown) => (storeMock.document ? [storeMock.document] : []),
   },
-  usePageStore: Object.assign(
-    (selector: (state: Record<string, unknown>) => unknown) =>
-      selector({
-        duplicatePage: vi.fn(),
-        publishPageToWorkspace: vi.fn(),
-        removePage: vi.fn(),
-      }),
-    {
-      getState: () => ({
-        duplicatePage: vi.fn(),
-        publishPageToWorkspace: vi.fn(),
-        removePage: vi.fn(),
-      }),
-    },
-  ),
+  pageActions: {
+    duplicatePage: vi.fn(),
+    publishPageToWorkspace: vi.fn(),
+    removePage: vi.fn(),
+    setPageVisibility: vi.fn(),
+  },
+  usePageStore: (selector: (state: Record<string, unknown>) => unknown) => selector({}),
 }));
 
 vi.mock('@/store/user', () => ({

@@ -91,6 +91,7 @@
   "workingDirectory.renameBranchAction": "Renombrar rama",
   "workingDirectory.renameBranchTitle": "Renombrar rama",
   "workingDirectory.renameFailed": "Error al renombrar",
+  "workingDirectory.rollBranchName": "Cambiar otro nombre de rama",
   "workingDirectory.searchPlaceholder": "Buscar directorios",
   "workingDirectory.selectFolder": "Seleccionar carpeta",
   "workingDirectory.setDefault": "Establecer como predeterminado",
