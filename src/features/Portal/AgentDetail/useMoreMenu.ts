@@ -1,5 +1,5 @@
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { agentDisplayName, type AgentNameFields } from '@lobechat/types';
+import { agentDisplayName, agentRenameField } from '@lobechat/types';
 
 import { openRenameModal } from '@/components/RenameModal';
 import { type PortalMoreMenuConfig } from '@/features/Portal/components/PortalMoreMenu/types';
@@ -10,14 +10,6 @@ import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
 import { usePortalShareUrl } from '../components/PortalMoreMenu/shareUrl';
-
-/**
- * The field a rename writes: whichever one the header is showing. `name` wins
- * the label whenever it is set, so renaming `title` under a named agent would
- * save without visibly changing anything.
- */
-export const agentRenameField = (meta: AgentNameFields): 'name' | 'title' =>
-  meta.name?.trim() ? 'name' : 'title';
 
 export const useAgentDetailMoreMenu = (): PortalMoreMenuConfig | undefined => {
   const agentId = useChatStore(chatPortalSelectors.agentDetailId);
