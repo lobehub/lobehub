@@ -4,10 +4,7 @@ import { Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import SurfaceSkeleton from '@/components/Skeleton/Surface';
-import { useClientDataSWR } from '@/libs/swr';
-import { providerKeys } from '@/libs/swr/keys';
-import { aiProviderService } from '@/services/aiProvider';
-import { useAiInfraStore } from '@/store/aiInfra';
+import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import ModelList from '../../features/ModelList';
 import ProviderConfig from '../../features/ProviderConfig';
@@ -16,11 +13,11 @@ const CustomProviderDetail = memo<{ id: string }>(({ id }) => {
   const useFetchAiProviderItem = useAiInfraStore((s) => s.useFetchAiProviderItem);
   useFetchAiProviderItem(id);
 
-  const { data, isLoading } = useClientDataSWR(providerKeys.clientConfig(id), () =>
-    aiProviderService.getAiProviderById(id),
-  );
+  // Same replica entry the detail hook fills — no second fetch, and a reload
+  // paints the cached provider while the network confirms it.
+  const data = useAiInfraStore(aiProviderSelectors.providerDetailById(id));
 
-  if (isLoading || !data || !data.id) return <SurfaceSkeleton header={false} variant={'form'} />;
+  if (!data || !data.id) return <SurfaceSkeleton header={false} variant={'form'} />;
 
   return (
     // No block padding of its own — SettingContainer already insets the page.
