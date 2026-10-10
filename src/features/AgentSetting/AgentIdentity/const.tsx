@@ -1,6 +1,6 @@
 import type { AgentAccountKind } from '@lobechat/types';
 import type { LucideIcon } from 'lucide-react';
-import { Mail, Phone } from 'lucide-react';
+import { KeyRound, Mail, Phone, Wallet } from 'lucide-react';
 
 /**
  * One address channel the identity tab can open.
@@ -47,3 +47,17 @@ export const isChannelAccount = (
   account: { kind: AgentAccountKind; provider: string },
   channel: Pick<IdentityChannel, 'kind' | 'provider'>,
 ): boolean => account.kind === channel.kind && account.provider === channel.provider;
+
+/** Icon for an account that belongs to no built-in channel (a mounted address). */
+export const KIND_ICONS: Record<AgentAccountKind, LucideIcon> = {
+  mail: Mail,
+  phone: Phone,
+  service: KeyRound,
+  wallet: Wallet,
+};
+
+/** Accounts no built-in channel claims — mounted ones, or providers this tab does not offer. */
+export const isUnchanneledAccount = (account: {
+  kind: AgentAccountKind;
+  provider: string;
+}): boolean => !IDENTITY_CHANNELS.some((channel) => isChannelAccount(account, channel));

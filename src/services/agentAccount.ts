@@ -1,4 +1,8 @@
-import type { AgentAccountKind, AgentInboxMessage } from '@lobechat/types';
+import type {
+  AgentAccountAttachment,
+  AgentAccountKind,
+  AgentInboxMessage,
+} from '@lobechat/types';
 import type { inferRouterOutputs } from '@trpc/server';
 
 import { lambdaClient } from '@/libs/trpc/client';
@@ -44,6 +48,11 @@ export interface ListAgentInboxParams {
  */
 const toInboxMessage = (row: InboxRow): AgentInboxMessage => ({
   accountId: row.accountId,
+  // Kept in metadata by the inbound edge; an attachment-only message would
+  // otherwise open with a blank body and no way to reach what was sent.
+  attachments: Array.isArray(row.metadata?.attachments)
+    ? (row.metadata.attachments as AgentAccountAttachment[])
+    : undefined,
   agentId: row.agentId,
   codes: row.codes ?? [],
   createdAt: row.createdAt,

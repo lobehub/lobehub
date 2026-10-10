@@ -86,6 +86,26 @@ const InboxMessageModal = memo<InboxMessageModalProps>(({ id }) => {
       >
         {data.text}
       </Text>
+      {data.attachments && data.attachments.length > 0 && (
+        <Flexbox gap={6}>
+          <Text fontSize={12} type={'secondary'}>
+            {t('identity.inbox.detail.attachments')}
+          </Text>
+          {/* Links, not inline previews: the URLs come from an outside sender,
+              and embedding them would let the sender see when mail is opened. */}
+          {data.attachments.map((attachment, index) => (
+            <a
+              href={attachment.url}
+              key={`${attachment.url}-${index}`}
+              rel={'noopener noreferrer nofollow'}
+              style={{ fontSize: 13, wordBreak: 'break-all' }}
+              target={'_blank'}
+            >
+              {attachment.name || attachment.mimeType || attachment.url}
+            </a>
+          ))}
+        </Flexbox>
+      )}
     </Flexbox>
   );
 });

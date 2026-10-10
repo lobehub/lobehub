@@ -333,6 +333,7 @@ export default {
     'Addresses this agent owns and can be reached at. Opening one is an explicit action; releasing it hands the address back.',
   'identity.hideDetail': 'Hide details',
   'identity.inbox.desc': 'Messages delivered to the addresses above.',
+  'identity.inbox.detail.attachments': 'Attachments',
   'identity.inbox.detail.from': 'From',
   'identity.inbox.detail.loadFailed': 'Could not open this message',
   'identity.inbox.detail.receivedAt': 'Received',

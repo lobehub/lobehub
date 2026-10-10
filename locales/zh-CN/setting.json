@@ -813,6 +813,7 @@
   "identity.desc": "该 Agent 拥有的地址，外界可通过这些地址联系它。开通是明确的主动操作；释放会把地址交还。",
   "identity.hideDetail": "收起详情",
   "identity.inbox.desc": "投递到上述地址的消息。",
+  "identity.inbox.detail.attachments": "附件",
   "identity.inbox.detail.from": "发件人",
   "identity.inbox.detail.loadFailed": "无法打开这封消息",
   "identity.inbox.detail.receivedAt": "接收时间",

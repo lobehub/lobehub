@@ -5,12 +5,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const service = vi.hoisted(() => ({
   getInboxMessage: vi.fn(),
   getInboxUnreadCount: vi.fn(),
+  list: vi.fn(),
   listInbox: vi.fn(),
   markAllInboxRead: vi.fn(),
   markInboxRead: vi.fn(),
   revoke: vi.fn(),
 }));
 vi.mock('@/services/agentAccount', () => ({ agentAccountService: service }));
+
+// No provider configured: only already-owned addresses render.
+vi.mock('@/store/serverConfig', () => ({
+  useServerConfigStore: (selector: (state: unknown) => unknown) =>
+    selector({ serverConfig: { agentIdentityProviders: [] } }),
+}));
 
 const ui = vi.hoisted(() => ({ confirmModal: vi.fn(), createModal: vi.fn() }));
 vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
@@ -23,6 +30,7 @@ const { IDENTITY_CHANNELS } = await import('./const');
 const { default: AccountCard } = await import('./AccountCard');
 const { default: InboxMessageModal } = await import('./InboxMessageModal');
 const { default: InboxSection } = await import('./InboxSection');
+const { default: IdentityAccounts } = await import('./IdentityAccounts');
 
 const fresh = (node: React.ReactNode) =>
   render(<SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>{node}</SWRConfig>);
@@ -40,6 +48,52 @@ describe('InboxMessageModal', () => {
     fresh(<InboxMessageModal id={'msg_1'} />);
 
     expect(await screen.findByText('identity.inbox.detail.loadFailed')).toBeInTheDocument();
+  });
+});
+
+describe('IdentityAccounts', () => {
+  it('shows a mounted address that no built-in channel claims, so it can be released', async () => {
+    service.list.mockResolvedValue([
+      {
+        agentId: 'agt_1',
+        capabilities: { receive: true, send: true },
+        displayName: null,
+        id: 'acc_user',
+        identifier: 'me@example.com',
+        kind: 'mail',
+        provider: 'user',
+        status: 'active',
+      },
+    ]);
+
+    fresh(<IdentityAccounts agentId={'agt_1'} />);
+
+    expect(await screen.findByText('me@example.com')).toBeInTheDocument();
+    // Its provider stands in for the channel title, and it is releasable.
+    expect(screen.getByText('user')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button').at(-1)!);
+    expect(ui.confirmModal).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('InboxMessageModal attachments', () => {
+  it('lists what an attachment-only message carried instead of a blank body', async () => {
+    service.getInboxMessage.mockResolvedValue({
+      attachments: [{ mimeType: 'image/jpeg', url: 'https://cdn.example.test/photo.jpg' }],
+      from: '+15550001111',
+      id: 'msg_photo',
+      receivedAt: new Date('2026-10-02T00:00:00Z'),
+      subject: null,
+      text: '',
+      to: 'toby@lobe.id',
+    });
+
+    fresh(<InboxMessageModal id={'msg_photo'} />);
+
+    const link = await screen.findByRole('link', { name: 'image/jpeg' });
+    expect(link).toHaveAttribute('href', 'https://cdn.example.test/photo.jpg');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+    expect(screen.queryByRole('img')).toBeNull();
   });
 });
 

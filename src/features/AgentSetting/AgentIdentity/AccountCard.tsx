@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import type { AgentAccountView } from '@/services/agentAccount';
 
 import type { IdentityChannel } from './const';
+import { KIND_ICONS } from './const';
 import { identityStyles } from './styles';
 import { useAccountActions } from './useIdentityActions';
 
@@ -27,7 +28,12 @@ const STATUS_KEYS = {
 interface AccountCardProps {
   account: AgentAccountView;
   agentId: string;
-  channel: IdentityChannel;
+  /**
+   * The built-in channel the account belongs to. Absent for a mounted account
+   * (e.g. provider `user`); the card then falls back to the account's kind and
+   * provider so the address can still be read, copied and released.
+   */
+  channel?: IdentityChannel;
   /** Read-only viewer: the address stays copyable, but cannot be released. */
   disabled?: boolean;
   onChanged: () => Promise<unknown> | void;
@@ -43,7 +49,11 @@ const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, disable
 
   return (
     <Flexbox horizontal align={'center'} className={identityStyles.card} gap={12}>
-      <Icon className={identityStyles.icon} icon={channel.icon} size={18} />
+      <Icon
+        className={identityStyles.icon}
+        icon={channel?.icon ?? KIND_ICONS[account.kind]}
+        size={18}
+      />
       <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
         <Flexbox horizontal align={'center'} gap={8}>
           <Text code ellipsis weight={500}>
@@ -52,7 +62,7 @@ const AccountCard = memo<AccountCardProps>(({ account, channel, agentId, disable
           <Tag>{t(STATUS_KEYS[account.status])}</Tag>
         </Flexbox>
         <Text fontSize={12} type={'secondary'}>
-          {account.displayName || t(channel.titleKey)}
+          {account.displayName || (channel ? t(channel.titleKey) : account.provider)}
         </Text>
       </Flexbox>
       <CopyButton content={account.identifier} title={t('identity.copy')} />

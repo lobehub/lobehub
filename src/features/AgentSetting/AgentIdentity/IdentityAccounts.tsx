@@ -9,7 +9,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
 
 import AccountCard from './AccountCard';
-import { IDENTITY_CHANNELS, isChannelAccount } from './const';
+import { IDENTITY_CHANNELS, isChannelAccount, isUnchanneledAccount } from './const';
 import InlineError from './InlineError';
 import ProvisionCard from './ProvisionCard';
 import SectionHeader from './SectionHeader';
@@ -91,6 +91,17 @@ const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => 
           />
         ));
       })}
+      {/* Mounted addresses (and providers this tab does not offer) still belong
+          to the agent: show them so they can be read, copied and released. */}
+      {accounts.filter(isUnchanneledAccount).map((account) => (
+        <AccountCard
+          account={account}
+          agentId={agentId}
+          disabled={disabled}
+          key={account.id}
+          onChanged={mutate}
+        />
+      ))}
     </Flexbox>
   );
 });
