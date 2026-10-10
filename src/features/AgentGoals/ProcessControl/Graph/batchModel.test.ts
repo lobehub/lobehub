@@ -423,6 +423,29 @@ describe('gate verdicts', () => {
   });
 });
 
+describe('wave ownership', () => {
+  it('keeps a released wave with its plan and moves the waves not yet out to the latest round', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1')],
+        extraEdges: [edge('t2', 't1', 'revises'), edge('a2', 'm4b', 'depends_on')],
+        extraNodes: [
+          node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+          node('m4', 'task', 10, { status: 'retired', title: 'U4' }),
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('m4b', 'task', 42, { title: 'U4' }),
+        ],
+        state: { assayNodeId: 'a2', massNodeIds: ['m3', 'm4'], probeNodeIds: ['m4b'] },
+      }),
+      NOW,
+    );
+    // Wave 1 (U3–U6) went out under v1; wave 2 (U7–U10) has not gone out — it
+    // waits under v2, the latest plan.
+    expect(buildBatchModel(graph, 'batch').waveRounds).toEqual([1, 2]);
+  });
+});
+
 describe('layoutBatch', () => {
   it('stacks trials → plan → gate → waves and puts v2 beside v1', () => {
     const graph = buildGoalGraphView(
@@ -447,11 +470,13 @@ describe('layoutBatch', () => {
     // Round 1 reads top to bottom.
     expect(probes.y + probes.height).toBeLessThan(t1.y);
     expect(t1.y + t1.height).toBeLessThan(a1.y);
-    expect(a1.y + a1.height).toBeLessThan(waves.y);
+    // v2 opened before any wave went out: the whole roster moved under v2, so
+    // v1 has no waves group and v2's group sits where it would have been.
+    expect(waves).toBeUndefined();
+    expect(a1.y + a1.height).toBeLessThan(redispatch.y);
     // v2 is a column of its own, level with v1 and to its right.
     expect(t2.y).toBe(t1.y);
     expect(a2.y).toBe(a1.y);
-    expect(redispatch.y).toBe(waves.y);
     expect(t2.x).toBeGreaterThan(Math.max(probes.x + probes.width, t1.x + t1.width));
     // Task-produced findings and unit tasks never land as loose cards.
     expect([...layout.nodeIds].sort()).toEqual(['a1', 'a2', 't1', 't2']);

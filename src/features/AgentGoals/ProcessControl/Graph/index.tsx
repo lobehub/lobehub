@@ -408,9 +408,16 @@ const useBatchCopy = () => {
         // verdict, how many checks it will run.
         const passed = judged.filter((check) => check.passed).length;
         const failed = judged.length - passed;
-        const tally = latest
-          ? [passed && `${passed} ✓`, failed && `${failed} ✗`].filter(Boolean).join(' · ')
-          : t('goalBatch.gate.checkCount', { count: model.gateChecks.length });
+        // Green what passed, red what did not — the tally is the whole subtitle.
+        const tally = latest ? (
+          <span data-gate-tally>
+            {passed > 0 && <span style={{ color: CELL_VISUAL.done.color }}>{`${passed} ✓`}</span>}
+            {passed > 0 && failed > 0 && ' · '}
+            {failed > 0 && <span style={{ color: cssVar.colorError }}>{`${failed} ✗`}</span>}
+          </span>
+        ) : (
+          t('goalBatch.gate.checkCount', { count: model.gateChecks.length })
+        );
         const checks = (latest ? judged : model.gateChecks).map((check) => {
           const { detail, label } = checkCopy(check);
           const mark = 'passed' in check ? (check.passed ? '✓ ' : '✗ ') : '';
@@ -429,7 +436,7 @@ const useBatchCopy = () => {
           ),
           icon: DoorOpen,
           palette: GATE_COLOR,
-          subtitle: `${tally} · ${t(`goalBatch.gate.subtitle.${key}` as any)}`,
+          subtitle: tally,
           title:
             round.revision > 1
               ? t('goalBatch.gate.titleRound', { revision: round.revision })
@@ -791,6 +798,11 @@ const Canvas = memo<
         [...batches].flatMap(([batchId, { layout, model }]) => {
           if (!layout || !visibleIds.has(batchId)) return [];
           const [first] = model.rounds;
+          // The roster waves a round owns, keeping each one's roster position.
+          const rowsOf = (revision: number) =>
+            model.waves.flatMap((cells, wave) =>
+              model.waveRounds[wave] === revision ? [{ cells, wave }] : [],
+            );
           return layout.groups.map((group) => {
             const round = model.rounds[group.revision - 1];
             const data =
@@ -808,13 +820,14 @@ const Canvas = memo<
                       onSelect,
                       started:
                         !first.assayId || first.gate === 'passed' || first.gate === 'rejected',
-                      waves: model.waves,
+                      rows: rowsOf(1),
                     }
                   : {
                       onEnter: () => onEnter(batchId),
                       onSelect,
                       probes: round.probes,
                       revision: group.revision,
+                      rows: rowsOf(group.revision),
                       waveSize: model.waveSize,
                       started: round.probes.some((probe) => probe.state !== 'backlog'),
                     };

@@ -36,11 +36,11 @@ export const KIND_COLOR: Record<GoalGraphNodeKind, { line: string; soft: string 
 };
 
 /**
- * A batch's release gate is a checkpoint the coordinator judges, not a question
- * put to a person, so it does not borrow the decision orange: magenta sets it
- * apart from every node kind on the map.
+ * A batch's release gate is where a person steps in when the batch breaks, so
+ * it wears the cyan the product uses for "a person decides here" — not the
+ * decision orange, and not a red that reads as an error.
  */
-export const GATE_COLOR = { line: cssVar.magenta10, soft: cssVar.magenta3 };
+export const GATE_COLOR = { line: cssVar.cyan10, soft: cssVar.cyan3 };
 
 export const KIND_ICON: Record<GoalGraphNodeKind, LucideIcon> = {
   batch: Boxes,

@@ -101,6 +101,12 @@ export interface BatchModel {
   gateChecks: BatchGateCheck[];
   phase?: GoalRolloutPhase;
   rounds: BatchRound[];
+  /**
+   * The round (1-based revision) each wave belongs to. A released wave belongs
+   * to the plan it went out under; the waves not yet released belong to the
+   * latest round — so after v2 opens, the rest of the roster moves under v2.
+   */
+  waveRounds: number[];
   /** The roster outside the first round's probes, chunked into waves. */
   waves: BatchCell[][];
   waveSize: number;
@@ -223,6 +229,22 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     );
   });
 
+  // A released unit went out under the latest plan at the time it was created.
+  const roundAt = (view: GoalNodeView) => {
+    let round = 1;
+    templates.forEach((template, r) => {
+      if (byCreatedAt(template, view) <= 0) round = r + 1;
+    });
+    return round;
+  };
+  const waveRounds = waves.map((wave) => {
+    const released = wave.find((cell) => cell.nodeId && !cell.runIn);
+    if (released?.nodeId && graph.byId[released.nodeId])
+      return roundAt(graph.byId[released.nodeId]);
+    const runIn = wave.find((cell) => cell.runIn)?.runIn;
+    return runIn ?? roundCount;
+  });
+
   // Where a re-opened unit ran before: the most recent earlier node with its title.
   const originOf = (view: GoalNodeView): BatchUnitOrigin | undefined => {
     const earlier = (tasksByTitle.get(view.node.title) ?? []).filter(
@@ -300,7 +322,16 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes_covered' as const }] : []),
   ];
 
-  return { batchId, decisionIds, gateChecks, phase: state?.phase, rounds, waves, waveSize };
+  return {
+    batchId,
+    decisionIds,
+    gateChecks,
+    phase: state?.phase,
+    rounds,
+    waveRounds,
+    waves,
+    waveSize,
+  };
 };
 
 const gateState = (

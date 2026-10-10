@@ -150,11 +150,15 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
       ? []
       : model.gateChecks;
 
+  const superseded = new Set(
+    graph.edges.filter((edge) => edge.kind === 'derived_from').map((edge) => edge.targetNodeId),
+  );
   const unitCard = (nodeId: string) => {
     const view = graph.byId[nodeId];
     if (!view) return null;
     const kind = view.node.kind === 'decision' ? 'decision' : 'task';
-    const state = batchCellState(view, new Set());
+    // Same reading as the squares: a unit a later round re-opened is superseded.
+    const state = superseded.has(nodeId) ? 'stale' : batchCellState(view, new Set());
     const status = CELL_VISUAL[state];
     return (
       <Flexbox
@@ -193,30 +197,28 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
 
   return (
     <Flexbox data-gate-detail gap={16}>
-      <Section title={t('goalBatch.gatePanel.verdict')}>
-        <Flexbox horizontal align={'center'} gap={6}>
-          <Icon color={visual.color} icon={visual.icon} size={14} />
-          <Text fontSize={13} style={{ color: visual.color }}>
-            {t(`goalBatch.gate.status.${round.gate}` as const)}
-          </Text>
-        </Flexbox>
-        {next && (
-          <Text fontSize={13} type={'secondary'}>
-            {next}
-          </Text>
-        )}
-      </Section>
-
-      {pending && decide && (
-        <Section title={t('goalBatch.gatePanel.decide')}>
-          {/* The checks below already say what broke; the question only asks
-              how to go on, in the reader's language. */}
-          <GoalDecisionCase
-            hideAsker
-            category={'judgment'}
-            decision={{ ...pending, question: t('goalBatch.gatePanel.question') }}
-            onDecide={(optionId, resolution) => decide(pending.id, optionId, resolution)}
-          />
+      {/* Waiting on a person, the question itself leads: no verdict line and no
+          section label repeating "needs your decision" above it. */}
+      {pending && decide ? (
+        <GoalDecisionCase
+          hideAsker
+          category={'judgment'}
+          decision={{ ...pending, question: t('goalBatch.gatePanel.question') }}
+          onDecide={(optionId, resolution) => decide(pending.id, optionId, resolution)}
+        />
+      ) : (
+        <Section title={t('goalBatch.gatePanel.verdict')}>
+          <Flexbox horizontal align={'center'} gap={6}>
+            <Icon color={visual.color} icon={visual.icon} size={14} />
+            <Text fontSize={13} style={{ color: visual.color }}>
+              {t(`goalBatch.gate.status.${round.gate}` as const)}
+            </Text>
+          </Flexbox>
+          {next && (
+            <Text fontSize={13} type={'secondary'}>
+              {next}
+            </Text>
+          )}
         </Section>
       )}
 
@@ -310,14 +312,6 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
                 const passed = evaluation.outcome === 'released';
                 return (
                   <Flexbox horizontal align={'baseline'} gap={10} key={evaluation.at}>
-                    <Text
-                      className={styles.mono}
-                      fontSize={12}
-                      style={{ flex: 'none' }}
-                      type={'secondary'}
-                    >
-                      {dayjs(evaluation.at).format('MM-DD HH:mm')}
-                    </Text>
                     <Icon
                       color={passed ? CELL_VISUAL.done.color : cssVar.colorError}
                       icon={passed ? CircleCheck : CircleX}
@@ -325,6 +319,14 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
                     />
                     <Text fontSize={12} style={{ flex: 1, minWidth: 0 }}>
                       {text}
+                    </Text>
+                    <Text
+                      className={styles.mono}
+                      fontSize={12}
+                      style={{ flex: 'none' }}
+                      type={'secondary'}
+                    >
+                      {dayjs(evaluation.at).format('MM-DD HH:mm')}
                     </Text>
                   </Flexbox>
                 );

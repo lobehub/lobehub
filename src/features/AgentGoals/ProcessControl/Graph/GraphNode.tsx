@@ -46,7 +46,7 @@ export interface GraphNodeData extends Record<string, unknown> {
     icon?: LucideIcon;
     /** Glyph colours when the card is not its kind — a release gate. */
     palette?: { line: string; soft: string };
-    subtitle?: string;
+    subtitle?: ReactNode;
     title?: string;
   };
   running: boolean;

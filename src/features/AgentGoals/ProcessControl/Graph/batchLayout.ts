@@ -151,8 +151,11 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
   }
   const wavesY = y;
   let wavesId: string | undefined;
-  if (model.waves.length) {
-    const height = groupHeight(stack(model.waves.length, BATCH_SQUARE, BATCH_SQUARE_GAP));
+  // Each group shows only the waves its round owns.
+  const ownedRows = (revision: number) =>
+    model.waveRounds.filter((owner) => owner === revision).length;
+  if (ownedRows(1)) {
+    const height = groupHeight(stack(ownedRows(1), BATCH_SQUARE, BATCH_SQUARE_GAP));
     wavesId = addGroup('waves', 1, { height, width: wavesW, x: cx - wavesW / 2, y });
     if (previous)
       edges.push({
@@ -199,9 +202,10 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
         });
       chain = round.assayId;
     }
-    if (round.probes.length) {
-      // Re-opened units are one batch of their own, capped at the wave size.
-      const rows = Math.ceil(round.probes.length / model.waveSize);
+    if (round.probes.length || ownedRows(round.revision)) {
+      // Re-opened units are one batch of their own, capped at the wave size,
+      // followed by the roster waves this round released or still holds.
+      const rows = Math.ceil(round.probes.length / model.waveSize) + ownedRows(round.revision);
       const height = groupHeight(stack(rows, BATCH_SQUARE, BATCH_SQUARE_GAP));
       const id = addGroup('redispatch', round.revision, {
         height,
