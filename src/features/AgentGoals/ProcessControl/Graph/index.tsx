@@ -32,7 +32,12 @@ import { useIsDark } from '@/hooks/useIsDark';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 
-import { type GoalGraphNodeKind, graphNodeKind, graphNodeLabel } from '../../Experiments/model';
+import {
+  type GoalGraphNodeKind,
+  graphNodeKind,
+  graphNodeLabel,
+  isContainerKind,
+} from '../../Experiments/model';
 import {
   type GoalGraphView,
   type GoalNodeView,
@@ -414,7 +419,7 @@ const Canvas = memo<
     const edgeLabel = useEdgeLabel();
     const isDarkMode = useIsDark();
 
-    const hasExperiments = graph.nodes.some((item) => item.node.kind === 'experiment');
+    const hasContainers = graph.nodes.some((item) => isContainerKind(item.node.kind));
     const map = useMemo(
       () =>
         explorationMap(
@@ -425,7 +430,7 @@ const Canvas = memo<
         ),
       [graph, collapsed, hiddenKinds],
     );
-    const baseNodes = hasExperiments
+    const baseNodes = hasContainers
       ? map.nodes
       : graph.nodes
           .map((item) => item.node)
@@ -446,7 +451,7 @@ const Canvas = memo<
     const handleNodesChange = useCallback((changes: NodeChange[]) => {
       setMeasuredSizes((previous) => mergeMeasuredSizes(previous, changes));
     }, []);
-    const positions = hasExperiments
+    const positions = hasContainers
       ? map.boxes
       : layoutGraph(
           baseNodes.filter((node) => visibleIds.has(node.id)),
@@ -482,8 +487,8 @@ const Canvas = memo<
         ...boxes.map((box) => box.y + box.height),
         ...ghosts.map((ghost) => ghost.y + GHOST_HEIGHT),
       );
-      return Math.min(hasExperiments ? 760 : 560, Math.max(216, bottom - top + 72));
-    }, [positions, ghosts, hasExperiments]);
+      return Math.min(hasContainers ? 760 : 560, Math.max(216, bottom - top + 72));
+    }, [positions, ghosts, hasContainers]);
 
     const ghostFlowNodes: FlowNode[] = useMemo(
       () =>
@@ -505,7 +510,7 @@ const Canvas = memo<
       if (!mainline) return result;
       const shape = { nodes: graph.nodes.map((view) => view.node), edges: graph.edges };
       for (const node of baseNodes) {
-        const members = node.kind === 'experiment' ? experimentMembers(shape, node.id, false) : [];
+        const members = isContainerKind(node.kind) ? experimentMembers(shape, node.id, false) : [];
         result.set(node.id, nodeEmphasis(mainline, node, members));
       }
       return result;
@@ -544,10 +549,10 @@ const Canvas = memo<
               subtitle: subtitleOf(item),
               view: item,
             };
-            const expanded = item.node.kind === 'experiment' && !collapsed.has(item.node.id);
+            const expanded = isContainerKind(item.node.kind) && !collapsed.has(item.node.id);
             const type = expanded
               ? 'goalExperimentGroup'
-              : graphNodeKind(graph, item) === 'experiment'
+              : isContainerKind(graphNodeKind(graph, item))
                 ? 'goalExperiment'
                 : 'goalNode';
             const measured = measuredSizes[item.node.id];
@@ -564,7 +569,7 @@ const Canvas = memo<
               id: item.node.id,
               position: { x: box?.x ?? 0, y: box?.y ?? 0 },
               type,
-              parentId: hasExperiments ? map.parents.get(item.node.id) : undefined,
+              parentId: hasContainers ? map.parents.get(item.node.id) : undefined,
               ...(expanded ? { style: { width: box.width, height: box.height } } : {}),
               ariaLabel: graphNodeLabel(
                 t(`goalProcess.kind.${graphNodeKind(graph, item)}`),
@@ -593,7 +598,7 @@ const Canvas = memo<
         onInspect,
         onEnter,
         onSelect,
-        hasExperiments,
+        hasContainers,
         map.parents,
         measuredSizes,
         emphasisById,
@@ -615,7 +620,7 @@ const Canvas = memo<
       const markerOf = (tone: EdgeTone) =>
         tone === 'mainline' ? mainlineMarker : tone === 'detour' ? detourMarker : marker;
       const lanes = new Map<string, number>();
-      const direct = (hasExperiments ? map.edges : graph.edges)
+      const direct = (hasContainers ? map.edges : graph.edges)
         .filter((edge) => visibleIds.has(edge.sourceNodeId) && visibleIds.has(edge.targetNodeId))
         .map((edge) => {
           const [source, target] = edgeDirection(edge);
@@ -642,7 +647,7 @@ const Canvas = memo<
             markerEnd: markerOf(tone),
             source,
             target,
-            type: hasExperiments ? 'exploration' : 'default',
+            type: hasContainers ? 'exploration' : 'default',
             data: { lane },
           } satisfies FlowEdge;
         });
@@ -675,7 +680,7 @@ const Canvas = memo<
       bridges,
       selectedId,
       edgeLabel,
-      hasExperiments,
+      hasContainers,
       map.edges,
       t,
       mainline,
@@ -828,7 +833,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   const [preferredView, setView] = useState<GraphViewMode>('stage');
   const stageIsWholeMap = isStageWholeMap(props.graph);
   const view: GraphViewMode = stageIsWholeMap ? 'all' : preferredView;
-  const experiments = props.graph.nodes.filter((item) => item.node.kind === 'experiment');
+  const containers = props.graph.nodes.filter((item) => isContainerKind(item.node.kind));
   const [hiddenKinds, setHiddenKinds] = useState<ReadonlySet<GoalGraphNodeKind>>(() => new Set());
   const showPortal = useChatStore(chatPortalSelectors.showPortal);
   const currentViewType = useChatStore(chatPortalSelectors.currentViewType);
@@ -847,15 +852,15 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
   }, []);
 
   const selectNode = (nodeId: string) => {
-    if (props.graph.byId[nodeId]?.node.kind === 'experiment') {
+    if (isContainerKind(props.graph.byId[nodeId]?.node.kind ?? ('task' as const))) {
       navigation.toggle(nodeId);
     } else props.onSelect(nodeId);
   };
-  const overview = experiments.length > 0 && (
+  const overview = containers.length > 0 && (
     <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
       <Text fontSize={12} type={'secondary'}>
         {t('goalExperiment.overviewCount', {
-          count: experiments.length,
+          count: containers.length,
           nodes: props.graph.nodes.length,
         })}
       </Text>
@@ -911,7 +916,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
       <Text fontSize={16} weight={600}>
         {t('goalProcess.graph.title')}
       </Text>
-      {experiments.length === 0 && !stageIsWholeMap && (
+      {containers.length === 0 && !stageIsWholeMap && (
         <Segmented
           size={'small'}
           value={view}
@@ -948,7 +953,7 @@ const Graph = memo<GraphProps>(({ extra, fullscreen = false, onFullscreenChange,
         [
           'problem',
           'task',
-          ...(props.graph.nodes.some((view) => view.node.kind === 'experiment')
+          ...(props.graph.nodes.some((view) => isContainerKind(view.node.kind))
             ? ['experiment' as const]
             : []),
           'finding',

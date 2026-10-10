@@ -5,6 +5,7 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import { ChevronDown, FlaskConical } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { KIND_ICON } from '../shared';
 import { experimentStatusVisual } from './experimentStatus';
 import type { GraphNodeData } from './GraphNode';
 
@@ -40,11 +41,15 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-/** An expanded answer encloses its work without replacing the surrounding map. */
+/** An expanded container encloses its work without replacing the surrounding map. */
 const ExperimentGroup = ({ data }: NodeProps) => {
-  const { view, memberCount, onToggle, onInspect, onEnter } = data as ExperimentGroupData;
+  const { view, memberCount, onToggle, onInspect, onEnter, kind } = data as ExperimentGroupData;
   const { t } = useTranslation('chat');
   const status = experimentStatusVisual(view.node.status);
+  // A batch folds like an experiment but is not one: it wears its own icon and
+  // the batch label, so the two containers never read as the same thing.
+  const isBatch = kind === 'batch';
+  const ContainerIcon = KIND_ICON[kind ?? view.node.kind] ?? FlaskConical;
   return (
     <div className={styles.frame}>
       <Handle position={Position.Top} type={'target'} />
@@ -68,9 +73,11 @@ const ExperimentGroup = ({ data }: NodeProps) => {
           }}
         >
           <Icon icon={ChevronDown} size={14} />
-          <Icon icon={FlaskConical} size={14} />
+          <Icon icon={ContainerIcon} size={14} />
           <span className={styles.title}>
-            {t('goalExperiment.number', { number: view.seq })} · {view.node.title}
+            {isBatch
+              ? `${t('goalProcess.kind.batch')} · ${view.node.title}`
+              : `${t('goalExperiment.number', { number: view.seq })} · ${view.node.title}`}
           </span>
         </Button>
         <Flexbox horizontal gap={4} style={{ flexShrink: 0 }}>

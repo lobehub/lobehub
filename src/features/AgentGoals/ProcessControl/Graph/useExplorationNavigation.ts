@@ -2,6 +2,8 @@ import type { GoalGraphSnapshot } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
 import { useMemo, useState } from 'react';
 
+import { isContainerKind } from '../../Experiments/model';
+
 type Graph = Pick<GoalGraphSnapshot, 'nodes' | 'edges'>;
 
 /** Expansion is presentation state; entering a group explicitly changes the viewing scope. */
@@ -17,11 +19,11 @@ export const useExplorationNavigation = (goalId: string, graph: Graph) => {
   const edges = graph.edges.filter(
     (edge) => ids.has(edge.sourceNodeId) && ids.has(edge.targetNodeId),
   );
-  const experiments = nodes.filter((node) => node.kind === 'experiment');
+  const containers = nodes.filter((node) => isContainerKind(node.kind));
   // The canvas refits whenever `collapsed` changes identity, so it must only
   // change when its contents do — a fresh Set per render refit the map on every
   // node click and every graph poll.
-  const collapsedKey = experiments
+  const collapsedKey = containers
     .filter((n) => !state.expanded.has(n.id))
     .map((n) => n.id)
     .join('\n');
@@ -37,7 +39,7 @@ export const useExplorationNavigation = (goalId: string, graph: Graph) => {
     path,
     scopeId,
     enter: (id: string) => {
-      if (!experiments.some((node) => node.id === id)) return;
+      if (!containers.some((node) => node.id === id)) return;
       setState((previous) => ({ ...previous, path: [...path, id] }));
     },
     backTo: (depth: number) =>
@@ -52,7 +54,7 @@ export const useExplorationNavigation = (goalId: string, graph: Graph) => {
     expandAll: (expand: boolean) =>
       setState((previous) => {
         const expanded = new Set(previous.expanded);
-        for (const node of experiments) {
+        for (const node of containers) {
           if (expand) expanded.add(node.id);
           else expanded.delete(node.id);
         }

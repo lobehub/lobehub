@@ -81,7 +81,7 @@ export const explorationMap = (
     const members = children(scope);
     const sizes: Record<string, Pick<LayoutBox, 'width' | 'height'>> = {};
     for (const node of members) {
-      if (node.kind === 'experiment' && !collapsed.has(node.id)) {
+      if ((node.kind === 'experiment' || node.kind === 'batch') && !collapsed.has(node.id)) {
         const inner = measure(node.id);
         const values = Object.values(inner);
         const left = Math.min(0, ...values.map((box) => box.x));
