@@ -44,6 +44,7 @@ import type {
 import {
   AgentRuntimeErrorType,
   buildHeteroSpawnArgs,
+  getWorkingDirEffectivePath,
   HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
   normalizeHeterogeneousProviderConfig,
   ThreadStatus,
@@ -872,6 +873,33 @@ export const executeHeterogeneousAgent = async (
     topicMetadata?.workingDirectoryConfig ??
     workingDirectoryConfig ??
     (workingDirectory === undefined ? undefined : { path: workingDirectory });
+
+  /**
+   * Where the session actually lives once the turn finishes.
+   *
+   * A CLI can move itself mid-run (`EnterWorktree` / `ExitWorktree`). Those
+   * recorders rewrite the topic's config, its scalar cwd and its per-cwd session
+   * entry in ONE write, so by completion the topic names a directory the run never
+   * started in. Resume reads the RECORD, not the run: keying this write back to the
+   * run's start cwd would point the next prompt at the worktree with no session
+   * recorded for it, dropping `--resume`.
+   *
+   * The signal is a record that moved DURING this run. A topic handed a different
+   * cwd at run start (another repo, a freshly picked worktree) is not a move — its
+   * record is simply the cwd this run was launched at, and the session stays keyed
+   * there. `git worktree add` is not a move either: it selects a worktree without
+   * moving the session, so its recorder leaves the scalar cwd where the session is.
+   */
+  const resolveSessionWorkingDirectory = (
+    topicMetadata: ChatTopicMetadata | undefined,
+  ): string | undefined => {
+    const startedAt = getWorkingDirEffectivePath(workingDirectoryConfig);
+    const recordedAt = getWorkingDirEffectivePath(topicMetadata?.workingDirectoryConfig);
+    if (startedAt && recordedAt && recordedAt !== startedAt) {
+      return topicMetadata?.workingDirectory ?? workingDirectory;
+    }
+    return workingDirectory;
+  };
   const hasStreamedState = () =>
     sawStreamedEvent ||
     !!mainState.accContent ||
@@ -917,21 +945,22 @@ export const executeHeterogeneousAgent = async (
         // The session and its cwd now live on THIS machine, so the topic is
         // pinned here — its next turn and the device picker follow it.
         const runDeviceId = getElectronStoreState().gatewayDeviceInfo?.deviceId;
+        const sessionWorkingDirectory = resolveSessionWorkingDirectory(topicMetadata);
         await updateTopicMetadata(topicId, {
           ...(runDeviceId ? { boundDeviceId: runDeviceId } : {}),
           heteroSessionBindingKey: activeSessionBindingKey,
           heteroSessionBindingKeyByWorkingDirectory: setHeteroSessionBindingKeyForWorkingDirectory(
             topicMetadata,
-            workingDirectory,
+            sessionWorkingDirectory,
             activeSessionBindingKey,
           ),
           heteroSessionId: sessionId,
           heteroSessionIdByWorkingDirectory: setHeteroSessionIdForWorkingDirectory(
             topicMetadata,
-            workingDirectory,
+            sessionWorkingDirectory,
             sessionId,
           ),
-          workingDirectory: workingDirectory ?? '',
+          workingDirectory: sessionWorkingDirectory ?? '',
           workingDirectoryConfig: getPersistedWorkingDirectoryConfig(topicMetadata),
         });
         persistedResumeSessionId = sessionId;
