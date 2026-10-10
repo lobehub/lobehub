@@ -348,6 +348,12 @@ class ChatGroupInternalAction implements ResetableStore {
    */
   loadGroups = async () => {
     const scope = this.#captureScope();
+    // Drop the previous identity's list before anything else. After a workspace
+    // switch the store stays mounted with `groupsInit` still true, so without
+    // this the old workspace's groups linger through a slow / failed request and
+    // the new scope's persisted list is never read — which in turn leaves the
+    // detail reconcile blind to the persisted-only ids a response omits.
+    this.#groupList.ensureScope(scope);
     const hydration = this.#get().groupsInit
       ? undefined
       : this.#groupList.hydrate(LIST_PARAMS, scope);

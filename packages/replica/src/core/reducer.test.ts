@@ -133,6 +133,46 @@ describe('replicaReducer', () => {
     });
   });
 
+  describe('removal vs a late hydrate', () => {
+    it('does not let a hydrate that resolves after a removal resurrect the entry', () => {
+      const h = createHarness();
+      h.run({ data: ['cached'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.state.entries.k.source).toBe('storage');
+
+      // A server-confirmed absence removes the entry — view and row.
+      h.run({ key: 'k', scope: S, type: 'remove' });
+      expect(h.view.k).toBeUndefined();
+      expect(h.state.removed?.k).toBe(true);
+
+      // A storage read that started before the removal must not bring it back.
+      const late = h.run({ data: ['cached'], key: 'k', scope: S, type: 'hydrate' });
+      expect(late.writes).toEqual([]);
+      expect(h.view.k).toBeUndefined();
+      expect(h.state.entries.k).toBeUndefined();
+    });
+
+    it('lets an authoritative write claim a removed key again', () => {
+      const h = createHarness();
+      h.run({ data: ['cached'], key: 'k', scope: S, type: 'hydrate' });
+      h.run({ key: 'k', scope: S, type: 'remove' });
+      expect(h.state.removed?.k).toBe(true);
+
+      h.run({ data: () => ['server'], key: 'k', scope: S, type: 'replace' });
+      expect(h.state.removed?.k).toBeUndefined();
+      expect(h.view.k).toEqual(['server']);
+    });
+
+    it('drops every marker when the scope resets', () => {
+      const h = createHarness();
+      h.run({ key: 'k', scope: S, type: 'remove' });
+      expect(h.state.removed?.k).toBe(true);
+
+      h.run({ scope: 'user-2:personal', type: 'resetScope' });
+      expect(h.state.removed).toBeUndefined();
+      expect(h.state.scope).toBe('user-2:personal');
+    });
+  });
+
   describe('scope isolation', () => {
     it('ignores actions captured under another scope', () => {
       const h = createHarness();

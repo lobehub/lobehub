@@ -78,6 +78,15 @@ export interface ReplicaEntryMeta<T> {
 /** Bookkeeping slot a replica keeps inside its domain store. */
 export interface ReplicaState<T> {
   entries: Record<string, ReplicaEntryMeta<T>>;
+  /**
+   * Keys explicitly removed while a hydrate for them might still be in flight.
+   * A removal deletes the entry and its row, but a storage read that started
+   * before it can still resolve afterwards; hydrate skips these so the stale
+   * read cannot resurrect the entry (e.g. a group the server confirmed gone).
+   * A later authoritative write (`replace` / `update` / `optimistic`) claims the
+   * key again, and a scope reset drops every marker.
+   */
+  removed?: Record<string, true>;
   /** The scope every entry in memory belongs to. */
   scope?: string;
 }

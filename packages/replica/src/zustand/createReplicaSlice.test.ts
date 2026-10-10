@@ -532,6 +532,49 @@ describe('createReplicaSlice', () => {
       expect(contexts[0]).toEqual({ key: 'a', scope: 'user-1:personal' });
     });
 
+    // The removal deletes the entry, but a storage read that started before it
+    // can still resolve afterwards; the replica must not let that stale read
+    // resurrect the removed entry (the server already confirmed it gone).
+    it('does not let a hydrate that resolves after a removal resurrect the entry', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      const realGet = storage.storage.get.bind(storage.storage);
+      let releaseRead!: () => void;
+      const readGate = new Promise<void>((resolve) => (releaseRead = resolve));
+      let readStarted = false;
+      vi.spyOn(storage.storage, 'get').mockImplementation(async (key) => {
+        if (key.queryKey === 'a') {
+          // A storage read is a snapshot: capture the row now, resolve later.
+          const snapshot = await realGet(key);
+          readStarted = true;
+          await readGate;
+          return snapshot;
+        }
+        return realGet(key);
+      });
+
+      // A network that never answers, so only the hydrate is at play.
+      const { slice, store } = setup({ fetcher: () => new Promise<string[]>(() => {}), storage });
+
+      let hydrated = false;
+      const session = renderHook(
+        () => slice.useSync({ id: 'a' }, { onHydrated: () => (hydrated = true) }),
+        { wrapper },
+      );
+      await waitFor(() => expect(readStarted).toBe(true));
+
+      // The key is removed (a server-confirmed absence) before the read lands.
+      act(() => slice.remove('a'));
+
+      releaseRead();
+      await act(async () => {});
+
+      expect(hydrated).toBe(false);
+      expect(store.getState().lists.a).toBeUndefined();
+      expect(store.getState().listsReplica.entries.a).toBeUndefined();
+      session.unmount();
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.

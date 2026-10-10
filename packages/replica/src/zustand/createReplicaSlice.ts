@@ -1,4 +1,4 @@
-import { useLayoutEffect } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 import { createReplicaEngine, type ReplicaEngineOptions } from '../core/engine';
 import { isReplicaSyncKey, replicaKeys } from '../core/keys';
@@ -218,6 +218,17 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
       if (active && key !== undefined && queryKey !== undefined) headQuery.set(key, queryKey);
     }, [active, key, queryKey]);
 
+    // The entry this hook currently asks for. A hydrate that resolves after the
+    // hook moved to another key still fills its own cache entry (harmless), but
+    // it must not replay `onHydrated`: those side effects act on the *current*
+    // view, so they would re-adopt a superseded object (e.g. navigate g1 → g2
+    // while g1's storage read is slow, then g1's hydrate resets the active group
+    // back to g1's supervisor).
+    const activeKey = useRef<string | undefined>(undefined);
+    useLayoutEffect(() => {
+      activeKey.current = active ? key : undefined;
+    }, [active, key]);
+
     const hydration = driver.useQuery<boolean>(
       active && resource.persisted && resource.persistKey(key!)
         ? replicaKeys.hydrate(resource.name, resource.version, scope, resource.storageKey(params!))
@@ -229,7 +240,7 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
         // adopts the roster and settles the flags the response path would.
         if (didHydrate) {
           const hydrated = view.get(get(), key!);
-          if (hydrated !== undefined) onHydrated?.(hydrated);
+          if (hydrated !== undefined && activeKey.current === key) onHydrated?.(hydrated);
         }
         return true;
       },

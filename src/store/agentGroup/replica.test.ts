@@ -603,4 +603,135 @@ describe('agentGroup store replica', () => {
     expect(Object.keys(useAgentGroupStore.getState().groupMap).sort()).toEqual(['g1', 'g2', 'g3']);
     expect(useAgentGroupStore.getState().groupMap.g2?.title).toBe('Two');
   });
+
+  // P1: a server-confirmed absence (deleted / no access) must win over a detail
+  // hydrate that was already reading storage. Otherwise the stale read restores
+  // the group, `onHydrated` clears the 404 and adopts the old roster, and the
+  // gone group stays on screen with no further network call to correct it.
+  it('does not resurrect a group the server confirmed gone while its hydrate was in flight', async () => {
+    const scope = createScope();
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      { data: groupDetail('g1', 'Persisted detail'), updatedAt: 1 },
+    );
+    // The list already seeded the group, so the page has something to hydrate.
+    useAgentGroupStore.getState().internal_updateGroupMaps([groupRow('g1', 'List row')]);
+
+    // Park the detail hydrate: read the row now (a storage snapshot), resolve late.
+    const storage = agentGroupDetailResource.storage!;
+    const realGet = storage.get.bind(storage);
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => (releaseRead = resolve));
+    let readStarted = false;
+    vi.spyOn(storage, 'get').mockImplementation(async (key) => {
+      if (key.queryKey === detailStorageKey('g1') && key.scope === scope) {
+        const snapshot = await realGet(key);
+        readStarted = true;
+        await readGate;
+        return snapshot;
+      }
+      return realGet(key);
+    });
+
+    // The server answers first: the group is gone.
+    getGroupDetail.mockResolvedValue(null);
+    const session = renderHook(() => useAgentGroupStore.getState().useFetchGroupDetail(true, 'g1'));
+
+    await vi.waitFor(() => expect(readStarted).toBe(true));
+    await vi.waitFor(() => expect(useAgentGroupStore.getState().groupNotFoundMap.g1).toBe(true));
+    expect(useAgentGroupStore.getState().groupMap.g1).toBeUndefined();
+
+    // The stale read finally lands; the group must stay gone.
+    releaseRead();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(useAgentGroupStore.getState().groupMap.g1).toBeUndefined();
+    expect(useAgentGroupStore.getState().groupNotFoundMap.g1).toBe(true);
+    expect(agentStoreMock.setActiveAgentId).not.toHaveBeenCalled();
+    session.unmount();
+  });
+
+  // P1: switching to another group while `g1`'s storage read is slow must not let
+  // `g1`'s hydrate replay its side effects. Filling g1's cache entry is harmless,
+  // but `onHydrated` acts on the current view and would reset the active agent and
+  // chat model back to g1's supervisor.
+  it('does not adopt a superseded group when its hydrate lands after navigation', async () => {
+    const scope = createScope();
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      { data: groupDetail('g1', 'One'), updatedAt: 1 },
+    );
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g2'), scope },
+      { data: groupDetail('g2', 'Two'), updatedAt: 1 },
+    );
+
+    const storage = agentGroupDetailResource.storage!;
+    const realGet = storage.get.bind(storage);
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => (releaseRead = resolve));
+    let readStarted = false;
+    vi.spyOn(storage, 'get').mockImplementation(async (key) => {
+      if (key.queryKey === detailStorageKey('g1') && key.scope === scope) {
+        const snapshot = await realGet(key);
+        readStarted = true;
+        await readGate;
+        return snapshot;
+      }
+      return realGet(key);
+    });
+
+    getGroupDetail.mockImplementation(pending);
+
+    const session = renderHook(
+      ({ id }: { id: string }) => useAgentGroupStore.getState().useFetchGroupDetail(true, id),
+      { initialProps: { id: 'g1' } },
+    );
+    await vi.waitFor(() => expect(readStarted).toBe(true));
+
+    // Navigate to g2 while g1's hydrate is still parked.
+    session.rerender({ id: 'g2' });
+    await vi.waitFor(() =>
+      expect(agentStoreMock.setActiveAgentId).toHaveBeenCalledWith('g2-supervisor'),
+    );
+
+    // g1's slow hydrate lands now — it must not re-adopt g1's supervisor.
+    releaseRead();
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(agentStoreMock.setActiveAgentId).not.toHaveBeenCalledWith('g1-supervisor');
+    expect(agentStoreMock.setActiveAgentId).toHaveBeenLastCalledWith('g2-supervisor');
+    session.unmount();
+  });
+
+  // P1: after a workspace switch the store stays mounted with `groupsInit` still
+  // true. `loadGroups` must reset the view to the new scope and read its persisted
+  // list rather than leaving the previous workspace's groups on screen until the
+  // (possibly slow) response lands.
+  it('resets to the new scope and hydrates its list when the workspace switches', async () => {
+    createScope('agent-group-user-a');
+    getGroups.mockResolvedValue([groupRow('g1', 'A group')]);
+    await useAgentGroupStore.getState().loadGroups();
+    expect(useAgentGroupStore.getState().groupsInit).toBe(true);
+    expect(useAgentGroupStore.getState().groups.map((group) => group.id)).toEqual(['g1']);
+
+    // The new scope persists a list of its own.
+    const scopeB = createScope('agent-group-user-b');
+    await agentGroupListResource.storage!.set(
+      { queryKey: LIST_STORAGE_KEY, scope: scopeB },
+      { data: [groupRow('b1', 'B group')], updatedAt: 1 },
+    );
+
+    // The network is slow, so the new scope's persisted list must paint meanwhile.
+    let resolveGroups!: (value: unknown) => void;
+    getGroups.mockImplementation(() => new Promise((resolve) => (resolveGroups = resolve)));
+
+    const inflight = useAgentGroupStore.getState().loadGroups();
+
+    await vi.waitFor(() =>
+      expect(useAgentGroupStore.getState().groups.map((group) => group.id)).toEqual(['b1']),
+    );
+
+    resolveGroups([groupRow('b1', 'B group')]);
+    await inflight;
+    expect(useAgentGroupStore.getState().groups.map((group) => group.id)).toEqual(['b1']);
+  });
 });
