@@ -14,6 +14,8 @@ const { mockClient } = vi.hoisted(() => ({
       bindOperationTopic: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      events: { query: vi.fn() },
+      planContext: { query: vi.fn() },
       submitPlan: { mutate: vi.fn() },
       submitOperationPlan: { mutate: vi.fn() },
       submitOperationReport: { mutate: vi.fn() },
@@ -873,5 +875,214 @@ describe('goal event delivery', () => {
       }),
     );
     expect(output).toHaveBeenCalledWith(expect.stringContaining(`"accepted": ${accepted}`));
+  });
+});
+
+const eventRow = {
+  actorType: 'system',
+  createdAt: new Date('2026-10-10T07:26:39.811Z'),
+  entityId: 'node-1',
+  entityType: 'node',
+  eventType: 'activated',
+  goalId: 'goal-1',
+  id: 'e1',
+  reason: 'Recovered an abandoned Task operation and started the next attempt',
+};
+
+const goalStateGraph = {
+  decisions: [],
+  edges: [],
+  events: [],
+  goal: {
+    agentId: 'agt-1',
+    config: {},
+    id: 'goal-1',
+    requirement: 'Migrate every client data resource to replica',
+    status: 'running',
+    subjectId: 'tpc-1',
+    subjectType: 'topic',
+    title: 'Replica migration',
+  },
+  nodes: [],
+  workVersions: [],
+};
+
+const goalStateContext = {
+  admission: { code: 'stale_input', message: 'Stale planning input; no plan applied', ok: false },
+  budget: {
+    blocked: false,
+    deadline: null,
+    maxRounds: 50,
+    maxTotalCost: 12,
+    runs: 12,
+    totalCost: 3.5,
+  },
+  goal: { agentId: 'agt-1', pausedBy: null, status: 'running' },
+  queue: { pendingDecisions: 0, unfinishedTasks: 4 },
+  review: { current: 'bbbbbbbbbbbb', recorded: 'bbbbbbbbbbbb' },
+  snapshot: { current: 'cccccccccccc', recorded: 'aaaaaaaaaaaa' },
+  turn: {
+    adopted: false,
+    consumed: false,
+    dispatchNeverStarted: false,
+    failedTurns: 0,
+    operationId: 'op-1',
+    opStatus: 'running',
+    problem: 'Automatic recovery could not start the next attempt',
+    problemTaskId: 'task-1',
+    retryAfter: null,
+    startedAt: '2026-10-09T17:47:59.776Z',
+    submitted: null,
+    token: 'goal-1_tok',
+    turns: 13,
+  },
+};
+
+describe('goal state command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockClient.goal.graph.query.mockResolvedValue({ data: goalStateGraph });
+    mockClient.goal.planContext.query.mockResolvedValue({ data: goalStateContext });
+    mockClient.goal.events.query.mockResolvedValue({ data: [] });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('takes the verdict from the server instead of re-deriving it from the graph', async () => {
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+
+    expect(mockClient.goal.planContext.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(mockClient.goal.graph.query).toHaveBeenCalledWith({ id: 'goal-1' });
+  });
+
+  it('renders the planning turn, the moved snapshot and the admission code', async () => {
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+    const text = output();
+
+    expect(text).toContain('Planning turn #13');
+    expect(text).toContain('stale_input');
+    expect(text).toContain('the graph moved after this turn started');
+    expect(text).toContain('moved');
+    expect(text).toContain('4 unfinished task(s)');
+    // The requirement language is not the CLI's place to invent: the hint must
+    // come from the code, and the server's message must survive verbatim.
+    expect(text).toContain('Stale planning input; no plan applied');
+  });
+
+  it('renders recent events and lets --events 0 turn them off', async () => {
+    mockClient.goal.events.query.mockResolvedValue({ data: [eventRow] });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1', '--events', '5']);
+    expect(mockClient.goal.events.query).toHaveBeenCalledWith({ id: 'goal-1', limit: 5 });
+    expect(output()).toContain('Recovered an abandoned Task operation');
+
+    vi.mocked(console.log).mockClear();
+    mockClient.goal.events.query.mockClear();
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1', '--events', '0']);
+    expect(mockClient.goal.events.query).not.toHaveBeenCalled();
+    expect(output()).not.toContain('Recent events');
+  });
+});
+
+describe('goal plan refusal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  const planArgs = ['node', 'test', 'goal', 'plan', 'goal-1', '--token', 'tok', '--file', 'p.json'];
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('explains the refusal from the server admission before the error propagates', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-env');
+    mockClient.goal.submitPlan.mutate.mockRejectedValue(
+      new Error('Stale planning input; no plan applied'),
+    );
+    mockClient.goal.planContext.query.mockResolvedValue({ data: goalStateContext });
+
+    await expect(createProgram().parseAsync(planArgs)).rejects.toThrow('Stale planning input');
+
+    expect(mockClient.goal.planContext.query).toHaveBeenCalledWith({
+      id: 'goal-1',
+      operationId: 'op-env',
+    });
+    const text = output();
+    expect(text).toContain('Refused (stale_input)');
+    expect(text).toContain('snapshot');
+    expect(text).toContain('lh goal state goal-1');
+  });
+
+  it('never lets a failing diagnostic replace the original error', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-env');
+    mockClient.goal.submitPlan.mutate.mockRejectedValue(
+      new Error('Stale planning input; no plan applied'),
+    );
+    mockClient.goal.planContext.query.mockRejectedValue(new Error('network down'));
+
+    await expect(createProgram().parseAsync(planArgs)).rejects.toThrow('Stale planning input');
+    expect(output()).not.toContain('Refused');
+  });
+});
+
+describe('goal events command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('pages the audit trail and passes every filter through', async () => {
+    mockClient.goal.events.query.mockResolvedValue({ data: [eventRow] });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'events',
+      'goal-1',
+      '--limit',
+      '5',
+      '--offset',
+      '10',
+      '--entity',
+      'node',
+      '--type',
+      'activated',
+      '--json',
+    ]);
+
+    expect(mockClient.goal.events.query).toHaveBeenCalledWith({
+      id: 'goal-1',
+      entityType: 'node',
+      eventType: 'activated',
+      limit: 5,
+      offset: 10,
+    });
+    const printed = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]));
+    expect(printed).toHaveLength(1);
+    expect(printed[0].id).toBe('e1');
   });
 });

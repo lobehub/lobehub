@@ -6,6 +6,7 @@ import type {
   GoalEventActorType,
   GoalEventEntityType,
   GoalEventType,
+  GoalGraphEvent,
   GoalGraphSnapshot,
   GoalGraphWorkVersionDisplay,
   GoalNodeKind,
@@ -195,6 +196,48 @@ export class GoalGraphModel {
         work: linkDisplays.get(link.workVersionId),
       })),
     };
+  };
+
+  /**
+   * The goal's audit trail, newest first.
+   *
+   * `getGraph` bundles only the newest {@link GRAPH_EVENT_LIMIT} events, which a
+   * long-running goal exhausts — the transition that explains a stall can sit
+   * just past the cap. This pages the same table so a reader can reach it.
+   * Ownership is the predicate `getGraph` uses, so "no such goal" and "not
+   * yours" stay indistinguishable and neither leaks another user's goal.
+   */
+  listEvents = async (
+    goalId: string,
+    options: {
+      entityType?: GoalEventEntityType;
+      eventType?: GoalEventType;
+      limit: number;
+      offset?: number;
+    },
+  ): Promise<GoalGraphEvent[] | undefined> => {
+    const [goal] = await this.db
+      .select({ id: goals.id })
+      .from(goals)
+      .where(and(eq(goals.id, goalId), this.ownership()))
+      .limit(1);
+    if (!goal) return undefined;
+
+    const filters = [eq(goalEvents.goalId, goalId)];
+    if (options.entityType) filters.push(eq(goalEvents.entityType, options.entityType));
+    if (options.eventType) filters.push(eq(goalEvents.eventType, options.eventType));
+
+    return (
+      this.db
+        .select()
+        .from(goalEvents)
+        .where(and(...filters))
+        // `id` breaks ties so paging never repeats or skips an event written in
+        // the same millisecond as its neighbour.
+        .orderBy(desc(goalEvents.createdAt), desc(goalEvents.id))
+        .limit(options.limit)
+        .offset(options.offset ?? 0)
+    );
   };
 
   /**

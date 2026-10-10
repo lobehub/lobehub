@@ -726,6 +726,52 @@ describe('CLI main Agent planning', () => {
     expect((await service().graph(id)).nodes.filter((n) => n.kind === 'task')).toHaveLength(0);
   });
 
+  it('names on the read path the refusal submit folds into one message', async () => {
+    const { id, state, op } = await start();
+
+    // A live, unchanged turn: both paths agree a plan would apply.
+    expect((await manager().admission(id)).admission).toMatchObject({ code: 'ok', ok: true });
+
+    // The same changed graph `submit` refuses — but admission says WHICH
+    // precondition failed, where the shared message says only "Stale planning
+    // input". This is the answer `lh goal state` renders.
+    await new GoalGraphModel(db, userId).createNode(id, {
+      title: 'Changed input',
+      kind: 'finding',
+    });
+    expect((await manager().admission(id)).admission).toMatchObject({
+      code: 'stale_input',
+      ok: false,
+    });
+    await expect(manager().submit(id, state.token, op.id, taskPlan)).rejects.toThrow('Stale');
+
+    // A pause is its own code, not the same "the graph moved" answer.
+    await service().pause(id);
+    expect((await manager().admission(id)).admission).toMatchObject({
+      code: 'inactive',
+      ok: false,
+    });
+  });
+
+  it('pages the goal audit trail newest first and refuses another owner', async () => {
+    const { id } = await start();
+    const graph = new GoalGraphModel(db, userId);
+    // A second event, so paging has something to page over.
+    await graph.createNode(id, { title: 'Extra finding', kind: 'finding' });
+    const all = await graph.listEvents(id, { limit: 50 });
+
+    expect(all!.length).toBeGreaterThan(1);
+    expect(all![0]!.createdAt.getTime()).toBeGreaterThanOrEqual(all!.at(-1)!.createdAt.getTime());
+
+    // Paging must not repeat or skip: offset 1 starts on the second-newest row.
+    const page = await graph.listEvents(id, { limit: 1, offset: 1 });
+    expect(page![0]!.id).toBe(all![1]!.id);
+
+    // A missing goal and someone else's goal are both invisible.
+    expect(await graph.listEvents('goal-missing', { limit: 5 })).toBeUndefined();
+    expect(await new GoalGraphModel(db, 'other-user').listEvents(id, { limit: 5 })).toBeUndefined();
+  });
+
   it('adopts a dispatch with a lost response rather than launching another Agent', async () => {
     const original = vi.mocked(AiAgentService.prototype.execAgent).getMockImplementation()!;
     vi.mocked(AiAgentService.prototype.execAgent).mockImplementation(async (params) => {

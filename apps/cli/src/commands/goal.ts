@@ -2,9 +2,13 @@ import { readFile } from 'node:fs/promises';
 
 import type {
   GoalEdgeKind,
+  GoalEventEntityType,
+  GoalEventType,
   GoalGraphDecision,
+  GoalGraphEvent,
   GoalGraphSnapshot,
   GoalNodeKind,
+  GoalPlanContext,
   GoalTickResult,
 } from '@lobechat/types';
 import { type Command, Option } from 'commander';
@@ -124,8 +128,24 @@ const isSameWaitingState = (previous: GoalRunTickResult | undefined, current: Go
   previous.taskId === current.taskId;
 
 function printGraph(graph: GoalGraphSnapshot) {
-  console.log(`\n${pc.bold(graph.goal.title)} ${pc.dim(graph.goal.id)} [${graph.goal.status}]`);
-  if (graph.goal.requirement) console.log(`${pc.dim('Requirement:')} ${graph.goal.requirement}`);
+  const { goal } = graph;
+  console.log(
+    `\n${pc.bold(goal.title)} ${pc.dim(goal.id)} [${goal.status}${
+      goal.config?.pausedBy ? ` · paused by ${goal.config.pausedBy}` : ''
+    }]`,
+  );
+  if (goal.subjectType)
+    console.log(`${pc.dim('Subject:')} ${`${goal.subjectType} ${goal.subjectId ?? ''}`.trim()}`);
+  if (goal.requirement) console.log(`${pc.dim('Requirement:')} ${goal.requirement}`);
+  const turn = goal.config?.managerState;
+  const pending = graph.decisions.filter((decision) => decision.status === 'pending').length;
+  console.log(
+    `${pc.dim('Planning:')} ${
+      turn
+        ? `turn #${turn.turns} · started ${turn.startedAt}${turn.consumed ? ' · settled' : ''}`
+        : 'no planning turn'
+    }${pending > 0 ? pc.yellow(` · ${pending} decision(s) need you`) : ''}`,
+  );
   const incoming = new Map<string, typeof graph.edges>();
   for (const edge of graph.edges) {
     const list = incoming.get(edge.targetNodeId) ?? [];
@@ -161,6 +181,187 @@ function printTick(result: GoalTickResult) {
   console.log(`${icon} ${pc.bold(result.outcome)} ${result.message}`);
   if (result.taskId) console.log(`  ${pc.dim(`task: ${result.taskId}`)}`);
   if (result.nodeId) console.log(`  ${pc.dim(`node: ${result.nodeId}`)}`);
+}
+
+/** Recent events `lh goal state` shows unless a caller asks for another count. */
+const GOAL_EVENT_TAIL_DEFAULT = 10;
+
+/**
+ * A one-line reading of each admission code the server can return.
+ *
+ * Keyed by code, not by message: the server deliberately folds several causes
+ * ("the turn was consumed", "its run ended", "the graph moved") into the single
+ * `Stale planning input` message, so the message alone cannot say which
+ * precondition failed — which is exactly what the CLI is here to surface.
+ */
+const admissionHint: Record<string, string> = {
+  acceptance_escalate_only:
+    'a failed Goal acceptance can only be escalated — it cannot be superseded by new work',
+  budget_exhausted: 'a budget bound is reached (rounds, cost or deadline)',
+  consumed: 'this turn was already settled; its plan cannot be submitted again',
+  existing_work: 'unfinished work must be delivered before planning or verifying',
+  inactive: 'the Goal is not in an active state (planning or running)',
+  operation_mismatch: 'the token does not speak for the operation bound to this Goal',
+  pending_decision: 'a decision gate is still waiting on an answer',
+  review_changed: 'task review feedback changed after this turn started',
+  stale_input: 'the graph moved after this turn started, so the plan would apply to stale input',
+  turn_owner: 'this Goal has no matching planning turn',
+  turn_settled: "this turn's run is no longer running",
+  wait_unsettled: 'unfinished work must be settled before waiting',
+  wait_until_past: 'the wait deadline is already in the past',
+};
+
+const toIso = (value: Date | string) =>
+  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+const shortHash = (hash?: string | null) => (hash ? `${hash.slice(0, 12)}…` : '—');
+
+/**
+ * Recorded receipt against what the server computes now. The snapshot a plan is
+ * validated against is server-owned — a client cannot recompute it — so this is
+ * the one place the "why was my plan stale" comparison becomes visible.
+ */
+const compareHash = (recorded: string | null, current?: string) => {
+  if (!current) return pc.dim('unavailable');
+  if (!recorded) return `${shortHash(current)} ${pc.dim('(no receipt)')}`;
+  return current === recorded
+    ? `${shortHash(current)} ${pc.dim('matches receipt')}`
+    : `${shortHash(recorded)} → ${shortHash(current)} ${pc.yellow('moved')}`;
+};
+
+/** The same comparison without color, for a message that is not a console line. */
+const compareHashPlain = (recorded: string | null, current?: string) => {
+  if (!current) return 'unavailable';
+  if (!recorded) return `${shortHash(current)} (no receipt)`;
+  return current === recorded
+    ? `${shortHash(current)} matches receipt`
+    : `${shortHash(recorded)} → ${shortHash(current)} MOVED`;
+};
+
+function printGoalState(
+  graph: GoalGraphSnapshot,
+  context: GoalPlanContext,
+  events: GoalGraphEvent[],
+) {
+  const { goal } = graph;
+  const field = (label: string, value: string) =>
+    console.log(`  ${pc.dim(label.padEnd(11))} ${value}`);
+
+  console.log(`\n${pc.bold(goal.title)} ${pc.dim(goal.id)}`);
+  field(
+    'Status',
+    `${context.goal.status}${
+      context.goal.pausedBy ? pc.yellow(` (paused by ${context.goal.pausedBy})`) : ''
+    }`,
+  );
+  field(
+    'Subject',
+    goal.subjectType ? `${goal.subjectType} ${goal.subjectId ?? ''}`.trim() : 'standalone',
+  );
+  field('Agent', context.goal.agentId ?? '—');
+  if (goal.requirement) field('Requirement', truncate(goal.requirement, 96));
+  if (context.budget) {
+    const cap =
+      context.budget.maxTotalCost === null
+        ? ''
+        : `/${Number(context.budget.maxTotalCost).toFixed(2)}`;
+    field(
+      'Budget',
+      `runs ${context.budget.runs}/${context.budget.maxRounds ?? '∞'} · $${context.budget.totalCost.toFixed(2)}${cap}${
+        context.budget.deadline ? ` · deadline ${context.budget.deadline}` : ''
+      }${context.budget.blocked ? pc.red(' · exhausted') : ''}`,
+    );
+  }
+
+  if (context.turn) {
+    const { turn } = context;
+    console.log(
+      `\n  ${pc.bold(`Planning turn #${turn.turns}`)} ${pc.dim(`started ${turn.startedAt}`)}`,
+    );
+    field('token', turn.token);
+    field(
+      'operation',
+      `${turn.operationId ?? '—'}${turn.opStatus ? pc.dim(` (${turn.opStatus})`) : ''}`,
+    );
+    field(
+      'receipt',
+      `consumed ${turn.consumed} · failedTurns ${turn.failedTurns} · neverStarted ${turn.dispatchNeverStarted} · adopted ${turn.adopted}`,
+    );
+    field('snapshot', compareHash(context.snapshot.recorded, context.snapshot.current));
+    field('review', compareHash(context.review.recorded, context.review.current));
+    if (turn.problem)
+      field('problem', `${turn.problemTaskId ?? '—'} · ${truncate(turn.problem, 60)}`);
+    if (turn.submitted)
+      field('submitted', `${turn.submitted.action} · ${truncate(turn.submitted.reason, 60)}`);
+    if (turn.retryAfter) field('retryAfter', turn.retryAfter);
+  } else {
+    console.log(`\n  ${pc.dim('No planning turn recorded for this Goal.')}`);
+  }
+
+  const { admission } = context;
+  console.log(
+    `\n  ${pc.bold('Admission')} ${
+      admission.ok
+        ? pc.green('✓ a plan for the current turn would be accepted')
+        : pc.red(`✗ refused — ${admission.code}`)
+    }`,
+  );
+  if (!admission.ok) {
+    const hint = admissionHint[admission.code];
+    if (hint) console.log(`      ${pc.dim(hint)}`);
+    if (admission.message) console.log(`      ${admission.message}`);
+  }
+
+  if (context.queue)
+    field(
+      'Queue',
+      `${context.queue.unfinishedTasks} unfinished task(s) · ${context.queue.pendingDecisions} pending decision(s)`,
+    );
+
+  if (events.length > 0) {
+    console.log(`\n  ${pc.bold('Recent events')} ${pc.dim(`(newest ${events.length})`)}`);
+    for (const event of events)
+      console.log(
+        `    ${pc.dim(toIso(event.createdAt))}  ${event.entityType} ${event.eventType}${
+          event.reason ? `  ${truncate(event.reason, 76)}` : ''
+        }`,
+      );
+  }
+}
+
+/**
+ * Explain a refused `lh goal plan` from the server's own admission, so an
+ * operator does not have to re-derive it from the graph. Best-effort: a
+ * diagnostic that itself fails must never replace the real error.
+ */
+async function explainPlanRefusal(
+  id: string,
+  options: { operation?: string },
+): Promise<string | undefined> {
+  try {
+    const { data } = await (
+      await getTrpcClient()
+    ).goal.planContext.query({
+      id,
+      operationId: options.operation ?? process.env.LOBEHUB_OPERATION_ID,
+    });
+    if (data.admission.ok) return undefined;
+    const lines = [`Refused (${data.admission.code}): ${admissionHint[data.admission.code] ?? ''}`];
+    if (data.admission.message) lines.push(`  ${data.admission.message}`);
+    if (data.turn) {
+      lines.push(
+        `  turn #${data.turn.turns} started ${data.turn.startedAt} · consumed ${data.turn.consumed} · run ${
+          data.turn.opStatus ?? 'n/a'
+        }`,
+      );
+      lines.push(`  snapshot ${compareHashPlain(data.snapshot.recorded, data.snapshot.current)}`);
+      lines.push(`  review   ${compareHashPlain(data.review.recorded, data.review.current)}`);
+    }
+    lines.push(`  Inspect with: lh goal state ${id}`);
+    return lines.join('\n');
+  } catch {
+    return undefined;
+  }
 }
 
 /**
@@ -247,15 +448,26 @@ export function registerGoalCommand(program: Command) {
         const endpoint = hasOperationToken()
           ? client.goal.submitOperationPlan
           : client.goal.submitPlan;
-        const result = await endpoint.mutate({
-          id,
-          token: options.token,
-          operationId,
-          plan: JSON.parse(await readFile(options.file, 'utf8')),
-        });
-        if (options.json) outputJson(result.data);
-        else
-          console.log('Plan recorded; the coordinator will continue after this Agent turn exits.');
+        try {
+          const result = await endpoint.mutate({
+            id,
+            token: options.token,
+            operationId,
+            plan: JSON.parse(await readFile(options.file, 'utf8')),
+          });
+          if (options.json) outputJson(result.data);
+          else
+            console.log(
+              'Plan recorded; the coordinator will continue after this Agent turn exits.',
+            );
+        } catch (error) {
+          // A refusal is a verdict about this turn, so print the server's own
+          // admission before the error propagates: the bare message ("Stale
+          // planning input") cannot say which precondition failed.
+          const explanation = await explainPlanRefusal(id, options);
+          if (explanation) console.log(explanation);
+          throw error;
+        }
       },
     );
 
@@ -487,6 +699,80 @@ export function registerGoalCommand(program: Command) {
     .description('Show the Goal Graph')
     .option('--json [fields]', 'Output JSON')
     .action(show);
+
+  goal
+    .command('state <id>')
+    .alias('inspect')
+    .description('Explain why this Goal will or will not accept a plan right now')
+    .option(
+      '--events <n>',
+      'Recent events to include (0 disables)',
+      String(GOAL_EVENT_TAIL_DEFAULT),
+    )
+    .option('--json [fields]', 'Output JSON')
+    .action(async (id: string, options: { events: string; json?: boolean | string }) => {
+      const client = await getTrpcClient();
+      const tail = Math.max(0, Number.parseInt(options.events, 10) || 0);
+      const [graph, context] = await Promise.all([
+        client.goal.graph.query({ id }),
+        client.goal.planContext.query({ id }),
+      ]);
+      const events = tail > 0 ? (await client.goal.events.query({ id, limit: tail })).data : [];
+      if (options.json !== undefined) return outputJson({ ...context.data, events }, options.json);
+      printGoalState(graph.data, context.data, events);
+    });
+
+  goal
+    .command('events <id>')
+    .description("List this Goal's audit trail, newest first")
+    .option('-L, --limit <n>', 'Events to fetch', '50')
+    .option('--offset <n>', 'Events to skip', '0')
+    .option('--entity <type>', 'Filter by entity: goal | node | edge | decision | task')
+    .option(
+      '--type <type>',
+      'Filter by event: created | updated | activated | resolved | rejected | retired | linked | unlinked',
+    )
+    .option('--json [fields]', 'Output JSON')
+    .action(
+      async (
+        id: string,
+        options: {
+          entity?: GoalEventEntityType;
+          json?: boolean | string;
+          limit: string;
+          offset: string;
+          type?: GoalEventType;
+        },
+      ) => {
+        const limit = Number.parseInt(options.limit, 10);
+        const offset = Number.parseInt(options.offset, 10);
+        const result = await (
+          await getTrpcClient()
+        ).goal.events.query({
+          id,
+          entityType: options.entity,
+          eventType: options.type,
+          limit,
+          offset,
+        });
+        if (options.json !== undefined) return outputJson(result.data, options.json);
+        if (result.data.length === 0) return log.info('No events.');
+        printTable(
+          result.data.map((event) => [
+            toIso(event.createdAt),
+            `${event.entityType} ${event.eventType}`,
+            event.actorType,
+            truncate(event.reason ?? '-', 64),
+            event.id,
+          ]),
+          ['TIME', 'EVENT', 'ACTOR', 'REASON', 'EVENT ID'],
+        );
+        if (result.data.length === limit)
+          console.log(
+            pc.dim(`\nMore may follow — continue with --offset ${offset + result.data.length}`),
+          );
+      },
+    );
 
   goal
     .command('supervision <id>')

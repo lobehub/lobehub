@@ -8,9 +8,11 @@ import {
 } from '@lobechat/const/goal';
 import { buildGoalManagerPrompt } from '@lobechat/prompts';
 import type {
+  GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
   GoalManagerState,
+  GoalPlanContext,
   GoalTickResult,
   TaskItem,
 } from '@lobechat/types';
@@ -151,6 +153,73 @@ const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
 export const MAX_FAILED_MANAGER_TURNS = 5;
 const FAILED_TURN_BASE_BACKOFF_MS = 60_000;
 const FAILED_TURN_MAX_BACKOFF_MS = 30 * 60_000;
+
+/**
+ * Why a plan was refused, with the verbatim message this service has thrown
+ * since before a diagnosis surface existed.
+ *
+ * A table rather than literals at each throw site so the write path (`submit`)
+ * and the read path (`admission`) cannot drift: both read the same entry, and
+ * `lh goal state` turns `code` into a sentence. Several codes share one message
+ * on purpose — `submit` has always folded "consumed", "the run ended" and "the
+ * graph moved" into a single stale-input refusal, and callers match that text.
+ */
+const PLAN_REJECTION = {
+  acceptance_escalate_only: {
+    message:
+      'A failed Goal acceptance can only be escalated; it cannot be superseded by new work yet',
+    trpc: 'CONFLICT',
+  },
+  budget_exhausted: { message: 'Goal budget exhausted', trpc: 'CONFLICT' },
+  consumed: { message: 'Stale planning input; no plan applied', trpc: 'CONFLICT' },
+  existing_work: {
+    message: 'Existing work must be delivered before planning or verification',
+    trpc: 'CONFLICT',
+  },
+  inactive: { message: 'Goal stopped or awaiting human decision', trpc: 'CONFLICT' },
+  operation_mismatch: { message: 'Unrelated main Agent operation', trpc: 'FORBIDDEN' },
+  pending_decision: { message: 'Goal stopped or awaiting human decision', trpc: 'CONFLICT' },
+  review_changed: {
+    message:
+      'Task review feedback changed; exit without a plan so the next bounded turn can read it',
+    trpc: 'CONFLICT',
+  },
+  stale_input: { message: 'Stale planning input; no plan applied', trpc: 'CONFLICT' },
+  turn_owner: { message: 'This planning turn does not own the Goal', trpc: 'FORBIDDEN' },
+  turn_settled: { message: 'Stale planning input; no plan applied', trpc: 'CONFLICT' },
+  wait_unsettled: { message: 'Settle existing work before waiting', trpc: 'CONFLICT' },
+  wait_until_past: { message: 'Wait until must be in the future', trpc: 'BAD_REQUEST' },
+} as const satisfies Record<
+  string,
+  { message: string; trpc: 'BAD_REQUEST' | 'CONFLICT' | 'FORBIDDEN' }
+>;
+
+type PlanRejectionCode = keyof typeof PLAN_REJECTION;
+
+/** A precondition verdict: enough for `submit` to throw it, or for the CLI to explain it. */
+type PlanAdmission =
+  | {
+      agentId: string;
+      code: 'ok';
+      graph: GoalGraphSnapshot;
+      ok: true;
+      opStatus?: string;
+      unfinished: GoalGraphNode[];
+    }
+  | { code: 'duplicate'; ok: true; submitted: NonNullable<GoalManagerState['submitted']> }
+  | {
+      code: PlanRejectionCode;
+      message: string;
+      ok: false;
+      trpcCode: (typeof PLAN_REJECTION)[PlanRejectionCode]['trpc'];
+    };
+
+const rejectPlan = (code: PlanRejectionCode): PlanAdmission => ({
+  code,
+  message: PLAN_REJECTION[code].message,
+  ok: false,
+  trpcCode: PLAN_REJECTION[code].trpc,
+});
 
 export type FailedTurnDecision =
   | { action: 'pause'; failure: RunFailure; reason: string }
@@ -668,7 +737,8 @@ export class GoalManagerService {
     };
   };
 
-  private budgetBlocked = async (graph: GoalGraphSnapshot, db = this.db) => {
+  /** Whether a budget bound is reached, with the numbers behind it for `lh goal state`. */
+  private budgetFacts = async (graph: GoalGraphSnapshot, db = this.db) => {
     const spend = await new TaskTopicModel(db, this.userId, this.workspaceId).sumRunCostByTaskIds(
       graph.nodes.flatMap((n) => (n.taskId ? [n.taskId] : [])),
     );
@@ -677,13 +747,23 @@ export class GoalManagerService {
       graph.goal.config?.managerState,
     );
     const goal = graph.goal;
-    return (
-      (goal.maxRounds !== null && spend.runs >= goal.maxRounds) ||
-      (goal.maxTotalCost !== null &&
-        spend.totalCost + management.totalCost >= Number(goal.maxTotalCost)) ||
-      (!!goal.config?.schedule?.deadline && Date.now() >= Date.parse(goal.config.schedule.deadline))
-    );
+    const totalCost = spend.totalCost + management.totalCost;
+    const deadline = goal.config?.schedule?.deadline ?? null;
+    return {
+      blocked:
+        (goal.maxRounds !== null && spend.runs >= goal.maxRounds) ||
+        (goal.maxTotalCost !== null && totalCost >= Number(goal.maxTotalCost)) ||
+        (!!deadline && Date.now() >= Date.parse(deadline)),
+      deadline,
+      maxRounds: goal.maxRounds,
+      maxTotalCost: goal.maxTotalCost,
+      runs: spend.runs,
+      totalCost,
+    };
   };
+
+  private budgetBlocked = async (graph: GoalGraphSnapshot, db = this.db) =>
+    (await this.budgetFacts(graph, db)).blocked;
 
   private wait = async (goalId: string, message: string): Promise<GoalTickResult> => {
     await scheduleGoalAdvance({
@@ -1243,6 +1323,174 @@ export class GoalManagerService {
         await this.save(db, goalId, { ...fresh.config.managerState, dispatchNeverStarted: true });
     });
 
+  /**
+   * Every precondition a plan has to satisfy, evaluated without writing.
+   *
+   * `submit` runs this first and throws its verdict; `admission()` returns the
+   * same verdict to `lh goal state`. One implementation, so the refusal a caller
+   * sees and the reason the CLI prints can never disagree.
+   *
+   * `token` / `operationId` are optional because the read path asks "would the
+   * CURRENT turn's plan apply?" — it has no submitted token to compare, so it
+   * passes the recorded one. Guards that only make sense with a plan are skipped
+   * when none is supplied.
+   */
+  private evaluateAdmission = async (
+    db: LobeChatDatabase,
+    input: {
+      goal: GoalItem;
+      operationId?: string;
+      plan?: GoalPlan;
+      state: GoalManagerState;
+      token?: string;
+    },
+  ): Promise<PlanAdmission> => {
+    const { goal, plan, state } = input;
+    if (!goal.config?.manager || !goal.agentId) return rejectPlan('turn_owner');
+    if (input.token !== undefined && state.token !== input.token) return rejectPlan('turn_owner');
+    // Bound to the goal agent as it is NOW: a turn dispatched before a handoff
+    // no longer speaks for the goal.
+    const agentId = goal.agentId;
+    const op = await this.turnOperation(
+      new AgentOperationModel(db, this.userId, this.workspaceId),
+      state,
+    );
+    if (input.operationId !== undefined) {
+      // An adopted local desktop run has no server operation row; it is the run
+      // whose id the conversation environment carried when the goal was created.
+      const localAdoptedRun = !!state.adopted && !op && input.operationId === state.operationId;
+      if (!localAdoptedRun && (op?.id !== input.operationId || op.agentId !== agentId))
+        return rejectPlan('operation_mismatch');
+    }
+    const graph = await this.graph(db).getGraph(goal.id);
+    if (!graph || !activeStatuses.has(goal.status)) return rejectPlan('inactive');
+    if (graph.decisions.some((d) => d.status === 'pending')) return rejectPlan('pending_decision');
+    if (state.submitted) return { code: 'duplicate', ok: true, submitted: state.submitted };
+    if (state.consumed) return rejectPlan('consumed');
+    if (op && op.status !== 'running') return rejectPlan('turn_settled');
+    if (managerSnapshot(graph) !== state.snapshot) return rejectPlan('stale_input');
+    if (state.reviewSnapshot && (await this.reviews(graph, db)).hash !== state.reviewSnapshot)
+      return rejectPlan('review_changed');
+    if ((await this.budgetFacts(graph, db)).blocked) return rejectPlan('budget_exhausted');
+    const unfinished = graph.nodes.filter((n) => n.kind === 'task' && !terminalNodes.has(n.status));
+    // A takeover of the terminal acceptance can only be answered with `escalate`.
+    // The acceptance task is matched by TITLE regardless of status, so a corrective
+    // task returns to that same failed node and `verify` sets `readyForAcceptance`
+    // without producing a fresh run — both end at the Gate. Refusing here keeps the
+    // prompt's offer and the server's answer the same; letting the acceptance be
+    // superseded is a lifecycle change, not a validation one.
+    if (
+      plan &&
+      (plan.action === 'tasks' || plan.action === 'verify') &&
+      state.problem &&
+      graph.nodes.some(
+        (n) =>
+          n.kind === 'task' &&
+          n.taskId === state.problemTaskId &&
+          n.title === GOAL_ACCEPTANCE_TASK_TITLE,
+      )
+    )
+      return rejectPlan('acceptance_escalate_only');
+    // The unfinished-work guard asks whether an UNINVITED turn may plan while
+    // work is in flight; it would double-plan the frontier. A takeover turn
+    // inherits work that is stuck by definition — the coordinator only handed it
+    // over because nothing else moves it — so a corrective task is the answer
+    // rather than the thing to forbid. Without this exemption the prompt
+    // advertises four actions and only `escalate` can ever commit.
+    if (
+      plan &&
+      (plan.action === 'tasks' || plan.action === 'verify') &&
+      ((unfinished.length && !state.problem) ||
+        (plan.action === 'verify' &&
+          !graph.nodes.some((n) => n.kind === 'task' && n.status === 'resolved')))
+    )
+      return rejectPlan('existing_work');
+    if (plan?.action === 'wait' && unfinished.length) return rejectPlan('wait_unsettled');
+    if (plan?.action === 'wait' && Date.parse(plan.until) <= Date.now())
+      return rejectPlan('wait_until_past');
+    return { agentId, code: 'ok', graph, ok: true, opStatus: op?.status, unfinished };
+  };
+
+  /**
+   * The verdict `submit` would reach right now, plus the facts behind it.
+   *
+   * Read-only: `lh goal state` renders it and a refused `lh goal plan` re-reads
+   * it, so the CLI explains a refusal from these predicates instead of deriving
+   * them from a graph that cannot see the manager or review receipts. Token and
+   * operation default to the current turn's — the plan a takeover prompt sends.
+   */
+  admission = async (
+    goalId: string,
+    input: { operationId?: string; token?: string } = {},
+  ): Promise<GoalPlanContext> => {
+    const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const state = goal.config?.managerState;
+    const verdict: PlanAdmission =
+      state && goal.config?.manager && goal.agentId
+        ? await this.evaluateAdmission(this.db, {
+            goal,
+            operationId: input.operationId ?? state.operationId,
+            state,
+            token: input.token ?? state.token,
+          })
+        : rejectPlan('turn_owner');
+    const graph =
+      verdict.ok && verdict.code === 'ok' ? verdict.graph : await this.graph().getGraph(goalId);
+    const budget = graph ? await this.budgetFacts(graph) : undefined;
+    return {
+      admission: {
+        code: verdict.code,
+        ...(verdict.ok ? {} : { message: verdict.message }),
+        ok: verdict.ok,
+      },
+      budget: budget
+        ? {
+            blocked: budget.blocked,
+            deadline: budget.deadline,
+            maxRounds: budget.maxRounds,
+            maxTotalCost: budget.maxTotalCost,
+            runs: budget.runs,
+            totalCost: budget.totalCost,
+          }
+        : undefined,
+      goal: { agentId: goal.agentId, pausedBy: goal.config?.pausedBy ?? null, status: goal.status },
+      queue: graph
+        ? {
+            pendingDecisions: graph.decisions.filter((d) => d.status === 'pending').length,
+            unfinishedTasks: graph.nodes.filter(
+              (n) => n.kind === 'task' && !terminalNodes.has(n.status),
+            ).length,
+          }
+        : undefined,
+      review: {
+        ...(graph && state ? { current: (await this.reviews(graph)).hash } : {}),
+        recorded: state?.reviewSnapshot ?? null,
+      },
+      snapshot: {
+        ...(graph ? { current: managerSnapshot(graph) } : {}),
+        recorded: state?.snapshot ?? null,
+      },
+      turn: state
+        ? {
+            adopted: !!state.adopted,
+            consumed: !!state.consumed,
+            dispatchNeverStarted: !!state.dispatchNeverStarted,
+            failedTurns: state.failedTurns ?? 0,
+            operationId: state.operationId ?? null,
+            opStatus: verdict.ok && verdict.code === 'ok' ? (verdict.opStatus ?? null) : null,
+            problem: state.problem ?? null,
+            problemTaskId: state.problemTaskId ?? null,
+            retryAfter: state.retryAfter ?? null,
+            startedAt: state.startedAt,
+            submitted: state.submitted ?? null,
+            token: state.token,
+            turns: state.turns,
+          }
+        : null,
+    };
+  };
+
   submit = async (goalId: string, token: string, operationId: string, input: GoalPlan) => {
     const plan = goalPlanSchema.parse(input);
     const armed = plan.action === 'wait' ? GoalWaitService.arm(plan.until) : undefined;
@@ -1250,92 +1498,13 @@ export class GoalManagerService {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const goal = await model.lockById(goalId);
       const state = goal?.config?.managerState;
-      if (!goal?.config?.manager || !goal.agentId || !state || state.token !== token)
-        throw new TRPCError({
-          code: 'FORBIDDEN',
-          message: 'This planning turn does not own the Goal',
-        });
-      const op = await this.turnOperation(
-        new AgentOperationModel(db, this.userId, this.workspaceId),
-        state,
-      );
-      // Bound to the goal agent as it is NOW: a turn dispatched before a handoff
-      // no longer speaks for the goal.
-      const agentId = goal.agentId;
-      // An adopted local desktop run has no server operation row; it is the run
-      // whose id the conversation environment carried when the goal was created.
-      const localAdoptedRun = !!state.adopted && !op && operationId === state.operationId;
-      if (!localAdoptedRun && (op?.id !== operationId || op.agentId !== agentId))
-        throw new TRPCError({ code: 'FORBIDDEN', message: 'Unrelated main Agent operation' });
-      const graph = await this.graph(db).getGraph(goalId);
-      if (
-        !graph ||
-        !activeStatuses.has(goal.status) ||
-        graph.decisions.some((d) => d.status === 'pending')
-      )
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'Goal stopped or awaiting human decision',
-        });
-      if (state.submitted) return { duplicate: true, plan: state.submitted };
-      if (
-        state.consumed ||
-        (op && op.status !== 'running') ||
-        managerSnapshot(graph) !== state.snapshot
-      )
-        throw new TRPCError({ code: 'CONFLICT', message: 'Stale planning input; no plan applied' });
-      if (state.reviewSnapshot && (await this.reviews(graph, db)).hash !== state.reviewSnapshot)
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message:
-            'Task review feedback changed; exit without a plan so the next bounded turn can read it',
-        });
-      if (await this.budgetBlocked(graph, db))
-        throw new TRPCError({ code: 'CONFLICT', message: 'Goal budget exhausted' });
-      const unfinished = graph.nodes.filter(
-        (n) => n.kind === 'task' && !terminalNodes.has(n.status),
-      );
-      // A takeover of the terminal acceptance can only be answered with `escalate`.
-      // The acceptance task is matched by TITLE regardless of status, so a corrective
-      // task returns to that same failed node and `verify` sets `readyForAcceptance`
-      // without producing a fresh run — both end at the Gate. Refusing here keeps the
-      // prompt's offer and the server's answer the same; letting the acceptance be
-      // superseded is a lifecycle change, not a validation one.
-      if (
-        state.problem &&
-        (plan.action === 'tasks' || plan.action === 'verify') &&
-        graph.nodes.some(
-          (n) =>
-            n.kind === 'task' &&
-            n.taskId === state.problemTaskId &&
-            n.title === GOAL_ACCEPTANCE_TASK_TITLE,
-        )
-      )
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message:
-            'A failed Goal acceptance can only be escalated; it cannot be superseded by new work yet',
-        });
-      // The unfinished-work guard asks whether an UNINVITED turn may plan while
-      // work is in flight; it would double-plan the frontier. A takeover turn
-      // inherits work that is stuck by definition — the coordinator only handed it
-      // over because nothing else moves it — so a corrective task is the answer
-      // rather than the thing to forbid. Without this exemption the prompt
-      // advertises four actions and only `escalate` can ever commit.
-      if (
-        (plan.action === 'tasks' || plan.action === 'verify') &&
-        ((unfinished.length && !state.problem) ||
-          (plan.action === 'verify' &&
-            !graph.nodes.some((n) => n.kind === 'task' && n.status === 'resolved')))
-      )
-        throw new TRPCError({
-          code: 'CONFLICT',
-          message: 'Existing work must be delivered before planning or verification',
-        });
-      if (plan.action === 'wait' && unfinished.length)
-        throw new TRPCError({ code: 'CONFLICT', message: 'Settle existing work before waiting' });
-      if (plan.action === 'wait' && Date.parse(plan.until) <= Date.now())
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Wait until must be in the future' });
+      if (!goal || !state)
+        throw new TRPCError({ code: 'FORBIDDEN', message: PLAN_REJECTION.turn_owner.message });
+      const admission = await this.evaluateAdmission(db, { goal, operationId, plan, state, token });
+      if (!admission.ok)
+        throw new TRPCError({ code: admission.trpcCode, message: admission.message });
+      if (admission.code === 'duplicate') return { duplicate: true, plan: admission.submitted };
+      const { agentId, graph, unfinished } = admission;
       const authored = new GoalGraphModel(db, this.userId, this.workspaceId, {
         id: agentId,
         type: 'agent',

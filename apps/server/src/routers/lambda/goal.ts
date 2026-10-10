@@ -806,6 +806,77 @@ export const goalRouter = router({
   }),
 
   /**
+   * Why `submitPlan` would accept or refuse a plan right now, without writing.
+   *
+   * `lh goal state` renders it and a refused `lh goal plan` re-reads it, so the
+   * CLI explains a refusal from the same predicates the write path uses — the
+   * manager and review snapshots a client cannot see from the graph alone.
+   */
+  planContext: goalProcedure
+    .input(
+      idInput.extend({
+        operationId: z.string().min(1).optional(),
+        token: z.string().min(1).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        const manager = new GoalManagerService(
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+        return {
+          data: await manager.admission(input.id, {
+            operationId: input.operationId,
+            token: input.token,
+          }),
+          success: true,
+        };
+      } catch (error) {
+        mapGoalError(error, 'read the plan context of');
+      }
+    }),
+
+  /**
+   * The goal's audit trail, newest first, paged past the capped copy `graph`
+   * bundles. `lh goal events` reads it.
+   */
+  events: goalProcedure
+    .input(
+      idInput.extend({
+        entityType: z.enum(['goal', 'node', 'edge', 'decision', 'task']).optional(),
+        eventType: z
+          .enum([
+            'created',
+            'updated',
+            'activated',
+            'resolved',
+            'rejected',
+            'retired',
+            'linked',
+            'unlinked',
+          ])
+          .optional(),
+        limit: z.number().int().min(1).max(200).optional(),
+        offset: z.number().int().min(0).optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.goalService.listEvents(input.id, {
+          entityType: input.entityType,
+          eventType: input.eventType,
+          limit: input.limit ?? 50,
+          offset: input.offset,
+        });
+        return { data, success: true };
+      } catch (error) {
+        mapGoalError(error, 'list events of');
+      }
+    }),
+
+  /**
    * List goals with their graph roll-up: how many Tasks are done, how many
    * decision gates wait on a human, and what the exploration has cost.
    */
