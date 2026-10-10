@@ -705,6 +705,40 @@ describe('AgentRuntimeService', () => {
       }
     });
 
+    it('does not require durable storage for an environment-only result hook', async () => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('db down'),
+      );
+
+      await expect(service.createOperation(mockParams)).resolves.toBeDefined();
+    });
+
+    it('requires durable storage for a caller result hook', async () => {
+      vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
+        new Error('db down'),
+      );
+
+      await expect(
+        service.createOperation({
+          ...mockParams,
+          hooks: [
+            {
+              id: 'caller',
+              type: 'afterToolCall',
+              webhook: {
+                url: 'https://hooks.example/caller',
+                responseHandling: 'toolCall',
+              },
+            },
+          ],
+        }),
+      ).rejects.toThrow('Failed to durably persist afterToolCall');
+    });
+
     // Codex P1 on #20093: the member bridge lived only in the 2h runtime
     // snapshot, so a late approval continued the supervisor instead.
     it("keeps a durable copy of a group member's completion bridge on the row", async () => {

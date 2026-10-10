@@ -531,8 +531,12 @@ describe('afterToolCall control pipeline', () => {
   );
 
   it.each(['single', 'batch'] as const)(
-    'publishes the result after an allowed %s hook-less continuation',
+    'evaluates the environment once after the original caller in an allowed %s continuation',
     async (mode) => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
       const fixture = setup([]);
       fixture.rows.push({
         id: 'protected-row',
@@ -574,7 +578,10 @@ describe('afterToolCall control pipeline', () => {
           fixture.state,
         );
       }
-      expect(fetchHook).toHaveBeenCalledTimes(1);
+      expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
+        'https://hooks.example/control',
+        'https://hooks.example/environment',
+      ]);
       expect(fixture.host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
         'protected-row',
         expect.objectContaining({ content: 'executed', pluginError: null }),

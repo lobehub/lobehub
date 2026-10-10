@@ -491,9 +491,7 @@ const createToolMessage = async ({
       agentId,
       content: result.content,
       groupId: host.operation.groupId ?? state.origin?.groupId ?? undefined,
-      metadata: {
-        toolExecutionTimeMs: result.executionTime ?? 0,
-      },
+      metadata: { toolExecutionTimeMs: result.executionTime ?? 0 },
       parentId: parentMessageId,
       plugin: tool as any,
       pluginError: result.error ?? null,

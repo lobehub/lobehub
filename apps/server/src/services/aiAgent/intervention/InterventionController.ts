@@ -368,21 +368,19 @@ export class InterventionController {
       throw new Error('stopPendingApproval: interrupted operation has unsettled batch members');
     }
 
-    {
-      await this.deps.messageModel.resolveHumanApproval(
-        targets.map((target) => ({
-          content: STOPPED_TOOL_CONTENT,
-          id: target.id,
-          intervention: {
-            ...(approvalResolutionRequestId && {
-              resolutionRequestId: approvalResolutionRequestId,
-            }),
-            status: 'aborted',
-          },
-        })),
-        { publishResult: true },
-      );
-    }
+    await this.deps.messageModel.resolveHumanApproval(
+      targets.map((target) => ({
+        content: STOPPED_TOOL_CONTENT,
+        id: target.id,
+        intervention: {
+          ...(approvalResolutionRequestId && {
+            resolutionRequestId: approvalResolutionRequestId,
+          }),
+          status: 'aborted',
+        },
+      })),
+      { publishResult: true },
+    );
 
     // Read before the interrupt retires the runtime snapshot.
     const groupMember = await this.deps.agentRuntimeService.loadGroupMemberBridge(operationId);

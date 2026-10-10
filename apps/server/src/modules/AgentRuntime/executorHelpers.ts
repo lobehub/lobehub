@@ -456,9 +456,7 @@ export const buildServerAgentMemberRunner = (
             content: '',
             groupId,
             ...(isCouncil && {
-              metadata: {
-                ...(isCouncil && { agentCouncil: true }),
-              },
+              metadata: { agentCouncil: true },
             }),
             parentId: parentMessageId,
             plugin: chatToolPayload as any,

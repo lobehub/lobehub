@@ -92,7 +92,7 @@ export interface ClaimedApprovalResume {
  */
 export const claimApprovalResume = async (
   deps: {
-    controlToolResult?: AgentRuntimeService['controlCompletedToolResult'];
+    controlToolResult: AgentRuntimeService['controlCompletedToolResult'];
     messageModel: MessageModel;
   },
   input: ClaimApprovalResumeInput,
@@ -362,7 +362,7 @@ export const claimApprovalResume = async (
             replacePluginState: true,
           },
         ];
-    const controlled = await deps.controlToolResult?.({
+    const controlled = await deps.controlToolResult({
       operationId: approvalSourceOperationId,
       toolMessageId: resumeToolResult.parentMessageId,
       result: {
@@ -371,20 +371,19 @@ export const claimApprovalResume = async (
         success: !skipped,
       },
     });
-    const result = controlled?.result;
-    const withheld = controlled?.blocked;
-    if (result)
-      resolvedToolResult = {
-        ...resumeToolResult,
-        content: result.content,
-        pluginState: result.state,
-      };
+    const result = controlled.result;
+    const withheld = controlled.blocked;
+    resolvedToolResult = {
+      ...resumeToolResult,
+      content: result.content,
+      pluginState: result.state,
+    };
     // Source adapters only claim the decision. Publish the final hook result
     // with the claim in one transaction, or finish an existing same-owner claim.
     const claimState = await deps.messageModel.resolveHumanApproval(
       [
         {
-          content: result?.content ?? resumeToolResult.content,
+          content: result.content,
           id: resumeToolResult.parentMessageId,
           intervention: skipped
             ? {
@@ -394,8 +393,8 @@ export const claimApprovalResume = async (
                 status: 'rejected',
               }
             : { resolutionRequestId: approvalResolutionRequestId, status: 'approved' },
-          pluginError: result?.error ?? null,
-          pluginState: result?.state ?? resumeToolResult.pluginState,
+          pluginError: result.error ?? null,
+          pluginState: result.state,
           ...(withheld && { replacePluginState: true }),
         },
       ],

@@ -80,6 +80,49 @@ afterEach(() => {
 
 describe('out-of-band tool result control', () => {
   it.each([false, true])(
+    'evaluates current environment once while retaining same-id caller policies, queue=%s',
+    async (queue) => {
+      queueMode.mockReturnValue(queue);
+      const { deps, input } = setup();
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      deps.messageModel.findMessagePlugin.mockResolvedValue({
+        ...plugin,
+        intervention: { operationId: 'original', status: 'approved' },
+      });
+      deps.loadState.mockResolvedValue(null);
+      deps.loadDurableHooks.mockImplementation(async (id) => [
+        { ...hook, webhook: { ...hook.webhook, url: `https://hooks.example/${id}` } },
+      ]);
+      fetchHook.mockImplementation(async () => new Response(JSON.stringify({ decision: 'allow' })));
+
+      expect((await controlDeferredToolResult(deps, input)).result).toBe(original);
+      expect(
+        fetchHook.mock.calls.map(([url, init]) => [url, JSON.parse(init.body).operationId]),
+      ).toEqual([
+        ['https://hooks.example/original', 'original'],
+        ['https://hooks.example/parent', 'parent'],
+        ['https://hooks.example/environment', 'parent'],
+      ]);
+
+      fetchHook
+        .mockClear()
+        .mockImplementation(
+          async (url) =>
+            new Response(
+              JSON.stringify({ decision: String(url).endsWith('/parent') ? 'deny' : 'allow' }),
+            ),
+        );
+      expect((await controlDeferredToolResult(deps, input)).blocked).toBe(true);
+      expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
+        'https://hooks.example/original',
+        'https://hooks.example/parent',
+      ]);
+    },
+  );
+  it.each([false, true])(
     'recovers the original call and full result on a cold worker, queue=%s',
     async (queue) => {
       queueMode.mockReturnValue(queue);
@@ -157,7 +200,7 @@ describe('out-of-band tool result control', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
-      expect(deps.dispatcher.hasAfterToolCallControl('parent', [], plugin)).toBe(true);
+      expect(deps.dispatcher.hasAfterToolCallControl('parent', [])).toBe(true);
       deps.loadState.mockResolvedValue(null);
       deps.loadDurableHooks.mockResolvedValue([]);
       deps.messageModel.findById.mockResolvedValue({

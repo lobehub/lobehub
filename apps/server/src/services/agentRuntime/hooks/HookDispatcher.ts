@@ -60,12 +60,16 @@ export class HookDispatcher {
   private hooks: Map<string, AgentHook[]> = new Map();
 
   /** Shared by normal dispatch and tool control, including cold-worker recovery. */
-  private resolveHooks(operationId: string, serializedHooks?: SerializedAgentHook[]) {
+  private resolveHooks(
+    operationId: string,
+    serializedHooks?: SerializedAgentHook[],
+    includeServerHooks = true,
+  ) {
     const restored = serializedHooks ? parseSerializedHooks(serializedHooks) : undefined;
     const hooks: (AgentHook | SerializedHook)[] = isQueueAgentRuntimeEnabled()
       ? (restored ?? this.getSerializedHooks(operationId) ?? [])
       : (this.hooks.get(operationId) ?? restored ?? []);
-    return mergeServerHooks(hooks, getServerHooks());
+    return mergeServerHooks(hooks, includeServerHooks ? getServerHooks() : []);
   }
 
   /**
@@ -150,13 +154,10 @@ export class HookDispatcher {
   hasAfterToolCallControl(
     operationId: string,
     serializedHooks?: SerializedAgentHook[],
-    event?: { identifier: string; apiName: string },
+    includeServerHooks = true,
   ): boolean {
-    return this.resolveHooks(operationId, serializedHooks).some(
-      (hook) =>
-        hook.type === 'afterToolCall' &&
-        hook.webhook?.responseHandling === 'toolCall' &&
-        (!event || matchesHook(hook.matcher, event)),
+    return this.resolveHooks(operationId, serializedHooks, includeServerHooks).some(
+      (hook) => hook.type === 'afterToolCall' && hook.webhook?.responseHandling === 'toolCall',
     );
   }
 
@@ -176,8 +177,16 @@ export class HookDispatcher {
     event: AfterToolCallHookEvent,
     serializedHooks?: SerializedAgentHook[],
     signal?: AbortSignal,
+    includeServerHooks = true,
   ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
-    return this.evaluateToolControl('afterToolCall', operationId, event, serializedHooks, signal);
+    return this.evaluateToolControl(
+      'afterToolCall',
+      operationId,
+      event,
+      serializedHooks,
+      signal,
+      includeServerHooks,
+    );
   }
 
   private async evaluateToolControl(
@@ -186,8 +195,9 @@ export class HookDispatcher {
     event: Omit<ToolCallHookEvent, 'mock'> | AfterToolCallHookEvent,
     serializedHooks?: SerializedAgentHook[],
     signal?: AbortSignal,
+    includeServerHooks = true,
   ): Promise<{ status: 'allow' | 'blocked' | 'cancelled'; reason?: string }> {
-    const hooks = this.resolveHooks(operationId, serializedHooks);
+    const hooks = this.resolveHooks(operationId, serializedHooks, includeServerHooks);
     for (const hook of hooks) {
       if (signal?.aborted) return { status: 'cancelled' };
       if (

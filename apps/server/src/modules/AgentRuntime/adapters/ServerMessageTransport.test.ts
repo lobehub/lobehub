@@ -73,7 +73,7 @@ describe('ServerMessageTransport', () => {
         replacePluginState: true,
         pluginState: { phase: 'afterToolCall', type: 'blocked' },
       }),
-    ).rejects.toThrow('Failed to persist withheld tool result');
+    ).rejects.toThrow('Failed to persist tool result');
   });
 
   it('does not swallow an unrelated unique constraint violation', async () => {

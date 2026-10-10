@@ -13,6 +13,8 @@ import { controlToolResult, type ToolResultControlOutcome } from './toolResultCo
 export interface DeferredToolResultControlInput {
   /** Parent tool whose arguments produced a member anchor's result. */
   contextToolMessageId?: string;
+  /** A following continuation round can evaluate the current environment instead. */
+  includeServerHooks?: boolean;
   operationId?: string;
   /** Only server-built child usage, never arbitrary tool/user result fields. */
   preserveUsage?: boolean;
@@ -66,19 +68,26 @@ export async function controlDeferredToolResult(
     cancelled: false,
     result: input.result,
   };
-  for (const operationId of operationIds.length ? operationIds : [undefined]) {
-    outcome = await evaluate(operationId);
+  const rounds = operationIds.length ? operationIds : [undefined];
+  for (const [index, operationId] of rounds.entries()) {
+    outcome = await evaluate(
+      operationId,
+      input.includeServerHooks !== false && index === rounds.length - 1,
+    );
     if (outcome.blocked || outcome.cancelled) return outcome;
   }
   return outcome;
 
-  async function evaluate(operationId: string | undefined): Promise<ToolResultControlOutcome> {
+  async function evaluate(
+    operationId: string | undefined,
+    includeServerHooks: boolean,
+  ): Promise<ToolResultControlOutcome> {
     const state = operationId ? await deps.loadState(operationId) : null;
     let hooks = state?.host?.hooks;
     if (!state && operationId) {
       hooks = await deps.loadDurableHooks(operationId);
     }
-    if (!deps.dispatcher.hasAfterToolCallControl(operationId ?? '', hooks))
+    if (!deps.dispatcher.hasAfterToolCallControl(operationId ?? '', hooks, includeServerHooks))
       return {
         blocked: false,
         cancelled: false,
@@ -137,7 +146,7 @@ export async function controlDeferredToolResult(
       },
       hooks,
       input.signal,
-      input.preserveUsage,
+      { includeServerHooks, preserveUsage: input.preserveUsage },
     );
     if (controlled.blocked && plugin.state?.onComplete === 'finish') {
       controlled.result.state!.onComplete = 'finish';

@@ -43,9 +43,21 @@ export async function controlToolResult(
   event: AfterToolCallHookEvent,
   hooks?: SerializedAgentHook[],
   signal?: AbortSignal,
-  preserveUsage = false,
+  {
+    preserveUsage = false,
+    includeServerHooks = true,
+  }: {
+    preserveUsage?: boolean;
+    includeServerHooks?: boolean;
+  } = {},
 ): Promise<ToolResultControlOutcome> {
-  const decision = await dispatcher?.evaluateAfterToolCall(event.operationId, event, hooks, signal);
+  const decision = await dispatcher?.evaluateAfterToolCall(
+    event.operationId,
+    event,
+    hooks,
+    signal,
+    includeServerHooks,
+  );
   if (signal?.aborted || decision?.status === 'cancelled') {
     return {
       blocked: true,

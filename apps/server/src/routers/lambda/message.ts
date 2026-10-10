@@ -108,8 +108,6 @@ const heterogeneousToolStateSnapshotSchema = z.object({
   snapshotSeq: z.number().int().positive(),
 });
 
-const publicToolMetadataSchema = z.record(z.string(), z.any());
-
 const messageBatchOperationSchema = z.discriminatedUnion('type', [
   z.object({
     message: CreateNewMessageParamsSchema,
@@ -126,7 +124,7 @@ const messageBatchOperationSchema = z.discriminatedUnion('type', [
     value: z.object({
       content: z.string().optional(),
       heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
-      metadata: publicToolMetadataSchema.optional(),
+      metadata: z.object({}).passthrough().optional(),
       pluginError: z.any().optional(),
       pluginState: z.record(z.string(), z.any()).optional(),
     }),
@@ -895,7 +893,7 @@ export const messageRouter = router({
       z
         .object({
           id: z.string(),
-          value: publicToolMetadataSchema,
+          value: z.object({}).passthrough(),
         })
         .extend(basicContextSchema.shape),
     )
@@ -1030,7 +1028,7 @@ export const messageRouter = router({
           value: z.object({
             content: z.string().optional(),
             heterogeneousToolState: heterogeneousToolStateSnapshotSchema.optional(),
-            metadata: publicToolMetadataSchema.optional(),
+            metadata: z.object({}).passthrough().optional(),
             pluginError: z.any().optional(),
             pluginState: z.object({}).passthrough().optional(),
           }),

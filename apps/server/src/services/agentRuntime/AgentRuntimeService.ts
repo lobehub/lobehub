@@ -119,7 +119,6 @@ import {
   type DeferredToolResultControlInput,
   loadDurableToolResultHooks,
 } from './hooks/deferredToolResultControl';
-import { getServerHooks } from './hooks/serverHooks';
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { buildProjectedMessagePatch } from './messagePatch';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
@@ -1259,7 +1258,7 @@ export class AgentRuntimeService {
           : [],
       ),
     );
-    const requiresDurableResultControl = [...durableHooks, ...getServerHooks()].some(
+    const requiresDurableResultControl = durableHooks.some(
       (hook) => hook.type === 'afterToolCall' && hook.webhook?.responseHandling === 'toolCall',
     );
     const operationStartPersisted = await traceStartStage('record_start', () =>
@@ -1277,7 +1276,7 @@ export class AgentRuntimeService {
         chatGroupId: appContext?.groupId ?? null,
         maxSteps,
         metadata: {
-          _hooks: durableHooks,
+          ...(durableHooks.length > 0 && { _hooks: durableHooks }),
           ...(appContext?.agentSignal ? { agentSignal: appContext.agentSignal } : {}),
           ...(interventionResolution
             ? { agentInterventionContinuation: interventionResolution }

@@ -373,6 +373,7 @@ export class ServerToolTransport implements ToolTransport {
           },
           {
             operationId: originalOperationId,
+            includeServerHooks: originalOperationId === this.ctx.operationId,
             toolMessageId: context.toolMessageId,
             result: resultWithExecutionTime,
             signal: context.abortSignal,
