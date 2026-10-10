@@ -432,6 +432,50 @@ describe('agentGroup store replica', () => {
     );
   });
 
+  // P1: a group can live in the persisted list without ever being seeded into
+  // `groupMap`. After a reload the list hydrates it, the authoritative response
+  // drops it — and its persisted detail must go too, or a later direct visit
+  // paints a deleted / unauthorized group from storage while the network is slow.
+  it('prunes a persisted detail the authoritative list drops, with no groupMap entry', async () => {
+    const scope = createScope();
+    getGroups.mockResolvedValue([groupRow('g1'), groupRow('g2')]);
+    getGroupDetail.mockImplementation(async (groupId: string) => groupDetail(groupId));
+
+    // An earlier visit persisted both the list and g2's detail.
+    await useAgentGroupStore.getState().loadGroups();
+    await useAgentGroupStore.getState().internal_fetchGroupDetail('g2');
+    await vi.waitFor(async () =>
+      expect(
+        (
+          await agentGroupListResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope })
+        )?.data?.map((group) => group.id),
+      ).toEqual(['g1', 'g2']),
+    );
+    await vi.waitFor(async () =>
+      expect(
+        (await agentGroupDetailResource.storage!.get({ queryKey: detailStorageKey('g2'), scope }))
+          ?.data,
+      ).toBeDefined(),
+    );
+
+    // Reload: memory is gone, storage stays — `groupMap` is empty again, so the
+    // list is the only thing that still knows about g2 before the network answers.
+    useAgentGroupStore.setState({ ...initialChatGroupState });
+    expect(useAgentGroupStore.getState().groupMap.g2).toBeUndefined();
+
+    getGroups.mockResolvedValue([groupRow('g1')]);
+    await useAgentGroupStore.getState().loadGroups();
+
+    // g2 never entered `groupMap` this session, yet its persisted detail is gone.
+    expect(useAgentGroupStore.getState().groupMap.g2).toBeUndefined();
+    expect(useAgentGroupStore.getState().groups.map((group) => group.id)).toEqual(['g1']);
+    await vi.waitFor(async () =>
+      expect(
+        await agentGroupDetailResource.storage!.get({ queryKey: detailStorageKey('g2'), scope }),
+      ).toBeUndefined(),
+    );
+  });
+
   // P1: a persisted detail hydrates with no network response. Its success side
   // effects must run off the hydrated value too, or an offline / slow first
   // paint resolves tools / models through an empty (or previously active) agent

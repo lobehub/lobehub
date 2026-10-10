@@ -74,6 +74,13 @@ class ChatGroupInternalAction implements ResetableStore {
   readonly #groupList;
   /** One group lives in the list row and in `groupMap`: write to both at once. */
   readonly #groupRows;
+  /**
+   * Ids the last authoritative list `replace` dropped. A group can live in the
+   * persisted list without ever being seeded into `groupMap` (a reload hydrates
+   * the list only), so the detail reconcile prunes these as well — see
+   * {@link #reconcileGroupMap}.
+   */
+  #droppedGroupIds: string[] = [];
 
   constructor(set: Setter, get: () => ChatGroupStore, _api?: unknown) {
     // keep signature aligned with StateCreator params: (set, get, api)
@@ -86,6 +93,18 @@ class ChatGroupInternalAction implements ResetableStore {
       entity: agentGroupsEntity,
       fetcher: () => chatGroupService.getGroups(),
       get,
+      // The list is the authoritative parent of every detail, so remember the
+      // rows a `replace` drops: a group that only ever hydrated from the
+      // persisted list never reached `groupMap`, and its detail must still be
+      // pruned (see `#reconcileGroupMap`). Returning `incoming` keeps the
+      // default "the response is the value".
+      merge: (incoming, confirmed) => {
+        const nextIds = new Set(incoming.map((group) => group.id));
+        this.#droppedGroupIds = (confirmed ?? [])
+          .map((group) => group.id)
+          .filter((id) => !nextIds.has(id));
+        return incoming;
+      },
       set,
       stateKey: 'agentGroupListReplica',
       view: groupsLens,
@@ -287,16 +306,26 @@ class ChatGroupInternalAction implements ResetableStore {
   };
 
   /**
-   * Fold the complete, authoritative group list into `groupMap`: a detail the
-   * list no longer carries (the group was deleted, or the caller lost access)
-   * is pruned from memory and from the persisted replica, then the returned rows
-   * are merged in. Without the prune a removed group keeps resolving its
-   * metadata and permissions through `groupMap` (e.g. the supervisor fallback)
-   * even though `getGroups()` stopped listing it.
+   * Fold the complete, authoritative group list into `groupMap`: every detail
+   * the list no longer carries (the group was deleted, or the caller lost
+   * access) is pruned from memory and from the persisted replica, then the
+   * returned rows are merged in. Without the prune a removed group keeps
+   * resolving its metadata and permissions (e.g. the supervisor fallback) even
+   * though `getGroups()` stopped listing it.
+   *
+   * The candidates are not just `groupMap`: after a reload the persisted list
+   * hydrates groups without seeding `groupMap`, so a group the authoritative
+   * response drops would otherwise keep its persisted detail and paint on a
+   * later slow / offline visit. `#droppedGroupIds` carries those ids from the
+   * list replace. A stale candidate is harmless — only ids *absent from the
+   * authoritative list* are ever removed.
    */
   #reconcileGroupMap = (groups: ChatGroupItem[]) => {
     const listedIds = new Set(groups.map((group) => group.id));
-    for (const groupId of Object.keys(this.#get().groupMap)) {
+    const candidates = new Set([...Object.keys(this.#get().groupMap), ...this.#droppedGroupIds]);
+    this.#droppedGroupIds = [];
+
+    for (const groupId of candidates) {
       if (!listedIds.has(groupId)) this.#groupRows.remove(groupId);
     }
     this.internal_updateGroupMaps(groups);
