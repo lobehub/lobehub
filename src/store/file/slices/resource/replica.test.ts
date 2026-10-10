@@ -704,4 +704,106 @@ describe('resourceList replica', () => {
       expect((destination?.data.items as ResourceItem[]).map((item) => item.id)).toContain('moved');
     });
   });
+
+  it('does not carry a pre-paint create into the folder the user navigates to', async () => {
+    // Folder A never answers, so its first page never paints; folder B does.
+    querySpy.mockImplementation((params) =>
+      params.parentId === 'folder-b' ? Promise.resolve(page([row('b-1')], 1)) : pending(),
+    );
+    const createSpy = vi.spyOn(resourceService, 'createResource').mockImplementation(pending);
+
+    const hook = renderHook(
+      (props: { parentId: string | null }) =>
+        useFileStore((s) => s.useFetchResources)({ parentId: props.parentId }),
+      { initialProps: { parentId: 'folder-a' as string | null }, wrapper },
+    );
+
+    // The header is usable while the first page is still in flight, so the
+    // create starts before the entry has a query of its own.
+    act(() => {
+      void useFileStore.getState().createResourceAndSync({
+        fileType: 'text/plain',
+        name: 'New',
+        parentId: 'folder-a',
+        sourceType: 'file',
+        url: '',
+      });
+    });
+    expect(ids()[0].startsWith('temp-resource-')).toBe(true);
+
+    const paramsB = normalizeResourceListParams({ parentId: 'folder-b' })!;
+    hook.rerender({ parentId: 'folder-b' });
+
+    // Folder B's response must not be merged with folder A's in-flight row.
+    await waitFor(() => expect(ids()).toEqual(['b-1']));
+    expect(createSpy).toHaveBeenCalledTimes(1);
+
+    const persisted = await resourceListResource.storage!.get({
+      queryKey: resourceListResource.storageKey(paramsB),
+      scope,
+    });
+    expect((persisted?.data.items as ResourceItem[]).map((item) => item.id)).toEqual(['b-1']);
+  });
+
+  it('patches a cached destination folder when a move runs through the visible-row path', async () => {
+    const paramsB = normalizeResourceListParams({ parentId: 'folder-b' })!;
+    await seedPersisted(paramsB, [row('stay-b')]);
+    const keyB = resourceListResource.storageKey(paramsB);
+
+    const movedRow = { ...row('moved'), parentId: null };
+    querySpy.mockResolvedValue(page([movedRow], 1));
+    vi.spyOn(resourceService, 'moveResource').mockResolvedValue({
+      ...movedRow,
+      parentId: 'folder-b',
+    });
+
+    renderHook(() => useFileStore((s) => s.useFetchResources)({ parentId: null }), { wrapper });
+    await waitFor(() => expect(ids()).toEqual(['moved']));
+
+    // The tree delegates to this action whenever the row is visible, so the
+    // captured destination patch has to be applied here too.
+    await act(async () => {
+      await useFileStore.getState().moveResource('moved', 'folder-b');
+    });
+
+    await waitFor(async () => {
+      const destination = await resourceListResource.storage!.get({ queryKey: keyB, scope });
+      expect((destination?.data.items as ResourceItem[]).map((item) => item.id)).toContain('moved');
+    });
+  });
+
+  it('restarts paging from the head after moving a row out of an extended folder', async () => {
+    querySpy
+      .mockResolvedValueOnce(page(rows(50), 120))
+      .mockResolvedValueOnce(page(rows(50, 50), 120))
+      .mockResolvedValueOnce(page(rows(50, 1), 119));
+
+    renderHook(() => useFileStore((s) => s.useFetchResources)({ parentId: 'folder-a' }), {
+      wrapper,
+    });
+
+    await waitFor(() => expect(useFileStore.getState().resourceList).toHaveLength(50));
+    await act(async () => {
+      await useFileStore.getState().loadMoreResources();
+    });
+    expect(useFileStore.getState().resourceList).toHaveLength(100);
+
+    vi.spyOn(resourceService, 'moveResource').mockResolvedValue({
+      ...row('resource-0'),
+      parentId: 'folder-b',
+    });
+    await act(async () => {
+      await useFileStore.getState().moveResource('resource-0', 'folder-b');
+    });
+
+    // The row left the folder, so the loaded depth collapsed to a fresh head.
+    await waitFor(() => expect(useFileStore.getState().resourceList).toHaveLength(50));
+
+    querySpy.mockResolvedValueOnce(page(rows(50, 51), 119));
+    await act(async () => {
+      await useFileStore.getState().loadMoreResources();
+    });
+
+    expect(querySpy).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 50 }));
+  });
 });

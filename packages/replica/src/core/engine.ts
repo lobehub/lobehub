@@ -390,16 +390,29 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   const revalidate = (key?: string): Promise<unknown> =>
     options.revalidate ? options.revalidate(key) : Promise.resolve();
 
-  /** Start an optimistic overlay now and settle it later (multi-resource flows). */
+  /**
+   * Start an optimistic overlay now and settle it later (multi-resource flows).
+   * `query` tags the overlay with the query it describes; a caller that knows
+   * the requested query (e.g. before the first page painted) should pass it, so
+   * the overlay is scoped to that query rather than kept across every change.
+   */
   const beginOptimistic = (
     key: string,
     apply: (data: TData) => TData,
+    query?: string,
   ): ReplicaOptimisticToken<TData> => {
     const scope = resource.scope.get();
     const id = ++mutationSeq;
     // Tag the overlay with the query it describes: the entry may move on to
     // another query (or another query may reuse the key) before it settles.
-    dispatch({ apply, id, key, query: getSlot().entries[key]?.query, scope, type: 'optimistic' });
+    dispatch({
+      apply,
+      id,
+      key,
+      query: query ?? getSlot().entries[key]?.query,
+      scope,
+      type: 'optimistic',
+    });
     return {
       commit: (confirm) => dispatch({ confirm, id, key, scope, type: 'commit' }),
       rollback: () => {

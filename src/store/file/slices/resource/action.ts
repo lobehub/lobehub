@@ -288,10 +288,20 @@ export class ResourceActionImpl {
     this.#resourceList.update(RESOURCE_LIST_KEY, (data) => data ?? seeded, { persist: false });
   };
 
+  /**
+   * Replica query identity of the Explorer's current request. Tagging an
+   * overlay with it scopes the overlay even when it starts before the first
+   * page painted — the seeded entry has no query of its own yet, and an
+   * untagged overlay would be kept across every query change (leaking one
+   * folder's row into another).
+   */
+  #requestedListQuery = (): string | undefined =>
+    this.#requestedListParams ? resourceListResource.query(this.#requestedListParams) : undefined;
+
   /** Optimistic overlay over the explorer list. */
   #beginListOptimistic = (apply: (data: ResourceListValue) => ResourceListValue) => {
     this.#ensureListView();
-    return this.#resourceList.beginOptimistic(RESOURCE_LIST_KEY, apply);
+    return this.#resourceList.beginOptimistic(RESOURCE_LIST_KEY, apply, this.#requestedListQuery());
   };
 
   #revalidateList = async (): Promise<void> => {
@@ -681,6 +691,17 @@ export class ResourceActionImpl {
     // List rows may omit `parentId`; only a known parent can prove a no-op move.
     if (existing.parentId !== undefined && (existing.parentId ?? null) === parentId) return;
 
+    // Capture what the completed move needs to reconcile the *other* folders'
+    // cached lists before the request goes out: the user may switch scope while
+    // it is in flight, after which neither the scope nor the old folders' slug
+    // aliases can be read from the store any more. A move of a row visible in
+    // the Explorer lands here (the tree delegates to this action), so this is
+    // the only place those caches get patched.
+    const cachePatch = await this.prepareResourceMoveCachePatch(
+      [existing.parentId, queryParams?.parentId ?? null],
+      parentId,
+    );
+
     const movedOptimistic: ResourceItem = {
       ...existing,
       _optimistic: {
@@ -703,18 +724,24 @@ export class ResourceActionImpl {
 
     const token = this.#beginListOptimistic((data) => applyMove(data, movedOptimistic));
 
+    let moved: ResourceItem;
     try {
-      const moved = (await resourceService.moveResource(id, parentId, existing)) as ResourceItem;
+      moved = (await resourceService.moveResource(id, parentId, existing)) as ResourceItem;
       token?.commit((data) => applyMove(data, moved));
     } catch (error) {
       token?.rollback();
       throw error;
     }
 
+    // A row that left the mounted folder shifts the loaded offsets, so the next
+    // "load more" would skip the row that moved up into the gap: drop the loaded
+    // depth to the head before confirming.
+    if (!shouldKeepVisible) this.#resourceList.collapse(RESOURCE_LIST_KEY);
+
     // The server accepted the move, so a reconciliation failure must not undo it
     // or report the operation as failed (the caller — the tree's optimistic
     // transaction — would restore a row the server already moved).
-    await this.#revalidateListQuietly('moveResource');
+    await this.applyMovedResourceToCaches(moved, cachePatch);
   };
 
   /**
