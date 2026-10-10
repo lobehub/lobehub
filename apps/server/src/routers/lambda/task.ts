@@ -1423,6 +1423,13 @@ export const taskRouter = router({
               { configPatch },
             );
         if (!task) throw new TRPCError({ code: 'NOT_FOUND', message: 'Task not found' });
+        // A schedule write without a status transition never passes through
+        // `updateStatus`, so the run-count window would stay unstamped and the
+        // dispatcher would treat the task as unarmed (`armedAt = null`) — an
+        // immediate grace-window fire consumes a one-shot maxExecutions quota
+        // right after arming (vent T-634). Stamp after the row write, using the
+        // resulting row; the status path stamps inside `updateStatus` itself.
+        if (!status) await ctx.taskService.stampScheduleArmedOnColumnWrite(task);
         // Only an actual assignee change notifies — re-saving the same assignee
         // stays silent (self-assignment is filtered inside the helper).
         if (task.assigneeUserId !== resolved.assigneeUserId) {
