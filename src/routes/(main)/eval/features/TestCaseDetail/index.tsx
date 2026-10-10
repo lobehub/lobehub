@@ -69,9 +69,10 @@ export interface TestCaseDetailProps {
   testCase: {
     datasetId: string;
     content?: {
+      expected?: string;
       input?: string;
       messages?: Array<{ content?: unknown; role?: string }>;
-    } & Record<string, unknown>;
+    };
     evalConfig?: Record<string, unknown> | null;
     evalMode?: string | null;
     id: string;
