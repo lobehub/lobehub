@@ -336,14 +336,23 @@ class ChatGroupInternalAction implements ResetableStore {
    * read, while the network confirms it in parallel, instead of blanking the
    * list first; the rows then seed `groupMap`.
    *
+   * The request is started before the hydration read is awaited: the two are
+   * independent, and a caller such as `sendAsGroup` awaits `loadGroups()` before
+   * it navigates, so serializing them only delays both. Hydration still paints
+   * the persisted list as soon as it resolves; `await hydration` before the
+   * replace keeps that paint ahead of the network's.
+   *
    * The scope is captured before the first await and threaded through the
    * writes, so a response that resolves after an identity switch is dropped
    * instead of being written (and persisted) into the next scope's partition.
    */
   loadGroups = async () => {
     const scope = this.#captureScope();
-    if (!this.#get().groupsInit) await this.#groupList.hydrate(LIST_PARAMS, scope);
+    const hydration = this.#get().groupsInit
+      ? undefined
+      : this.#groupList.hydrate(LIST_PARAMS, scope);
     const groups = await chatGroupService.getGroups();
+    await hydration;
     if (!this.#isStillInScope(scope)) return;
 
     this.#groupList.replace(LIST_PARAMS, groups, scope);

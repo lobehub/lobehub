@@ -127,6 +127,38 @@ describe('agentGroup store replica', () => {
     expect(useAgentGroupStore.getState().groupsInit).toBe(true);
   });
 
+  // The network request must not wait behind the hydration read: `sendAsGroup`
+  // awaits `loadGroups()` before it navigates, so serializing the two delays both.
+  it('starts the list request before the hydration read resolves', async () => {
+    const scope = createScope();
+    await agentGroupListResource.storage!.set(
+      { queryKey: LIST_STORAGE_KEY, scope },
+      { data: [groupRow('cached')], updatedAt: 1 },
+    );
+    getGroups.mockResolvedValue([groupRow('g1')]);
+
+    // Hold the hydration read open so the request's start can be observed.
+    const storage = agentGroupListResource.storage!;
+    const original = storage.get.bind(storage);
+    let releaseHydration!: () => void;
+    const gate = new Promise<void>((resolve) => (releaseHydration = resolve));
+    const getSpy = vi.spyOn(storage, 'get').mockImplementation(async (key: any) => {
+      await gate;
+      return original(key);
+    });
+
+    const inflight = useAgentGroupStore.getState().loadGroups();
+
+    // The request is already in flight while hydration is still pending.
+    await vi.waitFor(() => expect(getGroups).toHaveBeenCalled());
+    expect(useAgentGroupStore.getState().groupsInit).toBe(false);
+
+    releaseHydration();
+    await inflight;
+    expect(useAgentGroupStore.getState().groups.map((group) => group.id)).toEqual(['g1']);
+    getSpy.mockRestore();
+  });
+
   it('replaces the list with the server response, persists it and seeds groupMap', async () => {
     const scope = createScope();
     getGroups.mockResolvedValue([groupRow('g1', 'Server group')]);
