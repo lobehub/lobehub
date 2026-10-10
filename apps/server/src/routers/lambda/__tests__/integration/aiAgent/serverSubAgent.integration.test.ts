@@ -13,7 +13,7 @@
  */
 import { stripSubAgentReference } from '@lobechat/builtin-tool-lobe-agent';
 import { type LobeChatDatabase } from '@lobechat/database';
-import { agentOperations, agents, messages } from '@lobechat/database/schemas';
+import { agentOperations, agents, messagePlugins, messages } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
 import { eq } from 'drizzle-orm';
 import OpenAI from 'openai';
@@ -56,7 +56,7 @@ const PARENT_FINAL = 'Based on the sub-agent result, the final answer is 42.';
 const createTestContext = () => ({ jwtPayload: { userId }, userId });
 
 /** Mock parent first step: a single `callSubAgent` tool call. */
-const createCallSubAgentResponse = () => {
+const createCallSubAgentResponse = ({ wait = true }: { wait?: boolean } = {}) => {
   const responseId = `resp_parent_${Date.now()}`;
   const msgItemId = `msg_parent_${Date.now()}`;
   const callId = `call_subagent_1`;
@@ -64,7 +64,7 @@ const createCallSubAgentResponse = () => {
     arguments: JSON.stringify({
       description: 'Research the answer',
       instruction: 'Find the answer to the ultimate question.',
-      wait: true,
+      ...(wait ? { wait: true } : {}),
     }),
     call_id: callId,
     name: 'lobe-agent____callSubAgent',
@@ -258,5 +258,60 @@ describe('Server callSubAgent suspend/resume', () => {
     );
     expect(subAgentToolMessage).toBeDefined();
     expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
-  });
+  }, 30_000);
+});
+
+describe('Server callSubAgent async dispatch (default)', () => {
+  it('dispatches without parking the parent and records the dispatch anchor', async () => {
+    let callCount = 0;
+    mockResponsesCreate.mockImplementation(function () {
+      callCount++;
+      // 1: the parent emits `callSubAgent` WITHOUT `wait`; every later step — the
+      // parent's own continuation and the sub-op alike — is a plain final answer.
+      if (callCount === 1) {
+        return Promise.resolve(createCallSubAgentResponse({ wait: false }) as any);
+      }
+      return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
+    });
+
+    const caller = aiAgentRouter.createCaller(createTestContext());
+
+    const createResult = await caller.execAgent({
+      agentId: testAgentId,
+      prompt: 'Please research the ultimate question and report back.',
+    });
+    expect(createResult.success).toBe(true);
+
+    const finalState = await waitForOperationComplete(
+      inMemoryAgentStateManager,
+      createResult.operationId,
+      { maxWaitTime: 20_000 },
+    );
+
+    // The parent did NOT park waiting for the child: it took its own continuation
+    // step after the dispatch tool result and reached `done`.
+    expect(finalState.status).toBe('done');
+    expect(finalState.pendingToolsCalling ?? []).toHaveLength(0);
+    expect(mockResponsesCreate.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+    // A child op was forked for the background sub-agent...
+    const childOps = await serverDB
+      .select()
+      .from(agentOperations)
+      .where(eq(agentOperations.parentOperationId, createResult.operationId));
+    expect(childOps.length).toBeGreaterThanOrEqual(1);
+
+    // Let the background child finish so its settle write does not outlive the test.
+    await waitForOperationComplete(inMemoryAgentStateManager, childOps[0].id, {
+      maxWaitTime: 20_000,
+    });
+
+    // ...and the dispatch anchor is a real tool message created up front (not the
+    // legacy empty `pending` park row) — its plugin row carries the callSubAgent api.
+    const anchorPlugins = await serverDB
+      .select()
+      .from(messagePlugins)
+      .where(eq(messagePlugins.apiName, 'callSubAgent'));
+    expect(anchorPlugins.some((p) => p.userId === userId)).toBe(true);
+  }, 30_000);
 });

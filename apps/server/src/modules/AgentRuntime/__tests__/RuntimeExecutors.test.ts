@@ -6867,6 +6867,74 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect(result.nextContext).toBeUndefined();
     });
 
+    it('call_tool dispatches server callAgent without parking by default', async () => {
+      const mockExecVirtualSubAgent = vi
+        .fn()
+        .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
+      const ctxWithCallback = {
+        ...ctx,
+        execVirtualSubAgent: mockExecVirtualSubAgent,
+        topicId: 'topic-123',
+      };
+
+      mockMessageModel.create.mockResolvedValueOnce({ id: 'tool-msg-id' });
+      mockToolExecutionService.executeTool.mockImplementation(
+        async (_payload: any, context: any) => {
+          const subAgent = await context.subAgent.run({
+            agentId: 'target-agent-id',
+            description: 'Call agent target-agent',
+            instruction: 'Do something useful',
+            timeout: 1_800_000,
+          });
+
+          return {
+            content: `Sub-agent dispatched (threadId: ${subAgent.threadId}) — it runs in the background; its result will NOT appear in this turn.`,
+            executionTime: 10,
+            state: {
+              status: 'dispatched',
+              subOperationId: subAgent.subOperationId,
+              targetAgentId: 'target-agent-id',
+              threadId: subAgent.threadId,
+            },
+            success: true,
+          };
+        },
+      );
+
+      const executors = createRuntimeExecutors(ctxWithCallback);
+      const state = createMockState();
+      const instruction = {
+        payload: {
+          parentMessageId: 'assistant-msg-id',
+          toolCalling: {
+            apiName: 'callAgent',
+            arguments: JSON.stringify({
+              agentId: 'target-agent-id',
+              instruction: 'Do something useful',
+            }),
+            id: 'tool-call-1',
+            identifier: 'lobe-agent-management',
+            type: 'default' as const,
+          },
+        },
+        type: 'call_tool' as const,
+      };
+
+      const result = await executors.call_tool!(instruction, state);
+
+      // The anchor is written `dispatched` up front, before the child forks...
+      expect(mockMessageModel.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pluginState: { status: 'dispatched' },
+          role: 'tool',
+          tool_call_id: 'tool-call-1',
+        }),
+      );
+      // ...and the parent does not park: the turn continues with a tool result.
+      expect(result.nextContext?.phase).toBe('tool_result');
+      expect(result.newState?.status).not.toBe('waiting_for_async_tool');
+    });
+
     it('exec_sub_agent executor dispatches from the source parent message', async () => {
       const mockExecSubAgent = vi
         .fn()
