@@ -72,9 +72,12 @@ export const evaluateRolloutGate = ({
   const probeNodes = graph.nodes.filter((node) => state.probeNodeIds.includes(node.id));
   // R6 (per-item check): every released member — probe or mass — ends with a
   // check, so a rejection anywhere in the batch breaks it, not only a rejected
-  // probe. The settle/broken checks therefore span all materialized tasks.
+  // probe. Only the CURRENT round's members decide this gate: a member the
+  // coordinator retired when re-opening the round (R5) is history, not a live
+  // failure, and must not keep blocking the new canary.
+  const roundIds = new Set([...state.probeNodeIds, ...(state.massNodeIds ?? [])]);
   const memberTaskNodes = graph.nodes.filter(
-    (node) => members.has(node.id) && node.kind === 'task',
+    (node) => roundIds.has(node.id) && node.kind === 'task',
   );
 
   const unsettled = memberTaskNodes.filter((node) => !TERMINAL_NODE_STATUSES.has(node.status));
