@@ -137,6 +137,49 @@ describe('benchmark replica', () => {
     expect(useEvalStore.getState().benchmarkDetailMap.b1.name).toBe('MMLU');
   });
 
+  it('drops a hydrated detail and its persisted row on NOT_FOUND', async () => {
+    await benchmarkDetailResource.storage!.set(
+      { queryKey: DETAIL_STORAGE_KEY, scope },
+      { data: { id: 'b1', name: 'Cached' } as any, updatedAt: 1 },
+    );
+    let rejectFetch: (error: unknown) => void = () => {};
+    vi.spyOn(agentEvalService, 'getBenchmark').mockImplementation(
+      () => new Promise((_, reject) => (rejectFetch = reject)),
+    );
+
+    renderDetailSync('b1');
+    await waitFor(() => expect(useEvalStore.getState().benchmarkDetailMap.b1?.name).toBe('Cached'));
+
+    await act(async () => {
+      rejectFetch(Object.assign(new Error('Benchmark not found'), { data: { code: 'NOT_FOUND' } }));
+    });
+
+    await waitFor(() => expect(useEvalStore.getState().benchmarkDetailMap.b1).toBeUndefined());
+    await waitFor(async () =>
+      expect(
+        await benchmarkDetailResource.storage!.get({ queryKey: DETAIL_STORAGE_KEY, scope }),
+      ).toBeUndefined(),
+    );
+  });
+
+  it('keeps a hydrated detail on a transient fetch failure', async () => {
+    await benchmarkDetailResource.storage!.set(
+      { queryKey: DETAIL_STORAGE_KEY, scope },
+      { data: { id: 'b1', name: 'Cached' } as any, updatedAt: 1 },
+    );
+    const getBenchmark = vi
+      .spyOn(agentEvalService, 'getBenchmark')
+      .mockRejectedValue(
+        Object.assign(new Error('boom'), { data: { code: 'INTERNAL_SERVER_ERROR' } }),
+      );
+
+    const { result } = renderDetailSync('b1');
+    await waitFor(() => expect(result.current.error).toBeDefined());
+    expect(getBenchmark).toHaveBeenCalled();
+
+    expect(useEvalStore.getState().benchmarkDetailMap.b1?.name).toBe('Cached');
+  });
+
   it('repaints the refreshed list after a mutation', async () => {
     const listBenchmarks = vi
       .spyOn(agentEvalService, 'listBenchmarks')

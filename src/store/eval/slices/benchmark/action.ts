@@ -12,6 +12,7 @@ import {
 import { agentEvalService } from '@/services/agentEval';
 import { type EvalStore, useEvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import {
   BENCHMARK_LIST_KEY,
@@ -181,7 +182,16 @@ export class BenchmarkActionImpl {
    * Keeps the pre-migration `{ error, isLoading, mutate }` shape.
    */
   useFetchBenchmarkDetail = (id?: string): BenchmarkDetailSyncResult => {
-    const sync = this.#detail.useSync(id ?? null);
+    const sync = this.#detail.useSync(id ?? null, {
+      // A benchmark deleted elsewhere answers NOT_FOUND, yet a hydrated copy
+      // would keep the page painting it (the route only shows the error when
+      // the map entry is absent), even across reloads. NOT_FOUND is
+      // definitive: drop the cached detail and its persisted row. Transient
+      // failures keep the cached page on screen.
+      onError: (error) => {
+        if (id && isTrpcErrorCode(error, 'NOT_FOUND')) this.#detail.remove(id);
+      },
+    });
     return {
       error: sync.error,
       isLoading: !sync.isHydrated || sync.isValidating,
