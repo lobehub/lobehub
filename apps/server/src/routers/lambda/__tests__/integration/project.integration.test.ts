@@ -1,7 +1,8 @@
 // @vitest-environment node
 import type { LobeChatDatabase } from '@lobechat/database';
-import { agents, knowledgeBases } from '@lobechat/database/schemas';
+import { agents, knowledgeBases, tasks } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { asc, inArray } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { projectRouter } from '../../project';
@@ -91,6 +92,45 @@ describe('Project Router Integration', () => {
       taskCaller.addDependency({ dependsOnId: secondTask.data.id, taskId: firstTask.data.id }),
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
+
+  it.each([true, false])(
+    'rejects moving a task tree without changing any rows (has project: %s)',
+    async (hasProject) => {
+      const source = hasProject
+        ? await caller.create({ identifier: 'SOURCE', name: 'Source' })
+        : undefined;
+      const target = await caller.create({ identifier: 'TARGET', name: 'Target' });
+      const taskCaller = taskRouter.createCaller(createTestContext(userId));
+      const parent = await taskCaller.create({
+        instruction: 'Parent',
+        projectId: source?.data.id,
+      });
+      const child = await taskCaller.create({
+        instruction: 'Child',
+        parentTaskId: parent.data.id,
+      });
+      const ids = [parent.data.id, child.data.id];
+      const readTree = () =>
+        serverDB.select().from(tasks).where(inArray(tasks.id, ids)).orderBy(asc(tasks.id));
+      const before = await readTree();
+      expect(before).toHaveLength(2);
+      for (const task of before) {
+        expect(task.projectId).toBe(source?.data.id ?? null);
+        expect(task.identifier).toBeTruthy();
+      }
+
+      // Released clients can still call the old procedure with its original input.
+      for (const taskId of ids) {
+        await expect(caller.moveTask({ id: target.data.id, taskId })).rejects.toMatchObject({
+          code: 'PRECONDITION_FAILED',
+          message: 'Moving tasks between projects is temporarily disabled',
+        });
+        // Includes identifiers, hierarchy, timestamps, and every other stored column.
+        expect(await readTree()).toEqual(before);
+      }
+      expect((await caller.detail({ id: target.data.id })).data.tasks).toEqual([]);
+    },
+  );
 
   it('requires a valid project identifier', async () => {
     await expect(caller.create({ identifier: 'not-valid!', name: 'Invalid' })).rejects.toThrow(

@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerProjectCommand } from './project';
 
@@ -46,6 +46,39 @@ describe('project command', () => {
     vi.clearAllMocks();
     mockResolveWorkspaceId.mockReturnValue(undefined);
     vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('omits move from project task help while retaining create', async () => {
+    let output = '';
+    const program = createProgram().configureOutput({
+      writeOut: (text) => {
+        output += text;
+      },
+    });
+    await expect(
+      program.parseAsync(['node', 'test', 'project', 'task', '--help']),
+    ).rejects.toMatchObject({ code: 'commander.helpDisplayed', exitCode: 0 });
+    expect(output).toContain('create');
+    expect(output).not.toMatch(/\bmove\b/);
+  });
+
+  it('rejects the removed move command before making an API request', async () => {
+    let output = '';
+    const program = createProgram().configureOutput({
+      writeErr: (text) => {
+        output += text;
+      },
+    });
+    await expect(
+      program.parseAsync(['node', 'test', 'project', 'task', 'move', 'prj_1', 'task_1']),
+    ).rejects.toMatchObject({ code: 'commander.unknownCommand', exitCode: 1 });
+    expect(output).toContain("unknown command 'move'");
+    expect(mockClient.project.moveTask.mutate).not.toHaveBeenCalled();
+    expect(mockClient.task.create.mutate).not.toHaveBeenCalled();
   });
 
   it('creates a project', async () => {
