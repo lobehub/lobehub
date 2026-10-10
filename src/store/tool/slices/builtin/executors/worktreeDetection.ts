@@ -4,9 +4,10 @@ import type {
   DeviceGitUpstreamRef,
   WorkingDirConfig,
 } from '@lobechat/types';
-import { getWorkingDirSourcePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import isEqual from 'fast-deep-equal';
 
+import { moveHeteroSessionForWorkingDirectory } from '@/helpers/heteroSessionByWorkingDirectory';
 import { mutate } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { gitService } from '@/services/git';
@@ -1133,7 +1134,25 @@ export const recordWorktreeEnter = async (params: {
   const nextConfig = applyWorktreeAddToConfig(currentConfig, source, worktreeInfo);
 
   if (isEqual(currentConfig, nextConfig)) return;
-  await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });
+
+  // Unlike `git worktree add` (a shell command that leaves the CLI where it was),
+  // `EnterWorktree` moves the SESSION — its own result says so — so the topic's cwd
+  // record moves with it in this one write. Writing `activeWorktree` alone would
+  // only change where the next run RESOLVES its cwd: the scalar cwd and the per-cwd
+  // session map would keep naming the directory the turn started in, and
+  // `resolveHeteroResume` reads those — no entry for the new cwd plus a saved cwd
+  // that disagrees is exactly a dropped `--resume`.
+  const movedSession = moveHeteroSessionForWorkingDirectory(
+    topic?.metadata,
+    getWorkingDirEffectivePath(currentConfig) ?? topic?.metadata?.workingDirectory,
+    worktreeInfo.path,
+  );
+
+  await state.updateTopicMetadata(topicId, {
+    ...movedSession,
+    workingDirectory: worktreeInfo.path,
+    workingDirectoryConfig: nextConfig,
+  });
 };
 
 /**
@@ -1163,5 +1182,21 @@ export const recordWorktreeExit = async (params: {
   const nextConfig = applyWorktreeExitToConfig(currentConfig, source);
 
   if (isEqual(currentConfig, nextConfig)) return;
-  await state.updateTopicMetadata(topicId, { workingDirectoryConfig: nextConfig });
+
+  // The session is now back in the source repo, so the cwd record follows it back
+  // in the same write (see recordWorktreeEnter) — scalar and per-cwd session map
+  // together with the config, or the next prompt resolves the source repo while
+  // the session map still keys the session to the worktree it just left.
+  const nextWorkingDirectory = getWorkingDirEffectivePath(nextConfig) ?? source;
+  const movedSession = moveHeteroSessionForWorkingDirectory(
+    topic?.metadata,
+    getWorkingDirEffectivePath(currentConfig) ?? topic?.metadata?.workingDirectory,
+    nextWorkingDirectory,
+  );
+
+  await state.updateTopicMetadata(topicId, {
+    ...movedSession,
+    workingDirectory: nextWorkingDirectory,
+    workingDirectoryConfig: nextConfig,
+  });
 };

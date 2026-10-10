@@ -2899,6 +2899,76 @@ describe('heterogeneousAgentExecutor DB persistence', () => {
       });
     });
 
+    it('persists the session at the directory the CLI moved itself into, not the cwd the turn started in', async () => {
+      // The CLI can move the session mid-run (`EnterWorktree` / `ExitWorktree`).
+      // Those recorders rewrite the topic's scalar cwd, the per-cwd session entry
+      // and the config in ONE write, so by completion the topic names a different
+      // directory than this run started in. The completion write must follow that
+      // record: keying it back to the run's start cwd would leave the next prompt
+      // resolving the worktree with no session recorded for it — a dropped resume.
+      const cwdSource = '/Users/me/repo';
+      const cwdWt = '/Users/me/repo/.claude/worktrees/a';
+
+      let topicMeta: ChatTopicMetadata = {
+        heteroSessionBindingKeyByWorkingDirectory: { [cwdSource]: 'native:v1:claude-code' },
+        heteroSessionId: 'cc-session-source',
+        heteroSessionIdByWorkingDirectory: { [cwdSource]: 'cc-session-source' },
+        workingDirectory: cwdSource,
+        workingDirectoryConfig: { path: cwdSource, repoType: 'github' },
+      };
+      const store = createMockStore({
+        topicDataMap: { 'agent-1__main': { items: [{ id: 'topic-1', metadata: topicMeta }] } },
+      });
+      store.updateTopicMetadata = vi.fn(async (_id: string, patch: Partial<ChatTopicMetadata>) => {
+        topicMeta = { ...topicMeta, ...patch };
+        store.topicDataMap['agent-1__main'].items[0].metadata = topicMeta;
+      });
+      const get = vi.fn(() => store);
+
+      let resolveSendPrompt: () => void = () => {};
+      mockSendPrompt.mockReturnValue(new Promise<void>((r) => (resolveSendPrompt = r)));
+      mockStartSession.mockImplementation(async (params: any) => {
+        ipc.setAgentType('ipc-sess-1', params.agentType ?? 'claude-code');
+        return { sessionId: 'ipc-sess-1' };
+      });
+      // The completion write carries the id main reports at the finish path; a
+      // fresh one keeps it from short-circuiting against the streamed id.
+      mockGetSessionInfo.mockImplementation(async () => ({ agentSessionId: 'cc-session-moved' }));
+
+      const executorPromise = executeHeterogeneousAgent(get, {
+        ...defaultParams,
+        resumeSessionId: 'cc-session-source',
+        workingDirectory: cwdSource,
+        workingDirectoryConfig: { path: cwdSource, repoType: 'github' },
+      });
+      await flush();
+      ipc.emitRawLine('ipc-sess-1', ccInit('cc-session-source'));
+      await flush();
+
+      // Mid-run: the session moves itself into the worktree (what the recorders do).
+      await store.updateTopicMetadata('topic-1', {
+        heteroSessionBindingKeyByWorkingDirectory: { [cwdWt]: 'native:v1:claude-code' },
+        heteroSessionIdByWorkingDirectory: { [cwdWt]: 'cc-session-source' },
+        workingDirectory: cwdWt,
+        workingDirectoryConfig: {
+          git: { activeWorktree: cwdWt, isWorktree: true },
+          path: cwdSource,
+          repoType: 'github',
+        },
+      });
+
+      ipc.emitRawLine('ipc-sess-1', ccResult());
+      ipc.emitComplete('ipc-sess-1');
+      await flush();
+      resolveSendPrompt();
+      await flush();
+      await executorPromise;
+      await flush();
+
+      expect(topicMeta.workingDirectory).toBe(cwdWt);
+      expect(topicMeta.heteroSessionIdByWorkingDirectory).toEqual({ [cwdWt]: 'cc-session-moved' });
+    });
+
     it('does NOT retry resume once partial output streamed, even before the persist queue drains', async () => {
       // Regression: content/tool/subagent state now lives in `mainState` and is
       // only updated inside the QUEUED reduceAndApplyMain. retryWithoutResume's

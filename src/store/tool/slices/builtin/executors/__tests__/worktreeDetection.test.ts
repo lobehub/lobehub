@@ -762,6 +762,37 @@ describe('recordWorktreeEnter', () => {
     await recordWorktreeEnter({ content: enterCreated('/repo/wt', 'worktree-a'), topicId: 't1' });
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectory: '/repo/wt',
+      workingDirectoryConfig: {
+        git: { activeWorktree: '/repo/wt', branch: 'worktree-a', isWorktree: true },
+        path: '/repo',
+        repoType: 'github',
+      },
+    });
+  });
+
+  it('moves the recorded session onto the worktree, so the next turn can still resume it', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          heteroSessionBindingKeyByWorkingDirectory: { '/repo': 'native:v1:claude-code' },
+          heteroSessionId: 'sess-in-repo',
+          heteroSessionIdByWorkingDirectory: { '/repo': 'sess-in-repo' },
+          workingDirectory: '/repo',
+          workingDirectoryConfig: { path: '/repo', repoType: 'github' },
+        },
+      },
+    };
+
+    await recordWorktreeEnter({ content: enterCreated('/repo/wt', 'worktree-a'), topicId: 't1' });
+
+    // The session, its binding key and the scalar cwd all move together: resume
+    // reads the per-cwd map, so leaving them on '/repo' would make the next prompt
+    // resolve '/repo/wt' with no session for it and drop `--resume`.
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      heteroSessionBindingKeyByWorkingDirectory: { '/repo/wt': 'native:v1:claude-code' },
+      heteroSessionIdByWorkingDirectory: { '/repo/wt': 'sess-in-repo' },
+      workingDirectory: '/repo/wt',
       workingDirectoryConfig: {
         git: { activeWorktree: '/repo/wt', branch: 'worktree-a', isWorktree: true },
         path: '/repo',
@@ -817,6 +848,7 @@ describe('recordWorktreeExit', () => {
     });
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectory: '/repo',
       workingDirectoryConfig: { git: { isWorktree: false }, path: '/repo' },
     });
   });
@@ -830,6 +862,36 @@ describe('recordWorktreeExit', () => {
     });
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectory: '/repo',
+      workingDirectoryConfig: { git: { isWorktree: false }, path: '/repo' },
+    });
+  });
+
+  it('moves the recorded session back to the source repo the session returned to', async () => {
+    chatMocks.topics = {
+      t1: {
+        metadata: {
+          heteroSessionBindingKeyByWorkingDirectory: { '/repo/wt': 'native:v1:claude-code' },
+          heteroSessionId: 'sess-in-wt',
+          heteroSessionIdByWorkingDirectory: { '/repo/wt': 'sess-in-wt' },
+          workingDirectory: '/repo/wt',
+          workingDirectoryConfig: {
+            git: { activeWorktree: '/repo/wt', branch: 'worktree-a', isWorktree: true },
+            path: '/repo',
+          },
+        },
+      },
+    };
+
+    await recordWorktreeExit({
+      content: 'Exited worktree. Your work is preserved at /repo/wt. Session is now back in /repo.',
+      topicId: 't1',
+    });
+
+    expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      heteroSessionBindingKeyByWorkingDirectory: { '/repo': 'native:v1:claude-code' },
+      heteroSessionIdByWorkingDirectory: { '/repo': 'sess-in-wt' },
+      workingDirectory: '/repo',
       workingDirectoryConfig: { git: { isWorktree: false }, path: '/repo' },
     });
   });
@@ -858,6 +920,7 @@ describe('recordWorktreeExit', () => {
     });
 
     expect(chatMocks.updateTopicMetadata).toHaveBeenCalledWith('t1', {
+      workingDirectory: '/repo',
       workingDirectoryConfig: { git: { isWorktree: false }, path: '/repo', repoType: 'github' },
     });
   });

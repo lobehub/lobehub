@@ -3,7 +3,6 @@ import { createCallAgentManifest } from '@lobechat/builtin-tool-agent-management
 import { GoalIdentifier, isGoalPrompt } from '@lobechat/builtin-tool-goal';
 import { isDesktop, isHeterogeneousAgentModelId, LOADING_FLAT } from '@lobechat/const';
 import { formatSelectedSkillsContext, formatSelectedToolsContext } from '@lobechat/context-engine';
-import { isRemoteHeterogeneousType } from '@lobechat/heterogeneous-agents';
 import { chainCompressContext } from '@lobechat/prompts';
 import type {
   ChatAudioItem,
@@ -19,7 +18,6 @@ import type {
 import {
   applyTopicModelToHeterogeneousProvider,
   getWorkingDirEffectivePath,
-  getWorkingDirSourcePath,
   RequestTrigger,
   resolveAgentAgencyConfig,
 } from '@lobechat/types';
@@ -46,6 +44,7 @@ import {
   resolveWorkspaceScoped,
 } from '@/helpers/executionTarget';
 import { globalAgentContextManager } from '@/helpers/GlobalAgentContextManager';
+import { resolveReachableWorkingDirectory } from '@/helpers/workingDirectoryReachability';
 import { agentService } from '@/services/agent';
 import { aiAgentService, MAX_CLIENT_OPERATION_SNAPSHOT } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
@@ -1262,20 +1261,18 @@ export class ConversationLifecycleActionImpl {
     const agentWorkingDirectoryConfig = runCwdParams
       ? resolveAgentWorkingDirectoryConfig(runCwdParams)
       : undefined;
-    // Heterogeneous CLI agents (Claude Code, Codex, …) store sessions per-cwd
-    // (`~/.claude/projects/<encoded-cwd>/`). Anchor their session cwd to the
-    // SOURCE repo, NOT the selected worktree, so switching worktree keeps cwd +
-    // sessionId consistent and never drops the conversation context. The active
-    // worktree lives only in `workingDirectoryConfig.git.activeWorktree` as a
-    // record. The per-cwd session store is a LOCAL CLI trait — remote platform
-    // agents (openclaw / hermes) run through the gateway with no such
-    // constraint, so they (like non-hetero runtimes) keep the effective
-    // (worktree) path.
-    const isLocalCliHetero =
-      !!heterogeneousProvider && !isRemoteHeterogeneousType(heterogeneousProvider.type);
-    const resolveWorkingDirPath = isLocalCliHetero
-      ? getWorkingDirSourcePath
-      : getWorkingDirEffectivePath;
+    // Every run executes in the EFFECTIVE path: the active worktree when one is
+    // selected, the source repo otherwise. The worktree is the directory the user
+    // picked, so the CLI has to spawn there. Resolving this branch to the SOURCE
+    // path instead — while the new-topic fallback below (`agentWorkingDirectory`)
+    // always resolved to the effective one — is what made a worktree-selected
+    // conversation run in its worktree for the first turn and then silently move
+    // to the source repo on every turn after it.
+    //
+    // Moving the cwd between worktrees of one repo does not drop the CLI session:
+    // `heteroSessionIdByWorkingDirectory` keeps one session per cwd, so each
+    // worktree returns to its own CLI context (`resolveHeteroResume`). The source
+    // path stays the grouping identity and the base `git worktree` operates on.
     // A topic's cwd is a bare path that only holds on the machine it was pinned
     // on — never hand another machine's path to this run (mirrors the server's
     // `topicPinFitsDevice`).
@@ -1284,15 +1281,34 @@ export class ConversationLifecycleActionImpl {
       topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
         ? undefined
         : existingTopic?.metadata;
-    const workingDirectory =
-      resolveWorkingDirPath(topicCwdMetadata?.workingDirectoryConfig) ??
-      topicCwdMetadata?.workingDirectory ??
-      agentWorkingDirectory;
     const workingDirectoryConfig =
       topicCwdMetadata?.workingDirectoryConfig ??
       (topicCwdMetadata?.workingDirectory
         ? { path: topicCwdMetadata.workingDirectory }
         : agentWorkingDirectoryConfig);
+    const recordedWorkingDirectory =
+      getWorkingDirEffectivePath(topicCwdMetadata?.workingDirectoryConfig) ??
+      topicCwdMetadata?.workingDirectory ??
+      agentWorkingDirectory;
+    // A recorded worktree can be deleted out of band while the topic keeps naming
+    // it as its active checkout. Spawning into a directory that no longer exists
+    // kills the run (the spawn layer refuses to auto-create one), so fall back to
+    // the repo it was linked from. Read-only: the topic keeps its record, so the
+    // status bar can still explain it and offer its one-click reset.
+    let workingDirectory: string | undefined;
+    if (resolvesRunCwd) {
+      const reachable = await resolveReachableWorkingDirectory({
+        // This machine reads its own filesystem directly, which is the only
+        // unambiguous answer — a remote device has to be online to answer.
+        deviceId: runCwdDeviceId === currentDeviceId ? undefined : runCwdDeviceId,
+        recorded:
+          workingDirectoryConfig ??
+          (recordedWorkingDirectory ? { path: recordedWorkingDirectory } : undefined),
+      });
+      workingDirectory = reachable.path;
+    } else {
+      workingDirectory = recordedWorkingDirectory;
+    }
     // Record which machine a new conversation runs on, so its next turn — and
     // the device picker — stay on it after the agent default changes. `auto`
     // has not picked a machine yet; the server stamps the one it routes to.

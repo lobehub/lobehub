@@ -9,6 +9,7 @@ import { aiAgentService } from '@/services/aiAgent';
 import { aiChatService } from '@/services/aiChat';
 import { chatService } from '@/services/chat';
 import * as skillPreload from '@/services/chat/mecha/skillPreload';
+import { gitService } from '@/services/git';
 import { messageService } from '@/services/message';
 import * as agentGroupStore from '@/store/agentGroup';
 import { useAiInfraStore } from '@/store/aiInfra';
@@ -2558,6 +2559,10 @@ describe('ConversationLifecycle actions', () => {
             },
           });
           executeHeterogeneousAgentMock.mockResolvedValue(undefined);
+          // A live checkout by default: a recorded worktree override makes the
+          // run probe it, and "no branch" is what the deleted-worktree fallback
+          // keys on. Cases that need a dead checkout override this.
+          vi.spyOn(gitService, 'getGitBranch').mockResolvedValue({ branch: 'stub' });
 
           return vi.spyOn(aiChatService, 'sendMessageInServer').mockResolvedValue({
             assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
@@ -2718,6 +2723,135 @@ describe('ConversationLifecycle actions', () => {
           expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
             expect.anything(),
             expect.objectContaining({ workingDirectory: DESKTOP_PATH }),
+          );
+        });
+
+        const WORKTREE_SOURCE = '/repo/lobehub';
+        const WORKTREE_PATH = '/repo/lobehub-worktree-feat';
+        const WORKTREE_TOPIC_ID = 'worktree-topic';
+        const worktreeAgentConfig = {
+          workingDirByDevice: {
+            [HETERO_DEVICE_ID]: {
+              git: { activeWorktree: WORKTREE_PATH, isWorktree: true },
+              path: WORKTREE_SOURCE,
+            },
+          },
+        };
+        // What the fixed writer pins: the checkout the run spawns in, with the
+        // source repo kept as the config's grouping identity.
+        const worktreeTopicMetadata = {
+          boundDeviceId: HETERO_DEVICE_ID,
+          workingDirectory: WORKTREE_PATH,
+          workingDirectoryConfig: {
+            git: { activeWorktree: WORKTREE_PATH, isWorktree: true },
+            path: WORKTREE_SOURCE,
+            repoType: 'github',
+          },
+        };
+
+        /** Seed an existing topic that entered `WORKTREE_PATH`. */
+        const seedWorktreeTopic = (options: { deviceOnline?: boolean } = {}) => {
+          if (options.deviceOnline) {
+            act(() => {
+              useDeviceStore.setState({
+                devices: [{ deviceId: HETERO_DEVICE_ID, name: 'Mac', online: true }] as any,
+              });
+            });
+          }
+          act(() => {
+            useChatStore.setState({
+              topicDataMap: {
+                [topicMapKey({ agentId: TEST_IDS.SESSION_ID })]: {
+                  currentPage: 0,
+                  hasMore: false,
+                  isExpandingPageSize: false,
+                  isLoadingMore: false,
+                  items: [
+                    {
+                      agentId: TEST_IDS.SESSION_ID,
+                      createdAt: 0,
+                      id: WORKTREE_TOPIC_ID,
+                      metadata: worktreeTopicMetadata,
+                      title: 'Worktree work',
+                      updatedAt: 0,
+                    } as any,
+                  ],
+                  pageSize: 20,
+                  total: 1,
+                },
+              },
+            });
+          });
+        };
+
+        const sendToWorktreeTopic = async () => {
+          const { result } = renderHook(() => useChatStore());
+          await act(async () => {
+            await result.current.sendMessage({
+              context: { agentId: TEST_IDS.SESSION_ID, threadId: null, topicId: WORKTREE_TOPIC_ID },
+              message: 'Continue in the worktree',
+            });
+          });
+        };
+
+        // The pinned branch used to resolve the SOURCE repo for a local CLI
+        // heterogeneous agent while the brand-new-topic fallback above resolved
+        // the effective one, so a worktree-selected conversation ran in its
+        // worktree for the first turn and silently moved to the source repo on
+        // every turn after it.
+        it('runs a topic pinned to a worktree in that worktree, not the source repo', async () => {
+          setupHeteroRun(worktreeAgentConfig);
+          seedWorktreeTopic();
+
+          await sendToWorktreeTopic();
+
+          // The CLI spawns in the checkout the user picked; the source repo
+          // survives only as the config's `path` (the grouping identity).
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({
+              workingDirectory: WORKTREE_PATH,
+              workingDirectoryConfig: expect.objectContaining({ path: WORKTREE_SOURCE }),
+            }),
+          );
+        });
+
+        // …and the first turn must name that SAME directory, so the two can no
+        // longer disagree about where the conversation runs.
+        it('pins a new worktree-selected topic to the worktree its run spawns in', async () => {
+          const sendMessageInServerSpy = setupHeteroRun(worktreeAgentConfig);
+
+          await sendHeteroMessage();
+
+          const runWorkingDirectory =
+            executeHeterogeneousAgentMock.mock.calls[0][1].workingDirectory;
+          expect(runWorkingDirectory).toBe(WORKTREE_PATH);
+          expect(sendMessageInServerSpy).toHaveBeenCalledWith(
+            expect.objectContaining({
+              newTopic: expect.objectContaining({
+                metadata: expect.objectContaining({ workingDirectory: runWorkingDirectory }),
+              }),
+            }),
+            expect.any(AbortController),
+          );
+        });
+
+        // A worktree can be deleted out of band while the topic keeps recording it
+        // as its checkout. The spawn layer refuses to auto-create a missing
+        // directory, so the run has to continue in the repo the worktree was
+        // linked from — and the topic keeps its record for the status bar to
+        // explain and offer its reset.
+        it('falls back to the source repo when the recorded worktree is gone', async () => {
+          setupHeteroRun(worktreeAgentConfig);
+          seedWorktreeTopic({ deviceOnline: true });
+          // No branch answers for the worktree path — the checkout is gone.
+          vi.spyOn(gitService, 'getGitBranch').mockResolvedValue({});
+
+          await sendToWorktreeTopic();
+
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.anything(),
+            expect.objectContaining({ workingDirectory: WORKTREE_SOURCE }),
           );
         });
       });
