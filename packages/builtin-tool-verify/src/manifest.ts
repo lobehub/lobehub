@@ -9,7 +9,7 @@ export const VerifyToolManifest: BuiltinToolManifest = {
   api: [
     {
       description:
-        'Record the verdict for the delivery check you were asked to judge. Call this exactly once, after investigating, with the checkItemId you were given and your verdict. This is the only way to submit your judgement.',
+        'Record the verdict for the delivery check you were asked to judge by a verify run. Call this exactly once, after investigating, with the checkItemId given in your instructions and your verdict — this is the only way to submit that judgement. Only call it when your instructions actually contain a checkItemId from a verify run; if they do not, you were not assigned a delivery check, so answer in your reply instead.',
       name: VerifyToolApiName.submitVerifyResult,
       parameters: {
         properties: {
