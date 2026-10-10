@@ -123,19 +123,73 @@ describe('bot replicas', () => {
     expect(sync.result.current.isValidating).toBe(true);
   });
 
-  it('replaces the providers with the server response and persists them', async () => {
-    vi.mocked(agentBotProviderService.getByAgentId).mockResolvedValue([provider('bot-2', 'slack')]);
+  it('drops cleartext credentials from the persisted copy but keeps them in memory', async () => {
+    // A platform may hand a credential back in the clear — iMessage's
+    // `webhookSecret` is public *and* the bearer secret inbound webhooks are
+    // checked against — so the persisted copy must not carry it.
+    const imessage: BotProviderItem = {
+      ...provider('bot-2', 'imessage'),
+      credentials: { desktopDeviceId: 'dev-1', webhookSecret: 'shared-secret' },
+    };
+    vi.mocked(agentBotProviderService.getByAgentId).mockResolvedValue([imessage]);
+
+    renderHook(() => useAgentStore((s) => s.useFetchBotProviders)(AGENT_ID), { wrapper });
+
+    // The in-memory view keeps the credentials, so an edit form can seed from it.
+    await waitFor(() =>
+      expect(useAgentStore.getState().botProvidersMap[AGENT_ID]?.[0]?.credentials).toEqual({
+        desktopDeviceId: 'dev-1',
+        webhookSecret: 'shared-secret',
+      }),
+    );
+    // The persisted row drops them entirely — no bearer secret left on disk.
+    await waitFor(async () =>
+      expect(
+        (await botProvidersResource.storage!.get({ queryKey: PROVIDERS_STORAGE_KEY, scope }))?.data,
+      ).toEqual([provider('bot-2', 'imessage')]),
+    );
+  });
+
+  it('keeps the masked placeholders — not a secret — in the persisted copy', async () => {
+    const discord: BotProviderItem = {
+      ...provider('bot-3', 'discord'),
+      credentials: { botToken: '••••••••', publicKey: 'a'.repeat(64) },
+    };
+    vi.mocked(agentBotProviderService.getByAgentId).mockResolvedValue([discord]);
 
     renderHook(() => useAgentStore((s) => s.useFetchBotProviders)(AGENT_ID), { wrapper });
 
     await waitFor(() =>
-      expect(useAgentStore.getState().botProvidersMap[AGENT_ID]?.[0]?.platform).toBe('slack'),
+      expect(useAgentStore.getState().botProvidersMap[AGENT_ID]?.[0]?.credentials).toEqual({
+        botToken: '••••••••',
+        publicKey: 'a'.repeat(64),
+      }),
     );
+    // The mask survives (a hydrated edit form can still show the field is set and
+    // round-trip it on save); the cleartext identifier does not.
     await waitFor(async () =>
       expect(
         (await botProvidersResource.storage!.get({ queryKey: PROVIDERS_STORAGE_KEY, scope }))?.data,
-      ).toEqual([provider('bot-2', 'slack')]),
+      ).toEqual([{ ...provider('bot-3', 'discord'), credentials: { botToken: '••••••••' } }]),
     );
+  });
+
+  it('pre-hydrates the catalog and this agent’s providers before any network', async () => {
+    await botProvidersResource.storage!.set(
+      { queryKey: PROVIDERS_STORAGE_KEY, scope },
+      { data: [provider('bot-1')], updatedAt: 1 },
+    );
+    await platformDefinitionsResource.storage!.set(
+      { queryKey: CATALOG_STORAGE_KEY, scope },
+      { data: [platformDef('discord')], updatedAt: 1 },
+    );
+    vi.mocked(agentBotProviderService.getByAgentId).mockImplementation(pending);
+    vi.mocked(agentBotProviderService.listPlatforms).mockImplementation(pending);
+
+    await act(() => useAgentStore.getState().preHydrateBotChannels(AGENT_ID));
+
+    expect(useAgentStore.getState().botProvidersMap[AGENT_ID]?.[0]?.id).toBe('bot-1');
+    expect(useAgentStore.getState().botPlatformDefinitions?.[0]?.id).toBe('discord');
   });
 
   it('paints the persisted platform catalog before the network answers', async () => {

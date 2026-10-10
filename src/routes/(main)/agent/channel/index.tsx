@@ -72,10 +72,15 @@ const ChannelContent = memo(() => {
   // — and the surface would render a plausible coming-soon-only catalog (every
   // real / connected channel silently dropped). So "has data" is *not* the merged
   // length: it's whether the real fetch actually yielded platforms. Gate on the
-  // raw synced `platforms` (never the static merge) and require the providers
-  // fetch to have not errored, so a failed load branches to an error state
-  // before we merge the static half.
-  const hasData = (platforms?.length ?? 0) > 0 && !providersError;
+  // raw synced `platforms` (never the static merge).
+  //
+  // The providers fetch, though, is a replica: a *background* revalidate that
+  // fails must not blank a hydrated first frame. Once the providers have a
+  // settled value (local copy or network), a providers error is not fatal — the
+  // grid renders from that value and reconciles behind it. It only falls through
+  // to the error state when there is nothing settled for this agent either.
+  const providersSettled = providers !== undefined;
+  const hasData = (platforms?.length ?? 0) > 0 && (!providersError || providersSettled);
 
   // Merge server-side platforms with frontend-only coming-soon entries.
   // Coming-soon entries shadow a server-registered platform of the same id, so a

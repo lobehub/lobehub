@@ -1,4 +1,5 @@
 import {
+  cacheScope,
   createReplicaSlice,
   recordLens,
   type ReplicaLens,
@@ -15,6 +16,7 @@ import {
   botProvidersResource,
   PLATFORM_DEFINITIONS_KEY,
   platformDefinitionsResource,
+  withoutBotProviderSecrets,
 } from './projection';
 
 export type { BotProviderItem };
@@ -64,6 +66,11 @@ export class BotSliceActionImpl {
       get,
       set,
       stateKey: 'botProvidersReplica',
+      // Cleartext credentials never reach disk: the server can hand one back in
+      // the clear (iMessage's `webhookSecret` is an identifier *and* a bearer
+      // secret), so the persisted row keeps only the masks. See
+      // {@link withoutBotProviderSecrets}.
+      toPersisted: withoutBotProviderSecrets,
       view: botProvidersLens,
     });
 
@@ -163,6 +170,31 @@ export class BotSliceActionImpl {
     const id = agentId || this.#get().activeAgentId;
     if (!id) return;
     await this.#providers.revalidate(id);
+  };
+
+  /**
+   * Seed the persisted channel data — the account-wide platform catalog and this
+   * agent's providers — before React commits the route.
+   *
+   * A route loader is the only point where the async (IndexedDB) read can land
+   * *before* the channel surface paints, so its first frame is the local copy
+   * instead of a loading skeleton. The mount-time `useSync` hydrate is a no-op
+   * once these slots are filled, so the two never race.
+   */
+  preHydrateBotChannels = async (agentId?: string): Promise<boolean> => {
+    const id = agentId || this.#get().activeAgentId;
+    const scope = cacheScope.get();
+
+    // The slots may still hold the previous identity's rows; drop them first.
+    this.#platformDefinitions.ensureScope(scope);
+    this.#providers.ensureScope(scope);
+
+    const [catalog, providers] = await Promise.all([
+      this.#platformDefinitions.hydrate(PLATFORM_DEFINITIONS_PARAMS, scope),
+      id ? this.#providers.hydrate({ agentId: id }, scope) : Promise.resolve(false),
+    ]);
+
+    return catalog || providers;
   };
 
   updateBotProvider = async (
