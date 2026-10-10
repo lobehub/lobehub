@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
 import { useDiscoverStore } from '@/store/discover';
+import { mcpSelectors } from '@/store/discover/selectors';
 import { AssistantSorts, McpSorts } from '@/types/discover';
 
 import ListLoading from '../../components/ListLoading';
@@ -30,15 +31,17 @@ const HomePage = memo(() => {
   });
 
   const {
-    data: mcpList,
-    isLoading: pluginLoading,
     error: mcpError,
+    isLoading: pluginLoading,
     mutate: refetchMcp,
+    queryKey: mcpQueryKey,
   } = useMcpList({
     page: 1,
     pageSize: 12,
     sort: McpSorts.Recommended,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const mcpList = useDiscoverStore(mcpSelectors.mcpList(mcpQueryKey));
 
   return (
     <>
