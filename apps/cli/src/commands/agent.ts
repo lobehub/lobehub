@@ -489,6 +489,15 @@ Exit codes:
         if (options.slug) input.slug = options.slug;
         if (options.topicId) input.appContext = { topicId: options.topicId };
         if (options.autoStart === false) input.autoStart = false;
+        // When another agent launched this command, its environment carries the
+        // operation the launcher's run belongs to (LOBEHUB_OPERATION_ID) — but
+        // deliberately not its agent id or its topic, which device-dispatched
+        // runs strip. Forward the operation so the target's conversation
+        // attributes the turn to the launching agent; the server reads the topic
+        // and agent from that operation row. A person running `lh` from a
+        // terminal has no ambient operation, and nothing is stamped.
+        const sourceOperationId = process.env.LOBEHUB_OPERATION_ID;
+        if (sourceOperationId) input.sourceOperationId = sourceOperationId;
         // commander's --no-headless sets `headless` to false. Anything else
         // (undefined, true) → headless mode is on and tool calls auto-execute.
         if (options.headless !== false) {

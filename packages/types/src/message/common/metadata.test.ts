@@ -54,4 +54,29 @@ describe('MessageMetadataSchema', () => {
       heterogeneousToolStateSeq: 4,
     });
   });
+
+  it('preserves the agent sender block so an agent → agent turn keeps its author', () => {
+    const parsed = MessageMetadataSchema.parse({
+      agentSender: {
+        agentId: 'agt_coco',
+        avatar: 'https://a.com/coco.png',
+        name: 'Coco',
+        title: 'Product Agent',
+        topicId: 'tpc_source',
+        topicTitle: 'Release risk review',
+      },
+      unknown: 'stripped',
+    });
+
+    expect(parsed).toEqual({
+      agentSender: {
+        agentId: 'agt_coco',
+        avatar: 'https://a.com/coco.png',
+        name: 'Coco',
+        title: 'Product Agent',
+        topicId: 'tpc_source',
+        topicTitle: 'Release risk review',
+      },
+    });
+  });
 });

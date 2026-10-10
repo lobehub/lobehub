@@ -357,6 +357,20 @@ export interface ExecAgentParams {
   /** The agent slug to run (either agentId or slug is required) */
   slug?: string;
   /**
+   * The operation the launcher's run belongs to, when another agent started this
+   * run. Every runtime hands its process its own `LOBEHUB_OPERATION_ID` but
+   * deliberately strips the launcher's agent id (device-dispatched runs), so the
+   * operation is the one identifier that survives every path. The server reads
+   * the topic and the agent from that operation row — its own record, and one
+   * that must belong to the caller — and stamps `metadata.agentSender` on the
+   * created user message.
+   *
+   * Deliberately not a topic id: a topic is a bare client claim no server row
+   * can vouch for, whereas the operation's topic and agent are written by the
+   * server itself.
+   */
+  sourceOperationId?: string;
+  /**
    * User agent of the originating request, captured server-side for run
    * attribution. Propagated into the run's `state.metadata` and downstream
    * LLM-call metadata for auditing and spend attribution. Never client-passable

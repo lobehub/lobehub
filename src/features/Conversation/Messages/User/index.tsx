@@ -23,10 +23,11 @@ import {
   useSetMessageItemActionTypeContext,
 } from '../Contexts/message-action-context';
 import Actions from './Actions';
+import AgentSenderSourceLink from './components/AgentSenderSourceLink';
 import UserMessageContent from './components/MessageContent';
 import { ScmEventAvatar, ScmEventSenderTitle } from './components/ScmEventSender';
 import { UserMessageExtra } from './Extra';
-import { getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
+import { getAgentSender, getBotSender, resolveSenderIdentity } from './resolveSenderIdentity';
 import ScheduledRunFooter from './ScheduledRunFooter';
 
 interface UserMessageProps {
@@ -39,6 +40,10 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   const item = useConversationStore(dataSelectors.getDisplayMessageById(id), isEqual)!;
   const { content, createdAt, error, role, extra, targetId, sender, metadata } = item;
   const botSender = getBotSender(item);
+  // An agent → agent turn (a sibling agent's `lh agent run`): the row belongs to
+  // the receiving agent's topic, so the sending agent — not the human owner —
+  // is who the bubble must be attributed to.
+  const agentSender = getAgentSender(item);
   // A wake-up message from the SCM integration is authored by the pull
   // request, so GitHub takes the sender slot instead of the card's header.
   const scmSource = useMemo(() => getScmEventSource(content), [content]);
@@ -54,12 +59,12 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
   // hidden-avatar behavior. Self identity applies only to the viewer's own
   // rows — see resolveSenderIdentity.
   // A bot-channel row is authored by someone else even in personal mode, so
-  // its sender is always shown.
-  const showSender = Boolean(activeWorkspaceId) || !!botSender || !!scmSource;
+  // its sender is always shown. Same for an agent → agent turn.
+  const showSender = Boolean(activeWorkspaceId) || !!botSender || !!scmSource || !!agentSender;
   const currentUserId = useUserStore(userProfileSelectors.userId);
   const { avatar, title } = resolveSenderIdentity({
-    botSender,
     currentUserId,
+    message: item,
     selfAvatar,
     selfTitle,
     sender,
@@ -121,7 +126,6 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
       showAvatar={showSender}
       showTitle={showSender && !scmSource}
       time={createdAt}
-      titleAddon={dmIndicator}
       actionAddon={
         commentCount > 0 && commentTopicId ? (
           <MessageCommentBadge count={commentCount} messageId={id} topicId={commentTopicId} />
@@ -132,6 +136,27 @@ const UserMessage = memo<UserMessageProps>(({ id, disableEditing, index }) => {
           <>
             {scmSource && <ScmEventSenderTitle source={scmSource} />}
             {metadata?.steer && <Tag>{t('steer.tag')}</Tag>}
+          </>
+        ) : undefined
+      }
+      titleAddon={
+        // The row is `row-reverse` (right-aligned), so `headerAddon` renders on
+        // the far side of the author name. The source link belongs on the near
+        // side instead: the author name stays next to its own avatar, and the
+        // topic it came from reads as a leading qualifier rather than splitting
+        // the name from its avatar.
+        dmIndicator || agentSender?.topicId ? (
+          <>
+            {dmIndicator}
+            {agentSender?.topicId && (
+              <AgentSenderSourceLink
+                chatGroupId={agentSender.chatGroupId}
+                threadId={agentSender.threadId}
+                topicAgentId={agentSender.topicAgentId ?? agentSender.agentId}
+                topicId={agentSender.topicId}
+                topicTitle={agentSender.topicTitle}
+              />
+            )}
           </>
         ) : undefined
       }

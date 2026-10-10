@@ -499,6 +499,28 @@ export class AgentModel {
   };
 
   /**
+   * The three fields a sender-identity snapshot needs, projected and scoped by
+   * the model's ownership filter, or `null` when the agent is missing or not
+   * visible to the current caller.
+   *
+   * Deliberately not {@link getAgentConfigById}: that one enriches the agent
+   * with its assigned knowledge and loads every enabled file's row and content,
+   * which is a lot of I/O to render a label. Callers that only display who an
+   * agent is — attribution, receipts — should use this.
+   */
+  getAgentDisplayFields = async (
+    id: string,
+  ): Promise<{ avatar: null | string; name: null | string; title: null | string } | null> => {
+    const rows = await this.db
+      .select({ avatar: agents.avatar, name: agents.name, title: agents.title })
+      .from(agents)
+      .where(and(eq(agents.id, id), this.ownership()))
+      .limit(1);
+
+    return rows[0] ?? null;
+  };
+
+  /**
    * Returns the agent's visibility, scoped by the model's ownership filter, or
    * `null` when the agent is missing or not visible to the current caller.
    * Used by the task service to inherit a private agent's visibility onto

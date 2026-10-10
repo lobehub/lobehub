@@ -1354,6 +1354,16 @@ const ExecAgentSchema = z
       })
       .optional(),
     /**
+     * The operation the launching agent's run belongs to, when another agent
+     * started this run (agent → agent: a sibling agent calling `lh agent run`).
+     * The launcher's own agent id is deliberately not sent — device-dispatched
+     * runs strip it — and neither is its topic: the server reads both from this
+     * operation row (ownership-scoped, the caller's own) and stamps
+     * `metadata.agentSender` on the created user message. An unknown, foreign,
+     * or topic-less operation simply resolves to nothing.
+     */
+    sourceOperationId: z.string().optional(),
+    /**
      * User intervention configuration for tool approvals.
      * Pass `{ approvalMode: 'headless' }` from headless clients (CLI, cron, bots)
      * so tool calls auto-execute without waiting for human approval.
@@ -2656,6 +2666,7 @@ export const aiAgentRouter = router({
         resumeToolResult,
         selectedToolIds,
         slug,
+        sourceOperationId: input.sourceOperationId,
         steer,
         trigger: trigger ?? RequestTrigger.Chat,
         userAgent: ctx.userAgent ?? undefined,

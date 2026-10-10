@@ -3,6 +3,7 @@ import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
 import type { SandboxStorageClaim } from '@lobechat/builtin-tool-cloud-sandbox';
 import type { LobeChatDatabase } from '@lobechat/database';
 import type {
+  AgentSenderMetadata,
   ExecAgentResult,
   ExecGroupAgentParams,
   ExecGroupAgentResult,
@@ -83,6 +84,7 @@ import { startOperation } from './pipeline/startOperation';
 import { resolveNewTopicSnapshot, setupTurn } from './pipeline/turnSetup';
 import { createRunFacts, type RunFacts } from './runFacts';
 import { applyShareGateToAgentConfig } from './shareGate';
+import { resolveAgentSenderFromOperation } from './sourceAttribution';
 import type { SubAgentRunDeps } from './subAgentRuns';
 import { execAgentMember, execAgentThreadRun } from './subAgentRuns';
 import { acquireTopicStartReservation, TopicStartReservationError } from './topicStartReservation';
@@ -1211,6 +1213,14 @@ export class AiAgentService {
     );
     if (reusedContinuation) return reusedContinuation;
 
+    // Agent → agent attribution: resolve the launching run's agent into a
+    // display snapshot once, before the turn rows exist, so the persisted user
+    // message carries a self-contained sender block.
+    const agentSender = await this.resolveSourceAgentSnapshot(
+      params.agentId,
+      params.sourceOperationId,
+    );
+
     // Stage 3 + shared turn setup — topic creation/reuse (with the pinned
     // model), device-access policy, hetero detection, attachment ingestion, and
     // the persisted user/assistant rows (see `pipeline/turnSetup`).
@@ -1225,6 +1235,7 @@ export class AiAgentService {
         },
         {
           agentConfig,
+          agentSender,
           agentSlug,
           appContext,
           assistantAgentId,
@@ -1673,6 +1684,29 @@ export class AiAgentService {
       userMessageId: result.userMessageId,
     };
   }
+
+  /**
+   * Resolve the agent that launched an agent → agent run into the snapshot the
+   * UI renders as the message author (`metadata.agentSender`).
+   *
+   * The client names only the operation its launcher's run belongs to; the topic
+   * and the agent are read from that operation row, which this server wrote.
+   * `resolveAgentSenderFromOperation` owns the trust rule (the row must be the
+   * caller's own, not merely visible to them).
+   */
+  private resolveSourceAgentSnapshot = (
+    destinationAgentId: string,
+    sourceOperationId?: string,
+  ): Promise<AgentSenderMetadata | undefined> =>
+    resolveAgentSenderFromOperation(sourceOperationId, {
+      destinationAgentId,
+      findAgentDisplayFields: (agentId) => this.agentModel.getAgentDisplayFields(agentId),
+      findAgentVisibility: (agentId) => this.agentModel.getAgentVisibility(agentId),
+      findOperation: (operationId) => this.agentOperationModel.findById(operationId),
+      findTopic: (topicId) => this.topicModel.findById(topicId),
+      userId: this.userId,
+      workspaceId: this.workspaceId,
+    });
 
   /**
    * `AgentRuntimeDelegate.verifyShareRunStillAuthorized` implementation — see
