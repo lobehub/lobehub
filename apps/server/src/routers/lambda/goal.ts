@@ -277,6 +277,10 @@ const readEvents = async (goalService: GoalService, input: EventsInput) => {
  * `allowTerminalOperation` is deliberately unset: reads of a run that has already
  * ended are an ordinary-session job, so the token works exactly while its turn
  * runs.
+ *
+ * Scope is the operation's principal AND its Goal: every endpoint calls
+ * `assertOperationReadsOwnGoal`, so a token reaches exactly the Goal whose
+ * current turn it holds — not any Goal in the workspace whose id it learns.
  */
 const goalOperationReadProcedure = heteroAuthedProcedure.use(serverDatabase).use(async (opts) => {
   if (opts.ctx.heteroAuthKind !== 'operation' || !opts.ctx.heteroOperation) {
@@ -303,12 +307,39 @@ const goalOperationReadProcedure = heteroAuthedProcedure.use(serverDatabase).use
   }
   return opts.next({
     ctx: {
+      goalModel: new GoalModel(opts.ctx.serverDB, principal.userId, principal.workspaceId),
       goalService: new GoalService(opts.ctx.serverDB, principal.userId, principal.workspaceId),
+      // The operation the token was minted for — not an id the caller supplies.
+      heteroOperationId: principal.operationId,
       userId: principal.userId,
       workspaceId: principal.workspaceId ?? null,
     },
   });
 });
+
+/**
+ * A device / gateway planning run may read only the Goal its own turn belongs to.
+ *
+ * Holding an active `hetero:ingest` token proves the caller is *some* live run of
+ * this user and workspace — not that it is THIS Goal's run. The capability is
+ * also carried by runs that never plan (`heteroOperationCapabilities`), and an
+ * operation id is not a Goal id; without this, a run that learns another Goal's
+ * id could read that Goal's manager state and, worse, its planning `token`, then
+ * submit a plan for it. The binding is the Goal's current turn: its
+ * `managerState.operationId` is the run the token was minted for.
+ */
+const assertOperationReadsOwnGoal = async (
+  ctx: { goalModel: GoalModel; heteroOperationId: string },
+  goalId: string,
+) => {
+  const goal = await ctx.goalModel.findById(goalId);
+  if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+  if (goal.config?.managerState?.operationId !== ctx.heteroOperationId)
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This run does not own the current planning turn of this goal',
+    });
+};
 
 export const goalRouter = router({
   wake: goalWriteProcedure
@@ -966,6 +997,7 @@ export const goalRouter = router({
 
   graphOperation: goalOperationReadProcedure.input(idInput).query(async ({ ctx, input }) => {
     try {
+      await assertOperationReadsOwnGoal(ctx, input.id);
       return { data: await ctx.goalService.graph(input.id), success: true };
     } catch (error) {
       mapGoalError(error, 'graph');
@@ -976,6 +1008,7 @@ export const goalRouter = router({
     .input(planContextInput)
     .query(async ({ ctx, input }) => {
       try {
+        await assertOperationReadsOwnGoal(ctx, input.id);
         const manager = new GoalManagerService(
           ctx.serverDB,
           ctx.userId,
@@ -989,6 +1022,7 @@ export const goalRouter = router({
 
   eventsOperation: goalOperationReadProcedure.input(eventsInput).query(async ({ ctx, input }) => {
     try {
+      await assertOperationReadsOwnGoal(ctx, input.id);
       return { data: await readEvents(ctx.goalService, input), success: true };
     } catch (error) {
       mapGoalError(error, 'list events of');

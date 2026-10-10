@@ -39,6 +39,14 @@ vi.mock('@/server/services/goal/manager', async (importOriginal) => ({
   }),
 }));
 
+const mockGoalFindById = vi.fn();
+vi.mock('@/database/models/goal', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  GoalModel: vi.fn(function () {
+    return { findById: mockGoalFindById };
+  }),
+}));
+
 const { goalRouter } = await import('../goal');
 
 const caller = (authKind: 'operation' | 'user') =>
@@ -56,6 +64,10 @@ describe('goalRouter operation reads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolve.mockResolvedValue({ operationId: 'op_1', userId: 'user-1', workspaceId: 'ws-1' });
+    mockGoalFindById.mockResolvedValue({
+      config: { managerState: { operationId: 'op_1' } },
+      id: 'goal_1',
+    });
     mockGraph.mockResolvedValue({ goal: { id: 'goal_1' } });
     mockAdmission.mockResolvedValue({ admission: { code: 'ok', ok: true } });
   });
@@ -89,5 +101,37 @@ describe('goalRouter operation reads', () => {
       operationId: undefined,
       token: undefined,
     });
+  });
+
+  it('refuses a Goal whose current turn belongs to another operation', async () => {
+    // A `hetero:ingest` token is held by runs that never plan, so holding one must
+    // not let a run read a Goal it does not own — least of all the manager state
+    // and planning token `planContext` returns.
+    mockGoalFindById.mockResolvedValue({
+      config: { managerState: { operationId: 'op_other' } },
+      id: 'goal_2',
+    });
+
+    await expect(caller('operation').graphOperation({ id: 'goal_2' })).rejects.toThrow(
+      'does not own',
+    );
+    await expect(caller('operation').planContextOperation({ id: 'goal_2' })).rejects.toThrow(
+      'does not own',
+    );
+    await expect(caller('operation').eventsOperation({ id: 'goal_2' })).rejects.toThrow(
+      'does not own',
+    );
+
+    // Refused before touching the Goal's graph, manager state or audit trail.
+    expect(mockGraph).not.toHaveBeenCalled();
+    expect(mockAdmission).not.toHaveBeenCalled();
+  });
+
+  it('refuses an operation read of a Goal it cannot see', async () => {
+    mockGoalFindById.mockResolvedValue(undefined);
+
+    await expect(caller('operation').graphOperation({ id: 'goal-missing' })).rejects.toThrow(
+      'Goal not found',
+    );
   });
 });
