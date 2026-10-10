@@ -8,7 +8,7 @@ import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { agentEvalService } from '@/services/agentEval';
-import { useEvalStore } from '@/store/eval';
+import { testCaseSelectors, useEvalStore } from '@/store/eval';
 
 import { createDatasetCreateModal } from '../../../../features/DatasetCreateModal';
 import { createDatasetEditModal } from '../../../../features/DatasetEditModal';
@@ -59,19 +59,20 @@ const DatasetsTab = memo<DatasetsTabProps>(
     const useFetchTestCases = useEvalStore((s) => s.useFetchTestCases);
     const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
 
-    // Fetch test cases for expanded dataset - use SWR return value directly
-    const { data: testCaseData, isLoading: loading } = useFetchTestCases(
+    // Fetch the expanded dataset's case page; the rows are read from the replica.
+    useFetchTestCases(
       expandedDs
         ? {
             datasetId: expandedDs,
             limit: pagination.pageSize,
             offset: (pagination.current - 1) * pagination.pageSize,
           }
-        : { datasetId: '', limit: 0, offset: 0 },
+        : null,
     );
 
-    const testCases = testCaseData?.data || [];
-    const total = testCaseData?.total || 0;
+    const testCases = useEvalStore(testCaseSelectors.testCases(expandedDs ?? undefined));
+    const total = useEvalStore(testCaseSelectors.testCaseTotal(expandedDs ?? undefined));
+    const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(expandedDs ?? undefined));
 
     const handleRefreshTestCases = useCallback(
       async (datasetId: string) => {

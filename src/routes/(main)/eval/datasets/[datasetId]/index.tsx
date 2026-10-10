@@ -13,7 +13,7 @@ import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { agentEvalService } from '@/services/agentEval';
-import { runSelectors, useEvalStore } from '@/store/eval';
+import { runSelectors, testCaseSelectors, useEvalStore } from '@/store/eval';
 
 import TestCasePreviewPanel from '../../bench/[benchmarkId]/features/DatasetsTab/TestCasePreviewPanel';
 import TestCaseTable from '../../bench/[benchmarkId]/features/DatasetsTab/TestCaseTable';
@@ -122,14 +122,14 @@ const DatasetDetail = memo(() => {
     [runList],
   );
 
-  const { data: testCaseData } = useFetchTestCases({
+  useFetchTestCases({
     datasetId: datasetId!,
     limit: pagination.pageSize,
     offset: (pagination.current - 1) * pagination.pageSize,
   });
 
-  const testCases = testCaseData?.data || [];
-  const total = testCaseData?.total || 0;
+  const testCases = useEvalStore(testCaseSelectors.testCases(datasetId));
+  const total = useEvalStore(testCaseSelectors.testCaseTotal(datasetId));
 
   const filteredCases = testCases.filter((c: any) => {
     if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;

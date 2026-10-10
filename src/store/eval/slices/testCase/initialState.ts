@@ -1,19 +1,21 @@
-interface TestCaseCacheItem {
-  data: any[];
-  pagination: { limit: number; offset: number };
-  total: number;
-}
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
+import type { TestCaseDetail, TestCaseListValue } from './projection';
 
 export interface TestCaseSliceState {
-  // Map to cache test cases by datasetId
-  loadingTestCaseIds: string[];
-  /** A single test case addressed by its own id, for the case detail page. */
-  testCaseDetailCache: Record<string, any>;
-  testCasesCache: Record<string, TestCaseCacheItem>;
+  /** Replica view of a test case addressed by its own id, for the case detail page. */
+  testCaseDetailMap: Record<string, TestCaseDetail>;
+  /** Replica bookkeeping of `testCaseDetailMap`. */
+  testCaseDetailReplica: ReplicaState<TestCaseDetail>;
+  /** Replica view of a dataset's case page (`testCaseListMap[datasetId]`). */
+  testCaseListMap: Record<string, TestCaseListValue>;
+  /** Replica bookkeeping of `testCaseListMap`. */
+  testCaseListReplica: ReplicaState<TestCaseListValue>;
 }
 
 export const testCaseInitialState: TestCaseSliceState = {
-  loadingTestCaseIds: [],
-  testCaseDetailCache: {},
-  testCasesCache: {},
+  testCaseDetailMap: {},
+  testCaseDetailReplica: createReplicaState(),
+  testCaseListMap: {},
+  testCaseListReplica: createReplicaState(),
 };
