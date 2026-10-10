@@ -1969,6 +1969,248 @@ describe('GoalService', () => {
     expect(after.edges.filter((e) => e.kind === 'depends_on')).toHaveLength(1);
   });
 
+  it('collapses a repeated mould into one batch, materializing only the probes', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+
+    expect((await service.tick(graph.goal.id)).outcome).toBe('advanced');
+
+    const after = await service.graph(graph.goal.id);
+    // ① Only the K probes exist as Tasks — the whole 50-unit fan-out never lands.
+    expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(5);
+    expect(after.nodes.filter((n) => n.kind === 'batch')).toHaveLength(1);
+    expect(after.nodes.filter((n) => n.kind === 'finding')).toHaveLength(1);
+    expect(after.nodes.filter((n) => n.kind === 'decision')).toHaveLength(1);
+
+    const state = after.goal.config?.rolloutState;
+    expect(state?.phase).toBe('probe');
+    expect(state?.probeNodeIds).toHaveLength(5);
+    expect(state?.unitTitles).toHaveLength(50);
+    expect(after.goal.config?.rollout?.trigger).toBe('canary');
+
+    // The probes are contained by the batch; the gate waits on each of them.
+    const batch = after.nodes.find((n) => n.kind === 'batch')!;
+    const containedIds = new Set(
+      after.edges
+        .filter((e) => e.kind === 'contains' && e.sourceNodeId === batch.id)
+        .map((e) => e.targetNodeId),
+    );
+    // Five probes inside the batch — never the whole 50-unit roster.
+    expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'task')).toHaveLength(5);
+    // Plus the one Template and the one Assay that make the batch a batch.
+    expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'finding')).toHaveLength(
+      1,
+    );
+    expect(after.nodes.filter((n) => containedIds.has(n.id) && n.kind === 'decision')).toHaveLength(
+      1,
+    );
+  });
+
+  it('does not grow a batch for a goal that is not one repeated mould', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '分两步上线一个新功能',
+      rollout: {
+        recipeOutline: '',
+        repeatable: false,
+        unitCount: 3,
+        units: [],
+        variants: [],
+      },
+      tasks: [
+        { dependsOn: [], instruction: '第一步：加 schema', title: '第一步' },
+        { dependsOn: [0], instruction: '第二步：接 UI', title: '第二步' },
+      ],
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Ship a feature' });
+
+    expect((await service.tick(graph.goal.id)).outcome).toBe('advanced');
+
+    const after = await service.graph(graph.goal.id);
+    expect(after.nodes.filter((n) => n.kind === 'batch')).toHaveLength(0);
+    expect(after.goal.config?.rolloutState).toBeUndefined();
+    // The ordinary decomposition is untouched: both steps are plain tasks.
+    expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
+  });
+
+  it('restarts the canary loop when a person answers a broken batch gate', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+    await service.tick(graph.goal.id);
+
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const before = await service.graph(graph.goal.id);
+    const state = before.goal.config!.rolloutState!;
+    const assayId = state.assayNodeId!;
+
+    // Simulate the break the coordinator opens when a gate blocks.
+    const decision = await graphModel.createDecision(graph.goal.id, assayId, {
+      authority: 'user',
+      options: [
+        { description: '修订配方', id: 'revise', label: '修订配方并重探' },
+        { description: '新类型', id: 'new_class', label: '作为新类型并排处理' },
+      ],
+      question: 'Batch gate blocked',
+      requestedUserId: userId,
+    });
+    await graphModel.updateNodeStatus(graph.goal.id, assayId, 'waiting');
+    await goalModel.updateRolloutState(graph.goal.id, { ...state, phase: 'pattern_break' });
+    await serverDB.update(goals).set({ status: 'paused' }).where(eq(goals.id, graph.goal.id));
+
+    // R5: the answer itself restarts the loop — no manual rerun.
+    await service.decide(graph.goal.id, decision!.id, 'revise', '补上 SSR 播种这一步');
+
+    const after = await service.graph(graph.goal.id);
+    const next = after.goal.config!.rolloutState!;
+    expect(next.phase).toBe('probe');
+    expect(next.waveIndex).toBe(0);
+    expect(next.templateRevision).toBe(state.templateRevision + 1);
+    expect(
+      after.edges.some((e) => e.kind === 'revises' && e.sourceNodeId === next.templateNodeId),
+    ).toBe(true);
+    // A fresh gate and a fresh probe batch: the class is proved again.
+    expect(next.assayNodeId).not.toBe(assayId);
+    expect(next.probeNodeIds.length).toBeGreaterThan(0);
+  });
+
+  it('re-opens the broken unit as a new task when the canary loop restarts', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+    await service.tick(graph.goal.id);
+
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const before = await service.graph(graph.goal.id);
+    const state = before.goal.config!.rolloutState!;
+    const [broken, ...settled] = state.probeNodeIds;
+    for (const id of settled) await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
+    await graphModel.updateNodeStatus(graph.goal.id, broken, 'waiting');
+    // A wave the round already released, whose member broke and was retired.
+    const massMember = await graphModel.createNode(graph.goal.id, {
+      kind: 'task',
+      scopeId: state.batchNodeId,
+      title: 'Unit 6',
+    });
+    await graphModel.updateNodeStatus(graph.goal.id, massMember!.id, 'retired');
+
+    const decision = await graphModel.createDecision(graph.goal.id, state.assayNodeId!, {
+      authority: 'user',
+      options: [
+        { description: '修订配方', id: 'revise', label: '修订配方并重探' },
+        { description: '新类型', id: 'new_class', label: '作为新类型并排处理' },
+      ],
+      question: 'Unit 1 did not pass',
+      requestedUserId: userId,
+    });
+    await graphModel.updateNodeStatus(graph.goal.id, state.assayNodeId!, 'waiting');
+    await goalModel.updateRolloutState(graph.goal.id, {
+      ...state,
+      massNodeIds: [massMember!.id],
+      phase: 'pattern_break',
+    });
+    await serverDB.update(goals).set({ status: 'paused' }).where(eq(goals.id, graph.goal.id));
+
+    await service.decide(graph.goal.id, decision!.id, 'revise', '补上冷启动这一步');
+
+    const after = await service.graph(graph.goal.id);
+    const next = after.goal.config!.rolloutState!;
+    // Decision #4: the broken unit runs again as a new task, the old one retires.
+    expect(after.nodes.find((n) => n.id === broken)?.status).toBe('retired');
+    // Both units that broke this round — the probe and the wave member — re-open.
+    const reopenedNodes = next.probeNodeIds.map((id) => after.nodes.find((n) => n.id === id)!);
+    expect(reopenedNodes.map((n) => n.title).sort()).toEqual(['Unit 1', 'Unit 6']);
+    const reopened = reopenedNodes.find((n) => n.title === 'Unit 1')!;
+    expect(
+      after.edges.some(
+        (e) =>
+          e.kind === 'derived_from' && e.sourceNodeId === reopened.id && e.targetNodeId === broken,
+      ),
+    ).toBe(true);
+    // Re-opening is not a new release: the roster cursor stays where it was.
+    expect(next.releasedCount).toBe(state.releasedCount);
+    // The new canary is a fresh round: the old wave's retired member no longer
+    // counts against its gate (it would re-open the same break at once).
+    expect(next.massNodeIds).toBeUndefined();
+  });
+
+  it('persists the planned recipe when the caller already chose a canary rollout', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [{ axis: 'cold-start', values: ['yes', 'no'] }],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({
+      config: { rollout: { canarySize: 3, trigger: 'canary', waveSize: 7 } },
+      title: 'Migrate stores',
+    });
+    await service.tick(graph.goal.id);
+
+    const policy = (await service.graph(graph.goal.id)).goal.config!.rollout!;
+    // What the planner derived is kept — later waves brief from it, the gate checks its axes…
+    expect(policy.spec?.recipeOutline).toBe('把 store 换成 replica 支撑的实现');
+    expect(policy.spec?.variantAxes).toEqual([{ axis: 'cold-start', values: ['yes', 'no'] }]);
+    expect(policy.units).toHaveLength(50);
+    // …and what the caller chose still wins.
+    expect(policy).toMatchObject({ canarySize: 3, trigger: 'canary', waveSize: 7 });
+  });
+
   it('asks a blocking question before planning, then plans once with the answer', async () => {
     const planner = vi
       .spyOn(GoalCriteriaGeneratorService.prototype, 'decompose')

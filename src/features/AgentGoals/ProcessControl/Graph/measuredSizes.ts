@@ -35,3 +35,20 @@ export const mergeMeasuredSizes = (
   }
   return next ?? previous;
 };
+
+/** Card node types: their height follows content, so a relayout hands the measurement back. */
+const CARD_NODE_TYPES = new Set(['goalNode', 'goalExperiment']);
+
+/**
+ * Size fields for one flow node on a relayout. A relayout hands React Flow a
+ * new node object, which it treats as unmeasured: it pins the card to
+ * `initialHeight` and drops the handle positions its edges are drawn from.
+ * Handing a card its last measurement back keeps both, so only a card that has
+ * never rendered — or a framed container sized by the layout — gets the estimate.
+ */
+export const flowNodeSize = (
+  type: string,
+  measured: MeasuredSize | undefined,
+  estimatedHeight: number | undefined,
+): { initialHeight?: number; measured?: MeasuredSize } =>
+  CARD_NODE_TYPES.has(type) && measured ? { measured } : { initialHeight: estimatedHeight };

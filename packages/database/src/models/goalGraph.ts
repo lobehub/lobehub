@@ -578,8 +578,14 @@ export class GoalGraphModel {
         const target = nodes.find((node) => node.id === targetNodeId);
         if (!source || !target || source.id === target.id)
           throw new Error('Invalid experiment relationship');
-        if (source.kind !== 'experiment')
-          throw new Error('Only an experiment can contain nodes or answer a question');
+        // Two kinds are containers: an `experiment` (a candidate answer under
+        // test) and a `batch` (one repeated mould delivered as a class). The
+        // single-owner and cycle rules below are about containment itself, so
+        // they hold for both; only the question-scope rules are experiment-only.
+        if (source.kind !== 'experiment' && source.kind !== 'batch')
+          throw new Error('Only a container can contain nodes or answer a question');
+        if (kind === 'answers' && source.kind !== 'experiment')
+          throw new Error('Only an experiment can answer a question');
         if (kind === 'contains') {
           const owner = experimentOwner(graph, target.id);
           if (owner && owner !== source.id)
@@ -590,6 +596,7 @@ export class GoalGraphModel {
             (edge) => edge.kind === 'answers' && edge.sourceNodeId === target.id,
           )?.targetNodeId;
           if (
+            source.kind === 'experiment' &&
             edges.some(
               (edge) =>
                 edge.kind === 'answers' &&
@@ -598,7 +605,11 @@ export class GoalGraphModel {
             )
           )
             throw new Error('A question must share its answer scope');
-          if (questionId && experimentOwner(graph, questionId) !== source.id)
+          if (
+            source.kind === 'experiment' &&
+            questionId &&
+            experimentOwner(graph, questionId) !== source.id
+          )
             throw new Error('An answer must share its question scope');
         } else {
           if (target.kind !== 'problem') throw new Error('An experiment must answer a question');

@@ -5,6 +5,7 @@ import {
   chainGoalDecompose,
   GOAL_CRITERIA_DRAFT_JSON_SCHEMA,
   GOAL_CRITERIA_DRAFT_PROMPT_VERSION,
+  GOAL_DECOMPOSE_JSON_SCHEMA,
   GOAL_DECOMPOSE_PROMPT_VERSION,
 } from './goal';
 
@@ -43,7 +44,7 @@ describe('chainGoalDecompose', () => {
     const { messages } = chainGoalDecompose({ requirement });
     const prompt = messages[0].content;
 
-    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v6');
+    expect(GOAL_DECOMPOSE_PROMPT_VERSION).toBe('v8');
     expect(messages[1].content).toContain(requirement);
     expect(prompt).toContain('a request to build, fix, or upgrade requires implementation');
     expect(prompt).toContain('It may pass when it proves a capability is missing');
@@ -53,6 +54,23 @@ describe('chainGoalDecompose', () => {
     expect(prompt).toContain('include dependent implementation tasks that consume its findings');
     expect(prompt).toContain('discovering a read-only viewer triggers implementation');
     expect(prompt).toContain('an investigation-only goal must not become an implementation task');
+  });
+
+  it('flags one repeated mould with a probe spec and a full roster', () => {
+    const { messages } = chainGoalDecompose({ requirement: '迁移 50 个同构的 store' });
+    const prompt = messages[0].content;
+
+    // R2: the homogeneity filter the planner must apply before claiming a batch.
+    expect(prompt).toContain('after replacing the concrete file / module / symbol names');
+    // Probe-only tasks plus the full roster the coordinator promotes from.
+    expect(prompt).toContain('3–5 probes');
+    expect(prompt).toContain('full roster of every homogeneous unit');
+    expect(prompt).toContain('leave rollout null');
+
+    const rollout = (GOAL_DECOMPOSE_JSON_SCHEMA.schema.properties as any).rollout;
+    expect(rollout).toBeDefined();
+    expect(rollout.properties.units).toBeDefined();
+    expect(rollout.properties.repeatable).toBeDefined();
   });
 
   it('reports what it cannot determine and plans on answered clarifications', () => {
