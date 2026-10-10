@@ -56,8 +56,7 @@ const Reviews = memo(() => {
         </Flexbox>
       ) : error ? (
         // A failed fetch is not "no reviews yet" — offer a retry. CommentList
-        // only mounts on success, so retried data seeds it fresh (it snapshots
-        // initialData at mount time).
+        // reseeds itself when a revalidated first page replaces the persisted one.
         <AsyncError
           error={error}
           retrying={isValidating}
