@@ -111,7 +111,7 @@ describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () 
     });
 
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ pluginState: { status: 'pending', threadId: 'thread-1' } }),
+      expect.objectContaining({ pluginState: { status: 'dispatched', threadId: 'thread-1' } }),
     );
     expect(execVirtualSubAgent).toHaveBeenCalledWith(
       expect.objectContaining({

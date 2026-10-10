@@ -6767,7 +6767,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
       expect((result.nextContext?.payload as any).stop).toBe(true);
     });
 
-    it('call_tool lets server callAgent run as a deferred tool via the subAgent runner', async () => {
+    it('call_tool lets server callAgent run as a deferred tool when wait:true (via the subAgent runner)', async () => {
       const mockExecVirtualSubAgent = vi
         .fn()
         .mockResolvedValue({ success: true, operationId: 'child-op', threadId: 'thread-child' });
@@ -6785,6 +6785,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             description: 'Call agent target-agent',
             instruction: 'Do something useful',
             timeout: 1_800_000,
+            wait: true,
           });
 
           return {
@@ -6812,6 +6813,7 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
             arguments: JSON.stringify({
               agentId: 'target-agent-id',
               instruction: 'Do something useful',
+              wait: true,
             }),
             id: 'tool-call-1',
             identifier: 'lobe-agent-management',
