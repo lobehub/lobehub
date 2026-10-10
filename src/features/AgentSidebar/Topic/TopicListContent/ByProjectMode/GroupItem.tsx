@@ -79,19 +79,22 @@ const styles = createStaticStyles(({ css }) => ({
 
     overflow: hidden;
     display: inline-flex;
+    flex: none;
+    align-items: center;
 
-    width: 0;
+    max-width: 0;
 
     opacity: 0;
 
     transition:
-      width 150ms ${cssVar.motionEaseOut},
+      max-width 150ms ${cssVar.motionEaseOut},
       opacity 150ms ${cssVar.motionEaseOut};
 
+    /* Holds the "more" menu plus the start "+" (2 × 24px), not a single icon */
     &:focus-within,
     .accordion-header:hover & {
       pointer-events: auto;
-      width: 24px;
+      max-width: 48px;
       opacity: 1;
     }
   `,
