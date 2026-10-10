@@ -4,6 +4,7 @@ export {
   buildCodexAppServerThreadParams,
   getCodexAppServerUnsupportedArgs,
 } from './appServerParams';
+export { type CodexAgentHandleOptions, createCodexAgentHandle } from './codexAgentHandle';
 export {
   CodexAppServerClient,
   type CodexAppServerClientOptions,

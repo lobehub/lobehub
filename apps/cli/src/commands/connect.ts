@@ -20,6 +20,12 @@ import type {
 } from '@lobechat/device-gateway-client';
 import { GatewayClient } from '@lobechat/device-gateway-client';
 import { listHeterogeneousAgentModels } from '@lobechat/heterogeneous-agents/models';
+import { resolveHeteroSpawnCommand } from '@lobechat/heterogeneous-agents/resolveCliCommand';
+import {
+  createRuntimeProbeCache,
+  type RuntimeProbeCache,
+} from '@lobechat/heterogeneous-agents/runtimeProbeCache';
+import { CodexAppServerClient } from '@lobechat/heterogeneous-agents/spawn';
 import { getShellInfo } from '@lobechat/local-file-shell';
 import type { Command } from 'commander';
 
@@ -57,6 +63,7 @@ import {
   resolveWorkspaceDeviceIdentity,
 } from '../device/register';
 import { TerminalSessionManager } from '../device/terminal';
+import { cliVersion } from '../pkg';
 import {
   installConnectService,
   readConnectServiceStatus,
@@ -127,6 +134,15 @@ export function registerConnectCommand(program: Command) {
         options.daemonChild || isServiceChild || process.env.LOBEHUB_DAEMON === '1';
 
       await runConnect(options, isDaemonChild);
+    });
+
+  // Capability discovery runs without login or opening a gateway connection. Desktop
+  // invokes its bundled CLI here so the probe and subsequent dispatch share a runtime.
+  connectCmd
+    .command('capabilities')
+    .description('Report native agent runtimes supported by this CLI and installed binaries')
+    .action(async () => {
+      console.log(JSON.stringify({ supportedAgentRuntimes: await probeNativeRuntimes() }));
     });
 
   // Subcommands
@@ -495,6 +511,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     writeTerminal: (params) => Promise.resolve(terminals.write(params)),
   };
 
+  // One native runtime probe per connection: system info is queried by tool runs and
+  // agent dispatch alike, and each probe starts a Codex app-server process.
+  const nativeRuntimes = createRuntimeProbeCache(probeNativeRuntimes);
+
   const handlerContext: GatewayHandlerContext = {
     deps: deviceControlDeps,
     error,
@@ -503,6 +523,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     info,
     isDaemonChild,
     maintenance,
+    nativeRuntimes,
     recordRequest,
   };
 
@@ -533,6 +554,10 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   client.on('connected', () => {
     updateStatus('connected');
     void metricsSampler?.flush();
+    // A (re)connection reprobes so an upgraded or downgraded Codex is reported, and
+    // warms the cache before the gateway's first system_info_request.
+    nativeRuntimes.invalidate();
+    void nativeRuntimes.get();
   });
 
   client.on('disconnected', () => {
@@ -919,6 +944,8 @@ interface GatewayHandlerContext {
   info: (msg: string) => void;
   isDaemonChild: boolean;
   maintenance: CliMaintenance;
+  /** Process-wide native runtime probe, shared by every gateway connection. */
+  nativeRuntimes: RuntimeProbeCache;
   recordRequest: () => void;
 }
 
@@ -933,12 +960,21 @@ function bindGatewayClientHandlers(
   ctx: GatewayHandlerContext,
   connectionWorkspaceId?: string,
 ) {
-  const { deps, error, getServerUrl, info, isDaemonChild, maintenance, recordRequest } = ctx;
+  const {
+    deps,
+    error,
+    getServerUrl,
+    info,
+    isDaemonChild,
+    maintenance,
+    nativeRuntimes,
+    recordRequest,
+  } = ctx;
 
   // Handle system info requests
-  client.on('system_info_request', (request: SystemInfoRequestMessage) => {
+  client.on('system_info_request', async (request: SystemInfoRequestMessage) => {
     info(`Received system_info_request: requestId=${request.requestId}`);
-    const systemInfo = collectSystemInfo();
+    const systemInfo = await collectSystemInfo(nativeRuntimes);
     client.sendSystemInfoResponse({
       requestId: request.requestId,
       result: { success: true, systemInfo },
@@ -1142,7 +1178,80 @@ function scheduleProactiveRefresh(
   }
 }
 
-function collectSystemInfo(): DeviceSystemInfo {
+/**
+ * Checks the currently resolved Codex binary without creating a conversation.
+ *
+ * Use when:
+ * - Reporting native runtime support to a connected gateway.
+ * Expects:
+ * - The same binary resolution and PATH as ordinary CLI dispatch.
+ * Returns:
+ * - False for missing, incompatible, malformed, or stalled native handshakes.
+ *
+ * Call stack:
+ * registerConnectCommand -> connect capabilities
+ * bindGatewayClientHandlers
+ *   -> {@link collectSystemInfo}
+ *     -> {@link supportsNativeCodex}
+ *       -> {@link resolveHeteroSpawnCommand}
+ *       -> {@link CodexAppServerClient.connect}
+ */
+async function supportsNativeCodex(): Promise<boolean> {
+  let client: CodexAppServerClient | undefined;
+  let expired = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  // Device discovery has a 10-second budget. Bound binary resolution and handshake
+  // together so a broken installation cannot block unrelated device tools.
+  // Cold Codex startup can exceed 3 seconds; reserve 6 seconds below the gateway budget.
+  const deadline = new Promise<boolean>((resolve) => {
+    timer = setTimeout(() => {
+      expired = true;
+      resolve(false);
+    }, 6000);
+  });
+  const probe = async () => {
+    try {
+      const resolved = await resolveHeteroSpawnCommand('codex');
+      // A late resolver must not create a subprocess after the caller has timed out.
+      if (expired) return false;
+      client = new CodexAppServerClient({
+        clientVersion: cliVersion,
+        commandPath: resolved.command,
+        cwd: process.cwd(),
+        env: { ...process.env, ...(resolved.pathEnv ? { PATH: resolved.pathEnv } : {}) },
+      });
+      const response = await client.connect();
+      return typeof response?.userAgent === 'string' && response.userAgent.length > 0;
+    } catch {
+      return false;
+    }
+  };
+  try {
+    return await Promise.race([probe(), deadline]);
+  } finally {
+    clearTimeout(timer);
+    // The probe owns only its handshake process, never a user's native session.
+    client?.close();
+  }
+}
+
+/** Native agent runtimes the resolved binaries support; one handshake per call. */
+async function probeNativeRuntimes(): Promise<string[]> {
+  return (await supportsNativeCodex()) ? ['codex-app-server-v1'] : [];
+}
+
+/**
+ * Reports host paths and live native capabilities to the gateway.
+ *
+ * Use when: a gateway requests this connection's current system information.
+ * Expects: local paths and binary resolution belong to this connect process.
+ * Returns: system information even when Codex is unavailable.
+ *
+ * Call stack:
+ * bindGatewayClientHandlers -> {@link collectSystemInfo}
+ *   -> RuntimeProbeCache.get -> {@link probeNativeRuntimes} -> {@link supportsNativeCodex}
+ */
+async function collectSystemInfo(nativeRuntimes: RuntimeProbeCache): Promise<DeviceSystemInfo> {
   const home = os.homedir();
   const platform = process.platform;
   const videosDir = platform === 'linux' ? 'Videos' : 'Movies';
@@ -1157,6 +1266,7 @@ function collectSystemInfo(): DeviceSystemInfo {
     homePath: home,
     musicPath: path.join(home, 'Music'),
     picturesPath: path.join(home, 'Pictures'),
+    supportedAgentRuntimes: await nativeRuntimes.get(),
     userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),
     workingDirectory: process.cwd(),

@@ -7,6 +7,10 @@ import {
   classifyHeteroProcessFailure,
   isHeteroStatusGuideErrorData,
 } from '@lobechat/heterogeneous-agents/processFailure';
+import {
+  type CodexBranchRun,
+  resolveCodexBranchRun,
+} from '@lobechat/heterogeneous-agents/protocol';
 import { ThreadStatus } from '@lobechat/types';
 import debug from 'debug';
 
@@ -154,12 +158,16 @@ const buildIngestRejectionError = (
 export interface HeterogeneousAgentServiceOptions {
   /** Inject a pre-built operation model (used by tests). */
   agentOperationModel?: AgentOperationModel;
+  /** Scoped message model shared by ingest and terminal branch handling. */
+  messageModel?: MessageModel;
   /** Inject a pre-built persistence handler (used by tests). */
   persistenceHandler?: HeterogeneousPersistenceHandler;
   /** Inject a snapshot store (used by tests); defaults to the env-resolved store. */
   snapshotStore?: ISnapshotStore | null;
   /** Inject a pre-built manager (used by tests). */
   streamEventManager?: IStreamEventManager;
+  /** Scoped thread model shared by dispatch and native binding persistence. */
+  threadModel?: ThreadModel;
   /** Inject a pre-built TopicModel (used by tests for the resume helper). */
   topicModel?: TopicModel;
   /**
@@ -188,6 +196,7 @@ export class HeterogeneousAgentService {
   private readonly persistenceHandler: HeterogeneousPersistenceHandler;
   private readonly streamEventManager: IStreamEventManager;
   private readonly topicModel: TopicModel;
+  private readonly threadModel: ThreadModel;
   private readonly traceRecorder: HeteroTraceRecorder;
   private readonly userId: string;
   private readonly workspaceId?: string;
@@ -203,9 +212,10 @@ export class HeterogeneousAgentService {
     this.workspaceId = workspaceId;
     this.agentOperationModel =
       options.agentOperationModel ?? new AgentOperationModel(db, userId, workspaceId);
-    this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.messageModel = options.messageModel ?? new MessageModel(db, userId, workspaceId);
     this.streamEventManager = options.streamEventManager ?? createStreamEventManager();
     this.topicModel = options.topicModel ?? new TopicModel(db, userId, workspaceId);
+    this.threadModel = options.threadModel ?? new ThreadModel(db, userId, workspaceId);
     this.traceRecorder = new HeteroTraceRecorder(
       options.snapshotStore !== undefined ? options.snapshotStore : createDefaultSnapshotStore(),
     );
@@ -215,7 +225,7 @@ export class HeterogeneousAgentService {
         isOperationLiveOnTopic: (operationId, topicId) =>
           this.agentOperationModel.isRunningOnTopic(operationId, topicId),
         messageModel: this.messageModel,
-        threadModel: new ThreadModel(db, userId, workspaceId),
+        threadModel: this.threadModel,
         topicModel: this.topicModel,
         userId,
         workspaceId,
@@ -507,7 +517,15 @@ export class HeterogeneousAgentService {
         // Only the producer can distinguish a missing native session from a
         // transient pre-init error such as Codex's "already has an active writer".
         // Clearing every error without a new id would fork the next turn empty.
-        await this.topicModel.updateMetadata(topicId, resumeBindingUpdate);
+        // Only a Codex Fork branch owns a native session separate from its topic.
+        const forkThread = isolationThreadId
+          ? await this.getCodexForkThread(topicId, isolationThreadId)
+          : undefined;
+        if (forkThread) {
+          await this.threadModel.updateMetadata(forkThread.id, resumeBindingUpdate);
+        } else {
+          await this.topicModel.updateMetadata(topicId, resumeBindingUpdate);
+        }
       } catch (err) {
         log('heteroFinish: update resume session binding failed (non-fatal): %O', err);
       }
@@ -571,9 +589,9 @@ export class HeterogeneousAgentService {
     // back onto the source assistant in the main conversation.
     if (isolationThreadId) {
       try {
-        const threadModel = new ThreadModel(this.db, this.userId, this.workspaceId);
+        const threadModel = this.threadModel;
         const thread = await threadModel.findById(isolationThreadId);
-        if (thread) {
+        if (thread?.type === 'isolation') {
           if (lastAssistantContent && thread.sourceMessageId) {
             await this.messageModel.update(thread.sourceMessageId, {
               content: lastAssistantContent,
@@ -711,9 +729,85 @@ export class HeterogeneousAgentService {
    * Reads the same `topic.metadata.heteroSessionId` the desktop renderer
    * writes, so resume state is shared between desktop and cloud paths.
    */
-  async getHeterogeneousResumeSessionId(topicId: string): Promise<string | undefined> {
+  async getHeterogeneousResumeSessionId(
+    topicId: string,
+    threadId?: string,
+  ): Promise<string | undefined> {
+    const forkThread = threadId ? await this.getCodexForkThread(topicId, threadId) : undefined;
+    if (forkThread) return forkThread.metadata?.heteroSessionId;
     const topic = await this.topicModel.findById(topicId);
     return topic?.metadata?.heteroSessionId;
+  }
+
+  /**
+   * Finds the Codex Fork branch that owns a thread-scoped run.
+   *
+   * Use when:
+   * - Deciding whether a run's native session belongs to its thread instead of its topic.
+   * Expects:
+   * - The run's topic and thread identifiers.
+   * Returns:
+   * - The thread when it is a Codex Fork branch of this topic; undefined for every other
+   *   thread, which keeps the topic-scoped session binding.
+   */
+  async getCodexForkThread(topicId: string, threadId: string) {
+    const thread = await this.threadModel.findById(threadId);
+    if (!thread || thread.topicId !== topicId || !thread.metadata?.codexForkTarget) return;
+    return thread;
+  }
+  /**
+   * Resolves a device branch from its durable origin and its own message ancestry.
+   *
+   * Use when:
+   * - Dispatching the first native Fork or continuing a saved child after refresh/reconnect.
+   * Expects:
+   * - A Codex Fork thread from {@link HeterogeneousAgentService.getCodexForkThread} and the
+   *   current user message identifier.
+   * Returns:
+   * - An exact native boundary/resume token, or an explicit lost-child rejection.
+   *
+   * Call stack:
+   *
+   * heteroDispatch
+   *   -> {@link HeterogeneousAgentService.getCodexBranchRun}
+   *     -> {@link resolveCodexBranchRun}
+   */
+  async getCodexBranchRun(
+    thread: NonNullable<Awaited<ReturnType<HeterogeneousAgentService['getCodexForkThread']>>>,
+    messageId: string,
+  ): Promise<CodexBranchRun> {
+    const { id: threadId, topicId } = thread;
+    const origin = thread.metadata?.codexForkTarget;
+    if (!origin) return { codexBranchError: 'Native branch is unavailable' };
+    // Read the actual ancestry rather than a paginated transcript, which can omit the durable child handoff.
+    const messages: Parameters<typeof resolveCodexBranchRun>[0]['messages'][number][] = [];
+    const visited = new Set<string>();
+    let currentId: string | null | undefined = messageId;
+    while (currentId && !visited.has(currentId)) {
+      visited.add(currentId);
+      const message = await this.messageModel.findById(currentId);
+      if (!message || message.topicId !== topicId || message.threadId !== threadId) break;
+      messages.push({
+        id: currentId,
+        metadata: message.metadata,
+        parentId: message.parentId,
+        threadId: message.threadId,
+        role: message.role,
+        content: message.content,
+        error: message.error,
+        // A tool-only answer has already used the branch even without assistant text.
+        tools: Array.isArray(message.tools) ? message.tools : undefined,
+      });
+      if (message.metadata?.heteroSessionId && message.metadata.heteroSessionId !== origin.threadId)
+        break;
+      currentId = message.parentId;
+    }
+    return resolveCodexBranchRun({
+      messageId,
+      messages,
+      resumeSessionId: thread.metadata?.heteroSessionId,
+      thread: { id: threadId, metadata: thread.metadata },
+    });
   }
 }
 

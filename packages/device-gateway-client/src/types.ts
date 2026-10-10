@@ -40,6 +40,10 @@ export interface DeviceSystemInfo {
   homePath: string;
   musicPath?: string;
   picturesPath?: string;
+  /** Native agent protocol versions supported by this live connection; absent on older clients.
+   * `codex-app-server-v1` supports native turn provenance, exact Fork boundaries and strict resume.
+   */
+  supportedAgentRuntimes?: string[];
   /** Opt-in tool identifiers supported by this client; absent on older clients. */
   supportedTools?: string[];
   userDataPath: string;

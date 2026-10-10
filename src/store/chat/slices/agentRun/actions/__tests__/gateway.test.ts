@@ -1120,6 +1120,136 @@ describe('GatewayActionImpl', () => {
       },
     );
 
+    // ROOT CAUSE:
+    //
+    // A native child refusal persists an error and returns success=false before
+    // a gateway token exists. Subscribing anyway left the optimistic assistant
+    // blank until a page reload. Reconcile the persisted turn before returning.
+    const codexForkThreadMaps = {
+      'topic-1': [
+        {
+          id: 'child-1',
+          metadata: {
+            codexForkTarget: { position: 'after', threadId: 'source-native', turnId: 'turn-1' },
+          },
+        },
+      ],
+    };
+
+    /** @example A lost child shows its persisted error without a gateway event. */
+    it('reconciles a rejected native branch without opening a gateway session', async () => {
+      const {
+        action,
+        connectToGateway,
+        replaceMessages,
+        startOperation,
+        state,
+        updateTopicStatus,
+      } = createExecuteTestAction();
+      const completeOperation = vi.fn();
+      state.completeOperation = completeOperation;
+      state.getOperationAbortSignal = vi.fn();
+      state.threadMaps = codexForkThreadMaps;
+      const context = {
+        agentId: 'agent-1',
+        scope: 'thread' as const,
+        threadId: 'child-1',
+        topicId: 'topic-1',
+      };
+      const failure: ExecAgentResult = {
+        ...precreatedInterventionResult,
+        autoStarted: false,
+        error: 'This Codex branch lost its native session. Fork again from the original message.',
+        status: 'error',
+        success: false,
+        token: undefined,
+      };
+      const failedMessage = createMockMessage({
+        content: '',
+        error: { body: { detail: failure.error }, type: 'ServerAgentRuntimeError' },
+        id: failure.assistantMessageId,
+        role: 'assistant',
+        threadId: 'child-1',
+      });
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValueOnce(failure);
+      vi.mocked(messageService.getMessages).mockResolvedValueOnce([failedMessage]);
+      const onComplete = vi.fn();
+
+      const result = await action.executeGatewayAgent({
+        context,
+        message: 'Continue the child',
+        onComplete,
+        parentOperationId: 'parent-send',
+      });
+
+      /** @example The child bucket receives its error before loading settles. */
+      expect(messageService.getMessages).toHaveBeenLastCalledWith(context);
+      expect(replaceMessages).toHaveBeenCalledWith([failedMessage], { context });
+      expect(completeOperation).toHaveBeenCalledWith('parent-send');
+      expect(onComplete).toHaveBeenCalledOnce();
+      expect(connectToGateway).not.toHaveBeenCalled();
+      expect(startOperation).not.toHaveBeenCalled();
+      expect(updateTopicStatus).not.toHaveBeenCalled();
+      expect(result).toBe(failure);
+    });
+
+    /** @example Failed dispatches outside a Codex Fork keep the existing gateway path. */
+    it('keeps the gateway path for a failed dispatch outside a Codex Fork thread', async () => {
+      const { action, connectToGateway, state } = createExecuteTestAction();
+      state.completeOperation = vi.fn();
+      state.getOperationAbortSignal = vi.fn();
+      state.threadMaps = { 'topic-1': [{ id: 'ordinary-thread', metadata: {} }] };
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValueOnce({
+        ...precreatedInterventionResult,
+        autoStarted: false,
+        status: 'error',
+        success: false,
+      });
+
+      await action.executeGatewayAgent({
+        context: {
+          agentId: 'agent-1',
+          scope: 'thread',
+          threadId: 'ordinary-thread',
+          topicId: 'topic-1',
+        },
+        message: 'Continue',
+        parentOperationId: 'parent-send',
+      });
+
+      /** @example The Fork-only reconciliation does not read messages for other runs. */
+      expect(messageService.getMessages).not.toHaveBeenCalled();
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
+    /** @example A failed reconciliation still releases the caller's loading state. */
+    it('settles a rejected branch when reading its persisted error fails', async () => {
+      const { action, connectToGateway, state } = createExecuteTestAction();
+      const completeOperation = vi.fn();
+      state.completeOperation = completeOperation;
+      state.getOperationAbortSignal = vi.fn();
+      state.threadMaps = codexForkThreadMaps;
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValueOnce({
+        ...precreatedInterventionResult,
+        autoStarted: false,
+        status: 'error',
+        success: false,
+        token: undefined,
+      });
+      vi.mocked(messageService.getMessages).mockRejectedValueOnce(new Error('read unavailable'));
+
+      /** @example Read failures reach the caller instead of silently hiding the error. */
+      await expect(
+        action.executeGatewayAgent({
+          context: { agentId: 'agent-1', scope: 'thread', threadId: 'child-1', topicId: 'topic-1' },
+          message: 'Continue the child',
+          parentOperationId: 'parent-send',
+        }),
+      ).rejects.toThrow('read unavailable');
+      expect(completeOperation).toHaveBeenCalledWith('parent-send');
+      expect(connectToGateway).not.toHaveBeenCalled();
+    });
+
     it.each(['approved', 'rejected'] as const)(
       'removes a %s question from pending interventions before connecting the precreated continuation',
       async (status) => {

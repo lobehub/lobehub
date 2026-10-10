@@ -78,6 +78,7 @@ import {
 } from '@/store/user/selectors';
 import { isTrpcErrorCode } from '@/utils/trpcError';
 
+import { findCodexForkThread } from '../../dispatch/codexForkTarget';
 import { resolveNewThreadIntent } from '../../dispatch/newThreadIntent';
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import { scheduleQueuedFollowUp } from '../../lifecycle/queuedFollowUp';
@@ -1512,6 +1513,28 @@ export class GatewayActionImpl {
         });
       }
       if (parentOperationId) this.#get().completeOperation(parentOperationId);
+      return result;
+    }
+
+    if (
+      result.success === false &&
+      findCodexForkThread(
+        this.#get().threadMaps,
+        resolvedMessageContext.topicId,
+        resolvedMessageContext.threadId,
+      )
+    ) {
+      // Native branch validation can settle the run before any gateway token
+      // exists. Read its persisted error directly instead of waiting for a
+      // stream that may never authenticate or replay that terminal event.
+      // Scoped to Codex Fork threads; other dispatch failures keep their path.
+      try {
+        const messages = await messageService.getMessages(resolvedMessageContext);
+        this.#get().replaceMessages(messages, { context: resolvedMessageContext });
+      } finally {
+        if (parentOperationId) this.#get().completeOperation(parentOperationId);
+        onComplete?.();
+      }
       return result;
     }
 

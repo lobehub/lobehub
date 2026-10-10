@@ -12,13 +12,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(
-  () => ({
-    mockCreatePiRpcAgentHandle: vi.fn(),
-    mockResolveHeteroSpawnCommand: vi.fn(),
-    mockSpawnAgent: vi.fn(),
-  }),
-);
+const {
+  mockCreateCodexAgentHandle,
+  mockCreatePiRpcAgentHandle,
+  mockResolveHeteroSpawnCommand,
+  mockSpawnAgent,
+} = vi.hoisted(() => ({
+  mockCreateCodexAgentHandle: vi.fn(),
+  mockCreatePiRpcAgentHandle: vi.fn(),
+  mockResolveHeteroSpawnCommand: vi.fn(),
+  mockSpawnAgent: vi.fn(),
+}));
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
@@ -30,6 +34,7 @@ const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
   ...(await importOriginal<typeof HeteroSpawn>()),
   spawnAgent: mockSpawnAgent,
+  createCodexAgentHandle: mockCreateCodexAgentHandle,
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
@@ -127,6 +132,7 @@ describe('hetero exec command', () => {
         return { command: command ?? defaultCommand };
       },
     );
+    mockCreateCodexAgentHandle.mockReset();
     mockCreatePiRpcAgentHandle.mockReset();
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
@@ -461,6 +467,57 @@ describe('hetero exec command', () => {
 
     expect(cancel.mock.calls).toEqual([['SIGKILL']]);
     rejectFactory!(new Error('Pi RPC session is closed'));
+    await command;
+    expect(exitSpy).toHaveBeenCalledWith(137);
+    expect(signalHandlers.size).toBe(0);
+  });
+
+  /** @example Connected-device Stop reaches native startup and escalates the second interrupt. */
+  it('cancels detached native Codex startup inside the connected wrapper group', async () => {
+    // ROOT CAUSE:
+    // Native app-server detaches even when connect groups the wrapper, so signals must be forwarded.
+    vi.stubEnv(HETERO_EXEC_INHERIT_PROCESS_GROUP_ENV, '1');
+    const signalHandlers = new Map<string, () => void>();
+    vi.spyOn(process, 'on').mockImplementation(((event: string, listener: () => void) => {
+      if (event === 'SIGINT' || event === 'SIGTERM') signalHandlers.set(event, listener);
+      return process;
+    }) as typeof process.on);
+    vi.spyOn(process, 'off').mockImplementation(((event: string) => {
+      signalHandlers.delete(event);
+      return process;
+    }) as typeof process.off);
+
+    const cancel = vi.fn().mockResolvedValue(undefined);
+    let rejectFactory: ((error: Error) => void) | undefined;
+    mockCreateCodexAgentHandle.mockImplementation(
+      (options: { onStartupControl?: (control: { cancel: typeof cancel }) => void }) => {
+        options.onStartupControl?.({ cancel });
+        return new Promise((_resolve, reject) => {
+          rejectFactory = reject;
+        });
+      },
+    );
+
+    const command = runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--codex-app-server',
+      '--prompt',
+      'hi',
+    ]);
+    for (let index = 0; index < 20 && !signalHandlers.get('SIGINT'); index += 1) {
+      await Promise.resolve();
+    }
+    signalHandlers.get('SIGINT')?.();
+    signalHandlers.get('SIGINT')?.();
+    for (let index = 0; index < 20 && cancel.mock.calls.length === 0; index += 1) {
+      await Promise.resolve();
+    }
+
+    expect(cancel.mock.calls.at(-1)).toEqual(['SIGKILL']);
+    rejectFactory!(new Error('Native Codex session is closed'));
     await command;
     expect(exitSpy).toHaveBeenCalledWith(137);
     expect(signalHandlers.size).toBe(0);
@@ -983,6 +1040,126 @@ describe('hetero exec command', () => {
         resumeSessionId: 'session-open-1',
       }),
     );
+  });
+
+  /** @example A device fork carries a native turn boundary without invoking codex exec. */
+  it('routes an explicit Codex fork through the native app-server handle', async () => {
+    // ROOT CAUSE:
+    // Device dispatch previously had only codex exec, so it could neither fork
+    // at lastTurnId nor report Codex turn provenance. Explicit native flags
+    // select the shared app-server state machine instead of text replay.
+    const forkTarget = { position: 'before', threadId: 'source-native', turnId: 'turn-2' };
+    mockCreateCodexAgentHandle.mockResolvedValue(createFakeHandle());
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'selected prompt',
+      '--codex-app-server',
+      '--codex-fork-target',
+      JSON.stringify(forkTarget),
+      '--resume',
+      'source-native',
+    ]);
+    /** @example The exact native boundary reaches the driver. */
+    expect(mockCreateCodexAgentHandle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        forkTarget,
+        prompt: 'selected prompt',
+        resumeSessionId: 'source-native',
+        strictHistory: true,
+      }),
+    );
+    /** @example Native forks must never become one-shot text-history runs. */
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+  });
+
+  /** @example A deleted child returns an error, preserving the saved native binding. */
+  it('does not retry a Fork branch history as a fresh text replay', async () => {
+    mockCreateCodexAgentHandle.mockResolvedValue(
+      createFakeHandle({
+        exitCode: 1,
+        stderrChunks: ['thread/resume failed: no rollout found for thread id child-native'],
+      }),
+    );
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'follow up',
+      '--codex-app-server',
+      '--codex-strict-history',
+      '--resume',
+      'child-native',
+    ]);
+    /** @example Exactly one native attempt is made even when stderr matches the legacy fallback. */
+    expect(mockCreateCodexAgentHandle).toHaveBeenCalledTimes(1);
+    /** @example No fallback can create an unrelated native session. */
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    /** @example Missing native history is terminal. */
+    expect(exitSpy).toHaveBeenCalledWith(1);
+  });
+
+  // ROOT CAUSE:
+  // `--codex-app-server` disabled resume interception and the fresh retry for every
+  // device Codex run, so an ordinary topic whose native session was lost failed instead
+  // of continuing from its transcript. Only Fork branches (`--codex-strict-history`)
+  // must refuse to restart.
+  /** @example An ordinary app-server topic recovers from a missing native session. */
+  it('retries an ordinary app-server Codex topic with its transcript fallback', async () => {
+    const dir = await mkdtemp(`${tmpdir()}/hetero-native-fallback-`);
+    const file = path.join(dir, 'input.json');
+    const fallbackPrompt = [
+      { text: 'previous conversation', type: 'text' },
+      { text: 'continue', type: 'text' },
+    ];
+    await writeFile(
+      file,
+      JSON.stringify({
+        content: [{ text: 'continue', type: 'text' }],
+        resumeFallback: fallbackPrompt,
+      }),
+    );
+    mockCreateCodexAgentHandle
+      .mockResolvedValueOnce(
+        createFakeHandle({
+          exitCode: 1,
+          // The exact message Codex 0.160 returns for a deleted rollout.
+          stderrChunks: [
+            'thread/resume failed: no rollout found for thread id stale-native (code -32600)\n',
+          ],
+        }),
+      )
+      .mockResolvedValueOnce(createFakeHandle({ exitCode: 0 }));
+    try {
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'codex',
+        '--input-json',
+        file,
+        '--codex-app-server',
+        '--resume',
+        'stale-native',
+      ]);
+    } finally {
+      await rm(dir, { force: true, recursive: true });
+    }
+    /** @example The first attempt resumes; the retry starts fresh with the transcript. */
+    expect(mockCreateCodexAgentHandle).toHaveBeenCalledTimes(2);
+    expect(mockCreateCodexAgentHandle.mock.calls[0][0]).toMatchObject({
+      resumeSessionId: 'stale-native',
+      strictHistory: false,
+    });
+    expect(mockCreateCodexAgentHandle.mock.calls[1][0].resumeSessionId).toBeUndefined();
+    expect(mockCreateCodexAgentHandle.mock.calls[1][0].prompt).toEqual(fallbackPrompt);
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
   it('runs Pi over the RPC transport with model, resume, and native args while ignoring effort and speed', async () => {
@@ -1769,6 +1946,38 @@ describe('hetero exec command', () => {
         'xyz',
         '--operation-id',
         'op-r2',
+      ]);
+
+      expect(mockSpawnAgent).toHaveBeenCalledTimes(2);
+      expect(mockSpawnAgent.mock.calls[1][0].resumeSessionId).toBeUndefined();
+      expect(exitSpy).toHaveBeenCalledWith(0);
+    });
+
+    // ROOT CAUSE:
+    // Codex reports a deleted rollout as "no rollout found", which matched none of the
+    // retry patterns, so the stale binding failed every later turn instead of retrying.
+    /** @example A missing Codex rollout is retried without --resume. */
+    it('retries a Codex exec run whose saved rollout is missing', async () => {
+      mockSpawnAgent
+        .mockReturnValueOnce(
+          createFakeHandle({
+            exitCode: 1,
+            stderrChunks: [
+              'Error: thread/resume: thread/resume failed: no rollout found for thread id stale (code -32600)\n',
+            ],
+          }),
+        )
+        .mockReturnValueOnce(createFakeHandle({ exitCode: 0 }));
+
+      await runCmd([
+        'hetero',
+        'exec',
+        '--type',
+        'codex',
+        '--prompt',
+        'continue',
+        '--resume',
+        'stale',
       ]);
 
       expect(mockSpawnAgent).toHaveBeenCalledTimes(2);

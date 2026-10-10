@@ -2996,7 +2996,12 @@ export class MessageModel {
    *
    * Returns a condition that matches both parent messages and thread messages.
    */
-  private buildThreadQueryCondition = async (threadId: string): Promise<SQL | undefined> => {
+  private buildThreadQueryCondition = async (
+    threadId: string,
+    ancestors: ReadonlySet<string> = new Set(),
+  ): Promise<SQL | undefined> => {
+    if (ancestors.has(threadId)) throw new Error(`Cyclic thread source: ${threadId}`);
+    const visited = new Set(ancestors).add(threadId);
     // Fetch the thread info to get sourceMessageId and type
     const thread = await this.db.query.threads.findFirst({
       where: and(
@@ -3011,13 +3016,21 @@ export class MessageModel {
     }
 
     // Get parent messages based on thread type
-    const parentMessages = await this.getThreadParentMessages({
-      sourceMessageId: thread.sourceMessageId,
-      threadType: thread.type as IThreadType,
-      topicId: thread.topicId,
-    });
+    const parentMessages = await this.getThreadParentMessages(
+      {
+        sourceMessageId: thread.sourceMessageId,
+        threadType: thread.type as IThreadType,
+        topicId: thread.topicId,
+      },
+      visited,
+    );
 
-    const parentMessageIds = parentMessages.map((m) => m.id);
+    const parentMessageIds = parentMessages
+      .filter(
+        (message) =>
+          !thread.metadata?.sourceMessageExcluded || message.id !== thread.sourceMessageId,
+      )
+      .map((message) => message.id);
 
     if (parentMessageIds.length === 0) {
       return eq(messages.threadId, threadId);
@@ -3181,11 +3194,14 @@ export class MessageModel {
    *   - Standalone: Only the source message itself
    *   - Isolation: No parent messages (completely isolated thread)
    */
-  getThreadParentMessages = async (params: {
-    sourceMessageId: string;
-    threadType: IThreadType;
-    topicId: string;
-  }): Promise<DBMessageItem[]> => {
+  getThreadParentMessages = async (
+    params: {
+      sourceMessageId: string;
+      threadType: IThreadType;
+      topicId: string;
+    },
+    ancestors: ReadonlySet<string> = new Set(),
+  ): Promise<DBMessageItem[]> => {
     const { sourceMessageId, topicId, threadType } = params;
 
     // For Isolation type, return empty array (no parent messages)
@@ -3209,6 +3225,10 @@ export class MessageModel {
 
     if (!sourceMessage) return [];
 
+    const parentScope = sourceMessage.threadId
+      ? await this.buildThreadQueryCondition(sourceMessage.threadId, ancestors)
+      : isNull(messages.threadId);
+
     // Get all main conversation messages up to and including the source message
     // Use `or` with explicit id match to handle timestamp precision issues
     // (JavaScript Date has millisecond precision, but PostgreSQL timestamptz has microsecond precision)
@@ -3219,7 +3239,7 @@ export class MessageModel {
         and(
           this.ownership(),
           eq(messages.topicId, topicId),
-          isNull(messages.threadId), // Only main conversation messages (not in any thread)
+          parentScope,
           or(
             lte(messages.createdAt, sourceMessage.createdAt),
             eq(messages.id, sourceMessageId), // Ensure source message is always included

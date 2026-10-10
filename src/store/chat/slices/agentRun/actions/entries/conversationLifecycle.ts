@@ -71,6 +71,10 @@ import {
   topicSelectors,
 } from '@/store/chat/selectors';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
+import {
+  findCodexForkThread,
+  resolveCodexBranchRun,
+} from '@/store/chat/slices/agentRun/actions/dispatch/codexForkTarget';
 import { executeDirectMention } from '@/store/chat/slices/agentRun/actions/dispatch/directMentionExecutor';
 import { resolveNewThreadIntent } from '@/store/chat/slices/agentRun/actions/dispatch/newThreadIntent';
 import { buildRunLifecycle } from '@/store/chat/slices/agentRun/actions/lifecycle/buildRunLifecycle';
@@ -1280,10 +1284,16 @@ export class ConversationLifecycleActionImpl {
     // on — never hand another machine's path to this run (mirrors the server's
     // `topicPinFitsDevice`).
     const topicDeviceId = existingTopic?.metadata?.boundDeviceId;
+    // A Codex Fork runs in its source's directory; other threads keep the topic's.
+    const threadMetadata = findCodexForkThread(
+      this.#get().threadMaps,
+      operationContext.topicId,
+      operationContext.threadId,
+    )?.metadata;
     const topicCwdMetadata =
       topicDeviceId && runCwdDeviceId && topicDeviceId !== runCwdDeviceId
         ? undefined
-        : existingTopic?.metadata;
+        : (threadMetadata ?? existingTopic?.metadata);
     const workingDirectory =
       resolveWorkingDirPath(topicCwdMetadata?.workingDirectoryConfig) ??
       topicCwdMetadata?.workingDirectory ??
@@ -1760,17 +1770,34 @@ export class ConversationLifecycleActionImpl {
           (heteroContext.topicId
             ? topicSelectors.getTopicById(heteroContext.topicId)(this.#get())
             : undefined) ?? existingTopic;
+        // Only a Codex Fork thread owns its native session; other threads resume the topic's.
+        const thread =
+          heterogeneousProvider.type === 'codex'
+            ? findCodexForkThread(
+                this.#get().threadMaps,
+                heteroContext.topicId,
+                heteroContext.threadId,
+              )
+            : undefined;
+        const resumeMetadata = (thread?.metadata ?? topic?.metadata) as
+          ChatTopicMetadata | undefined;
         const providerBinding = heterogeneousProvider.authMode === 'api';
-        const { cwdChanged, reason, resumeBindingKey, resumeSessionId } = resolveHeteroResume(
-          topic?.metadata,
-          workingDirectory,
-          {
-            currentBindingKey: providerBinding
-              ? undefined
-              : getNativeHeteroSessionBindingKey(heterogeneousProvider.type),
-            providerBinding,
-          },
-        );
+        const resumeDecision = resolveHeteroResume(resumeMetadata, workingDirectory, {
+          currentBindingKey: providerBinding
+            ? undefined
+            : getNativeHeteroSessionBindingKey(heterogeneousProvider.type),
+          providerBinding,
+        });
+        const { cwdChanged, reason, resumeBindingKey } = resumeDecision;
+        const { codexBranchError, codexForkTarget, resumeSessionId } =
+          heterogeneousProvider.type === 'codex'
+            ? resolveCodexBranchRun({
+                messageId: heteroData.userMessageId,
+                messages: heteroMessages,
+                resumeSessionId: resumeDecision.resumeSessionId,
+                thread,
+              })
+            : { resumeSessionId: resumeDecision.resumeSessionId };
         if (cwdChanged) {
           toast.info(t('heteroAgent.resumeReset.cwdChanged', { ns: 'chat' }));
         } else if (reason === 'binding_changed') {
@@ -1783,6 +1810,9 @@ export class ConversationLifecycleActionImpl {
 
         await executeHeterogeneousAgent(() => this.#get(), {
           assistantMessageId: heteroExecutionAssistantId,
+          userMessageId: heteroData.userMessageId,
+          codexBranchError,
+          codexForkTarget,
           context: heteroExecutionContext,
           contextSelections: effectiveContextSelections,
           heterogeneousProvider: effectiveHeterogeneousProvider,

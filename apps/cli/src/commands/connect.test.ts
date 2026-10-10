@@ -13,6 +13,25 @@ import { cleanupAllProcesses } from '../tools/shell';
 import { log, setVerbose } from '../utils/logger';
 import { registerConnectCommand } from './connect';
 
+const codexProbe = vi.hoisted(() => ({
+  close: vi.fn(),
+  connect: vi.fn<() => Promise<{ userAgent: string }>>(),
+  options: vi.fn(),
+  resolve: vi.fn<() => Promise<{ command: string; pathEnv?: string }>>(),
+}));
+vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
+  resolveHeteroSpawnCommand: codexProbe.resolve,
+}));
+vi.mock('@lobechat/heterogeneous-agents/spawn', () => ({
+  CodexAppServerClient: class {
+    constructor(options: object) {
+      codexProbe.options(options);
+    }
+    close = codexProbe.close;
+    connect = codexProbe.connect;
+  },
+}));
+
 const registerDeviceMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 
 vi.mock('../device/register', async (importOriginal) => {
@@ -138,6 +157,8 @@ describe('connect command', () => {
   let signalListeners: Map<NodeJS.Signals, Set<(...args: unknown[]) => void>>;
 
   beforeEach(() => {
+    codexProbe.connect.mockResolvedValue({ userAgent: 'codex/0.160.0' });
+    codexProbe.resolve.mockResolvedValue({ command: '/resolved/codex', pathEnv: '/resolved/bin' });
     signalListeners = new Map(
       (['SIGINT', 'SIGTERM'] as const).map((signal) => [
         signal,
@@ -316,7 +337,7 @@ describe('connect command', () => {
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);
 
-    clientEventHandlers['system_info_request']?.({
+    await clientEventHandlers['system_info_request']?.({
       requestId: 'req-2',
       type: 'system_info_request',
     });
@@ -326,6 +347,109 @@ describe('connect command', () => {
     expect(lastSentSystemInfoResponse.result.success).toBe(true);
     expect(lastSentSystemInfoResponse.result.systemInfo).toHaveProperty('homePath');
     expect(lastSentSystemInfoResponse.result.systemInfo).toHaveProperty('arch');
+    /** @example The current connection advertises native Fork support without relying on stale DB metadata. */
+    expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([
+      'codex-app-server-v1',
+    ]);
+  });
+
+  /** @example Desktop can inspect its bundled runtime without registering a device. */
+  it('reports native capabilities without authenticating or connecting', async () => {
+    const output = vi.spyOn(console, 'log').mockImplementation(() => {});
+    await createProgram().parseAsync(['node', 'test', 'connect', 'capabilities']);
+    /** @example Only a successful native handshake is advertised in machine-readable output. */
+    expect(output).toHaveBeenCalledWith(
+      JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+    );
+    /** @example Capability discovery does not consume a user login or gateway connection. */
+    expect(resolveToken).not.toHaveBeenCalled();
+    expect(GatewayClient).not.toHaveBeenCalled();
+    expect(codexProbe.close).toHaveBeenCalledOnce();
+  });
+
+  /** @example Unsupported Codex keeps ordinary device sends on the existing exec runtime. */
+  it('does not advertise native Codex when the binary rejects initialization', async () => {
+    // ROOT CAUSE:
+    // collectSystemInfo unconditionally advertised codex-app-server-v1, so even an
+    // exec-only binary was selected for native ordinary sends and failed before answering.
+    // Native support must come from the resolved binary's actual handshake.
+    codexProbe.connect.mockRejectedValueOnce(new Error('unsupported app-server'));
+    await createProgram().parseAsync(['node', 'test', 'connect']);
+    await clientEventHandlers['system_info_request']?.({
+      requestId: 'probe-old',
+      type: 'system_info_request',
+    });
+    /** @example Unavailable native capability preserves the successful system-info response. */
+    expect(lastSentSystemInfoResponse.result).toMatchObject({
+      success: true,
+      systemInfo: { supportedAgentRuntimes: [] },
+    });
+    /** @example A failed probe does not leave its subprocess alive. */
+    expect(codexProbe.close).toHaveBeenCalledOnce();
+  });
+
+  /** @example A handshake timeout must not stall device discovery or advertise support. */
+  it('bounds native Codex probing and closes the stalled client', async () => {
+    vi.useFakeTimers();
+    try {
+      codexProbe.connect.mockImplementationOnce(() => new Promise(() => {}));
+      await createProgram().parseAsync(['node', 'test', 'connect']);
+      const response = clientEventHandlers['system_info_request']?.({
+        requestId: 'probe-stall',
+        type: 'system_info_request',
+      });
+      await vi.advanceTimersByTimeAsync(6000);
+      await response;
+      /** @example A stalled app-server falls back to the existing capability set. */
+      expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([]);
+      /** @example Timeout releases the owned native process. */
+      expect(codexProbe.close).toHaveBeenCalledOnce();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // ROOT CAUSE:
+  // Every system_info_request started a Codex app-server handshake (up to 6 s), and tool
+  // runs query system info during ordinary turns, so every device run paid for it.
+  /** @example Repeated system info requests reuse one native probe per connection. */
+  it('probes native Codex once per connection', async () => {
+    await createProgram().parseAsync(['node', 'test', 'connect']);
+    for (const requestId of ['probe-1', 'probe-2', 'probe-3']) {
+      await clientEventHandlers['system_info_request']?.({
+        requestId,
+        type: 'system_info_request',
+      });
+    }
+    /** @example Resolution PATH is carried into the exact probed executable. */
+    expect(codexProbe.options).toHaveBeenCalledWith(
+      expect.objectContaining({
+        commandPath: '/resolved/codex',
+        env: expect.objectContaining({ PATH: '/resolved/bin' }),
+      }),
+    );
+    expect(codexProbe.connect).toHaveBeenCalledOnce();
+    expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([
+      'codex-app-server-v1',
+    ]);
+  });
+
+  /** @example Reconnecting detects a binary downgrade instead of keeping stale support. */
+  it('reprobes native Codex when the gateway connection is re-established', async () => {
+    await createProgram().parseAsync(['node', 'test', 'connect']);
+    await clientEventHandlers['system_info_request']?.({
+      requestId: 'probe-new',
+      type: 'system_info_request',
+    });
+    codexProbe.connect.mockRejectedValueOnce(new Error('binary downgraded'));
+    clientEventHandlers['connected']?.();
+    await clientEventHandlers['system_info_request']?.({
+      requestId: 'probe-downgrade',
+      type: 'system_info_request',
+    });
+    /** @example A later unsupported binary revokes the previous capability. */
+    expect(lastSentSystemInfoResponse.result.systemInfo.supportedAgentRuntimes).toEqual([]);
+    expect(codexProbe.connect).toHaveBeenCalledTimes(2);
   });
 
   it('should handle auth_failed', async () => {
@@ -486,7 +610,7 @@ describe('connect command', () => {
     const program = createProgram();
     await program.parseAsync(['node', 'test', 'connect']);
 
-    clientEventHandlers['system_info_request']?.({
+    await clientEventHandlers['system_info_request']?.({
       requestId: 'req-3',
       type: 'system_info_request',
     });

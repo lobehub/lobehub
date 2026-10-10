@@ -7,7 +7,15 @@ import type { App } from '@/core/App';
 
 import GatewayConnectionService from '../gatewayConnectionSrv';
 
-const { getShellInfoMock } = vi.hoisted(() => ({ getShellInfoMock: vi.fn() }));
+const { getShellInfoMock, execFileMock } = vi.hoisted(() => ({
+  getShellInfoMock: vi.fn(),
+  execFileMock: vi.fn(),
+}));
+
+vi.mock('node:child_process', () => ({
+  execFile: Object.assign(vi.fn(), { [Symbol.for('nodejs.util.promisify.custom')]: execFileMock }),
+}));
+vi.mock('@/modules/cliEmbedding', () => ({ resolveCliScript: () => 'bundled-cli.js' }));
 
 vi.mock('electron', () => ({
   app: {
@@ -33,6 +41,9 @@ describe('GatewayConnectionService system_info_request', () => {
 
   beforeEach(() => {
     getShellInfoMock.mockReset();
+    execFileMock
+      .mockReset()
+      .mockResolvedValue({ stdout: JSON.stringify({ supportedAgentRuntimes: [] }) });
     service = new GatewayConnectionService({} as App);
   });
 
@@ -53,6 +64,124 @@ describe('GatewayConnectionService system_info_request', () => {
         }),
       },
     });
+  });
+
+  /** @example A capable bundled CLI enables native Fork on a Desktop gateway connection. */
+  it('advertises the native runtimes reported by the bundled execution CLI', async () => {
+    // ROOT CAUSE:
+    // Desktop forwards agent runs to its bundled CLI but omitted native capabilities
+    // from system-info, so the server rejected every native Fork before dispatch.
+    // Probe that bundled runtime instead of a potentially older global lh binary.
+    getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+    });
+    const client = createClient();
+    await service['handleSystemInfoRequest'](client, {
+      requestId: 'native-desktop',
+      type: 'system_info_request',
+    });
+    /** @example The live system-info response supplies the server's dispatch capability. */
+    expect(client.sendSystemInfoResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: {
+          success: true,
+          systemInfo: expect.objectContaining({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+        },
+      }),
+    );
+    /** @example The probe executes the bundled CLI under Electron's Node runtime. */
+    expect(execFileMock).toHaveBeenCalledWith(
+      process.execPath,
+      ['bundled-cli.js', 'connect', 'capabilities'],
+      expect.objectContaining({
+        env: expect.objectContaining({ ELECTRON_RUN_AS_NODE: '1' }),
+        timeout: 9000,
+        windowsHide: true,
+      }),
+    );
+  });
+
+  // ROOT CAUSE:
+  // Every system_info_request spawned the bundled CLI (up to 9 s) plus a Codex handshake,
+  // and system info is queried during ordinary runs, so every device user paid for it.
+  /** @example Repeated system-info requests reuse one bundled CLI probe per connection. */
+  it('probes the bundled CLI once per connection', async () => {
+    getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
+    execFileMock.mockResolvedValue({
+      stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+    });
+    const client = createClient();
+    for (const requestId of ['first', 'second', 'third']) {
+      await service['handleSystemInfoRequest'](client, {
+        requestId,
+        type: 'system_info_request',
+      });
+    }
+    expect(execFileMock).toHaveBeenCalledOnce();
+    expect(client.sendSystemInfoResponse).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        requestId: 'third',
+        result: {
+          success: true,
+          systemInfo: expect.objectContaining({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+        },
+      }),
+    );
+  });
+
+  /** @example Updating or removing Codex changes the capability after reconnecting. */
+  it('revokes native support when a reconnect probe fails', async () => {
+    getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
+    execFileMock.mockResolvedValueOnce({
+      stdout: JSON.stringify({ supportedAgentRuntimes: ['codex-app-server-v1'] }),
+    });
+    const client = createClient();
+    await service['handleSystemInfoRequest'](client, {
+      requestId: 'first',
+      type: 'system_info_request',
+    });
+    execFileMock.mockRejectedValueOnce(new Error('bundled CLI unavailable or timed out'));
+    // Only the status transition matters here; keep-awake and broadcasting are out of scope.
+    vi.spyOn(service as any, 'syncPowerSaveBlocker').mockImplementation(() => {});
+    vi.spyOn(service as any, 'scheduleStatusBroadcast').mockImplementation(() => {});
+    service['setStatus']('reconnecting');
+    service['setStatus']('connected');
+    await service['handleSystemInfoRequest'](client, {
+      requestId: 'second',
+      type: 'system_info_request',
+    });
+    /** @example A failed probe preserves other device tools but cannot authorize Fork. */
+    expect(client.sendSystemInfoResponse).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        requestId: 'second',
+        result: {
+          success: true,
+          systemInfo: expect.objectContaining({ supportedAgentRuntimes: [] }),
+        },
+      }),
+    );
+    expect(execFileMock).toHaveBeenCalledTimes(2);
+  });
+
+  /** @example An older CLI's help output must not be interpreted as native support. */
+  it('omits native support when the bundled probe returns malformed output', async () => {
+    getShellInfoMock.mockResolvedValue({ displayName: 'zsh' });
+    execFileMock.mockResolvedValue({ stdout: 'Usage: lh connect' });
+    const client = createClient();
+    await service['handleSystemInfoRequest'](client, {
+      requestId: 'malformed',
+      type: 'system_info_request',
+    });
+    /** @example Ordinary system information remains available after a probe failure. */
+    expect(client.sendSystemInfoResponse).toHaveBeenCalledWith(
+      expect.objectContaining({
+        result: {
+          success: true,
+          systemInfo: expect.objectContaining({ supportedAgentRuntimes: [] }),
+        },
+      }),
+    );
   });
 
   it('omits an optional folder Electron cannot resolve and still answers successfully', async () => {

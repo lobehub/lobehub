@@ -138,7 +138,21 @@ const createHarness = (params: {
     listMessagePluginsByTopic: vi.fn(async (_topicId: string) => []),
   };
 
+  if (params.threadId)
+    threads.set(params.threadId, {
+      id: params.threadId,
+      topicId: params.topicId,
+      status: 'active',
+      title: 'Child',
+      type: 'continuation',
+    });
   const threadModel = {
+    updateMetadata: vi.fn(async (id: string, metadata: Record<string, unknown>) => {
+      const existing = threads.get(id);
+      if (!existing) return [];
+      threads.set(id, { ...existing, metadata: { ...existing.metadata, ...metadata } });
+      return [{ id }];
+    }),
     create: vi.fn(async (input: Partial<FakeThread>) => {
       const thread: FakeThread = {
         id: input.id!,
@@ -2324,5 +2338,111 @@ describe('HeterogeneousPersistenceHandler', () => {
         usage: { totalTokens: 2 },
       });
     });
+  });
+});
+
+/** @example Native child handoff survives an ingest retry and stamps both menu entry points. */
+describe('native device fork provenance', () => {
+  beforeEach(() => __resetOperationStatesForTesting());
+  afterEach(() => __resetOperationStatesForTesting());
+
+  /** @example A binding write failure is retried before the event can be acknowledged. */
+  it('retries the child binding and preserves source messages and topic native session', async () => {
+    // ROOT CAUSE:
+    // Device stream_start previously wrote the child session into its source
+    // topic and discarded codexTurnId. Swallowing a failed binding write also
+    // prevented retries. Persist the child thread first, then both message boundaries.
+    const h = createHarness({
+      assistantMessageId: 'child-answer',
+      operationId: 'fork-op',
+      topicId: 'source-topic',
+      threadId: 'child',
+    });
+    h.threads.get('child')!.metadata = {
+      codexForkTarget: { position: 'after', threadId: 'native-source', turnId: 'source-turn' },
+    };
+    const source: FakeMessage = {
+      id: 'source-user',
+      agentId: null,
+      content: 'source',
+      role: 'user',
+      topicId: 'source-topic',
+      threadId: null,
+      metadata: { heteroSessionId: 'native-source', codexTurnId: 'source-turn' },
+    };
+    h.messages.set(source.id, source);
+    h.messages.set('child-user', {
+      id: 'child-user',
+      agentId: null,
+      content: 'child',
+      role: 'user',
+      topicId: 'source-topic',
+      threadId: 'child',
+    });
+    h.messages.get('child-answer')!.parentId = 'child-user';
+    const event: AgentStreamEvent = {
+      operationId: 'fork-op',
+      timestamp: 1,
+      stepIndex: 0,
+      type: 'stream_start',
+      data: { sessionId: 'native-child', codexTurnId: 'child-turn' },
+    };
+    h.threadModel.updateMetadata.mockRejectedValueOnce(new Error('binding unavailable'));
+    const ingest = () =>
+      h.handler.ingest({ topicId: 'source-topic', operationId: 'fork-op', events: [event] });
+    /** @example A failed durable handoff cannot be acknowledged. */
+    await expect(ingest()).rejects.toThrow('binding unavailable');
+    await ingest();
+    /** @example The failed binding write is retried instead of latched in memory. */
+    expect(h.threadModel.updateMetadata).toHaveBeenCalledTimes(2);
+    /** @example The independent native child is bound only to its UI thread. */
+    expect(h.threads.get('child')?.metadata.heteroSessionId).toBe('native-child');
+    /** @example Both menus can resolve the same native turn boundary. */
+    expect(h.messages.get('child-user')?.metadata).toMatchObject({
+      heteroSessionId: 'native-child',
+      codexTurnId: 'child-turn',
+    });
+    /** @example Assistant provenance survives reload before any text is emitted. */
+    expect(h.messages.get('child-answer')?.metadata).toMatchObject({
+      heteroSessionId: 'native-child',
+      codexTurnId: 'child-turn',
+    });
+    /** @example The original message's native history boundary remains intact. */
+    expect(h.messages.get(source.id)).toEqual(source);
+    /** @example A child stream never overwrites the source topic resume token. */
+    expect(h.topicModel.updateMetadata).not.toHaveBeenCalledWith(
+      'source-topic',
+      expect.objectContaining({ heteroSessionId: 'native-child' }),
+    );
+  });
+
+  // ROOT CAUSE:
+  // The session binding moved to the thread for every thread run, so a run in an ordinary
+  // thread stopped updating its topic's resume token. Only a Codex Fork owns its session.
+  /** @example An ordinary thread run still records its native session on the topic. */
+  it('keeps the topic binding for a run in an ordinary thread', async () => {
+    const h = createHarness({
+      assistantMessageId: 'thread-answer',
+      operationId: 'thread-op',
+      topicId: 'source-topic',
+      threadId: 'ordinary',
+    });
+    await h.handler.ingest({
+      topicId: 'source-topic',
+      operationId: 'thread-op',
+      events: [
+        {
+          operationId: 'thread-op',
+          timestamp: 1,
+          stepIndex: 0,
+          type: 'stream_start',
+          data: { sessionId: 'native-session' },
+        },
+      ],
+    });
+    expect(h.topicModel.updateMetadata).toHaveBeenCalledWith('source-topic', {
+      heteroSessionId: 'native-session',
+    });
+    expect(h.threadModel.updateMetadata).not.toHaveBeenCalled();
   });
 });

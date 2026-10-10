@@ -1,4 +1,5 @@
 import type * as LobechatConstModule from '@lobechat/const';
+import { ThreadStatus } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { TRPCClientError } from '@trpc/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -2585,6 +2586,242 @@ describe('ConversationLifecycle actions', () => {
           // The desktop/home fallback is always available for a hetero CLI, so
           // every case below has something to lose to.
           window.__LOBE_GLOBAL_AGENT_CONTEXT__ = { desktopPath: DESKTOP_PATH };
+        });
+
+        /** @example A reload with stale thread metadata still resumes its persisted child. */
+        it('recovers a child binding from durable messages after reload', async () => {
+          // ROOT CAUSE:
+          //
+          // A successful native child turn persisted messages but its separate thread
+          // metadata write failed. Reload restored source + forkTarget; sendMessage
+          // ignored the child's recorded provenance and forked source a second time.
+          // Recover only this branch's ancestor, preserving explicit retry boundaries.
+          const sendSpy = setupHeteroRun({
+            workingDirByDevice: { [HETERO_DEVICE_ID]: { path: '/work/project' } },
+          });
+          const agentId = TEST_IDS.SESSION_ID;
+          const topicId = TEST_IDS.TOPIC_ID;
+          const threadId = 'durable-child-branch';
+          const target = {
+            position: 'after' as const,
+            threadId: 'native-source',
+            turnId: 'turn-source',
+          };
+          const childAnswer = createMockMessage({
+            content: 'Remember CHILD-402',
+            id: 'child-answer',
+            metadata: { codexTurnId: 'child-turn', heteroSessionId: 'native-child' },
+            role: 'assistant',
+            threadId,
+          });
+          const user = createMockMessage({
+            id: TEST_IDS.USER_MESSAGE_ID,
+            parentId: childAnswer.id,
+            role: 'user',
+            threadId,
+          });
+          sendSpy.mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: false,
+            messages: [
+              childAnswer,
+              user,
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: user.id,
+                role: 'assistant',
+                threadId,
+              }),
+            ],
+            topicId,
+            userMessageId: user.id,
+          });
+          act(() => {
+            useChatStore.setState({
+              threadMaps: {
+                [topicId]: [
+                  {
+                    id: threadId,
+                    topicId,
+                    title: 'child',
+                    type: 'continuation',
+                    status: ThreadStatus.Active,
+                    userId: 'user-1',
+                    createdAt: new Date(0),
+                    lastActiveAt: new Date(0),
+                    updatedAt: new Date(0),
+                    metadata: {
+                      codexForkTarget: target,
+                      heteroSessionId: 'native-source',
+                      heteroSessionBindingKey: 'native:v1:codex',
+                      workingDirectory: '/work/project',
+                    },
+                  },
+                ],
+              },
+            });
+          });
+          await act(async () => {
+            await useChatStore.getState().sendMessage({
+              context: { agentId, scope: 'thread', threadId, topicId },
+              message: 'Which child marker did I give you?',
+            });
+          });
+          /** @example The same native child receives the next prompt, with no source re-fork. */
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.objectContaining({
+              codexForkTarget: undefined,
+              resumeSessionId: 'native-child',
+            }),
+          );
+        });
+
+        // ROOT CAUSE:
+        // The send path read resume metadata from any thread in `threadMaps`, so an ordinary
+        // (non-Fork) thread run stopped sharing its topic's native session. Only a Codex Fork
+        // thread owns a separate binding.
+        /** @example An ordinary thread does not resume a session stored on the thread row. */
+        it('ignores thread-level resume metadata outside a Codex Fork thread', async () => {
+          const sendSpy = setupHeteroRun({
+            workingDirByDevice: { [HETERO_DEVICE_ID]: { path: '/work/project' } },
+          });
+          const topicId = TEST_IDS.TOPIC_ID;
+          const threadId = 'ordinary-thread';
+          const user = createMockMessage({ id: TEST_IDS.USER_MESSAGE_ID, role: 'user', threadId });
+          sendSpy.mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: false,
+            messages: [
+              user,
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: user.id,
+                role: 'assistant',
+                threadId,
+              }),
+            ],
+            topicId,
+            userMessageId: user.id,
+          });
+          act(() => {
+            useChatStore.setState({
+              threadMaps: {
+                [topicId]: [
+                  {
+                    id: threadId,
+                    topicId,
+                    title: 'ordinary',
+                    type: 'continuation',
+                    status: ThreadStatus.Active,
+                    userId: 'user-1',
+                    createdAt: new Date(0),
+                    lastActiveAt: new Date(0),
+                    updatedAt: new Date(0),
+                    metadata: {
+                      heteroSessionId: 'thread-row-session',
+                      workingDirectory: '/work/project',
+                    },
+                  },
+                ],
+              },
+            });
+          });
+          await act(async () => {
+            await useChatStore.getState().sendMessage({
+              context: { agentId: TEST_IDS.SESSION_ID, scope: 'thread', threadId, topicId },
+              message: 'Continue in the thread',
+            });
+          });
+          /** @example The thread row's session is not used as this run's resume token. */
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.not.objectContaining({ resumeSessionId: 'thread-row-session' }),
+          );
+        });
+
+        // ROOT CAUSE:
+        // When the child's thread binding and its message provenance were both lost, reload
+        // left only the source target, so the next send forked the source again and the
+        // native branch silently dropped the answer the UI still showed.
+        /** @example A visible branch answer without a saved child stops instead of re-forking. */
+        it('refuses to re-fork a branch whose child session was never saved', async () => {
+          const sendSpy = setupHeteroRun({
+            workingDirByDevice: { [HETERO_DEVICE_ID]: { path: '/work/project' } },
+          });
+          const topicId = TEST_IDS.TOPIC_ID;
+          const threadId = 'unsaved-child-branch';
+          const childAnswer = createMockMessage({
+            content: 'Remember CHILD-402',
+            id: 'child-answer',
+            metadata: {},
+            role: 'assistant',
+            threadId,
+          });
+          const user = createMockMessage({
+            id: TEST_IDS.USER_MESSAGE_ID,
+            parentId: childAnswer.id,
+            role: 'user',
+            threadId,
+          });
+          sendSpy.mockResolvedValue({
+            assistantMessageId: TEST_IDS.ASSISTANT_MESSAGE_ID,
+            isCreateNewTopic: false,
+            messages: [
+              childAnswer,
+              user,
+              createMockMessage({
+                id: TEST_IDS.ASSISTANT_MESSAGE_ID,
+                parentId: user.id,
+                role: 'assistant',
+                threadId,
+              }),
+            ],
+            topicId,
+            userMessageId: user.id,
+          });
+          act(() => {
+            useChatStore.setState({
+              threadMaps: {
+                [topicId]: [
+                  {
+                    id: threadId,
+                    topicId,
+                    title: 'child',
+                    type: 'continuation',
+                    status: ThreadStatus.Active,
+                    userId: 'user-1',
+                    createdAt: new Date(0),
+                    lastActiveAt: new Date(0),
+                    updatedAt: new Date(0),
+                    metadata: {
+                      codexForkTarget: {
+                        position: 'after',
+                        threadId: 'native-source',
+                        turnId: 'turn-source',
+                      },
+                      workingDirectory: '/work/project',
+                    },
+                  },
+                ],
+              },
+            });
+          });
+          await act(async () => {
+            await useChatStore.getState().sendMessage({
+              context: { agentId: TEST_IDS.SESSION_ID, scope: 'thread', threadId, topicId },
+              message: 'Which child marker did I give you?',
+            });
+          });
+          /** @example The run settles with an explicit error and never forks the source again. */
+          expect(executeHeterogeneousAgentMock).toHaveBeenCalledWith(
+            expect.any(Function),
+            expect.objectContaining({
+              codexBranchError: expect.stringContaining('lost its native session'),
+              codexForkTarget: undefined,
+              resumeSessionId: undefined,
+            }),
+          );
         });
 
         it('snapshots the heterogeneous effort into the first-send topic', async () => {

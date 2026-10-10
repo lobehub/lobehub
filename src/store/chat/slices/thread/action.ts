@@ -275,9 +275,24 @@ export class ChatThreadActionImpl {
     this.#get().internal_updateThreadLoading(id, false);
   };
 
-  internal_dispatchThread = (payload: ThreadDispatch, action?: any): void => {
-    const nextThreads = threadReducer(threadSelectors.currentTopicThreads(this.#get()), payload);
-    const nextMap = { ...this.#get().threadMaps, [this.#get().activeTopicId!]: nextThreads };
+  /**
+   * Applies a thread update to its owning topic, including background runs.
+   *
+   * Use when:
+   * - Synchronizing persisted thread state with the cache.
+   * Expects:
+   * - Background callers supply the captured topic ID.
+   * Returns:
+   * - The updated topic cache without changing the active conversation.
+   */
+  internal_dispatchThread = (
+    payload: ThreadDispatch,
+    action?: string,
+    topicId = this.#get().activeTopicId,
+  ): void => {
+    if (!topicId) return;
+    const nextThreads = threadReducer(this.#get().threadMaps[topicId] ?? [], payload);
+    const nextMap = { ...this.#get().threadMaps, [topicId]: nextThreads };
 
     // no need to update map if is the same
     if (isEqual(nextMap, this.#get().threadMaps)) return;

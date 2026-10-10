@@ -198,6 +198,33 @@ export class ThreadModel {
     return rows.length > 0;
   };
 
+  /**
+   * Atomically merges a thread metadata patch without replacing peer fields.
+   *
+   * Use when:
+   * - Native session binding and operation lifecycle writers update the same thread.
+   * Expects:
+   * - The thread belongs to this model's user/workspace scope.
+   * Returns:
+   * - Updated rows, or an empty result when the thread is unavailable.
+   */
+  updateMetadata = async (id: string, metadata: Partial<ThreadMetadata>) => {
+    // Lock the row before merging so binding writes cannot erase a concurrent lifecycle update.
+    return this.db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select({ metadata: threads.metadata })
+        .from(threads)
+        .where(and(eq(threads.id, id), this.ownership()))
+        .for('update');
+      if (!existing) return [];
+      return tx
+        .update(threads)
+        .set({ metadata: { ...existing.metadata, ...metadata }, updatedAt: new Date() })
+        .where(and(eq(threads.id, id), this.ownership()))
+        .returning({ id: threads.id });
+    });
+  };
+
   update = async (id: string, value: Partial<ThreadItem>) => {
     return this.db
       .update(threads)
