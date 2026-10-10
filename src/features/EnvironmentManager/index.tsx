@@ -15,7 +15,13 @@ import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import { openCreateInstanceModal } from './CreateInstanceModal';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
-import { useEnvironments, useInstances, useWorkspaceUsage } from './useEnvironmentData';
+import {
+  type CreatedEnvironment,
+  useEnvironmentActions,
+  useEnvironments,
+  useInstances,
+  useWorkspaceUsage,
+} from './useEnvironmentData';
 import WorkspaceUsageMeter from './WorkspaceUsageMeter';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -56,7 +62,7 @@ const styles = createStaticStyles(({ css }) => ({
 const LIST_MIN_HEIGHT = 4 * 72;
 
 /**
- * Environments and the instances built from them.
+ * Environments and the copies built from them.
  *
  * An environment is a SPECIFICATION — the sources to check out, what makes them
  * usable, what they run with. What a sandbox builds from it is a cache, which is
@@ -87,6 +93,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
   const { data, error, isValidating, mutate } = useEnvironments(visibility);
   const { data: instanceData, mutate: refreshInstances } = useInstances();
   const { refresh: refreshUsage } = useWorkspaceUsage();
+  const { buildInstance } = useEnvironmentActions();
 
   const [selectedId, setSelectedId] = useState<string>();
   // Whether a refresh the user asked for is still running.
@@ -117,17 +124,29 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     setSelectedId((current) => (current === id ? undefined : id));
   };
 
-  // Open the environment so the new instance is seen landing in its list, and
-  // ask for the instance in the same dialog the panel's own button opens.
-  //
-  // Both the row's shortcut and the step straight after creating an
-  // environment: a specification with no instance runs nothing, so stopping at
-  // the new row would hand back an environment that cannot be used and no hint
-  // that anything is missing. Dismissing the instance dialog still lands on
-  // that environment's panel, whose empty state asks for the same thing.
+  // The row's "new copy" shortcut: open the environment so the copy is seen
+  // landing in its list, and ask for it in the same dialog the panel's own
+  // button opens.
   const createInstance = (id: string) => {
     setSelectedId(id);
     openCreateInstanceModal({ environmentId: id });
+  };
+
+  /**
+   * Straight after creating an environment: open it, and start its default
+   * copy, which the server made in the same call. Nothing is asked — the person
+   * has not started any work yet, so a name and a folder would be answers made
+   * up on the spot; both are derived, and renaming is on the copy's row.
+   *
+   * A code environment clones and installs, so this is where that build
+   * starts, after the dialog has closed. A files environment has nothing to
+   * build: the same call settles it as ready on the server without starting a
+   * sandbox, so it never sits in a "pending" state waiting on a build that
+   * will not come.
+   */
+  const onEnvironmentCreated = (created: CreatedEnvironment) => {
+    setSelectedId(created.id);
+    void buildInstance(created.defaultInstance.id);
   };
 
   /**
@@ -177,7 +196,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
       <Button
         icon={<Icon icon={PlusIcon} />}
         type={'primary'}
-        onClick={() => openCreateEnvironmentModal(visibility, createInstance)}
+        onClick={() => openCreateEnvironmentModal(visibility, onEnvironmentCreated)}
       >
         {t('environments.create')}
       </Button>
@@ -208,7 +227,7 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
               action={
                 <Button
                   icon={<Icon icon={PlusIcon} />}
-                  onClick={() => openCreateEnvironmentModal(visibility, createInstance)}
+                  onClick={() => openCreateEnvironmentModal(visibility, onEnvironmentCreated)}
                 >
                   {t('environments.create')}
                 </Button>

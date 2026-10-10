@@ -13,17 +13,22 @@ interface InstanceSectionProps {
   editable: boolean;
   environmentId: string;
   kind: EnvironmentKind;
+  /**
+   * Shown as the environment itself rather than as a list: the panel's
+   * Overview, when the environment has one copy.
+   */
+  single?: boolean;
 }
 
 /**
- * The instances built from one environment, as a section of its detail panel.
+ * The copies built from one environment, as a section of its detail panel.
  *
  * Beside the environment rather than in a dialog of their own: an instance
  * belongs to exactly one environment, so the environment's own name and
  * specification are the whole context, and both stay on screen while a copy is
  * made or discarded.
  */
-const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, kind }) => {
+const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, kind, single }) => {
   const { data } = useInstances();
   const { data: environmentData } = useEnvironments();
   const actions = useEnvironmentActions();
@@ -51,6 +56,7 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, k
         // A files environment has nothing to build, so its rows carry no
         // build line and no rebuild — only the folder and what is in it.
         showBuild={kind === 'code'}
+        single={single}
         onBuild={actions.rebuildInstance}
         onRemove={actions.removeInstance}
         onStop={actions.stopInstance}
