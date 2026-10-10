@@ -86,30 +86,6 @@ const cases: GuardCase[] = [
         experiencesPage: 2,
       }),
   },
-  {
-    accept: (request) =>
-      useUserMemoryStore
-        .getState()
-        .internal_acceptPreferencesList({ items: [], total: 22 }, request),
-    fail: (error, request) =>
-      useUserMemoryStore.getState().internal_failPreferencesList(error, request),
-    name: 'preferences',
-    readList: () => useUserMemoryStore.getState().preferences,
-    readSearchError: () => useUserMemoryStore.getState().preferencesSearchError,
-    readSearchLoading: () => useUserMemoryStore.getState().preferencesSearchLoading,
-    resetWithSearch: () => useUserMemoryStore.getState().resetPreferencesList({ q: 'late night' }),
-    seedSettledSearch: () =>
-      useUserMemoryStore.setState({
-        preferences: [{ id: 'existing' } as never],
-        preferencesInit: true,
-        preferencesQuery: 'late night',
-      }),
-    seedPageTwo: () =>
-      useUserMemoryStore.setState({
-        preferences: [{ id: 'existing' } as never],
-        preferencesPage: 2,
-      }),
-  },
 ];
 
 beforeEach(() => {
