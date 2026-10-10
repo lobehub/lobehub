@@ -20,6 +20,7 @@ import {
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { findBatchGate } from '@/features/AgentGoals/ProcessControl/Graph/batchModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
+import { useFrontierActions } from '@/features/AgentGoals/ProcessControl/useGoalProcessActions';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
@@ -140,6 +141,7 @@ const Body = memo(() => {
   const view = useChatStore(chatPortalSelectors.goalNodeView);
   const openTaskDetail = useChatStore((s) => s.openTaskDetail);
   const openGoalNode = useChatStore((s) => s.openGoalNode);
+  const { decide } = useFrontierActions(view?.goalId ?? '');
   // Fetched here, not assumed from the goal page: the drill-down also opens
   // from the conversation portal, where nothing else holds the snapshot.
   const useFetchGoalGraph = useGoalStore((s) => s.useFetchGoalGraph);
@@ -187,6 +189,7 @@ const Body = memo(() => {
 
       {batchGate && (
         <GateDetail
+          decide={decide}
           graph={graph}
           model={batchGate.model}
           round={batchGate.round}

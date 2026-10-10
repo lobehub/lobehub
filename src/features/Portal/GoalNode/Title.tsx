@@ -8,7 +8,7 @@ import { graphNodeKind } from '@/features/AgentGoals/Experiments/model';
 import { coordinatorNodeTitleKey } from '@/features/AgentGoals/ProcessControl/coordinatorCopy';
 import { buildGoalGraphView } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
 import { findBatchGate } from '@/features/AgentGoals/ProcessControl/Graph/batchModel';
-import { KIND_COLOR, KindIcon } from '@/features/AgentGoals/ProcessControl/shared';
+import { GATE_COLOR, KindIcon } from '@/features/AgentGoals/ProcessControl/shared';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
@@ -40,7 +40,7 @@ const Title = memo(() => {
     <Flexbox horizontal align={'center'} gap={8} style={{ minWidth: 0 }}>
       {node &&
         (node.gate ? (
-          <Icon color={KIND_COLOR.decision.line} icon={DoorOpen} size={14} />
+          <Icon color={GATE_COLOR.line} icon={DoorOpen} size={14} />
         ) : (
           <KindIcon kind={node.kind} />
         ))}

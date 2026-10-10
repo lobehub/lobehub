@@ -58,6 +58,8 @@ export default {
   'goalBatch.gatePanel.checks': 'Checks',
   'goalBatch.gatePanel.checksAt': 'Verdict {{index}} · {{time}}',
   'goalBatch.gatePanel.checksPlanned': 'Not judged yet — these will be checked',
+  'goalBatch.gatePanel.decide': 'Your decision',
+  'goalBatch.gatePanel.question': 'How should this batch go on?',
   'goalBatch.gatePanel.history': 'Verdicts',
   'goalBatch.gatePanel.history.blocked': 'Held: {{checks}}',
   'goalBatch.gatePanel.history.empty': 'No verdict yet',

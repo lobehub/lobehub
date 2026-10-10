@@ -44,6 +44,8 @@ export interface GraphNodeData extends Record<string, unknown> {
     /** Detail behind an info icon beside the title, e.g. what a gate checks. */
     hint?: ReactNode;
     icon?: LucideIcon;
+    /** Glyph colours when the card is not its kind — a release gate. */
+    palette?: { line: string; soft: string };
     subtitle?: string;
     title?: string;
   };
@@ -318,7 +320,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
   const { presentation } = nodeData;
   const chip = presentation && 'chip' in presentation ? presentation.chip : stateChip;
   const kind = nodeData.kind ?? node.kind;
-  const palette = KIND_COLOR[kind];
+  const palette = nodeData.presentation?.palette ?? KIND_COLOR[kind];
   const isTask = node.kind === 'task';
   const attempts = view.attempts.length;
   // Coordinator-authored node titles are English; recognized ones localize.

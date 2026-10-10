@@ -46,7 +46,7 @@ import {
   isRunningNode,
   scopeGraphView,
 } from '../goalGraphViewModel';
-import { KindDot } from '../shared';
+import { GATE_COLOR, KindDot } from '../shared';
 import {
   BatchExperimentProbeGroup,
   BatchRedispatchGroup,
@@ -403,7 +403,15 @@ const useBatchCopy = () => {
         // The latest verdict's checks with their results — a unit hold included —
         // and before any verdict, the plan.
         const latest = round.evaluations.at(-1);
-        const checks = (latest ? verdictChecks(latest) : model.gateChecks).map((check) => {
+        const judged = latest ? verdictChecks(latest) : [];
+        // What the latest verdict found, at a glance: "3 ✓ · 1 ✗". Before any
+        // verdict, how many checks it will run.
+        const passed = judged.filter((check) => check.passed).length;
+        const failed = judged.length - passed;
+        const tally = latest
+          ? [passed && `${passed} ✓`, failed && `${failed} ✗`].filter(Boolean).join(' · ')
+          : t('goalBatch.gate.checkCount', { count: model.gateChecks.length });
+        const checks = (latest ? judged : model.gateChecks).map((check) => {
           const { detail, label } = checkCopy(check);
           const mark = 'passed' in check ? (check.passed ? '✓ ' : '✗ ') : '';
           return `${mark}${label}${detail ? `（${detail}）` : ''}`;
@@ -420,9 +428,8 @@ const useBatchCopy = () => {
             </Flexbox>
           ),
           icon: DoorOpen,
-          subtitle: `${t('goalBatch.gate.checkCount', { count: checks.length })} · ${t(
-            `goalBatch.gate.subtitle.${key}` as any,
-          )}`,
+          palette: GATE_COLOR,
+          subtitle: `${tally} · ${t(`goalBatch.gate.subtitle.${key}` as any)}`,
           title:
             round.revision > 1
               ? t('goalBatch.gate.titleRound', { revision: round.revision })

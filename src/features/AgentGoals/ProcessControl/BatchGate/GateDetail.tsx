@@ -6,15 +6,17 @@ import { CircleCheck, CircleDashed, CircleX } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import GoalDecisionCase from '../../GoalDecision';
 import type { GoalGraphView } from '../goalGraphViewModel';
 import { CELL_VISUAL } from '../Graph/BatchGroups';
 import {
+  batchCellState,
   type BatchGateState,
   type BatchModel,
   type BatchRound,
   verdictChecks,
 } from '../Graph/batchModel';
-import { KindDot } from '../shared';
+import { KIND_COLOR, KIND_ICON } from '../shared';
 import { type GateCheckLike, useGateCheckCopy } from './useGateCheckCopy';
 
 /**
@@ -39,15 +41,32 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
   `,
-  link: css`
+  /* A unit behind a failed check, as the card it is on the map — not a line of text. */
+  unitCard: css`
     cursor: pointer;
-    padding-block: 2px;
-    padding-inline: 4px;
-    border-radius: ${cssVar.borderRadiusSM};
+
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+
+    transition: border-color 0.15s;
 
     &:hover {
-      background: ${cssVar.colorFillQuaternary};
+      border-color: ${cssVar.colorBorder};
     }
+  `,
+  unitGlyph: css`
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
   `,
   mono: css`
     font-family: ${cssVar.fontFamilyCode};
@@ -78,13 +97,15 @@ const Section = memo<{ children: ReactNode; extra?: ReactNode; title: string }>(
 Section.displayName = 'GoalGateDetailSection';
 
 interface GateDetailProps {
+  /** Answer the gate's open decision; absent where the reader cannot answer. */
+  decide?: (decisionId: string, optionId: string, resolution?: string) => Promise<unknown>;
   graph: GoalGraphView;
   model: BatchModel;
   onOpenNode: (nodeId: string) => void;
   round: BatchRound;
 }
 
-const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) => {
+const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, round }) => {
   const { t } = useTranslation('chat');
   const copy = useGateCheckCopy();
   const visual = GATE_VISUAL[round.gate];
@@ -129,25 +150,46 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
       ? []
       : model.gateChecks;
 
-  const nodeLink = (nodeId: string) => {
+  const unitCard = (nodeId: string) => {
     const view = graph.byId[nodeId];
     if (!view) return null;
+    const kind = view.node.kind === 'decision' ? 'decision' : 'task';
+    const state = batchCellState(view, new Set());
+    const status = CELL_VISUAL[state];
     return (
       <Flexbox
         horizontal
         align={'center'}
-        className={styles.link}
-        gap={6}
+        className={styles.unitCard}
+        data-unit={nodeId}
+        gap={8}
         key={nodeId}
+        role={'button'}
         onClick={() => onOpenNode(nodeId)}
       >
-        <KindDot kind={view.node.kind} />
-        <Text ellipsis fontSize={12} type={'secondary'}>
+        <span
+          className={styles.unitGlyph}
+          style={{ background: KIND_COLOR[kind].soft, color: KIND_COLOR[kind].line }}
+        >
+          <Icon icon={KIND_ICON[kind]} size={14} />
+        </span>
+        <Text ellipsis fontSize={13} style={{ flex: 1, minWidth: 0 }} weight={500}>
           {view.node.title}
         </Text>
+        {kind === 'task' && (
+          <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
+            <Icon color={status.color} icon={status.icon} size={13} />
+            <Text fontSize={12} style={{ color: status.color }}>
+              {t(`goalBatch.cell.${state}` as const)}
+            </Text>
+          </Flexbox>
+        )}
       </Flexbox>
     );
   };
+
+  // The gate is waiting on a person: answer it here, beside what it found.
+  const pending = round.assayId ? graph.byId[round.assayId]?.decision : undefined;
 
   return (
     <Flexbox data-gate-detail gap={16}>
@@ -164,6 +206,19 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
           </Text>
         )}
       </Section>
+
+      {pending && decide && (
+        <Section title={t('goalBatch.gatePanel.decide')}>
+          {/* The checks below already say what broke; the question only asks
+              how to go on, in the reader's language. */}
+          <GoalDecisionCase
+            hideAsker
+            category={'judgment'}
+            decision={{ ...pending, question: t('goalBatch.gatePanel.question') }}
+            onDecide={(optionId, resolution) => decide(pending.id, optionId, resolution)}
+          />
+        </Section>
+      )}
 
       <Section
         title={t('goalBatch.gatePanel.checks')}
@@ -218,8 +273,8 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
                   )}
                 </Flexbox>
                 {!check.passed && check.nodeIds?.length ? (
-                  <Flexbox gap={2} paddingInline={'22px 0'}>
-                    {check.nodeIds.map(nodeLink)}
+                  <Flexbox gap={6} paddingInline={'22px 0'}>
+                    {check.nodeIds.map(unitCard)}
                   </Flexbox>
                 ) : null}
               </Flexbox>
