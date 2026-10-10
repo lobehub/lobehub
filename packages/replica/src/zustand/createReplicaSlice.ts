@@ -11,6 +11,14 @@ import type { ReplicaSyncDriver, ReplicaSyncSchedule } from './driver';
 type Setter<TStore> = (partial: Partial<TStore>, replace?: false, action?: any) => void;
 
 /**
+ * One `key` write in a batched lens update (see {@link ReplicaLens.setMany}).
+ */
+export interface ReplicaViewSet<TData> {
+  data: TData | undefined;
+  key: string;
+}
+
+/**
  * Where the materialized value lives in the domain store. Selectors keep
  * reading this location; the slice is the only writer.
  */
@@ -20,6 +28,12 @@ export interface ReplicaLens<TStore, TData> {
   /** Enumerate loaded keys (needed for entity propagation). */
   keys?: (state: TStore) => string[];
   set: (state: TStore, key: string, data: TData | undefined) => Partial<TStore>;
+  /**
+   * Apply several key writes in one pass — one clone of the backing field
+   * instead of one per key. Optional: the slice falls back to repeated `set`
+   * when a lens does not implement it.
+   */
+  setMany?: (state: TStore, entries: ReplicaViewSet<TData>[]) => Partial<TStore>;
 }
 
 export interface CreateReplicaSliceOptions<TStore, TParams, TData, TFetched> extends Omit<
@@ -104,14 +118,45 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
     ...options
   }: CreateReplicaSliceOptions<TStore, TParams, TData, TFetched>,
 ) => {
+  /**
+   * Apply every view write as ONE host update, so subscribers never observe a
+   * view out of step with its bookkeeping. Consecutive key writes go through
+   * the lens' `setMany` when it has one, so seeding N rows clones the backing
+   * field once instead of N times.
+   */
   const applyWrites = (state: TStore, writes: ReplicaViewWrite<TData>[]) => {
     let patch: Partial<TStore> = {};
     let current = state;
+    let pending: ReplicaViewSet<TData>[] = [];
+
+    const flush = () => {
+      if (pending.length === 0) return;
+      const entries = pending;
+      pending = [];
+      if (view.setMany && entries.length > 1) {
+        const next = view.setMany(current, entries);
+        patch = { ...patch, ...next };
+        current = { ...current, ...next };
+        return;
+      }
+      for (const entry of entries) {
+        const next = view.set(current, entry.key, entry.data);
+        patch = { ...patch, ...next };
+        current = { ...current, ...next };
+      }
+    };
+
     for (const write of writes) {
-      const next = 'type' in write ? view.clear(current) : view.set(current, write.key, write.data);
-      patch = { ...patch, ...next };
-      current = { ...current, ...next };
+      if ('type' in write) {
+        flush();
+        const next = view.clear(current);
+        patch = { ...patch, ...next };
+        current = { ...current, ...next };
+      } else {
+        pending.push({ data: write.data, key: write.key });
+      }
     }
+    flush();
     return patch;
   };
 
@@ -206,8 +251,11 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
           // Discard a head response the entry has moved past: the newer query
           // owns the view (see `headQuery`).
           if (queryKey === undefined || headQuery.get(key!) !== queryKey) return;
-          replace(params!, data, scope);
-          onSuccess?.(data);
+          // A response that resolves after the identity moved on is rejected by
+          // `replace` (it is not written, and must not be persisted). Never
+          // replay its success side effects either: they act on the CURRENT
+          // stores, so they would adopt the previous identity's data.
+          if (replace(params!, data, scope)) onSuccess?.(data);
         },
       },
     );
@@ -246,6 +294,16 @@ export const recordLens = <TStore, TData>(
     const next = { ...(state[field] as Record<string, TData> | undefined) };
     if (data === undefined) delete next[key];
     else next[key] = data;
+    return { [field]: next } as Partial<TStore>;
+  },
+  setMany: (state, entries) => {
+    // One clone of the record, then every key — a list refresh seeds N groups
+    // in a single copy instead of N.
+    const next = { ...(state[field] as Record<string, TData> | undefined) };
+    for (const { key, data } of entries) {
+      if (data === undefined) delete next[key];
+      else next[key] = data;
+    }
     return { [field]: next } as Partial<TStore>;
   },
 });

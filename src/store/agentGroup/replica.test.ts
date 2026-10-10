@@ -477,4 +477,54 @@ describe('agentGroup store replica', () => {
     await vi.waitFor(() => expect(session.result.current.isHydrated).toBe(true));
     session.unmount();
   });
+
+  // P1: the generic `useSync` hook must not replay a response's success side
+  // effects when the scoped write was rejected. A detail fetch started under
+  // user A that resolves after the switch to user B must not copy A's roster
+  // into the current agent store nor adopt A's supervisor as the active agent.
+  it('does not adopt a detail response that lands after an account switch', async () => {
+    createScope('agent-group-user-a');
+    let resolveDetail!: (value: unknown) => void;
+    getGroupDetail.mockImplementation(() => new Promise((resolve) => (resolveDetail = resolve)));
+
+    const session = renderHook(() => useAgentGroupStore.getState().useFetchGroupDetail(true, 'g1'));
+    await vi.waitFor(() => expect(getGroupDetail).toHaveBeenCalled());
+
+    // The identity switches while the request is still in flight.
+    createScope('agent-group-user-b');
+    resolveDetail({
+      ...groupDetail('g1', 'User A group'),
+      agents: [{ id: 'a1', isSupervisor: false, title: 'A member' }],
+      supervisorAgentId: 'a-supervisor',
+    });
+
+    await vi.waitFor(() => expect(session.result.current.isHydrated).toBe(true));
+    expect(useAgentGroupStore.getState().groupMap.g1).toBeUndefined();
+    expect(agentStoreMock.internal_dispatchAgentMap).not.toHaveBeenCalled();
+    expect(agentStoreMock.setActiveAgentId).not.toHaveBeenCalled();
+    session.unmount();
+  });
+
+  // P2: a list / session refresh seeds every group at once. One batched replica
+  // write means one store commit (one subscriber notification), not one per row.
+  it('seeds many groups in a single store commit', () => {
+    createScope();
+    let notifications = 0;
+    const unsubscribe = useAgentGroupStore.subscribe(() => {
+      notifications += 1;
+    });
+
+    useAgentGroupStore
+      .getState()
+      .internal_updateGroupMaps([
+        { ...groupRow('g1', 'One'), config: null } as any,
+        { ...groupRow('g2', 'Two'), config: null } as any,
+        { ...groupRow('g3', 'Three'), config: null } as any,
+      ]);
+    unsubscribe();
+
+    expect(notifications).toBe(1);
+    expect(Object.keys(useAgentGroupStore.getState().groupMap).sort()).toEqual(['g1', 'g2', 'g3']);
+    expect(useAgentGroupStore.getState().groupMap.g2?.title).toBe('Two');
+  });
 });

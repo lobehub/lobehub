@@ -260,12 +260,14 @@ class ChatGroupInternalAction implements ResetableStore {
    * This only merges; it never prunes. It is also called with a partial set
    * (the group sessions the session list carries), so a caller that holds the
    * complete group list prunes through {@link #reconcileGroupMap} instead.
+   *
+   * The seeds are applied as ONE batched replica write: doing it per row would
+   * clone `groupMap` and notify subscribers once per group.
    */
   internal_updateGroupMaps = (groups: ChatGroupItem[]) => {
-    for (const group of groups) {
-      this.#groupDetail.update(
-        group.id,
-        (existing) =>
+    this.#groupDetail.updateMany(
+      groups.map((group) => ({
+        apply: (existing) =>
           existing
             ? ({
                 ...existing,
@@ -278,9 +280,10 @@ class ChatGroupInternalAction implements ResetableStore {
                 config: existing.config || group.config,
               } as AgentGroupDetail)
             : toAgentGroupDetail(group),
-        { persist: false, source: 'seed' },
-      );
-    }
+        key: group.id,
+      })),
+      { persist: false, source: 'seed' },
+    );
   };
 
   /**
