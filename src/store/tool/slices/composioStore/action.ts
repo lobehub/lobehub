@@ -465,13 +465,23 @@ export class ComposioStoreActionImpl {
    * Deliberately does not subscribe to the store here — the composio slice is
    * imported by `tool/selectors/tool.ts`, so a runtime `useToolStore` import
    * would close a store↔slice cycle and break store initialization.
+   *
+   * No focus revalidation, matching the SWR hooks this replaced: the hook is
+   * mounted on broad surfaces (ChatInput, settings, onboarding, …), so a
+   * refocus must not refetch a catalog that only the server can change.
    */
   useFetchAppTools = (appSlug: string | undefined): ReplicaSyncResult =>
-    this.#appTools.useSync(appSlug ?? null);
+    this.#appTools.useSync(appSlug ?? null, { revalidateOnFocus: false });
 
   /** Fetch orchestration only; read the servers through `composioStoreSelectors`'. */
   useFetchUserComposioConnections = (enabled: boolean): ComposioConnectionsSyncResult => {
-    const sync = this.#connections.useSync(CONNECTIONS_PARAMS, { enabled });
+    // `revalidateOnFocus: false` likewise: the connections hook is mounted on
+    // broad surfaces, so the pre-migration no-focus schedule is preserved and a
+    // refocus does not add recurring `getComposioPlugins` traffic.
+    const sync = this.#connections.useSync(CONNECTIONS_PARAMS, {
+      enabled,
+      revalidateOnFocus: false,
+    });
 
     return { ...sync, mutate: sync.revalidate };
   };
