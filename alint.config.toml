@@ -189,7 +189,7 @@ lobehub = "./packages/alint/rules"
 
 # Test value: semantic checks of retained behavior, not assertion syntax.
 [[config.group]]
-files = [ "src/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx}", "apps/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx}", "packages/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx}" ]
+files = [ "src/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs}", "apps/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs}", "packages/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx,mjs}" ]
 ignores = [ "**/fixtures/**", "**/__mocks__/**" ]
 [config.group.plugins]
 lobehub = "./packages/alint/rules"
