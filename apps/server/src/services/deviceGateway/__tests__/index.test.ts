@@ -2,6 +2,7 @@ import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client
 import { describe, expect, it, vi } from 'vitest';
 
 // Import after mocks are set up
+import { resolveDeviceClientKinds } from '../clientKinds';
 import { DeviceGateway } from '../index';
 
 const mockEnv = vi.hoisted(() => ({
@@ -416,7 +417,9 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toEqual(systemInfo);
-      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1', undefined);
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1', undefined, {
+        clientKinds: ['desktop'],
+      });
     });
 
     it('should return undefined when result is not successful', async () => {
@@ -442,6 +445,82 @@ describe('DeviceGateway', () => {
     });
   });
 
+  describe('queryDeviceSystemInfo client preference', () => {
+    const configure = () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+    };
+
+    it('falls back to any client when the device has no desktop app', async () => {
+      configure();
+      const systemInfo = { arch: 'arm64', userDataPath: '/home/u/.lobehub' };
+      mockClient.getDeviceSystemInfo
+        .mockResolvedValueOnce({ error: 'NO_CAPABLE_CONNECTION', success: false })
+        .mockResolvedValueOnce({ success: true, systemInfo });
+
+      const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1', 'ws-1');
+
+      expect(result).toEqual(systemInfo);
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenNthCalledWith(1, 'user-1', 'dev-1', 'ws-1', {
+        clientKinds: ['desktop'],
+      });
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenNthCalledWith(
+        2,
+        'user-1',
+        'dev-1',
+        'ws-1',
+        undefined,
+      );
+    });
+
+    it.each(['TIMEOUT', 'DEVICE_OFFLINE'])(
+      'asks any client when the desktop read fails with %s',
+      async (error) => {
+        configure();
+        const systemInfo = { arch: 'arm64', userDataPath: '/home/u/.lobehub' };
+        mockClient.getDeviceSystemInfo
+          .mockResolvedValueOnce({ error, success: false })
+          .mockResolvedValueOnce({ success: true, systemInfo });
+
+        const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+        expect(result).toEqual(systemInfo);
+        expect(mockClient.getDeviceSystemInfo).toHaveBeenNthCalledWith(
+          2,
+          'user-1',
+          'dev-1',
+          undefined,
+          undefined,
+        );
+      },
+    );
+
+    it('asks any client when the desktop read throws', async () => {
+      configure();
+      const systemInfo = { arch: 'arm64' };
+      mockClient.getDeviceSystemInfo
+        .mockRejectedValueOnce(new Error('fetch failed'))
+        .mockResolvedValueOnce({ success: true, systemInfo });
+
+      const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(result).toEqual(systemInfo);
+    });
+
+    it('returns undefined when neither read is answered', async () => {
+      configure();
+      mockClient.getDeviceSystemInfo.mockResolvedValue({
+        error: 'DEVICE_NOT_FOUND',
+        success: false,
+      });
+
+      const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(result).toBeUndefined();
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('readDeviceSystemInfo', () => {
     const configure = () => {
       mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
@@ -461,7 +540,12 @@ describe('DeviceGateway', () => {
       const result = await new DeviceGateway().readDeviceSystemInfo('user-1', 'dev-1', 'ws-1');
 
       expect(result).toEqual({ ok: true, systemInfo });
-      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith('user-1', 'dev-1', 'ws-1');
+      expect(mockClient.getDeviceSystemInfo).toHaveBeenCalledWith(
+        'user-1',
+        'dev-1',
+        'ws-1',
+        undefined,
+      );
     });
 
     it("keeps the gateway's reason for an unanswered read", async () => {
@@ -1645,6 +1729,7 @@ describe('DeviceGateway', () => {
       expect(MockGatewayHttpClient).toHaveBeenCalledTimes(1);
       expect(MockGatewayHttpClient).toHaveBeenCalledWith({
         gatewayUrl: 'https://gateway.example.com',
+        resolveClientKinds: resolveDeviceClientKinds,
         serviceToken: 'token',
       });
     });

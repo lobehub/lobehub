@@ -141,6 +141,8 @@ export const DEVICE_RPC_METHODS = [
 
 export type DeviceRpcMethod = (typeof DEVICE_RPC_METHODS)[number];
 
+export { deviceRpcClients } from './rpcClients';
+
 /** Why a client without the app-update handlers rejects those RPCs. */
 export const APP_UPDATE_UNSUPPORTED_MESSAGE = 'This device client does not support remote updates';
 
