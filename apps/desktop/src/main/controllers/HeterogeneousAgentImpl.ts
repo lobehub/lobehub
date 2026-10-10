@@ -92,6 +92,7 @@ import {
   isDevinAcpSessionNotFoundError,
   isDroidAcpSessionNotFoundError,
   normalizeImage,
+  pickCodexRunProvenance,
   readCodexSessionModel,
   resolveClaudeCodeTranscriptPath,
   resolveCliSpawnPlan,
@@ -2200,6 +2201,7 @@ export default class HeterogeneousAgentCtr {
     params: SendPromptParams,
     session: AgentSession,
   ): Promise<boolean> {
+    const startedAt = new Date().toISOString();
     const cwd = session.cwd || electronApp.getPath('desktop');
     // One app-server serves multiple topics; ownership belongs to each thread, not its process.
     const spawnEnv = this.buildSessionSpawnEnv(session, false);
@@ -2304,12 +2306,17 @@ export default class HeterogeneousAgentCtr {
           this.broadcast('heteroAgentRuntimeStatus', status);
         },
         onSessionId: (agentSessionId) => {
-          if (agentSessionId !== session.agentSessionId) session.agentSessionId = agentSessionId;
+          if (agentSessionId === session.agentSessionId) return;
+          session.agentSessionId = agentSessionId;
+          this.getInflightRuns()?.patch(session.sessionId, { agentSessionId });
         },
         sessionId: session.sessionId,
         threadParams: buildCodexAppServerThreadParams(session.args, cwd, session.model),
       });
     session.appServerSession = appServerSession;
+    // No pid: the app-server process is shared, so reaping this run stops its session instead.
+    // A renderer reload then releases the native thread rather than leaving it claimed.
+    this.recordInflightRun({ cwd, params, session, startedAt });
 
     logger.info('Starting Codex app-server session:', {
       commandPath,
@@ -2322,6 +2329,10 @@ export default class HeterogeneousAgentCtr {
         input,
         onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
         operationId: params.operationId,
+        provenance: pickCodexRunProvenance({
+          ...spawnEnv,
+          LOBEHUB_OPERATION_ID: params.operationId,
+        }),
       });
       void this.writeCliTraceJson(traceSession, 'exit.json', {
         finishedAt: new Date().toISOString(),

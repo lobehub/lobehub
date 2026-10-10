@@ -16,5 +16,6 @@ export {
   type CodexThreadSessionOptions,
   type CodexThreadTurnOptions,
 } from './CodexThreadSession';
+export { type CodexRunProvenance, pickCodexRunProvenance } from './environment';
 export type * from './protocol';
 export { CODEX_APP_SERVER_PROTOCOL_REVISION } from './protocol';
