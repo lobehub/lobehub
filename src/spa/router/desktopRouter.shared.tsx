@@ -76,6 +76,7 @@ import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShel
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
 import { channelDataLoader } from '@/spa/router/channelDataLoader';
+import { identitiesListLoader } from '@/spa/router/identitiesListLoader';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -763,6 +764,9 @@ export const sharedMainAreaChildren: RouteObject[] = [
         handle: {
           meta: routeMeta({ icon: BrainCircuit, titleKey: 'navigation.memoryIdentities' }),
         },
+        // Seed the persisted identity list before the page paints, so a cold
+        // start shows the local copy instead of a loading state.
+        loader: identitiesListLoader,
         path: 'identities',
       },
       {

@@ -783,13 +783,6 @@ export const userMemoryKeys = {
     'userMemory:experiences',
     params,
   ]),
-  /** Injection identities (distinct from the paginated `identityList`). */
-  identities: def('userMemory:identities', () => ['userMemory:identities']),
-  /** Paginated identity list for the memory home views. */
-  identityList: def('userMemory:identityList', (params: unknown) => [
-    'userMemory:identityList',
-    params,
-  ]),
   memoryDetail: def('userMemory:memoryDetail', (layer: string, id: string) => [
     'userMemory:memoryDetail',
     layer,
