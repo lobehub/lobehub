@@ -2148,23 +2148,38 @@ export class TopicModel {
       // member start fails as "Topic … remained busy". The server's own
       // `finish` clears the marker before it publishes the terminal event, so a
       // genuine end never reaches this check with the marker still in place.
-      if (options.rejectInFlightOperation) {
-        const [operationRow] = await tx
+      let operationStatusRead: Promise<AgentOperationStatus | undefined> | undefined;
+      const readOperationStatus = () =>
+        (operationStatusRead ??= tx
           .select({ status: agentOperations.status })
           .from(agentOperations)
           .where(eq(agentOperations.id, operationId))
-          .limit(1);
-        if (
-          operationRow &&
-          CLIENT_UNSETTLEABLE_OPERATION_STATUSES.has(operationRow.status as AgentOperationStatus)
-        ) {
+          .limit(1)
+          .then(([row]) => row?.status as AgentOperationStatus | undefined));
+
+      if (options.rejectInFlightOperation) {
+        const operationStatus = await readOperationStatus();
+        if (operationStatus && CLIENT_UNSETTLEABLE_OPERATION_STATUSES.has(operationStatus)) {
           return {
             activeOperationId: runningOperation.operationId,
-            operationStatus: operationRow.status as AgentOperationStatus,
+            operationStatus,
             status: 'in_flight' as const,
           };
         }
       }
+
+      // `waitingForHuman` is written by the client while the marker's run waits
+      // for an approval (Codex permission card, Claude Code AskUserQuestion).
+      // Once that run itself is settled nothing is left to answer, so the topic
+      // leaves the hand icon exactly like it leaves `running`. The exception is
+      // a server-runtime run parked for approval: its stream ends and the client
+      // settles the marker, but the operation row stays `waiting_for_human` and
+      // the approval is still pending, so its status must survive.
+      const settlesTopicStatus =
+        isRoot &&
+        (existing.status === 'running' ||
+          (existing.status === 'waitingForHuman' &&
+            (await readOperationStatus()) !== 'waiting_for_human'));
 
       const metadata = {
         ...existing.metadata,
@@ -2183,7 +2198,7 @@ export class TopicModel {
         .update(topics)
         .set({
           metadata,
-          ...(isRoot && existing.status === 'running' ? { status } : {}),
+          ...(settlesTopicStatus ? { status } : {}),
           updatedAt: new Date(),
         })
         .where(and(eq(topics.id, id), this.ownership()));

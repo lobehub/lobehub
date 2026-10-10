@@ -1530,4 +1530,41 @@ describe('createGatewayEventHandler', () => {
       expect.objectContaining({ status: 'running' }),
     );
   });
+
+  /** @example An unacknowledged submit queued behind a refresh is moot once the run ends. */
+  it('does not mark the topic waitingForHuman after the run has ended', async () => {
+    const tool = {
+      id: 'native-tool',
+      parentId: 'answer-msg',
+      role: 'tool',
+      tool_call_id: 'native-item',
+      pluginIntervention: { interventionId: 'callback-a', status: 'pending' },
+    } as UIChatMessage;
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([tool]);
+    const store = createStore({ [messageMapKey(context)]: [tool] });
+    store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
+    store.markTopicUnread = vi.fn();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+
+    handler(
+      makeEvent('agent_intervention_response', {
+        interventionId: 'callback-a',
+        producerAck: false,
+        resolutionRequestId: 'resolution-a',
+        result: { decision: 'accept' },
+        toolCallId: 'native-item',
+      }),
+    );
+    handler(makeEvent('agent_runtime_end', { reason: 'success' }));
+    await flush();
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'waitingForHuman' }),
+    );
+  });
 });

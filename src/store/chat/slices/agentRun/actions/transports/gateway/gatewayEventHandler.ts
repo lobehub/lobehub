@@ -1021,6 +1021,9 @@ export const createGatewayEventHandler = (
             if (callbackScoped) {
               if (toolMessage.pluginIntervention?.status !== 'pending') return;
               pendingInterventionToolCallIds.set(data.toolCallId, data.interventionId);
+              // Queued behind earlier refreshes: the run may already have ended
+              // and been settled, and nothing would clear a late hand icon.
+              if (terminalState) return;
               writeTopicStatus('waitingForHuman');
             }
             const intervention = {
