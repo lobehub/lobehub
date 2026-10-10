@@ -96,6 +96,21 @@ describe('useReasoningEffortControl', () => {
     expect(result.current.effortValue).toBe(fallback);
   });
 
+  // `effort` is omitted until saved, so the fallback must match each Claude model's API default.
+  it.each([
+    ['opus47Effort', 'claude-opus-5-5', 'anthropic', 'medium'],
+    ['opus47Effort', 'global.anthropic.claude-opus-5-5', 'bedrock', 'medium'],
+    ['opus47Effort', 'claude-haiku-5-5', 'aihubmix', 'medium'],
+    ['opus47Effort', 'global.anthropic.claude-haiku-5-5', 'bedrock', 'medium'],
+    ['opus47Effort', 'claude-opus-5', 'anthropic', 'high'],
+    ['opus47Effort', 'claude-fable-5-1', 'anthropic', 'high'],
+    ['effort', 'claude-sonnet-4-6', 'anthropic', 'high'],
+  ])('falls back to %s %s on %s to its real default %s', (key, model, provider, fallback) => {
+    testState.ai.reasoningParams = [key];
+    const { result } = renderHook(() => useReasoningEffortControl(model, provider));
+    expect(result.current.effortValue).toBe(fallback);
+  });
+
   it('keeps the reasoning mode separate from the effort level', () => {
     testState.ai.reasoningParams = ['effort', 'reasoningMode'];
     testState.ai.config = { reasoningMode: 'pro' };

@@ -12,6 +12,7 @@ import InfoTooltip from '@/components/InfoTooltip';
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';
 import { useUpdateAgentConfig } from '@/features/ChatInput/hooks/useUpdateAgentConfig';
 import {
+  resolveDefaultEffortForModel,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
 } from '@/services/chat/mecha/modelParamsResolver';
@@ -170,6 +171,8 @@ const ControlsForm = memo<ControlsFormProps>(
     const enableReasoningValue = useWatch(form, 'enableReasoning') ?? initialValues.enableReasoning;
 
     const gpt52ReasoningEffortDefaultValue = model === 'gpt-5.5' ? 'medium' : 'none';
+    const effortDefaultValue = resolveDefaultEffortForModel(model, 'effort');
+    const opus47EffortDefaultValue = resolveDefaultEffortForModel(model, 'opus47Effort');
     const thinkingLevelDefaultValue = resolveDefaultThinkingLevelForModel(model);
     const thinkingLevel3DefaultValue = resolveDefaultThinkingLevelForModel(model, 'thinkingLevel3');
 
@@ -319,7 +322,7 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
-        children: <EffortSlider />,
+        children: <EffortSlider defaultValue={effortDefaultValue} />,
         label: labelWithTooltip(t('extendParams.effort.title'), t('extendParams.effort.desc')),
         layout: 'vertical',
         minWidth: undefined,
@@ -329,7 +332,7 @@ const ControlsForm = memo<ControlsFormProps>(
         },
       },
       {
-        children: <Opus47EffortSlider />,
+        children: <Opus47EffortSlider defaultValue={opus47EffortDefaultValue} />,
         label: labelWithTooltip(t('extendParams.effort.title'), t('extendParams.effort.desc')),
         layout: 'vertical',
         minWidth: undefined,

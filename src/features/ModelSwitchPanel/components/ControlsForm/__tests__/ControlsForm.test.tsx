@@ -1,5 +1,5 @@
 import { render } from '@testing-library/react';
-import type { ReactNode } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 import ControlsForm from '../ControlsForm';
@@ -23,13 +23,17 @@ const testState = vi.hoisted(() => ({
   aiState: {
     extendParams: ['enableReasoning'],
   } as TestAiState,
+  formItems: [] as { children?: ReactElement<{ defaultValue?: string }>; name?: string }[],
   setValues: vi.fn(),
   updateAgentChatConfig: vi.fn(),
 }));
 
 vi.mock('@lobehub/ui/base-ui/form', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  Form: () => <div data-testid="controls-form" />,
+  Form: ({ items }: { items: typeof testState.formItems }) => {
+    testState.formItems = items;
+    return <div data-testid="controls-form" />;
+  },
   useForm: () => ({ setValues: testState.setValues }),
   useWatch: vi.fn(() => undefined),
 }));
@@ -137,5 +141,20 @@ describe('ControlsForm', () => {
         enableAdaptiveThinking: false,
       }),
     );
+  });
+
+  // `effort` is omitted until saved, so the slider must show each model's real API default.
+  it.each([
+    ['opus47Effort', 'claude-opus-5-5', 'medium'],
+    ['opus47Effort', 'global.anthropic.claude-haiku-5-5', 'medium'],
+    ['opus47Effort', 'claude-opus-5', 'high'],
+    ['effort', 'claude-sonnet-4-6', 'high'],
+  ])('should default the %s slider for %s to %s', (key, model, expected) => {
+    testState.aiState.extendParams = [key];
+
+    render(<ControlsForm model={model} provider="anthropic" />);
+
+    const item = testState.formItems.find((formItem) => formItem.name === key);
+    expect(item?.children?.props.defaultValue).toBe(expected);
   });
 });

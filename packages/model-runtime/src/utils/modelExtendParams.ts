@@ -1,8 +1,11 @@
 import type { LobeAgentChatConfig } from '@lobechat/types';
 import type { AiModelReasoningConfig, ExtendParamsType } from 'model-bank/aiModel';
-import { MODEL_REASONING_EXTEND_PARAMS } from 'model-bank/aiModel';
+import { MODEL_REASONING_EXTEND_PARAMS, MODEL_REASONING_PARAM_DEFAULTS } from 'model-bank/aiModel';
 
-import { isAdaptiveThinkingDefaultOnModel } from '../providers/anthropic/modelId';
+import {
+  getClaudeDefaultEffort,
+  isAdaptiveThinkingDefaultOnModel,
+} from '../providers/anthropic/modelId';
 
 export interface ResolveEffectiveReasoningChatConfigContext {
   /**
@@ -167,6 +170,21 @@ export function resolveDefaultThinkingLevelForModel<
 
   return resolveThinkingLevelDefault(model, param) as NonNullable<LobeAgentChatConfig[T]>;
 }
+
+type EffortExtendParam = 'effort' | 'opus47Effort';
+
+/**
+ * The effort level a model runs at while the user has not saved one. `effort` is only sent once
+ * a value is saved, so this must match the provider's own default rather than a shared one —
+ * otherwise the UI shows a level the model is not running, and saving it changes behavior.
+ */
+export const resolveDefaultEffortForModel = <T extends EffortExtendParam>(
+  model: string,
+  extendParam: T,
+): NonNullable<LobeAgentChatConfig[T]> =>
+  (getClaudeDefaultEffort(model) ?? MODEL_REASONING_PARAM_DEFAULTS[extendParam]) as NonNullable<
+    LobeAgentChatConfig[T]
+  >;
 
 /**
  * Returns `true` for models that ship adaptive thinking on, `undefined` when the model has

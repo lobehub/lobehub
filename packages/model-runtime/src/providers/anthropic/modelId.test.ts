@@ -1,6 +1,9 @@
+import { LOBE_DEFAULT_MODEL_LIST } from 'model-bank';
+import { MODEL_REASONING_PARAM_LEVELS } from 'model-bank/aiModel';
 import { describe, expect, it } from 'vitest';
 
 import {
+  getClaudeDefaultEffort,
   hasTemperatureTopPConflict,
   isAdaptiveThinkingDefaultOnModel,
   isAlwaysThinkingClaudeModel,
@@ -222,6 +225,55 @@ describe('supportsClaudeEffortLevel', () => {
   ])('should report model %s effort %s support as %s', (model, effort, expected) => {
     expect(supportsClaudeEffortLevel(model, effort)).toBe(expected);
   });
+});
+
+describe('getClaudeDefaultEffort', () => {
+  it.each([
+    ['claude-opus-5-5', 'medium'],
+    ['global.anthropic.claude-opus-5-5', 'medium'],
+    ['anthropic/claude-opus-5.5', 'medium'],
+    ['claude-haiku-5-5', 'medium'],
+    ['global.anthropic.claude-haiku-5-5', 'medium'],
+    ['anthropic/claude-haiku-5.5', 'medium'],
+    ['claude-opus-6', 'medium'],
+    ['claude-haiku-6-1', 'medium'],
+    ['claude-opus-5', 'high'],
+    ['claude-opus-4-8', 'high'],
+    ['global.anthropic.claude-opus-4-7', 'high'],
+    ['claude-opus-4.6', 'high'],
+    ['claude-sonnet-5-5', 'high'],
+    ['claude-sonnet-5', 'high'],
+    ['claude-sonnet-4-6', 'high'],
+    ['claude-fable-5-1', 'high'],
+    ['claude-fable-5', 'high'],
+    ['claude-mythos-5-1', 'high'],
+    ['gpt-5', undefined],
+  ])('should default %s to %s effort', (model, expected) => {
+    expect(getClaudeDefaultEffort(model)).toBe(expected);
+  });
+});
+
+describe('Claude model cards with an effort selector', () => {
+  const effortKeys = ['effort', 'opus47Effort'] as const;
+  const cards = LOBE_DEFAULT_MODEL_LIST.flatMap((card) => {
+    const effortKey = effortKeys.find((key) => card.settings?.extendParams?.includes(key));
+    return effortKey ? [{ effortKey, id: card.id, providerId: card.providerId }] : [];
+  });
+
+  it('should cover the Claude cards that expose effort', () => {
+    expect(cards.length).toBeGreaterThan(0);
+  });
+
+  it.each(cards)(
+    'should only offer effort levels $providerId/$id supports ($effortKey)',
+    ({ effortKey, id }) => {
+      const unsupported = MODEL_REASONING_PARAM_LEVELS[effortKey].filter(
+        (level) => !supportsClaudeEffortLevel(id, level),
+      );
+
+      expect(unsupported).toEqual([]);
+    },
+  );
 });
 
 describe('rejectsForcedToolChoice', () => {
