@@ -442,6 +442,56 @@ export interface GoalRolloutPolicy {
   waveSize?: number;
 }
 
+/**
+ * One condition the release gate judged. Mirrors `evaluateRolloutGate`: the
+ * same keys, in the same order, with what each one found — so the person can see
+ * why a gate passed or held, not only that it did.
+ */
+export type GoalRolloutGateCheckKey =
+  | 'axes_covered'
+  | 'external'
+  | 'no_open_decision'
+  | 'plan_written'
+  | 'units_settled'
+  | 'units_succeeded';
+
+export interface GoalRolloutGateCheck {
+  /** For a count check: how many of `total` held, e.g. 5 of 5 units ran through. */
+  count?: number;
+  /** Free-form specifics: an external check's title, an uncovered `axis=value`. */
+  details?: string[];
+  key: GoalRolloutGateCheckKey;
+  /** The nodes the check is about — the units that failed, the open decision. */
+  nodeIds?: string[];
+  passed: boolean;
+  total?: number;
+}
+
+/**
+ * One gate verdict and what the coordinator did with it. Appended on every
+ * release and every hold, so the gate keeps its own record instead of the
+ * decision's prose being the only trace.
+ */
+export interface GoalRolloutGateEvaluation {
+  /** ISO time of the verdict. */
+  at: string;
+  /** What the gate judged; empty when a unit's own check held the batch (R6). */
+  checks: GoalRolloutGateCheck[];
+  /** The coordinator's English summary, kept for the trace. */
+  message?: string;
+  /** The unit whose own check held the batch, when `trigger` is `unit`. */
+  nodeId?: string;
+  outcome: 'blocked' | 'released';
+  /** Units the release put into the next wave. */
+  releasedCount?: number;
+  /** The recipe revision (round) this verdict belongs to. */
+  revision: number;
+  /** `gate`: the gate judged a settled wave. `unit`: one unit failed its own check. */
+  trigger: 'gate' | 'unit';
+  /** Waves released in this round when the verdict was taken (after a release). */
+  waveIndex: number;
+}
+
 /** Where a batch rollout currently stands. */
 export type GoalRolloutPhase = 'probe' | 'assay' | 'mass' | 'pattern_break' | 'done';
 
@@ -455,6 +505,8 @@ export interface GoalRolloutState {
   assayNodeId?: string;
   /** The `batch` container node. */
   batchNodeId: string;
+  /** Every gate verdict so far, oldest first, capped to the most recent few. */
+  gateLog?: GoalRolloutGateEvaluation[];
   /**
    * Node ids of the mass tasks the current round released, oldest wave first.
    * A restarted canary starts a new round and clears it.

@@ -29,6 +29,7 @@ import type {
   GoalNodeKind,
   GoalNodeStatus,
   GoalPauseReason,
+  GoalRolloutGateEvaluation,
   GoalRolloutState,
   GoalStatus,
   GoalTickResult,
@@ -166,6 +167,20 @@ const normalizeRolloutRoster = (
   }
   return [...probeTitles, ...rest];
 };
+
+/** How many gate verdicts a batch keeps; older ones fall off the front. */
+const GATE_LOG_LIMIT = 30;
+
+/** Append one gate verdict to the batch's own record of them. */
+const withGateVerdict = (
+  state: GoalRolloutState,
+  entry: Omit<GoalRolloutGateEvaluation, 'at'>,
+): GoalRolloutState => ({
+  ...state,
+  gateLog: [...(state.gateLog ?? []), { ...entry, at: new Date().toISOString() }].slice(
+    -GATE_LOG_LIMIT,
+  ),
+});
 
 /**
  * Materialize one roster unit as a Task inside a batch. The brief is the shared
@@ -2464,11 +2479,13 @@ export class GoalService {
       }
 
       case 'rollout_gate': {
-        return observe(await this.releaseRolloutWave(graph, effects));
+        return observe(await this.releaseRolloutWave(graph, effects, rolloutGate));
       }
 
       case 'pattern_break': {
-        return observe(await this.openPatternBreakGate(graph, move.message, effects));
+        return observe(
+          await this.openPatternBreakGate(graph, move.message, effects, { gate: rolloutGate }),
+        );
       }
 
       case 'no_frontier': {
@@ -2531,6 +2548,7 @@ export class GoalService {
                   graph,
                   `${acting!.title}: ${move.message}`,
                   effects,
+                  { unitId: acting!.id },
                 ),
               );
             }
@@ -2564,6 +2582,7 @@ export class GoalService {
                   graph,
                   `${acting!.title}: ${move.message}`,
                   effects,
+                  { unitId: acting!.id },
                 ),
               );
             }
@@ -3978,6 +3997,7 @@ export class GoalService {
   private releaseRolloutWave = async (
     graph: GoalGraphSnapshot,
     effects: GoalAdvanceEffect[],
+    gate?: RolloutGateResult,
   ): Promise<GoalTickResult> => {
     const goalId = graph.goal.id;
     const policy = graph.goal.config?.rollout;
@@ -4010,24 +4030,32 @@ export class GoalService {
       }
     }
 
-    const next: GoalRolloutState = {
-      ...state,
-      massNodeIds: [...(state.massNodeIds ?? []), ...newIds],
-      phase: 'mass',
-      releasedCount: released + newIds.length,
-      waveIndex: state.waveIndex + 1,
-    };
+    const message = `Batch gate passed; released wave ${state.waveIndex + 1} (${newIds.length} unit${newIds.length === 1 ? '' : 's'})`;
+    const next: GoalRolloutState = withGateVerdict(
+      {
+        ...state,
+        massNodeIds: [...(state.massNodeIds ?? []), ...newIds],
+        phase: 'mass',
+        releasedCount: released + newIds.length,
+        waveIndex: state.waveIndex + 1,
+      },
+      {
+        checks: gate?.checks ?? [],
+        message,
+        outcome: 'released',
+        releasedCount: newIds.length,
+        revision: state.templateRevision,
+        trigger: 'gate',
+        waveIndex: state.waveIndex + 1,
+      },
+    );
     await this.goalModel.updateRolloutState(goalId, next);
 
     if (next.releasedCount! >= roster.length) {
       await this.goalModel.updateRolloutState(goalId, { ...next, phase: 'done' });
     }
 
-    return {
-      goalId,
-      message: `Batch gate passed; released wave ${next.waveIndex} (${newIds.length} unit${newIds.length === 1 ? '' : 's'})`,
-      outcome: 'advanced',
-    };
+    return { goalId, message, outcome: 'advanced' };
   };
 
   /**
@@ -4042,6 +4070,8 @@ export class GoalService {
     graph: GoalGraphSnapshot,
     message: string,
     effects: GoalAdvanceEffect[],
+    /** What held the batch: the gate's own verdict, or one unit's failed check (R6). */
+    cause: { gate?: RolloutGateResult; unitId?: string } = {},
   ): Promise<GoalTickResult> => {
     const goalId = graph.goal.id;
     const state = graph.goal.config?.rolloutState;
@@ -4077,7 +4107,21 @@ export class GoalService {
       targetId: decision?.id ?? nodeId,
       type: 'opened_decision',
     });
-    await this.goalModel.updateRolloutState(goalId, { ...state, phase: 'pattern_break' });
+    await this.goalModel.updateRolloutState(
+      goalId,
+      withGateVerdict(
+        { ...state, phase: 'pattern_break' },
+        {
+          checks: cause.gate?.checks ?? [],
+          message,
+          nodeId: cause.unitId,
+          outcome: 'blocked',
+          revision: state.templateRevision,
+          trigger: cause.unitId ? 'unit' : 'gate',
+          waveIndex: state.waveIndex,
+        },
+      ),
+    );
     await this.setPauseReason(goalId, 'pattern_break');
     await this.transitionStatus(graph.goal, 'paused', reason);
     effects.push({ type: 'goal_status', detail: 'paused: pattern_break' });

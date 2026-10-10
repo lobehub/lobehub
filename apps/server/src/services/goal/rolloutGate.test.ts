@@ -54,6 +54,27 @@ describe('evaluateRolloutGate', () => {
     expect(result.provisional).toBe(true);
   });
 
+  it('reports every condition it judged, passed or not, with the nodes behind it', () => {
+    const result = evaluateRolloutGate({
+      graph: graph([
+        node('probe', { status: 'rejected' }),
+        node('template', { description: 'recipe', kind: 'finding' }),
+      ]),
+      policy: {
+        spec: { repeatable: true, variantAxes: [{ axis: 'mode', values: ['probe'] }] },
+        trigger: 'canary',
+      },
+      state: state(),
+    });
+    expect(result.checks).toEqual([
+      { count: 1, key: 'units_settled', passed: true, total: 1 },
+      { count: 0, key: 'units_succeeded', nodeIds: ['probe'], passed: false, total: 1 },
+      { key: 'no_open_decision', passed: true },
+      { key: 'plan_written', nodeIds: ['template'], passed: true },
+      { key: 'axes_covered', passed: true },
+    ]);
+  });
+
   it('is no longer provisional once a later wave has run', () => {
     const result = evaluateRolloutGate({
       graph: graph([node('probe'), node('template', { description: 'recipe', kind: 'finding' })]),

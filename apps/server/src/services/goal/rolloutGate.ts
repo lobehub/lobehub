@@ -1,6 +1,7 @@
 import type {
   GoalGraphNode,
   GoalGraphSnapshot,
+  GoalRolloutGateCheck,
   GoalRolloutPolicy,
   GoalRolloutState,
 } from '@lobechat/types';
@@ -31,6 +32,8 @@ export interface RolloutGateInput {
 export interface RolloutGateResult {
   /** Reasons that keep the gate from passing; empty when `met` is true. */
   blockers: string[];
+  /** Every condition judged, passed or not — what the gate log records. */
+  checks: GoalRolloutGateCheck[];
   met: boolean;
   /**
    * R3: true while the class-wide green still rests on the probe wave alone. The
@@ -67,6 +70,7 @@ export const evaluateRolloutGate = ({
   state,
   externalChecks,
 }: RolloutGateInput): RolloutGateResult => {
+  const checks: GoalRolloutGateCheck[] = [];
   const blockers: string[] = [];
   const members = experimentMembers(graph, state.batchNodeId);
   const probeNodes = graph.nodes.filter((node) => state.probeNodeIds.includes(node.id));
@@ -79,25 +83,55 @@ export const evaluateRolloutGate = ({
   const memberTaskNodes = graph.nodes.filter(
     (node) => roundIds.has(node.id) && node.kind === 'task',
   );
+  const total = memberTaskNodes.length;
 
   const unsettled = memberTaskNodes.filter((node) => !TERMINAL_NODE_STATUSES.has(node.status));
+  checks.push({
+    count: total - unsettled.length,
+    key: 'units_settled',
+    nodeIds: unsettled.length ? unsettled.map((node) => node.id) : undefined,
+    passed: unsettled.length === 0,
+    total,
+  });
   if (unsettled.length) blockers.push(`${unsettled.length} unit(s) have not settled`);
 
   const broken = memberTaskNodes.filter(
     (node) => node.status === 'rejected' || node.status === 'retired',
   );
+  checks.push({
+    count: total - broken.length,
+    key: 'units_succeeded',
+    nodeIds: broken.length ? broken.map((node) => node.id) : undefined,
+    passed: broken.length === 0,
+    total,
+  });
   if (broken.length) blockers.push(`${broken.length} unit(s) did not succeed`);
 
   const openDecision = graph.nodes.find(
     (node) => members.has(node.id) && node.kind === 'decision' && node.status === 'waiting',
   );
+  checks.push({
+    key: 'no_open_decision',
+    nodeIds: openDecision ? [openDecision.id] : undefined,
+    passed: !openDecision,
+  });
   if (openDecision) blockers.push('a human decision is still open in this batch');
 
   const template = state.templateNodeId
     ? graph.nodes.find((node) => node.id === state.templateNodeId)
     : undefined;
-  if (!template?.description?.trim()) blockers.push('the batch template is incomplete');
+  const planWritten = !!template?.description?.trim();
+  checks.push({
+    key: 'plan_written',
+    nodeIds: template ? [template.id] : undefined,
+    passed: planWritten,
+  });
+  if (!planWritten) blockers.push('the batch template is incomplete');
 
+  for (const declared of policy.gate?.externalChecks ?? []) {
+    const observed = externalChecks?.find((check) => check.title === declared.title);
+    checks.push({ details: [declared.title], key: 'external', passed: !!observed?.passed });
+  }
   const declared = policy.gate?.externalChecks ?? [];
   if (declared.length) {
     if (!externalChecks?.length) {
@@ -109,13 +143,21 @@ export const evaluateRolloutGate = ({
     }
   }
 
-  const gaps = uncoveredAxisValues(policy.spec?.variantAxes, probeNodes.map(asBrief));
-  if (gaps.length) {
-    blockers.push(`untested axes: ${gaps.map((gap) => `${gap.axis}=${gap.value}`).join(', ')}`);
+  if (policy.spec?.variantAxes?.length) {
+    const gaps = uncoveredAxisValues(policy.spec.variantAxes, probeNodes.map(asBrief));
+    checks.push({
+      details: gaps.length ? gaps.map((gap) => `${gap.axis}=${gap.value}`) : undefined,
+      key: 'axes_covered',
+      passed: gaps.length === 0,
+    });
+    if (gaps.length) {
+      blockers.push(`untested axes: ${gaps.map((gap) => `${gap.axis}=${gap.value}`).join(', ')}`);
+    }
   }
 
   return {
     blockers,
+    checks,
     met: blockers.length === 0,
     provisional: blockers.length === 0 && state.waveIndex === 0,
   };

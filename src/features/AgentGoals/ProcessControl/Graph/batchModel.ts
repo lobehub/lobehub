@@ -3,7 +3,11 @@ import {
   GOAL_BATCH_TEMPLATE_TITLE,
   ROLLOUT_WAVE_SIZE_DEFAULT,
 } from '@lobechat/const/goal';
-import type { GoalRolloutPhase } from '@lobechat/types';
+import type {
+  GoalRolloutGateCheckKey,
+  GoalRolloutGateEvaluation,
+  GoalRolloutPhase,
+} from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
 
 import { type GoalGraphView, type GoalNodeView, isRunningNode } from '../goalGraphViewModel';
@@ -53,8 +57,19 @@ export interface BatchProbe {
 /** `locked` until its probes settle, `checking` once they did, `rejected` when a person sent it back. */
 export type BatchGateState = 'locked' | 'checking' | 'passed' | 'human' | 'rejected';
 
+/**
+ * A gate verdict, plus which roster wave a release put out. The coordinator's
+ * `waveIndex` restarts with each round; the roster's waves do not, and every
+ * release puts out exactly the next one — so the wave is the release's ordinal.
+ */
+export interface BatchGateVerdict extends GoalRolloutGateEvaluation {
+  wave?: number;
+}
+
 export interface BatchRound {
   assayId?: string;
+  /** This round's gate verdicts, oldest first — what the gate actually judged. */
+  evaluations: BatchGateVerdict[];
   /** Answered as "a new class", not as a revision of the previous recipe. */
   forked: boolean;
   gate: BatchGateState;
@@ -67,17 +82,21 @@ export interface BatchRound {
 }
 
 /**
- * One condition the release gate checks, mirroring the coordinator's
- * `evaluateRolloutGate`: three always, plus each declared external check and
- * variant-axis coverage when the plan declared them.
+ * One condition the release gate will check, before any verdict exists —
+ * mirroring the coordinator's `evaluateRolloutGate`: the same keys in the same
+ * order, an external check per declared one, and axis coverage when declared.
  */
-export type BatchGateCheck =
-  { key: 'axes' | 'decisions' | 'plan' | 'units' } | { key: 'external'; title: string };
+export interface BatchGateCheck {
+  key: GoalRolloutGateCheckKey;
+  /** An external check's title. */
+  title?: string;
+}
 
 export interface BatchModel {
   batchId: string;
   /** Other decisions inside the batch — e.g. a machine gate on one unit. */
   decisionIds: string[];
+  /** What the gate checks, for a round no verdict has reached yet. */
   gateChecks: BatchGateCheck[];
   phase?: GoalRolloutPhase;
   rounds: BatchRound[];
@@ -95,7 +114,9 @@ export const batchCellState = (
 ): BatchCellState => {
   if (!view) return 'backlog';
   const { status } = view.node;
-  if (status === 'retired' || status === 'rejected') return 'stale';
+  // Retired is superseded; rejected is a unit that broke and waits on a person.
+  if (status === 'retired') return 'stale';
+  if (status === 'rejected') return 'human';
   if (status === 'resolved') return 'done';
   if (status === 'waiting' || view.decision || view.isStale || waitingOn.has(view.node.id))
     return 'human';
@@ -118,6 +139,10 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
       .map((view) => view.gateSubjectId)
       .filter((id): id is string => !!id),
   );
+  // A unit that failed its own check held the batch (R6): its node can still
+  // read active, but the batch is waiting on a person because of it.
+  const held = state?.phase === 'pattern_break' ? state.gateLog?.at(-1) : undefined;
+  if (held?.trigger === 'unit' && held.nodeId) waitingOn.add(held.nodeId);
   const cellOf = (id?: string) => batchCellState(id ? graph.byId[id] : undefined, waitingOn);
 
   const templates = members.filter(
@@ -205,6 +230,11 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     return slot ? { ...slot, kind: 'wave' } : undefined;
   };
 
+  let releases = 0;
+  const verdicts: BatchGateVerdict[] = (state?.gateLog ?? []).map((entry) =>
+    entry.outcome === 'released' ? { ...entry, wave: ++releases } : entry,
+  );
+
   const rounds: BatchRound[] = probeIdsByRound.map((ids, r) => {
     const probes = ids
       .map((id) => graph.byId[id])
@@ -231,6 +261,7 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
       );
     return {
       assayId: assay?.node.id,
+      evaluations: verdicts.filter((entry) => entry.revision === r + 1),
       forked,
       gate: gateState(assay, r === roundCount - 1, state?.phase, probes),
       origin: r > 0 ? roundOrigin(probes, r) : undefined,
@@ -247,14 +278,15 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
 
   const policy = config?.rollout;
   const gateChecks: BatchGateCheck[] = [
-    { key: 'units' },
-    { key: 'decisions' },
-    { key: 'plan' },
+    { key: 'units_settled' },
+    { key: 'units_succeeded' },
+    { key: 'no_open_decision' },
+    { key: 'plan_written' },
     ...(policy?.gate?.externalChecks ?? []).map((check) => ({
       key: 'external' as const,
       title: check.title,
     })),
-    ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes' as const }] : []),
+    ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes_covered' as const }] : []),
   ];
 
   return { batchId, decisionIds, gateChecks, phase: state?.phase, rounds, waves, waveSize };
@@ -293,4 +325,24 @@ export const countCells = (cells: { state: BatchCellState }[]) => {
   };
   for (const cell of cells) counts[cell.state] += 1;
   return counts;
+};
+
+/**
+ * The batch and round a release gate belongs to, when `nodeId` is one — so a
+ * surface that opens the gate can show its verdicts rather than a bare decision.
+ */
+export const findBatchGate = (
+  graph: GoalGraphView,
+  nodeId: string,
+): { model: BatchModel; round: BatchRound } | undefined => {
+  const batchId = graph.edges.find(
+    (edge) =>
+      edge.kind === 'contains' &&
+      edge.targetNodeId === nodeId &&
+      graph.byId[edge.sourceNodeId]?.node.kind === 'batch',
+  )?.sourceNodeId;
+  if (!batchId) return undefined;
+  const model = buildBatchModel(graph, batchId);
+  const round = model.rounds.find((item) => item.assayId === nodeId);
+  return round ? { model, round } : undefined;
 };

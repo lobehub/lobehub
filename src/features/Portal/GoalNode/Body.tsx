@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ExperimentDetail } from '@/features/AgentGoals/Experiments/Detail';
 import { isExperiment } from '@/features/AgentGoals/Experiments/model';
+import GateDetail from '@/features/AgentGoals/ProcessControl/BatchGate/GateDetail';
 import {
   coordinatorGateReason,
   coordinatorReasonCopy,
@@ -17,6 +18,7 @@ import {
   buildGoalGraphView,
   type GoalNodeView,
 } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
+import { findBatchGate } from '@/features/AgentGoals/ProcessControl/Graph/batchModel';
 import { KindDot } from '@/features/AgentGoals/ProcessControl/shared';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -157,6 +159,9 @@ const Body = memo(() => {
       </ExperimentDetail>
     );
   const isFinding = node.kind === 'finding';
+  // A batch's release gate is judged by the coordinator, not asked of a person:
+  // its panel shows the verdicts and their checks instead of a bare decision.
+  const batchGate = node.kind === 'decision' ? findBatchGate(graph, node.id) : undefined;
 
   // Coordinator gates localize; arbitrary gates keep their stored copy.
   const gateKind = node.kind === 'decision' ? viewGateKind(nodeView) : undefined;
@@ -168,15 +173,29 @@ const Body = memo(() => {
 
   return (
     <Flexbox flex={1} gap={16} padding={16} style={{ minHeight: 0, overflowY: 'auto' }}>
-      <Flexbox horizontal align={'center'} gap={8}>
-        <Tag size={'small'}>{t(`goalProcess.kind.${node.kind}` as const)}</Tag>
-        <Tag size={'small'}>{t(`goalProcess.nodeStatus.${node.status}` as const)}</Tag>
-        {nodeView.humanTouches.length > 0 && (
-          <Tag size={'small'}>{t('goalProcess.node.humanTouched')}</Tag>
-        )}
-      </Flexbox>
+      {/* A gate's raw node status stays `proposed` while it releases waves;
+          its verdict below says what state it is really in. */}
+      {!batchGate && (
+        <Flexbox horizontal align={'center'} gap={8}>
+          <Tag size={'small'}>{t(`goalProcess.kind.${node.kind}` as const)}</Tag>
+          <Tag size={'small'}>{t(`goalProcess.nodeStatus.${node.status}` as const)}</Tag>
+          {nodeView.humanTouches.length > 0 && (
+            <Tag size={'small'}>{t('goalProcess.node.humanTouched')}</Tag>
+          )}
+        </Flexbox>
+      )}
+
+      {batchGate && (
+        <GateDetail
+          graph={graph}
+          model={batchGate.model}
+          round={batchGate.round}
+          onOpenNode={(nodeId) => openGoalNode(view.goalId, nodeId)}
+        />
+      )}
 
       {node.description &&
+        !batchGate &&
         (isFinding ? (
           // A finding's description is the run's handoff — real Markdown, so
           // render it as such instead of pre-wrapped source text. `flex-shrink: 0`
@@ -200,7 +219,7 @@ const Body = memo(() => {
           </Section>
         ))}
 
-      {node.kind === 'decision' && nodeView.decision && (
+      {node.kind === 'decision' && nodeView.decision && !batchGate && (
         <Section title={t('goalProcess.gate.decisionPointLabel')}>
           {/* State the problem itself; the resolution options carry the choices. */}
           <Text fontSize={13}>{gateReasonText ?? nodeView.decision.question}</Text>

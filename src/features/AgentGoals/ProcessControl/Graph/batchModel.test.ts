@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
-import { buildBatchModel } from './batchModel';
+import { buildBatchModel, findBatchGate } from './batchModel';
 
 const T0 = new Date('2026-10-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -260,6 +260,107 @@ describe('buildBatchModel', () => {
 
     expect(cell).toMatchObject({ nodeId: 'f3', runIn: 2, state: 'done', title: 'U3' });
     expect(cell.reopenedIn).toBeUndefined();
+  });
+});
+
+describe('unit states', () => {
+  it('reads a rejected unit as waiting on a person and only a retired one as superseded', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        extraNodes: [
+          node('m3', 'task', 10, { status: 'rejected', title: 'U3' }),
+          node('m4', 'task', 10, { status: 'retired', title: 'U4' }),
+        ],
+        state: { massNodeIds: ['m3', 'm4'], phase: 'pattern_break', waveIndex: 1 },
+      }),
+      NOW,
+    );
+    const [first] = buildBatchModel(graph, 'batch').waves;
+    expect(first.slice(0, 2).map((cell) => cell.state)).toEqual(['human', 'stale']);
+  });
+
+  it('reads the unit that held the batch as waiting on a person, though its node is active', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        extraNodes: [node('m3', 'task', 10, { status: 'active', title: 'U3', updatedAt: at(59) })],
+        state: {
+          gateLog: [
+            {
+              at: at(59).toISOString(),
+              checks: [],
+              nodeId: 'm3',
+              outcome: 'blocked',
+              revision: 1,
+              trigger: 'unit',
+              waveIndex: 1,
+            },
+          ],
+          massNodeIds: ['m3'],
+          phase: 'pattern_break',
+          waveIndex: 1,
+        },
+      }),
+      NOW,
+    );
+    expect(buildBatchModel(graph, 'batch').waves[0][0].state).toBe('human');
+  });
+});
+
+describe('gate verdicts', () => {
+  it('gives each round its own verdicts and finds the round from its gate', () => {
+    const released = {
+      at: '2026-10-01T00:20:00.000Z',
+      checks: [{ count: 2, key: 'units_succeeded' as const, passed: true, total: 2 }],
+      outcome: 'released' as const,
+      releasedCount: 4,
+      revision: 1,
+      trigger: 'gate' as const,
+      waveIndex: 1,
+    };
+    const held = {
+      at: '2026-10-01T00:30:00.000Z',
+      checks: [],
+      nodeId: 'm4',
+      outcome: 'blocked' as const,
+      revision: 1,
+      trigger: 'unit' as const,
+      waveIndex: 1,
+    };
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1')],
+        extraEdges: [edge('t2', 't1', 'revises'), edge('a2', 'm4b', 'depends_on')],
+        extraNodes: [
+          node('m4', 'task', 10, { status: 'retired', title: 'U4' }),
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('m4b', 'task', 42, { title: 'U4' }),
+        ],
+        state: {
+          assayNodeId: 'a2',
+          gateLog: [released, held, { ...released, at: '2026-10-01T00:50:00.000Z', revision: 2 }],
+          probeNodeIds: ['m4b'],
+        },
+      }),
+      NOW,
+    );
+
+    const first = findBatchGate(graph, 'a1');
+    expect(first?.round.revision).toBe(1);
+    expect(first?.round.evaluations).toEqual([{ ...released, wave: 1 }, held]);
+    // The round's own wave count restarts; the roster's does not — v2's first
+    // release puts out the roster's second wave.
+    const second = findBatchGate(graph, 'a2');
+    expect(second?.round.evaluations.map((entry) => entry.wave)).toEqual([2]);
+    // What a gate checks before its first verdict.
+    expect(second?.model.gateChecks.map((check) => check.key)).toEqual([
+      'units_settled',
+      'units_succeeded',
+      'no_open_decision',
+      'plan_written',
+    ]);
+    // Any other node is not a gate.
+    expect(findBatchGate(graph, 't1')).toBeUndefined();
   });
 });
 

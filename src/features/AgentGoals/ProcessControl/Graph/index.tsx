@@ -39,6 +39,7 @@ import {
   graphNodeLabel,
   isContainerKind,
 } from '../../Experiments/model';
+import { useGateCheckCopy } from '../BatchGate/useGateCheckCopy';
 import {
   type GoalGraphView,
   type GoalNodeView,
@@ -393,15 +394,18 @@ type BatchRole = { kind: 'assay' | 'template'; model: BatchModel; round: BatchRo
 
 const useBatchCopy = () => {
   const { t } = useTranslation('chat');
+  const checkCopy = useGateCheckCopy();
   return useMemo(
     () => ({
       gate: (round: BatchRound, model: BatchModel): GraphNodeData['presentation'] => {
         const { key, ...chip } = GATE_CHIP[round.gate];
-        const checks = model.gateChecks.map((check) =>
-          check.key === 'external'
-            ? t('goalBatch.gate.check.external', { title: check.title })
-            : t(`goalBatch.gate.check.${check.key}` as const),
-        );
+        // The latest verdict's checks with their results; before any, the plan.
+        const latest = round.evaluations.findLast((item) => item.checks.length > 0);
+        const checks = (latest?.checks ?? model.gateChecks).map((check) => {
+          const { detail, label } = checkCopy(check);
+          const mark = 'passed' in check ? (check.passed ? '✓ ' : '✗ ') : '';
+          return `${mark}${label}${detail ? `（${detail}）` : ''}`;
+        });
         return {
           chip: { ...chip, text: t(`goalBatch.gate.status.${key}` as any) },
           // How many conditions decide the release, and which, one hover away.
@@ -409,7 +413,7 @@ const useBatchCopy = () => {
             <Flexbox gap={4}>
               <span>{t('goalBatch.gate.hintTitle')}</span>
               {checks.map((text, index) => (
-                <span key={index}>{`${index + 1}. ${text}`}</span>
+                <span key={index}>{latest ? text : `${index + 1}. ${text}`}</span>
               ))}
             </Flexbox>
           ),
@@ -431,7 +435,7 @@ const useBatchCopy = () => {
           : t('goalBatch.template.title', { revision: round.revision }),
       }),
     }),
-    [t],
+    [t, checkCopy],
   );
 };
 

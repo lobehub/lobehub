@@ -2048,6 +2048,57 @@ describe('GoalService', () => {
     expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
   });
 
+  it('records each gate verdict — the release and the hold — with what it checked', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+    await service.tick(graph.goal.id);
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const probeIds = (await service.graph(graph.goal.id)).goal.config!.rolloutState!.probeNodeIds;
+    for (const id of probeIds) await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
+
+    // The probes settled clean: the gate releases the first wave and says why.
+    await service.tick(graph.goal.id);
+    let state = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
+    expect(state.gateLog).toHaveLength(1);
+    expect(state.gateLog![0]).toMatchObject({
+      outcome: 'released',
+      releasedCount: 5,
+      revision: 1,
+      trigger: 'gate',
+      waveIndex: 1,
+    });
+    expect(state.gateLog![0].checks).toContainEqual(
+      expect.objectContaining({ count: 5, key: 'units_succeeded', passed: true, total: 5 }),
+    );
+
+    // One unit of that wave was rejected: the next verdict holds and names it.
+    const [rejected, ...rest] = state.massNodeIds!;
+    for (const id of rest) await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
+    await graphModel.updateNodeStatus(graph.goal.id, rejected, 'rejected');
+    await service.tick(graph.goal.id);
+    state = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
+    expect(state.phase).toBe('pattern_break');
+    expect(state.gateLog![1]).toMatchObject({ outcome: 'blocked', trigger: 'gate' });
+    expect(state.gateLog![1].checks).toContainEqual(
+      expect.objectContaining({ key: 'units_succeeded', nodeIds: [rejected], passed: false }),
+    );
+  });
+
   it('restarts the canary loop when a person answers a broken batch gate', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       problemStatement: '把 50 个同构的 store 迁移到 replica',
