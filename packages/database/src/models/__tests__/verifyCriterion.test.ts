@@ -244,3 +244,321 @@ describe('frozen resources', () => {
     );
   });
 });
+
+describe('query filters and empty-id guards', () => {
+  it('returns early for empty id sets', async () => {
+    const model = new VerifyCriterionModel(serverDB, userId);
+    expect(await model.findByIds([])).toEqual([]);
+    expect(await model.forkRubricCriteria([])).toEqual([]);
+  });
+
+  it('filters by archived, search and tags', async () => {
+    const model = new VerifyCriterionModel(serverDB, userId);
+    const alpha = await model.create({
+      title: 'Alpha widget',
+      verifierType: 'llm',
+      tags: ['a', 'b'],
+    });
+    const beta = await model.create({ title: 'Beta widget', verifierType: 'llm', tags: ['b'] });
+    await model.update(beta.id, { archivedAt: new Date() });
+
+    // archived rows are hidden by default and included on request
+    expect((await model.query()).map((c) => c.id)).toEqual([alpha.id]);
+    expect((await model.query({ includeArchived: true })).map((c) => c.id).sort()).toEqual(
+      [alpha.id, beta.id].sort(),
+    );
+
+    // search is scoped and the wildcard is escaped
+    expect((await model.query({ search: 'Alpha' })).map((c) => c.id)).toEqual([alpha.id]);
+    expect(await model.query({ search: '%' })).toHaveLength(0);
+
+    // tags use array containment
+    expect((await model.query({ tags: ['a'] })).map((c) => c.id)).toEqual([alpha.id]);
+  });
+
+  it('returns the original ids when nothing is rubric-mounted', async () => {
+    const model = new VerifyCriterionModel(serverDB, userId);
+    const a = await model.create({ title: 'a', verifierType: 'llm' });
+    const b = await model.create({ title: 'b', verifierType: 'agent' });
+    expect(await model.forkRubricCriteria([a.id, b.id])).toEqual([a.id, b.id]);
+  });
+});
+
+describe('materialize derived definitions and fixtures', () => {
+  it('derives a legacy definition from verifierConfig when none is supplied', async () => {
+    const model = new VerifyCriterionModel(serverDB, userId);
+    const [item] = await model.materialize(
+      [
+        {
+          id: 'legacy',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'Legacy check',
+          verifierConfig: { expected: 'panel visible', method: 'open the panel' },
+          verifierType: 'llm',
+        },
+      ],
+      'delivery',
+    );
+    expect(item.definition).toEqual({
+      expected: 'panel visible',
+      steps: [{ id: 'legacy-method', instruction: 'open the panel' }],
+    });
+    expect(item.resourceSnapshot).toEqual({ fixtures: [] });
+  });
+
+  it('snapshots the item document content and rejects an unresolvable document', async () => {
+    const { documents } = await import('../../schemas');
+    const [doc] = await serverDB
+      .insert(documents)
+      .values({
+        id: 'criterion-snapshot-doc',
+        userId,
+        title: 'Rubric body',
+        sourceType: 'api',
+        source: 'test',
+        fileType: 'text/plain',
+        totalCharCount: 5,
+        totalLineCount: 1,
+        content: 'hello',
+      })
+      .returning();
+    const [emptyDoc] = await serverDB
+      .insert(documents)
+      .values({
+        id: 'criterion-empty-doc',
+        userId,
+        title: 'Empty',
+        sourceType: 'api',
+        source: 'test',
+        fileType: 'text/plain',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        content: null,
+      })
+      .returning();
+    const model = new VerifyCriterionModel(serverDB, userId);
+
+    const [withContent] = await model.materialize(
+      [
+        {
+          id: 'doc-check',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'Doc check',
+          documentId: doc.id,
+          verifierConfig: {},
+          verifierType: 'llm',
+        },
+      ],
+      'delivery',
+    );
+    expect(withContent.resourceSnapshot?.documentContent).toBe('hello');
+
+    // a document with no content snapshots as an empty string
+    const [emptyContent] = await model.materialize(
+      [
+        {
+          id: 'empty-doc-check',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'Empty doc check',
+          documentId: emptyDoc.id,
+          verifierConfig: {},
+          verifierType: 'llm',
+        },
+      ],
+      'delivery',
+    );
+    expect(emptyContent.resourceSnapshot?.documentContent).toBe('');
+
+    // a criterion pointing at another owner's document cannot be snapshotted
+    const [foreignDoc] = await serverDB
+      .insert(documents)
+      .values({
+        id: 'criterion-foreign-doc',
+        userId: otherUserId,
+        title: 'Foreign body',
+        sourceType: 'api',
+        source: 'test',
+        fileType: 'text/plain',
+        totalCharCount: 1,
+        totalLineCount: 1,
+        content: 'secret',
+      })
+      .returning();
+    const foreignOwned = await model.create({
+      title: 'foreign body check',
+      verifierType: 'llm',
+      documentId: foreignDoc.id,
+    });
+    await expect(
+      model.materialize(
+        [
+          {
+            id: 'foreign-doc-check',
+            index: 0,
+            onFail: 'manual',
+            required: true,
+            title: 'Foreign doc check',
+            sourceCriterionId: foreignOwned.id,
+            verifierConfig: {},
+            verifierType: 'llm',
+          },
+        ],
+        'delivery',
+      ),
+    ).rejects.toThrow('Check document unavailable');
+  });
+
+  it('skips resource-less fixtures and freezes file fixtures', async () => {
+    const { globalFiles, files } = await import('../../schemas');
+    await serverDB.insert(globalFiles).values({
+      hashId: 'criterion-file-hash',
+      fileType: 'text/plain',
+      size: 3,
+      url: 'https://example.com/asset.txt',
+      creator: userId,
+    });
+    await serverDB.insert(files).values({
+      id: 'criterion-file-1',
+      userId,
+      fileType: 'text/plain',
+      fileHash: 'criterion-file-hash',
+      name: 'asset.txt',
+      size: 3,
+      url: 'https://example.com/asset.txt',
+    });
+    await serverDB.insert(files).values({
+      id: 'criterion-file-no-hash',
+      userId,
+      fileType: 'text/plain',
+      fileHash: null,
+      name: 'loose.txt',
+      size: 3,
+      url: 'https://example.com/loose.txt',
+    });
+    const model = new VerifyCriterionModel(serverDB, userId);
+
+    const [skipped] = await model.materialize(
+      [
+        {
+          id: 'skip-fixture',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'No resource',
+          verifierConfig: {},
+          verifierType: 'llm',
+          definition: { fixtures: [{ id: 'f-skip', name: 'No resource' }] },
+        },
+      ],
+      'delivery',
+    );
+    expect(skipped.resourceSnapshot?.fixtures).toEqual([]);
+
+    const [frozen] = await model.materialize(
+      [
+        {
+          id: 'file-fixture',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'File fixture',
+          verifierConfig: {},
+          verifierType: 'llm',
+          definition: {
+            fixtures: [
+              { id: 'f-file', name: 'Input', resource: { type: 'file', id: 'criterion-file-1' } },
+            ],
+          },
+        },
+      ],
+      'delivery',
+    );
+    expect(frozen.resourceSnapshot?.fixtures).toEqual([
+      {
+        fixtureId: 'f-file',
+        fileHash: 'criterion-file-hash',
+        url: 'https://example.com/asset.txt',
+      },
+    ]);
+
+    await expect(
+      model.materialize(
+        [
+          {
+            id: 'file-nohash',
+            index: 0,
+            onFail: 'manual',
+            required: true,
+            title: 'Loose file',
+            verifierConfig: {},
+            verifierType: 'llm',
+            definition: {
+              fixtures: [
+                {
+                  id: 'f-loose',
+                  name: 'Loose',
+                  resource: { type: 'file', id: 'criterion-file-no-hash' },
+                },
+              ],
+            },
+          },
+        ],
+        'delivery',
+      ),
+    ).rejects.toThrow('Fixture requires an immutable file hash');
+  });
+
+  it('validates a definition on update', async () => {
+    const model = new VerifyCriterionModel(serverDB, userId);
+    const c = await model.create({ title: 'editable', verifierType: 'llm' });
+    await model.update(c.id, { definition: { expected: 'updated' } });
+    expect((await model.findById(c.id))?.definition).toEqual({ expected: 'updated' });
+  });
+});
+
+describe('materialize document fixtures', () => {
+  it('freezes a document fixture with no stored content as an empty string', async () => {
+    const { documents } = await import('../../schemas');
+    const [doc] = await serverDB
+      .insert(documents)
+      .values({
+        id: 'criterion-fixture-empty-doc',
+        userId,
+        title: 'Empty fixture',
+        sourceType: 'api',
+        source: 'test',
+        fileType: 'text/plain',
+        totalCharCount: 0,
+        totalLineCount: 0,
+        content: null,
+      })
+      .returning();
+    const model = new VerifyCriterionModel(serverDB, userId);
+    const [item] = await model.materialize(
+      [
+        {
+          id: 'empty-fixture-check',
+          index: 0,
+          onFail: 'manual',
+          required: true,
+          title: 'Empty fixture check',
+          verifierConfig: {},
+          verifierType: 'llm',
+          definition: {
+            fixtures: [
+              { id: 'f-empty', name: 'Empty', resource: { type: 'document', id: doc.id } },
+            ],
+          },
+        },
+      ],
+      'delivery',
+    );
+    expect(item.resourceSnapshot?.fixtures).toEqual([{ fixtureId: 'f-empty', content: '' }]);
+  });
+});
