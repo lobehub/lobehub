@@ -142,6 +142,13 @@ export interface OperationMetadata {
     details?: any;
   };
 
+  /**
+   * One-use automatic retry grant for a run explicitly dispatched by this client.
+   * Consumed by the error card; absent for restored/reconnected operations.
+   * @default undefined
+   */
+  heteroAutoRetryAvailable?: boolean;
+
   // UI state (for sendMessage operation)
   inputEditorTempState?: any | null; // Editor state snapshot for cancel restoration
 
