@@ -46,6 +46,28 @@ export const params = {
         }
       }
 
+      // Transform reasoning object to reasoning_content string for multi-turn conversations.
+      // OpenRouter accepts reasoning_content on assistant messages to preserve reasoning context.
+      // Skip reasoning with signatures (Anthropic-style thinking blocks require their signature).
+      const messages = rest.messages?.map((message: any) => {
+        if (message.role !== 'assistant') return message;
+
+        const { reasoning: msgReasoning, ...msgRest } = message;
+
+        const reasoningContent =
+          typeof msgRest.reasoning_content === 'string'
+            ? msgRest.reasoning_content
+            : msgReasoning?.content && !msgReasoning?.signature
+              ? msgReasoning.content
+              : undefined;
+
+        if (reasoningContent !== undefined) {
+          return { ...msgRest, reasoning_content: reasoningContent };
+        }
+
+        return msgRest;
+      });
+
       // Add modalities and image_config for image generation models
       const isImageModel = model.includes('-image') || model.includes('flux');
       const modalities =
@@ -76,6 +98,7 @@ export const params = {
       return {
         ...rest,
         ...(image_config && { image_config }),
+        ...(messages && { messages }),
         ...(modalities && { modalities }),
         model: payload.enabledSearch ? `${payload.model}:online` : payload.model,
         ...(reasoning && { reasoning }),
