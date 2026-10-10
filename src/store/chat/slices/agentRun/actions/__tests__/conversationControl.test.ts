@@ -3546,6 +3546,73 @@ describe('ConversationControl actions', () => {
       });
     });
 
+    it.each(['submit', 'cancel'] as const)(
+      'publishes a gateway %s to the server operation the producer polls',
+      async (actionType) => {
+        // ROOT CAUSE:
+        // The legacy submit published to the gateway run's client-local op id,
+        // whose stream no producer reads. The device CLI long-polls the server
+        // op id, so the answer never arrived and the request timed out.
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'remote-agent';
+        const topicId = 'remote-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const assistantMessage = createMockMessage({
+          id: 'assistant-msg-gateway',
+          role: 'assistant',
+        });
+        // OSS self-host persists no durable card locator, so the legacy submit runs.
+        const toolMessage = createMockMessage({
+          id: 'tool-msg-gateway',
+          parentId: assistantMessage.id,
+          pluginIntervention: { status: 'pending' },
+          pluginState: { heterogeneousIntervention: { interactionKind: 'question' } },
+          role: 'tool',
+          tool_call_id: 'call-gateway',
+        } as any);
+        const clientOperationId = 'op_client_local';
+
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+            messagesMap: { [chatKey]: [assistantMessage, toolMessage] },
+          });
+          result.current.startOperation({
+            context: { agentId, threadId: null, topicId },
+            metadata: { serverOperationId: 'op_server_run' },
+            operationId: clientOperationId,
+            type: 'execServerAgentRuntime',
+          });
+          useChatStore.setState({
+            messageOperationMap: { [assistantMessage.id]: clientOperationId },
+          });
+        });
+
+        vi.spyOn(result.current, 'optimisticUpdateMessagePlugin').mockResolvedValue(undefined);
+        vi.spyOn(result.current, 'optimisticUpdateMessageContent').mockResolvedValue(undefined);
+        vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+          messages: [],
+          success: true,
+        });
+        const legacyRemoteSubmit = vi.mocked(lambdaClient.aiAgent.submitHeteroIntervention.mutate);
+
+        await act(async () => {
+          await result.current.submitHeteroIntervention(
+            toolMessage.id,
+            actionType,
+            actionType === 'submit' ? { Question: 'Answer' } : undefined,
+          );
+        });
+
+        expect(legacyRemoteSubmit).toHaveBeenCalledTimes(1);
+        expect(legacyRemoteSubmit).toHaveBeenCalledWith(
+          expect.objectContaining({ operationId: 'op_server_run', toolCallId: 'call-gateway' }),
+        );
+      },
+    );
+
     it('keeps a cold-start durable card unchanged when the source request fails', async () => {
       const { result } = renderHook(() => useChatStore());
       const agentId = 'remote-agent';

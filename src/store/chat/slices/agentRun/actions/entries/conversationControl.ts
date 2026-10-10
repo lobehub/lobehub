@@ -1959,20 +1959,29 @@ export class ConversationControlActionImpl {
             : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
         );
       } else {
+        // The producer long-polls the server operation's stream. A gateway run's
+        // local op id is client-only, so an answer published under it never
+        // reaches the producer.
+        const remoteOperationId = operation?.metadata?.serverOperationId ?? operationId;
         const resolutionIntent = JSON.stringify(
           canonicalizeResolutionPayload({ actionType, payload: payload ?? {} }),
         );
-        const resolutionKey = `${operationId}:${toolCallId}:${resolutionIntent}`;
+        const resolutionKey = `${remoteOperationId}:${toolCallId}:${resolutionIntent}`;
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, resolutionRequestId, result: payload ?? {}, toolCallId }
+            ? {
+                operationId: remoteOperationId,
+                resolutionRequestId,
+                result: payload ?? {},
+                toolCallId,
+              }
             : {
                 cancelReason: 'user_cancelled',
                 cancelled: true,
-                operationId,
+                operationId: remoteOperationId,
                 resolutionRequestId,
                 toolCallId,
               },
