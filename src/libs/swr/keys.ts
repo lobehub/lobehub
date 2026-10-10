@@ -541,26 +541,6 @@ export const discoverKeys = {
     locale,
     params,
   ]),
-  pluginCategories: def('discover:pluginCategories', (locale: string, params: unknown) => [
-    'discover:pluginCategories',
-    locale,
-    params,
-  ]),
-  pluginDetail: def(
-    'discover:pluginDetail',
-    (locale: string, identifier: string, withManifest?: boolean) => [
-      'discover:pluginDetail',
-      locale,
-      identifier,
-      withManifest,
-    ],
-  ),
-  pluginIdentifiers: def('discover:pluginIdentifiers', () => ['discover:pluginIdentifiers']),
-  pluginList: def('discover:pluginList', (locale: string, params: unknown) => [
-    'discover:pluginList',
-    locale,
-    params,
-  ]),
   providerDetail: def('discover:providerDetail', (locale: string, identifier: string) => [
     'discover:providerDetail',
     locale,

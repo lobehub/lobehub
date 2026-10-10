@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import PluginAvatar from '@/components/Plugins/PluginAvatar';
 import { useIsDark } from '@/hooks/useIsDark';
 import { useDiscoverStore } from '@/store/discover';
+import { pluginSelectors as discoverPluginSelectors } from '@/store/discover/selectors';
 import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 import { useToolStore } from '@/store/tool';
 import {
@@ -314,11 +315,13 @@ const PluginTag = memo<PluginTagProps>(
     ]);
 
     // Fetch from remote if not found locally
-    const usePluginDetail = useDiscoverStore((s) => s.usePluginDetail);
-    const { data: remoteData, isLoading } = usePluginDetail({
+    const usePluginDetail = useDiscoverStore((s) => s.useFetchPluginDetail);
+    const { isLoading, queryKey } = usePluginDetail({
       identifier: !localMeta && !isInstalled ? identifier : undefined,
       withManifest: false,
     });
+    // The replica view of this identifier; the sync hook only reports the fetch flags.
+    const remoteData = useDiscoverStore(discoverPluginSelectors.pluginDetail(queryKey));
 
     // Determine final metadata
     const meta = localMeta || {
