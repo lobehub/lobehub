@@ -114,6 +114,9 @@ const Body = memo(() => {
     );
   }
 
+  // Normalize once: an older server may not send the widget's boards list.
+  const dashboards = widget.dashboards ?? [];
+
   return (
     <Flexbox
       data-portal-widget={widget.id}
@@ -146,9 +149,9 @@ const Body = memo(() => {
         }
       >
         {!isMobile &&
-          (widget.dashboards.length > 0 ? (
+          (dashboards.length > 0 ? (
             <Flexbox horizontal gap={8} wrap={'wrap'}>
-              {widget.dashboards.map((dashboard) => (
+              {dashboards.map((dashboard) => (
                 <Button
                   data-portal-dashboard-link={dashboard.id}
                   icon={ArrowUpRightIcon}
