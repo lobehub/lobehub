@@ -1,7 +1,5 @@
 import type { WorkingDirGitState } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
-import { toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Icon, toast, Tooltip } from '@lobehub/ui';
 import { ArrowDownIcon, ArrowUpIcon, GitPullRequest } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

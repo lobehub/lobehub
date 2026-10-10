@@ -1,6 +1,5 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, TextArea } from '@lobehub/ui';
+import { Alert, Button, Flexbox, TextArea } from '@lobehub/ui';
 import { type FormInstance } from '@lobehub/ui/form';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

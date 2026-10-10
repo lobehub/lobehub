@@ -1,6 +1,4 @@
-import { Center, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, Center, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ChevronDownIcon, Settings2Icon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 

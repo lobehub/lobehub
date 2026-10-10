@@ -1,8 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { Button, createModal } from '@lobehub/ui';
+import { Button, createModal, Flexbox } from '@lobehub/ui';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

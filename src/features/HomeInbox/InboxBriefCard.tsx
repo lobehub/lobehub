@@ -1,8 +1,6 @@
 import { DEFAULT_AVATAR, INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, Block, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Target } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

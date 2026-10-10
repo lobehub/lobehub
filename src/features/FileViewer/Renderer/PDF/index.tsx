@@ -3,8 +3,7 @@
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
 
-import { Flexbox } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
+import { Flexbox, Spin } from '@lobehub/ui';
 import { Fragment, memo, useCallback, useState } from 'react';
 
 import { Document, Page, pdfjs } from '@/libs/pdfjs';

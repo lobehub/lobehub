@@ -1,6 +1,4 @@
-import { Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, Center, createStaticStyles, Flexbox, Icon, toast, Tooltip } from '@lobehub/ui';
 import { BrainIcon, LucideRefreshCcwDot, PlusIcon } from 'lucide-react';
 import { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,5 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { PlayIcon } from 'lucide-react';
 import { memo } from 'react';
 

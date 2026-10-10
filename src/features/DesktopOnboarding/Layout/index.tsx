@@ -1,9 +1,7 @@
 'use client';
 
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Divider, Text } from '@lobehub/ui';
-import { css, cx } from '@lobehub/ui';
+import { Center, css, cx, Divider, Flexbox, Text } from '@lobehub/ui';
 import { type FC, type PropsWithChildren } from 'react';
 
 import SimpleTitleBar from '@/features/Electron/titlebar/SimpleTitleBar';

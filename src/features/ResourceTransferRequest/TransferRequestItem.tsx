@@ -1,8 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Tag, Text, toast } from '@lobehub/ui';
+import { Avatar, Block, Button, Flexbox, Tag, Text, toast } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

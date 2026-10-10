@@ -2,10 +2,8 @@
 
 import type { ComposioAppType, LobehubSkillProviderType } from '@lobechat/const';
 import { resolveConnectorCatalogItem } from '@lobechat/const';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui';
+import { Avatar, createStaticStyles, cssVar, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { AlertCircle, Loader2, Square, SquareCheckBig, SquareMinus, X } from 'lucide-react';
 import React, { memo, useMemo } from 'react';

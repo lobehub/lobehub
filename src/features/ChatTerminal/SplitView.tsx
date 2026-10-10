@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles } from '@lobehub/ui';
 import { XIcon } from 'lucide-react';
 import { Fragment, type PointerEvent as ReactPointerEvent, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

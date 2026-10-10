@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, keyframes } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, keyframes } from '@lobehub/ui';
 import {
   CircleAlertIcon,
   EraserIcon,

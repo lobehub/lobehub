@@ -1,5 +1,4 @@
-import { Flexbox, Icon, SearchBar } from '@lobehub/ui';
-import { Select } from '@lobehub/ui';
+import { Flexbox, Icon, SearchBar, Select } from '@lobehub/ui';
 import { ArrowDownNarrowWide, Search } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

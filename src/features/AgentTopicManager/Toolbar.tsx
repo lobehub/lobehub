@@ -1,8 +1,15 @@
 'use client';
 
 import { type DropdownItem, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Tabs, Text, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Tabs,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import {
   Archive,
   CalendarRange,

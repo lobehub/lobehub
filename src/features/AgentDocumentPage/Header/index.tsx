@@ -1,9 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Text } from '@lobehub/ui';
-import { cssVar, cx } from '@lobehub/ui';
+import { ActionIcon, cssVar, cx, DropdownMenu, Flexbox, Text } from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

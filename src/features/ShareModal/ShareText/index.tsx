@@ -1,7 +1,6 @@
 import { FORM_STYLE } from '@lobechat/const';
 import { exportFile } from '@lobechat/utils/client';
-import { copyToClipboard, Flexbox } from '@lobehub/ui';
-import { Button, Switch, toast } from '@lobehub/ui';
+import { Button, copyToClipboard, Flexbox, Switch, toast } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';

@@ -1,7 +1,6 @@
 'use client';
 
-import { Tabs } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Tabs } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
 import MobileContentLayout from '@/components/server/MobileNavLayout';

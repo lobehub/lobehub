@@ -1,4 +1,4 @@
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { type PropsWithChildren, useEffect } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -46,8 +46,8 @@ vi.mock('./VoiceMessage/useVoiceMessageRecorder', () => ({
 }));
 
 interface TestHarnessProps {
-  onSendMenuChange: (menu: MenuProps | undefined) => void;
-  sendMenu?: MenuProps;
+  onSendMenuChange: (menu: { items: DropdownItem[] } | undefined) => void;
+  sendMenu?: { items: DropdownItem[] };
 }
 
 const Probe = ({
@@ -126,7 +126,9 @@ describe('ChatInput StoreUpdater', () => {
   });
 
   it('clears sendMenu when the prop becomes undefined', () => {
-    const initialSendMenu = { items: [{ key: 'test', label: 'Test' }] } satisfies MenuProps;
+    const initialSendMenu = { items: [{ key: 'test', label: 'Test' }] } satisfies {
+      items: DropdownItem[];
+    };
     const onSendMenuChange = vi.fn();
 
     const { rerender } = render(

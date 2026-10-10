@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 /** Indent added per nesting level, in px. */

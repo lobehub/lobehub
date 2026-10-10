@@ -1,5 +1,4 @@
-import { Flexbox, ScrollShadow } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, ScrollShadow } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useChatInputStore } from '@/features/ChatInput/store';

@@ -2,8 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import { RENDERER_HANDLED_LINK_ATTR } from '@lobechat/desktop-bridge';
-import { Button } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Button, cssVar } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import type { MouseEvent, ReactNode } from 'react';
 import { memo, useCallback } from 'react';

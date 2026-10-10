@@ -1,6 +1,4 @@
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Highlighter, Text } from '@lobehub/ui';
 import { ClockAlert } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

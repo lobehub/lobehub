@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Input, Text, toast } from '@lobehub/ui';
+import { Flexbox, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

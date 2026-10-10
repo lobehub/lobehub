@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { EditableMessage } from '@lobehub/ui/chat';
-import { createStaticStyles } from '@lobehub/ui';
 import { PencilLine } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

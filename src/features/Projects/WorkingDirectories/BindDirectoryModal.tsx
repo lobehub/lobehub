@@ -1,9 +1,10 @@
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Alert,
   Avatar,
   Button,
   createModal,
+  Flexbox,
+  Icon,
   ModalFooter,
   Select,
   Text,

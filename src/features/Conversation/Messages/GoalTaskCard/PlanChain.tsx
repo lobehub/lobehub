@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowRight, type LucideIcon, ShieldCheck } from 'lucide-react';
 import { Fragment, memo } from 'react';
 import { useTranslation } from 'react-i18next';

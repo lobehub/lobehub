@@ -1,7 +1,6 @@
 'use client';
 
-import { Freeze } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Freeze } from '@lobehub/ui';
 import { AnimatePresence, useIsPresent } from 'motion/react';
 import * as m from 'motion/react-m';
 import { type ReactNode } from 'react';

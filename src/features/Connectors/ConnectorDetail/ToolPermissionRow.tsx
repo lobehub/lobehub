@@ -1,5 +1,4 @@
-import { Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Tooltip } from '@lobehub/ui';
 import { BanIcon, CheckIcon, HandIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

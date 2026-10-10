@@ -1,8 +1,20 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, Tag, Text, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useResponsive } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+  TooltipGroup,
+  useResponsive,
+} from '@lobehub/ui';
 import { BookmarkCheckIcon, BookmarkIcon, DotIcon, GitBranchIcon, UsersIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';

@@ -1,6 +1,5 @@
 import { formatUsageValue } from '@lobechat/utils';
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 export interface TokenProgressItem {

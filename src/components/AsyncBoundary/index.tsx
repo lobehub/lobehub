@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
+import { Center, Flexbox, Spin } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import AsyncError, { type AsyncErrorVariant } from '../AsyncError';

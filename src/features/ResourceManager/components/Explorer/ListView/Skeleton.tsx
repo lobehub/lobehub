@@ -1,6 +1,4 @@
-import { Center, Flexbox } from '@lobehub/ui';
-import { Checkbox, Skeleton } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Center, Checkbox, cssVar, Flexbox, Skeleton } from '@lobehub/ui';
 
 import { FILE_DATE_WIDTH, FILE_SIZE_WIDTH, getListViewMinWidth } from './ListItem/constants';
 

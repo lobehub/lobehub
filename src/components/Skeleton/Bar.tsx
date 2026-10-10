@@ -1,7 +1,6 @@
 'use client';
 
-import { Skeleton } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Skeleton } from '@lobehub/ui';
 
 export interface SkeletonBarProps {
   height: number;

@@ -1,5 +1,14 @@
-import { Block, Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Input, toast } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  Flexbox,
+  Icon,
+  Input,
+  stopPropagation,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { Check, PaletteIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

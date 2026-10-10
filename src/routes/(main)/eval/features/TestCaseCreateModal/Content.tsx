@@ -1,8 +1,10 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Accordion,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
   Input,
   Select,
   Text,
@@ -11,7 +13,6 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { Form, useForm, useWatch } from '@lobehub/ui/form';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 

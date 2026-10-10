@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox, Icon, Image, Tooltip } from '@lobehub/ui';
 import { ArrowUp, Info, ListEnd, Pencil, Trash2 } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

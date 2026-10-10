@@ -1,7 +1,6 @@
 'use client';
 
-import { Popover } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Popover } from '@lobehub/ui';
 import { memo, useState } from 'react';
 
 import { DOCK_Z_INDEX } from '../const';

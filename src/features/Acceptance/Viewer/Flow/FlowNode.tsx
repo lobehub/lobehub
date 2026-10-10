@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { Handle, Position } from '@xyflow/react';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import {
   CheckCircle2,
   CircleDashed,

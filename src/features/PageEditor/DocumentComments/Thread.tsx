@@ -1,7 +1,5 @@
 import type { DocumentCommentItem, DocumentCommentThread } from '@lobechat/types';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Button, Skeleton } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Button, Center, cx, Flexbox, Skeleton } from '@lobehub/ui';
 import { Fragment, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

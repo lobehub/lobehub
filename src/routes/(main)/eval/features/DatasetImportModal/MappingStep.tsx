@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import { Checkbox, Input, Select, Table, type TableColumn, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,7 +1,6 @@
 'use client';
 
-import { copyToClipboard } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, toast } from '@lobehub/ui';
+import { ActionIcon, copyToClipboard, DropdownMenu, toast } from '@lobehub/ui';
 import { MoreHorizontal } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -2,9 +2,7 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceScope, DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import {
   ChevronRightIcon,
   FolderCogIcon,

@@ -1,5 +1,4 @@
-import { Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Spin } from '@lobehub/ui';
 import { type CSSProperties } from 'react';
 import React, { memo, useCallback, useMemo } from 'react';
 

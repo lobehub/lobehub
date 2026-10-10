@@ -1,9 +1,19 @@
 'use client';
 
 import { MAX_WIDTH } from '@lobechat/const';
-import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Modal, Spin, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  CopyButton,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Modal,
+  Spin,
+  Text,
+} from '@lobehub/ui';
 import { CircleCheckIcon, LogOutIcon, UnplugIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useState } from 'react';

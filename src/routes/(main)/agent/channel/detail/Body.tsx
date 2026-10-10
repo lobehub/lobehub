@@ -1,11 +1,21 @@
 'use client';
 
 import { isMaskedBotCredential } from '@lobechat/const';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
 import type { SelectOption } from '@lobehub/ui';
-import { Button, confirmModal, InputNumber, Select, Switch, Tag, Text } from '@lobehub/ui';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  InputNumber,
+  Select,
+  Switch,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Form, type FormInstance, useFormInstance, useWatch } from '@lobehub/ui/form';
-import { createStaticStyles } from '@lobehub/ui';
 import {
   Fingerprint,
   Hash,

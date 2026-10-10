@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Skeleton, Switch, Tag, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Switch,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { ArrowLeftIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';

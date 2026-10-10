@@ -1,5 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { CheckIcon } from 'lucide-react';
 
 const renderCheck = () => <Icon color={cssVar.colorTextSecondary} icon={CheckIcon} size={14} />;

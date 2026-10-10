@@ -6,9 +6,19 @@ import type {
   HeteroSessionDirPref,
   HeteroSessionImportStatus,
 } from '@lobechat/types';
-import { Flexbox, Icon, ScrollShadow, SearchBar } from '@lobehub/ui';
-import { Button, Checkbox, Progress, Spin, Text, useModalContext } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Button,
+  Checkbox,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Progress,
+  ScrollShadow,
+  SearchBar,
+  Spin,
+  Text,
+  useModalContext,
+} from '@lobehub/ui';
 import { Check, FolderSearch, TriangleAlert, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

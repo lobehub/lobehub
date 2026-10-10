@@ -1,9 +1,7 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, Tabs } from '@lobehub/ui';
 import { BookOpenIcon, HistoryIcon, SquareUserIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

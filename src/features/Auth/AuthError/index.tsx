@@ -2,9 +2,7 @@
 
 import { SiDiscord } from '@icons-pack/react-simple-icons';
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, useSearchParams } from 'react-router';

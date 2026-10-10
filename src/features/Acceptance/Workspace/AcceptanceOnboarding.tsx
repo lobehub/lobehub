@@ -1,8 +1,17 @@
 'use client';
 
-import { CopyButton, Flexbox, Icon } from '@lobehub/ui';
-import { Button, TabsIndicator, TabsList, TabsRoot, TabsTab } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Button,
+  CopyButton,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  TabsIndicator,
+  TabsList,
+  TabsRoot,
+  TabsTab,
+} from '@lobehub/ui';
 import { ArrowLeft, Bot, ClipboardCheck, Terminal } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

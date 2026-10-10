@@ -1,8 +1,6 @@
 'use client';
 
-import { Grid } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Grid, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

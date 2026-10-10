@@ -1,7 +1,6 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Block, createStaticStyles, cx } from '@lobehub/ui';
 import { SquarePenIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

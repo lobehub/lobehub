@@ -1,9 +1,7 @@
 'use client';
 
 import type { GithubIntegrationPreference } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Switch, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, createStaticStyles, Flexbox, Icon, Switch, Text } from '@lobehub/ui';
 import {
   CircleXIcon,
   GitMergeIcon,

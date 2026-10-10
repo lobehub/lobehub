@@ -1,8 +1,17 @@
 import type { HeteroSessionDirGroup, HeteroSessionDirPref } from '@lobechat/types';
 import { ClaudeCode, Codex } from '@lobehub/icons';
-import { Flexbox, Icon, ScrollShadow, Tooltip } from '@lobehub/ui';
-import { ActionIcon, DraggablePanel, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DraggablePanel,
+  Flexbox,
+  Icon,
+  ScrollShadow,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { ChevronRight, Eye, EyeOff, Folder, FolderGit2, Timer, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

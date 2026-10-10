@@ -1,8 +1,7 @@
 'use client';
 
 import { type CredType } from '@lobechat/types';
-import { Steps, useModalContext } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Steps, useModalContext } from '@lobehub/ui';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

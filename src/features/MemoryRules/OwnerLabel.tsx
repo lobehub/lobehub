@@ -1,9 +1,7 @@
 'use client';
 
 import { DEFAULT_AVATAR } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Avatar, cssVar, Flexbox } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { OwnerSection } from './labels';

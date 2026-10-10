@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui';
+import { Block, Divider, Flexbox } from '@lobehub/ui';
 import { Fragment } from 'react';
 
 import TaskItemSkeleton from '@/features/AgentTasks/AgentTaskList/TaskItemSkeleton';

@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { useResponsive } from '@lobehub/ui';
+import { Flexbox, useResponsive } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useQueryState } from '@/hooks/useQueryParam';

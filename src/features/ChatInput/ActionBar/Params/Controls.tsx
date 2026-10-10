@@ -4,10 +4,19 @@ import {
   resolveSubAgentModel,
 } from '@lobechat/const';
 import { resolveEffectiveReasoningChatConfig } from '@lobechat/model-runtime/utils/modelExtendParams';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Select, SliderWithInput, Spin, Switch, TextArea } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Select,
+  SliderWithInput,
+  Spin,
+  Switch,
+  TextArea,
+} from '@lobehub/ui';
 import { useForm } from '@lobehub/ui/form';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, ChevronUp } from 'lucide-react';

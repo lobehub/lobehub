@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Drawer, Switch, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Drawer,
+  Flexbox,
+  Switch,
+  Text,
+} from '@lobehub/ui';
 import { Pencil, Trash } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

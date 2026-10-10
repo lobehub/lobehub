@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 
 import NavHeader from '@/features/NavHeader';
 import WideScreenContainer from '@/features/WideScreenContainer';

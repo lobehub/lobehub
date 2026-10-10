@@ -1,6 +1,5 @@
 import type { TaskDetailData, TaskDetailSubtask } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
+import { Button, Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

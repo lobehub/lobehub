@@ -1,7 +1,7 @@
 'use client';
 
 import { OFFICIAL_URL } from '@lobechat/const';
-import { Block, Center, Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { Block, Center, createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   Avatar,
   Button,
@@ -15,7 +15,6 @@ import {
   toast,
   Upload,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   ArrowLeft,
   CircleHelp,

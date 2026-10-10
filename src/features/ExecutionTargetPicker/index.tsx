@@ -1,8 +1,7 @@
 'use client';
 
 import type { DeviceExecutionTarget, DeviceListItem } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
 import { BoxIcon, LaptopIcon, MonitorOffIcon, SparklesIcon } from 'lucide-react';
 import { memo } from 'react';
 

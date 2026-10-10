@@ -1,16 +1,17 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
   Spin,
   Text,
 } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
 import React, { memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 

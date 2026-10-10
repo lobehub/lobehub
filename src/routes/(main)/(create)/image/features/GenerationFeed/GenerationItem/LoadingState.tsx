@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Center } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
+import { Block, Center, Spin } from '@lobehub/ui';
 import React, { memo } from 'react';
 
 import { AsyncTaskStatus } from '@/types/asyncTask';

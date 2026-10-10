@@ -1,8 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Center, createStaticStyles, Flexbox, Spin } from '@lobehub/ui';
 import { memo } from 'react';
 
 import AsyncError from '@/components/AsyncError';

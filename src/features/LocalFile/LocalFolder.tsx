@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import path from 'path-browserify-esm';
 import React from 'react';
 

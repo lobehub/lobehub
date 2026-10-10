@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentItem, AcceptanceCommentThread } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { BadgeCheck, GitCommitHorizontal, MessageSquare, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useMemo } from 'react';

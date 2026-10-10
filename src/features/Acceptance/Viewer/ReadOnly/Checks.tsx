@@ -1,6 +1,4 @@
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Select, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Empty, Flexbox, Icon, Select, Text } from '@lobehub/ui';
 import { type Dispatch, type SetStateAction, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Empty, Flexbox, Markdown } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { Center, Empty, Flexbox, Markdown, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useClientDataSWR } from '@/libs/swr';

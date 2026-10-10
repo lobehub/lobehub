@@ -1,7 +1,5 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { sectionStyles } from '../Overview/sectionStyles';

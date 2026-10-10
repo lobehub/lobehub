@@ -1,6 +1,5 @@
 import { agentDisplayName, type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Switch, Tabs } from '@lobehub/ui';
+import { Button, Flexbox, Switch, Tabs } from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import { CopyIcon } from 'lucide-react';
 import { memo, useState } from 'react';

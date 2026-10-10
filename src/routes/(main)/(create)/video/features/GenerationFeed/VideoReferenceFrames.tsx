@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Image } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox, Image } from '@lobehub/ui';
 import { QuoteIcon } from 'lucide-react';
 import { memo } from 'react';
 

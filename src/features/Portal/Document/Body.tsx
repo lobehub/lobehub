@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Text,
+  TextArea,
+} from '@lobehub/ui';
 import { CheckIcon, PencilIcon, XIcon } from 'lucide-react';
 import type { ChangeEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';

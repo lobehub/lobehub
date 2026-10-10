@@ -1,5 +1,5 @@
-import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   ArchiveIcon,

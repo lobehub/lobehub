@@ -2,8 +2,7 @@
 
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Avatar, Spin } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, createStaticStyles, Spin } from '@lobehub/ui';
 import { type CSSProperties } from 'react';
 import { memo } from 'react';
 

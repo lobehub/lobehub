@@ -1,5 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Block, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => {

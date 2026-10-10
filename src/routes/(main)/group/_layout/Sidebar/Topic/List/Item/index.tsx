@@ -1,8 +1,16 @@
 import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Skeleton, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useTheme } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Tag,
+  Text,
+  Tooltip,
+  useTheme,
+} from '@lobehub/ui';
 import { HashIcon, MessageSquareDashed } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';

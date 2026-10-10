@@ -2,10 +2,8 @@
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
 import type { IconProps } from '@lobehub/ui';
-import { Icon, Popover } from '@lobehub/ui';
-import { toast, Upload } from '@lobehub/ui';
+import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
 import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { css, cssVar, cx } from '@lobehub/ui';
 import {
   Brain,
   CheckIcon,

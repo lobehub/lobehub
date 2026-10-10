@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { BanIcon, ClockIcon } from 'lucide-react';
 import { memo } from 'react';

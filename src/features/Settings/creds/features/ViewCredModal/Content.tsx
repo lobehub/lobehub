@@ -1,10 +1,16 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { CopyButton, Flexbox } from '@lobehub/ui';
-import { Alert, Descriptions, Text } from '@lobehub/ui';
+import {
+  Alert,
+  CopyButton,
+  createStaticStyles,
+  cx,
+  Descriptions,
+  Flexbox,
+  Text,
+} from '@lobehub/ui';
 import { useQuery } from '@tanstack/react-query';
-import { createStaticStyles, cx } from '@lobehub/ui';
 import { Eye, EyeOff } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

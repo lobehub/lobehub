@@ -1,8 +1,7 @@
 'use client';
 
 import { TRASH_RETENTION_DAYS } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import SettingHeader from '@/features/Settings/features/SettingHeader';

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tabs, Tag } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, Tabs, Tag } from '@lobehub/ui';
 import { ListChecks, MessagesSquare, Paperclip, Route } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

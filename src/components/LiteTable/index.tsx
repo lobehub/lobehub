@@ -1,5 +1,4 @@
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { createStaticStyles, cx, Skeleton } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 

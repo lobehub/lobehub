@@ -1,7 +1,6 @@
 'use client';
 
-import { Grid } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { Grid, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 const SkeletonList = memo<{ count?: number }>(({ count = 6 }) => {

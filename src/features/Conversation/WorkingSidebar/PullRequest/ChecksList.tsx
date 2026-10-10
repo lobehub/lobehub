@@ -1,6 +1,5 @@
 import type { DeviceGitPullRequestCheck } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Icon } from '@lobehub/ui';
 import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

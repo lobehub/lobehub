@@ -1,7 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListeningPort } from '@lobechat/types';
-import { copyToClipboard } from '@lobehub/ui';
-import { toast } from '@lobehub/ui';
+import { copyToClipboard, toast } from '@lobehub/ui';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -3,7 +3,7 @@
 import { type VoiceMessageRecording } from '@lobechat/types';
 import { type SlashOptions } from '@lobehub/editor';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Flexbox, type DropdownItem } from '@lobehub/ui';
+import { type DropdownItem, Flexbox } from '@lobehub/ui';
 import { Alert, toast } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef } from 'react';

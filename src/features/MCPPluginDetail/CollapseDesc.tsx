@@ -1,5 +1,4 @@
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { createStaticStyles, cx, Text } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 

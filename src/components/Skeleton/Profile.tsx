@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 
 import WideScreenContainer from '@/features/WideScreenContainer';
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';

@@ -1,8 +1,6 @@
 import { DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { UserRoundX } from 'lucide-react';
 import type { CSSProperties, KeyboardEvent, ReactNode } from 'react';

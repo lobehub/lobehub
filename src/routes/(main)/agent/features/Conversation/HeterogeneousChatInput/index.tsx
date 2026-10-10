@@ -3,8 +3,7 @@
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import { isHeteroSelectorAvailable } from '@lobechat/types';
 import { type ChatInputActionsProps } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button } from '@lobehub/ui';
+import { Alert, Button, Flexbox } from '@lobehub/ui';
 import { memo, type ReactNode, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

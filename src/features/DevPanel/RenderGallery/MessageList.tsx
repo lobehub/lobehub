@@ -2,8 +2,7 @@
 
 import { LOADING_FLAT } from '@lobechat/const';
 import type { ChatToolPayload, UIChatMessage } from '@lobechat/types';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Text } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import {

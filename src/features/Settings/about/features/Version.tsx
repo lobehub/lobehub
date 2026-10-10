@@ -4,9 +4,7 @@ import {
   type UpdaterState,
   useWatchBroadcast,
 } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { Button, Tag } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, Button, createStaticStyles, Flexbox, Tag, Tooltip } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

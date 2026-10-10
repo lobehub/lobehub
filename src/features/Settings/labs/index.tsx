@@ -1,8 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Alert, Skeleton, Switch, Tag } from '@lobehub/ui';
+import { Alert, Flexbox, Skeleton, Switch, Tag, Tooltip } from '@lobehub/ui';
 import { Form, type FormFieldProps, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { FlaskConicalIcon } from 'lucide-react';
 import { memo } from 'react';

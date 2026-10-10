@@ -1,5 +1,4 @@
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui';
+import { ActionIcon, Button, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { InfoIcon, MoreVerticalIcon, Trash2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

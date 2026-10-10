@@ -1,8 +1,17 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Select, Tag, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Block,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Select,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { ArrowLeftIcon, CheckCircle2Icon, Trash2Icon, UserIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';

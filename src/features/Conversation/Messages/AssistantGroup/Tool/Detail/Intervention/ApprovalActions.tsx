@@ -1,7 +1,5 @@
 import { registerPendingHotkeyCard } from '@lobechat/shared-tool-ui/pending-hotkeys';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Button, createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 import { CircleStop, CornerDownLeft } from 'lucide-react';
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';

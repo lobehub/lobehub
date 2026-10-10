@@ -1,10 +1,16 @@
 'use client';
 
 import { MAX_RESOURCE_COLLABORATORS_PER_ADD } from '@lobechat/const';
-import { Empty, Flexbox, Icon, SearchBar } from '@lobehub/ui';
 import {
   Avatar,
   Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
   SkeletonAvatar,
   SkeletonText,
   Text,
@@ -12,7 +18,6 @@ import {
   useModalContext,
 } from '@lobehub/ui';
 import { useHover } from 'ahooks';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { CheckIcon, SearchXIcon, UsersIcon } from 'lucide-react';
 import { memo, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

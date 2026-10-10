@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { ShieldCheck } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

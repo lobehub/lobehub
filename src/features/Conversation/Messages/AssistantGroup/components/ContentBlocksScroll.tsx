@@ -1,8 +1,7 @@
 'use client';
 
 import type { UIChatMessage } from '@lobechat/types';
-import { Flexbox, ScrollArea } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, ScrollArea } from '@lobehub/ui';
 import type { RefObject } from 'react';
 import { memo, useMemo } from 'react';
 

@@ -2,9 +2,7 @@
 
 import type { WorkingDirConfig, WorkingDirEntry } from '@lobechat/types';
 import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { cx, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { CheckIcon, ChevronDownIcon, FolderPlusIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

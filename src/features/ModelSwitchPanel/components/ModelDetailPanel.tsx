@@ -1,14 +1,16 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
   AccordionTrigger,
+  createStaticStyles,
+  Flexbox,
+  Icon,
   Tag,
   Text,
+  Tooltip,
 } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
 import { ArrowDownToDot, ArrowUpFromDot, CircleFadingArrowUp } from 'lucide-react';
 import type { FC } from 'react';
 import { memo } from 'react';

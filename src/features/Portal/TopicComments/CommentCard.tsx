@@ -1,5 +1,4 @@
 import type { TopicCommentItem } from '@lobechat/types';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui';
 import {
   ActionIcon,
@@ -7,6 +6,9 @@ import {
   Button,
   confirmModal,
   DropdownMenu,
+  Flexbox,
+  Icon,
+  Markdown,
   Text,
   toast,
 } from '@lobehub/ui';

@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Grid } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, createStaticStyles, Flexbox, Grid, Skeleton } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import WideScreenContainer from '@/features/WideScreenContainer';

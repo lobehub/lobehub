@@ -2,8 +2,7 @@
 
 import { type UIChatMessage } from '@lobechat/types';
 import { ThreadStatus } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
-import { Accordion } from '@lobehub/ui';
+import { Accordion, Block } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useMemo, useState } from 'react';
 

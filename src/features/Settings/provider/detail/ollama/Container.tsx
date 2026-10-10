@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles, responsive } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox, responsive } from '@lobehub/ui';
 import { XIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { useState } from 'react';

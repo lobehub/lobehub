@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, createStaticStyles, Flexbox, Tag, Text } from '@lobehub/ui';
 
 export const PERSONAL_SCOPE = 'personal';
 

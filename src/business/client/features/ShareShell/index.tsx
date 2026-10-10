@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 
 export interface ShareHeroProps {

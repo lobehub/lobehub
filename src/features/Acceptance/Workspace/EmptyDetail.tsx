@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Empty } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
+import { Button, Center, Empty } from '@lobehub/ui';
 import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

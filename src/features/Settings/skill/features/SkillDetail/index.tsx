@@ -2,9 +2,16 @@
 
 import { getLobehubSkillProviderById } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Markdown, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Skeleton, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Markdown,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Plus, SquareArrowOutUpRight, Trash2, Unplug, Wrench } from 'lucide-react';
 import type { ReactNode } from 'react';

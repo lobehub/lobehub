@@ -1,5 +1,4 @@
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Accordion } from '@lobehub/ui';
+import { Accordion, Flexbox, Markdown } from '@lobehub/ui';
 import qs from 'query-string';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

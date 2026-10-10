@@ -1,9 +1,7 @@
 'use client';
 
 import type { AgentEvalExperimentListItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowRight, Beaker } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

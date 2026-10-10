@@ -1,7 +1,5 @@
 import type { BriefArtifactDocument, BriefArtifacts } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Block, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronRightIcon, FileTextIcon } from 'lucide-react';
 import { memo } from 'react';
 

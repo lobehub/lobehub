@@ -1,6 +1,5 @@
 import { Block, type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Text, toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, confirmModal, cssVar, Text, toast } from '@lobehub/ui';
 import { Check, ChevronDownIcon, ChevronUpIcon, MoreHorizontal, Trash } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

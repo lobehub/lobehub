@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { MessageSquareText } from 'lucide-react';
 import { memo, useMemo } from 'react';
 

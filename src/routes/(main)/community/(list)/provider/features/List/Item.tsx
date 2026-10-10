@@ -1,7 +1,14 @@
 import { Github } from '@lobehub/icons';
-import { Block, Flexbox, MaskShadow, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  MaskShadow,
+  stopPropagation,
+  Text,
+} from '@lobehub/ui';
 import { GlobeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

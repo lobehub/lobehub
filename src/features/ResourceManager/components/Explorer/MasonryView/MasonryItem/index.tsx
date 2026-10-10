@@ -3,9 +3,15 @@ import {
   CUSTOM_FOLDER_FILE_TYPE,
   MARKDOWN_MIME_TYPES,
 } from '@lobechat/const';
-import { Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  Checkbox,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Icon,
+  stopPropagation,
+  Tooltip,
+} from '@lobehub/ui';
 import { LockIcon } from 'lucide-react';
 import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

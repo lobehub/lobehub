@@ -1,6 +1,4 @@
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Block, Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Database, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -10,9 +10,7 @@ import type {
   VerifyVisualizationDataset,
   VerifyVisualizationManifest,
 } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowDownRight, ArrowUpRight, ChartNoAxesCombined } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Fragment, memo } from 'react';

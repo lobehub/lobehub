@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Progress, Spin, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Progress, Spin, Text } from '@lobehub/ui';
 import { CircleAlertIcon, CircleCheckIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

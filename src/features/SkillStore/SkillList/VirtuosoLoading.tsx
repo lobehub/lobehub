@@ -1,6 +1,4 @@
-import { Center } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Center, cssVar, Spin } from '@lobehub/ui';
 
 const VirtuosoLoading = () => {
   return (

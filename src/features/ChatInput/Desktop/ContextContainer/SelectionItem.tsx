@@ -1,7 +1,5 @@
 import type { ChatContextContent } from '@lobechat/types';
-import { Tooltip } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Tag, Tooltip } from '@lobehub/ui';
 import { Code2Icon, TextIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 

@@ -7,10 +7,8 @@ import {
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui';
-import { Alert, Button, Tabs } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Alert, Button, createStaticStyles, cssVar, Flexbox, Tabs } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ChevronDown, Wrench } from 'lucide-react';
 import React, { memo } from 'react';

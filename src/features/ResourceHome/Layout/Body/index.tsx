@@ -1,4 +1,3 @@
-import { Tooltip } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -6,9 +5,10 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  cx,
   Text,
+  Tooltip,
 } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

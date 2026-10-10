@@ -1,7 +1,5 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { Edge, Node } from '@xyflow/react';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   ArrowRight,
   CheckCircle2,

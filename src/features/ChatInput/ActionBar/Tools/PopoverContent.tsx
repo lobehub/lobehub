@@ -1,6 +1,13 @@
 import { type ItemType } from '@lobehub/ui';
-import { Flexbox, Icon, SearchBar, stopPropagation, usePopoverContext } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  SearchBar,
+  stopPropagation,
+  usePopoverContext,
+} from '@lobehub/ui';
 import { Pin, Settings, Store, Zap } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

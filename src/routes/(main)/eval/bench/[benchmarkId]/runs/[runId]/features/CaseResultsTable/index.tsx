@@ -2,7 +2,7 @@
 
 import type { EvalThreadResult } from '@lobechat/types';
 import { formatCost, formatShortenNumber } from '@lobechat/utils';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Badge,
@@ -13,7 +13,6 @@ import {
   Tag,
   Tooltip,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { Footprints, Play, RotateCcw, SearchIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

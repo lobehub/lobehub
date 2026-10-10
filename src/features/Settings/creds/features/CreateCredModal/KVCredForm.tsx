@@ -1,10 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Input, InputPassword, TextArea } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox, Input, InputPassword, TextArea } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { useMutation } from '@tanstack/react-query';
-import { createStaticStyles } from '@lobehub/ui';
 import { Minus, Plus } from 'lucide-react';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';

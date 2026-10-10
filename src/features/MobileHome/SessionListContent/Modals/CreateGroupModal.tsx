@@ -1,7 +1,7 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Flexbox,
   Input,
   ModalFooter,
   toast,

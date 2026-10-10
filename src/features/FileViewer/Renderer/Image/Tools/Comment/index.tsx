@@ -1,8 +1,7 @@
 'use client';
 
 import { nanoid } from '@lobechat/utils';
-import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Button, createStaticStyles, cssVar, Text, TextArea } from '@lobehub/ui';
 import { CheckIcon, ListIcon, Trash2Icon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';

@@ -3,9 +3,17 @@
 import { type ChatMessageError } from '@lobechat/types';
 import { RequestTrigger, TraceNameMap } from '@lobechat/types';
 import { isRecord, pickTrimmedString } from '@lobechat/utils/object';
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Alert, Button, Select, Spin } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Highlighter,
+  Select,
+  Spin,
+} from '@lobehub/ui';
 import { CircleCheckIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';

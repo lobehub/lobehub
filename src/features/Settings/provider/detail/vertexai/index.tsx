@@ -1,8 +1,6 @@
 'use client';
 
-import { Markdown } from '@lobehub/ui';
-import { Select } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Markdown, Select } from '@lobehub/ui';
 import { VertexAIProviderCard } from 'model-bank/modelProviders';
 import { useTranslation } from 'react-i18next';
 

@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Block, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { PinIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

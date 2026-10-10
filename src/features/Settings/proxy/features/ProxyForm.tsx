@@ -1,9 +1,9 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
+  Flexbox,
   Input,
   InputPassword,
   RadioGroup,

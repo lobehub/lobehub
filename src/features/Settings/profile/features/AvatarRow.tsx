@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Upload } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Icon, Upload } from '@lobehub/ui';
 import { Loader2Icon, PencilIcon } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

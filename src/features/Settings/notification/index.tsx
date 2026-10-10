@@ -2,8 +2,7 @@ import {
   COMPLETION_BUILTIN_SOUNDS,
   type CompletionSoundSettings,
 } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Segmented, Select, Skeleton, Slider, Switch } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Segmented, Select, Skeleton, Slider, Switch } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import { Play } from 'lucide-react';
 import { useCallback, useEffect, useId, useState } from 'react';

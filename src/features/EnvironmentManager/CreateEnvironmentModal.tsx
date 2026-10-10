@@ -1,11 +1,11 @@
 'use client';
 
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  Flexbox,
   Input,
   ModalFooter,
   Text,

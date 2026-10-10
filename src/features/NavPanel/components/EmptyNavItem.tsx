@@ -1,5 +1,4 @@
-import { Block, Center, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
+import { Block, Center, Icon, Text } from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 

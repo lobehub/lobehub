@@ -1,9 +1,7 @@
 'use client';
 
 import type { GoalDecisionOption } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Avatar, Center, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { MonitorCog } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { Grid3x3Icon, ListIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,5 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { Center } from '@lobehub/ui';
-import { Avatar, Badge } from '@lobehub/ui';
+import { Avatar, Badge, Center } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useLocation } from 'react-router';
 

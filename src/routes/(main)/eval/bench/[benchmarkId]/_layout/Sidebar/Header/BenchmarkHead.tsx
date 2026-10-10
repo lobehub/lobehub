@@ -1,9 +1,17 @@
 'use client';
 
 import { type DropdownItem } from '@lobehub/ui';
-import { Block, Center, DropdownMenu, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Center,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Skeleton,
+  stopPropagation,
+  Text,
+} from '@lobehub/ui';
 import {
   Activity,
   Award,

@@ -1,6 +1,4 @@
-import { Block, Highlighter } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, cssVar, Highlighter, Tag } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

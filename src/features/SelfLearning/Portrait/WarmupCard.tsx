@@ -1,8 +1,15 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, keyframes } from '@lobehub/ui';
+import {
+  Block,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  keyframes,
+  Text,
+} from '@lobehub/ui';
 import { DnaIcon, HistoryIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

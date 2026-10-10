@@ -1,5 +1,4 @@
-import { Flexbox, Highlighter, Icon } from '@lobehub/ui';
-import { Alert, Button, Result } from '@lobehub/ui';
+import { Alert, Button, Flexbox, Highlighter, Icon, Result } from '@lobehub/ui';
 import { ShieldAlert } from 'lucide-react';
 import React, { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';

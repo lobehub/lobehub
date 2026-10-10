@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Popover } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Popover } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 

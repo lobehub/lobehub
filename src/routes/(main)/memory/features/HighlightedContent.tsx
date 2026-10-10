@@ -1,6 +1,4 @@
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface HighlightedContentProps {

@@ -1,7 +1,6 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { confirmModal, createStaticStyles, cssVar, toast } from '@lobehub/ui';
 import {
   AlertTriangle,
   ArrowRight,

@@ -1,10 +1,19 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Block, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Block,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  stopPropagation,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Spotlight } from '@lobehub/ui/awesome';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { ClockIcon, FileTextIcon, StarIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

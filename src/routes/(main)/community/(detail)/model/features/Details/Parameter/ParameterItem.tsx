@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Divider, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';

@@ -1,7 +1,7 @@
 'use client';
 
 import { currentUtilization, isWeeklyAllLimit } from '@lobechat/heterogeneous-agents/quota';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -12,7 +12,6 @@ import {
   Switch,
   Text,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import {
   CheckIcon,

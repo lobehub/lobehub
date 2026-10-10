@@ -1,8 +1,6 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { ActionIcon, Spin } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { ActionIcon, Block, createStaticStyles, cssVar, cx, Spin } from '@lobehub/ui';
 import { Plus, X } from 'lucide-react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { memo, useCallback, useRef, useState } from 'react';

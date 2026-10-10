@@ -1,8 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Icon } from '@lobehub/ui';
-import { Button, SplitButton } from '@lobehub/ui';
+import { Button, Icon, SplitButton } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

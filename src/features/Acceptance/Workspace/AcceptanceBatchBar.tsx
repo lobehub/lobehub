@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, DropdownMenu } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Button, createStaticStyles, cssVar, DropdownMenu, Flexbox } from '@lobehub/ui';
 import { CircleCheck, FolderInput, Trash2, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

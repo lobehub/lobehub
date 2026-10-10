@@ -1,5 +1,4 @@
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
+import { Block, Flexbox, Icon, Text } from '@lobehub/ui';
 import { FileLock2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

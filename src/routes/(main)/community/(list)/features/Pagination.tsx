@@ -1,7 +1,6 @@
 'use client';
 
-import { Pagination as Page } from '@lobehub/ui';
-import { useResponsive } from '@lobehub/ui';
+import { Pagination as Page, useResponsive } from '@lobehub/ui';
 import { memo } from 'react';
 import { useLocation } from 'react-router';
 

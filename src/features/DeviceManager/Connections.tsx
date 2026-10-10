@@ -1,8 +1,7 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui';
+import { Block, Flexbox, Tag, Text } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import type { ReactNode } from 'react';
 import { useRef } from 'react';

@@ -1,8 +1,7 @@
 import { isDesktop } from '@lobechat/const';
 import { getActivePluginIds, type LobeAgentConfig } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
+import { cssVar, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, confirmModal, type ModalInstance, toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import type { TFunction } from 'i18next';
 import {

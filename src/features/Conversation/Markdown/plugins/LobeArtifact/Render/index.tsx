@@ -1,6 +1,4 @@
-import { Center, Flexbox } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Center, createStaticStyles, cx, Flexbox, Spin } from '@lobehub/ui';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 

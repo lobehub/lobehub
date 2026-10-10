@@ -1,8 +1,15 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text, TextArea, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
 import { BadgeCheck } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useState } from 'react';

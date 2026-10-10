@@ -1,8 +1,17 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Alert, Button, Popover, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { AlertTriangle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

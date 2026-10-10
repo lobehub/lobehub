@@ -1,4 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import {
   Background,
   Controls,
@@ -9,7 +9,6 @@ import {
   useReactFlow,
   type Viewport,
 } from '@xyflow/react';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { useEffect, useRef } from 'react';
 
 import { observeWidth } from '@/features/AgentGoals/ProcessControl/Graph/useFitViewOnResize';

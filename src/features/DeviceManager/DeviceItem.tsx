@@ -1,10 +1,21 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Tag, Text } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  cx,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { useInViewport } from 'ahooks';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   EyeOffIcon,

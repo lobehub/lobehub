@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Flag, Repeat } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

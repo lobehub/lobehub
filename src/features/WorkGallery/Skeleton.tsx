@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ArticleSkeleton from '@/components/Skeleton/Article';

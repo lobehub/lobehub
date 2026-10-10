@@ -3,9 +3,16 @@
 import type { TaskExecutionConfig } from '@lobechat/types';
 import { toTaskExecutionConfigPatch } from '@lobechat/types';
 import { useEditor } from '@lobehub/editor/react';
-import { Block, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Text, toast, useModalContext } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Button,
+  cssVar,
+  Flexbox,
+  Text,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { Minimize2, Paperclip, X } from 'lucide-react';
 import { type KeyboardEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

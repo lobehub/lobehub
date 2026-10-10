@@ -2,9 +2,7 @@
 
 import type { AgentGraph, LobeAgentChatConfig } from '@lobechat/types';
 import { AgentGraphSchema } from '@lobechat/types/agent/graph';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Switch, TextArea } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Alert, Button, createStaticStyles, cssVar, Flexbox, Switch, TextArea } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

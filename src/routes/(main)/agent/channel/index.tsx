@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { memo, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router';
 

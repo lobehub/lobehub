@@ -1,8 +1,7 @@
 'use client';
 
 import type { WorkSummaryItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 

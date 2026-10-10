@@ -1,10 +1,16 @@
 'use client';
 
 import { agentDisplayName, type AgentItem } from '@lobechat/types';
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { ActionIcon, Skeleton, Text } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Popover,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from '@lobehub/ui';
 import { BookOpen, FileText, Settings, SquareTerminal } from 'lucide-react';
 import { memo, type PropsWithChildren, useState } from 'react';
 import { useTranslation } from 'react-i18next';

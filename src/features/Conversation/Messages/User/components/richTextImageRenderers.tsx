@@ -1,6 +1,5 @@
 import type { NodeRenderer } from '@lobehub/editor/renderer';
-import { Image } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Image } from '@lobehub/ui';
 import type { CSSProperties } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

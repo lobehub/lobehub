@@ -1,7 +1,5 @@
 import type { AgentTemplate } from '@lobechat/builtin-tool-web-onboarding/agentMarketplace';
-import { Icon } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Avatar, cx, Icon } from '@lobehub/ui';
 import { CheckIcon } from 'lucide-react';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback } from 'react';

@@ -1,9 +1,7 @@
 'use client';
 
 import type { BlockProps } from '@lobehub/ui';
-import { Block, Popover } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, Block, createStaticStyles, Popover, Text } from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';

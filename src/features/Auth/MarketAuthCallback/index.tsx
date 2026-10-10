@@ -1,7 +1,6 @@
 'use client';
 
-import { FluentEmoji } from '@lobehub/ui';
-import { Button, Result, Text } from '@lobehub/ui';
+import { Button, FluentEmoji, Result, Text } from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

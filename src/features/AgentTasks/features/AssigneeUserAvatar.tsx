@@ -1,5 +1,4 @@
-import { Center, Icon, Tooltip } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Center, cssVar, Icon, Tooltip } from '@lobehub/ui';
 import { CircleUser } from 'lucide-react';
 import { memo } from 'react';
 

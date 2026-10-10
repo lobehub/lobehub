@@ -1,5 +1,4 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
+import { Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { Users } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,15 +1,18 @@
 import { type SidebarGroup } from '@lobechat/types';
-import { ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   accordionStyles,
   AccordionTrigger,
+  ContextMenuTrigger,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
   Spin,
   Text,
 } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
 import { HashIcon } from 'lucide-react';
 import React, { memo, useCallback, useMemo, useState } from 'react';
 

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, CircleAlert, Loader2, MessagesSquare } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,4 @@
-import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, cssVar, Flexbox, Icon, Text, Tooltip } from '@lobehub/ui';
 import { ClockIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,9 +1,7 @@
 'use client';
 
 import { type StepContextTodos } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Checkbox, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Checkbox, createStaticStyles, cssVar, cx, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { ChevronDown, ChevronUp, CircleArrowRight } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

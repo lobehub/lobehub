@@ -1,6 +1,5 @@
-import { Flexbox, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Tooltip } from '@lobehub/ui';
 import { type TableColumn, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

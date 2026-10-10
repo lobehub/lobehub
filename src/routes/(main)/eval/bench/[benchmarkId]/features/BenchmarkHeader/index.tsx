@@ -3,8 +3,7 @@
 import type { AgentEvalRunListItem } from '@lobechat/types';
 import { formatCost } from '@lobechat/utils';
 import { type DropdownItem, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Button, confirmModal, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Button, confirmModal, createStaticStyles, cssVar, Text } from '@lobehub/ui';
 import {
   CircleDollarSign,
   Clock,

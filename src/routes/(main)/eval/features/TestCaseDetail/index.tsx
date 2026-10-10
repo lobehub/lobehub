@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Breadcrumb, Button, Tag, Text, TextArea, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Breadcrumb,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tag,
+  Text,
+  TextArea,
+  toast,
+} from '@lobehub/ui';
 import { FileText, Pencil } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,8 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
+import { Button, Icon } from '@lobehub/ui';
 import { BrainCircuit } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

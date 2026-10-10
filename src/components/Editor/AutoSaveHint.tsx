@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Spin, Tag } from '@lobehub/ui';
+import { Icon, Spin, Tag } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CloudIcon, TriangleAlertIcon } from 'lucide-react';
 import { type CSSProperties } from 'react';

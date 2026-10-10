@@ -2,9 +2,7 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { formatTokenNumber } from '@lobechat/utils/format';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { ActionIcon, Avatar, createStaticStyles, cssVar, cx, Flexbox, Tag } from '@lobehub/ui';
 import { Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

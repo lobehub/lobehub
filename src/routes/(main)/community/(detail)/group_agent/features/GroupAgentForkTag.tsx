@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
+import { Icon, Tag } from '@lobehub/ui';
 import { GitFork } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,9 +1,7 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Checkbox, Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Checkbox, cx, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { CheckIcon, ChevronDownIcon, SquircleDashed } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

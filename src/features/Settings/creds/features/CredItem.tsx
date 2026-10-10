@@ -1,8 +1,16 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { DropdownMenu, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Tag } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  stopPropagation,
+  Tag,
+} from '@lobehub/ui';
 import {
   Eye,
   File,

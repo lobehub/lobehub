@@ -1,8 +1,7 @@
 'use client';
 
 import { type VoiceMessageRecording } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Icon, Tooltip } from '@lobehub/ui';
 import { ArrowUp, type LucideProps, RotateCcw, X } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

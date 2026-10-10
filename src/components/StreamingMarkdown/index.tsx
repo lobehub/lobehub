@@ -1,7 +1,6 @@
 'use client';
 
-import { Markdown, ScrollArea } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Markdown, ScrollArea } from '@lobehub/ui';
 import type { RefObject } from 'react';
 import { memo, useEffect } from 'react';
 

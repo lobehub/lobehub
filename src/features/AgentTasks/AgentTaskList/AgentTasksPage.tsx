@@ -1,6 +1,6 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
+  Flexbox,
   Pagination,
   TabsIndicator,
   TabsList,

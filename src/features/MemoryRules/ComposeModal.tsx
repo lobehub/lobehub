@@ -5,12 +5,15 @@ import {
   type ExpertiseEnforcement,
   type ExpertiseRuleDirection,
 } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Spin,
   Text,
   TextArea,
@@ -18,7 +21,6 @@ import {
   Tooltip,
   useModalContext,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   ArrowLeftIcon,
   BellIcon,

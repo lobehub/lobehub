@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui';
+import { Button, Flexbox, toast } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

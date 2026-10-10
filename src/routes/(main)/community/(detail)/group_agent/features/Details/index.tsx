@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { useResponsive } from '@lobehub/ui';
+import { Flexbox, useResponsive } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useQueryState } from '@/hooks/useQueryParam';
@@ -19,11 +18,7 @@ const Details = memo<{ mobile?: boolean }>(({ mobile: isMobile }) => {
 
   return (
     <Flexbox gap={24}>
-      <Nav
-        activeTab={activeTab as GroupAgentNavKey}
-        mobile={mobile}
-        setActiveTab={setActiveTab}
-      />
+      <Nav activeTab={activeTab as GroupAgentNavKey} mobile={mobile} setActiveTab={setActiveTab} />
       <Flexbox
         gap={48}
         horizontal={!mobile}

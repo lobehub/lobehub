@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Progress, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Progress, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import * as m from 'motion/react-m';
 import { memo } from 'react';

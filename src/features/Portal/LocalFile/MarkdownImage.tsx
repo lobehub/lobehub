@@ -1,5 +1,4 @@
-import { Image } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Image } from '@lobehub/ui';
 import type { ComponentProps } from 'react';
 import { memo, useEffect, useMemo, useState } from 'react';
 

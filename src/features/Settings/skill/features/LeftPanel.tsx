@@ -1,9 +1,7 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
+import { Button, createStaticStyles, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from '@lobehub/ui';
 import { FileArchive, Grid2x2Plus, Link, Store } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

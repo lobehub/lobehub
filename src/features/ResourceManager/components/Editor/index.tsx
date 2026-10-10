@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, createModal, Skeleton } from '@lobehub/ui';
-import { cssVar, useTheme } from '@lobehub/ui';
+import { ActionIcon, createModal, cssVar, Flexbox, Skeleton, useTheme } from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { ArrowLeftIcon, DownloadIcon, InfoIcon } from 'lucide-react';
 import { memo } from 'react';

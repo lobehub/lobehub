@@ -1,9 +1,7 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { Badge, Spin } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Badge, createStaticStyles, cssVar, Flexbox, Spin, Tooltip } from '@lobehub/ui';
 import { isUndefined } from 'es-toolkit/compat';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

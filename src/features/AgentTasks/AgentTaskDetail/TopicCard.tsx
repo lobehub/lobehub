@@ -8,8 +8,7 @@ import {
   Markdown,
   stopPropagation,
 } from '@lobehub/ui';
-import { ActionIcon, Avatar, confirmModal, Tag, Text, toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, Avatar, confirmModal, cssVar, Tag, Text, toast } from '@lobehub/ui';
 import {
   ChevronDown,
   ChevronRight,

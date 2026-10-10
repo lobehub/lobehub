@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronsDownUp, ChevronsUpDown, GitBranch, GitCommitHorizontal } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

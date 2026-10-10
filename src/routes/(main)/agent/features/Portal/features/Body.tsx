@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { css, cx } from '@lobehub/ui';
+import { css, cx, Flexbox } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 
 const body = css`

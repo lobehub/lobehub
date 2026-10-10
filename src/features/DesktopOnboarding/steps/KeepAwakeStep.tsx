@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { Button, Checkbox, Tag, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, Button, Checkbox, cssVar, Empty, Flexbox, Tag, Text } from '@lobehub/ui';
 import { MonitorCheck, Undo2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

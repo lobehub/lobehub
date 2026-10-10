@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { FileImage, FileText, FileUpIcon } from 'lucide-react';
 import { type CSSProperties, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

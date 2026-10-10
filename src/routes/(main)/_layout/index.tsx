@@ -1,8 +1,7 @@
 'use client';
 
 import { HotkeyScopeEnum } from '@lobechat/const/hotkeys';
-import { Flexbox } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { cx, Flexbox } from '@lobehub/ui';
 import { type FC } from 'react';
 import { Suspense } from 'react';
 import { HotkeysProvider } from 'react-hotkeys-hook';

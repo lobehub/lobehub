@@ -1,8 +1,20 @@
 import { SiApple, SiLinux } from '@icons-pack/react-simple-icons';
 import { Microsoft } from '@lobehub/icons';
-import { Block, Empty, Flexbox, Icon, Popover, Snippet } from '@lobehub/ui';
-import { Accordion, ActionIcon, Divider, Steps, Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Accordion,
+  ActionIcon,
+  Block,
+  createStaticStyles,
+  cssVar,
+  Divider,
+  Empty,
+  Flexbox,
+  Icon,
+  Popover,
+  Snippet,
+  Steps,
+  Tag,
+} from '@lobehub/ui';
 import { startCase } from 'es-toolkit/compat';
 import {
   CheckIcon,

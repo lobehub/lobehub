@@ -1,5 +1,4 @@
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { useTheme } from '@lobehub/ui';
+import { Center, Empty, Flexbox, useTheme } from '@lobehub/ui';
 import { Boxes } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

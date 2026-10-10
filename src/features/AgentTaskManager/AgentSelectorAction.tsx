@@ -1,6 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Center, Flexbox, Popover } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Center, createStaticStyles, cx, Flexbox, Popover } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import { memo, Suspense, useCallback, useMemo, useState } from 'react';

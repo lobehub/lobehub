@@ -1,7 +1,6 @@
 'use client';
 
-import { Button } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, createStaticStyles } from '@lobehub/ui';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';
 import { memo } from 'react';

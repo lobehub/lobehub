@@ -1,7 +1,6 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { useModalContext } from '@lobehub/ui';
+import { Empty, Flexbox, useModalContext } from '@lobehub/ui';
 import { SearchX } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

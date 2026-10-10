@@ -1,7 +1,6 @@
 'use client';
 
-import { Accordion } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Accordion, createStaticStyles } from '@lobehub/ui';
 import { kebabCase } from 'es-toolkit';
 import { type FC, type ReactNode } from 'react';
 

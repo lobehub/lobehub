@@ -2,10 +2,8 @@
 
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget, DeviceListItem, LobeAgentAgencyConfig } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import type { SelectOptions } from '@lobehub/ui';
-import { Select } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Select } from '@lobehub/ui';
 import { MonitorSmartphone } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

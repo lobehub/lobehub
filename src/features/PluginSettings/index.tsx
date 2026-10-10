@@ -1,7 +1,6 @@
 import { type ToolManifestSettings } from '@lobechat/types';
-import { Markdown } from '@lobehub/ui';
+import { createStaticStyles, Markdown } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import { createStaticStyles } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 

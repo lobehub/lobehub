@@ -1,10 +1,10 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionRoot,
   AccordionTrigger,
+  Flexbox,
 } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';

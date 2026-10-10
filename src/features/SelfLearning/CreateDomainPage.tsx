@@ -1,10 +1,13 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  createStaticStyles,
+  cssVar,
   Divider,
+  Flexbox,
+  Icon,
   Input,
   Popover,
   Spin,
@@ -12,7 +15,6 @@ import {
   TextArea,
   toast,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   AnchorIcon,
   ArrowLeftIcon,

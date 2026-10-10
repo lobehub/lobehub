@@ -1,5 +1,4 @@
-import { lobeStaticStylish } from '@lobehub/ui';
-import { createStaticStyles, cx , responsive } from '@lobehub/ui';
+import { createStaticStyles, cx, lobeStaticStylish, responsive } from '@lobehub/ui';
 
 export const styles = createStaticStyles(({ css, cssVar }) => ({
   body: css`

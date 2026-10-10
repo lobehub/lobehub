@@ -1,5 +1,4 @@
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { ListTodo } from 'lucide-react';
 import { type FC, type PropsWithChildren } from 'react';
 

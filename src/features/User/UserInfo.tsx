@@ -1,9 +1,7 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ThemeButton from '@/features/User/UserPanel/ThemeButton';

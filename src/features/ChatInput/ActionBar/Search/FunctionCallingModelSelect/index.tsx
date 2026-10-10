@@ -1,6 +1,5 @@
-import { TooltipGroup } from '@lobehub/ui';
+import { createStaticStyles, TooltipGroup } from '@lobehub/ui';
 import { Select, type SelectProps } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useMemo } from 'react';
 

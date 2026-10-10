@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Spin } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
 import { memo } from 'react';
 

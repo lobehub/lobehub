@@ -1,8 +1,7 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox } from '@lobehub/ui';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';
 import { useGlobalStore } from '@/store/global';

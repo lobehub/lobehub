@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Avatar, Spin, Upload } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Avatar, createStaticStyles, cssVar, Icon, Spin, Upload } from '@lobehub/ui';
 import { PencilIcon, X } from 'lucide-react';
 import { memo, useMemo } from 'react';
 

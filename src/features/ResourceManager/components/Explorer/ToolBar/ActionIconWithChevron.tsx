@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { type LucideIcon } from 'lucide-react';
 import { ChevronDownIcon } from 'lucide-react';
 import { type ComponentProps } from 'react';

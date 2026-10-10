@@ -1,6 +1,5 @@
 import { type DropdownItem } from '@lobehub/ui';
-import { DropdownMenu, Icon, Tooltip } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui';
+import { confirmModal, DropdownMenu, Icon, toast, Tooltip } from '@lobehub/ui';
 import {
   BookMinusIcon,
   BookPlusIcon,

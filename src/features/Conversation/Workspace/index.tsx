@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { useSize } from 'ahooks';
-import { createStaticStyles } from '@lobehub/ui';
 import { type ReactNode, useRef } from 'react';
 
 import ChatTerminalPanel from '@/features/ChatTerminal';

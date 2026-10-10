@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, createStaticStyles, Icon } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router';

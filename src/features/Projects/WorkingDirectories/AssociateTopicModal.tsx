@@ -1,10 +1,10 @@
 import { getWorkingDirSourcePath } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import {
   Alert,
   Avatar,
   Button,
   createModal,
+  Flexbox,
   Select,
   Switch,
   Text,

@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui';
+import { Avatar, Flexbox, Tag } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

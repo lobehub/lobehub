@@ -1,8 +1,16 @@
 import type { UpdateInfo } from '@lobechat/electron-client-ipc';
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Button as BaseButton, createModal, toast, useModalContext } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Button as BaseButton,
+  createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Markdown,
+  toast,
+  useModalContext,
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { X } from 'lucide-react';
 import React, { memo, useEffect, useRef, useState } from 'react';

@@ -1,8 +1,6 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { BarList } from '@lobehub/charts';
-import { Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, cssVar, Icon } from '@lobehub/ui';
 import { MaximizeIcon, MessageSquareIcon } from 'lucide-react';
 import qs from 'query-string';
 import { memo, useState } from 'react';

@@ -1,8 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Icon } from '@lobehub/ui';
-import { Button, confirmModal, Switch, toast } from '@lobehub/ui';
+import { Button, confirmModal, Icon, Switch, toast } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { HardDriveDownload, HardDriveUpload } from 'lucide-react';
 import { useCallback } from 'react';

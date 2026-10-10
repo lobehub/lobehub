@@ -1,6 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox } from '@lobehub/ui';
 import { ExternalLink, RotateCcw, Settings2 } from 'lucide-react';
 
 import { electronSystemService } from '@/services/electron/system';

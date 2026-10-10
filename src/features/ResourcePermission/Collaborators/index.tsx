@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Button, createModal } from '@lobehub/ui';
+import { Button, createModal, Icon } from '@lobehub/ui';
 import { t } from 'i18next';
 import { PlusIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';

@@ -2,9 +2,17 @@ import { TASK_STATUSES } from '@lobechat/builtin-tool-task';
 import type { RecentItem, TaskStatus } from '@lobechat/types';
 import { agentDisplayName } from '@lobechat/types';
 import type { FlexboxProps } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Segmented, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  Avatar,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Segmented,
+  Skeleton,
+  Text,
+} from '@lobehub/ui';
 import { HashIcon } from 'lucide-react';
 import { memo, type ReactNode, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

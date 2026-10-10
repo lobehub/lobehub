@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { Segmented, type SegmentedOptions, Select, type SelectProps } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
 import { ImageIcon, Video } from 'lucide-react';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

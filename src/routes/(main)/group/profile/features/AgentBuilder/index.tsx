@@ -1,6 +1,5 @@
 import { BUILTIN_AGENT_SLUGS } from '@lobechat/builtin-agents';
-import { DraggablePanel } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, DraggablePanel } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ConversationSegmentSkeleton from '@/components/Skeleton/Conversation/Segment';

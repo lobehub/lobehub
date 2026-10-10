@@ -1,8 +1,6 @@
 'use client';
 
-import { Center } from '@lobehub/ui';
-import { toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, cx, toast } from '@lobehub/ui';
 import { Image as ImageIcon, X } from 'lucide-react';
 import { type FC } from 'react';
 import React, { memo, useEffect, useRef, useState } from 'react';

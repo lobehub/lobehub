@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { RouteSkeletonProps } from '@/spa/router/routeMeta';

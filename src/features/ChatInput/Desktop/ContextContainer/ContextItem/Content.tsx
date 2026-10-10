@@ -1,5 +1,4 @@
-import { Image } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Image } from '@lobehub/ui';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';

@@ -2,8 +2,7 @@
 
 import { readEvidenceChapters } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation } from '@lobechat/types';
-import { Flexbox, Image } from '@lobehub/ui';
-import { useResponsive } from '@lobehub/ui';
+import { Flexbox, Image, useResponsive } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import AudioPlayer from '@/features/AudioPlayer';

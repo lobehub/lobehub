@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cx, Flexbox, Icon } from '@lobehub/ui';
 import { ChevronDownIcon, FolderIcon, FolderOpenIcon } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback } from 'react';

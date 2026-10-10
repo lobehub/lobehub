@@ -1,7 +1,5 @@
 import { type ChatFileItem } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import FileIcon from '@/components/FileIcon';

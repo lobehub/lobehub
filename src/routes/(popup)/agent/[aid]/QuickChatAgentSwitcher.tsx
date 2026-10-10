@@ -2,9 +2,16 @@
 
 import { INBOX_SESSION_ID } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Avatar, Input } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import {
+  Avatar,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Icon,
+  Input,
+  Popover,
+  Tooltip,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';

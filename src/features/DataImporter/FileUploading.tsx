@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Progress } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Progress } from '@lobehub/ui';
 import React, { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

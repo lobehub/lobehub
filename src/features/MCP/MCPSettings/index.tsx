@@ -1,7 +1,5 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Input, Text, toast } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox, Icon, Input, Text, toast } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
-import { createStaticStyles } from '@lobehub/ui';
 import { EditIcon, LinkIcon, Settings2Icon, TerminalIcon } from 'lucide-react';
 import { useImperativeHandle, useState } from 'react';
 import { useTranslation } from 'react-i18next';

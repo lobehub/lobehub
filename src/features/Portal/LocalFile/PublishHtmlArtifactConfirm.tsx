@@ -1,8 +1,8 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   Accordion,
   Button,
   createModal,
+  Flexbox,
   ScrollArea,
   Text,
   useModalContext,

@@ -1,9 +1,16 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Switch, Text, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Switch,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { FolderGit2Icon, HardDriveIcon, InfoIcon, PencilIcon, TerminalIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

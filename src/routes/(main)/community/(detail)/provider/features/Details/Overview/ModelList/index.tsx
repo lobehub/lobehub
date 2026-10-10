@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, Block, cssVar, Flexbox, Tooltip, TooltipGroup } from '@lobehub/ui';
 import { ChevronRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Input, Spin, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, Button, cssVar, Flexbox, Input, Spin, Text } from '@lobehub/ui';
 import { ArrowUpIcon, HouseIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

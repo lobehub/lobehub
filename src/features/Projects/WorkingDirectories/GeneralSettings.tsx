@@ -1,8 +1,4 @@
-// FormKit migration is blocked on inline-validation support: `FormFieldProps` has no
-// `help`/`validateStatus`, which this form uses for the slug field.
-// eslint-disable-next-line no-restricted-imports
-import { Flexbox, Form } from '@lobehub/ui';
-import { Button, confirmModal, Input, TextArea, toast } from '@lobehub/ui';
+import { Button, confirmModal, Flexbox, Form, Input, TextArea, toast } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -101,11 +97,12 @@ export function GeneralSettings({ project }: { project: ProjectDetail['project']
               },
               {
                 label: t('create.slugLabel'),
-                desc: t('settings.slugDescription'),
-                help: isProjectSlugValid(slug) ? undefined : t('create.slugInvalid'),
-                validateStatus: isProjectSlugValid(slug) ? undefined : 'error',
+                desc: t(
+                  isProjectSlugValid(slug) ? 'settings.slugDescription' : 'create.slugInvalid',
+                ),
                 children: (
                   <Input
+                    aria-invalid={!isProjectSlugValid(slug) || undefined}
                     aria-label={t('create.slugLabel')}
                     disabled={pending}
                     maxLength={100}

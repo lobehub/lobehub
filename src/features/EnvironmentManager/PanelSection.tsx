@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 

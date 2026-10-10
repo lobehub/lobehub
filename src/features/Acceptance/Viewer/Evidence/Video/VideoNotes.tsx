@@ -1,8 +1,7 @@
 'use client';
 
 import { isFullFrameRect } from '@lobechat/const/verify';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { Flag, Repeat } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

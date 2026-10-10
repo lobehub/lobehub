@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Progress, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Progress,
+  Text,
+} from '@lobehub/ui';
 import { Play, RotateCcw } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import { Code2Icon, SquareDashedMousePointer } from 'lucide-react';
 import { memo } from 'react';
 

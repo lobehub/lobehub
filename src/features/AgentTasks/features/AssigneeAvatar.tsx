@@ -1,6 +1,4 @@
-import { Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Avatar, cssVar, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useAgentDisplayMeta } from '../shared/useAgentDisplayMeta';

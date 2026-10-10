@@ -1,8 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Center, cx, Divider, Flexbox } from '@lobehub/ui';
 import { type FC, type PropsWithChildren } from 'react';
 
 import { ProductLogo } from '@/components/Branding';

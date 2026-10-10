@@ -1,8 +1,15 @@
 'use client';
 
-import { Empty, Flexbox, Icon, Image } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useResponsive } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Image,
+  Text,
+  useResponsive,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { FileText, Film, Paperclip } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

@@ -1,8 +1,7 @@
 'use client';
 
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Center, createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { MessageSquareHeart } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';

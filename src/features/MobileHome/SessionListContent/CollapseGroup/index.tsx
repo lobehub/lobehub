@@ -1,5 +1,4 @@
-import { Accordion } from '@lobehub/ui';
-import { createStaticStyles, responsive } from '@lobehub/ui';
+import { Accordion, createStaticStyles, responsive } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 

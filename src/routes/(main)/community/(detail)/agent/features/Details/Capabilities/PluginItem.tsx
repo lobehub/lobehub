@@ -7,9 +7,19 @@ import {
   OFFICIAL_SITE,
 } from '@lobechat/const';
 import { type DiscoverPluginDetail, type PluginSource } from '@lobechat/types';
-import { Block, Flexbox, Icon, Image } from '@lobehub/ui';
-import { Avatar, Skeleton, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Image,
+  Skeleton,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';

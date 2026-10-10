@@ -1,7 +1,6 @@
 'use client';
 
-import { Drawer } from '@lobehub/ui';
-import { useResponsive } from '@lobehub/ui';
+import { Drawer, useResponsive } from '@lobehub/ui';
 import type { ComponentProps } from 'react';
 
 /** Keep each reading level full-width on phones, with a persistent exit. */

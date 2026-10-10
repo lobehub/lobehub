@@ -1,8 +1,6 @@
 'use client';
 
-import { Tooltip } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Spin, Tooltip } from '@lobehub/ui';
 import { Mic, RotateCcw, X } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useEffect } from 'react';

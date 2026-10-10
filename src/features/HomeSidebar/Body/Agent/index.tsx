@@ -1,6 +1,5 @@
 'use client';
 
-import { ContextMenuTrigger, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -8,10 +7,12 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
   Spin,
   Text,
 } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import React, { memo, type MouseEvent, Suspense, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

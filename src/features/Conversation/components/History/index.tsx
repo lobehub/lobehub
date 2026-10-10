@@ -1,6 +1,4 @@
-import { Center, Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Center, createStaticStyles, cssVar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import { ScrollText } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, toast } from '@lobehub/ui';
 import { Pause, Play, Repeat, RotateCcw, SkipForward, Square } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 

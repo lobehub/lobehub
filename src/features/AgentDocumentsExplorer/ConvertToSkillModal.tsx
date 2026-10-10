@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
@@ -10,7 +10,6 @@ import {
   TextArea,
   useModalContext,
 } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
 import { t } from 'i18next';
 import { Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';

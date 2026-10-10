@@ -3,9 +3,18 @@
 import { isDesktop } from '@lobechat/const';
 import { HETEROGENEOUS_TYPE_LABELS } from '@lobechat/heterogeneous-agents';
 import type { DeviceExecutionTarget } from '@lobechat/types';
-import { Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Button, confirmModal, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import {
   ChevronDownIcon,
   ExternalLinkIcon,

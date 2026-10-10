@@ -1,8 +1,17 @@
 'use client';
 
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Button, QRCode, Spin, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Alert,
+  Block,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  QRCode,
+  Spin,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { InfoIcon, MessageCircleIcon, RefreshCwIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

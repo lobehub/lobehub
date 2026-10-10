@@ -3,10 +3,8 @@
 import { getConnectorCatalog } from '@lobechat/const';
 import { getActivePluginIds, upsertPluginMode } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button } from '@lobehub/ui';
+import { Avatar, Button, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
-import { cssVar } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { PlusIcon } from 'lucide-react';
 import React, { memo, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';

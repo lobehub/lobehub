@@ -1,7 +1,5 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestDetail } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, ScrollArea } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Button, createStaticStyles, cx, Flexbox, Icon, ScrollArea } from '@lobehub/ui';
 import { ArrowUpIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

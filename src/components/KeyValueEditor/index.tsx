@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, Button, createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import fastDeepEqual from 'fast-deep-equal';
 import { LucidePlus, LucideTrash } from 'lucide-react';
 import { type CSSProperties } from 'react';

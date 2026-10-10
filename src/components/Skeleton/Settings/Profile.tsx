@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 
 import { useUserStore } from '@/store/user';

@@ -1,9 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Select, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox, Select, toast } from '@lobehub/ui';
 import { customAlphabet } from 'nanoid/non-secure';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Markdown, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { CircleAlert, CircleCheck, CircleSlash, SquareArrowOutUpRight } from 'lucide-react';
 import { memo } from 'react';

@@ -1,9 +1,7 @@
 'use client';
 
 import { nanoid } from '@lobechat/utils';
-import { Flexbox } from '@lobehub/ui';
-import { Button, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, createStaticStyles, Flexbox, toast } from '@lobehub/ui';
 import { MessageCirclePlusIcon } from 'lucide-react';
 import type { CSSProperties, PointerEvent, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

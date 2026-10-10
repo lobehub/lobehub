@@ -1,6 +1,4 @@
-import { Block, Icon } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Avatar, Block, createStaticStyles, cssVar, Icon, Text } from '@lobehub/ui';
 import { CheckIcon } from 'lucide-react';
 import { memo } from 'react';
 

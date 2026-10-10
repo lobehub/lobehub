@@ -2,9 +2,7 @@
 
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { formatPrice, formatTokenNumber } from '@lobechat/utils/format';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Checkbox, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Block, Checkbox, createStaticStyles, cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { CircleDollarSign, FolderIcon, MessageSquare, Star, Zap } from 'lucide-react';
 import { memo, type MouseEvent, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

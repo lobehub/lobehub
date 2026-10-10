@@ -3,10 +3,12 @@
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import type { ListHeterogeneousAgentModelsParams } from '@lobechat/types';
 import { HETEROGENEOUS_AGENT_DEFAULT_SELECTION } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenuGroup,
   DropdownMenuGroupLabel,
   DropdownMenuHeader,
@@ -25,9 +27,10 @@ import {
   DropdownMenuSubmenuRoot,
   DropdownMenuSubmenuTrigger,
   DropdownMenuTrigger,
+  Icon,
   Input,
+  Tooltip,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import {
   CheckIcon,
   ChevronDownIcon,

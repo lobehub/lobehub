@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { ChevronDown, Wrench } from 'lucide-react';
 import { Fragment, memo } from 'react';
 

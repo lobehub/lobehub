@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { cx, Flexbox, Icon } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Tooltip } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
 import { ChevronRightIcon, MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

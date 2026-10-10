@@ -1,6 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Icon, Text } from '@lobehub/ui';
 import {
   CircleHelp,
   FlaskConical,

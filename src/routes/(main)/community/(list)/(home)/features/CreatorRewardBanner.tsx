@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
-import { createStaticStyles, cx, responsive } from '@lobehub/ui';
+import { Button, createStaticStyles, cx, Flexbox, responsive } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

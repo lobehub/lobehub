@@ -1,7 +1,15 @@
 import type { VerifyCheckItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Input } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, useThemeMode } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Input,
+  useThemeMode,
+} from '@lobehub/ui';
 import {
   Check,
   CheckCircle2,

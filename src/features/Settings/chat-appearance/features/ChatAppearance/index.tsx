@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, highlighterThemes, mermaidThemes } from '@lobehub/ui';
-import { Select, Switch, Tabs } from '@lobehub/ui';
+import { Flexbox, highlighterThemes, mermaidThemes, Select, Switch, Tabs } from '@lobehub/ui';
 import { Form, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo, useState } from 'react';

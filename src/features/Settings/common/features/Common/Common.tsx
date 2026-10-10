@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, ImageSelect } from '@lobehub/ui';
-import { Select, Skeleton, Tabs } from '@lobehub/ui';
+import { Flexbox, Icon, ImageSelect, Select, Skeleton, Tabs } from '@lobehub/ui';
 import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { Ban, Gauge, Monitor, Moon, Mouse, Sun, Waves } from 'lucide-react';

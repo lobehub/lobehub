@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

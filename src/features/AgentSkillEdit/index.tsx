@@ -3,10 +3,16 @@
 import { isDesktop } from '@lobechat/const';
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
 import { type SkillResourceTreeNode } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, confirmModal, Drawer, toast } from '@lobehub/ui';
+import {
+  Alert,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  Drawer,
+  Flexbox,
+  toast,
+} from '@lobehub/ui';
 import { useForm } from '@lobehub/ui/form';
-import { createStaticStyles } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

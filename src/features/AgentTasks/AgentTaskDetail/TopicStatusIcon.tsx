@@ -1,5 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Icon } from '@lobehub/ui';
 import { CircleAlert } from 'lucide-react';
 import { memo } from 'react';
 

@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon, Tag } from '@lobehub/ui';
 import { HashIcon } from 'lucide-react';
 import { memo } from 'react';
 

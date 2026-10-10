@@ -1,8 +1,7 @@
 'use client';
 
 import type { VerifyEvidenceChapter } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

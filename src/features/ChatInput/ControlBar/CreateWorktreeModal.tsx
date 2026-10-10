@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -11,7 +11,6 @@ import {
   Text,
   useModalContext,
 } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
 import { t } from 'i18next';
 import { DicesIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';

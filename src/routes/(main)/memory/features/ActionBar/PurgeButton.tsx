@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, toast } from '@lobehub/ui';
+import { ActionIcon, Button, confirmModal, Icon, toast, Tooltip } from '@lobehub/ui';
 import { Trash2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

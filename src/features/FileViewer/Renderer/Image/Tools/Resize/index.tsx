@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Input, Select } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Input, Select } from '@lobehub/ui';
 import { LinkIcon, SaveIcon, UnlinkIcon, XIcon } from 'lucide-react';
 import type { PointerEvent } from 'react';
 import { useRef, useState } from 'react';

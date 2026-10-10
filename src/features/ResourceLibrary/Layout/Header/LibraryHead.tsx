@@ -1,9 +1,17 @@
 'use client';
 
-import { Block, Center, stopPropagation } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu, Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Center,
+  createStaticStyles,
+  cx,
+  DropdownMenu,
+  Skeleton,
+  stopPropagation,
+  Text,
+} from '@lobehub/ui';
 import { ChevronsUpDownIcon } from 'lucide-react';
 import type { DragEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';

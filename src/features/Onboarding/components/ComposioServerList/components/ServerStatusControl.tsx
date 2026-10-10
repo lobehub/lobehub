@@ -1,6 +1,4 @@
-import { Icon } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Icon, Spin } from '@lobehub/ui';
 import { CheckIcon, CircleX } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

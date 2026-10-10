@@ -1,8 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui';
-import { cx, useTheme } from '@lobehub/ui';
+import { Center, cx, Divider, Flexbox, useTheme } from '@lobehub/ui';
 import { type FC, type PropsWithChildren, useEffect } from 'react';
 import { useLocation } from 'react-router';
 

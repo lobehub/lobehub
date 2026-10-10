@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton as LobeSkeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton as LobeSkeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 interface SkeletonProps {

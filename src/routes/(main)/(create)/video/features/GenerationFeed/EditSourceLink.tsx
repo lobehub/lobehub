@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Image } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Image, Text } from '@lobehub/ui';
 import { CornerDownRightIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

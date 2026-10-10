@@ -1,7 +1,6 @@
 'use client';
 
-import { Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Spin } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useTopicMigrationPending } from './MigrationBanner';

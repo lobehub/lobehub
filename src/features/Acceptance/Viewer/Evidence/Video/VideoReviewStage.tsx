@@ -2,9 +2,16 @@
 
 import { isFullFrameRect } from '@lobechat/const/verify';
 import type { AcceptanceReviewAnnotation, VerifyEvidenceChapter } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { Flag, MessageSquareText, Repeat, X } from 'lucide-react';
 import type { PointerEvent as ReactPointerEvent, RefObject } from 'react';
 import { memo, useEffect, useImperativeHandle, useRef, useState } from 'react';

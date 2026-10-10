@@ -2,9 +2,20 @@
 
 import { TRASH_RETENTION_DAYS } from '@lobechat/const';
 import type { TrashCountByType, TrashItem, TrashResourceType } from '@lobechat/types';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Segmented, Tag, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  Avatar,
+  Button,
+  Center,
+  confirmModal,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Icon,
+  Segmented,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Trash2Icon } from 'lucide-react';

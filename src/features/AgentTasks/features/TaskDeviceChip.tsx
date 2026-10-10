@@ -1,9 +1,7 @@
 'use client';
 
 import type { DeviceListItem } from '@lobechat/types';
-import { Block, Flexbox, Icon, Popover, Tooltip } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Block, cx, Flexbox, Icon, Popover, Text, Tooltip } from '@lobehub/ui';
 import { CheckIcon, ChevronDownIcon, FolderIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

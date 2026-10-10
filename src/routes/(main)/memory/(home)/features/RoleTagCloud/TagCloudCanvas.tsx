@@ -1,7 +1,7 @@
+import { useTheme } from '@lobehub/ui';
 import { Billboard, Html, OrbitControls, Text } from '@react-three/drei';
 import type { ThreeEvent } from '@react-three/fiber';
 import { Canvas, useFrame } from '@react-three/fiber';
-import { useTheme } from '@lobehub/ui';
 import { memo, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 

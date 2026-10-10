@@ -1,8 +1,6 @@
 'use client';
 
-import { DropdownMenu } from '@lobehub/ui';
-import { Button, SplitButton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, createStaticStyles, DropdownMenu, SplitButton } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import urlJoin from 'url-join';

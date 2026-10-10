@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Button, cssVar, Flexbox } from '@lobehub/ui';
 import { Undo2Icon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

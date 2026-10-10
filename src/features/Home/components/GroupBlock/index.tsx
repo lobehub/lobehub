@@ -1,7 +1,5 @@
 import { type FlexboxProps, type IconProps } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, Suspense, useState } from 'react';

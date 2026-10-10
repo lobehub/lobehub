@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Popover } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, createStaticStyles, Flexbox, Popover, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

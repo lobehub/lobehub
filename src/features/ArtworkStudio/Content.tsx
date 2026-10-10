@@ -3,7 +3,6 @@
 import { imageUrl } from '@lobechat/const';
 import type { AgentArtworkComposition, AgentArtworkStyle } from '@lobechat/prompts';
 import { AGENT_ARTWORK_STYLES } from '@lobechat/prompts';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -14,12 +13,16 @@ import {
   Alert,
   Avatar,
   Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
   Spin,
   Text,
   useModalContext,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   CircleUserRound,
   Frame,

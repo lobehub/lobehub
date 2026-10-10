@@ -1,6 +1,4 @@
-import { Center, Flexbox, FluentEmoji } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, Center, createStaticStyles, Flexbox, FluentEmoji } from '@lobehub/ui';
 import { type ComponentType, type CSSProperties } from 'react';
 import { useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';

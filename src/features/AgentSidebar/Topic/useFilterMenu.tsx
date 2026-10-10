@@ -1,5 +1,5 @@
-import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui';
+import { Icon } from '@lobehub/ui';
 import { LucideCheck } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

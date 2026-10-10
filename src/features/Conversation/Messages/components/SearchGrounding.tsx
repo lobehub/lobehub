@@ -1,6 +1,4 @@
-import { Flexbox, Icon, SearchResultCards } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, SearchResultCards, Tag } from '@lobehub/ui';
 import { ChevronDown, ChevronRight, Globe, Images } from 'lucide-react';
 import { AnimatePresence } from 'motion/react';
 import * as m from 'motion/react-m';

@@ -1,6 +1,4 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createModal, DropdownMenu } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createModal, createStaticStyles, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { t } from 'i18next';
 import { ChevronDownIcon, ChevronUpIcon, InfoIcon, PlusIcon, XIcon } from 'lucide-react';
 import type { ModelRating } from 'model-bank';

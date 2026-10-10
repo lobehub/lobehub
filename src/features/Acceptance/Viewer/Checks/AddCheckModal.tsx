@@ -1,7 +1,7 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   createModal,
@@ -12,7 +12,6 @@ import {
   TextArea,
   useModalContext,
 } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
 import { t } from 'i18next';
 import { Check, CircleDashed, Plus } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';

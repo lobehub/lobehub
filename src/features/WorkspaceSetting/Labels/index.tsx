@@ -1,9 +1,20 @@
 'use client';
 
 import { type AgentLabelListItem } from '@lobechat/types';
-import { Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, DropdownMenu, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  DropdownMenu,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import isEqual from 'fast-deep-equal';
 import {

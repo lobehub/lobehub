@@ -1,6 +1,5 @@
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { FolderGit2Icon, FolderIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

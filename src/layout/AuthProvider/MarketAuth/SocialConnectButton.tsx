@@ -1,9 +1,7 @@
 'use client';
 
 import { SiGithub, SiX } from '@icons-pack/react-simple-icons';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Spin, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, Button, cssVar, Flexbox, Spin, Text, Tooltip } from '@lobehub/ui';
 import { ArrowRight, Link2Off, Loader2 } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

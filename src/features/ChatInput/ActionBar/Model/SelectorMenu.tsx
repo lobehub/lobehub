@@ -1,4 +1,6 @@
 import {
+  createStaticStyles,
+  cssVar,
   DropdownMenuItem,
   DropdownMenuItemContent,
   DropdownMenuItemExtra,
@@ -13,7 +15,6 @@ import {
   DropdownMenuTrigger,
   renderDropdownMenuItems,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

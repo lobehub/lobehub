@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Tag, toast } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { Button, cx, Flexbox, Icon, Tag, toast } from '@lobehub/ui';
 import { CheckCircle2 } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

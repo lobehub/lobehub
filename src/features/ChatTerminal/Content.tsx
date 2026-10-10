@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -14,7 +14,6 @@ import {
   TabsTab,
   Text,
 } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
 import {
   CopyXIcon,
   PlusIcon,

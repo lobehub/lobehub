@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

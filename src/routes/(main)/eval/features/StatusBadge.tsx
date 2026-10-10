@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Icon } from '@lobehub/ui';
 import { Activity, CheckCircle2, Clock, Hourglass, Pause, XCircle } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

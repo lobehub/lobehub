@@ -1,8 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';

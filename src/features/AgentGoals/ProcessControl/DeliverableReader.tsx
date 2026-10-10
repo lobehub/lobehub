@@ -1,9 +1,21 @@
 'use client';
 
 import { formatSize } from '@lobechat/utils/format';
-import { Center, Flexbox, Icon, Markdown, useAppElement } from '@lobehub/ui';
-import { ActionIcon, Button, Skeleton, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Markdown,
+  Skeleton,
+  Tag,
+  Text,
+  useAppElement,
+} from '@lobehub/ui';
 import { ArrowLeft, ArrowRight, Download, ExternalLink, X } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';

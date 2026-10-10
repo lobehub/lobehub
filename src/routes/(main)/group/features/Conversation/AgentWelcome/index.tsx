@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
+import { Flexbox, Markdown, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import React, { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

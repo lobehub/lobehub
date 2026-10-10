@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { Form } from '@lobehub/ui/form';
-import { createStaticStyles } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import { Fingerprint, KeyRound, UserRound } from 'lucide-react';
 import { memo } from 'react';

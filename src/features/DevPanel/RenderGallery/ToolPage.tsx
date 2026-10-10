@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Tabs, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Tabs, Tag, Text } from '@lobehub/ui';
 import { useEffect, useRef, useState } from 'react';
 
 import ApiList from './ApiList';

@@ -1,17 +1,21 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Popover,
   Skeleton,
   Text,
   toast,
+  Tooltip,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,

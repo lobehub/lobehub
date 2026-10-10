@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useChatStore } from '@/store/chat';

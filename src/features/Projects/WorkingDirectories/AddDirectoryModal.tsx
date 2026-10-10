@@ -1,8 +1,8 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   Alert,
   Button,
   createModal,
+  Flexbox,
   Input,
   Select,
   Text,

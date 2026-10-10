@@ -1,9 +1,7 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui';
-import { DropdownMenu } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, DropdownMenu, Icon } from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

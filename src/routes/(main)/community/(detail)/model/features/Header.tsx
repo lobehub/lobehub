@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useResponsive } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Text, useResponsive } from '@lobehub/ui';
 import { DotIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

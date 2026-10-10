@@ -1,9 +1,7 @@
 'use client';
 
 import { CUSTOM_DOCUMENT_FILE_TYPE, CUSTOM_FOLDER_FILE_TYPE } from '@lobechat/const';
-import { Icon, useAppElement } from '@lobehub/ui';
-import { toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Icon, toast, useAppElement } from '@lobehub/ui';
 import { FileText, FolderIcon } from 'lucide-react';
 import { type PropsWithChildren } from 'react';
 import { createContext, lazy, memo, Suspense, use, useEffect, useRef, useState } from 'react';

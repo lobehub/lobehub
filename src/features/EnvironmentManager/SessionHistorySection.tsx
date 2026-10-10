@@ -1,8 +1,17 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import {
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,

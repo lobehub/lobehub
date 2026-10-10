@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Button, Input, TextArea } from '@lobehub/ui';
+import { Button, Flexbox, Input, TextArea } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

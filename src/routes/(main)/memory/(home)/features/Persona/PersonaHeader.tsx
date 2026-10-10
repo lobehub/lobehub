@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Button, confirmModal, Text, toast } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Button, confirmModal, createStaticStyles, Flexbox, Text, toast } from '@lobehub/ui';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

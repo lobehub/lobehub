@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { ActionIcon, confirmModal, cssVar, Flexbox, toast } from '@lobehub/ui';
 import { BookMinusIcon, FileBoxIcon, Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

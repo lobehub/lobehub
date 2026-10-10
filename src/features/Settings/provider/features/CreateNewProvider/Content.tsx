@@ -1,8 +1,8 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
+  Flexbox,
   Input,
   InputPassword,
   Select,

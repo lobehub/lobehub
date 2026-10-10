@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { MessagesSquare } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

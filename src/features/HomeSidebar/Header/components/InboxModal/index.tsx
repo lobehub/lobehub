@@ -1,11 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
   DropdownMenu,
+  Flexbox,
   ModalClose,
   ModalHeader,
   ModalTitle,
@@ -13,7 +15,6 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
 import type { LucideIcon } from 'lucide-react';
 import {
   ArchiveIcon,

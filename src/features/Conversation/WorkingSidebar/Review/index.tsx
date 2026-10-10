@@ -2,8 +2,7 @@
 
 import type { GitWorkingTreePatch } from '@lobechat/electron-client-ipc';
 import { Center, type DropdownItem, DropdownMenu, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Spin } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, Spin } from '@lobehub/ui';
 import {
   ArrowLeftIcon,
   ChevronDownIcon,

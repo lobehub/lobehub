@@ -1,7 +1,6 @@
 'use client';
 
-import { Tooltip } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Tooltip } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import { useAuthorInfo } from '@/business/client/hooks/useAuthorInfo';

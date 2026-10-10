@@ -1,7 +1,6 @@
 'use client';
 
-import { Empty, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
+import { Button, Empty, Flexbox } from '@lobehub/ui';
 import { MessageSquare } from 'lucide-react';
 import { memo, useCallback, useState, useTransition } from 'react';
 import { useTranslation } from 'react-i18next';

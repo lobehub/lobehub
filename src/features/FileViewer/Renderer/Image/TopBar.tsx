@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Button } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Button, createStaticStyles, cssVar } from '@lobehub/ui';
 import {
   DownloadIcon,
   MaximizeIcon,

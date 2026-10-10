@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 
 import { CONVERSATION_MIN_WIDTH } from '@/const/layoutTokens';

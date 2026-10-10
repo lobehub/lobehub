@@ -1,6 +1,4 @@
-import { Center, Flexbox } from '@lobehub/ui';
-import { Checkbox } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Center, Checkbox, cssVar, Flexbox } from '@lobehub/ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 

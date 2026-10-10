@@ -1,8 +1,7 @@
 'use client';
 
 import type { AgentEvalExperimentDetail } from '@lobechat/types';
-import { Block, Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, createStaticStyles, Empty, Flexbox } from '@lobehub/ui';
 import { FlaskConical } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

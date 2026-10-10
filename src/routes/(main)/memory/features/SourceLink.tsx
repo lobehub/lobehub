@@ -1,7 +1,5 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
-import { Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Button, cssVar, Icon, Text } from '@lobehub/ui';
 import { Link2 } from 'lucide-react';
 import { memo } from 'react';
 

@@ -1,6 +1,5 @@
-import { Icon } from '@lobehub/ui';
 import type { DropdownItem } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
 import { CheckIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 

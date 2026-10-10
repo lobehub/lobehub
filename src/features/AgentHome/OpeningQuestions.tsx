@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Block, createStaticStyles, cx, Flexbox, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

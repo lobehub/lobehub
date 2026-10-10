@@ -1,4 +1,5 @@
 import {
+  cx,
   DropdownMenuGroup,
   DropdownMenuGroupLabel,
   DropdownMenuItem,
@@ -11,9 +12,8 @@ import {
   DropdownMenuSubmenuTrigger,
   Flexbox,
   menuSharedStyles,
+  Tag,
 } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
 import { Check } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

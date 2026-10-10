@@ -1,9 +1,8 @@
 'use client';
 
 import type { ExpertiseEnforcement, ExpertiseRuleDirection } from '@lobechat/types';
-import { Flexbox, SortableList } from '@lobehub/ui';
+import { cx, Flexbox, SortableList } from '@lobehub/ui';
 import { ActionIcon, type DropdownItem, DropdownMenu, Tag, Tooltip } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { MoreHorizontalIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';

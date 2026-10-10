@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Skeleton, Text } from '@lobehub/ui';
 import { type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';

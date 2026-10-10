@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Popover } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, cx, Flexbox, Icon, Popover } from '@lobehub/ui';
 import { ChevronDownIcon, InfinityIcon, ListTodoIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createGlobalStyle, createStaticStyles, cssVar } from '@lobehub/ui';
+import { createGlobalStyle, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 /**

@@ -3,9 +3,17 @@
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 import type { AcceptanceCommentReaction } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Popover, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx, useTheme } from '@lobehub/ui';
+import {
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Icon,
+  Popover,
+  toast,
+  Tooltip,
+  useTheme,
+} from '@lobehub/ui';
 import { PlusIcon, SmilePlus } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

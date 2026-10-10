@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, Text, useModalContext } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Avatar, Button, cssVar, Flexbox, Icon, Text, Tooltip, useModalContext } from '@lobehub/ui';
 import { Plus, SquareArrowOutUpRight } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

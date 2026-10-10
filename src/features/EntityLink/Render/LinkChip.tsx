@@ -1,8 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles } from '@lobehub/ui';
 import { PanelRightIcon } from 'lucide-react';
 import { memo, type MouseEvent, type ReactNode, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,5 @@
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

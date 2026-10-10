@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, createStaticStyles, cssVar } from '@lobehub/ui';
 import { MessageSquarePlus } from 'lucide-react';
 import { memo } from 'react';
 

@@ -1,7 +1,14 @@
-import { Flexbox, Icon, Popover } from '@lobehub/ui';
-import { ActionIcon, Select, Switch, Tabs } from '@lobehub/ui';
+import {
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Icon,
+  Popover,
+  Select,
+  Switch,
+  Tabs,
+} from '@lobehub/ui';
 import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
-import { createStaticStyles } from '@lobehub/ui';
 import {
   ArrowDownWideNarrow,
   ArrowUpNarrowWide,

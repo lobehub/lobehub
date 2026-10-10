@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Flexbox } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui';
+import { Center, Flexbox, Spin, Text } from '@lobehub/ui';
 import { memo, useCallback, useLayoutEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';

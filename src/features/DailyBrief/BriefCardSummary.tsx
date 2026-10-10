@@ -1,5 +1,4 @@
-import { Flexbox, MaskShadow } from '@lobehub/ui';
-import { Button } from '@lobehub/ui';
+import { Button, Flexbox, MaskShadow } from '@lobehub/ui';
 import { useSize } from 'ahooks';
 import { ChevronsDownUpIcon, ChevronsUpDownIcon } from 'lucide-react';
 import { lazy, memo, Suspense, useEffect, useRef, useState } from 'react';

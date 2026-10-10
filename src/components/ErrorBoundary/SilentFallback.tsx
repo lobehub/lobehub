@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { useTheme } from '@lobehub/ui';
+import { Icon, useTheme } from '@lobehub/ui';
 import { TriangleAlert } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 

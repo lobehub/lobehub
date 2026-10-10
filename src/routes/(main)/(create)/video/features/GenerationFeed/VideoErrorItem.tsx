@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Center, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, Center, cssVar, Icon, Text } from '@lobehub/ui';
 import { VideoOffIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

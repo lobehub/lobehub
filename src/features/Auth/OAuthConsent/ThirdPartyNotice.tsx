@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Alert, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ExternalLinkIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

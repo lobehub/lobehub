@@ -1,7 +1,5 @@
 import { Ollama } from '@lobehub/icons';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Alert, Button, Input, Progress } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Alert, Button, Center, cssVar, Flexbox, Input, Progress } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

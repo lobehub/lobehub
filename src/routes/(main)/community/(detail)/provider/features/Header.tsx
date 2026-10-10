@@ -1,9 +1,7 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, stopPropagation } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui';
-import { cssVar, useResponsive } from '@lobehub/ui';
+import { ActionIcon, cssVar, Flexbox, stopPropagation, useResponsive } from '@lobehub/ui';
 import { GlobeIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

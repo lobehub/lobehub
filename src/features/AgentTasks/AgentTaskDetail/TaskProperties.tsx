@@ -1,7 +1,5 @@
 import type { TaskPriority, TaskStatus } from '@lobechat/types';
-import { Block } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, cssVar, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

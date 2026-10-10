@@ -1,5 +1,4 @@
-import { Skeleton } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Skeleton } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';
 

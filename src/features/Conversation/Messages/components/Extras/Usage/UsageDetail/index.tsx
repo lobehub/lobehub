@@ -1,8 +1,6 @@
 import { type ModelPerformance, type ModelUsage } from '@lobechat/types';
 import { formatUsageValue } from '@lobechat/utils';
-import { Center, Flexbox, Icon, Popover } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Center, cssVar, Divider, Flexbox, Icon, Popover } from '@lobehub/ui';
 import { BadgeCent, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

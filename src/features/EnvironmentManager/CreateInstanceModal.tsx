@@ -1,10 +1,10 @@
 'use client';
 
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
+  Flexbox,
   Input,
   ModalFooter,
   Text,

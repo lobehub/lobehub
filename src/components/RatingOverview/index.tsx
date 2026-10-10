@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Progress, Text } from '@lobehub/ui';
-import { cssVar, useResponsive } from '@lobehub/ui';
+import { cssVar, Flexbox, Progress, Text, useResponsive } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

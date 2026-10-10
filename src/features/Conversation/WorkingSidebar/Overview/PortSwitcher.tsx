@@ -1,14 +1,16 @@
 import type { DeviceListeningPort } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
 import {
+  createStaticStyles,
+  cx,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  Icon,
+  Tooltip,
 } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
 import {
   CopyIcon,
   GlobeIcon,

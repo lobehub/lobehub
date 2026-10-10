@@ -1,5 +1,4 @@
-import { Icon, Tooltip } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Icon, Tooltip } from '@lobehub/ui';
 import { startCase } from 'es-toolkit/compat';
 import { type LucideIcon } from 'lucide-react';
 import {

@@ -1,9 +1,7 @@
 'use client';
 
 import type { DocumentCommentSelectionAnchor } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Tag, Text } from '@lobehub/ui';
-import { cx } from '@lobehub/ui';
+import { ActionIcon, cx, Flexbox, Tag, Text } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

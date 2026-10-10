@@ -1,6 +1,4 @@
-import { Block, Flexbox } from '@lobehub/ui';
-import { Divider, Skeleton } from '@lobehub/ui';
-import { cssVar, cx } from '@lobehub/ui';
+import { Block, cssVar, cx, Divider, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { styles as briefStyles } from '@/features/DailyBrief/style';

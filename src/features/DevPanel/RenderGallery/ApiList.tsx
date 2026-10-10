@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { createStaticStyles, cx, Flexbox, Text } from '@lobehub/ui';
 import { memo, useEffect, useRef } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';

@@ -1,6 +1,4 @@
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, Text } from '@lobehub/ui';
 import { Puzzle } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

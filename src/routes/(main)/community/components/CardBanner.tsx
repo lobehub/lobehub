@@ -1,7 +1,5 @@
 import { type DivProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
+import { Avatar, createStaticStyles, cssVar, cx, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 

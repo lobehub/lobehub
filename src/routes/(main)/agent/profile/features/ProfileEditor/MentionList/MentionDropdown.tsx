@@ -1,6 +1,5 @@
 import { type MenuRenderProps } from '@lobehub/editor';
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useLayoutEffect, useRef, useState } from 'react';
 

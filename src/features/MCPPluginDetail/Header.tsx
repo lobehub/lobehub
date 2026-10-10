@@ -1,9 +1,21 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, stopPropagation, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Button, Tag, Text, toast } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useResponsive } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Avatar,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  stopPropagation,
+  Tag,
+  Text,
+  toast,
+  Tooltip,
+  useResponsive,
+} from '@lobehub/ui';
 import {
   BookmarkIcon,
   BookmarkMinusIcon,

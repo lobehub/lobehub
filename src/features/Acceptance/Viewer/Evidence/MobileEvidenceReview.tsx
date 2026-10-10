@@ -1,7 +1,6 @@
 'use client';
 
-import { ActionIcon, Button, Text, TextArea } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { ActionIcon, Button, createStaticStyles, cssVar, Text, TextArea } from '@lobehub/ui';
 import { ChevronLeft, ChevronRight, NotebookPen, PencilLine, ZoomIn, ZoomOut } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

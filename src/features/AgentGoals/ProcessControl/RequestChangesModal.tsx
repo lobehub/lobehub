@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import {
   Button,
   createModal,
@@ -9,7 +9,6 @@ import {
   TextArea,
   useModalContext,
 } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

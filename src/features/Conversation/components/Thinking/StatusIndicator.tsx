@@ -1,6 +1,4 @@
-import { Block, Icon } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, cssVar, Icon, Spin } from '@lobehub/ui';
 import { AtomIcon } from 'lucide-react';
 import { memo } from 'react';
 

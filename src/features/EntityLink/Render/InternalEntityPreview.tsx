@@ -1,9 +1,7 @@
 'use client';
 
 import type { VerifyCodingScope } from '@lobechat/types';
-import { Flexbox, Freeze, Icon, Popover } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, createStaticStyles, Flexbox, Freeze, Icon, Popover, Text } from '@lobehub/ui';
 import type { TFunction } from 'i18next';
 import {
   BadgeCheckIcon,

@@ -1,9 +1,15 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar, useResponsive } from '@lobehub/ui';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  useResponsive,
+} from '@lobehub/ui';
 import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

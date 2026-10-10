@@ -1,5 +1,4 @@
-import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon, stopPropagation } from '@lobehub/ui';
 import { AudioLinesIcon } from 'lucide-react';
 import { memo } from 'react';
 

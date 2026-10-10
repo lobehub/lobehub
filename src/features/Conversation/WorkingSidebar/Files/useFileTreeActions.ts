@@ -1,6 +1,5 @@
 import type { ProjectFileIndexEntry } from '@lobechat/electron-client-ipc';
-import { copyToClipboard } from '@lobehub/ui';
-import { toast } from '@lobehub/ui';
+import { copyToClipboard, toast } from '@lobehub/ui';
 import type { DragEvent, KeyboardEvent, RefObject } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

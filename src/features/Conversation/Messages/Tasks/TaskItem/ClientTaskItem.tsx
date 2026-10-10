@@ -1,7 +1,6 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { Accordion, Text } from '@lobehub/ui';
+import { Accordion, Block, Text } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
 import { useChatStore } from '@/store/chat';

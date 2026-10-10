@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { Breadcrumb, type BreadcrumbItem, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
 import { ChevronRightIcon, HomeIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';

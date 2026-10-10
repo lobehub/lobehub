@@ -1,9 +1,16 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Avatar, Tag, Text } from '@lobehub/ui';
-import { createStaticStyles, responsive, useTheme } from '@lobehub/ui';
+import {
+  Avatar,
+  Block,
+  createStaticStyles,
+  Flexbox,
+  responsive,
+  Tag,
+  Text,
+  useTheme,
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { Trans, useTranslation } from 'react-i18next';

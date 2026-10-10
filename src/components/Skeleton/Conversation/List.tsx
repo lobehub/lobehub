@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 
 /** Avoid importing the skeleton barrel from a component it re-exports. */
 import ArticleSkeleton from '../Article';

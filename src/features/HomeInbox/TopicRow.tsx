@@ -1,8 +1,6 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Avatar, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { memo, type ReactNode } from 'react';
 
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';

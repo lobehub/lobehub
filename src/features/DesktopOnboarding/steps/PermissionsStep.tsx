@@ -1,9 +1,7 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Block, Button, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import {
   Bell,
   Check,

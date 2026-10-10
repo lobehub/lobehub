@@ -1,6 +1,5 @@
 import { BASE_PROVIDER_DOC_URL } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
+import { Flexbox, Text } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { CheckErrorRender } from '../../features/ProviderConfig/Checker';

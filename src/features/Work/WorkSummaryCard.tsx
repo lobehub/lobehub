@@ -2,9 +2,7 @@
 
 import type { WorkSummaryItem } from '@lobechat/types';
 import { formatUsageValue } from '@lobechat/utils';
-import { Center, Flexbox, Icon as LobeIcon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles, cx } from '@lobehub/ui';
+import { Center, createStaticStyles, cx, Flexbox, Icon as LobeIcon, Text } from '@lobehub/ui';
 import { CircleDollarSignIcon, CoinsIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

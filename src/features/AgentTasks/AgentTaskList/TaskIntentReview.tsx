@@ -1,9 +1,7 @@
 'use client';
 
 import type { TaskIntentAnalysis } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from '@lobehub/ui';
+import { Button, createStaticStyles, cssVar, Flexbox, Icon, Text } from '@lobehub/ui';
 import { ArrowLeft, Sparkles, Target } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,6 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui';
+import { Avatar, Flexbox, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

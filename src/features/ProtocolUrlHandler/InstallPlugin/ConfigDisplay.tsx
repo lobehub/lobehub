@@ -1,9 +1,7 @@
 'use client';
 
 import { type McpInstallSchema } from '@lobechat/electron-client-ipc';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Text } from '@lobehub/ui';
-import { createStaticStyles } from '@lobehub/ui';
+import { Block, createStaticStyles, Flexbox, Text } from '@lobehub/ui';
 import { LinkIcon, Settings2Icon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

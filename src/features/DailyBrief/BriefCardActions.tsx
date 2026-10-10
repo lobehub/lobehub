@@ -1,7 +1,5 @@
 import { type BriefAction, DEFAULT_BRIEF_ACTIONS, type TaskStatus } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Text, toast } from '@lobehub/ui';
-import { cssVar } from '@lobehub/ui';
+import { Button, cssVar, Flexbox, Icon, Text, toast, Tooltip } from '@lobehub/ui';
 import { Check, SquarePen, Target, Workflow } from 'lucide-react';
 import { lazy, memo, Suspense, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
