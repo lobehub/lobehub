@@ -4,6 +4,7 @@ import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/r
 import { agentEvalService } from '@/services/agentEval';
 import { type EvalStore, useEvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import {
   ALL_DATASETS_KEY,
@@ -88,7 +89,17 @@ export class DatasetActionImpl {
    * Keeps the pre-migration `{ data, error, isLoading, mutate }` shape.
    */
   useFetchDatasetDetail = (id?: string): DatasetDetailSyncResult => {
-    const sync = this.#detail.useSync(id ?? null);
+    const sync = this.#detail.useSync(id ?? null, {
+      // A dataset deleted by another client keeps answering NOT_FOUND, and the
+      // persisted detail would otherwise keep painting it — `AsyncBoundary` sees
+      // `data` defined and swallows the fetch error. NOT_FOUND is definitive, so
+      // drop the cached row and let the page settle on its error state; any
+      // transient failure keeps the persisted copy on screen.
+      onError: (error) => {
+        if (!id || !isTrpcErrorCode(error, 'NOT_FOUND')) return;
+        this.#detail.remove(id);
+      },
+    });
     // Subscribe so a replica commit (hydrate or server replace) re-renders the
     // consumer; the value itself is read through the store below.
     useEvalStore((s) => (id ? s.datasetDetailMap[id] : undefined));

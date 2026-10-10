@@ -38,7 +38,9 @@ const MutateBridge = () => {
 const wrapper = ({ children }: PropsWithChildren) =>
   createElement(
     SWRConfig,
-    { value: { dedupingInterval: 0, provider: () => new Map() } },
+    // `shouldRetryOnError: false`: a NOT_FOUND revalidation must settle now, not
+    // through SWR's backoff timers.
+    { value: { dedupingInterval: 0, provider: () => new Map(), shouldRetryOnError: false } },
     createElement(MutateBridge),
     children,
   );
@@ -195,6 +197,41 @@ describe('dataset replica', () => {
       });
       expect(persisted?.data).toEqual({ id: DETAIL_ID, name: 'MMLU' });
     });
+  });
+
+  it('drops a persisted detail when its revalidation answers NOT_FOUND', async () => {
+    const getDataset = vi
+      .spyOn(agentEvalService, 'getDataset')
+      .mockResolvedValue({ id: DETAIL_ID, name: 'MMLU' } as any);
+
+    renderDetail(DETAIL_ID);
+    await waitFor(() =>
+      expect(useEvalStore.getState().datasetDetailMap[DETAIL_ID]?.name).toBe('MMLU'),
+    );
+    await waitFor(async () =>
+      expect(
+        (await datasetDetailResource.storage!.get({ queryKey: DETAIL_STORAGE_KEY, scope }))?.data,
+      ).toEqual({ id: DETAIL_ID, name: 'MMLU' }),
+    );
+
+    // Deleted elsewhere: every read now answers NOT_FOUND. The persisted row
+    // must not keep the page painting a dataset that no longer exists.
+    getDataset.mockRejectedValue({ data: { code: 'NOT_FOUND' } });
+    await act(async () => {
+      await useEvalStore
+        .getState()
+        .refreshDatasetDetail(DETAIL_ID)
+        .catch(() => {});
+    });
+
+    await waitFor(() =>
+      expect(useEvalStore.getState().datasetDetailMap[DETAIL_ID]).toBeUndefined(),
+    );
+    await waitFor(async () =>
+      expect(
+        await datasetDetailResource.storage!.get({ queryKey: DETAIL_STORAGE_KEY, scope }),
+      ).toBeUndefined(),
+    );
   });
 
   it('repaints the refreshed benchmark list after a mutation', async () => {
