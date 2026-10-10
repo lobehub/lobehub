@@ -251,6 +251,7 @@ export const AttachmentUploadButton = memo<AttachmentUploadButtonProps>(({ disab
       onFiles={onFiles}
     >
       <Button
+        outdent
         disabled={disabled}
         icon={<Icon icon={ImagePlus} />}
         style={{ alignSelf: 'flex-start', minHeight: md ? undefined : 44 }}

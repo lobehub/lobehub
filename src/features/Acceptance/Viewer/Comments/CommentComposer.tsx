@@ -31,6 +31,8 @@ const MAX_COMMENT_ATTACHMENTS = 4;
 
 interface CommentComposerProps {
   autoFocus?: boolean;
+  /** The surrounding block draws the frame, so the field must not draw a second one. */
+  borderless?: boolean;
   /** One-line reply box instead of the two-line root box. */
   compact?: boolean;
   /**
@@ -54,7 +56,7 @@ interface CommentComposerProps {
  * sends.
  */
 const CommentComposer = memo<CommentComposerProps>(
-  ({ autoFocus, compact, minHeight, onCancel, onSubmit, placeholder, submitLabel }) => {
+  ({ autoFocus, borderless, compact, minHeight, onCancel, onSubmit, placeholder, submitLabel }) => {
     const { t } = useTranslation('verify');
     const [value, setValue] = useState('');
     const [sending, setSending] = useState(false);
@@ -96,7 +98,9 @@ const CommentComposer = memo<CommentComposerProps>(
           autoFocus={autoFocus}
           autoSize={{ maxRows: 20, minRows: compact ? 1 : 2 }}
           placeholder={placeholder}
+          style={borderless ? { paddingInline: 0 } : undefined}
           value={value}
+          variant={borderless ? 'borderless' : undefined}
           onChange={(event) => setValue(event.target.value)}
           onPaste={handlePaste}
           onKeyDown={(event) => {

@@ -130,7 +130,7 @@ export const AcceptanceOverview = ({
             reviewer's "fine by me" — or a reviewer would lose the affordance
             entirely. */}
         {tab === 'discussion' ? (
-          <AcceptanceDiscussion />
+          <AcceptanceDiscussion onOpenChecks={() => setTab('checks')} />
         ) : tab === 'flow' ? (
           <>
             <AcceptanceFlow />
