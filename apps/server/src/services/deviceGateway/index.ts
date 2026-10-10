@@ -171,11 +171,11 @@ interface TerminalRpcScope {
 type TerminalRpcMethod =
   'closeTerminal' | 'createTerminalSession' | 'readTerminal' | 'resizeTerminal' | 'writeTerminal';
 
-/** Live connections whose provider-binding probe answered, bounded per server instance. */
+/** Live sockets whose provider-binding probe answered, bounded per server instance. */
 const PROVIDER_BINDING_CAPABILITY_CACHE_LIMIT = 1024;
 
 export class DeviceGateway {
-  /** Probe answers per live connection set; see {@link findProviderBindingChannel}. */
+  /** Probe answers per live socket set; see {@link findProviderBindingChannel}. */
   private readonly providerBindingCapability = new Map<string, boolean>();
 
   private client: GatewayHttpClient | null = null;
@@ -1922,13 +1922,20 @@ export class DeviceGateway {
     const device = devices.find((candidate) => candidate.deviceId === deviceId);
 
     // Labels are freeform and several connections can share one, so a label is
-    // identified by the live connections behind it. A connector's protocol cannot
-    // change while it stays connected; a reconnect yields new connection IDs.
+    // identified by the live sockets behind it. A connector's protocol cannot
+    // change while one socket stays open, but `connectionId` is persisted per
+    // install: restarting `lh connect` (e.g. after a CLI downgrade) reuses it.
+    // The gateway stamps `connectedAt` when it accepts each socket, so the pair
+    // names one socket and any restart or reconnect is probed again.
     const connectionsByChannel = new Map<string, Array<string | undefined>>();
     for (const connection of device?.channels ?? []) {
       if (!connection.channel) continue;
       const ids = connectionsByChannel.get(connection.channel) ?? [];
-      ids.push(connection.connectionId);
+      ids.push(
+        connection.connectionId && connection.connectedAt
+          ? `${connection.connectionId}@${connection.connectedAt}`
+          : undefined,
+      );
       connectionsByChannel.set(connection.channel, ids);
     }
     const candidates = [...connectionsByChannel].map(([channel, ids]) => ({

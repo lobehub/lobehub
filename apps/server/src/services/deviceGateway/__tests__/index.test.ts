@@ -156,11 +156,13 @@ describe('DeviceGateway', () => {
       mockClient.invokeRpc.mock.calls.filter(
         ([, request]) => request.method === 'getProviderBoundAgentRunCapability',
       );
-    const deviceWith = (channels: Array<{ channel: string; connectionId: string }>) => [
+    const deviceWith = (
+      channels: Array<{ channel: string; connectedAt?: number; connectionId: string }>,
+    ) => [
       {
         connectedAt: Date.now(),
         deviceId: 'device-1',
-        channels: channels.map((channel) => ({ ...channel, connectedAt: Date.now() })),
+        channels: channels.map((channel) => ({ connectedAt: Date.now(), ...channel })),
       },
     ];
 
@@ -187,6 +189,31 @@ describe('DeviceGateway', () => {
         deviceWith([{ channel: 'cli', connectionId: 'conn-2' }]),
       );
       await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+      expect(probeCalls()).toHaveLength(2);
+    });
+
+    // ROOT CAUSE:
+    // `lh connect` persists connectionId per install, so a restart onto an older
+    // CLI kept the same id and reused the cached "supported" answer.
+    it('re-probes when the same install reconnects with a different CLI', async () => {
+      mockClient.invokeRpc.mockResolvedValue({
+        data: { available: true, version: 1 },
+        success: true,
+      });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectedAt: 1000, connectionId: 'install-1' }]),
+      );
+      const gateway = new DeviceGateway();
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe('cli');
+
+      // Restarted on a downgraded CLI: same persisted connectionId, new socket.
+      mockClient.invokeRpc.mockResolvedValue({ error: 'Unknown method', success: false });
+      mockClient.queryDeviceList.mockResolvedValue(
+        deviceWith([{ channel: 'cli', connectedAt: 2000, connectionId: 'install-1' }]),
+      );
+      await expect(gateway.findProviderBindingChannel('user-1', 'device-1')).resolves.toBe(
+        undefined,
+      );
       expect(probeCalls()).toHaveLength(2);
     });
 
