@@ -2,7 +2,12 @@ import debug from 'debug';
 import { useLayoutEffect } from 'react';
 
 import { getActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspaceId';
-import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
+import {
+  createReplicaSlice,
+  type ReplicaLens,
+  type ReplicaPageResult,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { knowledgeBaseService } from '@/services/knowledgeBase';
 import { resourceService } from '@/services/resource';
 import { type StoreSetter } from '@/store/types';
@@ -148,16 +153,27 @@ export class ResourceActionImpl {
   }
 
   /** One page of the explorer list; `cursor` is the page index (0 = head). */
-  #fetchResourcePage = async (params: ResourceListParams, cursor?: number) => {
+  #fetchResourcePage = async (
+    params: ResourceListParams,
+    cursor?: number,
+  ): Promise<ReplicaPageResult<ResourceItem, number>> => {
     const { pageSize, ...query } = params;
     const limit = pageSize ?? DEFAULT_RESOURCE_PAGE_SIZE;
+    const page = cursor ?? 0;
     const response = await resourceService.queryResources({
       ...query,
       limit,
-      offset: (cursor ?? 0) * limit,
+      offset: page * limit,
     });
 
-    return { items: response.items, total: response.total };
+    return {
+      items: response.items,
+      // The server drops rows *after* paging (Inbox folders), so a short page is
+      // not the end: exhaustion is exactly the server's `hasMore`, never a
+      // length inferred from the visible rows.
+      nextCursor: response.hasMore ? page + 1 : null,
+      total: response.total,
+    };
   };
 
   // ---- row helpers --------------------------------------------------------

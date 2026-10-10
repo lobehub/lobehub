@@ -48,7 +48,11 @@ const row = (id: string): ResourceItem => ({
 });
 
 const ids = () => useFileStore.getState().resourceList.map((item) => item.id);
-const page = (items: ResourceItem[], total: number) => ({ items, total });
+const page = (items: ResourceItem[], total: number, hasMore = items.length < total) => ({
+  hasMore,
+  items,
+  total,
+});
 const rows = (length: number, offset = 0) =>
   Array.from({ length }, (_, i) => row(`resource-${i + offset}`));
 
@@ -243,6 +247,27 @@ describe('resourceList replica', () => {
     expect(useFileStore.getState().resourceMap.size).toBe(0);
     // The queried params survive so the views can tell the request moved on.
     expect(useFileStore.getState().queryParams?.parentId).toBeNull();
+  });
+
+  it('keeps paging past a short page the server reports more for', async () => {
+    // Inbox filters folder-backed rows after paging: a visible page shorter than
+    // the page size is not the end while the server still reports `hasMore`.
+    querySpy
+      .mockResolvedValueOnce({ hasMore: true, items: rows(48) })
+      .mockResolvedValueOnce({ hasMore: false, items: rows(10, 48) });
+
+    renderHook(() => useFileStore((s) => s.useFetchResources)(BASE_INPUT), { wrapper });
+
+    await waitFor(() => expect(useFileStore.getState().resourceList).toHaveLength(48));
+    expect(useFileStore.getState().hasMore).toBe(true);
+
+    await act(async () => {
+      await useFileStore.getState().loadMoreResources();
+    });
+
+    expect(querySpy).toHaveBeenLastCalledWith(expect.objectContaining({ limit: 50, offset: 50 }));
+    expect(ids()).toHaveLength(58);
+    expect(useFileStore.getState().hasMore).toBe(false);
   });
 
   it('does not fetch another page when the head page is the last one', async () => {
