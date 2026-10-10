@@ -231,7 +231,7 @@ describe('Server callSubAgent suspend/resume', () => {
         vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/subagent-result');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
         vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-        vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
         const originalFetch = globalThis.fetch;
         vi.stubGlobal('fetch', (url: string, init: RequestInit) =>
           String(url) === 'https://hooks.example/subagent-result'

@@ -326,7 +326,7 @@ describe('afterToolCall control pipeline', () => {
     'uses onError=%s for invalid responses and never leaks response text',
     async (onError) => {
       const fixture = setup([control('control', onError)]);
-      fetchHook.mockResolvedValue(new Response(JSON.stringify({ invalid: secret })));
+      fetchHook.mockResolvedValue(new Response(JSON.stringify({ decision: secret })));
       const result = await fixture.step();
       expect(fixture.execute).toHaveBeenCalledTimes(1);
       expect(fixture.rows[0].content).toBe(
@@ -536,7 +536,7 @@ describe('afterToolCall control pipeline', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       const fixture = setup([]);
       fixture.rows.push({
         id: 'protected-row',
@@ -719,13 +719,13 @@ describe('afterToolCall control pipeline', () => {
     ]);
   });
 
-  it.each(['toolCall', 'toolResult', 'toolCallAndResult'] as const)(
-    'applies the explicit environment mode %s at runtime',
-    async (mode) => {
+  it.each(['beforeToolCall', 'afterToolCall', 'beforeToolCall,afterToolCall'])(
+    'uses toolCall to control selected events %s at runtime',
+    async (events) => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/env');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall,afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', mode);
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', events);
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
       fetchHook.mockImplementation(async (_url, init) =>
         response(JSON.parse(init.body).hookType === 'afterToolCall' ? 'deny' : 'allow'),
@@ -734,13 +734,28 @@ describe('afterToolCall control pipeline', () => {
       await fixture.step();
       expect(fixture.execute).toHaveBeenCalledTimes(1);
       expect(fixture.rows[0].content).toBe(
-        mode === 'toolCall' ? 'executed' : BLOCKED_TOOL_RESULT_CONTENT,
+        events.includes('afterToolCall') ? BLOCKED_TOOL_RESULT_CONTENT : 'executed',
       );
-      await vi.waitFor(() => expect(fetchHook).toHaveBeenCalledTimes(2));
-      expect(fetchHook.mock.calls.map(([, init]) => JSON.parse(init.body).hookType)).toEqual([
-        'beforeToolCall',
-        'afterToolCall',
-      ]);
+      expect(fetchHook.mock.calls.map(([, init]) => JSON.parse(init.body).hookType)).toEqual(
+        events.split(','),
+      );
+    },
+  );
+
+  it.each(['', 'not JSON', '{"decision":', '{}'])(
+    'executes and publishes normally when both hooks respond with notification body %j',
+    async (body) => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/env');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall,afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+      fetchHook.mockImplementation(async () => new Response(body));
+      const fixture = setup([]);
+      await fixture.step();
+      expect(fixture.execute).toHaveBeenCalledTimes(1);
+      expect(fixture.rows[0].content).toBe('executed');
+      expect(fetchHook).toHaveBeenCalledTimes(2);
     },
   );
 

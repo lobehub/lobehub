@@ -40,6 +40,8 @@ describe('server hook environment', () => {
     ['URL', 'ftp://webhook-service/ingress'],
     ['URL', ''],
     ['RESPONSE_HANDLING', 'invalid'],
+    ['RESPONSE_HANDLING', 'toolResult'],
+    ['RESPONSE_HANDLING', 'toolCallAndResult'],
     ['ON_ERROR', 'invalid'],
     ['ON_ERROR', 'block'],
   ])('rejects invalid %s without exposing the token', (name, value) => {
@@ -59,14 +61,14 @@ describe('server hook environment', () => {
   it('accepts afterToolCall-only result controls', () => {
     enable();
     vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
     expect(getAgentHookConfig().AGENT_HOOK_WEBHOOK_EVENTS).toEqual(['afterToolCall']);
   });
 
-  it('keeps toolCall before-only for existing deployment configurations', () => {
+  it('requires a beforeToolCall or afterToolCall event for toolCall', () => {
     enable();
-    vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'onToolCallError');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
     expect(() => getAgentHookConfig()).toThrow('beforeToolCall');
   });

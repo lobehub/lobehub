@@ -31,6 +31,7 @@ const event: Omit<ToolCallHookEvent, 'mock'> = {
 describe('environment hooks through real HTTP transport', () => {
   const requests: { authorization?: string; body: Record<string, unknown>; path?: string }[] = [];
   let response: unknown;
+  let responseStatus: number;
   const receiver = createServer(async (request, reply) => {
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(Buffer.from(chunk));
@@ -39,14 +40,16 @@ describe('environment hooks through real HTTP transport', () => {
       body: JSON.parse(Buffer.concat(chunks).toString()),
       path: request.url,
     });
+    reply.statusCode = request.url === '/notification' ? 204 : responseStatus;
     reply.setHeader('content-type', 'application/json');
-    reply.end(JSON.stringify(response));
+    reply.end(typeof response === 'string' ? response : JSON.stringify(response));
   });
   let url: string;
 
   beforeEach(async () => {
     requests.length = 0;
     response = { decision: 'allow' };
+    responseStatus = 200;
     queueMode.mockReturnValue(false);
     await new Promise<void>((resolve) => receiver.listen(0, '127.0.0.1', resolve));
     url = `http://127.0.0.1:${(receiver.address() as AddressInfo).port}/ingress`;
@@ -88,8 +91,8 @@ describe('environment hooks through real HTTP transport', () => {
         responseHandling: 'toolCall',
         url,
       });
-      for (const hook of hooks.slice(1))
-        expect(hook.webhook).toMatchObject({ onError: 'continue', responseHandling: 'ignore' });
+      expect(hooks[1].webhook).toMatchObject({ onError: 'block', responseHandling: 'toolCall' });
+      expect(hooks[2].webhook).toMatchObject({ onError: 'continue', responseHandling: 'ignore' });
 
       // A cold worker uses its current configuration, ignoring legacy snapshot copies.
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-secret-two');
@@ -105,12 +108,16 @@ describe('environment hooks through real HTTP transport', () => {
         reason: 'Denied by current env hook',
         status: 'blocked',
       });
-      await cold.dispatch(
-        event.operationId,
-        'afterToolCall',
-        { ...event, executionTimeMs: 1, mocked: true, result: { content: 'safe', success: true } },
-        restored,
-      );
+      const after = {
+        ...event,
+        executionTimeMs: 1,
+        mocked: true,
+        result: { content: 'safe', success: true },
+      };
+      expect(await cold.evaluateAfterToolCall(event.operationId, after, restored)).toMatchObject({
+        status: 'blocked',
+      });
+      await cold.dispatch(event.operationId, 'afterToolCall', after, restored);
       await cold.dispatch(
         event.operationId,
         'onToolCallError',
@@ -135,14 +142,10 @@ describe('environment hooks through real HTTP transport', () => {
     },
   );
 
-  it.each(['toolResult', 'toolCallAndResult'])(
-    'opts into afterToolCall controls with %s without persisting server secrets',
-    async (mode) => {
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', mode);
-      vi.stubEnv(
-        'AGENT_HOOK_WEBHOOK_EVENTS',
-        mode === 'toolResult' ? 'afterToolCall' : 'beforeToolCall,afterToolCall',
-      );
+  it.each(['afterToolCall', 'beforeToolCall,afterToolCall'])(
+    'checks selected events %s with toolCall without persisting server secrets',
+    async (events) => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', events);
       response = { decision: 'deny' };
       const dispatcher = new HookDispatcher();
       dispatcher.register(event.operationId, []);
@@ -155,9 +158,82 @@ describe('environment hooks through real HTTP transport', () => {
       expect(requests).toHaveLength(1);
       expect(requests[0].body).toMatchObject({ hookType: 'afterToolCall', result: after.result });
       expect(await dispatcher.evaluateToolCall(event.operationId, event)).toMatchObject({
-        status: mode === 'toolCallAndResult' ? 'blocked' : 'allow',
+        status: events.includes('beforeToolCall') ? 'blocked' : 'allow',
       });
-      expect(requests).toHaveLength(mode === 'toolCallAndResult' ? 2 : 1);
+      expect(requests).toHaveLength(events.includes('beforeToolCall') ? 2 : 1);
+    },
+  );
+
+  describe.each(['beforeToolCall', 'afterToolCall'] as const)(
+    'optional decisions for %s',
+    (type) => {
+      const after = { ...event, mocked: false, result: { content: 'full result', success: true } };
+      const evaluate = (dispatcher: HookDispatcher) =>
+        type === 'beforeToolCall'
+          ? dispatcher.evaluateToolCall(event.operationId, event)
+          : dispatcher.evaluateAfterToolCall(event.operationId, after);
+
+      it.each([
+        [204, ''],
+        [200, ''],
+        [200, 'not JSON'],
+        [200, '{"decision":'],
+        [200, {}],
+        [200, null],
+        [200, [{ decision: 'deny' }]],
+        [202, { accepted: true }],
+      ] as const)(
+        'continues on notification response %i %j even with onError=block',
+        async (status, body) => {
+          responseStatus = status;
+          response = body;
+          const dispatcher = new HookDispatcher();
+          expect(await evaluate(dispatcher)).toEqual({ status: 'allow' });
+          await dispatcher.dispatch(
+            event.operationId,
+            type,
+            type === 'beforeToolCall' ? event : after,
+          );
+          expect(requests).toHaveLength(1);
+          expect(requests[0].body.hookType).toBe(type);
+        },
+      );
+
+      it.each(['continue', 'block'] as const)(
+        'honors onError=%s for delivery and decision errors',
+        async (onError) => {
+          vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', onError);
+          const dispatcher = new HookDispatcher();
+          for (const [status, body] of [
+            [503, 'not JSON'],
+            [200, { decision: 'invalid' }],
+          ] as const) {
+            responseStatus = status;
+            response = body;
+            expect(await evaluate(dispatcher)).toMatchObject({
+              status: onError === 'block' ? 'blocked' : 'allow',
+            });
+          }
+        },
+      );
+
+      it('keeps evaluating later policies after a notification response', async () => {
+        response = { decision: 'deny' };
+        const dispatcher = new HookDispatcher();
+        dispatcher.register(event.operationId, [
+          {
+            id: 'notification-response',
+            type,
+            webhook: {
+              url: url.replace('/ingress', '/notification'),
+              responseHandling: 'toolCall',
+              onError: 'block',
+            },
+          },
+        ]);
+        expect(await evaluate(dispatcher)).toMatchObject({ status: 'blocked' });
+        expect(requests.map((request) => request.path)).toEqual(['/notification', '/ingress']);
+      });
     },
   );
 
@@ -180,7 +256,7 @@ describe('environment hooks through real HTTP transport', () => {
       result: { content: 'ok', success: true },
     });
     expect(handler).toHaveBeenCalledTimes(1);
-    expect(requests.map((request) => request.path)).toEqual(['/ingress/internal', '/ingress']);
+    expect(requests.map((request) => request.path)).toEqual(['/ingress/internal']);
     expect(dispatcher.getSerializedHooks(event.operationId)).toEqual([original[0]]);
   });
 
@@ -320,18 +396,14 @@ describe('environment hooks through real HTTP transport', () => {
       { ...event, executionTimeMs: 1, result: { content: 'ok', success: true } },
       restored,
     );
-    expect(requests.map((request) => request.path)).toEqual([
-      '/ingress',
-      '/ingress/internal',
-      '/ingress',
-    ]);
+    expect(requests.map((request) => request.path)).toEqual(['/ingress', '/ingress/internal']);
   });
 
   it.each(['continue', 'block'] as const)(
     'applies onError=%s to an invalid control response without leaking credentials',
     async (onError) => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', onError);
-      response = { invalid: 'synthetic-secret-two' };
+      response = { decision: 'synthetic-secret-two' };
       const log = vi.spyOn(console, 'error');
       const dispatcher = new HookDispatcher();
       dispatcher.register(event.operationId, []);

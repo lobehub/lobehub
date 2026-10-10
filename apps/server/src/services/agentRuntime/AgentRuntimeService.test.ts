@@ -709,7 +709,7 @@ describe('AgentRuntimeService', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       vi.spyOn(AgentOperationModel.prototype, 'recordStart').mockRejectedValue(
         new Error('db down'),
       );

@@ -87,7 +87,7 @@ describe('out-of-band tool result control', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       deps.messageModel.findMessagePlugin.mockResolvedValue({
         ...plugin,
         intervention: { operationId: 'original', status: 'approved' },
@@ -199,7 +199,7 @@ describe('out-of-band tool result control', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/after');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       expect(deps.dispatcher.hasAfterToolCallControl('parent', [])).toBe(true);
       deps.loadState.mockResolvedValue(null);
       deps.loadDurableHooks.mockResolvedValue([]);
@@ -362,7 +362,7 @@ describe('out-of-band tool result control', () => {
     vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/after');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
     expect((await controlDeferredToolResult(deps, input)).result.content).toBe(
       BLOCKED_TOOL_RESULT_CONTENT,
