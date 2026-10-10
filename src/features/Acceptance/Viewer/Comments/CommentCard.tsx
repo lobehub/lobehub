@@ -25,7 +25,7 @@ import { userProfileSelectors } from '@/store/user/selectors';
 import { commentAnchorUrl } from './anchor';
 import CommentContent from './CommentContent';
 import CommentReactions from './CommentReactions';
-import { styles } from './styles';
+import { styles, TIMELINE_NODE } from './styles';
 
 export const commentAuthorName = (author: AcceptanceCommentItem['author']) =>
   author.fullName || author.username || '—';
@@ -67,8 +67,9 @@ interface CommentCardProps {
   /**
    * `boxed` is the discussion message: a header strip over the body.
    * `plain` is the floating note: the same content with no frame of its own.
+   * `feed` is the discussion feed: an author line, the words indented under it.
    */
-  variant?: 'boxed' | 'plain';
+  variant?: 'boxed' | 'feed' | 'plain';
 }
 
 /** One remark: who, when, what — and the author's own actions behind a menu. */
@@ -156,6 +157,7 @@ const CommentCard = memo<CommentCardProps>(
           wrap={'wrap'}
         >
           {variant === 'plain' && <CommentAvatar comment={comment} size={18} />}
+          {variant === 'feed' && <CommentAvatar comment={comment} size={TIMELINE_NODE} />}
           <Text
             className={nameOverride ? styles.headline : styles.authorName}
             fontSize={13}
@@ -211,7 +213,15 @@ const CommentCard = memo<CommentCardProps>(
             </div>
           )}
         </Flexbox>
-        <div className={variant === 'boxed' ? styles.body : styles.panelBody}>
+        <div
+          className={
+            variant === 'boxed'
+              ? styles.body
+              : variant === 'feed'
+                ? styles.feedBody
+                : styles.panelBody
+          }
+        >
           <CommentContent comment={comment} />
           {onReact && (
             <CommentReactions

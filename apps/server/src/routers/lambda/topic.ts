@@ -461,6 +461,33 @@ export const topicRouter = router({
       return data.topic.id;
     }),
 
+  /**
+   * Fork a topic from one of its messages: copy the conversation prefix
+   * (first message → `messageId`) into a brand new topic and return its id.
+   *
+   * Shares `cloneTopic`'s guards: a fork writes a new topic and copies content
+   * out of the source, so it needs the same `topic:create` capability and the
+   * same refusal to lift a visitor topic's content into creator scope.
+   */
+  forkTopic: topicProcedure
+    .use(withScopedPermission('topic:create'))
+    .input(
+      z.object({
+        id: z.string(),
+        messageId: z.string(),
+        newTitle: z.string().optional(),
+      }),
+    )
+    .mutation(async ({ input, ctx }) => {
+      await assertCanUseTopicTargets(guardCtx(ctx), [input.id]);
+      await assertCreatorTopicTargets(guardCtx(ctx), [input.id]);
+      const data = await ctx.topicModel.duplicate(input.id, input.newTitle, {
+        upToMessageId: input.messageId,
+      });
+
+      return data.topic.id;
+    }),
+
   countTopics: topicProcedure
     .input(
       z

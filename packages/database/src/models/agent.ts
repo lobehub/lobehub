@@ -6,8 +6,8 @@ import {
 } from '@lobechat/const';
 import type { AgentRankItem, AgentTopicShareSubject, LobeAgentAgencyConfig } from '@lobechat/types';
 import {
+  applyWorkingDirByDevicePatch,
   DEFAULT_WORKSPACE_AGENT_SELECTION_POLICIES,
-  pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { toRecord } from '@lobechat/utils/object';
 import { TRPCError } from '@trpc/server';
@@ -1656,7 +1656,11 @@ export class AgentModel {
     return result?.id ?? null;
   };
 
-  updateConfig = async (agentId: string, input: PartialDeep<AgentItem> | undefined | null) => {
+  updateConfig = async (
+    agentId: string,
+    input: PartialDeep<AgentItem> | undefined | null,
+    replaceWorkingDirDeviceIds?: string[],
+  ) => {
     if (!input || Object.keys(input).length === 0) return;
 
     const data = this.stripImmutableFields(input);
@@ -1797,9 +1801,13 @@ export class AgentModel {
     // Apply the processed parameters
     mergedValue.params = Object.keys(updatedParams).length > 0 ? updatedParams : undefined;
 
-    // agencyConfig.workingDirByDevice: a per-device entry is cleared by sending
-    // `undefined`, which merge() skips — prune those keys so the delete persists.
-    pruneWorkingDirByDeviceDeletes(mergedValue.agencyConfig, data.agencyConfig);
+    // Opt-in replacement prevents old clients' complete cached maps from
+    // deleting Git metadata on devices they did not actually edit.
+    applyWorkingDirByDevicePatch(
+      mergedValue.agencyConfig,
+      data.agencyConfig,
+      replaceWorkingDirDeviceIds,
+    );
 
     await this.assertFixedExecutionTarget(agent.workspaceId, mergedValue.agencyConfig);
 

@@ -43,21 +43,27 @@ describe('HTTP hook primitive', () => {
     expect(request.signal).toBeInstanceOf(AbortSignal);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
-  it.each([200, 204, 205])('rejects empty control response %i', async (status) => {
+  it.each([200, 204, 205])('ignores empty decision response %i', async (status) => {
     fetchMock.mockResolvedValue(new Response(null, { status }));
     expect(await executeToolCallWebhook(config, {})).toEqual({
-      status: 'error',
-      code: 'invalid_response',
+      status: 'ignored',
     });
   });
   it.each([201, 202, 206])(
-    'requires HTTP 200 even with a valid control body: %i',
+    'accepts a valid decision on a successful HTTP response: %i',
     async (status) => {
       fetchMock.mockResolvedValue(new Response('{"decision":"allow"}', { status }));
       expect(await executeToolCallWebhook(config, {})).toEqual({
-        status: 'error',
-        code: 'invalid_response',
+        status: 'success',
+        decision: { decision: 'allow' },
       });
+    },
+  );
+  it.each(['{', 'notification accepted', '{}', 'null', '[]'])(
+    'ignores a successful response without a decision: %s',
+    async (body) => {
+      fetchMock.mockResolvedValue(new Response(body));
+      expect(await executeToolCallWebhook(config, {})).toEqual({ status: 'ignored' });
     },
   );
   it.each([200, 204, 205])('accepts empty notification response %i', async (status) => {

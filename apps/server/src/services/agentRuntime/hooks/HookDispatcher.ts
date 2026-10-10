@@ -215,10 +215,12 @@ export class HookDispatcher {
       if (!payload || signal?.aborted) return { status: 'cancelled' };
       const response = await executeToolCallWebhook(hook.webhook, payload, { signal });
       if (signal?.aborted || response.status === 'cancelled') return { status: 'cancelled' };
+      // A notification response does not decide for any subsequent policy.
+      if (response.status === 'ignored') continue;
       if (response.status === 'success' && response.decision.decision === 'deny') {
         return {
           status: 'blocked',
-          reason: response.decision.reason ?? `Blocked by ${type} hook.`,
+          reason: response.decision.reason || `Blocked by ${type} hook.`,
         };
       }
       if (response.status === 'error') {

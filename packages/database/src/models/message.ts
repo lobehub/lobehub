@@ -1084,6 +1084,7 @@ export interface SoftDeletedMessage {
    */
   ownerId: string | null;
   parentId: string | null;
+  projectId: string | null;
   role: string;
   topicId: string | null;
 }
@@ -4746,7 +4747,7 @@ export class MessageModel {
           const messageUpdateData: Record<string, any> = {};
 
           if (content !== undefined) {
-            messageUpdateData.content = content;
+            messageUpdateData.content = sanitizeNullBytes(content);
           }
 
           if (metadata !== undefined || heterogeneousToolState !== undefined) {
@@ -4775,17 +4776,18 @@ export class MessageModel {
           const pluginUpdateData: Record<string, any> = {};
 
           if (pluginState !== undefined) {
+            const sanitizedState = sanitizeNullBytes(pluginState);
             // Snapshot writes replace the whole runtime state. Ordinary patches
             // own complete top-level keys and merge inside the UPDATE so an
             // answer write cannot race away an intervention-terminal write.
             pluginUpdateData.state =
               heterogeneousToolState || replacePluginState
-                ? pluginState
-                : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(pluginState)}::jsonb`;
+                ? sanitizedState
+                : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(sanitizedState)}::jsonb`;
           }
 
           if (pluginError !== undefined) {
-            pluginUpdateData.error = pluginError;
+            pluginUpdateData.error = sanitizeNullBytes(pluginError);
           }
 
           const [updatedPlugin] = await trx
@@ -5451,11 +5453,19 @@ export class MessageModel {
           content: messages.content,
           id: messages.id,
           parentId: messages.parentId,
+          projectId: topics.projectId,
           role: messages.role,
           tools: messages.tools,
           topicId: messages.topicId,
         })
         .from(messages)
+        .leftJoin(
+          topics,
+          and(
+            eq(messages.topicId, topics.id),
+            buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+          ),
+        )
         .where(and(this.ownership(), inArray(messages.id, ids)));
       if (requested.length === 0) return [];
 
@@ -5491,11 +5501,19 @@ export class MessageModel {
               content: messages.content,
               id: messages.id,
               parentId: messages.parentId,
+              projectId: topics.projectId,
               role: messages.role,
               tools: messages.tools,
               topicId: messages.topicId,
             })
             .from(messages)
+            .leftJoin(
+              topics,
+              and(
+                eq(messages.topicId, topics.id),
+                buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, topics),
+              ),
+            )
             .where(and(this.ownership(), inArray(messages.id, companionIds)));
         }
       }
@@ -5572,6 +5590,7 @@ export class MessageModel {
         isCompanion: !requestedIds.has(row.id),
         ownerId: companionOwner.get(row.id) ?? null,
         parentId: row.parentId,
+        projectId: row.projectId,
         role: row.role,
         topicId: row.topicId,
       }));

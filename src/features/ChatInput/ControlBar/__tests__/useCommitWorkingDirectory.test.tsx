@@ -126,9 +126,11 @@ describe('useCommitWorkingDirectory — localTarget', () => {
     const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
     await result.current.commit({ path: 'C:/work' }, { localTarget: true });
 
-    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-      agencyConfig: { workingDirByDevice: { 'this-machine': { path: 'C:/work' } } },
-    });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-id',
+      { agencyConfig: { workingDirByDevice: { 'this-machine': { path: 'C:/work' } } } },
+      { replaceWorkingDirDeviceIds: ['this-machine'] },
+    );
   });
 
   it('leaves ordinary writes routed by the resolved config', async () => {
@@ -144,13 +146,49 @@ describe('useCommitWorkingDirectory — localTarget', () => {
     const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
     await result.current.commit({ path: 'C:/work' });
 
-    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith('agent-id', {
-      agencyConfig: {
-        boundDeviceId: 'other-device',
-        executionTarget: 'device',
-        workingDirByDevice: { 'other-device': { path: 'C:/work' } },
+    expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
+      'agent-id',
+      { agencyConfig: { workingDirByDevice: { 'other-device': { path: 'C:/work' } } } },
+      { replaceWorkingDirDeviceIds: ['other-device'] },
+    );
+  });
+
+  it('writes only the selected device instead of replaying other directory choices', async () => {
+    testState.agent.agencyConfig = {
+      executionTarget: 'local',
+      workingDirByDevice: {
+        'this-machine': { git: { activeWorktree: '/titu-worktree' }, path: '/titu' },
+        'other-device': '/remote/repo',
       },
-    });
+    };
+    const { result } = renderHook(() => useCommitWorkingDirectory('agent-id'));
+
+    await result.current.commit({ path: '/lobehub', repoType: 'github' });
+    expect(testState.agent.updateAgentConfigById).toHaveBeenLastCalledWith(
+      'agent-id',
+      {
+        agencyConfig: {
+          workingDirByDevice: { 'this-machine': { path: '/lobehub', repoType: 'github' } },
+        },
+      },
+      { replaceWorkingDirDeviceIds: ['this-machine'] },
+    );
+
+    await result.current.clear();
+    expect(testState.agent.updateAgentConfigById).toHaveBeenLastCalledWith(
+      'agent-id',
+      { agencyConfig: { workingDirByDevice: { 'this-machine': undefined } } },
+      { replaceWorkingDirDeviceIds: ['this-machine'] },
+    );
+
+    await result.current.commitAgentDefault('/plain-folder');
+    expect(testState.agent.updateAgentConfigById).toHaveBeenLastCalledWith(
+      'agent-id',
+      {
+        agencyConfig: { workingDirByDevice: { 'this-machine': '/plain-folder' } },
+      },
+      { replaceWorkingDirDeviceIds: ['this-machine'] },
+    );
   });
 });
 
@@ -240,7 +278,7 @@ describe('useCommitWorkingDirectory — commitAgentDefault', () => {
     expect(testState.agent.updateAgentConfigById).toHaveBeenCalledWith(
       'agent-id',
       { agencyConfig: { workingDirByDevice: { 'this-machine': '/work' } } },
-      { rethrow: true, showErrorMessage: false },
+      { replaceWorkingDirDeviceIds: ['this-machine'], rethrow: true, showErrorMessage: false },
     );
   });
 

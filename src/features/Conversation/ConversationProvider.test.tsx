@@ -225,11 +225,13 @@ describe('ConversationProvider', () => {
     const fakeScrollMethods = {
       getItemOffset: vi.fn(),
       getItemSize: vi.fn(),
+      getScrollElement: vi.fn(() => null),
       getScrollOffset: vi.fn(),
       getScrollSize: vi.fn(),
       getTotalCount: vi.fn(),
       getViewportSize: vi.fn(),
       scrollTo: vi.fn(),
+      scrollToEnd: vi.fn(),
       scrollToIndex: vi.fn(),
     };
 
@@ -237,6 +239,7 @@ describe('ConversationProvider', () => {
       api!.setState({
         activeIndex: 3,
         atBottom: false,
+        autoScrollDetached: true,
         chatInputOverlayHeight: 48,
         editor: fakeEditor,
         heteroOverloadRetryAttempts: { msg_old: 2 },
@@ -273,6 +276,7 @@ describe('ConversationProvider', () => {
     expect(state.scheduledSendAt).toBeUndefined();
     expect(state.activeIndex).toBeNull();
     expect(state.atBottom).toBe(true);
+    expect(state.autoScrollDetached).toBe(false);
     expect(state.isScrolling).toBe(false);
     expect(state.visibleItems.size).toBe(0);
 

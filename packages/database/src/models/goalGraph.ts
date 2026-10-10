@@ -744,6 +744,13 @@ export class GoalGraphModel {
           and(
             eq(goalNodes.goalId, goalId),
             eq(goalNodes.id, nodeId),
+            // A write that does not change the status is a no-op: rewriting the
+            // same status would bump `updatedAt` and append a duplicate event
+            // for nothing. A coordinator retry loop re-activating an
+            // already-active node on every tick would then churn the graph
+            // until no in-flight planning turn could submit a plan (the
+            // manager's snapshot hash reads these rows).
+            ne(goalNodes.status, status),
             // Retirement is a person's final word on a node. A coordinator tick
             // that loaded the node before it was retired must not write it back
             // to `resolved` / `active` afterwards; the goal row lock taken above

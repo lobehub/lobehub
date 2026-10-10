@@ -38,6 +38,14 @@ export type ReplicaSource = 'local' | 'server' | 'storage';
  * while the scope is still an optimistic guess (identity not resolved yet).
  */
 export interface ReplicaScope {
+  /**
+   * Whether this runtime may read the persisted projection back into memory.
+   * Defaults to `true`. A surface that never resolves an identity (e.g. a
+   * public embed that does not mount the user store) opts out: its scope is
+   * only the last-known guess, so hydrating it could paint a different — or a
+   * since-invalidated — session's private rows before authorization is checked.
+   */
+  canHydrate?: () => boolean;
   canPersist: () => boolean;
   get: () => string;
   use: () => string;

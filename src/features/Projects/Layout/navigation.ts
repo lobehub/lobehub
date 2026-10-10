@@ -13,4 +13,9 @@ export const getProjectTasksPath = (projectId: string) => `/project/${projectId}
 
 export const getProjectGoalsPath = (projectId: string) => `/project/${projectId}/goals`;
 
+export const getProjectDashboardPath = (projectId: string, dashboardId?: string) =>
+  dashboardId
+    ? `/project/${projectId}/dashboard/${dashboardId}`
+    : `/project/${projectId}/dashboard`;
+
 export const getProjectAcceptancePath = (projectId: string) => `/project/${projectId}/acceptance`;

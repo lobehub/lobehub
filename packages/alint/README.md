@@ -27,6 +27,8 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-unvalidated-redirect`          | warn     | server and web                                                | unvalidated return/callback targets                                     |
 | `no-prototype-pollution`           | warn     | server, desktop main, shared utilities                        | untrusted keys/paths reaching prototype setters                         |
 | `no-privileged-untrusted-electron` | warn     | Electron main/preload                                         | remote content with Node privileges or unrestricted IPC bridges         |
+| `no-removal-only-tests`            | warn     | app/package/client test and spec files                        | tests should prove behavior, not merely that a retired option is absent |
+| `no-redundant-api-copy`            | warn     | usage guides, builtin skills, CLI commands, public schemas    | keep ordinary instructions focused on supported actions                 |
 
 Package-level rules, kept next to the package they describe:
 

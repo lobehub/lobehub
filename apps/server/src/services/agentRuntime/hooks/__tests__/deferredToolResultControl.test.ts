@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { controlDeferredToolResult } from '../deferredToolResultControl';
 import { HookDispatcher } from '../HookDispatcher';
-import { BLOCKED_TOOL_RESULT_CONTENT } from '../toolResultControl';
 
 const { fetchHook, queueMode } = vi.hoisted(() => ({ fetchHook: vi.fn(), queueMode: vi.fn() }));
 vi.mock('@/database/models/user', () => ({ UserModel: { getEmailsByIds: async () => [] } }));
@@ -13,6 +12,7 @@ vi.mock('@/server/services/queue/impls', () => ({ isQueueAgentRuntimeEnabled: qu
 vi.mock('@/libs/qstash', () => ({ OtelQstashClient: class {} }));
 
 const secret = 'synthetic-private-child-result';
+const denialReason = '子任务结果被策略拒绝';
 const original = { content: secret, success: true, state: { full: secret, totalCost: 0.25 } };
 const plugin: MessagePluginItem = {
   id: 'tool-row',
@@ -68,7 +68,7 @@ beforeEach(() => {
   fetchHook
     .mockReset()
     .mockImplementation(
-      async () => new Response(JSON.stringify({ decision: 'deny', reason: secret })),
+      async () => new Response(JSON.stringify({ decision: 'deny', reason: denialReason })),
     );
   queueMode.mockReturnValue(false);
 });
@@ -87,7 +87,7 @@ describe('out-of-band tool result control', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       deps.messageModel.findMessagePlugin.mockResolvedValue({
         ...plugin,
         intervention: { operationId: 'original', status: 'approved' },
@@ -138,9 +138,10 @@ describe('out-of-band tool result control', () => {
         result: original,
       });
       expect(result).toMatchObject({
-        content: BLOCKED_TOOL_RESULT_CONTENT,
+        content: denialReason,
+        error: 'hook_denied',
         success: false,
-        state: { totalCost: 0.25 },
+        state: { totalCost: 0.25, reason: denialReason, type: 'blocked', phase: 'afterToolCall' },
       });
       expect(JSON.stringify(result)).not.toContain(secret);
     },
@@ -161,7 +162,7 @@ describe('out-of-band tool result control', () => {
       parentId: 'assistant',
     });
     const { result } = await controlDeferredToolResult(deps, input);
-    expect(result.content).toBe(BLOCKED_TOOL_RESULT_CONTENT);
+    expect(result.content).toBe(denialReason);
     expect(JSON.parse(fetchHook.mock.calls[0][1].body)).toMatchObject({
       operationId: 'parent',
       toolCallId: 'native-call',
@@ -199,7 +200,7 @@ describe('out-of-band tool result control', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/after');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       expect(deps.dispatcher.hasAfterToolCallControl('parent', [])).toBe(true);
       deps.loadState.mockResolvedValue(null);
       deps.loadDurableHooks.mockResolvedValue([]);
@@ -322,7 +323,7 @@ describe('out-of-band tool result control', () => {
         ),
     );
     expect((await controlDeferredToolResult(deps, input)).result.content).toBe(
-      BLOCKED_TOOL_RESULT_CONTENT,
+      'Blocked by afterToolCall hook.',
     );
     expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
       'https://hooks.example/after',
@@ -362,10 +363,8 @@ describe('out-of-band tool result control', () => {
     vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/after');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+    vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
     vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
-    expect((await controlDeferredToolResult(deps, input)).result.content).toBe(
-      BLOCKED_TOOL_RESULT_CONTENT,
-    );
+    expect((await controlDeferredToolResult(deps, input)).result.content).toBe(denialReason);
   });
 });

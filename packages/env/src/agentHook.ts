@@ -34,9 +34,7 @@ export const getAgentHookConfig = () => {
         z.array(agentHookTypeSchema).min(1).optional(),
       ),
       AGENT_HOOK_WEBHOOK_ON_ERROR: z.enum(['continue', 'block']).default('continue'),
-      AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING: z
-        .enum(['ignore', 'toolCall', 'toolResult', 'toolCallAndResult'])
-        .default('ignore'),
+      AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING: z.enum(['ignore', 'toolCall']).default('ignore'),
       AGENT_HOOK_WEBHOOK_TOKEN: z
         .string()
         .refine((token) => token.trim().length > 0)
@@ -56,16 +54,12 @@ export const getAgentHookConfig = () => {
     env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'ignore'
   )
     throw new Error(
-      'AGENT_HOOK_WEBHOOK_ON_ERROR=block requires toolCall, toolResult, or toolCallAndResult response handling',
+      'AGENT_HOOK_WEBHOOK_ON_ERROR=block requires AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING=toolCall',
     );
   const controlEvents =
     env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolCall'
-      ? ['beforeToolCall']
-      : env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolResult'
-        ? ['afterToolCall']
-        : env.AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING === 'toolCallAndResult'
-          ? ['beforeToolCall', 'afterToolCall']
-          : [];
+      ? ['beforeToolCall', 'afterToolCall']
+      : [];
   if (
     controlEvents.length > 0 &&
     !env.AGENT_HOOK_WEBHOOK_EVENTS?.some((type) => controlEvents.includes(type))

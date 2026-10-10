@@ -18,18 +18,24 @@ export interface ToolResultControlOutcome {
 /**
  * The tool has already executed. Replace its entire model-facing result, rather
  * than only the text: state/error/Work data may contain the same denied output.
- * Never echo a receiver-provided reason, which may quote the protected result.
+ * The hook's denial reason is the replacement content; discard the original output.
  */
-export function blockedToolResult(result: ToolRunResult, preserveUsage = false): ToolRunResult {
+export function blockedToolResult(
+  result: ToolRunResult,
+  {
+    preserveUsage = false,
+    reason = BLOCKED_TOOL_RESULT_CONTENT,
+  }: { preserveUsage?: boolean; reason?: string } = {},
+): ToolRunResult {
   return {
-    content: BLOCKED_TOOL_RESULT_CONTENT,
+    content: reason,
     deviceExecutionTime: result.deviceExecutionTime,
     error: 'hook_denied',
     executionTime: result.executionTime,
     state: {
       ...(preserveUsage && pickToolResultUsage(result.state)),
       phase: 'afterToolCall',
-      reason: BLOCKED_TOOL_RESULT_CONTENT,
+      reason,
       type: 'blocked',
     },
     ...(result.stop !== undefined && { stop: result.stop }),
@@ -62,7 +68,7 @@ export async function controlToolResult(
     return {
       blocked: true,
       cancelled: true,
-      result: blockedToolResult(event.result, preserveUsage),
+      result: blockedToolResult(event.result, { preserveUsage }),
     };
   }
   return {
@@ -70,7 +76,7 @@ export async function controlToolResult(
     cancelled: false,
     result:
       decision?.status === 'blocked'
-        ? blockedToolResult(event.result, preserveUsage)
+        ? blockedToolResult(event.result, { preserveUsage, reason: decision.reason })
         : event.result,
   };
 }

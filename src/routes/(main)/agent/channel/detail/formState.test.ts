@@ -5,7 +5,9 @@ import type { FieldSchema } from '@/server/services/bot/platforms/types';
 import {
   extractSettingsDefaults,
   getChannelFormValues,
+  mergeCredentialsForSave,
   mergeSettingsWithDefaults,
+  shouldAdoptIncomingConfig,
 } from './formState';
 
 const slackSchema: FieldSchema[] = [
@@ -108,6 +110,59 @@ describe('extractSettingsDefaults', () => {
       concurrency: 'queue',
       connectionMode: 'websocket',
     });
+  });
+});
+
+describe('mergeCredentialsForSave', () => {
+  it('carries a credential key the form does not mention', () => {
+    // The persisted copy keeps every key, but a form that never registered a
+    // field for one of them would drop it — the server replaces the blob
+    // wholesale, so the carried mask is what stops the key being deleted.
+    expect(
+      mergeCredentialsForSave(
+        { botId: '••••••••', botToken: '••••••••' },
+        { botToken: '••••••••' },
+      ),
+    ).toEqual({ botId: '••••••••', botToken: '••••••••' });
+  });
+
+  it('lets a form edit win over the config value', () => {
+    expect(mergeCredentialsForSave({ botToken: '••••••••' }, { botToken: 'rotated' })).toEqual({
+      botToken: 'rotated',
+    });
+  });
+
+  it('keeps clearing a credential meaningful', () => {
+    // An explicit empty overrides the carried value and is then dropped, so the
+    // server deletes the key instead of silently resurrecting it.
+    expect(mergeCredentialsForSave({ botToken: '••••••••' }, { botToken: '' })).toEqual({});
+  });
+
+  it('drops undefined values and tolerates a missing config', () => {
+    expect(mergeCredentialsForSave(undefined, { botToken: undefined } as never)).toEqual({});
+  });
+});
+
+describe('shouldAdoptIncomingConfig', () => {
+  const provider = { id: 'provider-1', platform: 'wechat' };
+
+  it('ignores a same-provider replacement while the form is dirty', () => {
+    // The replica-backed background revalidation must not wipe a mid-edit form.
+    expect(shouldAdoptIncomingConfig(provider, provider, true)).toBe(false);
+  });
+
+  it('adopts a same-provider replacement once the form is clean', () => {
+    expect(shouldAdoptIncomingConfig(provider, provider, false)).toBe(true);
+  });
+
+  it('adopts a different provider even while the previous form was dirty', () => {
+    expect(
+      shouldAdoptIncomingConfig(provider, { id: 'provider-2', platform: 'wechat' }, true),
+    ).toBe(true);
+  });
+
+  it('adopts on the first paint, when there is no previous config', () => {
+    expect(shouldAdoptIncomingConfig(undefined, provider, true)).toBe(true);
   });
 });
 

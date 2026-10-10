@@ -3,6 +3,7 @@ import type { TopicCommentItem } from '@lobechat/types';
 import { projectFileService } from '@/services/projectFile';
 import { type ChatStore } from '@/store/chat/store';
 import { useGlobalStore } from '@/store/global';
+import { getServerConfigStoreState } from '@/store/serverConfig';
 import { type StoreSetter } from '@/store/types';
 import { type PortalArtifact } from '@/types/artifact';
 
@@ -685,6 +686,17 @@ export class ChatPortalActionImpl {
 
   openMessageDetail = (messageId: string): void => {
     this.#get().pushPortalView({ messageId, type: PortalViewType.MessageDetail });
+  };
+
+  /** A dashboard widget in full: data, the dry run that produced a preview, versions and logs. */
+  openDashboardWidget = (widgetId: string, runId?: string): void => {
+    // The widget view only exists while the `dashboard` feature flag is on.
+    if (getServerConfigStoreState()?.featureFlags.enableDashboard !== true) return;
+    this.#get().pushPortalView({
+      ...(runId ? { runId } : {}),
+      type: PortalViewType.DashboardWidget,
+      widgetId,
+    });
   };
 
   openNotebook = (): void => {

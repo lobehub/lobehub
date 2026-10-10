@@ -40,6 +40,23 @@ const TOOL_NOT_ALLOWED_REASON = 'tool_not_allowed';
  */
 const unresolvedToolContent = (names: string) =>
   `Tool call rejected: no available tool is named ${names}. Copy a name exactly as declared in the tools schema and call it again.`;
+
+/**
+ * Splits a batch into calls the executor can attempt and calls that arrived
+ * with no `arguments` at all. `{}` stays executable — it is a legal
+ * no-argument call and JSON-parses fine; only a missing arguments string is
+ * the serialization-loss shape, and it cannot survive `JSON.parse` in the
+ * executor anyway.
+ */
+const partitionEmptyArgumentsCalls = (toolsCalling: ChatToolPayload[]) => {
+  const emptyArgsCalls: ChatToolPayload[] = [];
+  const executableCalls: ChatToolPayload[] = [];
+  for (const toolCalling of toolsCalling) {
+    if (toolCalling.arguments && toolCalling.arguments.trim().length > 0) executableCalls.push(toolCalling);
+    else emptyArgsCalls.push(toolCalling);
+  }
+  return { emptyArgsCalls, executableCalls };
+};
 /** The remote-device picker; walled off on device-locked runs. */
 const REMOTE_DEVICE_IDENTIFIER = 'lobe-remote-device';
 const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
@@ -50,6 +67,20 @@ const UNRESOLVED_TOOL_REASON = 'tool_name_unresolved';
  * broken, and failing loudly beats burning the step budget on it.
  */
 const UNRESOLVED_TOOL_FEEDBACK_LIMIT = 2;
+const EMPTY_ARGS_TOOL_REASON = 'tool_arguments_empty';
+/**
+ * What the model reads back when a call arrives with an empty `arguments`
+ * string. Parallel tool-call batches from some model/gateway pairs lose the
+ * per-call arguments during streaming serialization: the batch reaches the
+ * platform as fully-formed calls whose `arguments` is `''` (vent T-673 —
+ * 5/7/12 identical retries because the executor only answers with per-call
+ * schema errors). Executing them just burns one validation error per call,
+ * so the agent rejects them here with one actionable signal instead; the
+ * escape that works is re-issuing the calls one at a time with complete
+ * arguments.
+ */
+const EMPTY_ARGS_TOOL_CONTENT =
+  'Tool call rejected: the arguments of this call arrived empty — the parameters were lost before execution, a known failure mode when several tool calls are emitted in parallel. The call was not executed. Call the tool again one call at a time and include the complete arguments JSON for the call.';
 const PLUGIN_SCHEMA_SEPARATOR = '____';
 // Leave 35% of the model window for server-side context engineering (system
 // role, knowledge, memories, skills, etc.) and the model's completion. The
@@ -714,14 +745,36 @@ export class GeneralChatAgent implements Agent {
           context.payload as GeneralAgentCallLLMResultPayload;
 
         if (hasToolsCalling && toolsCalling && toolsCalling.length > 0) {
-          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(toolsCalling);
+          // Reject argument-loss calls before they reach the executor: a
+          // parallel batch that lost its arguments would otherwise burn one
+          // schema-validation error per call with no hint at the real cause
+          // (see EMPTY_ARGS_TOOL_CONTENT). Executable calls in the same batch
+          // still run, and the feedback rides the resolve_blocked_tools path
+          // so the model sees one rejected tool row per lost call.
+          const { emptyArgsCalls, executableCalls } = partitionEmptyArgumentsCalls(toolsCalling);
+
+          const instructions: AgentInstruction[] = [];
+
+          if (emptyArgsCalls.length > 0) {
+            instructions.push({
+              payload: {
+                blockedContent: EMPTY_ARGS_TOOL_CONTENT,
+                blockedReason: EMPTY_ARGS_TOOL_REASON,
+                parentMessageId,
+                toolsCalling: emptyArgsCalls,
+              },
+              type: 'resolve_blocked_tools',
+            } satisfies AgentInstruction);
+          }
+
+          if (executableCalls.length === 0) return instructions;
+
+          const { allowedTools, blockedTools } = this.partitionToolsByAllowList(executableCalls);
           // Check which tools need human intervention
           const [toolsNeedingIntervention, toolsToExecute] = await this.checkInterventionNeeded(
             allowedTools,
             state,
           );
-
-          const instructions: AgentInstruction[] = [];
 
           // Execute tools that don't need intervention first
           // These will run immediately before any approval requests

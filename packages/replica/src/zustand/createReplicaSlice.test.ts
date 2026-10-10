@@ -20,8 +20,9 @@ interface TestState {
   listsReplica: ReplicaState<string[]>;
 }
 
-const scopeState = { current: 'user-1:personal', trusted: true };
+const scopeState = { canHydrate: true, current: 'user-1:personal', trusted: true };
 const scope: ReplicaScope = {
+  canHydrate: () => scopeState.canHydrate,
   canPersist: () => scopeState.trusted,
   get: () => scopeState.current,
   // The real `use` is `useCacheScope`; a plain getter is enough for these tests.
@@ -88,6 +89,7 @@ const wrapper = ({ children }: PropsWithChildren) =>
   createElement(SWRConfig, { value: { dedupingInterval: 0, provider: () => new Map() } }, children);
 
 beforeEach(() => {
+  scopeState.canHydrate = true;
   scopeState.current = 'user-1:personal';
   scopeState.trusted = true;
 });
@@ -137,7 +139,11 @@ describe('createReplicaSlice', () => {
         }),
       });
       renderHook(() => failing.slice.useSync({ id: 'b' }, { onError }), { wrapper });
-      await waitFor(() => expect(onError).toHaveBeenCalledWith(failure));
+      // The callback also receives the key/scope the failing read was captured
+      // under, so a terminal removal can be bound to the right scope.
+      await waitFor(() =>
+        expect(onError).toHaveBeenCalledWith(failure, { key: 'b', scope: 'user-1:personal' }),
+      );
       expect(failing.store.getState().lists.b).toBeUndefined();
     });
 
@@ -334,6 +340,171 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.a).toEqual(['server']);
     });
 
+    it('does not let a slow hydration resurrect an entry removed while it was in flight', async () => {
+      // A NOT_FOUND / FORBIDDEN response removes the entry (and its row) while
+      // the persisted read is still in flight. That read already holds the old
+      // row, so landing it afterwards would repaint the value just dropped.
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const originalGet = storage.storage.get;
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      storage.storage.get = async (key) => {
+        const row = await originalGet(key);
+        if (key.queryKey === 'a') await held;
+        return row;
+      };
+      const { slice, store } = setup({ storage });
+
+      let hydration!: Promise<boolean>;
+      await act(async () => {
+        hydration = slice.hydrate({ id: 'a' });
+      });
+
+      // The network answers first and drops the entry.
+      act(() => slice.remove('a'));
+      expect(store.getState().lists.a).toBeUndefined();
+
+      // The slow read settles: it must not paint the row the removal dropped.
+      await act(async () => {
+        release();
+        await hydration;
+      });
+
+      expect(store.getState().lists.a).toBeUndefined();
+      expect(store.getState().listsReplica.entries.a).toBeUndefined();
+    });
+
+    it('refuses to hydrate a key that was explicitly removed even if its row is still on disk', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const { slice, store } = setup({ storage });
+
+      act(() => slice.remove('a'));
+      // The delete may not have flushed yet — the row must not come back anyway.
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a' })).toBe(false);
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+
+    it('lets a later server value supersede a removal so the key hydrates again', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const { slice, store } = setup({ storage });
+
+      act(() => slice.remove('a'));
+      // Access restored: the server now answers with a value again.
+      act(() => slice.replace({ id: 'a' }, ['regranted']));
+      expect(store.getState().lists.a).toEqual(['regranted']);
+      // Let the confirmed value reach the persisted row before reading it back.
+      await waitFor(() =>
+        expect(storage.rows.get('user-1:personal|a')?.data).toEqual(['regranted']),
+      );
+
+      // Drop memory the way a scope switch does, then come back: with the
+      // removal superseded, the persisted row may hydrate once more.
+      scopeState.current = 'user-2:personal';
+      act(() => slice.ensureScope('user-2:personal'));
+      scopeState.current = 'user-1:personal';
+      act(() => slice.ensureScope('user-1:personal'));
+
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a' })).toBe(true);
+      });
+      expect(store.getState().lists.a).toEqual(['regranted']);
+    });
+
+    it('reports a keyless (disabled) read as hydrated, so it never looks loading', () => {
+      const { slice } = setup();
+
+      const { result } = renderHook(() => slice.useSync(null), { wrapper });
+
+      expect(result.current.isHydrated).toBe(true);
+      expect(result.current.isValidating).toBe(false);
+    });
+
+    it('keeps the removal guard when a response captured under another scope is discarded', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      // The persisted-row delete is best-effort: simulate it still being pending.
+      storage.storage.remove = async () => {};
+      const { slice, store } = setup({ storage });
+
+      // Scope A removes the entry (and arms its guard).
+      act(() => slice.remove('a'));
+
+      // A response captured under A resolves only after the user switched to B,
+      // so `dispatch` drops it. It must not clear A's guard on the way out.
+      scopeState.current = 'user-2:personal';
+      act(() => slice.replace({ id: 'a' }, ['stale'], 'user-1:personal'));
+
+      // Switching back to A must still refuse to hydrate the stale row.
+      scopeState.current = 'user-1:personal';
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a' })).toBe(false);
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+
+    it('purges the captured scope row for a removal that lands after a scope switch', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const { slice, store } = setup({ storage });
+
+      // The active scope has its own entry loaded.
+      scopeState.current = 'user-2:personal';
+      act(() => slice.replace({ id: 'a' }, ['b-value']));
+      expect(store.getState().lists.a).toEqual(['b-value']);
+
+      // A late NOT_FOUND from a request captured under the previous scope must
+      // not delete the entry that is on screen now…
+      act(() => slice.remove('a', 'user-1:personal'));
+      expect(store.getState().lists.a).toEqual(['b-value']);
+
+      // …but that scope's own persisted row still has to go, or switching back
+      // to it would hydrate the value the server just denied.
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+
+    it('retries an off-scope purge once the captured scope may persist again', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      // The terminal answer lands while writes are still refused.
+      scopeState.current = 'user-2:personal';
+      scopeState.trusted = false;
+      act(() => slice.remove('a', 'user-1:personal'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(storage.rows.get('user-1:personal|a')).toBeDefined();
+
+      // Identity resolves: the next terminal answer must clear the row, not
+      // report a no-op that never deletes it.
+      scopeState.trusted = true;
+      act(() => slice.remove('a', 'user-1:personal'));
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+
+    it('binds the captured key and scope to the error callback', async () => {
+      const fetcher = vi.fn(async () => {
+        throw new Error('not found');
+      });
+      const { slice } = setup({ fetcher });
+      const contexts: { key: string | undefined; scope: string }[] = [];
+
+      scopeState.current = 'user-1:personal';
+      renderHook(
+        () => slice.useSync({ id: 'a' }, { onError: (_error, context) => contexts.push(context) }),
+        { wrapper },
+      );
+
+      await waitFor(() => expect(contexts.length).toBeGreaterThan(0));
+      expect(contexts[0]).toEqual({ key: 'a', scope: 'user-1:personal' });
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.
@@ -444,6 +615,22 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.a).toBeUndefined();
     });
 
+    it('does not hydrate the persisted projection when the runtime opts out', async () => {
+      // An identity-less runtime (e.g. the public Workbench) can only guess the
+      // scope, so it must not read another session's rows back into memory.
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['someone-elses'], updatedAt: 1 });
+      scopeState.canHydrate = false;
+      const { slice, store } = setup({ storage });
+
+      await act(async () => {
+        await slice.hydrate({ id: 'a' });
+      });
+
+      expect(store.getState().lists.a).toBeUndefined();
+      expect(store.getState().listsReplica.entries.a).toBeUndefined();
+    });
+
     it('never persists while the scope is untrusted', async () => {
       scopeState.trusted = false;
       const { slice, storage } = setup();
@@ -452,6 +639,118 @@ describe('createReplicaSlice', () => {
       });
       await new Promise((resolve) => setTimeout(resolve, 10));
       expect(storage.writes).toEqual([]);
+    });
+
+    it('retries a removal whose storage delete failed, instead of treating it as purged', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      const original = storage.storage.remove;
+      let attempts = 0;
+      storage.storage.remove = async (key) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('IndexedDB delete failed');
+        return original(key);
+      };
+
+      // The first delete is rejected by storage: the guard is armed, but the row
+      // is still on disk and must NOT be treated as purged.
+      act(() => slice.remove('a'));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(storage.rows.get('user-1:personal|a')).toBeDefined();
+
+      // A later terminal answer must retry the delete rather than no-op.
+      act(() => slice.remove('a'));
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+      expect(attempts).toBeGreaterThanOrEqual(2);
+    });
+
+    it('retries the storage delete of a removal made while the scope was untrusted', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      // Cold boot: identity is not resolved, so writes are refused and the
+      // delete never reaches storage — the hydration guard is armed all the same.
+      scopeState.trusted = false;
+      act(() => slice.remove('a'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(storage.rows.get('user-1:personal|a')).toBeDefined();
+
+      // Identity resolves: the next removal must clear the row, not no-op.
+      scopeState.trusted = true;
+      act(() => slice.remove('a'));
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+  });
+
+  describe('missing responses', () => {
+    it('applies a response the resource marks as missing as an explicit removal', () => {
+      // A nullable detail (e.g. the acceptance attached to a subject): the
+      // server answering "none" must clear a previously cached value, not let
+      // the merge fall back to it.
+      type NullableState = {
+        notes: Record<string, string[] | null>;
+        notesReplica: ReplicaState<string[] | null>;
+      };
+      const resource = defineReplica<{ id: string }, string[] | null>({
+        key: ({ id }) => id,
+        name: 'nullableNote',
+        scope,
+        version: 1,
+      });
+      const store = createStore<NullableState>()(() => ({
+        notes: {},
+        notesReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<NullableState, { id: string }, string[] | null>(resource, {
+        driver,
+        get: store.getState,
+        isMissing: (note) => note === null,
+        set: (partial) => store.setState(partial),
+        stateKey: 'notesReplica',
+        view: recordLens('notes'),
+      });
+
+      act(() => slice.replace({ id: 'a' }, ['kept']));
+      expect(store.getState().notes.a).toEqual(['kept']);
+
+      act(() => slice.replace({ id: 'a' }, null));
+      expect(store.getState().notes.a).toBeUndefined();
+      expect(store.getState().notesReplica.entries.a).toBeUndefined();
+    });
+
+    it('treats a repeated missing response as a no-op', () => {
+      type NullableState = {
+        notes: Record<string, string[] | null>;
+        notesReplica: ReplicaState<string[] | null>;
+      };
+      const resource = defineReplica<{ id: string }, string[] | null>({
+        key: ({ id }) => id,
+        name: 'nullableNoteRepeat',
+        scope,
+        version: 1,
+      });
+      const store = createStore<NullableState>()(() => ({
+        notes: {},
+        notesReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<NullableState, { id: string }, string[] | null>(resource, {
+        driver,
+        get: store.getState,
+        isMissing: (note) => note === null,
+        set: (partial) => store.setState(partial),
+        stateKey: 'notesReplica',
+        view: recordLens('notes'),
+      });
+
+      act(() => slice.replace({ id: 'a' }, ['kept']));
+      // The first "missing" drops the entry and clears stale storage…
+      expect(slice.replace({ id: 'a' }, null)).toBe(true);
+      // …a poll that still answers "missing" must not re-emit the removal.
+      expect(slice.replace({ id: 'a' }, null)).toBe(false);
+      expect(store.getState().notes.a).toBeUndefined();
     });
   });
 

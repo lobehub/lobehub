@@ -9,6 +9,7 @@ import {
   shouldExposeSelfFeedbackIntentTool,
 } from '@lobechat/builtin-tool-self-iteration';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
+import { getFeatureDisabledToolIds } from '@lobechat/builtin-tools/featureGates';
 import type {
   AgentGroupConfig,
   LobeToolManifest,
@@ -61,6 +62,7 @@ import {
 } from '@/helpers/executionTarget';
 import { buildConnectorManifests } from '@/libs/mcp/buildConnectorManifests';
 import { patchManifestWithPermissions } from '@/libs/mcp/connectorPermissionCheck';
+import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
 import { resolveModelMediaCapabilities } from '@/server/modules/AgentRuntime/resolveModelMediaCapabilities';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 import type { ServerAgentToolsContext } from '@/server/modules/Mecha';
@@ -282,7 +284,7 @@ export const discoverTools = async (
     disableLocalSystem,
     disableSelfFeedbackIntentTool,
     disableTools,
-    disabledPluginIds,
+    disabledPluginIds: requestedDisabledPluginIds,
     discordContext,
     exclusivePluginIds,
     externalFileTypes: rawExternalFileTypes,
@@ -298,6 +300,15 @@ export const discoverTools = async (
     throwIfExecutionAborted,
     topicBoundDeviceId,
   } = input;
+  // Feature-flagged builtin tools (e.g. lobe-dashboard) leave the pool while
+  // their flag is off for this user; a flag read failure keeps them out.
+  const featureFlags = await getServerFeatureFlagsStateFromRuntimeConfig(deps.userId).catch(
+    () => undefined,
+  );
+  const disabledPluginIds = [
+    ...requestedDisabledPluginIds,
+    ...getFeatureDisabledToolIds(featureFlags),
+  ];
 
   let tools: any[] | undefined;
   /** Started once the tool set is known; awaited at the return. */

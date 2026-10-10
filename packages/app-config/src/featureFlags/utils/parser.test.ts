@@ -24,6 +24,11 @@ describe('parseFeatureFlag', () => {
     });
   });
 
+  it('should toggle dashboards with +dashboard / -dashboard', () => {
+    expect(parseFeatureFlag('+dashboard')).toEqual({ dashboard: true });
+    expect(parseFeatureFlag('-dashboard')).toEqual({ dashboard: false });
+  });
+
   it('should hide content with commercial flags', () => {
     const input = '+commercial_hide_github,+commercial_hide_docs';
     expect(parseFeatureFlag(input)).toEqual({

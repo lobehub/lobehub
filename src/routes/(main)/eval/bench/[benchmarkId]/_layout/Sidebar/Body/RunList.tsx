@@ -50,8 +50,8 @@ interface RunListProps {
 const RunList = memo<RunListProps>(({ activeKey, benchmarkId, itemKey }) => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
-  const runList = useEvalStore(runSelectors.runList);
-  const isLoading = useEvalStore(runSelectors.isLoadingRuns);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
+  const isLoading = useEvalStore(runSelectors.isLoadingRuns(benchmarkId));
 
   const sortedRuns = useMemo(
     () =>

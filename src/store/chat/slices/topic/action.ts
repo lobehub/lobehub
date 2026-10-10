@@ -423,6 +423,39 @@ export class ChatTopicActionImpl {
     await switchTopic(newTopicId);
   };
 
+  /**
+   * Fork the active topic from one of its messages: copy the conversation
+   * prefix (first message → `messageId`) into a separate new topic, then switch
+   * to it. The source topic keeps its full history untouched.
+   */
+  forkTopic = async (messageId: string): Promise<string | undefined> => {
+    const { activeTopicId, refreshTopic, switchTopic } = this.#get();
+    if (!activeTopicId) return;
+
+    const topic = topicSelectors.getTopicById(activeTopicId)(this.#get());
+
+    const loadingToast = toast.loading(t('forkLoading', { ns: 'topic' }));
+
+    try {
+      const newTopicId = await topicService.forkTopic({
+        id: activeTopicId,
+        messageId,
+        newTitle: t('forkTitle', { ns: 'topic', title: topic?.title ?? '' }),
+      });
+
+      await refreshTopic();
+      await switchTopic(newTopicId);
+      toast.success(t('forkSuccess', { ns: 'topic' }));
+
+      return newTopicId;
+    } catch (error) {
+      console.error('[forkTopic] Failed to fork topic:', error);
+      toast.error(t('forkFailed', { ns: 'topic' }));
+    } finally {
+      loadingToast.close();
+    }
+  };
+
   importTopic = async (data: string): Promise<string | undefined> => {
     const { activeAgentId, activeGroupId, refreshTopic, switchTopic } = this.#get();
 
@@ -1180,6 +1213,19 @@ export class ChatTopicActionImpl {
           }
         }),
       );
+
+      // Mirror sweep: a run the SERVER has already retired can still leave this
+      // tab holding a `running` local op — its terminal frame never landed (a
+      // lost socket, a hibernated DO buffer, or an intervention continuation
+      // dispatched on a new operation). Such a topic is idle on the server, so it
+      // never appears in the `statuses: ['running']` query above; derive the
+      // candidates from the local op map instead. Fire-and-forget: the sidebar
+      // should not wait on a per-topic server read.
+      void this.#get()
+        .settleAllUnbackedTopicRuns()
+        .catch((err) =>
+          console.error('[cleanupStaleRunningTopics] unbacked local run sweep failed:', err),
+        );
 
       const cleanedCount = cleanedResults.filter(Boolean).length;
 

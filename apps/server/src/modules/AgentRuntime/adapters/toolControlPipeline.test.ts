@@ -195,11 +195,16 @@ describe('beforeToolCall control pipeline', () => {
     },
   );
 
-  it.each([false, true])(
-    'denies before mock/execution and persists attempts=0, queue=%s',
-    async (queue) => {
+  it.each([
+    { queue: false, reason: undefined },
+    { queue: true, reason: undefined },
+    { queue: false, reason: '' },
+    { queue: true, reason: '' },
+  ])(
+    'denies before mock/execution and persists attempts=0, queue=$queue, reason=$reason',
+    async ({ queue, reason }) => {
       queueMode.mockReturnValue(queue);
-      fetchHook.mockImplementation(async () => response('deny'));
+      fetchHook.mockImplementation(async () => response('deny', reason));
       const mock = vi.fn(async (event) => {
         (event as ToolCallHookEvent).mock({ content: 'mock', success: true });
       });
@@ -256,7 +261,7 @@ describe('beforeToolCall control pipeline', () => {
     'preserves the $failure rejection reason in a new $mode tool card',
     async ({ mode, failure, reason }) => {
       fetchHook.mockImplementation(async () =>
-        failure === 'deny' ? response('deny', reason) : new Response('invalid JSON'),
+        failure === 'deny' ? response('deny', reason) : new Response('{"decision":"invalid"}'),
       );
       const fixture = setup([control('control', 'block')]);
       const result =
@@ -549,22 +554,10 @@ describe('beforeToolCall control pipeline', () => {
 
   describe.each([false, true])('control errors, queue=%s', (queue) => {
     it.each([
-      { body: '', status: 200 },
-      { body: null, status: 204 },
-      { body: '{}', status: 200 },
-      { body: 'not JSON', status: 200 },
-      { body: '{"reason":"missing decision"}', status: 200 },
       { body: '{"decision":"ask"}', status: 200 },
       { body: '{"decision":"deny","reason":42}', status: 200 },
-      { body: '{"decision":"allow"}', status: 201 },
       { body: '{"decision":"allow"}', status: 400 },
       { body: '{"decision":"allow"}', status: 500 },
-      ...['allow', 'deny'].map((decision) => ({
-        body: JSON.stringify({
-          hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: decision },
-        }),
-        status: 200,
-      })),
     ])('applies both onError policies to response %#', async ({ body, status }) => {
       queueMode.mockReturnValue(queue);
       fetchHook.mockImplementation(async () => new Response(body, { status }));
@@ -580,6 +573,22 @@ describe('beforeToolCall control pipeline', () => {
       await continued.step();
       expect(continued.execute).toHaveBeenCalledTimes(1);
       expect(continued.execute.mock.calls[0][0].arguments).toBe('{"path":"a"}');
+    });
+
+    it.each([
+      { body: '', status: 200 },
+      { body: null, status: 204 },
+      { body: '{}', status: 200 },
+      { body: 'not JSON', status: 200 },
+      { body: '{"reason":"missing decision"}', status: 200 },
+      { body: '{"decision":"allow"}', status: 201 },
+      { body: '{"hookSpecificOutput":{"permissionDecision":"deny"}}', status: 200 },
+    ])('allows notification responses with onError=block %#', async ({ body, status }) => {
+      queueMode.mockReturnValue(queue);
+      fetchHook.mockImplementation(async () => new Response(body, { status }));
+      const fixture = setup([control('control', 'block')], undefined, queue);
+      await fixture.step();
+      expect(fixture.execute).toHaveBeenCalledTimes(1);
     });
   });
 

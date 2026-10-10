@@ -563,6 +563,14 @@ export interface BuiltinInterventionProps<Arguments = any> {
   interactionMode?: 'approval' | 'custom';
   messageId: string;
   /**
+   * Hold the host's approve action while the intervention cannot show what is
+   * being approved — e.g. its review data is still loading or failed to load.
+   * Pass `true` to block approval and `false` to release it; reject / stop stay
+   * available. Hosts without approval controls ignore it. Only approval-mode
+   * interventions receive it.
+   */
+  onApprovalBlockedChange?: (blocked: boolean) => void;
+  /**
    * Callback to update the arguments before approval
    * This is called when the user modifies the intervention content
    * The approve action will wait for this async callback to complete

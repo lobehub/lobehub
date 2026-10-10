@@ -33,6 +33,7 @@ export const softDeleteMessages = async (
       parentTitle: row.topicId,
       role: row.role,
     },
+    projectId: row.projectId,
     resourceId: row.id,
     resourceType: 'message',
     title: row.content?.trim().slice(0, MESSAGE_TITLE_LENGTH) || null,

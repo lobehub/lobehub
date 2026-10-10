@@ -9,6 +9,14 @@ import { topicMapKey } from '@/store/chat/utils/topicMapKey';
 import { createLocalFileScopeKey, createLocalFileTabId } from './helpers';
 import { PortalViewType } from './initialState';
 
+const dashboardFlag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@/store/serverConfig', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  getServerConfigStoreState: () => ({
+    featureFlags: { enableDashboard: dashboardFlag.enabled },
+  }),
+}));
+
 const localFileTabId = ({
   deviceId,
   filePath,
@@ -270,6 +278,47 @@ describe('chatDockSlice', () => {
           type: PortalViewType.TopicComments,
         },
       ]);
+    });
+  });
+
+  describe('openDashboardWidget', () => {
+    it('opens the widget view, carrying the dry run it was opened from', () => {
+      const { result } = renderHook(() => useChatStore());
+
+      act(() => {
+        result.current.clearPortalStack();
+        result.current.openDashboardWidget('widget-1', 'run-1');
+      });
+
+      expect(result.current.showPortal).toBe(true);
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        runId: 'run-1',
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-1',
+      });
+
+      act(() => {
+        result.current.openDashboardWidget('widget-2');
+      });
+      expect(chatPortalSelectors.dashboardWidgetView(result.current)).toEqual({
+        type: PortalViewType.DashboardWidget,
+        widgetId: 'widget-2',
+      });
+    });
+
+    it('opens nothing while the dashboard feature flag is off', () => {
+      const { result } = renderHook(() => useChatStore());
+      dashboardFlag.enabled = false;
+      try {
+        act(() => {
+          result.current.clearPortalStack();
+          result.current.openDashboardWidget('widget-1', 'run-1');
+        });
+        expect(chatPortalSelectors.dashboardWidgetView(result.current)).toBeFalsy();
+        expect(result.current.portalStack).toEqual([]);
+      } finally {
+        dashboardFlag.enabled = true;
+      }
     });
   });
 

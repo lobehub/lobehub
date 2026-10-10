@@ -22,6 +22,7 @@ import { BrowserManifest } from '@lobechat/builtin-tool-browser';
 import { CalculatorManifest } from '@lobechat/builtin-tool-calculator/manifest';
 import { CloudSandboxManifest } from '@lobechat/builtin-tool-cloud-sandbox';
 import { CredsManifest } from '@lobechat/builtin-tool-creds';
+import { DashboardManifest } from '@lobechat/builtin-tool-dashboard';
 import {
   GoalManifest,
   GoalReportManifest,
@@ -557,6 +558,13 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
   {
     identifier: TaskManifest.identifier,
     manifest: TaskManifest,
+    type: 'builtin',
+  },
+  {
+    // Opt-in: pin it in the Tools popover, or the activator enables it when a
+    // user asks for monitoring — not a default so ordinary turns stay lean.
+    identifier: DashboardManifest.identifier,
+    manifest: DashboardManifest,
     type: 'builtin',
   },
   {

@@ -1,20 +1,15 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import type { IconProps } from '@lobehub/ui';
 import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
-import { GlobeOffIcon, SkillsIcon } from '@lobehub/ui/icons';
+import { SkillsIcon } from '@lobehub/ui/icons';
 import {
-  Brain,
   CheckIcon,
   ChevronRight,
   Cloud,
-  CloudCog,
   FileUp,
-  Globe,
   LibraryBig,
   PlusIcon,
-  SearchCheck,
   Settings2Icon,
   TargetIcon,
   TypeIcon,
@@ -29,7 +24,6 @@ import { useMediaUploadAbility } from '@/hooks/useMediaUploadAbility';
 import { useModelSupportToolUse } from '@/hooks/useModelSupportToolUse';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
-import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { useFileStore } from '@/store/file';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
@@ -52,7 +46,6 @@ import { type ActionDropdownMenuItems } from '../components/ActionDropdown';
 import { ChatInputAction } from '../components/ChatInputAction';
 import { useDetailPopoverState } from '../components/useDetailPopoverState';
 import { useControls as useKnowledgeControls } from '../Knowledge/useControls';
-import { useMemoryEnabled } from '../Memory/useMemoryEnabled';
 import { useControls as useToolsControls } from '../Tools/useControls';
 
 const hotArea = css`
@@ -80,43 +73,6 @@ const activeLabel = css`
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-`;
-
-const searchOptionRow = css`
-  display: flex;
-  gap: 10px;
-  align-items: center;
-
-  width: 100%;
-  min-width: 220px;
-  max-width: 320px;
-
-  .title {
-    line-height: 1.25;
-  }
-
-  .desc {
-    margin-block-start: 3px;
-
-    font-size: 12px;
-    line-height: 1.35;
-    color: ${cssVar.colorTextDescription};
-    white-space: normal;
-  }
-`;
-
-const searchIconBox = css`
-  display: flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-
-  width: 36px;
-  height: 36px;
-  border: 1px solid ${cssVar.colorBorderSecondary};
-  border-radius: 8px;
-
-  background: ${cssVar.colorBgContainer};
 `;
 
 const labelWithChip = css`
@@ -175,9 +131,6 @@ const gatewayModeInfoCard = css`
     color: ${cssVar.colorTextSecondary};
   }
 `;
-
-const activeIcon = (icon: IconProps['icon'], active?: boolean): IconProps['icon'] =>
-  active ? <Icon color={cssVar.colorInfo} icon={icon} size={16} /> : icon;
 
 type DropdownItemWithPopover = NonNullable<ActionDropdownMenuItems>[number] & {
   label?: ReactNode;
@@ -305,14 +258,11 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
   const skillActivateMode = useAgentStore((s) =>
     chatConfigByIdSelectors.getSkillActivateModeById(agentId)(s),
   );
-  const [searchMode, useModelBuiltinSearch, disableGatewayMode] = useAgentStore((s) => [
-    chatConfigByIdSelectors.getSearchModeById(agentId)(s),
-    chatConfigByIdSelectors.getUseModelBuiltinSearchById(agentId)(s),
-    chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
-  ]);
+  const disableGatewayMode = useAgentStore(
+    (s) => chatConfigByIdSelectors.getChatConfigById(agentId)(s).disableGatewayMode,
+  );
   const isGatewayModeEnabled = (disableGatewayMode ?? defaultDisableGatewayMode) !== true;
 
-  const isMemoryEnabled = useMemoryEnabled(agentId);
   const [showTypoBar, setShowTypoBar] = useChatInputStore((s) => [s.showTypoBar, s.setShowTypoBar]);
   const editor = useChatInputStore((s) => s.editor);
   const routeLargeFilesToLocalPaths = useLargeFileLocalPath(agentId, editor);
@@ -341,42 +291,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     pinnedCount: skillPinnedCount,
   } = useToolsControls({ closeDropdown });
 
-  const isModelBuiltinSearchInternal = useAiInfraStore(
-    aiModelSelectors.isModelBuiltinSearchInternal(model, provider),
-  );
-  const isModelHasBuiltinSearch = useAiInfraStore(
-    aiModelSelectors.isModelHasBuiltinSearchConfig(model, provider),
-  );
-  const isProviderHasBuiltinSearch = useAiInfraStore(
-    aiProviderSelectors.isProviderHasBuiltinSearchConfig(provider),
-  );
-  const showProviderSearch =
-    !isModelBuiltinSearchInternal && (isModelHasBuiltinSearch || isProviderHasBuiltinSearch);
-
-  // Derived active search option
-  const activeSearchOption: 'off' | 'app' | 'provider' =
-    searchMode === 'off' ? 'off' : useModelBuiltinSearch ? 'provider' : 'app';
-
-  const handleToggleMemory = useCallback(
-    async (enabled: boolean) => {
-      await updateAgentChatConfig({ memory: { enabled } });
-    },
-    [updateAgentChatConfig],
-  );
-
-  const handleSelectSearch = useCallback(
-    async (option: 'off' | 'app' | 'provider') => {
-      if (option === 'off') {
-        await updateAgentChatConfig({ searchMode: 'off', useModelBuiltinSearch: false });
-      } else if (option === 'app') {
-        await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: false });
-      } else {
-        await updateAgentChatConfig({ searchMode: 'auto', useModelBuiltinSearch: true });
-      }
-    },
-    [updateAgentChatConfig],
-  );
-
   const handleToggleGatewayMode = useCallback(
     async (checked: boolean) => {
       await updateAgentChatConfig({ disableGatewayMode: checked ? false : true });
@@ -403,22 +317,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       ) : (
         label
       );
-
-    const renderSearchOption = (
-      icon: ReactNode,
-      title: string,
-      description: string,
-      active: boolean,
-    ) => (
-      <div className={cx(searchOptionRow)}>
-        <div className={cx(searchIconBox)}>{icon}</div>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div className="title">{title}</div>
-          {description && <div className="desc">{description}</div>}
-        </div>
-        {active && <Icon icon={CheckIcon} size={14} />}
-      </div>
-    );
 
     const renderLabelWithCount = (label: string, count: number, prefix?: string) =>
       count > 0 || prefix ? (
@@ -539,88 +437,10 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
           ]
         : [];
 
-    // Memory / Web Search / Skills form one group (no dividers between them),
-    // hidden entirely when the user can't configure resources.
-    const coreItems: ActionDropdownMenuItems = canConfigureResource
-      ? [
-          // Memory toggle — trailing switch; toggle by clicking the switch or the whole row
-          {
-            checked: Boolean(isMemoryEnabled),
-            icon: Brain,
-            key: 'memory',
-            label: t('memory.title'),
-            onCheckedChange: handleToggleMemory,
-            type: 'switch',
-          },
-          // Web search: simple toggle when 2 options, submenu when 3
-          ...(showProviderSearch
-            ? [
-                {
-                  children: [
-                    {
-                      key: 'search-off',
-                      label: renderSearchOption(
-                        <Icon icon={GlobeOffIcon} size={18} />,
-                        t('plus.search.off'),
-                        t('plus.search.offDesc'),
-                        activeSearchOption === 'off',
-                      ),
-                      onClick: () => handleSelectSearch('off'),
-                    },
-                    {
-                      key: 'search-app',
-                      label: renderSearchOption(
-                        <Icon
-                          color={activeSearchOption === 'app' ? cssVar.colorInfo : undefined}
-                          icon={SearchCheck}
-                          size={18}
-                        />,
-                        t('plus.search.appSearch'),
-                        t('plus.search.appSearchDesc'),
-                        activeSearchOption === 'app',
-                      ),
-                      onClick: () => handleSelectSearch('app'),
-                    },
-                    {
-                      key: 'search-provider',
-                      label: renderSearchOption(
-                        <Icon
-                          color={activeSearchOption === 'provider' ? cssVar.colorInfo : undefined}
-                          icon={CloudCog}
-                          size={18}
-                        />,
-                        t('plus.search.modelSearch'),
-                        t('plus.search.modelSearchDesc'),
-                        activeSearchOption === 'provider',
-                      ),
-                      onClick: () => handleSelectSearch('provider'),
-                    },
-                  ],
-                  extra: <Icon className="lobe-submenu-chevron" icon={ChevronRight} size={16} />,
-                  icon: activeIcon(
-                    activeSearchOption === 'off' ? GlobeOffIcon : Globe,
-                    activeSearchOption !== 'off',
-                  ),
-                  key: 'search-group',
-                  label: t('search.title'),
-                } as ActionDropdownMenuItems[number],
-              ]
-            : [
-                // Web search toggle — trailing switch; toggle by clicking the switch or the whole row
-                {
-                  checked: activeSearchOption !== 'off',
-                  icon: Globe,
-                  key: 'search-toggle',
-                  label: t('search.title'),
-                  onCheckedChange: (checked: boolean) =>
-                    handleSelectSearch(checked ? 'app' : 'off'),
-                  type: 'switch',
-                } as ActionDropdownMenuItems[number],
-              ]),
-          // Skills (with "Add Skills..." merged in) stays in the same group.
-          ...toolsItems,
-        ]
-      : [];
+    // Memory and web search are activation entries of the Tools popover now: they
+    // live in its "Auto" group, can be disabled there, and carry their own settings,
+    // so this menu only owns the route to them.
+    const coreItems: ActionDropdownMenuItems = canConfigureResource ? [...toolsItems] : [];
 
     // Formatting toolbar is always available; Agent Gateway + advanced params
     // only when the user can configure resources.
@@ -713,7 +533,6 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
       .flatMap((group, index) => (index === 0 ? group : [{ type: 'divider' as const }, ...group]));
   }, [
     agentId,
-    activeSearchOption,
     canConfigureResource,
     enableGoals,
     canUploadImage,
@@ -723,19 +542,15 @@ const usePlusMenuItems = ({ close }: { close: () => void }): ActionDropdownMenuI
     enableFC,
     enableGatewayMode,
     enableKnowledgeBase,
-    handleSelectSearch,
     handleToggleGatewayMode,
-    handleToggleMemory,
     handleToggleParams,
     isAgentModeEnabled,
     isDark,
     isGatewayModeEnabled,
-    isMemoryEnabled,
     isParamsPanelActive,
     isSkillPolicyMenuOpen,
     knowledgeEnabledCount,
     setShowTypoBar,
-    showProviderSearch,
     showTypoBar,
     skillActivateMode,
     skillAutoCount,

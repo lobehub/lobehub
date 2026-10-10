@@ -2,9 +2,9 @@ import { isDesktop, randomAgentName } from '@lobechat/const';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 import { getHeterogeneousTypeLabel } from '@lobechat/heterogeneous-agents';
 import {
+  applyWorkingDirByDevicePatch,
   isChatGroupSessionId,
   type LobeAgentAgencyConfig,
-  pruneWorkingDirByDeviceDeletes,
 } from '@lobechat/types';
 import { toast } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
@@ -23,7 +23,7 @@ import {
   revalidateReplica,
 } from '@/libs/replica';
 import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
-import { agentConfigKeys, builtinAgentKeys } from '@/libs/swr/keys';
+import { agentConfigKeys } from '@/libs/swr/keys';
 import { getCacheScope } from '@/libs/swr/useCacheScope';
 import type { AvailableAgentItem, CreateAgentParams, CreateAgentResult } from '@/services/agent';
 import { agentService, AVAILABLE_AGENTS_CONTEXT_QUERY_LIMIT } from '@/services/agent';
@@ -55,24 +55,24 @@ import { setLocalAgentWorkingDirectory } from '../../utils/localAgentWorkingDire
 import type { AgentSliceState, LoadingState, SaveStatus } from './initialState';
 import { agentConfigResource } from './projection';
 
-export type AgentMetaUpdate = Partial<
-  Pick<
-    AgentItem,
-    | 'avatar'
-    | 'backgroundColor'
-    | 'description'
-    | 'marketIdentifier'
-    | 'metadata'
-    | 'name'
-    | 'profile'
-    | 'societyId'
-    | 'tags'
-    | 'title'
-  >
->;
-type AgencyConfigPatch = PartialDeep<LobeAgentAgencyConfig>;
+const AGENT_META_KEYS = [
+  'avatar',
+  'backgroundColor',
+  'description',
+  'marketIdentifier',
+  'metadata',
+  'name',
+  'profile',
+  'societyId',
+  'tags',
+  'title',
+] as const satisfies readonly (keyof AgentItem)[];
+const AGENT_META_FIELDS: ReadonlySet<string> = new Set(AGENT_META_KEYS);
 
+export type AgentMetaUpdate = Partial<Pick<AgentItem, (typeof AGENT_META_KEYS)[number]>>;
 interface AgentConfigUpdateOptions {
+  /** Devices whose directory selection was explicitly edited, never cached sibling entries. */
+  replaceWorkingDirDeviceIds?: string[];
   /** Propagate the persistence failure so a scoped editor can render failed + Retry. */
   rethrow?: boolean;
   /** Keep generic error messaging for ordinary config controls. @default true */
@@ -84,48 +84,35 @@ interface AgentMetaUpdateOptions {
   rethrow?: boolean;
 }
 
-const preserveWorkingDirDeleteMarkers = (
-  merged: LobeAgentAgencyConfig,
-  patch: AgencyConfigPatch,
-): void => {
-  const incoming = patch.workingDirByDevice;
-  if (!incoming) return;
-
-  const deletions = Object.keys(incoming).filter((key) => incoming[key] === undefined);
-  if (deletions.length === 0) return;
-
-  const workingDirByDevice = {
-    ...merged.workingDirByDevice,
-  } as Record<string, string | undefined>;
-
-  for (const key of deletions) {
-    workingDirByDevice[key] = undefined;
-  }
-
-  merged.workingDirByDevice = workingDirByDevice as Record<string, string>;
-};
-
 /**
  * Deep-merge a partial config into the current one. `profile` is replaced as a
- * whole and `undefined` working directories are deletes (see the call sites).
+ * whole and explicitly edited working directory selections are replaced atomically.
  * Returns `current` itself when nothing changed, so readers keep their reference.
  */
 const mergeAgentConfig = (
   current: PartialDeep<AgentItem> | undefined,
   config: PartialDeep<LobeAgentConfig>,
+  options?: { replaceWorkingDirDeviceIds?: string[]; workingDirByDeviceSnapshot?: boolean },
 ): PartialDeep<AgentItem> => {
-  if (!current) return config;
-  const { value } = produce({ value: current }, (draft) => {
+  const { value } = produce({ value: current ?? {} }, (draft) => {
     draft.value = merge(draft.value, config);
     // The character sheet is authored as one document — `AgentModel`
     // replaces it rather than merging — so mirror that here, or a trait the
     // user just cleared reappears until the next full fetch.
     if (Object.hasOwn(config, 'profile')) draft.value.profile = config.profile;
-    // merge() can't drop keys; honor `undefined` as a per-device delete so
-    // clearing a working directory takes effect optimistically.
-    pruneWorkingDirByDeviceDeletes(draft.value.agencyConfig, config.agencyConfig);
+    const agencyConfig = draft.value.agencyConfig;
+    if (agencyConfig && options?.workingDirByDeviceSnapshot) {
+      // Complete server snapshots also remove device entries omitted by the server.
+      agencyConfig.workingDirByDevice = config.agencyConfig?.workingDirByDevice;
+    } else {
+      applyWorkingDirByDevicePatch(
+        agencyConfig,
+        config.agencyConfig,
+        options?.replaceWorkingDirDeviceIds,
+      );
+    }
   });
-  return isEqual(current, value) ? current : value;
+  return current && isEqual(current, value) ? current : value;
 };
 
 /** `useFetchAgentConfig` result: replica sync flags plus the SWR-era aliases. */
@@ -683,13 +670,20 @@ export class AgentSliceActionImpl {
    * stores already fetched). In-memory only: the persisted row holds confirmed
    * server values, written through `#replaceConfirmedAgentConfig`.
    */
-  internal_dispatchAgentMap = (id: string, config: PartialDeep<LobeAgentConfig>): void => {
-    this.#config.update(id, (current) => mergeAgentConfig(current, config), { persist: false });
+  internal_dispatchAgentMap = (
+    id: string,
+    config: PartialDeep<LobeAgentConfig>,
+    options?: { replaceWorkingDirDeviceIds?: string[]; workingDirByDeviceSnapshot?: boolean },
+  ): void => {
+    this.#config.update(id, (current) => mergeAgentConfig(current, config, options), {
+      persist: false,
+    });
   };
 
   #mergeLatestAgencyConfigPatch = (
     id: string,
     data: PartialDeep<LobeAgentConfig>,
+    replaceWorkingDirDeviceIds: string[] = [],
   ): PartialDeep<LobeAgentConfig> => {
     const agencyConfigPatch = data.agencyConfig;
     if (!agencyConfigPatch) return data;
@@ -698,10 +692,18 @@ export class AgentSliceActionImpl {
     const agencyConfig = merge(
       currentAgencyConfig ?? {},
       agencyConfigPatch,
-    ) as LobeAgentAgencyConfig;
+    ) as PartialDeep<LobeAgentAgencyConfig>;
 
-    pruneWorkingDirByDeviceDeletes(agencyConfig, agencyConfigPatch);
-    preserveWorkingDirDeleteMarkers(agencyConfig, agencyConfigPatch);
+    // Settings editors may spread a stale agencyConfig. Only directory edits
+    // explicitly identify devices whose selections should be written.
+    delete agencyConfig.workingDirByDevice;
+    const directoryPatch = agencyConfigPatch.workingDirByDevice;
+    if (directoryPatch) {
+      const entries = replaceWorkingDirDeviceIds
+        .filter((deviceId) => Object.hasOwn(directoryPatch, deviceId))
+        .map((deviceId) => [deviceId, directoryPatch[deviceId]]);
+      if (entries.length > 0) agencyConfig.workingDirByDevice = Object.fromEntries(entries);
+    }
 
     return { ...data, agencyConfig };
   };
@@ -713,20 +715,26 @@ export class AgentSliceActionImpl {
     options?: AgentConfigUpdateOptions,
   ): Promise<void> => {
     const { internal_dispatchAgentMap, updateSaveStatus } = this.#get();
-    const mergedData = this.#mergeLatestAgencyConfigPatch(id, data);
+    const replaceWorkingDirDeviceIds = options?.replaceWorkingDirDeviceIds;
+    const mergedData = this.#mergeLatestAgencyConfigPatch(id, data, replaceWorkingDirDeviceIds);
     const scope = getCacheScope();
 
     // 1. Optimistic update (instant UI feedback)
-    internal_dispatchAgentMap(id, mergedData);
+    internal_dispatchAgentMap(id, mergedData, { replaceWorkingDirDeviceIds });
     updateSaveStatus('saving');
 
     try {
       // 2. API call returns updated agent data
-      const result = await agentService.updateAgentConfig(id, mergedData, signal);
+      const result = await agentService.updateAgentConfig(
+        id,
+        mergedData,
+        signal,
+        replaceWorkingDirDeviceIds,
+      );
 
       // 3. Apply returned data, then invalidate the SWR key for later subscribers.
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent);
+        internal_dispatchAgentMap(id, result.agent, { workingDirByDeviceSnapshot: true });
         const confirmed = this.#get().agentMap[id];
         if (confirmed) this.#replaceConfirmedAgentConfig(id, scope, confirmed);
         // Refresh agent:config so cached model A cannot replay after a
@@ -780,10 +788,17 @@ export class AgentSliceActionImpl {
 
       // 3. Apply returned data, then seed related caches for later subscribers.
       if (result?.success && result.agent) {
-        internal_dispatchAgentMap(id, result.agent);
+        // Metadata saves run independently of config saves. Their full server
+        // response may predate a newer config, so confirm only metadata fields.
+        const confirmedMeta = Object.fromEntries(
+          Object.entries(result.agent).filter(
+            ([key]) => key === 'id' || AGENT_META_FIELDS.has(key),
+          ),
+        );
+        internal_dispatchAgentMap(id, confirmedMeta);
         const confirmed = this.#get().agentMap[id];
         if (confirmed) this.#replaceConfirmedAgentConfig(id, scope, confirmed);
-        await this.#get().internal_refreshAgentConfig(id, result.agent, scope);
+        await this.#get().internal_refreshAgentConfig(id, confirmed as LobeAgentConfig, scope);
         void revalidateReplica(agentListResource);
         this.#get().invalidateAvailableAgents();
       }
@@ -818,12 +833,8 @@ export class AgentSliceActionImpl {
      * other mutations still need a network refresh.
      */
     if (updatedAgent) {
-      await Promise.all(
-        slugs.map((slug) =>
-          mutate(builtinAgentKeys.init(slug, scope), updatedAgent as AgentItem, {
-            revalidate: false,
-          }),
-        ),
+      slugs.forEach((slug) =>
+        this.#get().internal_replaceBuiltinAgent(slug, updatedAgent as AgentItem, scope),
       );
       return;
     }

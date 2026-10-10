@@ -47,6 +47,7 @@ import { agentDocumentRouteMeta } from '@/features/AgentDocumentPage/routeMeta';
 import { goalDetailRouteMeta, goalsRouteMeta } from '@/features/AgentGoals/routeMeta';
 import { taskRouteMeta, tasksRouteMeta } from '@/features/AgentTasks/routeMeta';
 import { agentsRouteMeta } from '@/features/AgentViewAll/routeMeta';
+import { dashboardRouteMeta, dashboardsRouteMeta } from '@/features/Dashboard/routeMeta';
 import { pageRouteMeta } from '@/features/Pages/routeMeta';
 import {
   projectConversationRouteMeta,
@@ -75,6 +76,7 @@ import {
 import AppShellSkeleton, { APP_SHELL_FALLBACK_ID } from '@/spa/BootShell/AppShellSkeleton';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { agentChatTopicListLoader } from '@/spa/router/agentChatTopicListLoader';
+import { channelDataLoader } from '@/spa/router/channelDataLoader';
 import { pageListLoader } from '@/spa/router/pageListLoader';
 import { NoRouteSkeleton, routeMeta } from '@/spa/router/routeMeta';
 import { SettingsTabs } from '@/store/global/initialState';
@@ -215,6 +217,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Channel',
             ),
             handle: { meta: agentChannelRouteMeta },
+            loader: channelDataLoader,
             path: 'channel',
           },
           {
@@ -223,6 +226,7 @@ export const sharedMainAreaChildren: RouteObject[] = [
               'Desktop > Chat > Channel Platform',
             ),
             handle: { meta: agentChannelRouteMeta },
+            loader: channelDataLoader,
             path: 'channel/:platform',
           },
           {
@@ -997,6 +1001,39 @@ export const sharedMainAreaChildren: RouteObject[] = [
     path: 'projects',
   },
 
+  // Personal dashboards (free-form monitoring boards)
+  {
+    children: [
+      {
+        element: dynamicElement(() => import('@/routes/(main)/dashboard'), 'Desktop > Dashboards', {
+          preloadId: 'dashboard',
+        }),
+        handle: { meta: dashboardsRouteMeta },
+        index: true,
+      },
+      {
+        element: dynamicElement(
+          () => import('@/routes/(main)/dashboard/[dashboardId]'),
+          'Desktop > Dashboard Detail',
+          { preloadId: 'dashboard' },
+        ),
+        handle: { meta: dashboardRouteMeta },
+        path: ':dashboardId',
+      },
+    ],
+    // Personal-only, and off unless the `dashboard` feature flag is on: the gate
+    // leaves for home inside a workspace or while the flag is off.
+    element: dynamicLayout(
+      () => import('@/routes/(main)/dashboard/_layout'),
+      'Desktop > Dashboards > Layout',
+      {
+        preloadId: 'dashboard',
+      },
+    ),
+    errorElement: <ErrorBoundary resetPath=".." />,
+    path: 'dashboard',
+  },
+
   // Task workspace routes (cross-agent)
   {
     children: [
@@ -1037,6 +1074,35 @@ export const sharedMainAreaChildren: RouteObject[] = [
         ),
         handle: { meta: goalsRouteMeta },
         path: 'goals',
+      },
+      {
+        children: [
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/project/[projectId]/dashboard'),
+              'Desktop > Project Dashboards',
+              { preloadId: 'dashboard' },
+            ),
+            handle: { meta: dashboardsRouteMeta },
+            index: true,
+          },
+          {
+            element: dynamicElement(
+              () => import('@/routes/(main)/project/[projectId]/dashboard/[dashboardId]'),
+              'Desktop > Project Dashboard Detail',
+              { preloadId: 'dashboard' },
+            ),
+            handle: { meta: dashboardRouteMeta },
+            path: ':dashboardId',
+          },
+        ],
+        // Off unless the `dashboard` feature flag is on: the gate leaves for the project.
+        element: dynamicLayout(
+          () => import('@/routes/(main)/project/[projectId]/dashboard/_layout'),
+          'Desktop > Project Dashboards > Layout',
+          { preloadId: 'dashboard' },
+        ),
+        path: 'dashboard',
       },
       {
         children: [

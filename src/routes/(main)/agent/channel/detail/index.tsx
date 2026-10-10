@@ -20,7 +20,12 @@ import {
 import { keepPendingConnectResult, toTestResult } from './actionResults';
 import Body from './Body';
 import Footer from './Footer';
-import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
+import {
+  getChannelFormValues,
+  mergeCredentialsForSave,
+  mergeSettingsWithDefaults,
+  shouldAdoptIncomingConfig,
+} from './formState';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -250,11 +255,22 @@ const PlatformDetail = memo<PlatformDetailProps>(
       stopConnectPolling();
     }, [platformDef.id, stopConnectPolling]);
 
-    // Sync form with saved config
+    // Sync form with saved config. The provider list is replica-backed, so on a
+    // revisit the form paints the persisted config first and the live fetch
+    // replaces it in the background. Adopting that background copy while the
+    // user is mid-edit would silently discard their input, so a replacement of
+    // the *same* provider is ignored until the form is clean again (after a
+    // save / discard, or when a different provider arrives).
+    const previousConfigRef = useRef<CurrentConfig | undefined>(undefined);
     useEffect(() => {
+      const previous = previousConfigRef.current;
+      previousConfigRef.current = currentConfig;
+
+      if (!shouldAdoptIncomingConfig(previous, currentConfig, isDirty)) return;
+
       form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
-    }, [currentConfig, form, platformDef.schema]);
+    }, [currentConfig, form, platformDef.schema, isDirty]);
 
     useEffect(() => {
       if (!currentConfig?.enabled) {
@@ -295,10 +311,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
           settings: rawSettings = {},
         } = values;
 
-        // Strip undefined values from credentials (optional fields left empty by antd form)
-        const credentials = Object.fromEntries(
-          Object.entries(rawCredentials).filter(([, v]) => v !== undefined && v !== ''),
-        );
+        // The form may be seeded from the credential-trimmed persisted provider,
+        // so carry any credential key it does not mention from the config the
+        // form was seeded with; the server replaces the blob wholesale and would
+        // otherwise delete those keys. An explicitly cleared field still wins.
+        const credentials = mergeCredentialsForSave(currentConfig?.credentials, rawCredentials);
         const settings = mergeSettingsWithDefaults(
           platformDef.schema,
           omitUndefinedValues(rawSettings),
@@ -365,7 +382,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
         setTestResult(undefined);
 
         try {
-          const { applicationId, credentials } = params;
+          const { applicationId, credentials: authCredentials } = params;
+          const credentials = mergeCredentialsForSave(currentConfig?.credentials, authCredentials);
           const settings = mergeSettingsWithDefaults(
             platformDef.schema,
             omitUndefinedValues(form.getValue('settings') || {}),

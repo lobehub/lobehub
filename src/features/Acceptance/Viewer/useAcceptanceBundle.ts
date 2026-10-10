@@ -1,19 +1,33 @@
-import { useEffect } from 'react';
+import type { AcceptanceBundle } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import { useClientDataSWR } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
-import { verifyService } from '@/services/verify';
-
+import { useAcceptanceInitialBundle } from './AcceptanceInitialBundle';
 import { LIVE_ACCEPTANCE_STATUSES } from './verdict';
 
-const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
-  revalidateOnFocus: true,
-  revalidateOnReconnect: true,
-} as const;
+/** Poll cadence of a still-moving acceptance round. */
+const ACCEPTANCE_BUNDLE_POLL_INTERVAL = 5000;
+
+/** What `useAcceptanceBundle` hands its readers — the former SWR response shape. */
+export interface AcceptanceBundleSync {
+  /** The bundle from the replica view; `undefined` until hydrated or fetched. */
+  data: AcceptanceBundle | undefined;
+  error: unknown;
+  /** Nothing to show yet, and a hydration or fetch is still outstanding. */
+  isLoading: boolean;
+  isValidating: boolean;
+  /** Re-read the bundle and resolve with the freshly read value. */
+  mutate: () => Promise<AcceptanceBundle | undefined>;
+}
 
 /**
- * The acceptance bundle, revalidating on focus/reconnect as a live decision
- * surface.
+ * The acceptance bundle, read from the verify store's replica of
+ * `acceptanceBundleMap[acceptanceId]` — the local projection paints on the
+ * first frame, the network confirms behind it.
+ *
+ * The bundle is a LIVE decision surface (rounds run and reviews land while the
+ * reviewer is away), so the sync revalidates on focus/reconnect and polls every
+ * 5s while the aggregate is still moving.
  *
  * `poll: false` is for a surface that reads a bundle only as a DETAIL view —
  * the goal result page opens one per task row — where the live 5s poll would
@@ -21,26 +35,56 @@ const ACCEPTANCE_BUNDLE_SWR_CONFIG = {
  * revalidation (returning to the tab still refreshes) and leaves the always-on
  * polling to the acceptance page itself.
  */
-export const useAcceptanceBundle = (acceptanceId: string | null, options?: { poll?: boolean }) => {
+export const useAcceptanceBundle = (
+  acceptanceId: string | null,
+  options?: { poll?: boolean },
+): AcceptanceBundleSync => {
   const poll = options?.poll ?? true;
-  const swr = useClientDataSWR(
-    acceptanceId ? verifyKeys.acceptanceBundle(acceptanceId) : null,
-    () => verifyService.getAcceptanceBundle(acceptanceId!),
-    ACCEPTANCE_BUNDLE_SWR_CONFIG,
+  const useFetchAcceptanceBundle = useVerifyStore((s) => s.useFetchAcceptanceBundle);
+  const replicaData = useVerifyStore((s) =>
+    acceptanceId ? s.acceptanceBundleMap[acceptanceId] : undefined,
   );
+  // The Workbench SSR loader hands its authorized bundle down as request-local
+  // context data; it fills the first paint (server + hydration) until the live
+  // replica holds a value of its own.
+  const initial = useAcceptanceInitialBundle();
 
-  const status = swr.data?.acceptance.status;
-  useEffect(() => {
-    if (!poll) return;
-    if (!status || !LIVE_ACCEPTANCE_STATUSES.has(status)) return;
-    const timer = setInterval(() => void swr.mutate(), 5000);
-    return () => clearInterval(timer);
-  }, [poll, status, swr.mutate]);
+  // The poll follows the LIVE replica, not the static loader seed: a snapshot
+  // cannot know whether the round is still moving.
+  const status = replicaData?.acceptance.status;
+  const polling = poll && !!status && LIVE_ACCEPTANCE_STATUSES.has(status);
 
-  return swr;
+  const sync = useFetchAcceptanceBundle(acceptanceId, {
+    refreshInterval: polling ? ACCEPTANCE_BUNDLE_POLL_INTERVAL : 0,
+  });
+
+  /**
+   * A terminal answer supersedes the loader bundle: once the server says the
+   * acceptance is deleted (NOT_FOUND) or no longer ours (FORBIDDEN), the
+   * immutable seed must not be re-exposed behind the entry the replica just
+   * dropped — the gate would keep painting (and polling) a bundle the server no
+   * longer serves instead of its terminal state.
+   */
+  const terminal =
+    isTrpcErrorCode(sync.error, 'NOT_FOUND') || isTrpcErrorCode(sync.error, 'FORBIDDEN');
+  const seeded =
+    !terminal && initial && initial.acceptanceId === acceptanceId ? initial.bundle : undefined;
+  const data = replicaData ?? seeded;
+
+  return {
+    data,
+    error: sync.error,
+    // A read with no id has nothing to load — never report it as loading.
+    isLoading: !!acceptanceId && !data && !sync.error && (sync.isValidating || !sync.isHydrated),
+    isValidating: sync.isValidating,
+    mutate: async () => {
+      await sync.revalidate();
+      return acceptanceId ? useVerifyStore.getState().acceptanceBundleMap[acceptanceId] : undefined;
+    },
+  };
 };
 
-type AcceptanceBundleData = Awaited<ReturnType<typeof verifyService.getAcceptanceBundle>>;
+type AcceptanceBundleData = AcceptanceBundle;
 
 /** An evidence's current file URL, wherever in the bundle (a check or its history) it sits. */
 export const findEvidenceFileUrl = (

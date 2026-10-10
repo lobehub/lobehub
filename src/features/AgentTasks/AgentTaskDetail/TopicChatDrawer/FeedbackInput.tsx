@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { AttachmentUploadButton } from '@/features/AttachmentInput';
 import OpStatusTray from '@/features/Conversation/ChatInput/OpStatusTray';
+import { useConversationChatInputUiState } from '@/features/Conversation/ChatInput/useConversationChatInputUiState';
 import { useConversationResourceAccess } from '@/features/Conversation/hooks/useConversationResourceAccess';
 import { useConversationStore } from '@/features/Conversation/store';
 import { EditorCanvas } from '@/features/EditorCanvas';
@@ -30,6 +31,7 @@ const FeedbackInput = memo<FeedbackInputProps>(
     const { t } = useTranslation('chat');
     const editor = useEditor();
     const sendMessage = useConversationStore((s) => s.sendMessage);
+    const stopGenerating = useConversationStore((s) => s.stopGenerating);
     const [submitting, setSubmitting] = useState(false);
     const [hasContent, setHasContent] = useState(false);
     const [hasAttachments, setHasAttachments] = useState(false);
@@ -40,6 +42,14 @@ const FeedbackInput = memo<FeedbackInputProps>(
     const { canUseResource } = useConversationResourceAccess();
 
     const canSubmit = hasContent || hasAttachments;
+    // The run this drawer shows is a real op in its own conversation context, so
+    // the composer reads the same op-derived send area as the main composer:
+    // while the agent is working the control is Stop, and a typed follow-up
+    // queues beside it instead of reading as a fresh send. Without it the drawer
+    // offered Send during a running run — no way to stop it, and no sign that the
+    // follow-up was queued rather than started.
+    const { placeholderVariant, showSendWhileGenerating, showStopButton } =
+      useConversationChatInputUiState({ isInputEmpty: !canSubmit });
 
     useEffect(() => {
       if (expanded) editor?.focus?.();
@@ -134,14 +144,43 @@ const FeedbackInput = memo<FeedbackInputProps>(
                 </Flexbox>
               }
               right={
-                <SendButton
-                  disabled={!canSubmit && !submitting}
-                  loading={submitting}
-                  shape={'round'}
-                  title={t('taskDetail.replyInThread')}
-                  type={'primary'}
-                  onClick={handleSubmit}
-                />
+                showSendWhileGenerating ? (
+                  // Stop keeps the running state on screen and Send joins it, so a
+                  // typed follow-up is queued on click — the same pairing the main
+                  // composer uses. Replacing Stop with Send read as "the run has
+                  // finished" and made a queued follow-up look like a fresh run.
+                  <Flexbox horizontal align={'center'} gap={8}>
+                    <SendButton
+                      generating
+                      shape={'round'}
+                      title={t('stop', { ns: 'common' })}
+                      onStop={stopGenerating}
+                    />
+                    <SendButton
+                      disabled={!canSubmit}
+                      shape={'round'}
+                      title={t('taskDetail.replyInThread')}
+                      type={'primary'}
+                      onClick={handleSubmit}
+                    />
+                  </Flexbox>
+                ) : (
+                  <SendButton
+                    disabled={!canSubmit && !submitting}
+                    generating={showStopButton}
+                    loading={submitting}
+                    shape={'round'}
+                    // `onClick` stays off while generating: the editor's Stop
+                    // branch fires `onStop` AND `onClick`, so a handler here would
+                    // send the message the click was meant to cancel.
+                    type={'primary'}
+                    title={
+                      showStopButton ? t('stop', { ns: 'common' }) : t('taskDetail.replyInThread')
+                    }
+                    onClick={showStopButton ? undefined : handleSubmit}
+                    onStop={stopGenerating}
+                  />
+                )
               }
             />
           }
@@ -149,8 +188,15 @@ const FeedbackInput = memo<FeedbackInputProps>(
           <EditorCanvas
             editor={editor}
             floatingToolbar={false}
-            placeholder={t('taskDetail.replyPlaceholder')}
+            // Same copy switch as the main composer while the run is in flight —
+            // what is being typed is a follow-up to the working run, not a fresh
+            // reply into an idle thread.
             style={{ paddingBlock: 0 }}
+            placeholder={
+              placeholderVariant === 'followUp'
+                ? t('followUpPlaceholder')
+                : t('taskDetail.replyPlaceholder')
+            }
             onContentChange={handleContentChange}
             onPressEnter={({ event }) => {
               if (shouldSendOnEnter(event)) {

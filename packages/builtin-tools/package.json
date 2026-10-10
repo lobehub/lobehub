@@ -15,6 +15,7 @@
     "./streamings": "./src/streamings.ts",
     "./identifiers": "./src/identifiers.ts",
     "./dynamicInterventionAudits": "./src/dynamicInterventionAudits.ts",
+    "./featureGates": "./src/featureGates.ts",
     "./workRegistration": "./src/workRegistration.ts",
     "./fileEditScan": "./src/fileEditScan/index.ts"
   },
@@ -34,6 +35,7 @@
     "@lobechat/builtin-tool-claude-code": "workspace:*",
     "@lobechat/builtin-tool-cloud-sandbox": "workspace:*",
     "@lobechat/builtin-tool-creds": "workspace:*",
+    "@lobechat/builtin-tool-dashboard": "workspace:*",
     "@lobechat/builtin-tool-goal": "workspace:*",
     "@lobechat/builtin-tool-group-agent-builder": "workspace:*",
     "@lobechat/builtin-tool-group-management": "workspace:*",

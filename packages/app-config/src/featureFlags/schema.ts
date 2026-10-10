@@ -59,6 +59,15 @@ export const FeatureFlagsSchema = z.object({
    */
   agent_llm_relay: FeatureFlagValue.optional(),
 
+  /**
+   * Dashboards: monitoring widgets built by the `lobe-dashboard` agent tool,
+   * the home / project dashboard pages, the widget Portal and in-chat widget
+   * previews. Off: none of it is reachable and the tool is never offered;
+   * already-published widgets keep refreshing on their schedule. Array values
+   * are user ids.
+   */
+  dashboard: FeatureFlagValue.optional(),
+
   // internal flag
   agent_self_iteration: FeatureFlagValue.optional(),
   agent_onboarding: FeatureFlagValue.optional(),
@@ -129,6 +138,9 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   // Off until the client executor ships everywhere; allowlist first.
   agent_llm_relay: false,
 
+  // Off until an admin publishes a user allowlist or flips it to true.
+  dashboard: false,
+
   agent_self_iteration: isDev,
   agent_onboarding: isDev,
   dev_dock: isDev,
@@ -163,6 +175,7 @@ export const mapFeatureFlagsEnvToState = (
     enableAgentShare: evaluateFeatureFlag(config.agent_share, userId),
     enableGatewayMux: evaluateFeatureFlag(config.agent_gateway_mux, userId),
     enableLlmRelay: evaluateFeatureFlag(config.agent_llm_relay, userId),
+    enableDashboard: evaluateFeatureFlag(config.dashboard, userId),
     showProvider: evaluateFeatureFlag(config.provider_settings, userId),
 
     showOpenAIApiKey: evaluateFeatureFlag(config.openai_api_key, userId),

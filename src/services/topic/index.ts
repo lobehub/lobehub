@@ -64,6 +64,10 @@ export class TopicService {
     return lambdaClient.topic.cloneTopic.mutate({ id, newTitle });
   };
 
+  forkTopic = (params: { id: string; messageId: string; newTitle?: string }): Promise<string> => {
+    return lambdaClient.topic.forkTopic.mutate(params);
+  };
+
   batchMoveTopics = (topicIds: string[], targetAgentId: string) => {
     return lambdaClient.topic.batchMoveTopics.mutate({ targetAgentId, topicIds });
   };

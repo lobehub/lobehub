@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { openFeedbackModal } from '@/components/FeedbackModal';
 import { getNavigableRoutes, getRouteById } from '@/config/routes';
 import { FEEDBACK } from '@/const/url';
+import { useHomeDashboardFeature } from '@/features/Dashboard/hooks/useDashboardFeature';
 import { usePermission } from '@/hooks/usePermission';
 import { useChatStore } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
@@ -29,6 +30,7 @@ const MainMenu = memo(() => {
   const { pathname, menuContext, setPages, pages, onClose } = useCommandMenuContext();
   const { t } = useTranslation('common');
   const { allowed: canCreate } = usePermission('create_content');
+  const { enabled: dashboardEnabled } = useHomeDashboardFeature();
   // While the first send from the new-topic view is still creating the real
   // topic, openNewTopicOrSaveTopic is a no-op — disable the command instead of
   // letting it close the palette as a false success (same as the sidebar entry).
@@ -129,25 +131,28 @@ const MainMenu = memo(() => {
       </Command.Group>
 
       <Command.Group heading={t('cmdk.navigate')}>
-        {getNavigableRoutes().map((route) => {
-          const RouteIcon = route.icon;
-          const keywords = route.keywordsKey
-            ? t(route.keywordsKey as any).split(' ')
-            : route.keywords;
-          return (
-            !pathname?.startsWith(route.pathPrefix) && (
-              <CommandItem
-                icon={<RouteIcon />}
-                key={route.id}
-                keywords={keywords}
-                value={route.id}
-                onSelect={() => handleNavigate(route.path)}
-              >
-                {t(route.cmdkKey as any)}
-              </CommandItem>
-            )
-          );
-        })}
+        {getNavigableRoutes()
+          // The home dashboard is personal-only and behind the `dashboard` flag.
+          .filter((route) => route.id !== 'dashboard' || dashboardEnabled)
+          .map((route) => {
+            const RouteIcon = route.icon;
+            const keywords = route.keywordsKey
+              ? t(route.keywordsKey as any).split(' ')
+              : route.keywords;
+            return (
+              !pathname?.startsWith(route.pathPrefix) && (
+                <CommandItem
+                  icon={<RouteIcon />}
+                  key={route.id}
+                  keywords={keywords}
+                  value={route.id}
+                  onSelect={() => handleNavigate(route.path)}
+                >
+                  {t(route.cmdkKey as any)}
+                </CommandItem>
+              )
+            );
+          })}
       </Command.Group>
 
       <Command.Group heading={t('cmdk.about')}>

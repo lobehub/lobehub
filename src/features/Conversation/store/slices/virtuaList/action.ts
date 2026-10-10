@@ -38,9 +38,13 @@ export interface VirtuaListAction {
   setActiveIndex: (index: number | null) => void;
 
   /**
-   * Update scroll state (atBottom, isScrolling)
+   * Update scroll state (atBottom, autoScrollDetached, isScrolling)
    */
-  setScrollState: (state: { atBottom?: boolean; isScrolling?: boolean }) => void;
+  setScrollState: (state: {
+    atBottom?: boolean;
+    autoScrollDetached?: boolean;
+    isScrolling?: boolean;
+  }) => void;
 
   /**
    * Upsert visible item metrics and recalculate active index
@@ -101,6 +105,11 @@ export const virtuaListSlice: StateCreator<State & VirtuaListAction, [], [], Vir
     const { displayMessages, virtuaScrollMethods } = get();
     if (displayMessages.length === 0) return;
     if (!virtuaScrollMethods) return;
+
+    if (!smooth) {
+      virtuaScrollMethods.scrollToEnd();
+      return;
+    }
 
     // Target the true last item rather than the last message — VList may
     // append trailing items (spacer, SubAgent footer hint) that would

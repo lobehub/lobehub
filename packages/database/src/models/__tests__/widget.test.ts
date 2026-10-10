@@ -495,6 +495,78 @@ describe('WidgetModel', () => {
       expect(await model.findRun(widget.id, MISSING_UUID)).toBeUndefined();
     });
 
+    it('finds a version preview run however far the run history rolls on', async () => {
+      const widget = await model.create({ title: 'w' });
+      const v1 = await model.createVersion(widget.id, script(1));
+      const v2 = await model.createVersion(widget.id, script(2));
+
+      // The approval-era dry run of v1, then a failed retry of that version.
+      const approved = await model.startRun(widget.id, { trigger: 'preview', versionId: v1!.id });
+      await model.finishRun(approved!.id, {
+        output: { type: 'stat', value: 1 },
+        status: 'succeeded',
+      });
+      const failedRetry = await model.startRun(widget.id, {
+        trigger: 'preview',
+        versionId: v1!.id,
+      });
+      await model.finishRun(failedRetry!.id, { status: 'failed' });
+      // A manual run of v1 is not the dry run the approval showed.
+      const manual = await model.startRun(widget.id, { trigger: 'manual', versionId: v1!.id });
+      await model.finishRun(manual!.id, {
+        output: { type: 'stat', value: 9 },
+        status: 'succeeded',
+      });
+
+      // v2 keeps running until v1's preview leaves the newest-run window
+      // entirely — the publish card must still find it.
+      for (let i = 0; i < 35; i += 1) {
+        const run = await model.startRun(widget.id, { trigger: 'schedule', versionId: v2!.id });
+        await model.finishRun(run!.id, { output: { type: 'stat', value: 2 }, status: 'succeeded' });
+      }
+      expect(
+        (await model.listRuns(widget.id, { limit: 30 })).some((run) => run.id === approved!.id),
+      ).toBe(false);
+
+      expect(await model.findPreviewRun(widget.id, v1!.id)).toMatchObject({
+        id: approved!.id,
+        output: { type: 'stat', value: 1 },
+        status: 'succeeded',
+      });
+      // Only preview runs qualify; scheduled runs of v2 are not previews.
+      expect(await model.findPreviewRun(widget.id, v2!.id)).toBeUndefined();
+      expect(await model.findPreviewRun(widget.id, MISSING_UUID)).toBeUndefined();
+      expect(await model.findPreviewRun(MISSING_UUID, v1!.id)).toBeUndefined();
+    });
+
+    it('resolves the preview run by content hash, like the publish gate', async () => {
+      const widget = await model.create({ title: 'w' });
+      const v1 = await model.createVersion(widget.id, script(1));
+      // Move the draft pointer so re-saving v1's content creates a new row —
+      // the shape rollback drafts have.
+      const other = await model.createVersion(widget.id, script(2));
+      const v3 = await model.createVersion(widget.id, script(1));
+      expect(v3!.id).not.toBe(v1!.id);
+      expect(v3!.contentHash).toBe(v1!.contentHash);
+
+      const approved = await model.startRun(widget.id, {
+        trigger: 'preview',
+        versionId: v1!.id,
+      });
+      await model.finishRun(approved!.id, {
+        output: { type: 'stat', value: 1 },
+        status: 'succeeded',
+      });
+
+      // The publish gate accepts v1's run for the same-content v3, so the
+      // review lookup must find that same run for v3 — and not for a version
+      // with different content.
+      expect(await model.hasSucceededRunForContentHash(widget.id, v3!.contentHash)).toBe(true);
+      expect(await model.findPreviewRun(widget.id, v3!.id)).toMatchObject({ id: approved!.id });
+      expect(await model.findPreviewRun(widget.id, v1!.id)).toMatchObject({ id: approved!.id });
+      expect(await model.findPreviewRun(widget.id, other!.id)).toBeUndefined();
+    });
+
     it('tracks usable runs by content hash across version rows', async () => {
       const widget = await model.create({ title: 'w' });
       const v1 = await model.createVersion(widget.id, script(1));

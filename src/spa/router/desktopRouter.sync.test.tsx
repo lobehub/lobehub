@@ -193,7 +193,7 @@ describe('desktop router shared definition', () => {
   });
 
   it.each(mainAreaVariants)(
-    '%s exposes project task, goal, and acceptance workspaces',
+    '%s exposes project task, goal, dashboard, and acceptance workspaces',
     (_, factory) => {
       const projectRoute = factory().find((route) => route.path === 'project/:projectId');
       const projectIndexRoute = projectRoute?.children?.find((route) => route.index);
@@ -206,6 +206,7 @@ describe('desktop router shared definition', () => {
         'tasks',
         'settings/:section?',
         'goals',
+        'dashboard',
         'acceptance',
       ]);
       for (const section of ['general', 'environments', 'directories']) {
@@ -220,6 +221,16 @@ describe('desktop router shared definition', () => {
       ).toBe('conversation');
     },
   );
+
+  it.each(mainAreaVariants)('%s matches project dashboard list and board pages', (_, factory) => {
+    const list = matchRoutes(createMainAreaRoutes(factory), '/project/prj_1/dashboard');
+    const board = matchRoutes(createMainAreaRoutes(factory), '/acme/project/prj_1/dashboard/d-1');
+
+    expect(list?.at(-1)?.route.index).toBe(true);
+    expect(list?.at(-1)?.route.handle).toMatchObject({ meta: expect.any(Object) });
+    expect(board?.at(-1)?.route.path).toBe(':dashboardId');
+    expect(board?.at(-1)?.params).toMatchObject({ dashboardId: 'd-1', projectId: 'prj_1' });
+  });
 
   it.each(mainAreaVariants)('%s exposes the projects view-all route', (_, factory) => {
     const personalMatches = matchRoutes(createMainAreaRoutes(factory), '/projects');

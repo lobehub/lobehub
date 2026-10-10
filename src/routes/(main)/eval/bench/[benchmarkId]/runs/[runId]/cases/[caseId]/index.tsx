@@ -33,10 +33,10 @@ const CaseDetail = memo(() => {
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
   useFetchRunDetail(runId!, pollingConfig);
   const {
-    data: resultsData,
     error: resultsError,
-    isLoading: isLoadingResults,
-    mutate: mutateResults,
+    isHydrated: resultsHydrated,
+    isValidating: resultsValidating,
+    revalidate: revalidateResults,
   } = useFetchRunResults(runId!, pollingConfig);
 
   const runDetail = useEvalStore(runSelectors.getRunDetailById(runId!));
@@ -95,13 +95,13 @@ const CaseDetail = memo(() => {
   // failed fetch (ux Read §1.1). A page-level failure gets a reason + Reload.
   return (
     <AsyncBoundary
-      data={resultsData}
+      data={runResults}
       error={resultsError}
       errorVariant={'page'}
       isEmpty={!caseResult}
-      isLoading={isLoadingResults}
+      isLoading={!resultsHydrated || resultsValidating}
       loading={<RouteLoading />}
-      onRetry={() => mutateResults()}
+      onRetry={() => void revalidateResults()}
     >
       {caseResult && (
         <Flexbox height="100%" style={{ overflow: 'hidden' }}>

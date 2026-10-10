@@ -5,6 +5,7 @@ import { browserExecutor } from '@lobechat/builtin-tool-browser/client/executor'
 import { calculatorExecutor } from '@lobechat/builtin-tool-calculator/executor';
 import { cloudSandboxExecutor } from '@lobechat/builtin-tool-cloud-sandbox/executor';
 import { credsExecutor } from '@lobechat/builtin-tool-creds/executor';
+import { dashboardExecutor } from '@lobechat/builtin-tool-dashboard/client/executor';
 import { goalExecutor } from '@lobechat/builtin-tool-goal/client/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
@@ -83,6 +84,7 @@ export const builtinToolExecutors = [
   skillStoreExecutor,
   skillsExecutor,
   taskExecutor,
+  dashboardExecutor,
   videoGenerationExecutor,
   activatorExecutor,
   topicReferenceExecutor,

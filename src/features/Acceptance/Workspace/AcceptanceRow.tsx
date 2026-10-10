@@ -35,10 +35,9 @@ import { useNavigate } from 'react-router';
 
 import { openRenameModal } from '@/components/RenameModal';
 import NavItem from '@/features/NavPanel/components/NavItem';
-import { mutate as globalMutate } from '@/libs/swr';
-import { verifyKeys } from '@/libs/swr/keys';
 import type { AcceptanceListItem } from '@/services/verify';
 import { verifyService } from '@/services/verify';
+import { useVerifyStore } from '@/store/verify';
 
 import { acceptanceListPath } from '../Viewer/routes';
 import { getAcceptanceStatusActions } from '../Viewer/statusActions';
@@ -134,7 +133,7 @@ const AcceptanceRow = memo<{
   const title = item.subject.title || item.subjectId;
 
   const refresh = () =>
-    Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(item.id))]);
+    Promise.all([onChanged(), useVerifyStore.getState().refreshAcceptanceBundle(item.id)]);
 
   /**
    * The shared rename dialog, same as a topic's. An in-place input inside a
@@ -220,7 +219,10 @@ const AcceptanceRow = memo<{
         try {
           const summary = await verifyService.mergeAcceptance(item.id, targetId);
           if (active) navigate(`/acceptance/${targetId}`, { replace: true });
-          await Promise.all([onChanged(), globalMutate(verifyKeys.acceptanceBundle(targetId))]);
+          await Promise.all([
+            onChanged(),
+            useVerifyStore.getState().refreshAcceptanceBundle(targetId),
+          ]);
           toast.success(t('acceptance.workspace.merge.success', { count: summary.movedChecks }));
           return true;
         } catch (error) {

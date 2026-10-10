@@ -1,12 +1,18 @@
 'use client';
 
 import { TRASH_RETENTION_DAYS } from '@lobechat/const';
-import type { TrashCountByType, TrashItem, TrashResourceType } from '@lobechat/types';
+import type {
+  TrashCountByType,
+  TrashItem,
+  TrashProjectFilter,
+  TrashResourceType,
+} from '@lobechat/types';
 import {
   Avatar,
   Button,
   Center,
   confirmModal,
+  controlHeight,
   createStaticStyles,
   Empty,
   Flexbox,
@@ -16,20 +22,36 @@ import {
   Text,
   toast,
 } from '@lobehub/ui';
+import { useSize } from 'ahooks';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Trash2Icon } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
 import { useIsMobile } from '@/hooks/useIsMobile';
+import { useCacheScope } from '@/libs/swr/useCacheScope';
+import type { TrashViewFilter } from '@/services/trash';
+import { useLoadedProjectList, useProjectStore } from '@/store/project';
 import { trashSelectors, useTrashStore } from '@/store/trash';
+import { TrashEmptyScopeChangedError } from '@/store/trash/action';
+import { useUserStore } from '@/store/user';
+import { labPreferSelectors } from '@/store/user/selectors';
 
+import { ProjectFilter } from './ProjectFilter';
+import {
+  canEmptyTrashView,
+  isProjectRefusedError,
+  isScopeChangedError,
+  resolveProjectAvailability,
+} from './projectFilterState';
 import { TRASH_TYPE_ICON, TRASH_TYPE_ORDER } from './typeMeta';
 
 dayjs.extend(relativeTime);
 
 /** Stable empties so the replicated views never trip the store's shallow equality. */
+const TRASH_LIST_BREAKPOINT = 800;
 const EMPTY_ITEMS: TrashItem[] = [];
 const EMPTY_COUNTS: TrashCountByType = {};
 
@@ -39,6 +61,14 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
     padding-block: 16px;
     border-radius: ${cssVar.borderRadius};
     background: ${cssVar.colorBgContainer};
+  `,
+  /**
+   * Type chips on the small control height: with the track's 3px padding and
+   * 1px border the whole Segmented is `controlHeight.middle` tall, level with
+   * the project picker and the empty button beside it.
+   */
+  filterItem: css`
+    height: ${controlHeight.small}px;
   `,
   header: css`
     display: flex;
@@ -53,11 +83,35 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   muted: css`
     color: ${cssVar.colorTextSecondary};
   `,
+  name: css`
+    width: 100%;
+    min-width: 0;
+  `,
+  table: css`
+    @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
+      tbody tr {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      td[data-list-slot='title'] {
+        min-width: 0;
+      }
+    }
+  `,
   title: css`
     overflow: hidden;
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   `,
 }));
 
@@ -65,12 +119,14 @@ const TrashList = () => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const containerSize = useSize(containerRef);
+  const cardLayout = !!containerSize && containerSize.width <= TRASH_LIST_BREAKPOINT;
 
   const [
     activeType,
-    countByType,
     loadingIds,
-    setActiveType,
+    setFilter,
     restore,
     purge,
     emptyTrash,
@@ -79,9 +135,8 @@ const TrashList = () => {
     useFetchTrashCount,
   ] = useTrashStore((s) => [
     s.activeType,
-    s.trashCountMap.all ?? EMPTY_COUNTS,
     s.loadingIds,
-    s.setActiveType,
+    s.setFilter,
     s.restore,
     s.purge,
     s.emptyTrash,
@@ -90,20 +145,82 @@ const TrashList = () => {
     s.useFetchTrashCount,
   ]);
 
-  // The active filter's local-first page: first frame paints from storage.
-  const list = useTrashStore(trashSelectors.currentList(activeType));
-  const items = list?.items ?? EMPTY_ITEMS;
-  const nextCursor = list?.nextCursor ?? null;
+  // Projects are a Labs feature: without it the bin is not filtered by project.
+  const scope = useCacheScope();
+  const projectsEnabled = useUserStore(labPreferSelectors.enableProjects);
+  const selectedProjectId = useTrashStore(trashSelectors.activeProjectId(scope));
+  const projectId: TrashProjectFilter = projectsEnabled ? selectedProjectId : undefined;
+  const filter: TrashViewFilter = { projectId, resourceType: activeType };
+
+  // The live project list of this scope is the only source of project options.
+  const projectSync = useProjectStore((s) => s.useFetchProjectList)(projectsEnabled);
+  const refreshProjectList = useProjectStore((s) => s.refreshProjectList);
+  const projects = useLoadedProjectList();
+  const listedAvailability = resolveProjectAvailability({ projectId, projects });
+  // A project the live list no longer holds is not asked for at all.
+  const canFetch = listedAvailability !== 'unavailable';
+
+  // The active view's local-first page: first frame paints from storage.
+  const list = useTrashStore(trashSelectors.currentList(filter));
+  const isEmpty = useTrashStore(trashSelectors.isEmpty(filter));
+  const counts = useTrashStore(trashSelectors.countByType(projectId));
+  const storedFilterCount = useTrashStore(trashSelectors.filterCount(filter));
+  const storedTotal = useTrashStore(trashSelectors.totalCount(projectId));
+
+  const { error, isValidating, revalidate } = useFetchTrash(canFetch, filter);
+  const countSync = useFetchTrashCount(canFetch, projectId);
+
+  // The server refuses a project that was deleted or whose access was revoked;
+  // re-read the project list so the picker drops it as well.
+  const refused = isProjectRefusedError(error) || isProjectRefusedError(countSync.error);
+  useEffect(() => {
+    if (refused) void refreshProjectList();
+  }, [refused, refreshProjectList]);
+
+  const availability = resolveProjectAvailability({ projectId, projects, refused });
+  const projectUnavailable = availability === 'unavailable';
+  const listError = refused ? undefined : error;
+
+  // Counts cached for a project that is gone describe nothing the user can act on.
+  const countByType = (!projectUnavailable && counts) || EMPTY_COUNTS;
+  const filterCount = projectUnavailable ? undefined : storedFilterCount;
+  const total = projectUnavailable ? 0 : storedTotal;
+
+  // An unavailable project keeps the view restricted to it, showing nothing.
+  const items = (!projectUnavailable && list?.items) || EMPTY_ITEMS;
+  const nextCursor = projectUnavailable ? null : (list?.nextCursor ?? null);
   const isLoadingMore = !!list?.isLoadingMore;
-  const isEmpty = useTrashStore(trashSelectors.isEmpty(activeType));
-  const total = useTrashStore(trashSelectors.totalCount);
+  const isLoading = !isEmpty && items.length === 0 && isValidating && !projectUnavailable;
 
-  const { error, isValidating, revalidate } = useFetchTrash(true, activeType);
-  useFetchTrashCount(true);
-
-  const isLoading = !isEmpty && items.length === 0 && isValidating;
+  const canEmpty = canEmptyTrashView({
+    availability,
+    countsSettled: !countSync.isValidating,
+    filterCount,
+    hasError: !!error || !!countSync.error,
+    itemCount: items.length,
+  });
 
   const typeLabel = (type: TrashResourceType) => t(`trash.type.${type}` as const);
+  const projectLabel = (id: TrashProjectFilter) => {
+    if (id === undefined) return t('trash.filter.project.all');
+    if (id === null) return t('trash.filter.project.none');
+    const project = projects?.find((item) => item.id === id);
+    return project
+      ? `${project.name} (${project.identifier})`
+      : t('trash.filter.project.unavailable');
+  };
+  const emptyLabel = (view: TrashViewFilter, count?: number) => {
+    if (view.projectId !== undefined)
+      // Never a confident zero while the counts are still unknown.
+      return count === undefined
+        ? t('trash.actions.emptyFilteredPending')
+        : t('trash.actions.emptyFiltered', { count });
+    if (view.resourceType)
+      return t('trash.actions.emptyType', { type: typeLabel(view.resourceType) });
+    return t('trash.actions.empty');
+  };
+
+  const changeFilter = (next: TrashViewFilter) => setFilter(next, scope);
 
   // A rejected call (network / server) must not end in a silent spinner stop:
   // the user has to know whether the row was restored or deleted.
@@ -145,24 +262,44 @@ const TrashList = () => {
   };
 
   const handleEmpty = () => {
-    const count = activeType ? (countByType[activeType] ?? items.length) : total;
+    // Fixed for the whole sweep: switching the view while it runs never widens it.
+    const view: TrashViewFilter = { ...filter };
+    const count = filterCount ?? 0;
+    const filtered = view.projectId !== undefined || !!view.resourceType;
     confirmModal({
       cancelText: tc('cancel'),
-      content: t('trash.emptyConfirm.content', { count }),
+      content: (
+        <Flexbox gap={8}>
+          <span>{t('trash.emptyConfirm.content', { count })}</span>
+          {filtered && (
+            <Text type={'secondary'}>
+              {t('trash.emptyConfirm.scope', {
+                project: projectLabel(view.projectId),
+                type: view.resourceType ? typeLabel(view.resourceType) : t('trash.filter.type.all'),
+              })}
+            </Text>
+          )}
+        </Flexbox>
+      ),
       okButtonProps: { danger: true },
-      okText: activeType
-        ? t('trash.actions.emptyType', { type: typeLabel(activeType) })
-        : t('trash.actions.empty'),
+      okText: emptyLabel(view, count),
       onOk: async () => {
         try {
-          await emptyTrash();
-        } catch {
-          reportFailure();
+          await emptyTrash(view);
+        } catch (error) {
+          if (error instanceof TrashEmptyScopeChangedError || isScopeChangedError(error)) {
+            toast.error(t('trash.emptyStopped.scopeChanged'));
+          } else if (isProjectRefusedError(error)) {
+            toast.error(t('trash.projectUnavailable.title'));
+            void refreshProjectList();
+          } else {
+            reportFailure();
+          }
           return;
         }
         toast.success(t('trash.purge.success'));
       },
-      title: t('trash.emptyConfirm.title'),
+      title: filtered ? t('trash.emptyConfirm.filteredTitle') : t('trash.emptyConfirm.title'),
     });
   };
 
@@ -178,13 +315,15 @@ const TrashList = () => {
       render: (item) => {
         const TypeIcon = TRASH_TYPE_ICON[item.resourceType];
         const avatar = item.meta?.avatar;
+        const title = item.title || t('trash.untitled');
         return (
-          <Flexbox horizontal align={'center'} gap={10} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} className={styles.name} gap={10}>
             {avatar ? (
               <Avatar
                 avatar={avatar}
                 background={item.meta?.backgroundColor ?? undefined}
                 size={28}
+                style={{ flexShrink: 0 }}
               />
             ) : (
               <Center
@@ -195,8 +334,27 @@ const TrashList = () => {
                 <Icon icon={TypeIcon} size={18} />
               </Center>
             )}
-            <Flexbox style={{ minWidth: 0 }}>
-              <span className={styles.title}>{item.title || t('trash.untitled')}</span>
+            <Flexbox flex={1} style={{ minWidth: 0 }}>
+              <Text
+                as={'span'}
+                className={styles.title}
+                tabIndex={0}
+                ellipsis={{
+                  rows: cardLayout ? 2 : undefined,
+                  tooltip: {
+                    placement: 'topLeft',
+                    standalone: true,
+                    styles: {
+                      content: { overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' },
+                      root: { maxWidth: 'min(420px, calc(100vw - 32px))' },
+                    },
+                    title,
+                  },
+                  tooltipWhenOverflow: true,
+                }}
+              >
+                {title}
+              </Text>
               {!!item.meta?.childCount && (
                 <Text fontSize={12} type={'secondary'}>
                   {t('trash.meta.children', { count: item.meta.childCount })}
@@ -207,12 +365,12 @@ const TrashList = () => {
         );
       },
       title: t('trash.columns.name'),
+      width: 'clamp(320px, 36cqw, 420px)',
     },
     {
       key: 'type',
       render: (item) => <Tag>{typeLabel(item.resourceType)}</Tag>,
       title: t('trash.columns.type'),
-      width: 130,
     },
     {
       key: 'deletedAt',
@@ -222,13 +380,11 @@ const TrashList = () => {
         </span>
       ),
       title: t('trash.columns.deletedAt'),
-      width: 150,
     },
     {
       key: 'expiresAt',
       render: (item) => <span className={styles.muted}>{expiresLabel(item.expiresAt)}</span>,
       title: t('trash.columns.expiresIn'),
-      width: 140,
     },
     {
       key: 'actions',
@@ -259,43 +415,75 @@ const TrashList = () => {
 
   const typeOptions = [
     { label: `${t('trash.filter.all')}${total ? ` · ${total}` : ''}`, value: 'all' },
-    ...TRASH_TYPE_ORDER.filter((type) => countByType[type]).map((type) => ({
-      label: `${typeLabel(type)} · ${countByType[type]}`,
+    // The selected type stays listed at zero, so the active filter is always visible.
+    ...TRASH_TYPE_ORDER.filter((type) => countByType[type] || type === activeType).map((type) => ({
+      label: `${typeLabel(type)} · ${countByType[type] ?? 0}`,
       value: type,
     })),
   ];
 
+  const emptyDescription = () => {
+    if (filter.projectId !== undefined) return t('trash.emptyFilter.desc');
+    if (activeType) return t('trash.emptyType.desc', { type: typeLabel(activeType) });
+    return t('trash.empty.desc', { days: TRASH_RETENTION_DAYS });
+  };
+
   return (
-    <div className={styles.container}>
+    <div className={styles.container} ref={containerRef}>
       <div className={styles.header}>
-        <Segmented
-          options={typeOptions}
-          size={'small'}
-          value={activeType ?? 'all'}
-          onChange={(value) =>
-            setActiveType(value === 'all' ? undefined : (value as TrashResourceType))
-          }
-        />
+        <Flexbox horizontal align={'center'} gap={8} style={{ flexWrap: 'wrap', minWidth: 0 }}>
+          <Segmented
+            classNames={{ item: styles.filterItem }}
+            options={typeOptions}
+            size={'small'}
+            style={{ flexWrap: 'wrap', maxWidth: '100%' }}
+            value={activeType ?? 'all'}
+            onChange={(value) =>
+              changeFilter({
+                projectId,
+                resourceType: value === 'all' ? undefined : (value as TrashResourceType),
+              })
+            }
+          />
+          {projectsEnabled && (
+            <ProjectFilter
+              error={projectSync.error}
+              isValidating={projectSync.isValidating}
+              projects={projects}
+              unavailable={projectUnavailable}
+              value={projectId}
+              onChange={(next) => changeFilter({ projectId: next, resourceType: activeType })}
+              onOpen={() => void refreshProjectList()}
+              onRetry={() => void refreshProjectList()}
+            />
+          )}
+        </Flexbox>
         <Button
           danger
-          disabled={items.length === 0}
+          disabled={!canEmpty}
           icon={Trash2Icon}
           size={mobile ? 'small' : undefined}
           onClick={handleEmpty}
         >
-          {activeType
-            ? t('trash.actions.emptyType', { type: typeLabel(activeType) })
-            : t('trash.actions.empty')}
+          {emptyLabel(filter, filterCount)}
         </Button>
       </div>
       <LiteTable
+        className={styles.table}
         columns={columns}
         dataSource={items}
+        listBreakpoint={TRASH_LIST_BREAKPOINT}
         loading={isLoading}
         rowKey={(item) => item.id}
+        tableLayout={'fixed'}
         emptyText={
           <Center height={240} width={'100%'}>
-            {error ? (
+            {projectUnavailable ? (
+              <Empty
+                description={t('trash.projectUnavailable.desc')}
+                title={t('trash.projectUnavailable.title')}
+              />
+            ) : listError ? (
               <Empty
                 description={t('trash.loadFailed.desc')}
                 title={t('trash.loadFailed.title')}
@@ -307,11 +495,9 @@ const TrashList = () => {
               />
             ) : (
               <Empty
-                title={activeType ? undefined : t('trash.empty.title')}
-                description={
-                  activeType
-                    ? t('trash.emptyType.desc', { type: typeLabel(activeType) })
-                    : t('trash.empty.desc', { days: TRASH_RETENTION_DAYS })
+                description={emptyDescription()}
+                title={
+                  activeType || filter.projectId !== undefined ? undefined : t('trash.empty.title')
                 }
               />
             )}
@@ -324,7 +510,7 @@ const TrashList = () => {
             loading={isLoadingMore}
             size={'small'}
             type={'text'}
-            onClick={() => loadMore().catch(reportFailure)}
+            onClick={() => loadMore(filter).catch(reportFailure)}
           >
             {t('trash.actions.loadMore')}
           </Button>

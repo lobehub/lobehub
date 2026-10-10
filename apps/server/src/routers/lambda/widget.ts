@@ -12,12 +12,19 @@ import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { DashboardService } from '@/server/services/dashboard';
 import { WidgetService } from '@/server/services/widget';
+import {
+  widgetMetadataPatchSchema,
+  widgetMetadataSchema,
+} from '@/server/services/widget/metadataSchema';
 import { widgetVersionContentSchema } from '@/server/services/widget/versionSchema';
 
+import { assertDashboardEnabled } from './_helpers/dashboardFeatureGate';
 import { mapWidgetError, notFound } from './_helpers/widgetError';
 
 const widgetProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const { ctx } = opts;
+  // Off by default (runtime flag `dashboard`); covers `runAgentTool` too.
+  await assertDashboardEnabled(ctx.userId);
   const workspaceId = ctx.workspaceId ?? undefined;
   return opts.next({
     ctx: {
@@ -50,8 +57,10 @@ const layoutSchema = z.object({
   y: z.number().int().min(0),
 });
 
-const fail = (error: unknown, operation: string): never =>
-  mapWidgetError(error, 'widget', operation);
+// A declaration (not an arrow const) so `fail(...)` narrows control flow as `never`.
+function fail(error: unknown, operation: string): never {
+  return mapWidgetError(error, 'widget', operation);
+}
 
 /**
  * Widgets, their versions and runs.
@@ -74,11 +83,11 @@ export const widgetRouter = router({
       z.object({
         agentId: z.string().nullish(),
         dashboardId: uuid.optional(),
-        description: z.string().max(2000).nullish(),
+        // Same bounds the dashboard tool enforces — one schema, no drift.
+        ...widgetMetadataSchema.shape,
         layout: layoutSchema.nullish(),
         metadata,
         projectId: z.string().nullish(),
-        title: z.string().min(1).max(200),
         visibility: visibility.optional(),
       }),
     )
@@ -175,6 +184,23 @@ export const widgetRouter = router({
         return { data, success: true };
       } catch (error) {
         fail(error, 'get widget run');
+      }
+    }),
+
+  /**
+   * The preview run a publish approval was based on, fetched by version — it
+   * stays reachable after the widget's run history rolls past the list
+   * window, so old publish cards keep their body.
+   */
+  getPreviewRun: widgetProcedure
+    .input(z.object({ versionId: uuid, widgetId: uuid }))
+    .query(async ({ ctx, input }) => {
+      try {
+        const data = await ctx.widgetModel.findPreviewRun(input.widgetId, input.versionId);
+        if (!data) throw notFound('Run');
+        return { data, success: true };
+      } catch (error) {
+        fail(error, 'get widget preview run');
       }
     }),
 
@@ -326,9 +352,8 @@ export const widgetRouter = router({
       z.object({
         id: uuid,
         value: z.object({
-          description: z.string().max(2000).nullish(),
+          ...widgetMetadataPatchSchema.shape,
           metadata,
-          title: z.string().min(1).max(200).optional(),
           visibility: visibility.optional(),
         }),
       }),

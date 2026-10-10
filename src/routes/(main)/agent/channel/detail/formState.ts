@@ -59,6 +59,45 @@ export const getChannelFormValues = (config: ChannelConfigFormState) => ({
 });
 
 /**
+ * Build the credential blob a save submits.
+ *
+ * The form is seeded from the persisted provider, which keeps every credential
+ * *key* but replaces the values with masks (see `withoutBotProviderSecrets`).
+ * The server replaces the credential blob wholesale on update, so any key the
+ * form does not carry would be deleted on the way back — carry every key the
+ * form leaves unmentioned from the config the form was seeded with. An explicit
+ * empty (a field the user cleared) still wins and drops the key, so clearing a
+ * credential keeps its meaning.
+ */
+export const mergeCredentialsForSave = (
+  configCredentials: Record<string, string> | null | undefined,
+  formCredentials: Record<string, string> | null | undefined,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries({ ...configCredentials, ...formCredentials }).filter(
+      ([, value]) => value !== undefined && value !== '',
+    ),
+  );
+
+/**
+ * Whether the form should adopt an incoming (revalidated) provider config.
+ *
+ * The provider list is replica-backed, so a revisit paints the persisted config
+ * first and the live fetch replaces it in the background. Adopting that
+ * background copy while the user is mid-edit would silently discard their
+ * input, so a replacement of the *same* provider is ignored until the form is
+ * clean again — after a save / discard, or when a different provider arrives.
+ */
+export const shouldAdoptIncomingConfig = (
+  previous: { id?: string; platform?: string } | undefined,
+  next: { id?: string; platform?: string } | undefined,
+  isDirty: boolean,
+): boolean => {
+  const isSameProvider = previous?.id === next?.id && previous?.platform === next?.platform;
+  return !(isSameProvider && isDirty);
+};
+
+/**
  * Extract default values from a platform's settings schema, in the same flat
  * shape used by the form (top-level keys + flattened nested object children,
  * matching `getFields` in Body.tsx).

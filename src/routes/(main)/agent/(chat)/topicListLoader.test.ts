@@ -16,6 +16,7 @@ const chatState = vi.hoisted(() => ({
   replaceMessages: vi.fn(),
 }));
 const builtinAgentIdMap = vi.hoisted(() => ({ inbox: 'agt_inbox' }) as Record<string, string>);
+const preHydrateBuiltinAgentMock = vi.hoisted(() => vi.fn(async () => true));
 
 vi.mock('@lobechat/builtin-agents', () => ({
   BUILTIN_AGENT_SLUGS: { inbox: 'inbox' },
@@ -26,7 +27,9 @@ vi.mock('@/hooks/chatTopicListQuery', () => ({
 }));
 
 vi.mock('@/store/agent', () => ({
-  useAgentStore: { getState: () => ({ builtinAgentIdMap }) },
+  useAgentStore: {
+    getState: () => ({ builtinAgentIdMap, preHydrateBuiltinAgent: preHydrateBuiltinAgentMock }),
+  },
 }));
 
 vi.mock('@/store/agent/selectors', () => ({
@@ -52,6 +55,8 @@ describe('agent chat topic list loader', () => {
   beforeEach(() => {
     preHydrateTopicListMock.mockClear();
     preHydrateTopicListMock.mockResolvedValue(true);
+    preHydrateBuiltinAgentMock.mockClear();
+    preHydrateBuiltinAgentMock.mockResolvedValue(true);
     getSidebarTopicListParamsMock.mockReset();
     getSidebarTopicListParamsMock.mockReturnValue({ agentId: 'agt_1', pageSize: 20 });
   });
@@ -67,6 +72,19 @@ describe('agent chat topic list loader', () => {
 
     expect(getSidebarTopicListParamsMock).toHaveBeenCalledWith({ agentId: 'agt_1' });
     expect(preHydrateTopicListMock).toHaveBeenCalledWith({ agentId: 'agt_1', pageSize: 20 });
+  });
+
+  it('pre-hydrates the persisted builtin before resolving a builtin slug', async () => {
+    await expect(agentChatTopicListLoader(loaderArgs('inbox'))).resolves.toBeNull();
+
+    expect(preHydrateBuiltinAgentMock).toHaveBeenCalledWith('inbox');
+    expect(getSidebarTopicListParamsMock).toHaveBeenCalledWith({ agentId: 'agt_inbox' });
+  });
+
+  it('does not pre-hydrate a builtin for a concrete agent id', async () => {
+    await agentChatTopicListLoader(loaderArgs('agt_1'));
+
+    expect(preHydrateBuiltinAgentMock).not.toHaveBeenCalled();
   });
 
   it('resolves a builtin slug to its agent id', async () => {

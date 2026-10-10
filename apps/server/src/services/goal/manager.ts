@@ -252,7 +252,16 @@ export const decideFailedTurn = (
  */
 const managerTurnToken = (goalId: string) => `${goalId}_${randomUUID()}`;
 
-/** Excludes only the manager's own receipt. Concurrent policy/graph changes invalidate its plan. */
+/**
+ * Excludes only the manager's own receipt. Concurrent policy/graph changes
+ * invalidate its plan.
+ *
+ * Node rows are projected, not hashed whole: `updatedAt` is bookkeeping that a
+ * same-status rewrite bumps without changing any planning input, and hashing it
+ * made an in-flight planning turn go stale whenever a background loop rewrote a
+ * node it did not own (a coordinator retry re-activating an already-active task
+ * rejected every submit with "Stale planning input" until the turn expired).
+ */
 export const managerSnapshot = (graph: GoalGraphSnapshot) => {
   // Coordinator receipts are not planning input: arming a Task's quota wake while a
   // turn runs must not make that turn's plan stale.
@@ -264,7 +273,7 @@ export const managerSnapshot = (graph: GoalGraphSnapshot) => {
         config,
         maxRounds: graph.goal.maxRounds,
         maxTotalCost: graph.goal.maxTotalCost,
-        nodes: graph.nodes,
+        nodes: graph.nodes.map(({ updatedAt: _updatedAt, ...planning }) => planning),
         edges: graph.edges,
         decisions: graph.decisions,
         versions: graph.workVersions.map(({ nodeId, workVersionId, relation }) => ({

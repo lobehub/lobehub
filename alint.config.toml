@@ -197,7 +197,24 @@ lobehub = "./packages/alint/rules"
 "lobehub/no-removal-only-tests" = "warn"
 "lobehub/no-constant-stub-tests" = "warn"
 
+# Ordinary API instructions: avoid removal announcements and locally redundant
+# descriptions while preserving migration guidance and useful input semantics.
+[[config.group]]
+files = [ "docs/usage/**/*.mdx", "docs/usage/**/*.md", "packages/builtin-skills/**/*.md", "packages/builtin-skills/src/**/content.ts", "packages/builtin-skills/src/**/references/**/*.ts", "apps/cli/src/commands/**/*.ts", "packages/openapi/src/types/**/*.ts" ]
+ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-redundant-api-copy" = "warn"
+
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
+[[config.group]]
+files = [ "packages/alint/fixtures/no-redundant-api-copy/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-redundant-api-copy" = "warn"
+
 [[config.group]]
 files = [ "packages/alint/fixtures/no-constant-stub-tests/**" ]
 [config.group.plugins]

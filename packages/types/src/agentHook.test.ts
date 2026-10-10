@@ -123,19 +123,26 @@ describe('flat tool response parser', () => {
     'null',
     '[]',
     'true',
+    '42',
+    '"notification"',
+    '[{"decision":"deny"}]',
+    '{"decision":',
+    response({ reason: 'missing decision' }),
+    response({ hookSpecificOutput: { permissionDecision: 'deny' } }),
+  ])('ignores a notification response without a top-level decision %#', (body) => {
+    expect(parseToolCallHookResponse(body)).toEqual({ status: 'ignored' });
+  });
+  it.each([
     ...[
       { decision: 'block' },
       { decision: 'ask' },
       { decision: 'defer' },
       { decision: null },
       { decision: 1 },
-      { reason: 'missing decision' },
       { decision: 'deny', reason: 3 },
       { decision: 'deny', reason: null },
-      { hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'allow' } },
-      { hookSpecificOutput: { hookEventName: 'beforeToolCall', permissionDecision: 'deny' } },
     ].map(response),
-  ])('rejects malformed or unsupported control response %#', (body) => {
+  ])('rejects an explicitly invalid decision %#', (body) => {
     expect(parseToolCallHookResponse(body)).toEqual({ code: 'invalid_response', status: 'error' });
   });
   it.each(['allow', 'deny'])(

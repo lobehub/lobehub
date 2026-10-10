@@ -3,20 +3,18 @@ import { createStaticStyles, cssVar } from '@lobehub/ui';
 /**
  * Two comment surfaces, deliberately different.
  *
- * The discussion follows GitHub's Conversation: a rail down the left, the
- * author's avatar beside it, and the remark in a bordered box. Header names who
- * spoke and when; body carries the words. No colour anywhere — an author's
- * colour belongs on the marks they drew, not around their face.
+ * The discussion is an activity feed, Linear-style: no rail and no boxes. A
+ * remark is an author line with its words indented under the avatar; an event
+ * is one grey line. Rounds, not frames, give the feed its structure. No colour
+ * anywhere — an author's colour belongs on the marks they drew.
  *
  * A region note is a Figma-style pin: no frame at all, just an elevated surface
  * floating beside the screenshot.
  */
-export const TIMELINE_NODE = 32;
-const NODE_GUTTER = 12;
+export const TIMELINE_NODE = 20;
+export const NODE_GUTTER = 8;
 const EVENT_DOT = 20;
-/** Space between submitted records. The composer sits outside the timeline. */
-const ENTRY_GAP = 16;
-const RAIL = TIMELINE_NODE / 2;
+const ENTRY_GAP = 10;
 
 /**
  * The accent, diluted well past the reference. A blue box line reads much
@@ -89,28 +87,29 @@ export const styles = createStaticStyles(({ css }) => ({
   `,
   /** The composer, wrapped so it reads as one block rather than a loose field. */
   composerBlock: css`
-    padding: 12px;
+    padding-block: 8px;
+    padding-inline: 12px;
     border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadius};
+    border-radius: ${cssVar.borderRadiusLG};
+
     background: ${cssVar.colorBgContainer};
+
+    transition: border-color ${cssVar.motionDurationFast};
+
+    &:focus-within {
+      border-color: ${cssVar.colorBorder};
+    }
   `,
   deleted: css`
     font-style: italic;
     color: ${cssVar.colorTextTertiary};
   `,
-  /** A round landing or an approval: a dot on the rail and one line of text. */
   event: css`
     padding-block: 2px;
     font-size: 13px;
     color: ${cssVar.colorTextSecondary};
   `,
-  /**
-   * Opaque on purpose: a translucent fill let the rail show straight through
-   * the dot, which read as a smudge rather than as a node on the line.
-   */
   eventDot: css`
-    position: relative;
-
     display: inline-flex;
     flex: none;
     align-items: center;
@@ -118,12 +117,22 @@ export const styles = createStaticStyles(({ css }) => ({
 
     width: ${EVENT_DOT}px;
     height: ${EVENT_DOT}px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: 50%;
 
     color: ${cssVar.colorTextTertiary};
+  `,
+  entryAnchored: css`
+    border-radius: ${cssVar.borderRadius};
+    background: ${cssVar.colorInfoBg};
+    box-shadow: 0 0 0 6px ${cssVar.colorInfoBg};
+  `,
+  feedBody: css`
+    padding-block-start: 4px;
+    padding-inline-start: ${TIMELINE_NODE + NODE_GUTTER}px;
 
-    background: ${cssVar.colorBgElevated};
+    font-size: 14px;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
   `,
   meta: css`
     flex: none;
@@ -222,52 +231,18 @@ export const styles = createStaticStyles(({ css }) => ({
       opacity: 1;
     }
   `,
-  /** Entries with no node of their own still line up with the boxes above. */
   nodelessEntry: css`
     padding-inline-start: ${TIMELINE_NODE + NODE_GUTTER}px;
   `,
-  /**
-   * Only the historical stream connects nodes. Read-only cards and the composer
-   * can reuse entry styles without accidentally extending the rail.
-   */
-  timeline: css`
-    > *::before {
-      content: '';
-
-      position: absolute;
-      inset-block: 0;
-      inset-inline-start: ${RAIL - 1}px;
-
-      width: 2px;
-
-      background: ${cssVar.colorBorderSecondary};
-    }
-
-    > :first-child::before {
-      inset-block-start: ${TIMELINE_NODE / 2}px;
-    }
-
-    > :last-child::before {
-      inset-block-end: auto;
-      height: ${TIMELINE_NODE / 2}px;
-    }
-
-    > :only-child::before {
-      content: none;
-    }
-  `,
   timelineEntry: css`
     position: relative;
-    padding-block-end: ${ENTRY_GAP}px;
+    padding-block: ${ENTRY_GAP}px;
 
     &:hover [data-comment-actions] {
       opacity: 1;
     }
   `,
-  /** Avatars and event dots share one centre line, with an opaque node above it. */
   timelineNode: css`
-    position: relative;
-
     display: flex;
     flex: none;
     align-items: center;
@@ -275,10 +250,7 @@ export const styles = createStaticStyles(({ css }) => ({
 
     width: ${TIMELINE_NODE}px;
     height: ${TIMELINE_NODE}px;
-    border-radius: 50%;
 
     line-height: 0;
-
-    background: ${cssVar.colorBgContainer};
   `,
 }));

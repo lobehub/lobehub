@@ -28,6 +28,15 @@ const {
   mockPluginQuery: vi.fn().mockResolvedValue([]),
 }));
 
+// Feature-gated builtin tools (e.g. lobe-dashboard) join the disabled set
+// when their flag is off; this suite covers the agent's own tri-state config,
+// so run it with every gate open. Gating has its own coverage in
+// pipeline/__tests__/toolDiscovery.featureGate.test.ts.
+vi.mock('@/server/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getServerFeatureFlagsStateFromRuntimeConfig: vi.fn().mockResolvedValue({ enableDashboard: true }),
+}));
+
 vi.mock('@/libs/trusted-client', () => ({
   generateTrustedClientToken: vi.fn().mockReturnValue(undefined),
   getTrustedClientTokenForSession: vi.fn().mockResolvedValue(undefined),

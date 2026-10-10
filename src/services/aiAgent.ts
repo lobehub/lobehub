@@ -344,6 +344,22 @@ class AiAgentService {
   }
 
   /**
+   * Authoritative terminal outcome of a server run, by its operation id.
+   *
+   * The leaked-run sweep needs it to tell a run that COMPLETED from one that
+   * failed / was interrupted: only a completion may drain the follow-up the user
+   * queued behind it (a failed run keeps its queue, like every terminal path).
+   * The terminal frame that would have carried this outcome is exactly what the
+   * leak lost.
+   *
+   * Resolves `null` when the server no longer holds the run (its state expired).
+   * Callers must treat that as UNKNOWN, never as a completion.
+   */
+  async getOperationStatus(params: { operationId: string }) {
+    return await lambdaClient.aiAgent.getOperationStatus.query(params);
+  }
+
+  /**
    * Interrupt a running task
    */
   async interruptTask(params: InterruptTaskParams) {

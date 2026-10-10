@@ -357,6 +357,8 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
   通过 `lh connect --gateway http://your_server_ip:8788` 接入的设备，可以经由 `8788` 端口的设备网关为该部署执行本地工具。
 </Callout>
 
+`DEVICE_GATEWAY_PUBLIC_URL` 为可选项。在 `.env` 中将其设置为桌面端和 CLI 客户端访问设备网关的地址，例如 `http://your_server_ip:8788`，或反向代理到 `8788` 端口并开启 WebSocket 升级的域名。配置后，LobeHub 会下发该地址，支持自动发现的客户端可以从当前服务端获取它。不配置时，继续像上面的 `--gateway` 一样为每个客户端自行指定地址；两种方式都可以使用，已有部署无需修改。不要直接复用 `DEVICE_GATEWAY_URL` 的值：`http://gateway:8788` 只能在 Compose 网络内解析。
+
 ## 升级已有部署
 
 <Callout type="warning">

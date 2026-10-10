@@ -87,7 +87,7 @@ const BenchmarkDetail = memo(() => {
   const isLoadingDatasets = useEvalStore((s) => s.isLoadingDatasets);
   const refreshDatasets = useEvalStore((s) => s.refreshDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
 
   const { error, isLoading, mutate } = useFetchBenchmarkDetail(benchmarkId);
   useFetchDatasets(benchmarkId);

@@ -1,3 +1,5 @@
+import { EventEmitter } from 'node:events';
+
 import type { GatewayClient } from '@lobechat/device-gateway-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -232,5 +234,158 @@ describe('GatewayConnectionService status broadcast', () => {
     setStatus('disconnected');
 
     expect(broadcastStatuses()).toEqual(['disconnected']);
+  });
+});
+
+describe('GatewayConnectionService auth recovery', () => {
+  let service: GatewayConnectionService;
+  let doConnect: ReturnType<typeof vi.fn>;
+
+  const createFakeClient = () => {
+    const client = new EventEmitter() as any;
+    client.connect = vi.fn().mockResolvedValue(undefined);
+    client.disconnect = vi.fn().mockResolvedValue(undefined);
+    client.reconnect = vi.fn().mockResolvedValue(undefined);
+    client.updateToken = vi.fn();
+    return client as GatewayClient & {
+      disconnect: ReturnType<typeof vi.fn>;
+      reconnect: ReturnType<typeof vi.fn>;
+      updateToken: ReturnType<typeof vi.fn>;
+    };
+  };
+
+  /** Flush the async handlers that the event listeners kick off without awaiting. */
+  const flush = async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  };
+
+  beforeEach(() => {
+    const app = {
+      browserManager: { broadcastToAllWindows: vi.fn() },
+      storeManager: { get: vi.fn((_key: string, fallback?: unknown) => fallback), set: vi.fn() },
+    } as unknown as App;
+    service = new GatewayConnectionService(app);
+    doConnect = vi.fn().mockResolvedValue({ success: true });
+    (service as any).doConnect = doConnect;
+  });
+
+  describe('personal connection', () => {
+    it('refreshes the token and reconnects after auth_failed', async () => {
+      const refresher = vi.fn().mockResolvedValue({ success: true });
+      service.setTokenRefresher(refresher);
+      const client = createFakeClient();
+      (service as any).setupClientEvents(client);
+
+      client.emit('auth_failed', 'exp claim timestamp check failed');
+      await flush();
+
+      expect(refresher).toHaveBeenCalledTimes(1);
+      expect(doConnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('retries only once when the refreshed token is rejected again', async () => {
+      const refresher = vi.fn().mockResolvedValue({ success: true });
+      service.setTokenRefresher(refresher);
+      const client = createFakeClient();
+      (service as any).setupClientEvents(client);
+
+      client.emit('auth_failed', 'exp claim timestamp check failed');
+      await flush();
+      client.emit('auth_failed', 'exp claim timestamp check failed');
+      await flush();
+
+      expect(refresher).toHaveBeenCalledTimes(1);
+      expect(doConnect).toHaveBeenCalledTimes(1);
+      expect(service.getStatus()).toBe('disconnected');
+    });
+
+    it('gives the retry budget back once a connection authenticates', async () => {
+      const refresher = vi.fn().mockResolvedValue({ success: true });
+      service.setTokenRefresher(refresher);
+      const client = createFakeClient();
+      (service as any).setupClientEvents(client);
+
+      client.emit('auth_failed', 'first');
+      await flush();
+      client.emit('connected');
+      client.emit('auth_failed', 'second');
+      await flush();
+
+      expect(refresher).toHaveBeenCalledTimes(2);
+      expect(doConnect).toHaveBeenCalledTimes(2);
+    });
+
+    it('stays disconnected without looping when the refresh fails', async () => {
+      const refresher = vi.fn().mockResolvedValue({ success: false, error: 'invalid_grant' });
+      service.setTokenRefresher(refresher);
+      const client = createFakeClient();
+      (service as any).setupClientEvents(client);
+
+      client.emit('auth_failed', 'exp claim timestamp check failed');
+      await flush();
+
+      expect(refresher).toHaveBeenCalledTimes(1);
+      expect(doConnect).not.toHaveBeenCalled();
+      expect(service.getStatus()).toBe('disconnected');
+    });
+
+    it('pushes a refreshed token into the live client', () => {
+      const client = createFakeClient();
+      (service as any).client = client;
+
+      service.updatePersonalToken('fresh-token');
+
+      expect(client.updateToken).toHaveBeenCalledWith('fresh-token');
+    });
+  });
+
+  describe('workspace connection', () => {
+    const setupWorkspace = (service: GatewayConnectionService, workspaceId: string) => {
+      const client = createFakeClient();
+      (service as any).workspaceClients.set(workspaceId, client);
+      (service as any).setupClientEvents(client, { workspaceId });
+      return client;
+    };
+
+    it('re-mints the connect token and reconnects after auth_failed', async () => {
+      const client = setupWorkspace(service, 'ws-1');
+      const mint = vi.fn().mockResolvedValue('ws-token');
+      service.setWorkspaceTokenProvider(mint);
+
+      client.emit('auth_failed', 'token expired');
+      await flush();
+
+      expect(mint).toHaveBeenCalledWith('ws-1');
+      expect(client.updateToken).toHaveBeenCalledWith('ws-token');
+      expect(client.reconnect).toHaveBeenCalledTimes(1);
+      expect((service as any).workspaceClients.has('ws-1')).toBe(true);
+    });
+
+    it('closes the share instead of looping when it fails again', async () => {
+      const client = setupWorkspace(service, 'ws-1');
+      const mint = vi.fn().mockResolvedValue('ws-token');
+      service.setWorkspaceTokenProvider(mint);
+
+      client.emit('auth_failed', 'token expired');
+      await flush();
+      client.emit('auth_failed', 'token expired');
+      await flush();
+
+      expect(mint).toHaveBeenCalledTimes(1);
+      expect(client.disconnect).toHaveBeenCalledTimes(1);
+      expect((service as any).workspaceClients.has('ws-1')).toBe(false);
+    });
+
+    it('closes the share when the connect token cannot be re-minted', async () => {
+      const client = setupWorkspace(service, 'ws-1');
+      service.setWorkspaceTokenProvider(vi.fn().mockResolvedValue(null));
+
+      client.emit('auth_failed', 'token expired');
+      await flush();
+
+      expect(client.reconnect).not.toHaveBeenCalled();
+      expect((service as any).workspaceClients.has('ws-1')).toBe(false);
+    });
   });
 });

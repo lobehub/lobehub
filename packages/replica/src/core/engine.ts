@@ -16,6 +16,7 @@ import {
 } from './paging';
 import type { ReplicaAction, ReplicaEffect, ReplicaViewWrite } from './reducer';
 import { replicaReducer } from './reducer';
+import { createTombstones } from './tombstones';
 import type { ReplicaResource, ReplicaState } from './types';
 import { ReplicaWriteQueue } from './writeQueue';
 
@@ -69,6 +70,14 @@ export interface ReplicaEngineOptions<TParams, TData, TFetched> {
   isClientOnly?: (item: any) => boolean;
   /** Reject a persisted value that cannot serve these params. Rarely needed: rows are stored per query. */
   isHydratable?: (cached: TData, params: TParams) => boolean;
+  /**
+   * Non-paged: whether a head response means the entry no longer exists. Such a
+   * response is applied as an explicit removal (memory + persisted row) instead
+   * of through `merge` — otherwise a `null` would fall back to the confirmed
+   * value (the reducer resolves `action.data(confirmed) ?? confirmed`), so a
+   * deleted aggregate would be retained and re-persisted.
+   */
+  isMissing?: (incoming: TFetched) => boolean;
   /**
    * Non-paged: fold a server response into the confirmed value. Return
    * `undefined` to keep the current value. Defaults to "the response is the value".
@@ -140,6 +149,32 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   /** Keys with a `loadMore` request in flight (the only valid `isLoadingMore`). */
   const loadingMore = new Set<string>();
 
+  // ---- removal guard ----------------------------------------------------
+  // An explicit removal (a deleted / unauthorized aggregate, or a subject whose
+  // attachment is gone) drops the entry AND its persisted row — but a read of
+  // that row that started before the removal still holds the old value, and a
+  // removal leaves no trace in the slots for the `hydrate` guard to see. So a
+  // scope+key is remembered as removed and refuses hydration until a server
+  // value supersedes it, otherwise the late read resurrects the exact value the
+  // removal just dropped.
+  const removedEntries = createTombstones();
+  /**
+   * Keys whose persisted row delete was actually queued. `runEffects` refuses to
+   * write while the scope is untrusted, so a removal made on a cold boot can arm
+   * the guard without clearing the row. The guard alone must therefore not turn
+   * a later removal into a no-op, or the stale row would survive and hydrate
+   * again once the scope becomes trusted.
+   */
+  const purgedEntries = createTombstones();
+  const markRemoved = (scope: string, key: string) => removedEntries.add(scope, key);
+  const clearRemoved = (scope: string, key: string) => {
+    removedEntries.clear(scope, key);
+    purgedEntries.clear(scope, key);
+  };
+  const isRemoved = (scope: string, key: string) => removedEntries.has(scope, key);
+  const markPurged = (scope: string, key: string) => purgedEntries.add(scope, key);
+  const isPurged = (scope: string, key: string) => purgedEntries.has(scope, key);
+
   const getSlot = port.getState;
   const storageKey = (key: string, query?: string) => ({
     queryKey: replicaStorageKey(key, query),
@@ -188,7 +223,14 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       if (!resource.persistKey(effect.key)) continue;
       const key = { ...storageKey(effect.key, effect.query), scope: effect.scope };
       if (effect.type === 'remove') {
-        writeQueue.remove(key);
+        // A repeated removal for this key can be a real no-op (see `remove`) —
+        // but only once the row delete actually landed. A storage that rejects
+        // the delete (a closed IndexedDB, a quota error) must leave the key
+        // unpurged, so the next terminal answer retries it instead of letting a
+        // stale row survive to hydrate again.
+        void writeQueue.remove(key).then((removed) => {
+          if (removed) markPurged(effect.scope, effect.key);
+        });
         trackStorageKey(effect.scope, key.queryKey, false);
         continue;
       }
@@ -220,6 +262,15 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     const activeScope = resource.scope.get();
     // An action captured under another identity is stale — drop it.
     if (action.scope !== activeScope) return false;
+
+    // Every removal path (explicit `remove`, a missing response, an entity that
+    // takes its whole value with it) arms the hydration guard for this key.
+    if (action.type === 'remove') markRemoved(action.scope, action.key);
+    // A replacement that reaches the active scope supersedes an earlier removal,
+    // so the key may hydrate again. A response captured under another scope is
+    // dropped below and must NOT clear its guard: the removal still stands for
+    // its own scope, whose row delete may be pending or may have failed.
+    if (action.type === 'replace') clearRemoved(action.scope, action.key);
 
     const initial = getSlot();
     let slot = initial;
@@ -258,11 +309,20 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
 
   const hydrate = async (params: TParams, scope = resource.scope.get()) => {
     if (!resource.storage) return false;
+    // An identity-less runtime reads network-only: its scope is a guess, so
+    // hydrating it could paint another session's private rows.
+    if (resource.scope.canHydrate && !resource.scope.canHydrate()) return false;
     const key = resource.key(params);
     if (!resource.persistKey(key)) return false;
+    // A removed entry is not read back: only a later server value supersedes
+    // the removal (see `replace`), so a stale row can never repaint it.
+    if (isRemoved(scope, key)) return false;
     const query = resource.query(params);
     const cached = await resource.storage.get({ ...storageKey(key, query), scope });
     if (!cached) return false;
+    // Re-check after the read: a removal that landed while it was in flight must
+    // not resurrect the row it just dropped.
+    if (isRemoved(scope, key)) return false;
     if (options.isHydratable && !options.isHydratable(cached.data, params)) return false;
     return dispatch({
       data: cached.data,
@@ -310,6 +370,15 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       ? options.prepareHead(fetched, port.read(key), params)
       : fetched;
     if (incoming === undefined) return false;
+    // A response that says the entry is gone clears it outright: the merge path
+    // would keep — and re-persist — the confirmed value it is replacing. It also
+    // arms the hydration guard, so a persisted read still in flight cannot bring
+    // the dropped value back.
+    if (!paging && options.isMissing?.(incoming)) {
+      // Route through `remove` so a repeated "missing" is a no-op and a response
+      // captured under another scope is dropped rather than applied here.
+      return remove(key, scope);
+    }
     const query = resource.query(params);
     const entry = getSlot().entries[key];
     // A different query (filters, sort) must not merge with loaded pages. A
@@ -339,7 +408,61 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     { persist = true }: { persist?: boolean } = {},
   ) => dispatch({ apply, key, persist, scope: resource.scope.get(), type: 'update' });
 
-  const remove = (key: string) => dispatch({ key, scope: resource.scope.get(), type: 'remove' });
+  /**
+   * Purge a removal that belongs to a scope which is no longer active.
+   *
+   * The in-memory view is not ours to touch — the active scope owns it — but the
+   * guard and the persisted row both belong to THAT scope. Arming the one and
+   * deleting the other keeps a switch back from hydrating a value the server
+   * just deleted or denied. `dispatch` would reject the off-scope action
+   * outright (see `replace`'s stale-scope guard), so the row would otherwise
+   * survive untouched.
+   *
+   * Like `remove`, the delete only counts as done once it was actually queued:
+   * an untrusted scope refuses writes, so the guard stays armed as `unpurged`
+   * and a later removal retries instead of reporting a no-op that never deletes.
+   */
+  const purge = (key: string, scope: string): boolean => {
+    if (isRemoved(scope, key) && isPurged(scope, key)) return false;
+    markRemoved(scope, key);
+    // Nothing persisted (no storage, or a key this resource never persists) is
+    // already "cleared": the guard alone is the whole purge.
+    if (!writeQueue || !resource.persistKey(key)) {
+      markPurged(scope, key);
+      return false;
+    }
+    if (!resource.scope.canPersist()) return false;
+    const target = { ...storageKey(key), scope };
+    trackStorageKey(scope, target.queryKey, false);
+    void writeQueue.remove(target).then((removed) => {
+      if (removed) markPurged(scope, key);
+    });
+    return true;
+  };
+
+  /**
+   * Drop an entry and its persisted row.
+   *
+   * A removal is a no-op only once there is genuinely nothing left to do: the
+   * key is guarded, its value is gone, AND its stale row was already scheduled
+   * for deletion (or there is no persisted row to clear). A subject with no
+   * acceptance polls `null` every couple of seconds, and re-emitting the same
+   * delete on every tick would only churn storage. But a removal whose delete
+   * was skipped — an untrusted scope refuses writes — keeps retrying, so the row
+   * cannot survive to hydrate again once the scope is trusted.
+   *
+   * A removal captured under another identity (a late NOT_FOUND arriving after a
+   * workspace switch) is routed to {@link purge}: it must not touch the scope on
+   * screen, yet its own scope's row still has to go.
+   */
+  const remove = (key: string, scope: string = resource.scope.get()): boolean => {
+    if (scope !== resource.scope.get()) return purge(key, scope);
+    // Nothing persisted (no storage, or a key this resource never persists) is
+    // already "cleared"; otherwise the row delete must have been queued.
+    const rowCleared = !writeQueue || !resource.persistKey(key) || isPurged(scope, key);
+    if (rowCleared && isRemoved(scope, key) && port.read(key) === undefined) return false;
+    return dispatch({ key, scope, type: 'remove' });
+  };
 
   /**
    * Persist the confirmed value of an entry as it is now — the flush after a

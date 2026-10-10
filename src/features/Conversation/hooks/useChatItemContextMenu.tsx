@@ -15,6 +15,7 @@ import { resolveHeteroErroredStepId } from '@/features/Conversation/Error/hetero
 import { usePermission } from '@/hooks/usePermission';
 import { showContextMenu } from '@/libs/contextMenu';
 import type { NativeContextMenuItem } from '@/libs/contextMenu/types';
+import { useChatStore } from '@/store/chat';
 import { useSessionStore } from '@/store/session';
 import { sessionSelectors } from '@/store/session/selectors';
 import { useUserStore } from '@/store/user';
@@ -68,6 +69,7 @@ export const useChatItemContextMenu = ({
   const selectedTextRef = useRef<string | undefined>(undefined);
 
   const storeApi = useConversationStoreApi();
+  const forkTopic = useChatStore((s) => s.forkTopic);
 
   const [role, error, isCollapsed, hasThread, isRegenerating] = useConversationStore((s) => {
     const item = dataSelectors.getDisplayMessageById(id)(s);
@@ -131,6 +133,7 @@ export const useChatItemContextMenu = ({
       divider,
       edit,
       expand,
+      fork,
       regenerate,
       share,
       translate,
@@ -143,7 +146,7 @@ export const useChatItemContextMenu = ({
             if ('type' in item && item.type === 'divider') return item;
             if (['edit', 'del'].includes(String(item.key))) return { ...item, disabled: !canEdit };
             if (
-              ['branching', 'delAndRegenerate', 'regenerate', 'translate'].includes(
+              ['branching', 'delAndRegenerate', 'fork', 'regenerate', 'translate'].includes(
                 String(item.key),
               )
             ) {
@@ -162,6 +165,9 @@ export const useChatItemContextMenu = ({
       const collapseAction = isCollapsed ? expand : collapse;
       const list: MenuItem[] = [edit, copy, collapseAction];
 
+      // Forking a message into a standalone topic is GA; the in-topic thread
+      // creator (`branching`) is still gated behind dev mode.
+      if (!inThread && !isGroupSession) list.push(fork);
       if (!inThread && !isGroupSession && isDevMode) list.push(branching);
 
       list.push(divider, translate, divider, share, divider, regenerate, delAndRegenerate, del);
@@ -250,6 +256,15 @@ export const useChatItemContextMenu = ({
           toggleMessageCollapsed(id);
           break;
         }
+        case 'fork': {
+          if (!canCreate) break;
+          if (!topic) {
+            toast.warning(t('forkRequiresSavedTopic'));
+            break;
+          }
+          await forkTopic(id);
+          break;
+        }
         case 'branching': {
           if (!canCreate) break;
           if (!topic) {
@@ -311,6 +326,7 @@ export const useChatItemContextMenu = ({
       deleteMessage,
       delAndRegenerateMessage,
       delAndResendThreadMessage,
+      forkTopic,
       getMessage,
       handleShare,
       id,

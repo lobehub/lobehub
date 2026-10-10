@@ -292,7 +292,7 @@ const TaskAcceptance = memo<TaskAcceptanceProps>(({ variant = 'default' }) => {
       <Collapsible open={sectionExpanded}>
         <Flexbox className={styles.body} gap={14}>
           {bundleLoading && <Spin size="middle" />}
-          {bundleError && <AcceptanceError onRetry={() => void mutateBundle()} />}
+          {bundleError ? <AcceptanceError onRetry={() => void mutateBundle()} /> : null}
           {bundle && (
             <>
               <GoalRoundTimeline rounds={bundle.rounds} />

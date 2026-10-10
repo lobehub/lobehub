@@ -1,6 +1,6 @@
 import { and, asc, count, desc, eq, ilike, inArray, isNull } from 'drizzle-orm';
 
-import type { FileItem, MessageItem, SessionItem, TopicItem } from '@/database/schemas';
+import type { FileItem, SessionItem, TopicItem } from '@/database/schemas';
 import { messages, messagesFiles } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { idGenerator } from '@/database/utils/idGenerator';
@@ -61,7 +61,7 @@ export class MessageService extends BaseService {
     return await Promise.all(
       messages.map(async (message) => {
         return {
-          ...projectPublicMessage(message as MessageItem),
+          ...projectPublicMessage(message),
           files: await Promise.all(
             message.filesToMessages?.map(async ({ file }) => {
               const publicFile = projectPublicFile(file as FileItem);

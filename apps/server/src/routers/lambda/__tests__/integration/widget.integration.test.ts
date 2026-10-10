@@ -2,9 +2,11 @@
 import type { LobeChatDatabase } from '@lobechat/database';
 import {
   agents,
+  dashboards,
   metricPoints,
   metrics,
   projects,
+  topics,
   widgetRuns,
   widgets,
   widgetVersions,
@@ -40,6 +42,17 @@ vi.mock('@/database/core/db-adaptor', () => ({
     return testDB;
   }),
 }));
+
+// Runtime flag `dashboard` (off by default): the suite runs with it on and
+// narrows it per test to exercise the gate through the real flag mapping.
+const dashboardFlag = vi.hoisted(() => ({ value: true as boolean | string[] }));
+vi.mock('@/server/featureFlags', async () => {
+  const { mapFeatureFlagsEnvToState } = await import('@/config/featureFlags');
+  return {
+    getServerFeatureFlagsStateFromRuntimeConfig: async (userId?: string) =>
+      mapFeatureFlagsEnvToState({ dashboard: dashboardFlag.value }, userId),
+  };
+});
 
 const queueMode = vi.hoisted(() => ({ enabled: false }));
 vi.mock('@/envs/app', async (importOriginal) => {
@@ -104,6 +117,7 @@ describe('widget + dashboard routers integration', () => {
 
   afterEach(async () => {
     queueMode.enabled = false;
+    dashboardFlag.value = true;
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
@@ -120,6 +134,31 @@ describe('widget + dashboard routers integration', () => {
     caller: WidgetCaller,
     input: Parameters<WidgetCaller['create']>[0] = { title: 'Open PRs' },
   ) => (await caller.create(input))!.data;
+
+  describe('feature flag', () => {
+    it('refuses every widget and dashboard call, agent tool included, while `dashboard` is off for the caller', async () => {
+      dashboardFlag.value = [ownerId];
+      const owner = callers(ownerId);
+      const member = callers(memberId);
+
+      expect((await owner.board.list())!.success).toBe(true);
+      expect((await owner.widget.list())!.success).toBe(true);
+
+      await expect(member.board.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(member.widget.list()).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      await expect(
+        member.board.runAgentTool({ apiName: 'listDashboards', args: {} }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      dashboardFlag.value = false;
+      await expect(owner.board.create({ title: 'Ops' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+      await expect(owner.widget.create({ title: 'Open PRs' })).rejects.toMatchObject({
+        code: 'FORBIDDEN',
+      });
+    });
+  });
 
   describe('version flow', () => {
     it('requires a successful dry run of the exact content before publishing', async () => {
@@ -174,15 +213,37 @@ describe('widget + dashboard routers integration', () => {
       const widget = await createWidget(owner, { dashboardId: board.id, title: 'Open PRs' });
       const draft = (await owner.saveDraft({ widgetId: widget.id, ...statScript }))!.data;
 
+      const coordinatorId = await createTestAgent(db, ownerId);
+      const [project] = await db
+        .insert(projects)
+        .values({
+          coordinatorAgentId: coordinatorId,
+          identifier: 'OPS',
+          name: 'Ops project',
+          userId: ownerId,
+        })
+        .returning();
+      const projectBoard = (await ownerBoard.create({ projectId: project.id, title: 'Launch' }))!
+        .data;
+      await ownerBoard.addItem({ dashboardId: projectBoard.id, widgetId: widget.id });
+
       const detail = (await owner.detail({ id: widget.id }))!.data;
       expect(detail).toMatchObject({
-        dashboards: [{ id: board.id, title: 'Ops' }],
         draftVersion: { id: draft.id },
         publishedVersion: null,
       });
+      // Each board carries its project so links open it inside the project.
+      expect(detail.dashboards).toEqual(
+        expect.arrayContaining([
+          { id: board.id, projectId: null, title: 'Ops' },
+          { id: projectBoard.id, projectId: project.id, title: 'Launch' },
+        ]),
+      );
 
       await ownerBoard.trash({ id: board.id });
-      expect((await owner.detail({ id: widget.id }))!.data.dashboards).toEqual([]);
+      expect((await owner.detail({ id: widget.id }))!.data.dashboards).toEqual([
+        { id: projectBoard.id, projectId: project.id, title: 'Launch' },
+      ]);
     });
 
     it('publishes v2 over v1 and rolls back to the archived v1', async () => {
@@ -745,6 +806,77 @@ describe('widget + dashboard routers integration', () => {
     });
   });
 
+  describe('runAgentTool', () => {
+    it('scopes widgets to the conversation’s agent and project, ignoring foreign topics', async () => {
+      const agentId = await createTestAgent(db, ownerId);
+      const coordinatorId = await createTestAgent(db, ownerId);
+      const [project] = await db
+        .insert(projects)
+        .values({
+          coordinatorAgentId: coordinatorId,
+          identifier: 'TOOL',
+          name: 'P',
+          userId: ownerId,
+        })
+        .returning();
+      await db.insert(topics).values([
+        { agentId, id: `tpc_own_${ownerId}`, projectId: project.id, userId: ownerId },
+        { id: `tpc_other_${memberId}`, projectId: project.id, userId: memberId },
+      ]);
+      const { board } = callers(ownerId);
+      const createArgs = { ...statScript, description: 'Always 7', title: 'Seven' };
+
+      const created = await board.runAgentTool({
+        apiName: 'createWidgetDraft',
+        args: createArgs,
+        context: { agentId, operationId: 'op_1', topicId: `tpc_own_${ownerId}` },
+      });
+      expect(created).toMatchObject({ success: true });
+      const [widget] = await db
+        .select()
+        .from(widgets)
+        .where(eq(widgets.id, created.state.widgetId));
+      expect(widget).toMatchObject({ agentId, projectId: project.id, userId: ownerId });
+
+      // Another user's topic id is dropped instead of leaking its project.
+      const foreign = await board.runAgentTool({
+        apiName: 'createWidgetDraft',
+        args: createArgs,
+        context: { agentId, topicId: `tpc_other_${memberId}` },
+      });
+      const [foreignWidget] = await db
+        .select()
+        .from(widgets)
+        .where(eq(widgets.id, foreign.state.widgetId));
+      expect(foreignWidget).toMatchObject({ agentId, projectId: null });
+
+      // A run without the widget's agent/project cannot reach it.
+      const unscoped = await board.runAgentTool({
+        apiName: 'dryRunWidget',
+        args: { versionId: created.state.versionId, widgetId: widget.id },
+        context: { operationId: 'op_1' },
+      });
+      expect(unscoped).toMatchObject({ success: false });
+      expect(runSandbox).not.toHaveBeenCalled();
+
+      runSandbox.mockResolvedValueOnce(ok({ type: 'stat', value: 7 }));
+      const dryRun = await board.runAgentTool({
+        apiName: 'dryRunWidget',
+        args: { versionId: created.state.versionId, widgetId: widget.id },
+        context: { agentId, operationId: 'op_1', topicId: `tpc_own_${ownerId}` },
+      });
+      expect(dryRun).toMatchObject({ state: { status: 'succeeded' }, success: true });
+      expect(dryRun.content).toContain('"value": 7');
+    });
+
+    it('rejects unknown tool APIs', async () => {
+      const { board } = callers(ownerId);
+      await expect(
+        board.runAgentTool({ apiName: 'publish', args: {} } as any),
+      ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    });
+  });
+
   describe('permissions', () => {
     it('lets members read and refresh public widgets but not author them', async () => {
       const { board: ownerBoard, widget: owner } = callers(ownerId, workspaceId);
@@ -794,6 +926,35 @@ describe('widget + dashboard routers integration', () => {
         code: 'NOT_FOUND',
       });
       expect((await member.list())!.data.map((w) => w.id)).toEqual([widget.id]);
+    });
+
+    it('refuses a layout write that saves nothing instead of reporting it saved', async () => {
+      const { board: ownerBoard, widget: owner } = callers(ownerId, workspaceId);
+      const { board: memberBoard } = callers(memberId, workspaceId);
+
+      const board = (await ownerBoard.create({ title: 'Team board' }))!.data;
+      const widget = await createWidget(owner, { dashboardId: board.id, title: 'CI health' });
+      const [{ item }] = (await memberBoard.detail({ id: board.id }))!.data.items;
+      const patches = [{ id: item.id, layout: { h: 2, w: 4, x: 0, y: 0 } }];
+
+      // A member can read the public board but only its creator can arrange it.
+      await expect(
+        memberBoard.updateItemLayouts({ dashboardId: board.id, patches }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      // Items that are not on the board save nothing either.
+      await expect(
+        ownerBoard.updateItemLayouts({
+          dashboardId: board.id,
+          patches: [{ ...patches[0], id: widget.id }],
+        }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+
+      expect((await ownerBoard.updateItemLayouts({ dashboardId: board.id, patches }))!.data).toBe(
+        1,
+      );
+      expect(
+        (await ownerBoard.updateItemLayouts({ dashboardId: board.id, patches: [] }))!.data,
+      ).toBe(0);
     });
 
     it('hides a public widget, its versions, runs and metric series once its project turns private', async () => {
@@ -890,6 +1051,35 @@ describe('widget + dashboard routers integration', () => {
 
       const placed = await createWidget(owner, { dashboardId: board.id, title: 'Placed' });
       expect(placed.item).toMatchObject({ dashboardId: board.id, widgetId: placed.id });
+    });
+
+    it('creates a board with a widget on it in one step, keeping no board when placement fails', async () => {
+      const { board: ownerBoard, widget: owner } = callers(ownerId, workspaceId);
+      const widget = await createWidget(owner);
+      const boardsOf = (userId: string) =>
+        db
+          .select()
+          .from(dashboards)
+          .where(and(eq(dashboards.userId, userId), eq(dashboards.workspaceId, workspaceId)));
+
+      // A widget the caller cannot read (or that does not exist) is not placed.
+      await expect(
+        ownerBoard.create({ title: 'Ghost', widgetId: '00000000-0000-4000-8000-000000000000' }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      // The placement insert itself fails.
+      vi.spyOn(DashboardModel.prototype, 'addItem').mockRejectedValueOnce(
+        new Error('FK violation'),
+      );
+      await expect(
+        ownerBoard.create({ title: 'Failed placement', widgetId: widget.id }),
+      ).rejects.toMatchObject({ code: 'INTERNAL_SERVER_ERROR' });
+      expect(await boardsOf(ownerId)).toEqual([]);
+
+      const board = (await ownerBoard.create({ title: 'Ops', widgetId: widget.id }))!.data;
+      expect((await ownerBoard.detail({ id: board.id }))!.data.items).toMatchObject([
+        { widget: { id: widget.id } },
+      ]);
+      expect((await boardsOf(ownerId)).map(({ title }) => title)).toEqual(['Ops']);
     });
 
     it('rejects malformed ids before they reach the database', async () => {
@@ -1008,9 +1198,12 @@ describe('widget + dashboard routers integration', () => {
         expect(await post('/tick', {})).toMatchObject({ claimed: 0, dispatched: 1, due: 1 });
         expect(publish).toHaveBeenCalledWith({
           body: { slot: slot.toISOString(), widgetId: widget.id },
-          deduplicationId: `widget:${widget.id}:${slot.toISOString()}`,
+          // QStash rejects `:` in a deduplication id, so the logical
+          // `widget:<id>:<slot>` key is encoded before it is published.
+          deduplicationId: expect.stringMatching(/^[a-f0-9]{64}$/),
           url: 'https://app.test/api/workflows/widget/run-widget',
         });
+        expect(publish.mock.calls[0][0].deduplicationId).not.toContain(':');
         // Not claimed and nothing ran in the tick: the slot is still due.
         expect(await nextRunAt(widget.id)).toEqual(slot);
         expect(runSandbox).not.toHaveBeenCalled();
@@ -1117,7 +1310,8 @@ describe('widget + dashboard routers integration', () => {
         const resumeMessage = { leaseStartedAt, runId: reserved.id, widgetId: widget.id };
         expect(publish).toHaveBeenCalledWith({
           body: resumeMessage,
-          deduplicationId: `widget-run:${reserved.id}:${leaseStartedAt}`,
+          // Same QStash-safe encoding as a due slot's publish.
+          deduplicationId: expect.stringMatching(/^[a-f0-9]{64}$/),
           url: 'https://app.test/api/workflows/widget/run-widget',
         });
 

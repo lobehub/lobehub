@@ -19,6 +19,7 @@ import {
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
+import { DASHBOARD_DRY_RUN_AUDIT } from '@lobechat/builtin-tool-dashboard';
 import { appendSubAgentReference, isCallSubAgentCall } from '@lobechat/builtin-tool-lobe-agent';
 import { dynamicInterventionAudits } from '@lobechat/builtin-tools/dynamicInterventionAudits';
 import { ABANDONED_OPERATION_ERROR_PREFIX } from '@lobechat/const/goal';
@@ -95,6 +96,7 @@ import { QueueService } from '@/server/services/queue';
 import { LocalQueueServiceImpl } from '@/server/services/queue/impls';
 import { ToolExecutionService } from '@/server/services/toolExecution';
 import { BuiltinToolsExecutor } from '@/server/services/toolExecution/builtin';
+import { createWidgetDryRunAudit } from '@/server/services/widget/dryRunAudit';
 import {
   resolveRunWorkAccessScope,
   stateHasEntityFileEdits,
@@ -5115,7 +5117,14 @@ export class AgentRuntimeService {
         enabled: world?.agent?.chatConfig?.enableContextCompression ?? true,
         maxWindowToken: contextWindowTokens ?? undefined,
       },
-      dynamicInterventionAudits,
+      dynamicInterventionAudits: {
+        ...dynamicInterventionAudits,
+        [DASHBOARD_DRY_RUN_AUDIT]: createWidgetDryRunAudit(
+          this.serverDB,
+          origin?.userId ?? this.userId,
+          this.workspaceId,
+        ),
+      },
       modelRuntimeConfig,
       operationId,
       userId: origin?.userId,

@@ -443,7 +443,7 @@ export const serverConfigKeys = {
 
 // ---- discover (marketplace) ---------------------------------------------
 // NOTE: discover/eval/ragEval/knowledgeBase/device/userMemory/agentKnowledge/
-// agentBot/file prefixes are deliberately kept OUT of `CACHE_TIERS`
+// file prefixes are deliberately kept OUT of `CACHE_TIERS`
 // (see localStorageProvider.ts) so this key-convergence introduces no new
 // persistence — they stay memory-only exactly as before.
 export const discoverKeys = {
@@ -561,17 +561,6 @@ export const discoverKeys = {
     locale,
     params,
   ]),
-  providerDetail: def('discover:providerDetail', (locale: string, identifier: string) => [
-    'discover:providerDetail',
-    locale,
-    identifier,
-  ]),
-  providerIdentifiers: def('discover:providerIdentifiers', () => ['discover:providerIdentifiers']),
-  providerList: def('discover:providerList', (locale: string, params: unknown) => [
-    'discover:providerList',
-    locale,
-    params,
-  ]),
   skillCategories: def('discover:skillCategories', (locale: string, params: unknown) => [
     'discover:skillCategories',
     locale,
@@ -644,8 +633,6 @@ export const evalKeys = {
   datasetRuns: def('eval:datasetRuns', (datasetId: string) => ['eval:datasetRuns', datasetId]),
   datasetsAll: def('eval:datasetsAll', () => ['eval:datasetsAll']),
   datasets: def('eval:datasets', (benchmarkId: string) => ['eval:datasets', benchmarkId]),
-  experimentDetail: def('eval:experimentDetail', (id: string) => ['eval:experimentDetail', id]),
-  experiments: def('eval:experiments', () => ['eval:experiments']),
   runDetail: def('eval:runDetail', (id: string) => ['eval:runDetail', id]),
   runResults: def('eval:runResults', (id: string) => ['eval:runResults', id]),
   runs: def('eval:runs', (benchmarkId?: string) => ['eval:runs', benchmarkId]),
@@ -852,12 +839,6 @@ export const agentKnowledgeKeys = {
   ),
 };
 
-// ---- agent bot ----------------------------------------------------------
-export const agentBotKeys = {
-  platformDefinitions: def('agentBot:platformDefinitions', () => ['agentBot:platformDefinitions']),
-  providers: def('agentBot:providers', (agentId: string) => ['agentBot:providers', agentId]),
-};
-
 // ---- file ---------------------------------------------------------------
 export const fileKeys = {
   ttsFile: def('file:ttsFile', (messageId: string) => ['file:ttsFile', messageId]),
@@ -981,18 +962,6 @@ const acceptanceListKeyParts = ({ filter, projectId, scope, source }: Acceptance
 ];
 
 export const verifyKeys = {
-  acceptanceBundle: def('verify:acceptanceBundle', (acceptanceId: string) => [
-    'verify:acceptanceBundle',
-    acceptanceId,
-  ]),
-  acceptanceBySubject: def(
-    'verify:acceptanceBySubject',
-    (subjectType: string, subjectId: string) => [
-      'verify:acceptanceBySubject',
-      subjectType,
-      subjectId,
-    ],
-  ),
   /** Statuses for a known subject set. Ids are sorted+joined so the key is order-free. */
   acceptanceStatuses: def(
     'verify:acceptanceStatuses',
@@ -1332,13 +1301,6 @@ export const userKeys = {
   checkTrace: def('user:checkTrace', () => ['user:checkTrace']),
   initState: def('user:initState', () => ['user:initState']),
 };
-export const builtinAgentKeys = {
-  init: def('builtinAgent:init', (slug: string, scope: string) => [
-    'builtinAgent:init',
-    slug,
-    scope,
-  ]),
-};
 export const imessageKeys = {
   bridgeStatus: def('imessage:bridgeStatus', () => ['imessage:bridgeStatus']),
 };
@@ -1368,7 +1330,6 @@ export const matchDomain =
  */
 export const swrKeys = {
   agent: agentConfigKeys,
-  agentBot: agentBotKeys,
   agentBuilder: agentBuilderKeys,
   agentDocument: agentDocumentSWRKeys,
   agentHome: agentHomeKeys,
@@ -1378,7 +1339,6 @@ export const swrKeys = {
   aiModel: aiModelKeys,
   auth: authKeys,
   brief: briefKeys,
-  builtinAgent: builtinAgentKeys,
   changelog: changelogKeys,
   cron: cronKeys,
   device: deviceKeys,

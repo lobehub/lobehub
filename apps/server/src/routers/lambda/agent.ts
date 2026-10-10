@@ -1418,6 +1418,8 @@ export const agentRouter = router({
     .input(
       z.object({
         agentId: z.string(),
+        // Transport-only opt-in; old clients send cached complete device maps.
+        replaceWorkingDirDeviceIds: z.array(z.string()).optional(),
         value: z.object({}).passthrough().partial(),
       }),
     )
@@ -1468,7 +1470,11 @@ export const agentRouter = router({
       }
 
       // Use AgentService to update and return the updated agent data
-      return ctx.agentService.updateAgentConfig(input.agentId, safeValue);
+      return ctx.agentService.updateAgentConfig(
+        input.agentId,
+        safeValue,
+        input.replaceWorkingDirDeviceIds,
+      );
     }),
 
   /**

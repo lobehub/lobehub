@@ -84,6 +84,32 @@ describe('shouldFoldProcess', () => {
   );
   const proc = [w('t1')];
 
+  it('folds a finished turn whose process only READ an image', () => {
+    const readImage = {
+      apiName: 'Read',
+      id: 'read-image',
+      identifier: 'claude-code',
+      result: { content: 'ok', id: 'r', state: { images: [{ url: 'https://x/a.png' }] } },
+    };
+    expect(
+      shouldFoldProcess({
+        enabled: true,
+        hasFinalAnswer: true,
+        isGenerating: false,
+        isLatestItem: true,
+        operationEnded: true,
+        processSegments: [
+          w('commands', 2),
+          {
+            kind: 'workflow',
+            blocks: [{ id: 'read-image', tools: [readImage] } as any],
+            standalone: true,
+          },
+        ],
+      }),
+    ).toBe(true);
+  });
+
   it('folds a finished, non-latest turn that has a workflow when enabled', () => {
     expect(
       shouldFoldProcess({

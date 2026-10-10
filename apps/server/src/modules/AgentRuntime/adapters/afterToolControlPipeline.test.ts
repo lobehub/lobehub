@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentHook } from '@/server/services/agentRuntime/hooks';
 import { HookDispatcher } from '@/server/services/agentRuntime/hooks';
-import { BLOCKED_TOOL_RESULT_CONTENT } from '@/server/services/agentRuntime/hooks/toolResultControl';
 
 import type { RuntimeExecutorContext } from '../context';
 import { ServerToolTransport } from './ServerToolTransport';
@@ -172,6 +171,8 @@ afterEach(() => {
 
 describe('afterToolCall control pipeline', () => {
   const secret = 'synthetic-sensitive-result';
+  const denialReason = '禁止将敏感工具结果交给模型';
+  const defaultReason = 'Blocked by afterToolCall hook.';
   const raw = () => ({
     content: secret.repeat(1000),
     error: { message: secret, type: 'tool_error' },
@@ -195,7 +196,7 @@ describe('afterToolCall control pipeline', () => {
     'withholds the full result before persistence and LLM continuation, queue=%s',
     async (queue) => {
       queueMode.mockReturnValue(queue);
-      fetchHook.mockImplementation(async () => response('deny', secret));
+      fetchHook.mockImplementation(async () => response('deny', denialReason));
       const fixture = setup([control()], undefined, true);
       fixture.execute.mockResolvedValue(raw());
       const result = await fixture.step();
@@ -209,22 +210,26 @@ describe('afterToolCall control pipeline', () => {
       });
       expect(fixture.rows).toEqual([
         expect.objectContaining({
-          content: BLOCKED_TOOL_RESULT_CONTENT,
+          content: denialReason,
           pluginError: 'hook_denied',
           pluginState: {
             type: 'blocked',
             phase: 'afterToolCall',
-            reason: BLOCKED_TOOL_RESULT_CONTENT,
+            reason: denialReason,
           },
           tool_call_id: 'native-1',
         }),
       ]);
       expect(JSON.stringify(result)).not.toContain(secret);
+      expect(JSON.stringify(result)).toContain(denialReason);
       expect(JSON.stringify(result)).not.toContain('123456789');
       expect(JSON.stringify(await fixture.host.transports.messages.query())).not.toContain(secret);
       expect(
         JSON.stringify(vi.mocked(fixture.host.transports.stream.publishEvent).mock.calls),
       ).not.toContain(secret);
+      expect(
+        JSON.stringify(vi.mocked(fixture.host.transports.stream.publishEvent).mock.calls),
+      ).toContain(denialReason);
       expect(archive).not.toHaveBeenCalled();
       expect(result.newState.cost?.tools.total).toBe(5);
       expect(fixture.host.transports.stream.publishEvent).toHaveBeenCalledWith(
@@ -289,7 +294,8 @@ describe('afterToolCall control pipeline', () => {
     );
     resolve(response('deny'));
     await running;
-    expect(fixture.rows[0].content).toBe(BLOCKED_TOOL_RESULT_CONTENT);
+    expect(fixture.rows[0].content).toBe(defaultReason);
+    expect(fixture.rows[0].pluginState).toMatchObject({ reason: defaultReason });
   });
 
   it.each(['server', 'client', 'mock'] as const)(
@@ -326,12 +332,13 @@ describe('afterToolCall control pipeline', () => {
     'uses onError=%s for invalid responses and never leaks response text',
     async (onError) => {
       const fixture = setup([control('control', onError)]);
-      fetchHook.mockResolvedValue(new Response(JSON.stringify({ invalid: secret })));
+      fetchHook.mockResolvedValue(new Response(JSON.stringify({ decision: secret })));
       const result = await fixture.step();
       expect(fixture.execute).toHaveBeenCalledTimes(1);
-      expect(fixture.rows[0].content).toBe(
-        onError === 'block' ? BLOCKED_TOOL_RESULT_CONTENT : 'executed',
-      );
+      expect(fixture.rows[0].content).toBe(onError === 'block' ? 'hook_control_error' : 'executed');
+      if (onError === 'block') {
+        expect(fixture.rows[0].pluginState).toMatchObject({ reason: 'hook_control_error' });
+      }
       expect(JSON.stringify(result)).not.toContain(secret);
     },
   );
@@ -359,15 +366,16 @@ describe('afterToolCall control pipeline', () => {
           }),
       );
       const result = await fixture.step();
-      expect(fixture.rows[0].content).toBe(
-        onError === 'block' ? BLOCKED_TOOL_RESULT_CONTENT : 'executed',
-      );
+      expect(fixture.rows[0].content).toBe(onError === 'block' ? 'hook_control_error' : 'executed');
+      if (onError === 'block') {
+        expect(fixture.rows[0].pluginState).toMatchObject({ reason: 'hook_control_error' });
+      }
       expect(fixture.execute).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(result)).not.toContain(secret);
     },
   );
 
-  it('applies ordered controls once, preserves a tool stop, and does not forward a receiver reason', async () => {
+  it('applies ordered controls once, preserves a tool stop, and forwards the denying hook reason', async () => {
     const fixture = setup([
       control('allow'),
       { ...control('skip'), matcher: '^other/' },
@@ -376,7 +384,7 @@ describe('afterToolCall control pipeline', () => {
     ]);
     fixture.execute.mockResolvedValue({ ...raw(), stop: true });
     fetchHook.mockImplementation(async (url) =>
-      response(String(url).endsWith('/deny') ? 'deny' : 'allow', secret),
+      response(String(url).endsWith('/deny') ? 'deny' : 'allow', denialReason),
     );
     const result = await fixture.step();
     expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
@@ -384,7 +392,47 @@ describe('afterToolCall control pipeline', () => {
       'https://hooks.example/deny',
     ]);
     expect(result.newState.status).toBe('done');
+    expect(fixture.rows[0]).toMatchObject({
+      content: denialReason,
+      pluginState: { reason: denialReason },
+    });
     expect(JSON.stringify(result)).not.toContain(secret);
+  });
+
+  it.each([' \n自定义 "reason"\n ', secret])(
+    'preserves an explicitly provided denial reason verbatim: %j',
+    async (reason) => {
+      const fixture = setup([control()]);
+      fixture.execute.mockResolvedValue(raw());
+      fetchHook.mockImplementation(async () => response('deny', reason));
+
+      await fixture.step();
+
+      expect(fixture.rows[0]).toMatchObject({
+        content: reason,
+        pluginError: 'hook_denied',
+        pluginState: { reason, type: 'blocked', phase: 'afterToolCall' },
+      });
+      expect(fixture.rows[0].pluginState).not.toHaveProperty('nested');
+      expect(fixture.rows[0].pluginState).not.toHaveProperty('images');
+      expect(archive).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each([false, true])('uses the default for an empty denial reason, queue=%s', async (queue) => {
+    queueMode.mockReturnValue(queue);
+    const fixture = setup([control()]);
+    fixture.execute.mockResolvedValue(raw());
+    fetchHook.mockImplementation(async () => response('deny', ''));
+
+    await fixture.step();
+
+    expect(fixture.rows[0]).toMatchObject({
+      content: defaultReason,
+      pluginError: 'hook_denied',
+      pluginState: { reason: defaultReason, type: 'blocked', phase: 'afterToolCall' },
+    });
+    expect(JSON.stringify(fixture.rows)).not.toContain(secret);
   });
 
   it('evaluates a failed result after the last tool retry only', async () => {
@@ -417,7 +465,7 @@ describe('afterToolCall control pipeline', () => {
       expect.arrayContaining([
         expect.objectContaining({
           tool_call_id: 'constructor',
-          content: BLOCKED_TOOL_RESULT_CONTENT,
+          content: defaultReason,
         }),
         expect.objectContaining({ tool_call_id: '__proto__', content: 'allowed sibling' }),
       ]),
@@ -467,7 +515,7 @@ describe('afterToolCall control pipeline', () => {
       expect(fixture.rows).toHaveLength(1);
       expect(fixture.host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
         'existing-row',
-        expect.objectContaining({ replacePluginState: true, content: BLOCKED_TOOL_RESULT_CONTENT }),
+        expect.objectContaining({ replacePluginState: true, content: defaultReason }),
       );
       expect(JSON.stringify(await fixture.host.transports.messages.query())).not.toContain(secret);
       expect(JSON.stringify(result)).not.toContain(secret);
@@ -536,7 +584,7 @@ describe('afterToolCall control pipeline', () => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/environment');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       const fixture = setup([]);
       fixture.rows.push({
         id: 'protected-row',
@@ -712,20 +760,16 @@ describe('afterToolCall control pipeline', () => {
       'run:three',
       'control:three',
     ]);
-    expect(fixture.rows.map((row) => row.content)).toEqual([
-      'one',
-      BLOCKED_TOOL_RESULT_CONTENT,
-      'three',
-    ]);
+    expect(fixture.rows.map((row) => row.content)).toEqual(['one', defaultReason, 'three']);
   });
 
-  it.each(['toolCall', 'toolResult', 'toolCallAndResult'] as const)(
-    'applies the explicit environment mode %s at runtime',
-    async (mode) => {
+  it.each(['beforeToolCall', 'afterToolCall', 'beforeToolCall,afterToolCall'])(
+    'uses toolCall to control selected events %s at runtime',
+    async (events) => {
       vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/env');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall,afterToolCall');
-      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', mode);
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', events);
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
       vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
       fetchHook.mockImplementation(async (_url, init) =>
         response(JSON.parse(init.body).hookType === 'afterToolCall' ? 'deny' : 'allow'),
@@ -734,13 +778,28 @@ describe('afterToolCall control pipeline', () => {
       await fixture.step();
       expect(fixture.execute).toHaveBeenCalledTimes(1);
       expect(fixture.rows[0].content).toBe(
-        mode === 'toolCall' ? 'executed' : BLOCKED_TOOL_RESULT_CONTENT,
+        events.includes('afterToolCall') ? defaultReason : 'executed',
       );
-      await vi.waitFor(() => expect(fetchHook).toHaveBeenCalledTimes(2));
-      expect(fetchHook.mock.calls.map(([, init]) => JSON.parse(init.body).hookType)).toEqual([
-        'beforeToolCall',
-        'afterToolCall',
-      ]);
+      expect(fetchHook.mock.calls.map(([, init]) => JSON.parse(init.body).hookType)).toEqual(
+        events.split(','),
+      );
+    },
+  );
+
+  it.each(['', 'not JSON', '{"decision":', '{}'])(
+    'executes and publishes normally when both hooks respond with notification body %j',
+    async (body) => {
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/env');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-token');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'beforeToolCall,afterToolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolCall');
+      vi.stubEnv('AGENT_HOOK_WEBHOOK_ON_ERROR', 'block');
+      fetchHook.mockImplementation(async () => new Response(body));
+      const fixture = setup([]);
+      await fixture.step();
+      expect(fixture.execute).toHaveBeenCalledTimes(1);
+      expect(fixture.rows[0].content).toBe('executed');
+      expect(fetchHook).toHaveBeenCalledTimes(2);
     },
   );
 

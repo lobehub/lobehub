@@ -81,6 +81,19 @@ export const preHydrateMessagesForRoute = async (
 
 /** Loader for the agent chat routes (`/agent/:aid`, `/agent/:aid/:topicId`). */
 export const agentChatTopicListLoader = async ({ params }: LoaderFunctionArgs): Promise<null> => {
+  /**
+   * A builtin slug (`inbox`, …) resolves to its id from `builtinAgentIdMap`, so
+   * the persisted builtin agent must be seeded before `resolveRouteAgentId` runs.
+   * The replica's storage read is the only place it can land pre-paint — the
+   * mount-time sync (and its hydrate) has not run yet.
+   */
+  if (params.aid && builtinAgentSlugs.has(params.aid)) {
+    await settleWithin(
+      useAgentStore.getState().preHydrateBuiltinAgent(params.aid),
+      PRE_PAINT_HYDRATE_TIMEOUT,
+    );
+  }
+
   await Promise.all([
     preHydrateTopicListForRoute(params.aid),
     preHydrateMessagesForRoute(params.aid, params.topicId),

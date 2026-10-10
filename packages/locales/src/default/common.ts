@@ -51,6 +51,8 @@ export default {
   'branching': 'Create Subtopic',
   'branchingRequiresSavedTopic':
     'Current topic is not saved, please save it first to use subtopic feature',
+  'forkRequiresSavedTopic': 'Current topic is not saved. Save it first to fork a new topic',
+  'forkTopic': 'Continue in new topic',
   'viewExecutionDetails': 'View execution details',
   'cancel': 'Cancel',
   'changelog': 'Changelog',
@@ -535,6 +537,7 @@ export default {
   'tab.chat': 'Chat',
   'recents': 'Recents',
   'tab.community': 'Community',
+  'tab.dashboard': 'Dashboards',
   'tab.create': 'Create',
   'tab.discover': 'Discover',
   'tab.eval': 'Eval Lab',

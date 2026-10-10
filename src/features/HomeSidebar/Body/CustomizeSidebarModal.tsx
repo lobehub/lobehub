@@ -47,6 +47,7 @@ import {
   SIDEBAR_ACCORDION_KEYS,
   SIDEBAR_SPACER_ID,
 } from '@/store/global/selectors/systemStatus';
+import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfig';
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -63,6 +64,7 @@ export interface SidebarItemConfig {
 
 const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
   { id: 'tasks', labelKey: 'tab.tasks', routeId: 'tasks' },
+  { id: 'dashboard', labelKey: 'tab.dashboard', routeId: 'dashboard' },
   { id: 'pages', labelKey: 'tab.pages', routeId: 'page' },
   { id: 'recents', labelKey: 'recents' },
   { id: 'project', labelKey: 'project:sidebar.title' },
@@ -77,15 +79,27 @@ const ALL_SIDEBAR_ITEMS: SidebarItemConfig[] = [
 // Private is workspace-only; in personal mode every row is implicitly
 // owner-private, so hide it from the customizer where toggling it on
 // would render an empty accordion no user can populate.
-export const getAvailableSidebarItems = (isWorkspaceMode: boolean): SidebarItemConfig[] =>
+// Dashboards also stay out until the `dashboard` feature flag is on for the
+// user; a dropped id is restored by `withAllKnownKeys` once it is.
+export const getAvailableSidebarItems = (
+  isWorkspaceMode: boolean,
+  { dashboardEnabled = false }: { dashboardEnabled?: boolean } = {},
+): SidebarItemConfig[] =>
   ALL_SIDEBAR_ITEMS.filter((item) => {
-    if (isWorkspaceMode && item.id === 'memory') return false;
+    if (item.id === 'dashboard' && !dashboardEnabled) return false;
+    if (isWorkspaceMode && (item.id === 'memory' || item.id === 'dashboard')) return false;
     if (!isWorkspaceMode && item.id === 'private') return false;
     return true;
   });
 
-export const getSortableSidebarItemIds = (isWorkspaceMode: boolean): Set<string> =>
-  new Set([...getAvailableSidebarItems(isWorkspaceMode).map((item) => item.id), SIDEBAR_SPACER_ID]);
+export const getSortableSidebarItemIds = (
+  isWorkspaceMode: boolean,
+  options?: { dashboardEnabled?: boolean },
+): Set<string> =>
+  new Set([
+    ...getAvailableSidebarItems(isWorkspaceMode, options).map((item) => item.id),
+    SIDEBAR_SPACER_ID,
+  ]);
 
 const ITEM_MAP = new Map(ALL_SIDEBAR_ITEMS.map((item) => [item.id, item]));
 
@@ -375,9 +389,10 @@ const CustomizeSidebarContent = memo(() => {
   );
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const isWorkspaceMode = !!useActiveWorkspaceSlug();
+  const dashboardEnabled = useServerConfigStore(serverConfigSelectors.enableDashboard);
   const sortableItemIds = useMemo(
-    () => getSortableSidebarItemIds(isWorkspaceMode),
-    [isWorkspaceMode],
+    () => getSortableSidebarItemIds(isWorkspaceMode, { dashboardEnabled }),
+    [isWorkspaceMode, dashboardEnabled],
   );
   const filteredStoreItems = useMemo(
     () => storeItems.filter((id) => sortableItemIds.has(id)),

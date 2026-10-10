@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 
+import { DashboardItemLimitError } from '@/database/models/dashboard';
 import { ScopeLevelError } from '@/database/utils/scopeLevel';
 import { WidgetFlowError } from '@/server/services/widget';
 
@@ -24,6 +25,9 @@ export function mapWidgetError(error: unknown, domain: string, operation: string
   if (error instanceof TRPCError) throw error;
   if (error instanceof WidgetFlowError) {
     throw new TRPCError({ code: FLOW_ERROR_CODES[error.code], message: error.message });
+  }
+  if (error instanceof DashboardItemLimitError) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: error.message });
   }
   if (error instanceof ScopeLevelError) {
     throw new TRPCError({

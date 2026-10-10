@@ -6,7 +6,11 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { getRouteById } from '@/config/routes';
 import { useGlobalStore } from '@/store/global';
 import { SidebarTabKey } from '@/store/global/initialState';
-import { featureFlagsSelectors, useServerConfigStore } from '@/store/serverConfig';
+import {
+  featureFlagsSelectors,
+  serverConfigSelectors,
+  useServerConfigStore,
+} from '@/store/serverConfig';
 
 export interface NavItem {
   hidden?: boolean;
@@ -38,6 +42,7 @@ export const useNavLayout = (): NavLayout => {
   const toggleCommandMenu = useGlobalStore((s) => s.toggleCommandMenu);
   const { showMarket, hideGitHub } = useServerConfigStore(featureFlagsSelectors);
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
+  const enableDashboard = useServerConfigStore(serverConfigSelectors.enableDashboard);
 
   const topNavItems = useMemo(
     () =>
@@ -61,13 +66,22 @@ export const useNavLayout = (): NavLayout => {
           url: '/tasks',
         },
         {
+          // Personal boards only for now — workspace-level boards have no UI
+          // yet — and only while the `dashboard` feature flag is on.
+          hidden: !!activeWorkspaceSlug || !enableDashboard,
+          icon: getRouteById('dashboard')!.icon,
+          key: SidebarTabKey.Dashboard,
+          title: t('tab.dashboard'),
+          url: '/dashboard',
+        },
+        {
           icon: getRouteById('resource')!.icon,
           key: SidebarTabKey.Resource,
           title: t('tab.resource'),
           url: '/resource',
         },
       ] as NavItem[],
-    [t, toggleCommandMenu],
+    [t, toggleCommandMenu, activeWorkspaceSlug, enableDashboard],
   );
 
   const bottomMenuItems = useMemo(
