@@ -24,6 +24,7 @@ import { formatSize } from '@/utils/format';
 import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
+import { useConfirmRemoveEnvironment } from './useConfirmRemoveEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -193,28 +194,8 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
             ]
         : [];
 
-    const remove = () =>
-      actions
-        .removeEnvironment(environment.id)
-        // A refusal has to reach the person. An environment still holding
-        // instances is refused on purpose, and that is what they need to read.
-        .catch((error: unknown) =>
-          toast.error(describeError(error, t, t('environments.removeFailed'))),
-        );
-
-    // Asked for, like deleting an instance is — the row is emptied of
-    // instances by then, but the environment still carries its specification,
-    // its variables and the snapshot built from them, and none of that comes
-    // back. A single click in a menu was the whole gesture.
-    const confirmRemove = () =>
-      confirmModal({
-        cancelText: tCommon('cancel'),
-        content: t('environments.removeConfirmContent'),
-        okButtonProps: { danger: true },
-        okText: t('environments.remove'),
-        onOk: remove,
-        title: t('environments.removeConfirmTitle', { name: environment.name }),
-      });
+    const confirmRemoveEnvironment = useConfirmRemoveEnvironment();
+    const confirmRemove = () => confirmRemoveEnvironment(environment);
 
     return (
       <Flexbox

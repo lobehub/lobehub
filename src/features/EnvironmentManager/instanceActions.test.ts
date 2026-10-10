@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   canCopyInstance,
-  canRemoveInstance,
   copyBlockReason,
   copyEntryTitle,
+  deleteEntry,
   recheckCopySource,
 } from './instanceActions';
 
@@ -73,17 +73,22 @@ describe('recheckCopySource', () => {
   });
 });
 
-describe('canRemoveInstance', () => {
-  it('offers no delete on the default copy, even to its creator', () => {
-    expect(canRemoveInstance({ isDefault: true }, true)).toBe(false);
+describe('deleteEntry', () => {
+  it('offers no delete on the default copy among several, even to its creator', () => {
+    expect(deleteEntry({ isDefault: true }, { editable: true, single: false })).toBeUndefined();
   });
 
-  it('offers delete on a copy beside the default', () => {
-    expect(canRemoveInstance({ isDefault: false }, true)).toBe(true);
+  it('offers to delete a copy beside the default', () => {
+    expect(deleteEntry({ isDefault: false }, { editable: true, single: false })).toBe('instance');
+  });
+
+  it("makes the only copy's delete entry delete the environment", () => {
+    expect(deleteEntry({ isDefault: true }, { editable: true, single: true })).toBe('environment');
   });
 
   it('offers no delete to anyone but the creator', () => {
-    expect(canRemoveInstance({ isDefault: false }, false)).toBe(false);
+    expect(deleteEntry({ isDefault: false }, { editable: false, single: false })).toBeUndefined();
+    expect(deleteEntry({ isDefault: true }, { editable: false, single: true })).toBeUndefined();
   });
 });
 

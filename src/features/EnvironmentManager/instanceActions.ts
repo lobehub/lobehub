@@ -73,15 +73,23 @@ export const recheckCopySource = async (
 };
 
 /**
- * Whether the row offers to delete this copy.
+ * What the row's delete entry deletes, or `undefined` when it has none.
  *
- * Never the default copy: it is what the environment is, and the server
- * refuses to delete it on its own. A broken one is rebuilt; with no other copy
- * left, deleting the environment is how it goes. And only for the
- * environment's creator, like every other change to its copies.
+ * Never the default copy on its own: it is what the environment is, and the
+ * server refuses to delete it. A broken one is rebuilt. When it is the only
+ * copy, the entry is there and deletes the environment, which is how that copy
+ * goes. Only for the environment's creator, like every other change to its
+ * copies.
  */
-export const canRemoveInstance = (instance: { isDefault: boolean }, editable: boolean) =>
-  editable && !instance.isDefault;
+export const deleteEntry = (
+  instance: { isDefault: boolean },
+  { editable, single }: { editable: boolean; single: boolean },
+): 'environment' | 'instance' | undefined => {
+  if (!editable) return undefined;
+  if (single) return 'environment';
+
+  return instance.isDefault ? undefined : 'instance';
+};
 
 /**
  * Whether the row offers to copy this copy at all — enabled or greyed out is

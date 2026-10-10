@@ -6,6 +6,7 @@ import { memo } from 'react';
 
 import InstanceList from './InstanceList';
 import { repositoryPath } from './repository';
+import { useConfirmRemoveEnvironment } from './useConfirmRemoveEnvironment';
 import { useEnvironmentActions, useEnvironments, useInstances } from './useEnvironmentData';
 
 interface InstanceSectionProps {
@@ -32,6 +33,7 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, k
   const { data } = useInstances();
   const { data: environmentData } = useEnvironments();
   const actions = useEnvironmentActions();
+  const confirmRemoveEnvironment = useConfirmRemoveEnvironment();
 
   const instances = (data?.instances ?? []).filter(
     (instance) => instance.environmentId === environmentId,
@@ -40,10 +42,10 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, k
   // Read here rather than on each row: every instance in this section is built
   // from the one environment, so the checkout is the section's fact, not the
   // row's. The rows carry it because they are what a person points at.
-  const repository = repositoryPath(
-    environmentData?.environments.find((environment) => environment.id === environmentId)
-      ?.configuration,
+  const environment = environmentData?.environments.find(
+    (candidate) => candidate.id === environmentId,
   );
+  const repository = repositoryPath(environment?.configuration);
 
   return (
     <Flexbox>
@@ -59,6 +61,7 @@ const InstanceSection = memo<InstanceSectionProps>(({ editable, environmentId, k
         single={single}
         onBuild={actions.rebuildInstance}
         onRemove={actions.removeInstance}
+        onRemoveEnvironment={environment ? () => confirmRemoveEnvironment(environment) : undefined}
         onStop={actions.stopInstance}
       />
     </Flexbox>

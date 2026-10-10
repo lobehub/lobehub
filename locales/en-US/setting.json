@@ -687,7 +687,7 @@
   "environments.namePlaceholder": "Environment name",
   "environments.refresh": "Refresh",
   "environments.remove": "Delete environment",
-  "environments.removeConfirmContent": "Its specification, variables and saved snapshot go with it, and cannot be recovered.",
+  "environments.removeConfirmContent": "Its specification, variables, its copy's folder and the saved snapshot go with it, and cannot be recovered.",
   "environments.removeConfirmTitle": "Delete environment {{name}}?",
   "environments.removeFailed": "Could not delete this environment",
   "environments.saveFailed": "Could not save this change",

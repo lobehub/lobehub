@@ -687,7 +687,7 @@
   "environments.namePlaceholder": "环境名称",
   "environments.refresh": "刷新",
   "environments.remove": "删除环境",
-  "environments.removeConfirmContent": "它的配置、环境变量和保存下来的快照都会一起删除，无法恢复。",
+  "environments.removeConfirmContent": "它的配置、环境变量、副本的目录和保存下来的快照都会一起删除，无法恢复。",
   "environments.removeConfirmTitle": "删除环境 {{name}}？",
   "environments.removeFailed": "删除环境失败",
   "environments.saveFailed": "无法保存这次修改",

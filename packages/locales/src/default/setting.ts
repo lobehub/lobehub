@@ -3947,7 +3947,7 @@ When I am ___, I need ___
   'environments.remove': 'Delete environment',
   'environments.removeConfirmTitle': 'Delete environment {{name}}?',
   'environments.removeConfirmContent':
-    'Its specification, variables and saved snapshot go with it, and cannot be recovered.',
+    "Its specification, variables, its copy's folder and the saved snapshot go with it, and cannot be recovered.",
   'environments.storage.used': '{{used}} of {{total}}',
   'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
   'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',

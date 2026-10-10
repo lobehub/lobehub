@@ -28,9 +28,9 @@ import {
 import { describeError } from './errorMessage';
 import {
   canCopyInstance,
-  canRemoveInstance,
   copyBlockReason,
   copyEntryTitle,
+  deleteEntry,
   recheckCopySource,
 } from './instanceActions';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
@@ -99,6 +99,8 @@ interface InstanceListProps {
   occupancyUnavailable: boolean;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Deletes the whole environment; the only copy's delete entry. */
+  onRemoveEnvironment?: () => void;
   /** Ends the run holding an instance; `stopped: false` when nothing was. */
   onStop: (id: string) => Promise<{ stopped: boolean }>;
   /** `owner/name` of the environment's checkout, when it builds from one. */
@@ -119,6 +121,8 @@ interface InstanceRowProps {
   occupancyUnavailable: boolean;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Deletes the whole environment; the only copy's delete entry. */
+  onRemoveEnvironment?: () => void;
   onStop: (id: string) => Promise<{ stopped: boolean }>;
   repository?: string;
   showBuild: boolean;
@@ -213,6 +217,7 @@ const InstanceRow = memo<InstanceRowProps>(
     occupancyUnavailable,
     onBuild,
     onRemove,
+    onRemoveEnvironment,
     onStop,
     repository,
     showBuild,
@@ -262,6 +267,7 @@ const InstanceRow = memo<InstanceRowProps>(
     const stoppable = editable && instance.inUse && instance.status !== 'pending';
 
     const copyBlocked = copyBlockReason(instance, occupancyUnavailable);
+    const deletes = deleteEntry(instance, { editable, single: Boolean(single) });
     const [checkingCopy, setCheckingCopy] = useState(false);
     // Read again on the click rather than trusted from whenever the list was
     // fetched; see `recheckCopySource`.
@@ -476,8 +482,17 @@ const InstanceRow = memo<InstanceRowProps>(
               onClick={() => openEditInstanceModal(instance)}
             />
           )}
-          {/* Never on the default copy; see `canRemoveInstance`. */}
-          {canRemoveInstance(instance, editable) && (
+          {/* The only copy's delete entry deletes the environment; the
+            default copy among several has none. See `deleteEntry`. */}
+          {deletes === 'environment' && onRemoveEnvironment && (
+            <ActionIcon
+              icon={Trash2Icon}
+              size={'small'}
+              title={t('environments.remove')}
+              onClick={onRemoveEnvironment}
+            />
+          )}
+          {deletes === 'instance' && (
             <ActionIcon
               disabled={removing}
               icon={Trash2Icon}
@@ -587,6 +602,7 @@ const InstanceList = memo<InstanceListProps>(
     occupancyUnavailable,
     onBuild,
     onRemove,
+    onRemoveEnvironment,
     onStop,
     repository,
     showBuild,
@@ -639,6 +655,7 @@ const InstanceList = memo<InstanceListProps>(
                 single={single}
                 onBuild={onBuild}
                 onRemove={onRemove}
+                onRemoveEnvironment={onRemoveEnvironment}
                 onStop={onStop}
               />
             ))}
