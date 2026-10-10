@@ -68,7 +68,7 @@ export const getServerGlobalConfig = async () => {
       modelListKey: 'AWS_BEDROCK_MODEL_LIST',
     },
     deepseek: {
-      enabled: true,
+      enabledKey: 'ENABLED_DEEPSEEK',
     },
     giteeai: {
       enabledKey: 'ENABLED_GITEE_AI',
