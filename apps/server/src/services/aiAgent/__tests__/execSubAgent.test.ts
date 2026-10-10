@@ -632,7 +632,9 @@ describe('AiAgentService.execSubAgent', () => {
         expect.objectContaining({
           appContext: expect.objectContaining({
             isSubAgent: true,
-            subAgentProgress: { parentOperationId: 'parent-op-2', toolMessageId: 'tool-msg-2' },
+            // A non-blocking continuation (`settle`) has no parked parent to push
+            // live progress to, so `subAgentProgress` is not injected.
+            subAgentProgress: undefined,
             threadId: 'thread-old',
           }),
           hooks: expect.arrayContaining([
@@ -640,6 +642,7 @@ describe('AiAgentService.execSubAgent', () => {
               id: 'sub-agent-bridge',
               webhook: expect.objectContaining({
                 body: {
+                  mode: 'settle',
                   parentOperationId: 'parent-op-2',
                   threadId: 'thread-old',
                   toolMessageId: 'tool-msg-2',

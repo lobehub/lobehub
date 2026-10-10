@@ -64,6 +64,7 @@ const createCallSubAgentResponse = () => {
     arguments: JSON.stringify({
       description: 'Research the answer',
       instruction: 'Find the answer to the ultimate question.',
+      wait: true,
     }),
     call_id: callId,
     name: 'lobe-agent____callSubAgent',

@@ -50,7 +50,7 @@ describe('buildServerVirtualSubAgentRunner after tool approval', () => {
 
     expect(messageModel.create).not.toHaveBeenCalled();
     expect(messageModel.updatePluginState).toHaveBeenCalledWith('approved-tool-row', {
-      status: 'pending',
+      status: 'dispatched',
     });
     expect(execVirtualSubAgent).toHaveBeenCalledWith(
       expect.objectContaining({ parentMessageId: 'approved-tool-row' }),
@@ -76,7 +76,7 @@ describe('buildServerVirtualSubAgentRunner after tool approval', () => {
     const result = await runner.run({ description: 'research', instruction: 'go' });
 
     expect(messageModel.create).toHaveBeenCalledWith(
-      expect.objectContaining({ parentId: 'assistant-1', pluginState: { status: 'pending' } }),
+      expect.objectContaining({ parentId: 'assistant-1', pluginState: { status: 'dispatched' } }),
     );
     expect(result).toMatchObject({ started: true, toolMessageId: 'new-placeholder' });
   });
