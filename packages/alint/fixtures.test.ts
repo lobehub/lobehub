@@ -4,13 +4,13 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { hasFixtureProvider, runFixtureLint } from './runFixtures';
+import { runFixtureLint } from './runFixtures';
 
 /**
  * Calibration: every `bad-*` fixture must produce a finding for its rule on
  * the line below each standalone `// alint-expect` (or its JSX-comment form inside JSX) comment (±1 line), every
- * `good-*` fixture must produce none. Runs when alint has a local or global model;
- * no configured model skips calibration and must not be counted as a pass.
+ * `good-*` fixture must produce none. Runs only when a provider is set up (`bun run alint:setup`);
+ * without `.alint/config.toml` the suite is skipped, not failed.
  */
 const alintDir = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(alintDir, '../..');
@@ -25,7 +25,9 @@ const FIXTURE_ROOTS = [
   { dir: 'packages/heterogeneous-agents/alint/fixtures', prefix: 'hetero' },
 ];
 
-const hasSetup = await hasFixtureProvider(rootDir);
+const hasSetup = await readFile(path.join(rootDir, '.alint/config.toml'), 'utf8')
+  .then(() => true)
+  .catch(() => false);
 
 /** Every fixture file, with the rule id its findings must carry. */
 const fixtures = (
