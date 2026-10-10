@@ -979,6 +979,149 @@ describe('GeneralChatAgent', () => {
         },
       ]);
     });
+
+    it('rejects parallel-batch calls that arrived with empty arguments instead of executing them', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      // The serialization-loss shape from T-673: fully-formed parallel calls
+      // whose per-call arguments were lost upstream, reaching the agent as ''.
+      const lostArgsCalls: ChatToolPayload[] = [
+        {
+          apiName: 'search',
+          arguments: '',
+          id: 'call-1',
+          identifier: 'lobe-web-browsing',
+          type: 'builtin',
+        },
+        {
+          apiName: 'search',
+          arguments: '',
+          id: 'call-2',
+          identifier: 'lobe-web-browsing',
+          type: 'builtin',
+        },
+      ];
+
+      const result = await agent.runner(
+        createMockContext('llm_result', {
+          hasToolsCalling: true,
+          parentMessageId: 'msg-1',
+          toolsCalling: lostArgsCalls,
+        }),
+        createMockState(),
+      );
+
+      expect(result).toEqual([
+        {
+          payload: {
+            blockedContent: expect.stringContaining('arguments of this call arrived empty'),
+            blockedReason: 'tool_arguments_empty',
+            parentMessageId: 'msg-1',
+            toolsCalling: lostArgsCalls,
+          },
+          type: 'resolve_blocked_tools',
+        },
+      ]);
+    });
+
+    it('still executes the calls that kept their arguments in a mixed batch', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const lostArgsCall: ChatToolPayload = {
+        apiName: 'search',
+        arguments: '',
+        id: 'call-1',
+        identifier: 'lobe-web-browsing',
+        type: 'builtin',
+      };
+      const healthyCall: ChatToolPayload = {
+        apiName: 'readFile',
+        arguments: '{"path":"/tmp/a.txt"}',
+        id: 'call-2',
+        identifier: 'lobe-local-system',
+        type: 'builtin',
+      };
+
+      const result = await agent.runner(
+        createMockContext('llm_result', {
+          hasToolsCalling: true,
+          parentMessageId: 'msg-1',
+          toolsCalling: [lostArgsCall, healthyCall],
+        }),
+        // Manifests without humanIntervention config → no intervention, so the
+        // healthy call goes straight to the executor.
+        createMockState({
+          toolManifestMap: {
+            'lobe-web-browsing': { identifier: 'lobe-web-browsing' },
+            'lobe-local-system': { identifier: 'lobe-local-system' },
+          },
+        }),
+      );
+
+      expect(result).toEqual([
+        {
+          payload: {
+            blockedContent: expect.stringContaining('Call the tool again one call at a time'),
+            blockedReason: 'tool_arguments_empty',
+            parentMessageId: 'msg-1',
+            toolsCalling: [lostArgsCall],
+          },
+          type: 'resolve_blocked_tools',
+        },
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: healthyCall,
+          },
+        },
+      ]);
+    });
+
+    it('keeps a legal no-argument call executable (arguments "{}" is not the loss shape)', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        operationId: 'test-session',
+        modelRuntimeConfig: mockModelRuntimeConfig,
+      });
+
+      const noArgsCall: ChatToolPayload = {
+        apiName: 'listOnlineDevices',
+        arguments: '{}',
+        id: 'call-1',
+        identifier: 'lobe-remote-device',
+        type: 'builtin',
+      };
+
+      const result = await agent.runner(
+        createMockContext('llm_result', {
+          hasToolsCalling: true,
+          parentMessageId: 'msg-1',
+          toolsCalling: [noArgsCall],
+        }),
+        createMockState({
+          toolManifestMap: { 'lobe-remote-device': { identifier: 'lobe-remote-device' } },
+        }),
+      );
+
+      expect(result).toEqual([
+        {
+          type: 'call_tool',
+          payload: {
+            parentMessageId: 'msg-1',
+            toolCalling: noArgsCall,
+          },
+        },
+      ]);
+    });
   });
 
   describe('tool_result phase', () => {
