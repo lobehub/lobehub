@@ -9,6 +9,7 @@ import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
 import type { LobeChatDatabase } from '../type';
+import { agentUsableBy } from '../utils/agent-access';
 import { buildWorkspacePayload, buildWorkspaceWhere } from '../utils/workspace';
 
 /**
@@ -131,8 +132,20 @@ export class AgentAccountModel {
     this.gateKeeper = gateKeeper;
   }
 
-  private ownership = () =>
-    buildWorkspaceWhere({ userId: this.userId, workspaceId: this.workspaceId }, agentAccounts);
+  /**
+   * Workspace scope AND the owning agent's visibility. An account carries its
+   * agent's secrets and inbound mail (verification codes included), so a
+   * workspace member must not reach the accounts of a colleague's private
+   * agent — workspace scope alone would let them.
+   */
+  private ownership = () => {
+    const ctx = { userId: this.userId, workspaceId: this.workspaceId };
+
+    return and(
+      buildWorkspaceWhere(ctx, agentAccounts),
+      agentUsableBy(this.db, agentAccounts.agentId, ctx),
+    )!;
+  };
 
   private encrypt = async (value: Record<string, string>): Promise<string> => {
     if (!this.gateKeeper) {

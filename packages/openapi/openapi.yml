@@ -17,6 +17,95 @@ components:
         - success
         - timestamp
       type: object
+    AgentAccount:
+      additionalProperties: false
+      properties:
+        agentId:
+          type: string
+        capabilities:
+          additionalProperties: false
+          properties:
+            login:
+              type:
+                - boolean
+                - "null"
+            receive:
+              type: boolean
+            send:
+              type: boolean
+            sign:
+              type:
+                - boolean
+                - "null"
+          required:
+            - receive
+            - send
+          type: object
+        createdAt:
+          format: date-time
+          type: string
+        credentialHint:
+          additionalProperties: true
+          type:
+            - object
+            - "null"
+        displayName:
+          type:
+            - string
+            - "null"
+        hasCredential:
+          type: boolean
+        id:
+          type: string
+        identifier:
+          type: string
+        kind:
+          enum:
+            - mail
+            - phone
+            - wallet
+            - service
+          type: string
+        metadata:
+          additionalProperties: true
+          type:
+            - object
+            - "null"
+        provider:
+          type: string
+        revokedAt:
+          format: date-time
+          type:
+            - string
+            - "null"
+        status:
+          enum:
+            - provisioning
+            - active
+            - suspended
+            - revoked
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+        userId:
+          type: string
+        workspaceId:
+          type:
+            - string
+            - "null"
+      required:
+        - id
+        - agentId
+        - kind
+        - identifier
+        - provider
+        - status
+        - capabilities
+        - hasCredential
+        - createdAt
+        - updatedAt
+      type: object
     ApiKey:
       additionalProperties: false
       properties:
@@ -47,6 +136,7 @@ components:
               - "*"
               - agent:read
               - agent:write
+              - agent:credential:write
               - eval:read
               - eval:write
               - chat:read
@@ -2609,6 +2699,713 @@ paths:
                   minLength: 1
                   maxLength: 255
               additionalProperties: false
+  /api/v1/agents/{id}/accounts:
+    get:
+      operationId: listAgentAccounts
+      tags:
+        - agents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    additionalProperties: false
+                    properties:
+                      accounts:
+                        items:
+                          $ref: "#/components/schemas/AgentAccount"
+                        type: array
+                      total:
+                        minimum: 0
+                        type: integer
+                    required:
+                      - accounts
+                      - total
+                    type: object
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: kind
+          schema:
+            type: string
+            enum:
+              - mail
+              - phone
+              - wallet
+              - service
+        - in: query
+          name: provider
+          schema:
+            type: string
+            minLength: 1
+    post:
+      operationId: createAgentAccount
+      tags:
+        - agents
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgentAccount"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              anyOf:
+                - type: object
+                  properties:
+                    capabilities:
+                      type: object
+                      properties:
+                        login:
+                          type: boolean
+                        receive:
+                          type: boolean
+                        send:
+                          type: boolean
+                        sign:
+                          type: boolean
+                      required:
+                        - receive
+                        - send
+                    displayName:
+                      type: string
+                      minLength: 1
+                    identifier:
+                      type: string
+                      minLength: 1
+                    kind:
+                      type: string
+                      enum:
+                        - mail
+                        - phone
+                        - wallet
+                        - service
+                    metadata:
+                      type: object
+                      propertyNames:
+                        type: string
+                      additionalProperties: {}
+                    provider:
+                      type: string
+                      minLength: 1
+                  required:
+                    - identifier
+                    - kind
+                    - provider
+                - type: object
+                  properties:
+                    displayName:
+                      type: string
+                      minLength: 1
+                    provider:
+                      type: string
+                      minLength: 1
+                  required:
+                    - provider
+                  additionalProperties: false
+  /api/v1/agents/{id}/accounts/{accountId}:
+    get:
+      operationId: getAgentAccount
+      tags:
+        - agents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgentAccount"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: accountId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+    patch:
+      operationId: updateAgentAccount
+      tags:
+        - agents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgentAccount"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: accountId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                capabilities:
+                  type: object
+                  properties:
+                    login:
+                      type: boolean
+                    receive:
+                      type: boolean
+                    send:
+                      type: boolean
+                    sign:
+                      type: boolean
+                  required:
+                    - receive
+                    - send
+                displayName:
+                  type:
+                    - string
+                    - "null"
+                metadata:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties: {}
+    delete:
+      operationId: revokeAgentAccount
+      tags:
+        - agents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgentAccount"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: accountId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: query
+          name: purgeCredential
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+        - in: query
+          name: release
+          schema:
+            type: string
+            enum:
+              - "true"
+              - "false"
+  /api/v1/agents/{id}/accounts/{accountId}/credential:
+    put:
+      operationId: setAgentAccountCredential
+      tags:
+        - agents
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties: false
+                properties:
+                  data:
+                    $ref: "#/components/schemas/AgentAccount"
+                  message:
+                    type: string
+                  success:
+                    const: true
+                    type: boolean
+                  timestamp:
+                    format: date-time
+                    type: string
+                required:
+                  - success
+                  - timestamp
+                type: object
+          description: Successful response
+        "400":
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    enum:
+                      - false
+                  error:
+                    type: array
+                    items: {}
+                  data: {}
+                required:
+                  - success
+                  - error
+                  - data
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Authentication required
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Insufficient permission
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Resource conflict
+        "429":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Rate limit exceeded
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+          description: Internal server error
+      parameters:
+        - in: path
+          name: accountId
+          schema:
+            type: string
+            minLength: 1
+          required: true
+        - in: path
+          name: id
+          schema:
+            type: string
+            minLength: 1
+          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                credential:
+                  type: object
+                  propertyNames:
+                    type: string
+                  additionalProperties:
+                    type: string
+                hint:
+                  type: object
+                  properties:
+                    expiresAt:
+                      type: string
+                    masked:
+                      type: string
+                    username:
+                      type: string
+              required:
+                - credential
   /api/v1/api-keys:
     get:
       operationId: getApiV1ApiKeys
@@ -2710,6 +3507,7 @@ paths:
                           - "*"
                           - agent:read
                           - agent:write
+                          - agent:credential:write
                           - eval:read
                           - eval:write
                           - chat:read
@@ -2769,6 +3567,7 @@ paths:
                             - "*"
                             - agent:read
                             - agent:write
+                            - agent:credential:write
                             - eval:read
                             - eval:write
                             - chat:read
