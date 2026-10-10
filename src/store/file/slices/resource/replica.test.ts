@@ -14,7 +14,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheScope } from '@/libs/replica';
+import { cacheScope, REPLICA_INDEX_KEY } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { resourceService } from '@/services/resource';
 import { initialState } from '@/store/file/initialState';
@@ -100,6 +100,16 @@ describe('resourceList replica', () => {
           queryParams: params,
           total: items.length,
         },
+        updatedAt: 1,
+      },
+    );
+    // Register the row in the replica's persisted-row index, exactly as the
+    // engine does when it writes a page, so persisted patches can find it.
+    seededQueryKeys.add(REPLICA_INDEX_KEY);
+    await resourceListResource.storage!.set(
+      { queryKey: REPLICA_INDEX_KEY, scope },
+      {
+        data: [...seededQueryKeys].filter((key) => key !== REPLICA_INDEX_KEY) as never,
         updatedAt: 1,
       },
     );
@@ -531,5 +541,167 @@ describe('resourceList replica', () => {
     await waitFor(() => expect(ids()[0]).toBe('resource-1'));
     expect(ids()).not.toContain('resource-0');
     expect(querySpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a pending upload when a same-pool sort repaints from its cached page', async () => {
+    const sortedParams = normalizeResourceListParams({
+      parentId: null,
+      sorter: 'size',
+      sortType: 'asc',
+    })!;
+    await seedPersisted(sortedParams, [row('cached-sorted')]);
+
+    // Only the default (newest-first) query answers; the sorted one is offline.
+    querySpy.mockImplementation((params) =>
+      params.sorter === 'size' ? pending() : Promise.resolve(page([row('newest-1')], 1)),
+    );
+
+    const hook = renderHook(
+      (props: { sorter?: 'size' }) =>
+        useFileStore((s) => s.useFetchResources)({
+          parentId: null,
+          sorter: props.sorter,
+          sortType: props.sorter ? 'asc' : undefined,
+        }),
+      { initialProps: {} as { sorter?: 'size' }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['newest-1']));
+
+    act(() =>
+      useFileStore.getState().insertLocalResource(
+        {
+          fileType: 'text/plain',
+          name: 'Uploading',
+          parentId: null,
+          size: 3,
+          sourceType: 'file',
+          url: '',
+        },
+        'temp-upload',
+      ),
+    );
+    expect(ids()).toEqual(['temp-upload', 'newest-1']);
+
+    // Same pool, different storage row: the overwrite hydrate must keep the
+    // client-only row the persisted page has no counterpart for.
+    hook.rerender({ sorter: 'size' });
+
+    await waitFor(() => expect(ids()).toContain('cached-sorted'));
+    expect(ids()).toContain('temp-upload');
+  });
+
+  it('reconciles when a same-pool query change drops the pending create token', async () => {
+    let releaseCreate!: (value: ResourceItem) => void;
+    const createGate = new Promise<ResourceItem>((resolve) => {
+      releaseCreate = resolve;
+    });
+    vi.spyOn(resourceService, 'createResource').mockImplementation(() => createGate);
+
+    querySpy.mockImplementation((params) =>
+      params.sorter === 'size'
+        ? Promise.resolve(page([row('sorted-1')], 1))
+        : Promise.resolve(page([row('newest-1')], 1)),
+    );
+
+    const hook = renderHook(
+      (props: { sorter?: 'size' }) =>
+        useFileStore((s) => s.useFetchResources)({
+          parentId: null,
+          sorter: props.sorter,
+          sortType: props.sorter ? 'asc' : undefined,
+        }),
+      { initialProps: {} as { sorter?: 'size' }, wrapper },
+    );
+
+    await waitFor(() => expect(ids()).toEqual(['newest-1']));
+
+    let creating!: Promise<string>;
+    act(() => {
+      creating = useFileStore.getState().createResource({
+        fileType: 'text/plain',
+        name: 'New',
+        parentId: null,
+        sourceType: 'file',
+        url: '',
+      });
+    });
+    expect(ids()[0].startsWith('temp-resource-')).toBe(true);
+
+    // Same-pool query change: the overlay is dropped before it settles.
+    hook.rerender({ sorter: 'size' });
+    await waitFor(() => expect(ids()).toEqual(['sorted-1']));
+
+    const callsBefore = querySpy.mock.calls.length;
+    await act(async () => {
+      releaseCreate(row('created'));
+      await creating;
+    });
+
+    // The dropped token must force a reconciliation, not leave the server
+    // change unreflected until focus / reconnect.
+    await waitFor(() => expect(querySpy.mock.calls.length).toBeGreaterThan(callsBefore));
+  });
+
+  it('restarts paging from the head after removing rows from a multi-page knowledge base view', async () => {
+    querySpy
+      .mockResolvedValueOnce(page(rows(50), 120))
+      .mockResolvedValueOnce(page(rows(50, 50), 120))
+      .mockResolvedValueOnce(page(rows(50, 1), 119));
+
+    renderHook(() => useFileStore((s) => s.useFetchResources)({ libraryId: 'kb-1' }), { wrapper });
+
+    await waitFor(() => expect(useFileStore.getState().resourceList).toHaveLength(50));
+    await act(async () => {
+      await useFileStore.getState().loadMoreResources();
+    });
+    expect(useFileStore.getState().resourceList).toHaveLength(100);
+
+    await act(async () => {
+      await useFileStore.getState().removeResourcesFromKnowledgeBase('kb-1', ['resource-0']);
+    });
+
+    // The loaded depth collapsed to a fresh head page ...
+    await waitFor(() => expect(useFileStore.getState().resourceList).toHaveLength(50));
+
+    querySpy.mockResolvedValueOnce(page(rows(50, 51), 119));
+    await act(async () => {
+      await useFileStore.getState().loadMoreResources();
+    });
+
+    // ... so "load more" restarts at the head's next offset, not the stale 100.
+    expect(querySpy).toHaveBeenLastCalledWith(expect.objectContaining({ offset: 50 }));
+  });
+
+  it('patches the cached source and destination folder pages after an API-only move', async () => {
+    const paramsA = normalizeResourceListParams({ parentId: 'folder-a' })!;
+    const paramsB = normalizeResourceListParams({ parentId: 'folder-b' })!;
+    await seedPersisted(paramsA, [row('moved'), row('stay-a')]);
+    await seedPersisted(paramsB, [row('stay-b')]);
+
+    const keyA = resourceListResource.storageKey(paramsA);
+    const keyB = resourceListResource.storageKey(paramsB);
+
+    // The explorer is open on an uncached folder; the move is issued elsewhere.
+    querySpy.mockResolvedValue(page([], 0));
+    renderHook(() => useFileStore((s) => s.useFetchResources)({ parentId: 'folder-c' }), {
+      wrapper,
+    });
+
+    const patch = await useFileStore
+      .getState()
+      .prepareResourceMoveCachePatch('folder-a', 'folder-b');
+    await useFileStore
+      .getState()
+      .applyMovedResourceToCaches({ ...row('moved'), parentId: 'folder-b' }, patch);
+
+    await waitFor(async () => {
+      const source = await resourceListResource.storage!.get({ queryKey: keyA, scope });
+      expect((source?.data.items as ResourceItem[]).map((item) => item.id)).toEqual(['stay-a']);
+    });
+    await waitFor(async () => {
+      const destination = await resourceListResource.storage!.get({ queryKey: keyB, scope });
+      expect((destination?.data.items as ResourceItem[]).map((item) => item.id)).toContain('moved');
+    });
   });
 });

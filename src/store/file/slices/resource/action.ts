@@ -23,7 +23,13 @@ import {
   RESOURCE_LIST_KEY,
   resourceListResource,
 } from './projection';
-import { getResourceQueryKey, isOptimisticRowInRequestedPool } from './utils';
+import {
+  getResourceQueryKey,
+  isOptimisticRowInRequestedPool,
+  listsMovedRowUnfiltered,
+  patchDestinationList,
+  patchSourceList,
+} from './utils';
 
 const log = debug('resource-manager:action');
 
@@ -306,6 +312,22 @@ export class ResourceActionImpl {
     }
   };
 
+  /**
+   * Settle an optimistic overlay and, when it could not be found any more — a
+   * same-pool query change (re-sort, view-mode switch) drops its token — force
+   * a reconciliation, so the server change is not left unreflected until the
+   * next focus, reconnect or manual refresh.
+   */
+  #commitListOptimistic = (
+    token:
+      { commit: (confirm?: (data: ResourceListValue) => ResourceListValue) => boolean } | undefined,
+    action: string,
+    confirm?: (data: ResourceListValue) => ResourceListValue,
+  ): void => {
+    const settled = token?.commit(confirm);
+    if (token && !settled) void this.#revalidateListQuietly(action);
+  };
+
   #clearSyncingOptimistic = (resource: ResourceItem): ResourceItem => stripOptimistic(resource);
 
   #isResourceOutsideCurrentQuery = (resource: ResourceItem): boolean => {
@@ -539,7 +561,9 @@ export class ResourceActionImpl {
 
     try {
       const created = (await resourceService.createResource(params)) as ResourceItem;
-      token?.commit((data) => this.#settleCreated(data, optimistic.id, created));
+      this.#commitListOptimistic(token, 'createResource', (data) =>
+        this.#settleCreated(data, optimistic.id, created),
+      );
     } catch (error) {
       token?.rollback();
       console.error('Failed to create resource:', error);
@@ -561,7 +585,9 @@ export class ResourceActionImpl {
 
     try {
       const created = (await resourceService.createResource(params)) as ResourceItem;
-      token?.commit((data) => this.#settleCreated(data, optimistic.id, created));
+      this.#commitListOptimistic(token, 'createResourceAndSync', (data) =>
+        this.#settleCreated(data, optimistic.id, created),
+      );
       return created.id;
     } catch (error) {
       token?.rollback();
@@ -574,7 +600,7 @@ export class ResourceActionImpl {
 
     try {
       await resourceService.deleteResource(id);
-      token?.commit();
+      this.#commitListOptimistic(token, 'deleteResource');
     } catch (error) {
       token?.rollback();
       throw error;
@@ -594,7 +620,7 @@ export class ResourceActionImpl {
 
     try {
       await resourceService.deleteResources(ids);
-      token?.commit();
+      this.#commitListOptimistic(token, 'deleteResources');
     } catch (error) {
       token?.rollback();
       throw error;
@@ -634,7 +660,9 @@ export class ResourceActionImpl {
 
     try {
       const result = (await resourceService.updateResource(id, updates)) as ResourceItem;
-      token?.commit((data) => this.#patchRow(data, id, () => result));
+      this.#commitListOptimistic(token, 'updateResource', (data) =>
+        this.#patchRow(data, id, () => result),
+      );
     } catch (error) {
       token?.rollback();
       throw error;
@@ -717,15 +745,18 @@ export class ResourceActionImpl {
   };
 
   /**
-   * Reconcile a completed move into the explorer list the replica owns: the
-   * moved row is patched (or dropped) in the in-memory view, and any mounted
-   * query is revalidated so a later visit reads the fresh head page instead of
-   * the pre-move persisted rows.
+   * Reconcile a completed move into every cached list of the two folders the
+   * move touched — not only the mounted one. The patch was captured before the
+   * request (scope + both folders widened to every key the explorer may query
+   * them by), because the user may switch scope while it is in flight.
    *
-   * The patch carries the scope the move was issued from. Reconcile only when
-   * that scope is still the active one: after a workspace or library switch the
-   * mounted replica answers another identity / query, and applying the
-   * completion there would paint (and persist) this scope's row into it.
+   * The mounted list is patched through the in-memory entry; every other cached
+   * folder is patched through its persisted row, so an offline navigation
+   * hydrates the reconciled page instead of the pre-move one. The moved row is
+   * dropped from a source folder and seeded into a destination folder only when
+   * that list is an unfiltered folder listing the row certainly belongs to.
+   * Reconcile only while the issuing scope is still active: after a workspace or
+   * library switch the mounted replica answers another identity / query.
    */
   applyMovedResourceToCaches = async (
     resource: ResourceItem,
@@ -734,22 +765,28 @@ export class ResourceActionImpl {
     if (getActiveWorkspaceId() !== patch.scope.workspaceId) return;
     if ((this.#get().queryParams?.libraryId ?? undefined) !== patch.scope.libraryId) return;
 
-    const stripped = stripOptimistic(resource);
+    const moved = stripOptimistic(resource);
+    const toKeys = new Set(patch.toParentKeys);
+    const fromKeys = new Set(patch.fromParentKeys.filter((key) => !toKeys.has(key)));
+
+    const reconcileFolderList = (data: ResourceListValue): ResourceListValue | undefined => {
+      const params = data.queryParams;
+      if (!params || (params.libraryId ?? undefined) !== patch.scope.libraryId) return undefined;
+
+      const parentId = params.parentId ?? null;
+      if (fromKeys.has(parentId)) return patchSourceList(data, moved.id);
+      if (toKeys.has(parentId) && listsMovedRowUnfiltered(params, moved)) {
+        return patchDestinationList(data, moved, params);
+      }
+      return undefined;
+    };
 
     this.#resourceList.update(
       RESOURCE_LIST_KEY,
-      (data) => {
-        if (!data) return data;
-        if (data.items.some((item) => item.id === stripped.id)) {
-          return this.#patchRow(data, stripped.id, () => stripped);
-        }
-        if (this.#isResourceVisibleInCurrentQuery(stripped)) {
-          return this.#insertRow(data, stripped);
-        }
-        return data;
-      },
+      (data) => (data ? (reconcileFolderList(data) ?? data) : data),
       { persist: true },
     );
+    await this.#resourceList.patchStoredRows((data) => reconcileFolderList(data));
 
     await this.#revalidateListQuietly('applyMovedResourceToCaches');
   };
@@ -890,7 +927,7 @@ export class ResourceActionImpl {
 
     try {
       await knowledgeBaseService.addFilesToKnowledgeBase(knowledgeBaseId, ids);
-      token?.commit((data) =>
+      this.#commitListOptimistic(token, 'addResourcesToKnowledgeBase', (data) =>
         this.#patchRows(data, idsSet, (resource) =>
           this.#clearSyncingOptimistic({ ...resource, knowledgeBaseId }),
         ),
@@ -928,13 +965,16 @@ export class ResourceActionImpl {
     try {
       await knowledgeBaseService.removeFilesFromKnowledgeBase(knowledgeBaseId, ids);
       if (isKnowledgeBaseView) {
-        token?.commit();
-        // The rows left the server's page too, so the offset the loaded depth
-        // implies no longer lines up with the survivors — without a revalidate
-        // the next "load more" would skip the row that shifted up into the gap.
+        this.#commitListOptimistic(token, 'removeResourcesFromKnowledgeBase');
+        // The rows left the server's page too, so the loaded depth no longer
+        // lines up with the survivors. Drop the loaded pages to the head first:
+        // the confirmation then repaints a real head page and "load more"
+        // restarts from offset 1 instead of skipping the row that shifted up
+        // into the gap (a multi-page list kept its old cursor otherwise).
+        this.#resourceList.collapse(RESOURCE_LIST_KEY);
         await this.#revalidateListQuietly('removeResourcesFromKnowledgeBase');
       } else {
-        token?.commit((data) =>
+        this.#commitListOptimistic(token, 'removeResourcesFromKnowledgeBase', (data) =>
           this.#patchRows(data, idsSet, (resource) =>
             this.#clearSyncingOptimistic({ ...resource, knowledgeBaseId: undefined }),
           ),
