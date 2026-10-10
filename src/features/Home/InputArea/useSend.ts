@@ -19,6 +19,10 @@ import { useChatStore } from '@/store/chat';
 import { fileChatSelectors, useFileStore } from '@/store/file';
 import { useHomeStore } from '@/store/home';
 import { useTaskStore } from '@/store/task';
+import { settingsSelectors } from '@/store/user/selectors';
+import { authSelectors } from '@/store/user/slices/auth/selectors';
+import { getUserStoreState } from '@/store/user/store';
+import { getUserMemoryStoreState } from '@/store/userMemory';
 
 import { useResolvedHomeAgentId } from '../AgentSelect/useResolvedHomeAgentId';
 import type { HomeMode } from '../types';
@@ -45,6 +49,28 @@ const ensureAgentConfigLoaded = async (agentId: string): Promise<void> => {
   if (agentState.agentMap[agentId]) return;
   const config = await agentService.getAgentConfigById(agentId);
   if (config) agentState.internal_dispatchAgentMap(agentId, config);
+};
+
+/**
+ * Make sure the user persona is loaded before a Home submission builds its
+ * context.
+ *
+ * The context is built from the memory store and `resolveUserPersona` reads it
+ * synchronously — it never fetches. The surfaces that pre-warm it (the
+ * conversation list, the memory page) are not mounted on Home: the composer
+ * itself does not mount them, so a submission from a cold Home would otherwise
+ * run its first turn without the persona the user enabled. Signed-out visitors
+ * and users with memories switched off never inject a persona, so there is
+ * nothing to load for them.
+ *
+ * Never throws: a failed load degrades to sending without a persona, exactly
+ * like an unloaded cache.
+ */
+const ensureUserPersonaLoaded = async (): Promise<void> => {
+  const userState = getUserStoreState();
+  if (!authSelectors.isLogin(userState) || !settingsSelectors.memoryEnabled(userState)) return;
+
+  await getUserMemoryStoreState().ensurePersona();
 };
 
 export const useSend = (mode: HomeMode = 'chat') => {
@@ -126,6 +152,10 @@ export const useSend = (mode: HomeMode = 'chat') => {
 
       // Require input content (except for default inbox which can have files/context)
       if (!message && fileList.length === 0 && contextList.length === 0) return;
+
+      // Task mode records a row and never builds a message context, so it is the
+      // only submission that stays out of this.
+      if (mode !== 'task') await ensureUserPersonaLoaded();
 
       let submitted = false;
       try {
