@@ -61,6 +61,7 @@ vi.mock('@/server/modules/AgentRuntime/factory', () => ({
 }));
 
 const emptyResolvedAttachments = {
+  audioList: [],
   fileList: [],
   imageList: [],
   orderedFileIds: [],
@@ -1168,7 +1169,97 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
   });
 
-  describe('image delivery to the dispatched CLI', () => {
+  describe('attachment delivery to heterogeneous agents', () => {
+    it('passes parsed document text and a retrieval URL to the CLI', async () => {
+      mockResolveAttachmentsByFileIds.mockResolvedValue({
+        ...emptyResolvedAttachments,
+        fileList: [
+          {
+            content: 'The launch date is October 12.',
+            fileType: 'application/pdf',
+            id: 'file-2',
+            name: 'brief.pdf',
+            size: 200,
+            url: 'https://signed/file-2.pdf',
+          },
+        ],
+        orderedFileIds: ['file-2'],
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-2'],
+        prompt: 'When is the launch?',
+      });
+
+      expect(mockSpawnHeteroSandbox).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining('The launch date is October 12.'),
+        }),
+      );
+      expect(mockSpawnHeteroSandbox.mock.calls.at(-1)?.[0].prompt).toContain(
+        'https://signed/file-2.pdf',
+      );
+    });
+
+    it('passes parsed document text to a remote device agent', async () => {
+      heteroAgentConfig.agencyConfig = {
+        executionTarget: 'local',
+        heterogeneousProvider: { type: 'openclaw' },
+      } as any;
+      heteroAgentConfig.model = 'openclaw';
+      heteroAgentConfig.provider = 'lobehub';
+      mockResolveAttachmentsByFileIds.mockResolvedValue({
+        ...emptyResolvedAttachments,
+        fileList: [
+          {
+            content: 'The launch date is October 12.',
+            fileType: 'application/pdf',
+            id: 'file-2',
+            name: 'brief.pdf',
+            size: 200,
+            url: 'https://signed/file-2.pdf',
+          },
+        ],
+        orderedFileIds: ['file-2'],
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-2'],
+        localDeviceId: 'personal-desktop',
+        prompt: 'When is the launch?',
+      });
+
+      const toolCall = mockExecuteToolCall.mock.calls.at(-1)?.[1];
+      expect(JSON.parse(toolCall.arguments).prompt).toContain('The launch date is October 12.');
+      expect(JSON.parse(toolCall.arguments).prompt).toContain('https://signed/file-2.pdf');
+    });
+
+    it('passes image URLs to a remote device agent', async () => {
+      heteroAgentConfig.agencyConfig = {
+        executionTarget: 'local',
+        heterogeneousProvider: { type: 'openclaw' },
+      } as any;
+      heteroAgentConfig.model = 'openclaw';
+      heteroAgentConfig.provider = 'lobehub';
+      mockResolveAttachmentsByFileIds.mockResolvedValue({
+        ...emptyResolvedAttachments,
+        imageList: [{ alt: 'screenshot.png', id: 'file-1', url: 'https://signed/file-1.png' }],
+        orderedFileIds: ['file-1'],
+      });
+
+      await service.execAgent({
+        agentId: 'agent-1',
+        fileIds: ['file-1'],
+        localDeviceId: 'personal-desktop',
+        prompt: 'What is this?',
+      });
+
+      const toolCall = mockExecuteToolCall.mock.calls.at(-1)?.[1];
+      expect(JSON.parse(toolCall.arguments).prompt).toContain('https://signed/file-1.png');
+    });
+
     it('should resolve image attachments and pass imageList to the sandbox dispatch', async () => {
       mockResolveAttachmentsByFileIds.mockResolvedValue({
         ...emptyResolvedAttachments,

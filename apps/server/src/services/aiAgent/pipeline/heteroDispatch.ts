@@ -7,7 +7,9 @@ import {
   isLocalHeterogeneousType,
   isRemoteHeterogeneousType,
 } from '@lobechat/heterogeneous-agents';
+import { filesPrompts } from '@lobechat/prompts';
 import type {
+  ChatFileItem,
   DeviceUnavailableErrorData,
   ErrorType,
   ExecAgentResult,
@@ -290,7 +292,10 @@ export interface HeteroDispatchInput {
   pinnedHeterogeneousTopicModel?: HeterogeneousTopicPin;
   requestedDeviceId?: string;
   requestTrigger?: RequestTrigger;
-  runAttachments: { imageList?: Array<{ alt: string; id: string; url: string }> };
+  runAttachments: {
+    fileList?: ChatFileItem[];
+    imageList?: Array<{ alt: string; id: string; url: string }>;
+  };
   /** Ids of the rows THIS turn just persisted (excluded from recovery history). */
   selfMessageIds: Set<string>;
   topicStartOwnerOperationId?: string;
@@ -532,6 +537,16 @@ export const dispatchHeteroAgent = async (
     runAttachments.imageList && runAttachments.imageList.length > 0
       ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
       : undefined;
+  // Unlike the normal Agent runtime, CLI dispatch skips MessageContentProcessor.
+  // Give it the parsed document preview and signed download URL for this turn.
+  const documentContext = filesPrompts({ fileList: runAttachments.fileList });
+  const remoteAttachmentContext = filesPrompts({
+    fileList: runAttachments.fileList,
+    imageList: runAttachments.imageList,
+  });
+  const remotePromptWithAttachments = [prompt, remoteAttachmentContext]
+    .filter(Boolean)
+    .join('\n\n');
   const heteroExecArgs = isLocalHeterogeneousType(heteroType)
     ? buildHeteroExecArgs(
         heterogeneousProvider?.type === heteroType
@@ -552,7 +567,7 @@ export const dispatchHeteroAgent = async (
     operationId,
     // The CLI receives only the request: `/goal` is already in the system
     // context, and Claude Code's own `/goal` command would otherwise take it.
-    prompt: stripGoalCommand(prompt),
+    prompt: [stripGoalCommand(prompt), documentContext].filter(Boolean).join('\n\n'),
     repos: topicRepos,
     resumeFallbackSystemContext,
     resumeSessionId,
@@ -871,7 +886,7 @@ export const dispatchHeteroAgent = async (
               operationId,
               parentOperationId: topicStartOwnerOperationId,
               platformAgentId: agentConfig.agencyConfig?.heterogeneousProvider?.platformAgentId,
-              prompt,
+              prompt: remotePromptWithAttachments,
               taskId: operationId,
               topicId,
               // Scope notify callbacks to the same workspace as the dispatched
