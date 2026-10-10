@@ -38,13 +38,15 @@ const useActivitySearch = (query: string) => {
   return { activities, activitiesSearchLoading };
 };
 
-describe('cached memory list hydration', () => {
+describe('activity list store view', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useUserMemoryStore.setState(initialState, false);
   });
 
-  it('restores a cached search after switching away and back within the deduping interval', async () => {
+  // The activity list is a `@lobechat/replica` resource now: the flat `activities`
+  // field is its view, and each query's rows land there as the network answers.
+  it('repaints each query through the replica-backed store', async () => {
     vi.spyOn(userMemoryService, 'queryActivities').mockImplementation(async (params) => ({
       items: [{ id: params?.q } as never],
       page: params?.page ?? 1,
@@ -79,6 +81,13 @@ describe('cached memory list hydration', () => {
         activitiesSearchLoading: false,
       });
     });
-    expect(userMemoryService.queryActivities).toHaveBeenCalledTimes(2);
+
+    // Every query re-reads through the replica's network sync: a stale cached
+    // page never survives a query switch.
+    const calledQueries = vi
+      .mocked(userMemoryService.queryActivities)
+      .mock.calls.map(([params]) => params?.q);
+    expect(calledQueries).toContain('alpha');
+    expect(calledQueries).toContain('beta');
   });
 });
