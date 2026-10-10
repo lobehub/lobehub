@@ -412,6 +412,10 @@ export class ComposioStoreActionImpl {
     const { composioServers } = this.#get();
     const existing = composioServers.find((s) => s.identifier === identifier);
     if (!existing) return undefined;
+    // Bound to the identity that started it, like `createComposioConnection`,
+    // whose own guard only captures the scope once it starts — after the cleanup
+    // below has already awaited.
+    const scope = cacheScope.get();
 
     // Clean up the stale connection on Composio's side (the prior link likely
     // expired). Best-effort — if it's already gone we still mint a fresh one.
@@ -423,6 +427,10 @@ export class ComposioStoreActionImpl {
     } catch (error) {
       console.error('[Composio] Failed to clean up stale connection:', error);
     }
+
+    // Identity switched during the cleanup: minting now would create (and
+    // persist) this scope's connection under the other identity.
+    if (cacheScope.get() !== scope) return undefined;
 
     // Mint a fresh link; createComposioConnection replaces the record in place
     // (by identifier), so the UI keeps showing the same row with a new redirectUrl.

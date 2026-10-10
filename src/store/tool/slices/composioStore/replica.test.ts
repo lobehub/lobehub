@@ -666,6 +666,53 @@ describe('composio connections replica', () => {
     expect((persisted?.data ?? []).some((s) => s.connectedAccountId === 'ca_slack')).toBe(false);
   });
 
+  it('does not mint a reauthorized connection into the scope switched to during cleanup', async () => {
+    mocks.getComposioPlugins.mockResolvedValue([composioPlugin('slack', { status: 'FAILED' })]);
+    renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
+    await waitFor(() => expect(connectionIds()).toEqual(['slack']));
+
+    let resolveDelete!: (value: unknown) => void;
+    mocks.deleteConnection.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveDelete = resolve;
+      }),
+    );
+    mocks.createConnection.mockResolvedValue({
+      authConfigId: 'ac_slack',
+      connectedAccountId: 'ca_slack_new',
+      identifier: 'slack',
+      redirectUrl: 'https://composio.dev/redirect',
+    });
+
+    let reauthorized!: Promise<unknown>;
+    await act(async () => {
+      reauthorized = useToolStore.getState().reauthorizeComposioConnection('slack');
+    });
+    await waitFor(() => expect(mocks.deleteConnection).toHaveBeenCalledTimes(1));
+
+    // The user switches identity while the stale connection is being cleaned up.
+    const nextScope = `composio-user-${randomUUID()}:personal`;
+    mocks.getComposioPlugins.mockResolvedValue([]);
+    useScope(nextScope);
+    await act(async () => {});
+
+    await act(async () => {
+      resolveDelete({ success: true });
+      await reauthorized;
+    });
+
+    // The reauthorization belongs to the scope that started it: no fresh link is
+    // minted for — nor persisted into — the switched-to identity.
+    expect(mocks.createConnection).not.toHaveBeenCalled();
+    const persisted = await composioServersResource.storage!.get({
+      queryKey: SERVERS_STORAGE_KEY,
+      scope: nextScope,
+    });
+    expect((persisted?.data ?? []).some((s) => s.connectedAccountId === 'ca_slack_new')).toBe(
+      false,
+    );
+  });
+
   it('does not let a pending write in one scope drop another scope’s list', async () => {
     mocks.getComposioPlugins.mockResolvedValue([composioPlugin('gmail', { status: 'PENDING' })]);
     renderHook(() => useToolStore((s) => s.useFetchUserComposioConnections)(true), { wrapper });
