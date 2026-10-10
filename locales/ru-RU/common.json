@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "Он остается в библиотеке, в которую вы его поместили — другие участники просто перестают его там видеть",
   "visibilityConfirm.makePrivate.itemLoaded": "Контент, который уже был загружен другими, нельзя будет отозвать",
   "visibilityConfirm.makePrivate.itemReferences": "Существующие вложения сообщений и ссылки будут отображаться как недоступные",
-  "visibilityConfirm.publish.itemCapturedState": "Участники могут запускать его экземпляры и получать доступ ко всему, что он захватил — файлы, входы в CLI, вашу авторизованную личность",
+  "visibilityConfirm.publish.itemCapturedState": "Участники могут запускать его копии и получать доступ ко всему, что он захватил — файлы, входы в CLI, вашу авторизованную личность",
   "visibilityConfirm.publish.itemLoaded": "После переключения обратно контент, который уже был загружен другими, нельзя будет отозвать",
   "visibilityConfirm.publish.itemReversible": "Вы можете переключить обратно на приватный режим позже из того же меню",
   "visibilityConfirm.publish.itemVisible": "Все участники рабочей области увидят это немедленно",

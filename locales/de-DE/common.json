@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "Es bleibt in der Bibliothek, in der Sie es abgelegt haben – andere Mitglieder sehen es dort einfach nicht mehr.",
   "visibilityConfirm.makePrivate.itemLoaded": "Inhalte, die andere bereits geladen haben, können nicht zurückgezogen werden",
   "visibilityConfirm.makePrivate.itemReferences": "Vorhandene Nachrichtenanhänge und Verweise werden als nicht verfügbar angezeigt",
-  "visibilityConfirm.publish.itemCapturedState": "Mitglieder können seine Instanzen ausführen und auf alles zugreifen, was es erfasst hat – Dateien, CLI-Anmeldungen, Ihre angemeldete Identität",
+  "visibilityConfirm.publish.itemCapturedState": "Mitglieder können seine Kopien ausführen und auf alles zugreifen, was es erfasst hat – Dateien, CLI-Anmeldungen, Ihre angemeldete Identität",
   "visibilityConfirm.publish.itemLoaded": "Nach dem Wechsel können Inhalte, die andere bereits geladen haben, nicht zurückgezogen werden",
   "visibilityConfirm.publish.itemReversible": "Sie können es später im selben Menü wieder privat machen",
   "visibilityConfirm.publish.itemVisible": "Alle Mitglieder des Arbeitsbereichs sehen dies sofort",

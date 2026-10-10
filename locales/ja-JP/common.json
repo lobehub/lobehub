@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "それはあなたがそれをファイルしたライブラリに残りますが、他のメンバーはそこにそれを見ることができなくなります",
   "visibilityConfirm.makePrivate.itemLoaded": "他の人がすでに読み込んだコンテンツは取り戻せません",
   "visibilityConfirm.makePrivate.itemReferences": "既存のメッセージ添付ファイルや参照は利用不可として表示されます",
-  "visibilityConfirm.publish.itemCapturedState": "メンバーはそのインスタンスを実行し、それがキャプチャしたすべてのものにアクセスできます — ファイル、CLIログイン、サインインしたアイデンティティ",
+  "visibilityConfirm.publish.itemCapturedState": "メンバーはそのコピーを実行し、それがキャプチャしたすべてのものにアクセスできます — ファイル、CLIログイン、サインインしたID",
   "visibilityConfirm.publish.itemLoaded": "切り替え後、他の人がすでに読み込んだコンテンツは取り戻せません",
   "visibilityConfirm.publish.itemReversible": "同じメニューから後で非公開に戻すことができます",
   "visibilityConfirm.publish.itemVisible": "すべてのワークスペースメンバーがすぐにこれを確認できます",
