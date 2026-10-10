@@ -458,16 +458,19 @@ export class SkillManagementDocumentService {
   ): Promise<SkillAgentDocument | undefined> {
     if (target.agentDocumentId) {
       const doc = await this.agentDocumentModel.findById(target.agentDocumentId);
-      if (!doc) return undefined;
-      if (doc.agentId !== agentId) return undefined;
-      if (doc.fileType === SKILL_BUNDLE_FILE_TYPE) return doc;
+      if (doc && doc.agentId === agentId) {
+        if (doc.fileType === SKILL_BUNDLE_FILE_TYPE) return doc;
 
-      if (doc.fileType === SKILL_INDEX_FILE_TYPE && doc.parentId) {
-        const bundle = await this.agentDocumentModel.findByDocumentId(agentId, doc.parentId);
-        if (bundle?.fileType === SKILL_BUNDLE_FILE_TYPE) return bundle;
+        if (doc.fileType === SKILL_INDEX_FILE_TYPE && doc.parentId) {
+          const bundle = await this.agentDocumentModel.findByDocumentId(agentId, doc.parentId);
+          if (bundle?.fileType === SKILL_BUNDLE_FILE_TYPE) return bundle;
+        }
       }
 
-      return undefined;
+      // Fall through to the name selector when the agent document id does not
+      // resolve to a bundle under this agent. LLM tool calls commonly pass both
+      // selectors, and one mistyped id character must not hard-fail the read
+      // when the stable skill name is also provided (T-507).
     }
 
     if (!target.name) return undefined;
