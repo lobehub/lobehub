@@ -1,5 +1,6 @@
 import { request } from 'node:http';
 
+import { BOT_CREDENTIAL_MASK } from '@lobechat/const/bot';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
@@ -151,6 +152,51 @@ describe('ImessageBridgeService', () => {
     ]);
 
     await service.stop();
+  });
+
+  it('keeps the stored webhook secret when an update carries the replica mask', async () => {
+    const { service, store } = createService();
+    await service.upsertConfig(config);
+
+    // A cache-first save hands back the masked replica copy, not the secret.
+    await service.upsertConfig({
+      applicationId: 'home-mac-mini',
+      blueBubblesServerUrl: 'http://127.0.0.1:5678',
+      enabled: true,
+      webhookSecret: BOT_CREDENTIAL_MASK,
+    });
+
+    expect(store.get('imessageBridgeConfigs')).toEqual([
+      {
+        applicationId: 'home-mac-mini',
+        blueBubblesPassword: 'local-password',
+        blueBubblesServerUrl: 'http://127.0.0.1:5678',
+        enabled: true,
+        webhookSecret: 'shared-secret',
+      },
+    ]);
+    // The registered loopback webhook keeps using the real shared secret, so
+    // forwarding to the cloud stays authenticated.
+    expect(MockBlueBubblesApiClient.instances.at(-1)?.registerWebhook).toHaveBeenCalledWith(
+      'http://127.0.0.1:43210/webhooks/bluebubbles/home-mac-mini?secret=shared-secret',
+      ['new-message'],
+    );
+
+    await service.stop();
+  });
+
+  it('refuses to persist a mask when no real secret is stored yet', async () => {
+    const { service } = createService();
+
+    await expect(
+      service.upsertConfig({
+        applicationId: 'home-mac-mini',
+        blueBubblesPassword: 'local-password',
+        blueBubblesServerUrl: 'http://127.0.0.1:1234',
+        enabled: true,
+        webhookSecret: BOT_CREDENTIAL_MASK,
+      }),
+    ).rejects.toThrow('webhookSecret is required');
   });
 
   it('executes outbound iMessage sends from device-gateway message API calls', async () => {
