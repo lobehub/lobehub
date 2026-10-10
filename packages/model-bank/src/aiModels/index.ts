@@ -72,6 +72,7 @@ import { default as supergrok } from './superGrok';
 import { default as taichu } from './taichu';
 import { default as tencentcloud } from './tencentcloud';
 import { default as togetherai } from './togetherai';
+import { default as tokendos } from './tokendos';
 import { typeSafeModels as typesafe } from './typesafe';
 import { default as unsloth } from './unsloth';
 import { default as upstage } from './upstage';
@@ -186,6 +187,7 @@ const staticModelMap: ModelsMap = {
   taichu,
   tencentcloud,
   togetherai,
+  tokendos,
   typesafe,
   unsloth,
   upstage,
@@ -306,6 +308,7 @@ export { default as supergrok } from './superGrok';
 export { default as taichu } from './taichu';
 export { default as tencentcloud } from './tencentcloud';
 export { default as togetherai } from './togetherai';
+export { default as tokendos } from './tokendos';
 export { typeSafeModels as typesafe } from './typesafe';
 export { default as unsloth } from './unsloth';
 export { default as upstage } from './upstage';
