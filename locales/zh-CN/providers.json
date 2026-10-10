@@ -56,6 +56,7 @@
   "perplexity.description": "Perplexity 提供先进的对话模型，包括 Llama 3.1 变体，适用于在线与离线使用及复杂 NLP 任务。",
   "ppio.description": "PPIO 提供可靠、性价比高的开源模型 API，支持 DeepSeek、Llama、Qwen 等主流模型。",
   "qiniu.description": "七牛云提供可靠、性价比高的实时与批量 AI 推理服务，使用便捷。",
+  "quicksilverpro.description": "QuickSilver Pro 是一个由 MachineFi Inc.（美国）运营的 OpenAI 兼容 AI 网关，通过统一的 API 提供多家供应商的模型。",
   "qwen.description": "Qwen 是阿里云的大规模语言模型，具备强大的理解与生成能力，覆盖问答、写作、观点表达与代码等多个领域。",
   "replicate.description": "Replicate 通过简单的云 API 运行开源图像模型，如 FLUX 与 Stable Diffusion。",
   "sambanova.description": "SambaNova Cloud 让开发者以极快速度使用顶级开源模型进行推理。",

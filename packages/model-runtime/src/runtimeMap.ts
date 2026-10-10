@@ -55,6 +55,7 @@ import { LobeOpenRouterAI } from './providers/openrouter';
 import { LobePerplexityAI } from './providers/perplexity';
 import { LobePPIOAI } from './providers/ppio';
 import { LobeQiniuAI } from './providers/qiniu';
+import { LobeQuickSilverProAI } from './providers/quicksilverpro';
 import { LobeQwenAI } from './providers/qwen';
 import { LobeReplicateAI } from './providers/replicate';
 import { LobeSambaNovaAI } from './providers/sambanova';
@@ -142,6 +143,7 @@ export const providerRuntimeMap = {
   perplexity: LobePerplexityAI,
   ppio: LobePPIOAI,
   qiniu: LobeQiniuAI,
+  quicksilverpro: LobeQuickSilverProAI,
   qwen: LobeQwenAI,
   replicate: LobeReplicateAI,
   router: LobeNewAPIAI,
