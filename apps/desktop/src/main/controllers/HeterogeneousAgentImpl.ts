@@ -2319,6 +2319,7 @@ export default class HeterogeneousAgentCtr {
 
     try {
       await appServerSession.run({
+        env: { ...spawnEnv, LOBEHUB_OPERATION_ID: params.operationId },
         input,
         onRawMessage: (line) => this.appendCliTraceFile(traceSession, 'stdout.jsonl', line),
         operationId: params.operationId,
