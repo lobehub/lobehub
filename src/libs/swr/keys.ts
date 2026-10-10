@@ -609,11 +609,6 @@ export const discoverKeys = {
       identifier,
     ],
   ),
-  userProfile: def('discover:userProfile', (locale: string, username: string) => [
-    'discover:userProfile',
-    locale,
-    username,
-  ]),
   // -- marketplace detail "related agents" lists (UI) --
   mcpAgents: def('discover:mcpAgents', (identifier: string, page: number) => [
     'discover:mcpAgents',

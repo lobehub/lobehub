@@ -8,6 +8,7 @@ import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
+import { userSelectors } from '@/store/discover/selectors';
 
 import NotFound from '../components/NotFound';
 import { resolveWorkspaceCommunityProfileRedirect } from '../workspace/features/resolveWorkspaceProfileEdit';
@@ -27,7 +28,9 @@ const OrganizationDetailPage = memo<OrganizationDetailPageProps>(({ mobile }) =>
   const { isWorkspaceScope } = useCommunityWorkspaceProfile();
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
-  const { data, error, isLoading, mutate } = useUserProfile({ username });
+  const { error, isLoading, mutate, queryKey } = useUserProfile({ username });
+  // The replica view of this profile; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(userSelectors.userProfile(queryKey));
 
   useEffect(() => {
     const redirectTo = resolveWorkspaceCommunityProfileRedirect({

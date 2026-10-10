@@ -8,6 +8,7 @@ import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
+import { userSelectors } from '@/store/discover/selectors';
 import type { DiscoverUserProfile } from '@/types/discover';
 
 import NotFound from '../components/NotFound';
@@ -40,13 +41,15 @@ const WorkspaceDetailPage = memo<WorkspaceDetailPageProps>(({ mobile }) => {
 
   const useUserProfile = useDiscoverStore((s) => s.useUserProfile);
   const {
-    data,
     error: userProfileError,
     isLoading: isUserProfileLoading,
     mutate,
+    queryKey: userProfileQueryKey,
   } = useUserProfile({
     username: workspaceUsername ?? '',
   });
+  // The replica view of this profile; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(userSelectors.userProfile(userProfileQueryKey));
 
   // Fallback profile so the page header renders even before the market profile is materialized
   const fallbackProfile = useMemo<DiscoverUserProfile | null>(() => {
