@@ -8,7 +8,20 @@ import type {
   VerifyRunSource,
   VerifyRunStatus,
 } from '@lobechat/types';
-import { and, asc, desc, eq, gt, ilike, inArray, isNotNull, lt, or, sql } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gt,
+  ilike,
+  inArray,
+  isNotNull,
+  lt,
+  or,
+  type SQL,
+  sql,
+} from 'drizzle-orm';
 
 import { agentOperations } from '../schemas/agentOperations';
 import type { NewVerifyRun, VerifyRunItem } from '../schemas/verify';
@@ -654,8 +667,9 @@ export class VerifyRunModel {
    *
    * No per-user scope, like `TaskModel.findStuckTasks`: this backs a global
    * cron, and each row carries the owner the recovery is then performed as.
-   * Operation-less rounds are excluded — the rollup is addressed by operation,
-   * so there is nothing to recompute for them.
+   * Operation-less rounds are excluded — this recovery is addressed by the bound
+   * operation. (The evidence half is different: see
+   * {@link findStuckCollectingEvidence}, which settles such rounds by run id.)
    *
    * Paged on the `(updatedAt, id)` keyset rather than returning a fixed oldest-N
    * slice. The sweep deliberately leaves some rows untouched (a check whose
@@ -678,12 +692,8 @@ export class VerifyRunModel {
     olderThan: Date,
     options?: { after?: { id: string; updatedAt: Date }; limit?: number },
   ): Promise<VerifyRunItem[]> => {
-    const { after, limit = 200 } = options ?? {};
-
-    // Millisecond-truncated updatedAt — the precision the cursor round-trips at.
-    const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
-
-    const conditions = [
+    return VerifyRunModel.findStuckMatching(
+      db,
       or(
         eq(verifyRuns.status, 'verifying'),
         and(
@@ -695,8 +705,71 @@ export class VerifyRunModel {
               and ${agentOperations.completionReason} in ('error', 'interrupted'))`,
         ),
       )!,
+      olderThan,
+      options,
+    );
+  };
+
+  /**
+   * One page of runs stranded in `collecting_evidence` since before `olderThan`,
+   * across all owners — the evidence-turn half of the sweep's input.
+   *
+   * A task-bound run enters `collecting_evidence` through a durable write, but
+   * the evidence-only continuation that is supposed to end it is just another
+   * agent run: if that run is aborted, stalls, or its terminal hook is lost, no
+   * retry re-enters and no watchdog looks — the acceptance above the run stays
+   * blocked on a verdict that nothing will ever produce. The sweep re-enters
+   * judging directly (the `claimVerifying` gate accepts `collecting_evidence`),
+   * so a stranded run is recoverable without re-running evidence collection.
+   *
+   * Shares {@link findStuckVerifying}'s no-per-user scope, keyset paging, and
+   * millisecond-precision `updatedAt` handling — see that method's doc for why.
+   *
+   * Unlike `findStuckVerifying`, operation-less rounds ARE returned: when the
+   * builder operation is deleted while a run sits here, `onDelete: 'set null'`
+   * clears the link, and the sweep still has to settle the run — by its own id —
+   * or the acceptance above it stays blocked forever.
+   */
+  static findStuckCollectingEvidence = async (
+    db: LobeChatDatabase,
+    olderThan: Date,
+    options?: { after?: { id: string; updatedAt: Date }; limit?: number },
+  ): Promise<VerifyRunItem[]> => {
+    return VerifyRunModel.findStuckMatching(
+      db,
+      eq(verifyRuns.status, 'collecting_evidence'),
+      olderThan,
+      { ...options, includeOperationless: true },
+    );
+  };
+
+  /**
+   * Keyset-paged scan of runs matching `statusCondition` stuck past `olderThan`.
+   *
+   * `includeOperationless` widens the scan to rounds whose bound Agent Run was
+   * deleted — `onDelete: 'set null'` clears `operation_id`. Only the evidence
+   * half needs them: the sweep settles such a run by its own id. The `verifying`
+   * half keeps excluding them, since that recovery is addressed by operation.
+   */
+  private static findStuckMatching = async (
+    db: LobeChatDatabase,
+    statusCondition: SQL,
+    olderThan: Date,
+    options?: {
+      after?: { id: string; updatedAt: Date };
+      includeOperationless?: boolean;
+      limit?: number;
+    },
+  ): Promise<VerifyRunItem[]> => {
+    const { after, includeOperationless = false, limit = 200 } = options ?? {};
+
+    // Millisecond-truncated updatedAt — the precision the cursor round-trips at.
+    const updatedAtMs = sql`date_trunc('milliseconds', ${verifyRuns.updatedAt})`;
+
+    const conditions = [
+      statusCondition,
       lt(verifyRuns.updatedAt, olderThan),
-      isNotNull(verifyRuns.operationId),
+      ...(includeOperationless ? [] : [isNotNull(verifyRuns.operationId)]),
     ];
 
     if (after) {

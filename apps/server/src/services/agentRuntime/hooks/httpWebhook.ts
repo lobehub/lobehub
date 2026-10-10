@@ -30,9 +30,23 @@ class HookHttpError extends Error {
   }
 }
 
-function resolveUrl(url: string): string {
+/**
+ * Resolve a webhook URL against the base the *receiver* can reach.
+ *
+ * QStash deliveries are relayed by the QStash service (Upstash cloud or a
+ * self-hosted container), which typically cannot reach this process's loopback
+ * — in Compose-style deployments INTERNAL_APP_URL is exactly that. Those must
+ * carry an APP_URL the relay resolves (host-gateway, public origin). Plain
+ * fetch fires from this process itself, so the internal address is preferred
+ * there to keep server-to-server traffic off the public path.
+ */
+function resolveUrl(url: string, delivery: AgentHookWebhook['delivery']): string {
+  const base =
+    delivery === 'qstash'
+      ? process.env.APP_URL || process.env.INTERNAL_APP_URL
+      : process.env.INTERNAL_APP_URL || process.env.APP_URL;
   try {
-    const resolved = new URL(url, process.env.INTERNAL_APP_URL || process.env.APP_URL || undefined);
+    const resolved = new URL(url, base || undefined);
     if (
       !['http:', 'https:'].includes(resolved.protocol) ||
       resolved.username ||
@@ -95,7 +109,7 @@ async function fetchWebhook<T>(
   const combinedSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
   try {
     combinedSignal.throwIfAborted();
-    const response = await fetch(resolveUrl(webhook.url), {
+    const response = await fetch(resolveUrl(webhook.url, webhook.delivery), {
       body: JSON.stringify(payload),
       headers: resolveWebhookHeaders(webhook),
       method: 'POST',
@@ -154,7 +168,7 @@ export async function deliverWebhook(
     return;
   }
 
-  const url = resolveUrl(webhook.url);
+  const url = resolveUrl(webhook.url, 'qstash');
   const headers = resolveWebhookHeaders(webhook);
   try {
     if (!process.env.QSTASH_TOKEN)
@@ -186,7 +200,12 @@ export async function deliverWebhook(
           : new HookHttpError('network_error', { message: 'QStash publish failed' });
     if (webhook.fallback === 'none') throw failure;
     console.error('[HookDispatcher] QStash delivery failed, falling back to fetch', failure);
-    await fetchWebhook(webhook, payload, discardNotificationBody);
+    // The fallback fires from this process itself, so it resolves against the
+    // direct base — not the relay's URL. A deployment that sets INTERNAL_APP_URL
+    // precisely because the server cannot reach its own public address would
+    // fail the fallback exactly when QStash is unavailable, the one moment the
+    // fallback exists for.
+    await fetchWebhook({ ...webhook, delivery: 'fetch' }, payload, discardNotificationBody);
   }
 }
 

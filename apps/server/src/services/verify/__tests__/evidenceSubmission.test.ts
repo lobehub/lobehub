@@ -36,7 +36,18 @@ vi.mock('@/database/models/verifyRun', () => ({
 }));
 
 describe('startEvidenceSubmission', () => {
+  /**
+   * The models are mocked and ignore the db, so the transaction only has to run
+   * the callback — but the backfill must go through one (all-or-nothing: a
+   * half-written backfill would read back as partial builder evidence).
+   */
+  const transaction = vi.fn();
+  const db = () => ({ transaction }) as any;
+
   beforeEach(() => {
+    transaction
+      .mockReset()
+      .mockImplementation(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
     execAgent.mockReset().mockResolvedValue({ operationId: 'evidence-op' });
     findByOperation.mockReset().mockResolvedValue({ id: 'run-1' });
     upsertByCheckItem.mockReset().mockResolvedValue({ id: 'result-1' });
@@ -46,7 +57,7 @@ describe('startEvidenceSubmission', () => {
 
   it('records the heterogeneous builder deliverable as inline evidence for every criterion', async () => {
     await recordHeterogeneousDeliverableEvidence({
-      db: {} as any,
+      db: db(),
       deliverable: 'artifact path and sha-256',
       operation: { id: 'work-op' } as any,
       plan: [
@@ -63,6 +74,7 @@ describe('startEvidenceSubmission', () => {
       userId: 'user-1',
     });
 
+    expect(transaction).toHaveBeenCalledTimes(1);
     expect(upsertByCheckItem).toHaveBeenCalledWith(
       expect.objectContaining({ operationId: 'work-op', verifyRunId: 'run-1' }),
     );
@@ -79,7 +91,7 @@ describe('startEvidenceSubmission', () => {
     listByRun.mockResolvedValue([{ checkItemId: 'criterion-1', type: 'transcript' }]);
 
     await recordHeterogeneousDeliverableEvidence({
-      db: {} as any,
+      db: db(),
       deliverable: 'the whole final report',
       operation: { id: 'work-op' } as any,
       plan: [

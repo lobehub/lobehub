@@ -3,6 +3,7 @@ import debug from 'debug';
 
 import { VerifyCheckResultModel } from '@/database/models/verifyCheckResult';
 import { VerifyRunModel } from '@/database/models/verifyRun';
+import type { VerifyRunItem } from '@/database/schemas/verify';
 import type { LobeChatDatabase } from '@/database/type';
 
 import { AcceptanceService } from './acceptanceService';
@@ -44,7 +45,23 @@ export class VerifyStatusService {
   async recompute(operationId: string): Promise<VerifyRunStatus | null> {
     const run = await this.runModel.findByOperation(operationId);
     if (!run) return null;
+    return this.rollUp(run);
+  }
 
+  /**
+   * Roll up a run addressed by its own id. The operation-addressed
+   * {@link recompute} cannot resolve a run whose bound Agent Run was deleted
+   * (`onDelete: 'set null'` clears `verify_runs.operation_id`) — and that is
+   * exactly when the sweep still has to settle it.
+   */
+  async recomputeByRunId(runId: string): Promise<VerifyRunStatus | null> {
+    const run = await this.runModel.findById(runId);
+    if (!run) return null;
+    return this.rollUp(run);
+  }
+
+  /** Derive the rollup from the frozen plan + current results and persist it. */
+  private async rollUp(run: VerifyRunItem): Promise<VerifyRunStatus | null> {
     const plan = (run.plan ?? []) as VerifyCheckItem[];
     if (plan.length === 0) {
       // No plan → nothing to verify. Leave as-is (unverified / skipped).
@@ -86,7 +103,7 @@ export class VerifyStatusService {
           run.acceptanceId,
         );
       }
-      log('rollup op %s (run %s) → %s', operationId, run.id, status);
+      log('rollup op %s (run %s) → %s', run.operationId, run.id, status);
     }
 
     return status;
@@ -113,6 +130,59 @@ export class VerifyStatusService {
       );
     }
     return claimed;
+  }
+
+  /**
+   * Run-addressed form of {@link claimVerifying}, for a run whose bound Agent Run
+   * was deleted (`onDelete: 'set null'` clears `verify_runs.operation_id`). The
+   * sweep still has to settle such a run, but the operation-addressed claim can
+   * no longer resolve it.
+   */
+  async claimVerifyingByRunId(runId: string, staleBefore: Date): Promise<boolean> {
+    const run = await this.runModel.findById(runId);
+    if (!run) return false;
+
+    const claimed = await this.runModel.claimVerifying(runId, staleBefore);
+    if (claimed && run.acceptanceId) {
+      await new AcceptanceService(this.db, this.userId, this.workspaceId).recomputeStatus(
+        run.acceptanceId,
+      );
+    }
+    return claimed;
+  }
+
+  /**
+   * Put a run back into `collecting_evidence` after a recovery attempt failed for
+   * a reason other than the operation disappearing.
+   *
+   * The evidence scan is the only one that can retry the inline judge — it is the
+   * half that re-reads the frozen deliverable from the hook. So a failed recovery
+   * has to rest in the state that scan selects; leaving it in `verifying` would
+   * drop it from the evidence scan, and the `verifying` half would eventually
+   * close its checks `errored`, losing the recovered evidence for good.
+   */
+  async restoreEvidenceCollection(runId: string): Promise<void> {
+    await this.runModel.updateStatus(runId, 'collecting_evidence');
+  }
+
+  /**
+   * Park a run the sweep could not finalize back in `collecting_evidence`, so the
+   * evidence half retries the rollup and the finalizer.
+   *
+   * Once `recomputeByRunId` has made a recovered run terminal, no scan looks at it
+   * again — they select only `verifying`, `collecting_evidence`, or an eligible
+   * `planned` round — so a finalizer failure (report write, repair setup, task
+   * drive) would leave the bound task active forever despite a settled verdict.
+   *
+   * The evidence half is the one to re-enter, not `recoverRun`: it still reads the
+   * frozen deliverable out of the evidence hook — which is what the report needs —
+   * and `enterJudging` skips the judge entirely once every required check already
+   * holds a verdict. `recoverRun` would re-drive the finalizer with no deliverable,
+   * silently dropping the report. Parking re-stamps `updated_at`, so the retry
+   * waits out the evidence half's abandoned bound.
+   */
+  async reopenForFinalizeRetry(runId: string): Promise<void> {
+    await this.runModel.updateStatus(runId, 'collecting_evidence');
   }
 
   /** Explicit transitions that aren't derivable from results alone. */

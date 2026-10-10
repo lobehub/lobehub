@@ -1183,4 +1183,80 @@ describe('HookDispatcher', () => {
       );
     });
   });
+  describe('deliverWebhook URL base resolution', () => {
+    const saved = {
+      APP_URL: process.env.APP_URL,
+      INTERNAL_APP_URL: process.env.INTERNAL_APP_URL,
+      QSTASH_TOKEN: process.env.QSTASH_TOKEN,
+    };
+
+    beforeEach(() => {
+      global.fetch = vi.fn().mockResolvedValue({ status: 200 });
+      mockPublishJSON.mockReset().mockResolvedValue({ messageId: 'm1' });
+      process.env.APP_URL = 'https://lobe.example.com';
+      process.env.INTERNAL_APP_URL = 'http://127.0.0.1:3210';
+      process.env.QSTASH_TOKEN = 'test-token';
+    });
+
+    afterEach(() => {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      vi.restoreAllMocks();
+    });
+
+    it('resolves a relative qstash webhook against APP_URL so the relay can reach it', async () => {
+      await deliverWebhook(
+        { delivery: 'qstash', url: '/api/workflows/verify/on-evidence-complete' },
+        {},
+      );
+
+      expect(mockPublishJSON).toHaveBeenCalledWith(
+        expect.objectContaining({
+          url: 'https://lobe.example.com/api/workflows/verify/on-evidence-complete',
+        }),
+      );
+    });
+
+    it('resolves a relative fetch webhook against INTERNAL_APP_URL', async () => {
+      await deliverWebhook({ delivery: 'fetch', url: '/api/internal/hook' }, {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:3210/api/internal/hook',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('prefers APP_URL for qstash even when INTERNAL_APP_URL is set', async () => {
+      await deliverWebhook({ delivery: 'qstash', fallback: 'none', url: '/api/x' }, {});
+
+      const called = mockPublishJSON.mock.calls[0][0];
+      expect(called.url).toBe('https://lobe.example.com/api/x');
+    });
+
+    it('resolves qstash publish-failure fallback fetches against the direct base', async () => {
+      // Deployments set INTERNAL_APP_URL because the server cannot reach its own
+      // public address — the fallback must not depend on that address working.
+      mockPublishJSON.mockRejectedValue(new Error('qstash down'));
+
+      await deliverWebhook({ delivery: 'qstash', url: '/api/x' }, {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:3210/api/x',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+
+    it('resolves missing-token fallback fetches against the direct base', async () => {
+      delete process.env.QSTASH_TOKEN;
+
+      await deliverWebhook({ delivery: 'qstash', url: '/api/x' }, {});
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://127.0.0.1:3210/api/x',
+        expect.objectContaining({ method: 'POST' }),
+      );
+    });
+  });
 });

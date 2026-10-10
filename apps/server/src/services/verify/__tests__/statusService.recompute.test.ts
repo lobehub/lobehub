@@ -55,6 +55,14 @@ describe('VerifyStatusService.recompute — errored rollup', () => {
     );
   });
 
+  it('parks a failed finalization back in `collecting_evidence` for the evidence half', async () => {
+    // The evidence half is the half that still holds the frozen deliverable, which
+    // is what the retried report needs — `verifying` would re-finalize without it.
+    await new VerifyStatusService(db, 'u1').reopenForFinalizeRetry('run-1');
+
+    expect(runUpdateStatus).toHaveBeenCalledWith('run-1', 'collecting_evidence');
+  });
+
   it('an errored required check (none failed) rolls up to `errored`, not `failed`', async () => {
     runFindByOperation.mockResolvedValue(runWith([{ id: 'c1' }]));
     resultListByRun.mockResolvedValue([{ checkItemId: 'c1', status: 'errored', verdict: null }]);

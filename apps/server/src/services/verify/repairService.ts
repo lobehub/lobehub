@@ -271,6 +271,7 @@ const buildInstruction = (
 
 export class VerifyRepairService {
   private readonly messageModel: MessageModel;
+  private readonly operationModel: AgentOperationModel;
   private readonly runModel: VerifyRunModel;
   private readonly resultModel: VerifyCheckResultModel;
   private readonly statusService: VerifyStatusService;
@@ -281,6 +282,7 @@ export class VerifyRepairService {
     private readonly workspaceId?: string,
   ) {
     this.messageModel = new MessageModel(db, userId, workspaceId);
+    this.operationModel = new AgentOperationModel(db, userId, workspaceId);
     this.runModel = new VerifyRunModel(db, userId, workspaceId);
     this.resultModel = new VerifyCheckResultModel(db, userId, workspaceId);
     this.statusService = new VerifyStatusService(db, userId, workspaceId);
@@ -300,8 +302,48 @@ export class VerifyRepairService {
   }
 
   /**
+   * The repair round already spawned for this run, if any.
+   *
+   * Spawning and recording the spawn are separate writes: a repair can start
+   * and then the link / `repairing` status fail to persist, after which the
+   * finalizer is retried. Without this lookup the retry would spawn a second
+   * repair against the same failure. A repair is recognisable either by the
+   * link on a failed result, or — when the link never landed — as a child
+   * operation carrying its own confirmed round of the same acceptance (the
+   * shape `prepareRepairRound` writes atomically with the child). Evidence and
+   * verifier children write into the parent's run and carry no round of their
+   * own, so they never match.
+   */
+  private async findSpawnedRepair(
+    operationId: string,
+    failures: { result: VerifyCheckResultItem | undefined }[],
+  ): Promise<string | undefined> {
+    const linked = failures.find(({ result }) => result?.repairOperationId)?.result
+      ?.repairOperationId;
+    if (linked) return linked;
+
+    const parentRun = await this.runModel.findByOperation(operationId);
+    if (!parentRun) return;
+    const children = (await this.operationModel.listOperationTree(operationId)).filter(
+      (op) => op.id !== operationId && op.parentOperationId === operationId,
+    );
+    for (const child of children) {
+      const childRun = await this.runModel.findByOperation(child.id);
+      if (
+        childRun?.planConfirmedAt &&
+        childRun.plan?.length &&
+        childRun.acceptanceId === parentRun.acceptanceId
+      ) {
+        return child.id;
+      }
+    }
+  }
+
+  /**
    * Trigger one round of auto-repair. Returns the repair operation id, or null
    * when there's nothing to repair or no spawner is available in this context.
+   * Idempotent across retries: a repair already spawned for this run is
+   * re-linked instead of spawning another one.
    */
   async triggerAutoRepair(
     operationId: string,
@@ -312,6 +354,16 @@ export class VerifyRepairService {
     if (!spawner) {
       log('auto-repair eligible for op %s but no spawner available', operationId);
       return null;
+    }
+
+    const existingRepairId = await this.findSpawnedRepair(operationId, failures);
+    if (existingRepairId) {
+      log(
+        'op %s already has repair %s; re-linking instead of respawning',
+        operationId,
+        existingRepairId,
+      );
+      return this.recordSpawnedRepair(operationId, failures, existingRepairId);
     }
 
     const failedItemIds = failures.map((f) => f.item.id);
@@ -336,21 +388,27 @@ export class VerifyRepairService {
     });
     if (!spawned) return null;
 
-    // Link the repair operation onto each failed result and flip the rollup.
+    log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
+    return this.recordSpawnedRepair(operationId, failures, spawned.repairOperationId);
+  }
+
+  /** Link the repair operation onto each failed result and flip the rollup. */
+  private async recordSpawnedRepair(
+    operationId: string,
+    failures: { item: VerifyCheckItem }[],
+    repairOperationId: string,
+  ): Promise<{ repairOperationId: string }> {
     const run = await this.runModel.findByOperation(operationId);
     if (run) {
       for (const { item } of failures) {
-        await this.resultModel.updateByCheckItem(run.id, item.id, {
-          repairOperationId: spawned.repairOperationId,
-        });
+        await this.resultModel.updateByCheckItem(run.id, item.id, { repairOperationId });
       }
     }
     await this.statusService.markRepairing(operationId);
     // A fast startup failure can precede the plan/parent writes above. Reconcile
     // after both exist as well as from the completion hook.
-    await settleFailedRepair(this.db, this.userId, spawned.repairOperationId, this.workspaceId);
-    log('triggered auto-repair op %s → %s', operationId, spawned.repairOperationId);
+    await settleFailedRepair(this.db, this.userId, repairOperationId, this.workspaceId);
 
-    return spawned;
+    return { repairOperationId };
   }
 }
