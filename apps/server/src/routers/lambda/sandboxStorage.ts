@@ -2,12 +2,12 @@ import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ConnectorDataError } from '@lobechat/connector-data';
 import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
 import { type LobeChatDatabase } from '@lobechat/database';
+import { toExecutionConfiguration } from '@lobechat/types';
 import {
   derivedInstanceDirectory,
   isDefaultInstance,
   MAX_DERIVED_DIRECTORY_ATTEMPTS,
 } from '@lobechat/utils/environmentInstance';
-import { toExecutionConfiguration } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
