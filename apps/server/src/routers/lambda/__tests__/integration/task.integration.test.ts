@@ -1040,6 +1040,80 @@ describe('Task Router Integration', () => {
         /already running/,
       );
     });
+
+    describe('continueTopicId ownership', () => {
+      const settleRun = async (taskId: string, topicId: string) => {
+        await new TaskTopicModel(serverDB, userId).updateStatus(taskId, topicId, 'completed');
+        await new TaskModel(serverDB, userId).updateStatus(taskId, 'paused');
+      };
+
+      it('continues a settled Topic owned by the task', async () => {
+        const task = await caller.create({ assigneeAgentId: testAgentId, instruction: 'Test' });
+        await caller.run({ id: task.data.id });
+        await settleRun(task.data.id, testTopicId);
+
+        await caller.run({ continueTopicId: testTopicId, id: task.data.id });
+
+        expect(mockExecAgent).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            appContext: expect.objectContaining({ topicId: testTopicId }),
+          }),
+        );
+        const [topic] = await new TaskTopicModel(serverDB, userId).findByTaskId(task.data.id);
+        expect(topic).toMatchObject({ status: 'running', topicId: testTopicId });
+      });
+
+      it('rejects a Topic that is not a run of the task', async () => {
+        const task = await caller.create({ assigneeAgentId: testAgentId, instruction: 'Test' });
+        const unrelatedTopicId = await createTestTopic(serverDB, userId);
+        otherUserId = await createTestUser(serverDB);
+        const foreignTopicId = await createTestTopic(serverDB, otherUserId);
+
+        for (const continueTopicId of [unrelatedTopicId, foreignTopicId]) {
+          await expect(caller.run({ continueTopicId, id: task.data.id })).rejects.toMatchObject({
+            code: 'NOT_FOUND',
+          });
+        }
+        expect(mockExecAgent).not.toHaveBeenCalled();
+        const found = await caller.find({ id: task.data.id });
+        expect(found.data.status).toBe('backlog');
+      });
+
+      it("rejects a descendant task's Topic", async () => {
+        const parent = await caller.create({ assigneeAgentId: testAgentId, instruction: 'Parent' });
+        const child = await caller.create({
+          assigneeAgentId: testAgentId,
+          instruction: 'Child',
+          parentTaskId: parent.data.id,
+        });
+        await caller.run({ id: child.data.id });
+        await settleRun(child.data.id, testTopicId);
+        mockExecAgent.mockClear();
+
+        await expect(
+          caller.run({ continueTopicId: testTopicId, id: parent.data.id }),
+        ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+        expect(mockExecAgent).not.toHaveBeenCalled();
+      });
+
+      it("rejects a Topic of an agent other than the task's assignee", async () => {
+        const task = await caller.create({ assigneeAgentId: testAgentId, instruction: 'Test' });
+        const otherAgentId = await createTestAgent(serverDB, userId);
+        const { topics } = await import('@/database/schemas');
+        const otherAgentTopicId = 'tpc_other_agent';
+        await serverDB
+          .insert(topics)
+          .values({ agentId: otherAgentId, id: otherAgentTopicId, userId });
+        const taskTopicModel = new TaskTopicModel(serverDB, userId);
+        await taskTopicModel.add(task.data.id, otherAgentTopicId, { seq: 1 });
+        await taskTopicModel.updateStatus(task.data.id, otherAgentTopicId, 'completed');
+
+        await expect(
+          caller.run({ continueTopicId: otherAgentTopicId, id: task.data.id }),
+        ).rejects.toMatchObject({ code: 'CONFLICT' });
+        expect(mockExecAgent).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe('usage', () => {
