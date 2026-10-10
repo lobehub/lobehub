@@ -10,6 +10,7 @@ import { resolveHeteroSpawnCwd } from '@lobechat/heterogeneous-agents/workingDir
 import { getTask, removeTask, saveTask } from '../daemon/taskRegistry';
 import { registerAgentRun } from './agentRunRegistry';
 
+/** Device execution inputs for a server-authorized heterogeneous run. */
 export interface SpawnHeteroAgentRunParams {
   agentId?: string;
   agentType: string;
@@ -17,6 +18,8 @@ export interface SpawnHeteroAgentRunParams {
   args?: string[];
   assistantMessageId?: string;
   cwd?: string;
+  /** A historical boundary always starts a new native session, ignoring resume hints. */
+  freshSession?: { historyBoundaryMessageId: string };
   /** Image attachments (signed URLs) appended as image content blocks. */
   imageList?: HeteroExecImageRef[];
   jwt: string;
@@ -56,6 +59,22 @@ interface SpawnHeteroAgentRunLogger {
  * event, `rejected` on an early wrapper-process `error`. A missing target cwd
  * is handled inside `lh hetero exec`, which can classify it and emit
  * `heteroFinish`; other wrapper spawn failures flow back as rejected dispatches.
+ *
+ * Use when:
+ * - A Device Gateway request authorizes a native agent run on this connected device.
+ *
+ * Expects:
+ * - Authorized operation, topic, prompt and cwd; an explicit history boundary overrides resume.
+ *
+ * Returns:
+ * - The wrapper spawn acknowledgement; the wrapper reports native output and completion.
+ *
+ * Call stack:
+ * connect agent_run_request handler
+ *   -> {@link spawnHeteroAgentRun}
+ *     -> child_process.spawn
+ *       -> lh hetero exec
+ *         -> native agent CLI -> BatchIngester
  */
 export function spawnHeteroAgentRun(
   params: SpawnHeteroAgentRunParams,
@@ -71,12 +90,14 @@ export function spawnHeteroAgentRun(
     operationId,
     prompt,
     resumeFallbackSystemContext,
-    resumeSessionId,
+    resumeSessionId: requestedResumeSessionId,
     serverUrl,
     systemContext,
     topicId,
     workspaceId,
   } = params;
+  // A selected boundary wins over stale session hints from an older relay.
+  const resumeSessionId = params.freshSession ? undefined : requestedResumeSessionId;
   const workDir = cwd ?? process.cwd();
   // A stale project path must not prevent the wrapper CLI from starting: the
   // inner spawnAgent preflight owns cwd classification and reports the
@@ -113,7 +134,7 @@ export function spawnHeteroAgentRun(
     imageList,
     isNewSession: !resumeSessionId,
     prompt,
-    resumeFallbackSystemContext,
+    resumeFallbackSystemContext: params.freshSession ? undefined : resumeFallbackSystemContext,
     systemContext,
   });
 

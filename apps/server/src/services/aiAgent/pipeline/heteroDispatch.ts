@@ -274,9 +274,12 @@ const hasHeteroRunStarted = async (
   }
 };
 
+/** Authorized execution inputs for the heterogeneous dispatch stage. */
 export interface HeteroDispatchInput {
   canManageAgent: boolean;
   effectiveRequestedDeviceId?: string;
+  /** Selected replay replaces topic-wide native/recovery history when present. */
+  heterogeneousFreshSession?: InternalExecAgentParams['heterogeneousFreshSession'];
   heterogeneousProvider?: LobeAgentAgencyConfig['heterogeneousProvider'];
   heteroType: HeterogeneousAgentType;
   hooks?: AgentHook[];
@@ -398,7 +401,11 @@ export const dispatchHeteroAgent = async (
   const heteroService = new HeterogeneousAgentService(deps.db, deps.userId, {
     workspaceId: deps.workspaceId,
   });
-  const resumeSessionId = await heteroService.getHeterogeneousResumeSessionId(topicId);
+  // A historical regeneration must never fall back to the topic's latest
+  // native transcript, including when its selected replay is empty.
+  const resumeSessionId = input.heterogeneousFreshSession
+    ? undefined
+    : await heteroService.getHeterogeneousResumeSessionId(topicId);
   // Sign an operation-scoped JWT so the CLI can authenticate against
   // heteroIngest / heteroFinish without full user credentials.
   let operationJwt: string;
@@ -451,7 +458,9 @@ export const dispatchHeteroAgent = async (
   // a serialized duplicate. Amp threads are server-backed, so they rely on
   // native continuation exclusively and never need this local-file fallback.
   let conversationHistory: ConversationHistoryEntry[] | undefined;
-  if (heteroType !== 'amp') {
+  // A fresh session carries its own selected history; the topic-wide list
+  // below would leak replaced and later turns.
+  if (heteroType !== 'amp' && !input.heterogeneousFreshSession) {
     try {
       // `allowShareVisitor`: this is the RUN's own topic, already resolved
       // and authorized upstream. An agent-share visitor run executes under
@@ -503,7 +512,12 @@ export const dispatchHeteroAgent = async (
   // `/goal` reaches a hetero agent as instructions, not a tool: it creates and
   // plans the goal through `lh` in this same run.
   const agentSystemContext = withConversationGoalPrompt(
-    agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+    [
+      agentConfig.agencyConfig?.heterogeneousProvider?.systemContext,
+      input.heterogeneousFreshSession?.systemContext,
+    ]
+      .filter(Boolean)
+      .join('\n\n') || undefined,
     prompt,
   );
   const systemContext = buildCloudHeteroContext({
@@ -544,6 +558,9 @@ export const dispatchHeteroAgent = async (
     : undefined;
 
   const heteroParams = {
+    freshSession: input.heterogeneousFreshSession
+      ? { historyBoundaryMessageId: input.heterogeneousFreshSession.historyBoundaryMessageId }
+      : undefined,
     agentType: heteroType,
     assistantMessageId,
     githubToken,

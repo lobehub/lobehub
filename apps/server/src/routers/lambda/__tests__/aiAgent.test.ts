@@ -12,10 +12,12 @@ import {
   workspaces,
 } from '@lobechat/database/schemas';
 import { getTestDB } from '@lobechat/database/test-utils';
+import { HETEROGENEOUS_FRESH_SESSION_CONTEXT_MAX_LENGTH } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import { eq } from 'drizzle-orm';
 import type * as ModelBankModule from 'model-bank';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import type * as InternalJwtModule from '@/libs/trpc/utils/internalJwt';
 import { AiAgentService } from '@/server/services/aiAgent';
@@ -137,6 +139,32 @@ vi.mock('model-bank', async (importOriginal) => {
  * 2. Ensure topic creation logic is correct
  * 3. Verify interactions with the database
  */
+describe('execAgent heterogeneousFreshSession input', () => {
+  const parse = (systemContext: string) => {
+    const schema = aiAgentRouter._def.procedures.execAgent._def.inputs[0];
+    if (!(schema instanceof z.ZodType)) throw new Error('Expected the router input Zod schema');
+    return schema.safeParseAsync({
+      agentId: 'agent-1',
+      heterogeneousFreshSession: { historyBoundaryMessageId: 'user-A', systemContext },
+      parentMessageId: 'user-A',
+      prompt: 'Read this file',
+      resume: true,
+    });
+  };
+
+  /** @example Bounded history plus a large current attachment still reaches execution. */
+  it('accepts a context up to the shared limit', async () => {
+    const result = await parse('a'.repeat(HETEROGENEOUS_FRESH_SESSION_CONTEXT_MAX_LENGTH));
+    expect(result.success).toBe(true);
+  });
+
+  /** @example Client-supplied replay text cannot grow without bound. */
+  it('rejects a context beyond the shared limit', async () => {
+    const result = await parse('a'.repeat(HETEROGENEOUS_FRESH_SESSION_CONTEXT_MAX_LENGTH + 1));
+    expect(result.success).toBe(false);
+  });
+});
+
 describe('AI Agent Router Integration Tests', () => {
   let serverDB: LobeChatDatabase;
   let userId: string;

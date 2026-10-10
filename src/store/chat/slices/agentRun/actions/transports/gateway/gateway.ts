@@ -19,6 +19,7 @@ import type {
   ChatTopicStatus,
   ConversationContext,
   ExecAgentResult,
+  HeterogeneousFreshSession,
   MessageMetadata,
   RuntimeMentionedAgent,
 } from '@lobechat/types';
@@ -992,6 +993,8 @@ export class GatewayActionImpl {
     context: ConversationContext;
     /** File IDs of already-uploaded attachments to attach to the new user message */
     fileIds?: string[];
+    /** Explicit selected history for a fresh Codex regeneration. */
+    heterogeneousFreshSession?: HeterogeneousFreshSession;
     message: string;
     /**
      * Conversation context that owns the rendered messages. Defaults to the
@@ -1080,6 +1083,7 @@ export class GatewayActionImpl {
       clientOperations,
       context: executionContext,
       fileIds,
+      heterogeneousFreshSession,
       message,
       messageContext = executionContext,
       metadata,
@@ -1220,6 +1224,7 @@ export class GatewayActionImpl {
         : await aiAgentService.execAgentTask(
             {
               agentId: executionContext.agentId,
+              heterogeneousFreshSession,
               // Fresh sends only — resume flows never pass this, and the server drops
               // it defensively on resume-like params anyway.
               clientIds,

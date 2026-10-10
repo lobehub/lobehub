@@ -44,6 +44,17 @@ const NO_TEXT_BLOCK_MENU: MessageActionSlot[] = [
   'copyOperationId',
 ];
 
+const withoutTextActions = (slots: string[]): string[] =>
+  slots.filter((key) => key !== 'copy' && key !== 'edit');
+
+/**
+ * Overrides that offer a non-destructive `regenerate` replace the default
+ * `delAndRegenerate`, which deletes the tool history before the retry succeeds.
+ * Other overrides keep the defaults.
+ */
+const offersRegenerate = (config?: MessageActionsConfig) =>
+  !!config && [...(config.bar ?? []), ...(config.menu ?? [])].includes('regenerate');
+
 interface GroupActionsProps {
   actionsConfig?: MessageActionsConfig;
   contentBlock?: AssistantContentBlock;
@@ -71,6 +82,15 @@ export const GroupActionsBar = memo<GroupActionsProps>(
       }
       // Finished, but the turn ends on a tool-call block — no text to edit/copy,
       // yet it's a complete reply that can still be shared and selected.
+      if (offersRegenerate(actionsConfig)) {
+        return (
+          <MessageActionBar
+            bar={withoutTextActions(actionsConfig?.bar ?? [])}
+            ctx={ctx}
+            menu={withoutTextActions(actionsConfig?.menu ?? [])}
+          />
+        );
+      }
       return <MessageActionBar bar={NO_TEXT_BLOCK_BAR} ctx={ctx} menu={NO_TEXT_BLOCK_MENU} />;
     }
 
