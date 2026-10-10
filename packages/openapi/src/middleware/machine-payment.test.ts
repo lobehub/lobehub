@@ -24,6 +24,9 @@ const WALLET_SECRET = 'machine-payment-test-wallet-secret';
 const METHOD_NAME = 'lobehub-test';
 const METHOD_KEY = `${METHOD_NAME}/charge`;
 
+/** `'0.02'` → `'2'`: the fixture currency has two decimals. */
+const toBaseUnits = (amount: string) => String(Math.round(Number(amount) * 100));
+
 const testCharge = Method.from({
   intent: 'charge',
   name: METHOD_NAME,
@@ -31,7 +34,16 @@ const testCharge = Method.from({
     credential: {
       payload: z.object({ signature: z.string(), type: z.enum(['payment', 'proof']) }),
     },
-    request: z.object({ amount: z.string(), currency: z.string() }),
+    // Like the real rails (`tempo.charge()`, `stripe.charge()`), the method takes
+    // the amount in the currency's major unit and stores it in base units. The
+    // settled challenge therefore carries base units, not what was quoted.
+    request: z.pipe(
+      z.object({ amount: z.string(), currency: z.string() }),
+      z.transform(({ amount, ...rest }) => ({
+        ...rest,
+        amount: toBaseUnits(amount),
+      })),
+    ),
   },
 });
 
@@ -252,9 +264,9 @@ describe('machinePayment', () => {
   });
 
   describe('paid tier', () => {
-    it('challenges for the resolved price', async () => {
+    it('challenges for the resolved price in the method base units', async () => {
       expect((await challengeFor('/search')).request).toMatchObject({
-        amount: '0.02',
+        amount: '2',
         currency: 'usd',
       });
     });
@@ -365,6 +377,8 @@ describe('machinePayment', () => {
   });
 
   describe('ledger recording', () => {
+    // The settled challenge carries the method's base units (`'2'` here, `10000`
+    // for a Tempo charge of 0.01); the ledger must still read the quoted price.
     it('records a paid settlement with its route, price, reference and payer', async () => {
       const challenge = await challengeFor('/search');
       await submit('/search', mint(challenge));

@@ -3,32 +3,20 @@ import type { MiddlewareHandler } from 'hono';
 import { Credential, Receipt } from 'mppx';
 
 import type {
+  MachinePaymentMppx,
   MachinePaymentPrice,
   MachinePaymentPriceParams,
   MachinePaymentRecordParams,
 } from '@/business/server/machine-payments/types';
 
+export type {
+  ComposedPaymentResult,
+  MachinePaymentMppx,
+} from '@/business/server/machine-payments/types';
+
 const log = debug('lobe-hono:machine-payment');
 
 const RECEIPT_HEADER = 'Payment-Receipt';
-
-/** Outcome of a composed mppx handler for one HTTP request. */
-export type ComposedPaymentResult =
-  | { challenge: Response; status: 402 }
-  | { status: 200; withReceipt: (response: Response) => Response };
-
-/**
- * Structural view of the mppx instance this middleware needs.
- *
- * Kept structural on purpose: which payment methods the instance carries
- * (Stripe SPT, Tempo stablecoin, …) is a deployment decision that belongs to
- * the layer that constructs it, not to the protocol plumbing here.
- */
-export interface MachinePaymentMppx {
-  compose: (
-    ...entries: [string, Record<string, unknown>][]
-  ) => (input: Request) => Promise<ComposedPaymentResult>;
-}
 
 export interface MachinePaymentConfig {
   /** Canonical `name/intent` key of the configured method, e.g. `stripe/charge`. */
@@ -151,11 +139,13 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
     const receiptHeader = result.withReceipt(new Response(null)).headers.get(RECEIPT_HEADER);
     if (receiptHeader) c.header(RECEIPT_HEADER, receiptHeader);
 
-    // Amount and currency come from the settled credential rather than the
-    // price just resolved: the ledger should record what was actually charged.
-    // mppx binds the amount into the challenge id and refuses a stale quote, so
-    // the two cannot currently diverge — reading the settled value keeps that
-    // true without depending on the invariant holding.
+    // Amount and currency are the quote this request settled against, in the
+    // currency's major unit. They are what was charged: mppx verified the
+    // credential against a challenge composed from this very price, and binds
+    // the amount into the challenge id, so a credential for any other quote was
+    // refused above. The settled challenge is no substitute — a real method
+    // (Tempo, Stripe) stores its amount in base units, so it reads `10000` for a
+    // charge of `0.01`.
     const settled = settlementOf(c.req.raw);
 
     // Recorded before delivery for the same reason as the receipt: the money
@@ -170,8 +160,8 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
     // which this middleware calls exactly once and never retries.
     try {
       await recordPayment?.({
-        amount: settled.amount ?? price.amount,
-        currency: settled.currency ?? price.currency,
+        amount: price.amount,
+        currency: price.currency,
         reference: receiptHeader ? Receipt.deserialize(receiptHeader).reference : '',
         route,
         ...(settled.claimedSource ? { claimedSource: settled.claimedSource } : {}),
@@ -190,31 +180,23 @@ export const machinePayment = (config: MachinePaymentConfig): MiddlewareHandler 
 };
 
 interface SettledCredential {
-  amount?: string;
   claimedSource?: string;
-  currency?: string;
 }
 
 /**
- * What the settled credential itself declares. The amount and currency are
- * authoritative — mppx binds them into the verified challenge. The payer is
- * not: `source` is caller-supplied and only as trustworthy as the payment
- * method's verification of it, so it is surfaced as a claim.
+ * Who the settled credential claims paid. `source` is caller-supplied and only
+ * as trustworthy as the payment method's verification of it, so it is surfaced
+ * as a claim.
  *
  * Never throws: the credential already verified, so a parse failure here only
- * means those details are unknown. Failing a settled request over unreadable
- * bookkeeping fields would charge the caller and then deny them the resource.
+ * means the claim is unknown. Failing a settled request over an unreadable
+ * bookkeeping field would charge the caller and then deny them the resource.
  */
 const settlementOf = (request: Request): SettledCredential => {
   try {
     const credential = Credential.fromRequest(request);
-    const charged = credential.challenge?.request as Record<string, unknown> | undefined;
 
-    return {
-      ...(typeof charged?.amount === 'string' ? { amount: charged.amount } : {}),
-      ...(typeof charged?.currency === 'string' ? { currency: charged.currency } : {}),
-      ...(credential.source ? { claimedSource: credential.source } : {}),
-    };
+    return credential.source ? { claimedSource: credential.source } : {};
   } catch {
     return {};
   }
