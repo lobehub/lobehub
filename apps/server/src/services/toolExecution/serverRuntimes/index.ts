@@ -10,6 +10,7 @@
 import type { ToolExecutionContext } from '../types';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
+import { agentAccountRuntime } from './agentAccount';
 import { agentBuilderRuntime } from './agentBuilder';
 import { agentDocumentsRuntime } from './agentDocuments';
 import { agentManagementRuntime } from './agentManagement';
@@ -70,6 +71,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 registerRuntimes([
   acceptanceEvidenceRuntime,
   auvRuntime,
+  agentAccountRuntime,
   agentBuilderRuntime,
   webBrowsingRuntime,
   cloudSandboxRuntime,

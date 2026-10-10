@@ -43,6 +43,7 @@ import debug from 'debug';
 import type { ModelAbilities } from 'model-bank';
 
 import { loadModels } from '@/business/client/model-bank/loadModels';
+import { AgentAccountModel } from '@/database/models/agentAccount';
 import { AiModelModel } from '@/database/models/aiModel';
 import { AiProviderModel } from '@/database/models/aiProvider';
 import { ChatGroupModel } from '@/database/models/chatGroup';
@@ -545,6 +546,24 @@ export const discoverTools = async (
     );
   }
 
+  /**
+   * Whether the executing agent owns at least one live identity account. This
+   * is the fact the tool rules read to decide whether the agent-account tool
+   * ships this turn: the addresses and inbox reach the model as context, so the
+   * tool is enabled only when there is something for it to act on. Non-critical
+   * — a failed read simply leaves the tool out.
+   */
+  async function readHasIdentityAccount(): Promise<boolean> {
+    const accounts = await new AgentAccountModel(
+      deps.db,
+      deps.userId,
+      undefined,
+      deps.workspaceId,
+    ).query({ agentId: resolvedAgentId, liveOnly: true });
+
+    return accounts.length > 0;
+  }
+
   // Every other read this send needs, started together. They hit different
   // backends — Postgres rows, the Market's live skill discovery, the device
   // gateway — and none of them feeds another, so the user waits for the slowest
@@ -564,6 +583,7 @@ export const discoverTools = async (
         ),
         attachedFileTypes: started(readAttachedFileTypes()),
         oversizedFiles: started(readHasOversizedFiles().catch(() => false)), // non-critical
+        hasIdentityAccount: started(readHasIdentityAccount().catch(() => false)), // non-critical
         composioManifests: started(
           traceDiscoveryStage('composio', () =>
             deps.composioService.getComposioManifests(resolvedAgentId),
@@ -824,6 +844,7 @@ export const discoverTools = async (
 
     hasAgentDocuments = await toolReads.agentDocuments;
     const hasOversizedFiles = await toolReads.oversizedFiles;
+    const hasIdentityAccount = await toolReads.hasIdentityAccount;
 
     log('execAgent: isBotConversation=%s', isBotConversation);
 
@@ -1129,6 +1150,7 @@ export const discoverTools = async (
       executionPlan,
       globalMemoryEnabled,
       hasEnabledKnowledgeBases,
+      hasIdentityAccount,
       hasOversizedFiles,
       isBotConversation,
       isGroupSupervisor,

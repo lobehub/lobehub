@@ -62,7 +62,13 @@ export interface RevokeAgentAccountOptions {
 
 /** What `handleInbound` decided, so the webhook route can pick a status code. */
 export type AgentAccountInboundOutcome =
-  | { accountId: string; message: AgentAccountInboundMessage; outcome: 'delivered' }
+  | {
+      accountId: string;
+      /** Provider delivery id, so a failed handling can release its replay claim. */
+      eventId: string;
+      message: AgentAccountInboundMessage;
+      outcome: 'delivered';
+    }
   | { accountId?: string; outcome: 'ignored' | 'rejected' | 'unknown-account' | 'unroutable' };
 
 export interface AgentAccountServiceOptions {
@@ -102,6 +108,14 @@ export class AgentAccountService {
   }): Promise<AgentAccountView[]> => this.model.query(query);
 
   get = (id: string): Promise<AgentAccountView | undefined> => this.model.findById(id);
+
+  /**
+   * Whether this deployment has the named provider registered. The inbound
+   * edge asks before dispatching so an unknown provider is a 404 (a webhook
+   * URL nobody configured) rather than the registry's thrown error read as a
+   * 500.
+   */
+  hasProvider = (provider: string): boolean => this.options.registry.has(provider);
 
   // --------------- Writes ---------------
 
@@ -334,10 +348,27 @@ export class AgentAccountService {
       return { accountId: resolved.view.id, outcome: 'ignored' };
     }
 
-    const message = await provider.normalizeInbound(event, ref);
+    let message: AgentAccountInboundMessage | null;
+    try {
+      message = await provider.normalizeInbound(event, ref);
+    } catch (error) {
+      // Verified and claimed but not processed: give the event id back so the
+      // provider's retry is handled instead of acknowledged as a duplicate.
+      await provider.releaseInbound?.(event.eventId)?.catch(() => undefined);
+      throw error;
+    }
     if (!message) return { accountId: resolved.view.id, outcome: 'ignored' };
 
-    return { accountId: resolved.view.id, message, outcome: 'delivered' };
+    return { accountId: resolved.view.id, eventId: event.eventId, message, outcome: 'delivered' };
+  };
+
+  /**
+   * Release the replay claim of a delivery whose handling failed after
+   * {@link handleInbound} accepted it, so the provider's retry is processed
+   * instead of acknowledged as a duplicate.
+   */
+  releaseInbound = async (providerName: string, eventId: string): Promise<void> => {
+    await this.options.registry.get(providerName).releaseInbound?.(eventId);
   };
 
   // --------------- Internals ---------------

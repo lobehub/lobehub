@@ -34,6 +34,7 @@
   "table.columns.trigger.enums.goal": "目标规划",
   "table.columns.trigger.enums.history_summary": "历史摘要",
   "table.columns.trigger.enums.image": "图像生成",
+  "table.columns.trigger.enums.inbox": "助手收件箱",
   "table.columns.trigger.enums.input_completion": "输入补全",
   "table.columns.trigger.enums.memory": "记忆提取",
   "table.columns.trigger.enums.multimodal_analysis": "多模态分析",

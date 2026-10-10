@@ -375,6 +375,19 @@ describe('AgentAccountModel scope and writes', () => {
     ).resolves.toBeUndefined();
   });
 
+  it('leaves suspended and revoked accounts out of a live-only query', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const active = await model.create({ ...mailAccount('live@lobe.id'), status: 'active' });
+    const suspended = await model.create(mailAccount('paused@lobe.id'));
+    const revoked = await model.create(mailAccount('gone@lobe.id'));
+
+    await model.update(suspended.id, { status: 'suspended' });
+    await model.revoke(revoked.id);
+
+    const live = await model.query({ agentId, liveOnly: true });
+    expect(live.map((account) => account.id)).toEqual([active.id]);
+  });
+
   it('keeps one account per (agent, kind, provider, identifier)', async () => {
     const model = new AgentAccountModel(serverDB, userId);
     await model.create(mailAccount('dupe@lobe.id'));
