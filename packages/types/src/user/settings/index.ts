@@ -9,6 +9,7 @@ import type { MarketAuthTokens } from './market';
 import type { UserMemorySettings } from './memory';
 import type { UserModelProviderConfig } from './modelProvider';
 import type { NotificationSettings } from './notification';
+import type { UserQuickNoteSettings } from './quickNote';
 import type { UserServiceModelConfig } from './systemAgent';
 import type { UserToolConfig } from './tool';
 import type { UserTTSConfig } from './tts';
@@ -24,6 +25,7 @@ export * from './market';
 export * from './memory';
 export * from './modelProvider';
 export * from './notification';
+export * from './quickNote';
 export * from './sync';
 export * from './systemAgent';
 export * from './tool';
@@ -42,6 +44,7 @@ export interface UserSettings {
   market?: MarketAuthTokens;
   memory?: UserMemorySettings;
   notification?: NotificationSettings;
+  quickNote?: UserQuickNoteSettings;
   systemAgent: UserServiceModelConfig;
   tool: UserToolConfig;
   tts: UserTTSConfig;
@@ -62,6 +65,7 @@ export const UserSettingsSchema = z
     market: z.any().optional(),
     memory: z.any().optional(),
     notification: z.any().optional(),
+    quickNote: z.any().optional(),
     systemAgent: z.any().optional(),
     tool: z.any().optional(),
     tts: z.any().optional(),
