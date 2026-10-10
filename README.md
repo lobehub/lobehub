@@ -26,7 +26,8 @@ You stay in charge — without staying online.
 [![][github-forks-shield]][github-forks-link]
 [![][github-stars-shield]][github-stars-link]
 [![][github-issues-shield]][github-issues-link]
-[![][github-license-shield]][github-license-link]<br>
+[![][github-license-shield]][github-license-link]
+![tokens](https://img.shields.io/endpoint?url=https://gittokens.rsamf.com/badge/lobehub/lobehub)<br>
 
 **Share LobeHub Repository**
 
