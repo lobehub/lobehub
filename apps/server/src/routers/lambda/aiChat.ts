@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { TRACING_SCENARIOS } from '@lobechat/const';
-import { getErrorCodeSpec } from '@lobechat/model-runtime';
+import { getErrorCodeSpec, StructuredOutputError } from '@lobechat/model-runtime';
 import type { CreateMessageParams, SendMessageServerResponse } from '@lobechat/types';
 import { AiSendMessageServerSchema, RequestTrigger, StructureOutputSchema } from '@lobechat/types';
 import { createTimingHelpers, createTimingRequestId } from '@lobechat/utils';
@@ -182,6 +182,14 @@ export const aiChatRouter = router({
         },
       );
     } catch (error) {
+      // Schema mode used to resolve unparsable model text (e.g. plain prose) as `undefined`.
+      // Keep that as "no result" so best-effort callers such as input completion stay silent;
+      // provider, auth and budget failures still map below. Tool mode keeps throwing.
+      if (error instanceof StructuredOutputError && !input.tools) {
+        log('outputJSON got unparsable structured output: %s', error.message);
+        return { data: undefined, tracingId };
+      }
+
       const runtimeTRPCError = createRuntimeTRPCError(error, {
         silentHandlerLog: input.tracing?.scenario === TRACING_SCENARIOS.InputCompletion,
       });
