@@ -130,10 +130,14 @@ class GoalService {
     maxTotalCost?: number | null;
   }) => lambdaClient.goal.setBudget.mutate(params);
 
+  /**
+   * A batch is only ever created by decomposition, never hand-authored, so the
+   * add-node surface accepts every kind except `batch`.
+   */
   addNode = async (params: {
     description?: string;
     id: string;
-    kind: GoalNodeKind;
+    kind: Exclude<GoalNodeKind, 'batch'>;
     priority?: number;
     title: string;
   }) => lambdaClient.goal.addNode.mutate(params);

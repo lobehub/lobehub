@@ -65,7 +65,7 @@ export const GOAL_CRITERIA_DRAFT_JSON_SCHEMA = {
 };
 
 /** Bump when the goal decomposition planning prompt meaningfully changes. */
-export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v6';
+export const GOAL_DECOMPOSE_PROMPT_VERSION = 'v7';
 
 export const GOAL_DECOMPOSE_JSON_SCHEMA = {
   name: 'goal_decomposition',
@@ -74,6 +74,37 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
     properties: {
       assumptions: { items: { maxLength: 280, type: 'string' }, maxItems: 5, type: 'array' },
       problemStatement: { maxLength: 280, minLength: 1, type: 'string' },
+      /**
+       * Set only for one repeated mould — many structurally identical units
+       * sharing a single reusable transformation. Null for every ordinary goal.
+       */
+      rollout: {
+        additionalProperties: false,
+        properties: {
+          recipeOutline: { maxLength: 280, type: 'string' },
+          repeatable: { type: 'boolean' },
+          /** Honest count of the homogeneous units in the whole goal. */
+          unitCount: { minimum: 1, type: 'integer' },
+          /** Roster of every homogeneous unit, probes first, in delivery order. */
+          units: { items: { maxLength: 120, type: 'string' }, maxItems: 60, type: 'array' },
+          /** Axes the units vary along, so a probe can cover them. */
+          variants: {
+            items: {
+              additionalProperties: false,
+              properties: {
+                axis: { maxLength: 80, minLength: 1, type: 'string' },
+                values: { items: { maxLength: 80, type: 'string' }, maxItems: 8, type: 'array' },
+              },
+              required: ['axis', 'values'],
+              type: 'object',
+            },
+            maxItems: 4,
+            type: 'array',
+          },
+        },
+        required: ['repeatable', 'unitCount', 'recipeOutline', 'variants', 'units'],
+        type: ['object', 'null'],
+      },
       questions: {
         items: {
           additionalProperties: false,
@@ -107,7 +138,7 @@ export const GOAL_DECOMPOSE_JSON_SCHEMA = {
         type: 'array',
       },
     },
-    required: ['problemStatement', 'questions', 'assumptions', 'tasks'],
+    required: ['problemStatement', 'questions', 'assumptions', 'tasks', 'rollout'],
     type: 'object' as const,
   },
   strict: true,
@@ -158,6 +189,11 @@ export const chainGoalDecompose = ({
         '- Set blocking when the goal leaves open something that defines the deliverable itself and no default is safe: who it is for, what exactly is to be analyzed or changed, what outcome a change must achieve, or which of incompatible directions to take. A guess there produces a different deliverable, not merely a weaker one. Formats, details, and preferences with a sensible default are never blocking.',
         '- The user is asked once, before any work starts, and every blocking question goes into that single round — there is no later chance to ask, so list them all now rather than holding one back. Keep to what truly decides the deliverable. A goal that already states these things returns no blocking question.',
         '- assumptions lists the non-obvious readings the plan relies on that the user may want to correct; skip the obvious. Write every assumption and every answered clarification into the instructions of the tasks it affects.',
+        '- rollout is how you flag ONE repeated mould: many structurally identical units that share a single reusable transformation — for example migrating fifty sibling stores the same way, or applying one cross-cutting change to many files. Leave it null for every ordinary goal, including one whose directions differ from each other or form a pipeline. Setting it is a claim you must be able to defend, not a way to list more tasks.',
+        "- When you set rollout, repeatable must be true only if, after replacing the concrete file / module / symbol names with placeholders, every unit's transformation steps are still the same. If they differ, it is not one batch: leave rollout null and decompose the directions normally.",
+        '- rollout.unitCount is your honest count of the homogeneous units in the WHOLE goal (it will usually exceed the few tasks you list). recipeOutline names that single reusable transformation in one sentence. variants lists the axes the units vary along (e.g. axis "cold-start" with values ["yes","no"]); name an axis only if some unit actually takes each value you list.',
+        '- rollout.units is the full roster of every homogeneous unit as short titles, probes first and in delivery order (list all of them, up to 60). The coordinator promotes the units after the probes from this roster one wave at a time; a unit missing here will never be delivered.',
+        '- When rollout is set, tasks lists only the few REPRESENTATIVE units to run first — 3–5 probes, not every unit. Choose probes that cover the declared variant axes and MUST include the hardest unit. The coordinator releases the remaining units in waves once the probes prove the class runs fully automatically; do not enumerate them here.',
         '- Write all fields in the language used by the goal.',
       ].join('\n'),
       role: 'system',

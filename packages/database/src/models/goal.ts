@@ -4,6 +4,8 @@ import { GOAL_CLARIFICATION_TITLE, type GoalStatus } from '@lobechat/const/goal'
 import type {
   GoalDecisionOption,
   GoalNodeStatus,
+  GoalRolloutPolicy,
+  GoalRolloutState,
   GoalSupervisionState,
   GoalUnderstanding,
 } from '@lobechat/types';
@@ -188,6 +190,35 @@ export class GoalModel {
       .where(and(eq(goals.id, id), this.ownership()));
   };
 
+  /**
+   * Patch only `config.rolloutState`, for the same reason as
+   * `updateUnderstanding`: the coordinator writes batch progress while the user
+   * may be editing budget on the same column. Passing `null` clears the batch.
+   */
+  updateRolloutState = async (id: string, state: GoalRolloutState | null): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config:
+          state === null
+            ? sql`COALESCE(${goals.config}, '{}'::jsonb) - 'rolloutState'`
+            : sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{rolloutState}', ${JSON.stringify(state)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
+  /** Patch only `config.rollout`, so auto-detection can persist the policy. */
+  updateRolloutPolicy = async (id: string, policy: GoalRolloutPolicy): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`jsonb_set(COALESCE(${goals.config}, '{}'::jsonb), '{rollout}', ${JSON.stringify(policy)}::jsonb)`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(goals.id, id), this.ownership()));
+  };
+
   /** Compare-and-swap only the supervisor namespace; concurrent budget edits survive. */
   updateSupervisorState = async (
     id: string,
@@ -222,14 +253,15 @@ export class GoalModel {
         // policy edits cannot replace the concurrently written incident ledger.
         ...(value.config !== undefined
           ? {
-              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt')
+              config: sql`(COALESCE(${JSON.stringify(value.config ?? {})}::jsonb, '{}'::jsonb) - 'planningCheckpoint' - 'planningProtocol' - 'supervisorState' - 'managerState' - 'understanding' - 'quotaRetryWakeAt' - 'rolloutState')
                 || jsonb_strip_nulls(jsonb_build_object(
                   'planningCheckpoint', ${goals.config}->'planningCheckpoint',
                   'planningProtocol', ${goals.config}->'planningProtocol',
                   'supervisorState', ${goals.config}->'supervisorState',
                   'managerState', ${goals.config}->'managerState',
                   'understanding', ${goals.config}->'understanding',
-                  'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt'
+                  'quotaRetryWakeAt', ${goals.config}->'quotaRetryWakeAt',
+                  'rolloutState', ${goals.config}->'rolloutState'
                 ))`,
             }
           : {}),

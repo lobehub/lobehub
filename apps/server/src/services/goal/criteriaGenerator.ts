@@ -74,6 +74,26 @@ const decompositionSchema = z.object({
   assumptions: z.array(z.string()).default([]),
   problemStatement: z.string().min(1),
   /**
+   * The planner's batch claim. Present only when it judged the goal to be one
+   * repeated mould; the coordinator validates it with `spec.ts` before creating
+   * a `batch`, so a planner that over-claims still decomposes normally.
+   */
+  rollout: z
+    .object({
+      recipeOutline: z.string().optional(),
+      repeatable: z.boolean(),
+      /** Honest count of the homogeneous units in the whole goal. */
+      unitCount: z.number().int().positive(),
+      /** Roster of every homogeneous unit, probes first, in delivery order. */
+      units: z.array(z.string().min(1)).default([]),
+      /** Axes the units vary along; a probe must cover each declared value. */
+      variants: z
+        .array(z.object({ axis: z.string().min(1), values: z.array(z.string()) }))
+        .default([]),
+    })
+    .nullable()
+    .optional(),
+  /**
    * What the planner could not determine and would change the deliverable.
    * Defaulted so an older answer without the field still plans.
    */

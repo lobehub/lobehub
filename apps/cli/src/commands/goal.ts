@@ -19,6 +19,7 @@ import { resolveAppUrlBuilder } from './task/url';
 // `any` node kind, which is how a renamed kind silently printed `undefined`
 // here after the type checker had signed off everywhere else.
 const nodeIcon: Record<GoalNodeKind, string> = {
+  batch: '▦',
   decision: '◆',
   experiment: '⚗',
   finding: '●',
@@ -328,6 +329,12 @@ export function registerGoalCommand(program: Command) {
       '--max-concurrent-tasks <n>',
       "How many of this goal's tasks may run at once (default 3)",
     )
+    .option(
+      '--rollout <mode>',
+      'Batch roll-out for one repeated mould: canary (probe first, then waves), full, or off to forbid a batch. Omit to let the planner decide',
+    )
+    .option('--canary-size <n>', 'Probe size K for --rollout canary (default 5, maximum 5)')
+    .option('--wave-size <n>', 'Units released per wave after the gate passes (default 5)')
 
     .option('--max-steps-per-run <n>', 'Optional agent step cap per Task run (for example 500)')
     .option(
@@ -345,6 +352,9 @@ export function registerGoalCommand(program: Command) {
     .action(async (title: string, options) => {
       if (options.maxExperiments && !options.explore) {
         throw new Error('--max-experiments requires --explore');
+      }
+      if (options.rollout && !['canary', 'full', 'off'].includes(options.rollout)) {
+        throw new Error('--rollout must be one of: canary, full, off');
       }
       const operationId = process.env.LOBEHUB_OPERATION_ID;
       const fromTopic = Boolean(options.topic || options.conversation);
@@ -388,6 +398,17 @@ export function registerGoalCommand(program: Command) {
               ? { maxIncidents: Number.parseInt(options.maxSupervisionIncidents, 10) }
               : {}),
           },
+          // Auto-detection is the default: with no `--rollout`, the planner's
+          // homogeneity claim decides. `off` forbids a batch outright.
+          rollout: options.rollout
+            ? {
+                canarySize: options.canarySize
+                  ? Number.parseInt(options.canarySize, 10)
+                  : undefined,
+                trigger: options.rollout,
+                waveSize: options.waveSize ? Number.parseInt(options.waveSize, 10) : undefined,
+              }
+            : undefined,
           taskAgentId: options.taskAgent,
         },
         criteria: (options.criterion as string[] | undefined)?.map((criterion) => ({

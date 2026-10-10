@@ -2,6 +2,7 @@ import { Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
+  Boxes,
   CircleHelp,
   FlaskConical,
   GitBranch,
@@ -24,6 +25,9 @@ export const KIND_COLOR: Record<GoalGraphNodeKind, { line: string; soft: string 
   // primary-strength band sits at x9–x10, and x6/x7 resolve to near-pastel
   // tints (light-mode blue-7 is #93c8ff). x3/x10 gives the glyph a visible
   // tinted tile with a saturated line in both themes.
+  // A batch is one repeated mould delivered as a class; geekblue keeps it
+  // distinct from the single `task` blue while sitting beside the experiment cyan.
+  batch: { line: cssVar.geekblue10, soft: cssVar.geekblue3 },
   decision: { line: cssVar.orange10, soft: cssVar.orange3 },
   experiment: { line: cssVar.cyan10, soft: cssVar.cyan3 },
   finding: { line: cssVar.green10, soft: cssVar.green3 },
@@ -32,6 +36,7 @@ export const KIND_COLOR: Record<GoalGraphNodeKind, { line: string; soft: string 
 };
 
 export const KIND_ICON: Record<GoalGraphNodeKind, LucideIcon> = {
+  batch: Boxes,
   decision: GitBranch,
   experiment: FlaskConical,
   finding: Lightbulb,
