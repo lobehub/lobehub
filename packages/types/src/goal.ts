@@ -323,6 +323,12 @@ export interface GoalManagerState {
    * tick and spent the whole turn budget in minutes.
    */
   retryAfter?: string;
+  /**
+   * When the queued wake for `retryAfter` fires. The queue caps a delay at a
+   * day, so a wait longer than that is re-armed from here when the capped wake
+   * fires; ticks before then see it armed and queue nothing.
+   */
+  retryArmedUntil?: string;
   reviewSnapshot?: string;
   snapshot: string;
   startedAt: string;

@@ -144,6 +144,28 @@ export class GoalModel {
   };
 
   /**
+   * Drop the main Agent's failed-turn wait (`managerState.retryAfter` and its arm
+   * receipt), leaving every other receipt field alone. A person resuming the Goal
+   * is the signal that the runtime was fixed, so the next turn should not sit out
+   * a backoff chosen for the failure they just fixed.
+   */
+  clearManagerRetryWait = async (id: string): Promise<void> => {
+    await this.db
+      .update(goals)
+      .set({
+        config: sql`${goals.config} #- '{managerState,retryAfter}' #- '{managerState,retryArmedUntil}'`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(goals.id, id),
+          this.ownership(),
+          sql`COALESCE(${goals.config} -> 'managerState', '{}'::jsonb) ? 'retryAfter'`,
+        ),
+      );
+  };
+
+  /**
    * Claim the queued wake for a Task waiting on a usage-window reset, so that
    * repeated ticks before the reset (the sweep, Task events, manual advances)
    * queue one callback instead of one each. Succeeds only when no wake is armed,

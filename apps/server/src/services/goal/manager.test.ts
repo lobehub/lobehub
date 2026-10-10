@@ -858,6 +858,63 @@ describe('CLI main Agent planning', () => {
       expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(
         MAX_FAILED_MANAGER_TURNS,
       );
+
+      // The person fixed the runtime and resumed: the next turn goes out now.
+      await service().resume(id);
+      await service().tick(id);
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(
+        MAX_FAILED_MANAGER_TURNS + 1,
+      );
+    });
+
+    it('starts the next turn at once when a Goal paused mid-backoff is resumed', async () => {
+      const { id, op } = await start(10);
+      await ops().recordCompletion(op.id, {
+        status: 'error',
+        error: { message: 'spawn claude ENOENT' },
+      });
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      expect((await model().findById(id))!.config!.managerState!.retryAfter).toBeDefined();
+
+      await service().pause(id);
+      await service().resume(id);
+      expect((await model().findById(id))!.config!.managerState!.retryAfter).toBeUndefined();
+      await service().tick(id);
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-arms a wait longer than the queue can delay', async () => {
+      const { id, op } = await start(3);
+      const DAY = 86_400_000;
+      let now = Date.now();
+      vi.spyOn(Date, 'now').mockImplementation(() => now);
+      const resetsAt = Math.floor((now + 3 * DAY) / 1000);
+      await ops().recordCompletion(op.id, {
+        status: 'error',
+        error: {
+          body: { code: 'rate_limit', rateLimitInfo: { resetsAt, status: 'rejected' } },
+          category: 'quota',
+          message: "You've hit your weekly limit",
+        },
+      });
+      const wakes = () =>
+        vi
+          .mocked(scheduler.scheduleGoalAdvance)
+          .mock.calls.filter(([params]) => params.goalId === id && params.delay === 86_400).length;
+
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      expect(wakes()).toBe(1);
+      // Ticks before the capped wake fires queue nothing more.
+      await service().tick(id);
+      expect(wakes()).toBe(1);
+
+      // The capped wake fires a day later, two days short of the reset.
+      now += DAY + 1000;
+      expect((await service().tick(id)).outcome).toBe('waiting_external');
+      expect(wakes()).toBe(2);
+      await service().tick(id);
+      expect(wakes()).toBe(2);
+      expect(vi.mocked(AiAgentService.prototype.execAgent)).toHaveBeenCalledTimes(1);
     });
 
     it('waits for an offline device on the Task schedule without charging the turn', async () => {
