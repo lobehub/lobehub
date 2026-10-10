@@ -1,4 +1,4 @@
-name: T727 scratch verify
+name: T727 scratch lint
 
 on:
   push:
@@ -9,10 +9,10 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: root type-check and eval testCase unit test
+  lint:
+    name: root lint and eval testCase unit test
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 90
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
         uses: ./.github/actions/setup-env
       - name: Install deps
         run: pnpm i
-      - name: Type check (root, bun --check)
-        run: bun run type-check
+      - name: Lint (bun run lint = eslint + stylelint + type-check + circular)
+        run: bun run lint
       - name: Unit test - eval testCase slice
         run: bunx vitest run --project app src/store/eval/slices/testCase/action.test.ts
