@@ -1645,6 +1645,7 @@ export const taskRouter = router({
         actorAgentId: z.string().optional(),
         error: z.string().optional(),
         id: z.string(),
+        operationId: z.string().optional(),
         status: z.enum(TASK_STATUSES),
       }),
     )
@@ -1655,12 +1656,20 @@ export const taskRouter = router({
         // transitions call the service without an actor and stay silent.
         const actor = await resolveActivityActor(ctx, actorAgentId);
         const result = await ctx.taskService.updateStatus(statusInput, actor);
-        const { task, unlocked, paused, checkpointTriggered, allSubtasksDone, parentTaskId } =
-          result;
+        const {
+          task,
+          unlocked,
+          paused,
+          checkpointTriggered,
+          allSubtasksDone,
+          parentTaskId,
+          completionDeferred,
+        } = result;
         return {
           data: task,
           message: `Task ${input.status}`,
           success: true,
+          ...(completionDeferred && { completionDeferred: true }),
           ...(unlocked.length > 0 && { unlocked }),
           ...(paused.length > 0 && { paused }),
           ...(checkpointTriggered && { checkpointTriggered: true }),

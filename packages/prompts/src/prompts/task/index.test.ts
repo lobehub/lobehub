@@ -130,7 +130,10 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).toContain('Automation: heartbeat, every 4h');
-    expect(result).toContain('NEVER set this task to completed');
+    expect(result).toContain('NEVER end the loop for that, and never set it to canceled or failed');
+    // A tick may retire the loop only when the instruction's own end condition is met.
+    expect(result).toContain('when the Instruction defines an end condition');
+    expect(result).toContain('Do not ask the user to stop it instead');
   });
 
   it('should render a schedule automation line with the cron pattern and timezone', () => {
@@ -150,7 +153,7 @@ describe('buildTaskRunPrompt', () => {
     );
 
     expect(result).toContain('Automation: cron "0 9 * * *" (Asia/Shanghai)');
-    expect(result).toContain('NEVER set this task to completed');
+    expect(result).toContain('NEVER end the loop for that, and never set it to canceled or failed');
   });
 
   it('should not render an automation line for non-automation tasks', () => {

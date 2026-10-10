@@ -101,6 +101,8 @@ export interface CreateTaskInput {
 export interface UpdateStatusResult {
   allSubtasksDone?: boolean;
   checkpointTriggered?: boolean;
+  /** Completion was requested by the task's own run and lands when it ends. */
+  completionDeferred?: boolean;
   parentTaskId?: string | null;
   paused: string[];
   task: TaskItem;
@@ -491,6 +493,13 @@ export class TaskService {
     input: {
       error?: string;
       id: string;
+      /**
+       * The caller's own run, when an agent changes the task it is executing.
+       * Completing that task is a delivery request: it is recorded and
+       * finalized by onTopicComplete once the run ends, instead of
+       * interrupting the run mid-tool-call.
+       */
+      operationId?: string;
       status: TaskStatus;
     },
     /**
@@ -500,7 +509,7 @@ export class TaskService {
      */
     actor?: { agentId?: string | null; userId?: string | null },
   ): Promise<UpdateStatusResult> {
-    const { id, status, error: errorMsg } = input;
+    const { id, operationId, status, error: errorMsg } = input;
 
     if (errorMsg && status !== 'failed') {
       throw new TRPCError({
@@ -513,6 +522,18 @@ export class TaskService {
 
     if (resolved.status === 'running' && status !== 'running') {
       const topics = await this.taskTopicModel.findByTaskId(resolved.id);
+
+      if (
+        status === 'completed' &&
+        operationId &&
+        topics.some((t) => t.status === 'running' && t.operationId === operationId)
+      ) {
+        await this.taskModel.updateContext(resolved.id, {
+          completion: { requestedByOperationId: operationId },
+        });
+        return { completionDeferred: true, paused: [], task: resolved, unlocked: [] };
+      }
+
       const aiAgentService = new AiAgentService(this.db, this.userId, {
         workspaceId: this.workspaceId,
       });

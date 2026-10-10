@@ -39,4 +39,10 @@ describe('task skill instructions', () => {
       content.indexOf('Complete when done'),
     );
   });
+
+  it('lets a tick retire the loop once the instruction end condition is met', () => {
+    expect(content).toContain('**End conditions**');
+    expect(content).toContain('Then run `lh task complete <id>` as your final step');
+    expect(content).toContain('Do not ask the user to stop it instead');
+  });
 });

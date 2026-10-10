@@ -228,6 +228,9 @@ export class TaskLifecycleService {
       }
 
       // 5. Default post-tick transition.
+      //    - Automation task whose own tick requested completion (the
+      //      instruction's end condition was verified as met) → 'completed',
+      //      retiring the loop now that the run has finished cleanly.
       //    - Schedule-mode task that just consumed its final allowed run
       //      (count ≥ maxExecutions) → park at 'completed' so the UI reflects
       //      the cap immediately. Without this, a daily cron with
@@ -272,7 +275,13 @@ export class TaskLifecycleService {
             } | null
           )?.completion?.requestedByOperationId === params.operationId;
 
-        if (
+        if (currentTask.automationMode && completionRequestedByCurrentOperation) {
+          log('automation task=%s retired by its own tick — end condition met', taskIdentifier);
+          await this.taskModel.updateStatusIfCurrent(taskId, 'running', 'completed', {
+            completedAt: new Date(),
+            error: null,
+          });
+        } else if (
           currentTask.automationMode === 'schedule' &&
           (await this.scheduleCapReached(currentTask))
         ) {

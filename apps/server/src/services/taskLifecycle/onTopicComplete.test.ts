@@ -299,6 +299,53 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'paused', expect.anything());
     });
 
+    it.each(['schedule', 'heartbeat'] as const)(
+      '%s task whose own tick met the end condition → completed instead of re-armed',
+      async (automationMode) => {
+        const task = baseTask({
+          automationMode,
+          context: { completion: { requestedByOperationId: 'op-1' } },
+        });
+        findById.mockResolvedValueOnce(task).mockResolvedValue({ ...task, status: 'completed' });
+
+        await service.onTopicComplete({
+          operationId: 'op-1',
+          reason: 'done',
+          runTrigger: automationMode,
+          taskId: 'task-1',
+          taskIdentifier: 'TASK-1',
+          topicId: 'topic-1',
+        });
+
+        expect(updateStatusIfCurrent).toHaveBeenCalledWith('task-1', 'running', 'completed', {
+          completedAt: expect.any(Date),
+          error: null,
+        });
+        expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'scheduled', expect.anything());
+        expect(fakeScheduler.scheduleNextTopic).not.toHaveBeenCalled();
+      },
+    );
+
+    it('automation task ignores a completion request left by an earlier tick', async () => {
+      const task = baseTask({
+        automationMode: 'schedule',
+        context: { completion: { requestedByOperationId: 'op-old' } },
+      });
+      findById.mockResolvedValue(task);
+
+      await service.onTopicComplete({
+        operationId: 'op-1',
+        reason: 'done',
+        runTrigger: 'schedule',
+        taskId: 'task-1',
+        taskIdentifier: 'TASK-1',
+        topicId: 'topic-1',
+      });
+
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'scheduled', { error: null });
+      expect(updateStatusIfCurrent).not.toHaveBeenCalled();
+    });
+
     it('successful subtask → completes and unlocks downstream tasks instead of pausing', async () => {
       const task = baseTask({ automationMode: null, parentTaskId: 'parent-task' });
       const parentTask = baseTask({ id: 'parent-task', identifier: 'TASK-0' });

@@ -279,7 +279,20 @@ export function registerLifecycleCommands(task: Command) {
     .description('Mark a task as completed')
     .action(async (id: string) => {
       const client = await getTrpcClient();
-      const result = (await client.task.updateStatus.mutate({ id, status: 'completed' })) as any;
+      // Inside an agent run, completing the task being executed is deferred to
+      // the end of the run instead of interrupting it.
+      const operationId = process.env.LOBEHUB_OPERATION_ID?.trim() || undefined;
+      const result = (await client.task.updateStatus.mutate({
+        id,
+        operationId,
+        status: 'completed',
+      })) as any;
+      if (result.completionDeferred) {
+        log.info(
+          `Task ${pc.bold(result.data.identifier)} completion requested. It will be finalized when the current run finishes.`,
+        );
+        return;
+      }
       log.info(`Task ${pc.bold(result.data.identifier)} completed.`);
       if (result.unlocked?.length > 0) {
         log.info(`Unlocked: ${result.unlocked.map((id: string) => pc.bold(id)).join(', ')}`);

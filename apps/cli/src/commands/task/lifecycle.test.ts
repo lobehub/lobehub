@@ -113,6 +113,45 @@ describe('task comment attribution', () => {
   });
 });
 
+describe('task complete', () => {
+  beforeEach(() => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', '');
+    client.task.updateStatus.mutate.mockReset();
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('passes the current run so completing its own task is deferred', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op_tick');
+    client.task.updateStatus.mutate.mockResolvedValue({
+      completionDeferred: true,
+      data: { identifier: 'T-1' },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'task', 'complete', 'T-1']);
+
+    expect(client.task.updateStatus.mutate).toHaveBeenCalledWith({
+      id: 'T-1',
+      operationId: 'op_tick',
+      status: 'completed',
+    });
+  });
+
+  it('omits the operation outside an agent run', async () => {
+    client.task.updateStatus.mutate.mockResolvedValue({ data: { identifier: 'T-1' } });
+
+    await createProgram().parseAsync(['node', 'test', 'task', 'complete', 'T-1']);
+
+    expect(client.task.updateStatus.mutate).toHaveBeenCalledWith({
+      id: 'T-1',
+      operationId: undefined,
+      status: 'completed',
+    });
+  });
+});
+
 describe('task lifecycle — following the agent stream', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
 
