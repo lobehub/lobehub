@@ -47,6 +47,7 @@ const mockBrowserManager = {
 
 const mockGatewayConnectionSrv = {
   disconnect: vi.fn().mockResolvedValue({ success: true }),
+  syncAccessToken: vi.fn(),
 };
 
 const mockApp = {
@@ -171,6 +172,14 @@ describe('RemoteServerConfigCtr', () => {
           refreshToken: 'refresh-token',
         }),
       );
+    });
+
+    // The gateway client snapshots its token, so a background refresh only takes
+    // effect on the next automatic reconnect if it is pushed to the live socket.
+    it('should push the fresh access token into the live gateway connection', async () => {
+      await controller.saveTokens('access-token', 'refresh-token', 3600);
+
+      expect(mockGatewayConnectionSrv.syncAccessToken).toHaveBeenCalledWith('access-token');
     });
   });
 

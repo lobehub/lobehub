@@ -44,6 +44,14 @@ const DEFAULT_GATEWAY_URL = OFFICIAL_DEVICE_GATEWAY_URL;
 const RECONNECT_UI_GRACE_MS = 5000;
 
 /**
+ * Minimum spacing between `auth_failed`-driven refresh + reconnect cycles. The
+ * gateway client disables its own auto-reconnect once the gateway rejects the
+ * token, so the service has to drive the retry — but a token the gateway keeps
+ * rejecting must not turn that into a hot refresh loop.
+ */
+const AUTH_FAILED_RETRY_COOLDOWN_MS = 30_000;
+
+/**
  * Result envelope a tool-call handler must return. Mirrors
  * `BuiltinServerRuntimeOutput` so the renderer-side and remote-device paths
  * stay symmetric: `content` is the LLM-facing prompt text; `state` carries the
@@ -162,6 +170,10 @@ export default class GatewayConnectionService extends ServiceModule {
 
   private tokenProvider: (() => Promise<string | null>) | null = null;
   private tokenRefresher: (() => Promise<{ error?: string; success: boolean }>) | null = null;
+  /** Dedupes overlapping auth recoveries (an `auth_failed` racing an `auth_expired`). */
+  private authRecoveryInFlight = false;
+  /** Start of the last `auth_failed`-driven recovery; throttles retries. */
+  private lastAuthRecoveryAt = 0;
   private toolCallHandler: ToolCallHandler | null = null;
   private mcpCallHandler: McpCallHandler | null = null;
   private messageApiHandler: MessageApiHandler | null = null;
@@ -192,6 +204,18 @@ export default class GatewayConnectionService extends ServiceModule {
    */
   setTokenRefresher(refresher: () => Promise<{ error?: string; success: boolean }>) {
     this.tokenRefresher = refresher;
+  }
+
+  /**
+   * Push a freshly minted access token into the live personal connection.
+   *
+   * The gateway client snapshots its token at construction and replays it on its
+   * own backoff/heartbeat reconnects, so without this push a socket drop that
+   * lands after a background token refresh authenticates with the pre-refresh
+   * token — and is rejected once that one expires.
+   */
+  syncAccessToken(token: string) {
+    this.client?.updateToken(token);
   }
 
   /**
@@ -501,6 +525,22 @@ export default class GatewayConnectionService extends ServiceModule {
       }
     });
 
+    client.on('auth_failed', (reason) => {
+      // The gateway rejected the token, and the client has already closed the
+      // socket with auto-reconnect disabled — nothing brings the connection back
+      // unless we do. Recover per scope: a workspace share re-mints its
+      // short-lived connect token, the personal connection refreshes the user
+      // token (same recovery as `auth_expired`, which the gateway only sends
+      // while the socket is still up).
+      if (scope) {
+        logger.warn(`Workspace ${scope.workspaceId} authentication failed: ${reason}`);
+        void this.handleWorkspaceAuthExpired(scope.workspaceId);
+      } else {
+        logger.warn(`Authentication failed: ${reason}`);
+        void this.handleAuthFailed(reason);
+      }
+    });
+
     client.on('replaced', () => {
       logger.warn(
         `Gateway connection${scope ? ` for workspace ${scope.workspaceId}` : ''} was taken over by another client with the same connection id; not reconnecting`,
@@ -704,17 +744,21 @@ export default class GatewayConnectionService extends ServiceModule {
     );
   }
 
-  // ─── Auth Expired Handling ───
+  // ─── Auth Expired / Failed Handling ───
 
-  private async handleAuthExpired() {
-    // Disconnect the current client
+  /**
+   * Drop the personal connection, refresh the user token, and connect again.
+   * `doConnect()` re-reads the token from the provider, so the replacement
+   * socket never carries the token that was just rejected.
+   */
+  private async refreshTokenAndReconnect() {
     if (this.client) {
       await this.client.disconnect();
       this.client = null;
     }
 
     if (!this.tokenRefresher) {
-      logger.error('No token refresher configured, cannot handle auth_expired');
+      logger.error('No token refresher configured, cannot recover the connection');
       this.setStatus('disconnected');
       return;
     }
@@ -728,6 +772,43 @@ export default class GatewayConnectionService extends ServiceModule {
     } else {
       logger.error('Token refresh failed:', result.error);
       this.setStatus('disconnected');
+    }
+  }
+
+  private async handleAuthExpired() {
+    await this.refreshTokenAndReconnect();
+  }
+
+  /**
+   * The gateway refused our token. Without this handler the client stays down
+   * for good (it disables auto-reconnect on `auth_failed`) while `gatewayEnabled`
+   * is still `true`, so the UI switch reads as "off" and device tasks keep
+   * failing until the user toggles it or restarts the app.
+   *
+   * Refresh once and reconnect. A second rejection inside the cooldown means the
+   * freshly minted token was refused too — settle on `disconnected` instead of
+   * spinning, and leave recovery to the next connect (manual toggle, restart, or
+   * a later auth recovery).
+   */
+  private async handleAuthFailed(reason: string) {
+    if (this.authRecoveryInFlight) return;
+
+    const sinceLast = Date.now() - this.lastAuthRecoveryAt;
+    if (this.lastAuthRecoveryAt > 0 && sinceLast < AUTH_FAILED_RETRY_COOLDOWN_MS) {
+      logger.warn(
+        `Authentication failed again ${sinceLast}ms after the last recovery; staying disconnected`,
+      );
+      this.setStatus('disconnected');
+      return;
+    }
+
+    this.authRecoveryInFlight = true;
+    this.lastAuthRecoveryAt = Date.now();
+    try {
+      logger.warn(`Authentication failed (${reason}), attempting token refresh before reconnect`);
+      await this.refreshTokenAndReconnect();
+    } finally {
+      this.authRecoveryInFlight = false;
     }
   }
 

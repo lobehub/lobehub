@@ -219,6 +219,18 @@ export default class RemoteServerConfigCtr extends ControllerModule {
   private refreshPromise: Promise<{ error?: string; success: boolean }> | null = null;
 
   /**
+   * Keep the live device-gateway connection on the latest access token.
+   *
+   * The gateway client snapshots the token it was constructed with and replays
+   * it on its own automatic reconnects, so every token write here has to be
+   * pushed through — otherwise a reconnect that lands after a background refresh
+   * authenticates with the stale token and gets rejected.
+   */
+  private syncGatewayToken(accessToken: string) {
+    this.app.getService(GatewayConnectionService)?.syncAccessToken(accessToken);
+  }
+
+  /**
    * Encrypt and store tokens
    * @param accessToken Access token
    * @param refreshToken Refresh token
@@ -251,6 +263,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         lastRefreshAt: this.lastRefreshAt,
         refreshToken: this.encryptedRefreshToken,
       });
+      this.syncGatewayToken(accessToken);
       return;
     }
 
@@ -272,6 +285,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       lastRefreshAt: this.lastRefreshAt,
       refreshToken: this.encryptedRefreshToken,
     });
+    this.syncGatewayToken(accessToken);
   }
 
   /**
