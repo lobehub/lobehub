@@ -1,9 +1,8 @@
-import isEqual from 'fast-deep-equal';
 import { produce } from 'immer';
 import { type SWRResponse } from 'swr';
-import useSWR from 'swr';
 
-import { mutate, useClientDataSWR, useClientDataSWRWithSync } from '@/libs/swr';
+import { createReplicaSlice, type ReplicaLens, type ReplicaSyncResult } from '@/libs/replica';
+import { mutate, useClientDataSWRWithSync } from '@/libs/swr';
 import { userMemoryKeys } from '@/libs/swr/keys';
 import { memoryCRUDService, userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
@@ -11,7 +10,7 @@ import { type RetrieveMemoryParams, type RetrieveMemoryResult } from '@/types/us
 import { LayersEnum } from '@/types/userMemory';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore } from '../../store';
+import { type UserMemoryStore, useUserMemoryStore } from '../../store';
 import { type IdentityForInjection } from '../../types';
 import { userMemoryCacheKey } from '../../utils/cacheKey';
 import { createMemorySearchParams } from '../../utils/searchParams';
@@ -20,23 +19,91 @@ import { contextInitialState } from '../context/initialState';
 import { experienceInitialState } from '../experience/initialState';
 import { identityInitialState } from '../identity/initialState';
 import { preferenceInitialState } from '../preference/initialState';
+import {
+  type MemoryDetailDisplay,
+  memoryDetailKey,
+  type MemoryDetailParams,
+  userMemoryDetailResource,
+  userMemoryRetrieveResource,
+} from './projection';
 
 const n = setNamespace('userMemory');
 
 type MemoryContext = Parameters<typeof createMemorySearchParams>[0];
+
+/**
+ * The retrieve result map keeps its long-standing flat field (`memoryMap`) as the
+ * replica view, plus the per-entry fetched-at stamp the memory selectors read.
+ * The engine owns every write; the selectors keep reading the same place.
+ */
+const retrieveMapLens: ReplicaLens<UserMemoryStore, RetrieveMemoryResult> = {
+  clear: () => ({ memoryFetchedAtMap: {}, memoryMap: {} }),
+  get: (state, key) => state.memoryMap[key],
+  keys: (state) => Object.keys(state.memoryMap),
+  set: (state, key, data) => {
+    const memoryMap = { ...state.memoryMap };
+    const memoryFetchedAtMap = { ...state.memoryFetchedAtMap };
+
+    if (data === undefined) {
+      delete memoryMap[key];
+      delete memoryFetchedAtMap[key];
+    } else {
+      memoryMap[key] = data;
+      memoryFetchedAtMap[key] = Date.now();
+    }
+
+    return { memoryFetchedAtMap, memoryMap };
+  },
+};
+
+/**
+ * One memory detail per `${layer}:${id}`, mirrored into `memoryDetailMap` so the
+ * right-hand panels read the replica view instead of a raw SWR cache entry.
+ */
+const detailMapLens: ReplicaLens<UserMemoryStore, MemoryDetailDisplay> = {
+  clear: () => ({ memoryDetailMap: {} }),
+  get: (state, key) => state.memoryDetailMap[key],
+  keys: (state) => Object.keys(state.memoryDetailMap),
+  set: (state, key, data) => {
+    const memoryDetailMap = { ...state.memoryDetailMap };
+
+    if (data === undefined) delete memoryDetailMap[key];
+    else memoryDetailMap[key] = data;
+
+    return { memoryDetailMap };
+  },
+};
 
 type Setter = StoreSetter<UserMemoryStore>;
 export const createBaseSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
   new BaseActionImpl(set, get, _api);
 
 export class BaseActionImpl {
+  readonly #detail;
   readonly #get: () => UserMemoryStore;
+  readonly #retrieve;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#detail = createReplicaSlice(userMemoryDetailResource, {
+      actionPrefix: n('memoryDetail'),
+      fetcher: (params) => this.#fetchDetail(params),
+      get,
+      set,
+      stateKey: 'memoryDetailReplica',
+      view: detailMapLens,
+    });
+    this.#retrieve = createReplicaSlice(userMemoryRetrieveResource, {
+      actionPrefix: n('memoryRetrieve'),
+      fetcher: (params) => userMemoryService.retrieveMemory(params),
+      get,
+      set,
+      stateKey: 'memoryRetrieveReplica',
+      view: retrieveMapLens,
+    });
   }
 
   clearEditingMemory = (): void => {
@@ -65,10 +132,49 @@ export class BaseActionImpl {
     );
   };
 
+  /**
+   * Flatten the nested detail response into the shape the right-hand panel
+   * reads. `undefined` means "no such memory", which the panel renders as empty.
+   */
+  #fetchDetail = async ({
+    id,
+    layer,
+  }: MemoryDetailParams): Promise<MemoryDetailDisplay | undefined> => {
+    const detail = await userMemoryService.getMemoryDetail({ id, layer });
+    if (!detail || detail.layer !== layer) return undefined;
+
+    const source = { source: detail.source, sourceType: detail.sourceType };
+
+    switch (detail.layer) {
+      case LayersEnum.Activity: {
+        return { ...detail.memory, ...detail.activity, ...source };
+      }
+      case LayersEnum.Context: {
+        return { ...detail.memory, ...detail.context, ...source };
+      }
+      case LayersEnum.Experience: {
+        return { ...detail.memory, ...detail.experience, ...source };
+      }
+      case LayersEnum.Identity: {
+        return { ...detail.memory, ...detail.identity, ...source };
+      }
+      case LayersEnum.Preference: {
+        return { ...detail.memory, ...detail.preference, ...source };
+      }
+      default: {
+        return undefined;
+      }
+    }
+  };
+
   purgeAllMemories = async (): Promise<void> => {
     const { memoryCRUDService } = await import('@/services/userMemory');
 
     await memoryCRUDService.deleteAll();
+
+    // The retrieve / detail reads are replica-backed: drop their views (and the
+    // persisted rows) through the engine, not by assigning plain state.
+    this.resetMemoryCaches();
 
     this.#set(
       produce((draft) => {
@@ -83,8 +189,6 @@ export class BaseActionImpl {
         draft.editingMemoryContent = undefined;
         draft.editingMemoryId = undefined;
         draft.editingMemoryLayer = undefined;
-        draft.memoryFetchedAtMap = {};
-        draft.memoryMap = {};
         draft.persona = undefined;
         draft.personaInit = true;
         draft.roles = [];
@@ -96,11 +200,6 @@ export class BaseActionImpl {
     );
 
     await Promise.all([
-      mutate(
-        (key) => Array.isArray(key) && key[0] === userMemoryKeys.memoryDetail.root,
-        undefined,
-        { revalidate: true },
-      ),
       mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.activities.root, undefined, {
         revalidate: true,
       }),
@@ -120,9 +219,6 @@ export class BaseActionImpl {
       mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.preferences.root, undefined, {
         revalidate: true,
       }),
-      mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.retrieve.root, undefined, {
-        revalidate: true,
-      }),
       mutate(userMemoryKeys.persona(), null, { revalidate: false }),
       mutate(
         userMemoryKeys.tags(),
@@ -139,6 +235,15 @@ export class BaseActionImpl {
     const key = userMemoryCacheKey(params);
 
     await mutate(userMemoryKeys.retrieve(key));
+  };
+
+  /**
+   * Drop every retrieve / detail view of the active scope through the replica
+   * engine, so the persisted rows go with them. Used by the memory purge.
+   */
+  resetMemoryCaches = (): void => {
+    for (const key of Object.keys(this.#get().memoryMap)) this.#retrieve.remove(key);
+    for (const key of Object.keys(this.#get().memoryDetailMap)) this.#detail.remove(key);
   };
 
   setActiveMemoryContext = (context?: MemoryContext): void => {
@@ -249,85 +354,35 @@ export class BaseActionImpl {
     }
   };
 
+  /**
+   * Fetch orchestration for one memory detail. Returns an `SWRResponse`-shaped
+   * value — `data` reads the replica view — so the existing right panels are
+   * untouched; the detail lands in `memoryDetailMap`, never in this return value.
+   */
   useFetchMemoryDetail = (id: string | null, layer: LayersEnum): SWRResponse<any> => {
-    const swrKey = id ? userMemoryKeys.memoryDetail(layer, id) : null;
+    const sync: ReplicaSyncResult = this.#detail.useSync(id ? { id, layer } : null, {
+      enabled: Boolean(id),
+      revalidateOnFocus: false,
+    });
 
-    return useSWR(
-      swrKey,
-      async () => {
-        if (!id) return null;
-
-        const detail = await userMemoryService.getMemoryDetail({ id, layer });
-
-        if (!detail) return null;
-
-        // Transform nested structure to flat structure
-        switch (layer) {
-          case LayersEnum.Activity: {
-            if (detail.layer === LayersEnum.Activity) {
-              return {
-                ...detail.memory,
-                ...detail.activity,
-                source: detail.source,
-                sourceType: detail.sourceType,
-              };
-            }
-            break;
-          }
-          case LayersEnum.Context: {
-            if (detail.layer === LayersEnum.Context) {
-              return {
-                ...detail.memory,
-                ...detail.context,
-                source: detail.source,
-                sourceType: detail.sourceType,
-              };
-            }
-            break;
-          }
-          case LayersEnum.Experience: {
-            if (detail.layer === LayersEnum.Experience) {
-              return {
-                ...detail.memory,
-                ...detail.experience,
-                source: detail.source,
-                sourceType: detail.sourceType,
-              };
-            }
-            break;
-          }
-          case LayersEnum.Identity: {
-            if (detail.layer === LayersEnum.Identity) {
-              return {
-                ...detail.memory,
-                ...detail.identity,
-                source: detail.source,
-                sourceType: detail.sourceType,
-              };
-            }
-            break;
-          }
-          case LayersEnum.Preference: {
-            if (detail.layer === LayersEnum.Preference) {
-              return {
-                ...detail.memory,
-                ...detail.preference,
-                source: detail.source,
-                sourceType: detail.sourceType,
-              };
-            }
-            break;
-          }
-        }
-
-        return null;
-      },
-      {
-        revalidateOnFocus: false,
-      },
+    const detail = useUserMemoryStore((state) =>
+      id ? state.memoryDetailMap[memoryDetailKey({ id, layer })] : undefined,
     );
+
+    return {
+      data: detail,
+      error: sync.error,
+      isLoading: !detail && (sync.isValidating || !sync.isHydrated),
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    } as unknown as SWRResponse<any>;
   };
 
+  /**
+   * Fetch orchestration for the retrieve memory map. The rows land in
+   * `memoryMap` (keyed by the query cache key); this return value only carries
+   * the sync flags, so any existing consumer keeps its shape.
+   */
   useFetchUserMemory = (
     enable: boolean,
     params?: RetrieveMemoryParams,
@@ -335,66 +390,19 @@ export class BaseActionImpl {
     const resolvedParams = params ?? this.#get().activeParams;
     const key = resolvedParams ? userMemoryCacheKey(resolvedParams) : undefined;
 
-    return useClientDataSWR<RetrieveMemoryResult>(
-      enable && resolvedParams ? userMemoryKeys.retrieve(key) : null,
-      () => userMemoryService.retrieveMemory(resolvedParams!),
-      {
-        onSuccess: (result) => {
-          if (!resolvedParams || !key) return;
+    const sync: ReplicaSyncResult = this.#retrieve.useSync(resolvedParams ?? null, {
+      enabled: enable && Boolean(resolvedParams),
+    });
 
-          const state = this.#get();
-          const previous = state.memoryMap[key];
-          const next = result ?? { activities: [], contexts: [], experiences: [], preferences: [] };
-          const fetchedAt = Date.now();
+    const data = useUserMemoryStore((state) => (key ? state.memoryMap[key] : undefined));
 
-          if (previous && isEqual(previous, next)) {
-            this.#set(
-              {
-                memoryFetchedAtMap: {
-                  ...state.memoryFetchedAtMap,
-                  [key]: fetchedAt,
-                },
-              },
-              false,
-              n('useFetchUserMemory/refresh', {
-                key,
-                totals: {
-                  activities: next.activities.length,
-                  contexts: next.contexts.length,
-                  experiences: next.experiences.length,
-                  preferences: next.preferences.length,
-                },
-              }),
-            );
-
-            return;
-          }
-
-          this.#set(
-            {
-              memoryFetchedAtMap: {
-                ...state.memoryFetchedAtMap,
-                [key]: fetchedAt,
-              },
-              memoryMap: {
-                ...state.memoryMap,
-                [key]: next,
-              },
-            },
-            false,
-            n('useFetchUserMemory/success', {
-              key,
-              totals: {
-                activities: next.activities.length,
-                contexts: next.contexts.length,
-                experiences: next.experiences.length,
-                preferences: next.preferences.length,
-              },
-            }),
-          );
-        },
-      },
-    );
+    return {
+      data,
+      error: sync.error,
+      isLoading: !data && (sync.isValidating || !sync.isHydrated),
+      isValidating: sync.isValidating,
+      mutate: sync.revalidate,
+    } as unknown as SWRResponse<RetrieveMemoryResult>;
   };
 
   useInitIdentities = (isLogin: boolean): SWRResponse<any> => {
