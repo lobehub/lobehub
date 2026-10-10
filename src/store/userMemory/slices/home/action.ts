@@ -1,6 +1,7 @@
 import isEqual from 'fast-deep-equal';
 import { useMemo } from 'react';
 import { type SWRResponse } from 'swr';
+import { type StoreApi, useStore } from 'zustand';
 
 import { type QueryIdentityRolesResult } from '@/database/models/userMemory';
 import { createReplicaSlice, type ReplicaLens } from '@/libs/replica';
@@ -10,7 +11,10 @@ import { userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
-import { type UserMemoryStore, useUserMemoryStore } from '../../store';
+// Type-only: the runtime store is reached through the `StoreApi` the store
+// passes to the slice, so this module never imports the store at runtime — the
+// store imports the slice, and a runtime import back would be a cycle.
+import { type UserMemoryStore } from '../../store';
 import {
   type HomeReplicaParams,
   IDENTITY_ROLES_KEY,
@@ -70,8 +74,11 @@ const mergeUnchanged = <T>(incoming: T, confirmed: T | undefined) =>
   isEqual(incoming, confirmed) ? undefined : incoming;
 
 type Setter = StoreSetter<UserMemoryStore>;
-export const createHomeSlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
-  new HomeActionImpl(set, get, _api);
+export const createHomeSlice = (
+  set: Setter,
+  get: () => UserMemoryStore,
+  api: StoreApi<UserMemoryStore>,
+) => new HomeActionImpl(set, get, api);
 
 /**
  * The memory home reads: the persona and the identity roles + tags aggregate.
@@ -83,11 +90,12 @@ export const createHomeSlice = (set: Setter, get: () => UserMemoryStore, _api?: 
  * views, so the memory home page and its components are untouched.
  */
 export class HomeActionImpl {
+  readonly #api: StoreApi<UserMemoryStore>;
   readonly #identityRoles;
   readonly #persona;
 
-  constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
-    void _api;
+  constructor(set: Setter, get: () => UserMemoryStore, api: StoreApi<UserMemoryStore>) {
+    this.#api = api;
     this.#persona = createReplicaSlice(personaResource, {
       actionPrefix: n('persona'),
       fetcher: () => this.#fetchPersona(),
@@ -135,7 +143,7 @@ export class HomeActionImpl {
    */
   useFetchPersona = (isLogin = true): SWRResponse<PersonaData | null> => {
     const sync = this.#persona.useSync(HOME_PARAMS, { enabled: isLogin });
-    const view = useUserMemoryStore((state) => state.personaData);
+    const view = useStore(this.#api, (state) => state.personaData);
     const data = useMemo<PersonaData | null | undefined>(() => view?.persona, [view]);
 
     return {
@@ -154,7 +162,7 @@ export class HomeActionImpl {
    */
   useFetchTags = (): SWRResponse<QueryIdentityRolesResult> => {
     const sync = this.#identityRoles.useSync(HOME_PARAMS);
-    const view = useUserMemoryStore((state) => state.identityRolesData);
+    const view = useStore(this.#api, (state) => state.identityRolesData);
     const data = useMemo<IdentityRolesData | undefined>(() => view, [view]);
 
     return {
