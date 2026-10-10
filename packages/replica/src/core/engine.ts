@@ -144,7 +144,9 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
    * Entries definitively removed — not merely absent — keyed by scope + entry.
    * A removal must not be undone by a hydrate that was already reading storage
    * when it happened: that stale read would repaint the entry just dropped.
-   * A server-confirmed value clears it, and an identity change starts clean.
+   * Markers therefore stay attributed to their own scope until a server-confirmed
+   * value supersedes them — clearing them on an identity change would let a
+   * round trip (A → B → A) with A's read still pending repaint A's deleted row.
    */
   const definitiveRemovals = new Set<string>();
   const removalKey = (scope: string, key: string) => `${scope}\u0000${key}`;
@@ -235,9 +237,6 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     const writes: ReplicaViewWrite<TData>[] = [];
     const read = (key: string) => readThrough(writes, key);
     if (slot.scope !== undefined && slot.scope !== activeScope) {
-      // A new identity starts clean: removals from the previous one no longer
-      // describe what is on screen.
-      definitiveRemovals.clear();
       const reset = replicaReducer(slot, { scope: activeScope, type: 'resetScope' }, read);
       writes.push(...reset.writes);
       slot = reset.state;

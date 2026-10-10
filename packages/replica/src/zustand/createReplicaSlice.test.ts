@@ -410,6 +410,53 @@ describe('createReplicaSlice', () => {
       await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
     });
 
+    it('keeps a removal attributed to its scope across an identity round trip', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });
+      const originalGet = storage.storage.get;
+      let releaseRead!: () => void;
+      storage.storage.get = async (key) => {
+        // Hold A's entry read: it is the one the removal must beat.
+        if (key.scope === 'user-1:personal' && key.queryKey === 'a') {
+          await new Promise<void>((resolve) => (releaseRead = resolve));
+        }
+        return originalGet(key);
+      };
+      const { slice, store } = setup({
+        fetcher: vi.fn(() => new Promise<string[]>(() => {})),
+        storage,
+      });
+
+      // A's persisted read is in flight when the removal lands.
+      let hydrating!: Promise<boolean>;
+      act(() => {
+        hydrating = slice.hydrate({ id: 'a' });
+      });
+      act(() => {
+        slice.remove('a');
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+
+      // Leave A for B and come back to A while A's read is still pending.
+      scopeState.current = 'user-2:personal';
+      act(() => {
+        slice.replace({ id: 'b' }, ['user-2-data']);
+      });
+      scopeState.current = 'user-1:personal';
+      act(() => {
+        slice.replace({ id: 'c' }, ['user-1-other']);
+      });
+
+      await act(async () => {
+        releaseRead();
+        await hydrating;
+      });
+
+      // The marker outlives the round trip: A's late read must not repaint it.
+      expect(store.getState().lists.a).toBeUndefined();
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.
