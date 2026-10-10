@@ -332,6 +332,31 @@ describe('document detail replica', () => {
     expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
   });
 
+  it('drops every previous-identity editor entry on a scope reset, not only the mounted one', async () => {
+    vi.mocked(documentService.getDocumentById).mockImplementation(
+      async (id: string) => documentRow({ id }) as any,
+    );
+    const first = renderDocument('doc-1', createEditor());
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    // Leave doc-1 without closing it: its editor entry stays behind, inactive.
+    first.unmount();
+    act(() => useDocumentStore.setState({ activeDocumentId: undefined }));
+
+    const second = renderDocument('doc-2', createEditor());
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-2']).toBeDefined());
+    expect(useDocumentStore.getState().documents['doc-1']).toBeDefined();
+
+    vi.mocked(documentService.getDocumentById).mockImplementation(pending as any);
+    useScope(`document-user-${randomUUID()}:personal`);
+    second.rerender();
+
+    await waitFor(() => expect(useDocumentStore.getState().documentDetailMap).toEqual({}));
+    // The inactive doc-1 entry is not watched by any mounted hook, yet it was
+    // derived from the reset scope: revisiting it must not paint the old body.
+    expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
+    expect(useDocumentStore.getState().documents['doc-2']).toBeUndefined();
+  });
+
   it('keeps no previous-identity editor state when the new scope’s fetch fails', async () => {
     vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
     const editor = createEditor();

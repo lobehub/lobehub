@@ -80,6 +80,8 @@ export interface UseFetchDocumentResult {
   mutate: () => Promise<unknown>;
 }
 
+const detailLens = recordLens<DocumentStore, DocumentDetail>('documentDetailMap');
+
 type Setter = StoreSetter<DocumentStore>;
 export const createDocumentSlice = (set: Setter, get: () => DocumentStore, _api?: unknown) =>
   new DocumentActionImpl(set, get, _api);
@@ -104,9 +106,32 @@ export class DocumentActionImpl {
       // and evict the row persisted for this document earlier (the engine
       // removes it) so a reload cannot resurrect a deleted / revoked document.
       toPersisted: (data) => (data.document ? data : null),
-      view: recordLens<DocumentStore, DocumentDetail>('documentDetailMap'),
+      view: { ...detailLens, clear: this.#clearDetailView },
     });
   }
+
+  /**
+   * Scope reset (account / workspace switch): drop the projection together with
+   * every editor entry derived from it, in the same commit.
+   *
+   * `useFetchDocument` only watches the document it is mounted for, so editor
+   * entries of documents opened earlier in the session would otherwise survive
+   * the reset: revisiting one under the new identity would treat the previous
+   * identity's body as loaded (and keep showing it if the new fetch fails).
+   * Their queued autosaves belong to the previous identity and are cancelled,
+   * never flushed under the new one.
+   */
+  #clearDetailView = (state: DocumentStore): Partial<DocumentStore> => {
+    const derivedIds = Object.keys(state.documentDetailMap).filter((id) => state.documents[id]);
+    if (derivedIds.length === 0) return detailLens.clear(state);
+
+    const documents = { ...state.documents };
+    for (const id of derivedIds) {
+      this.#cleanupDebouncedSave(id);
+      delete documents[id];
+    }
+    return { ...detailLens.clear(state), documents };
+  };
 
   cancelDebouncedSave = (documentId: string): void => {
     this.#debouncedSaves.get(documentId)?.cancel();
