@@ -11,7 +11,8 @@ permissions:
 jobs:
   verify:
     name: root type-check and eval testCase unit test
-    runs-on: ubuntu-24.04-arm
+    runs-on: macos-15
+    timeout-minutes: 60
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
