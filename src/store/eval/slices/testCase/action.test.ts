@@ -49,17 +49,16 @@ const DATASET = 'dataset-1';
 const CASE = 'case-1';
 const PAGE = { datasetId: DATASET, limit: 10, offset: 0 };
 
-const testCase = (id: string, extra: Record<string, unknown> = {}): any =>
-  ({
-    content: { input: `input-${id}` },
-    datasetId: DATASET,
-    evalConfig: {},
-    evalMode: 'rubric',
-    id,
-    metadata: {},
-    sortOrder: 1,
-    ...extra,
-  });
+const testCase = (id: string, extra: Record<string, unknown> = {}): any => ({
+  content: { input: `input-${id}` },
+  datasetId: DATASET,
+  evalConfig: {},
+  evalMode: 'rubric',
+  id,
+  metadata: {},
+  sortOrder: 1,
+  ...extra,
+});
 
 const okList = (data: any[]) => ({ data, total: data.length }) as any;
 
@@ -101,12 +100,15 @@ describe('eval testCase slice replicas', () => {
   it('paints the persisted case page before the network answers', async () => {
     await testCaseListResource.storage!.set(
       { queryKey: LIST_KEY, scope },
-      { data: { items: [testCase(CASE, { content: { input: 'Cached' } })], total: 1 }, updatedAt: 1 },
+      {
+        data: { items: [testCase(CASE, { content: { input: 'Cached' } })], total: 1 },
+        updatedAt: 1,
+      },
     );
     vi.mocked(agentEvalService.listTestCases).mockImplementation(pending);
 
     const sync = renderHook(() => useEvalStore((s) => s.useFetchTestCases)(PAGE), { wrapper });
-    const rows = renderHook(() => useEvalStore(testCaseSelectors.testCases(DATASET)));
+    const rows = renderHook(() => useEvalStore(testCaseSelectors.testCases(PAGE)));
 
     await waitFor(() => expect(rows.result.current[0]?.content?.input).toBe('Cached'));
     expect(sync.result.current.isHydrated).toBe(true);
@@ -151,6 +153,41 @@ describe('eval testCase slice replicas', () => {
       expect(state.testCaseListMap['ds-a']?.items?.[0]?.content?.input).toBe('ds-a');
       expect(state.testCaseListMap['ds-b']?.items?.[0]?.content?.input).toBe('ds-b');
     });
+  });
+
+  it('never shows the previous page’s rows under the next page’s query', async () => {
+    const PAGE_2 = { ...PAGE, offset: 10 };
+    vi.mocked(agentEvalService.listTestCases).mockResolvedValueOnce(okList([testCase('page-1')]));
+
+    const sync = renderHook(
+      (query: typeof PAGE) => useEvalStore((s) => s.useFetchTestCases)(query),
+      {
+        initialProps: PAGE,
+        wrapper,
+      },
+    );
+    await waitFor(() =>
+      expect(testCaseSelectors.testCases(PAGE)(useEvalStore.getState())[0]?.id).toBe('page-1'),
+    );
+
+    // Page 2 is still in flight, then fails: the entry keeps holding page 1.
+    let reject!: (error: Error) => void;
+    vi.mocked(agentEvalService.listTestCases).mockImplementationOnce(
+      () => new Promise((_, r) => (reject = r)),
+    );
+    sync.rerender(PAGE_2);
+    await waitFor(() => expect(agentEvalService.listTestCases).toHaveBeenCalledWith(PAGE_2));
+
+    const state = () => useEvalStore.getState();
+    expect(state().testCaseListMap[DATASET]?.items?.[0]?.id).toBe('page-1');
+    expect(testCaseSelectors.testCases(PAGE_2)(state())).toEqual([]);
+    expect(testCaseSelectors.isLoadingTestCases(PAGE_2)(state())).toBe(true);
+
+    await act(async () => reject(new Error('network')));
+    await waitFor(() => expect(sync.result.current.error).toBeTruthy());
+    expect(testCaseSelectors.testCases(PAGE_2)(state())).toEqual([]);
+    // The dataset-wide count stays usable for the pager meanwhile.
+    expect(testCaseSelectors.testCaseTotal(DATASET)(state())).toBe(1);
   });
 
   it('disables the sync when no dataset is requested', async () => {

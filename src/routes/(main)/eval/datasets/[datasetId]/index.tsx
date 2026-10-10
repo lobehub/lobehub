@@ -122,13 +122,15 @@ const DatasetDetail = memo(() => {
     [runList],
   );
 
-  useFetchTestCases({
+  // One query for the fetch and the read: the rows only show for this exact page.
+  const caseQuery = {
     datasetId: datasetId!,
     limit: pagination.pageSize,
     offset: (pagination.current - 1) * pagination.pageSize,
-  });
+  };
+  useFetchTestCases(caseQuery);
 
-  const testCases = useEvalStore(testCaseSelectors.testCases(datasetId));
+  const testCases = useEvalStore(testCaseSelectors.testCases(caseQuery));
   const total = useEvalStore(testCaseSelectors.testCaseTotal(datasetId));
 
   const filteredCases = testCases.filter((c: any) => {

@@ -60,19 +60,19 @@ const DatasetsTab = memo<DatasetsTabProps>(
     const refreshTestCases = useEvalStore((s) => s.refreshTestCases);
 
     // Fetch the expanded dataset's case page; the rows are read from the replica.
-    useFetchTestCases(
-      expandedDs
-        ? {
-            datasetId: expandedDs,
-            limit: pagination.pageSize,
-            offset: (pagination.current - 1) * pagination.pageSize,
-          }
-        : null,
-    );
+    // One query for the fetch and the reads: the rows only show for this exact page.
+    const caseQuery = expandedDs
+      ? {
+          datasetId: expandedDs,
+          limit: pagination.pageSize,
+          offset: (pagination.current - 1) * pagination.pageSize,
+        }
+      : null;
+    useFetchTestCases(caseQuery);
 
-    const testCases = useEvalStore(testCaseSelectors.testCases(expandedDs ?? undefined));
+    const testCases = useEvalStore(testCaseSelectors.testCases(caseQuery));
     const total = useEvalStore(testCaseSelectors.testCaseTotal(expandedDs ?? undefined));
-    const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(expandedDs ?? undefined));
+    const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(caseQuery));
 
     const handleRefreshTestCases = useCallback(
       async (datasetId: string) => {
