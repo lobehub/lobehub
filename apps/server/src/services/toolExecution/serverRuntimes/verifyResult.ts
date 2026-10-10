@@ -12,6 +12,9 @@ import type { ServerRuntimeRegistration } from './types';
 
 const log = debug('lobe-server:verify-result-runtime');
 
+/** Verdicts already landed (tool write or terminal fallback) — re-submission is a no-op. */
+const TERMINAL_RESULT_STATUSES = new Set(['passed', 'failed', 'errored', 'skipped']);
+
 interface VerifyResultRuntimeContext {
   operationId?: string;
   serverDB: LobeChatDatabase;
@@ -54,14 +57,44 @@ class VerifyResultExecutionRuntime {
     const op = await new AgentOperationModel(this.db, this.userId, this.workspaceId).findById(
       this.operationId,
     );
-    const targetOperationId = op?.parentOperationId ?? this.operationId;
+    // Loud-fail instead of silently self-targeting: without the parent op there is
+    // no verification session to update, so a derived id would always hit
+    // "No verification session for this run." — an unactionable error for the
+    // verifier. Naming the missing context is the actionable signal.
+    if (!op) {
+      return {
+        content:
+          'No parent verification context for this run: the calling operation has no parent, so there is no check to record against. This tool only records a verdict for a check assigned by a verify run.',
+        error: 'NO_PARENT_VERIFICATION',
+        success: false,
+      };
+    }
+    const targetOperationId = op.parentOperationId;
 
     // The result row is keyed by the parent run's verification session.
     const run = await new VerifyRunModel(this.db, this.userId, this.workspaceId).findByOperation(
       targetOperationId,
     );
     if (!run) {
-      return { content: 'No verification session for this run.', error: 'NO_RUN', success: false };
+      return {
+        content:
+          'No verification session is bound to the parent run, so there is no check to record against. This tool only records verdicts for checks assigned by a verify run — if your instructions did not include a checkItemId from a verify run, report your verdict in your reply instead.',
+        error: 'NO_RUN',
+        success: false,
+      };
+    }
+
+    // Idempotent re-submission: re-submitting an already-recorded verdict is a
+    // no-op, not a silent overwrite — a duplicate call must not clobber the
+    // recorded evidence/reasoning behind an existing verdict.
+    const current = (
+      await new VerifyCheckResultModel(this.db, this.userId, this.workspaceId).listByRun(run.id)
+    ).find((result) => result.checkItemId === params.checkItemId);
+    if (current && TERMINAL_RESULT_STATUSES.has(current.status)) {
+      return {
+        content: `Verdict "${current.status}" was already recorded for this check; the duplicate submission was ignored.`,
+        success: true,
+      };
     }
 
     const status = params.verdict === 'passed' ? 'passed' : 'failed';
