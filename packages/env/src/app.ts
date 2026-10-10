@@ -80,6 +80,13 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_SERVICE_TOKEN: z.string().optional(),
       ENABLE_AGENT_GATEWAY: z.boolean().optional(),
       /**
+       * Opt-out for LLM generation tracing, which is on by default whenever S3
+       * is configured and records system prompts plus generation input/output
+       * (DB rows in `llm_generation_tracing` + S3 blobs). Set to `1` to keep
+       * a deployment from retaining generation content.
+       */
+      DISABLE_LLM_GENERATION_TRACING_S3: z.boolean().optional(),
+      /**
        * Server-to-server Agent Gateway endpoint, e.g. a Docker Compose service
        * name the browser cannot resolve. Falls back to AGENT_GATEWAY_URL.
        */
@@ -144,6 +151,7 @@ export const getAppConfig = () => {
 
       AGENT_GATEWAY_SERVICE_TOKEN: process.env.AGENT_GATEWAY_SERVICE_TOKEN,
       ENABLE_AGENT_GATEWAY: process.env.ENABLE_AGENT_GATEWAY === '1',
+      DISABLE_LLM_GENERATION_TRACING_S3: process.env.DISABLE_LLM_GENERATION_TRACING_S3 === '1',
       AGENT_GATEWAY_URL: process.env.AGENT_GATEWAY_URL,
       AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,

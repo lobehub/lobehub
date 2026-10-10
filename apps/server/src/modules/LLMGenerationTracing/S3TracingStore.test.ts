@@ -18,6 +18,7 @@ vi.mock('@/server/modules/S3', () => ({
 }));
 
 const { S3TracingStore, buildTracingKey } = await import('./S3TracingStore');
+const { FileS3 } = await import('@/server/modules/S3');
 
 const samplePayload = (overrides: Partial<TracingPayload> = {}): TracingPayload => ({
   created_at: new Date('2026-05-22T11:22:33.444Z').getTime(),
@@ -51,6 +52,13 @@ describe('buildTracingKey', () => {
 });
 
 describe('S3TracingStore.save', () => {
+  it('forces private objects even when the deployment enables public-read ACLs', () => {
+    // Regression: tracing blobs carry full system prompts and input/output
+    // payloads, so they must never inherit the bucket's public ACL.
+    new S3TracingStore();
+    expect(vi.mocked(FileS3)).toHaveBeenCalledWith({ setAcl: false });
+  });
+
   it('uploads zstd-compressed JSON with the canonical key and content-type', async () => {
     const store = new S3TracingStore();
     const payload = samplePayload({ input: { messages: [{ role: 'user' }] } });

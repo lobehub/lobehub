@@ -388,13 +388,15 @@ export class S3 {
 }
 
 export class FileS3 extends S3 {
-  constructor() {
+  constructor(options?: { setAcl?: boolean }) {
     super(fileEnv.S3_ACCESS_KEY_ID, fileEnv.S3_SECRET_ACCESS_KEY, fileEnv.S3_ENDPOINT, {
       bucket: fileEnv.S3_BUCKET,
       forcePathStyle: fileEnv.S3_ENABLE_PATH_STYLE,
       internalEndpoint: fileEnv.S3_INTERNAL_ENDPOINT,
       region: fileEnv.S3_REGION,
-      setAcl: fileEnv.S3_SET_ACL,
+      // Callers handling sensitive payloads (e.g. llm-generation-tracing)
+      // override this to keep objects private on public-ACL file buckets.
+      setAcl: options?.setAcl ?? fileEnv.S3_SET_ACL,
     });
   }
 }

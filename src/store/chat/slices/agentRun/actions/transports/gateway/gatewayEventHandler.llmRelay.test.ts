@@ -83,6 +83,11 @@ const contentUpdates = (store: ChatStore) =>
 
 describe('createGatewayEventHandler — LLM relay', () => {
   beforeEach(() => {
+    // The handler logs async failures (e.g. `.catch(console.error)` chains)
+    // that can still be in flight during worker teardown; real console calls
+    // then race the vitest rpc shutdown and fail the shard with
+    // "Closing rpc while onUserConsoleLog was pending".
+    vi.spyOn(console, 'error').mockImplementation(() => {});
     relay.execute.mockReset();
     relay.cancel.mockReset();
     relay.cancelOperation.mockReset();

@@ -87,9 +87,9 @@ export class FollowUpActionService {
     // click (positive) / dismissal (negative) back via `recordFeedback`.
     //
     // Gate on the tracing store actually being configured: when it isn't (e.g.
-    // prod without ENABLE_LLM_GENERATION_TRACING_S3), the tracing hook is a
-    // no-op and never inserts a row, so handing the client an id would make
-    // every feedback call resolve to NOT_FOUND.
+    // prod without S3 configured), the tracing hook is a no-op and never
+    // inserts a row, so handing the client an id would make every feedback
+    // call resolve to NOT_FOUND.
     const tracingId = getLLMGenerationTracingService().isEnabled() ? randomUUID() : undefined;
     let raw: unknown;
     try {

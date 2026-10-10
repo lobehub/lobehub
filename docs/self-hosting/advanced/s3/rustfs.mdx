@@ -91,10 +91,34 @@ We need to configure an S3-compatible storage service in the server-side databas
         ],
         "NotResource": [],
         "Condition": {}
+      },
+      {
+        "Sid": "KeepLLMGenerationTracingPrivate",
+        "Effect": "Deny",
+        "Principal": {
+          "AWS": [
+            "*"
+          ]
+        },
+        "Action": [
+          "s3:GetObject"
+        ],
+        "Resource": [
+          "arn:aws:s3:::lobe/llm-generation-tracing/*"
+        ],
+        "Condition": {
+          "StringEquals": {
+            "aws:PrincipalType": "Anonymous"
+          }
+        }
       }
     ]
   }
   ```
+
+  <Callout type={'warning'}>
+    LLM generation tracing is on by default for S3-backed deployments and stores system prompts plus generation inputs/outputs under the `llm-generation-tracing/` prefix. The second statement blocks anonymous reads of that prefix while leaving authenticated server reads working — do not remove it. Set `DISABLE_LLM_GENERATION_TRACING_S3=1` to disable collection entirely.
+  </Callout>
 
   Save the settings to apply the policy.
 
