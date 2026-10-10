@@ -1,4 +1,4 @@
-import { AGENT_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
+import { AGENT_SKILLS_IDENTIFIER_PREFIX, USER_SKILLS_IDENTIFIER_PREFIX } from '@lobechat/const';
 import {
   formatCommandResult,
   formatSandboxRecreation,
@@ -486,6 +486,8 @@ export class SkillsExecutionRuntime {
       // inspector can pick the right label ("Activate Agent Skill") and prefer
       // the friendly `title` over the raw `agent-skills:<filename>` name.
       const isAgentSkill = builtinSkill.identifier.startsWith(AGENT_SKILLS_IDENTIFIER_PREFIX);
+      // The user's own skill library rides the same path under `user-skills:`.
+      const isUserSkill = builtinSkill.identifier.startsWith(USER_SKILLS_IDENTIFIER_PREFIX);
 
       return {
         content,
@@ -494,7 +496,7 @@ export class SkillsExecutionRuntime {
           hasResources,
           identifier: builtinSkill.identifier,
           name: builtinSkill.name,
-          source: isAgentSkill ? 'agent' : 'builtin',
+          source: isAgentSkill ? 'agent' : isUserSkill ? 'user' : 'builtin',
           ...(builtinSkill.title && { title: builtinSkill.title }),
         },
         success: true,

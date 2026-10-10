@@ -42,6 +42,18 @@ export const SKILL_BUNDLE_FILE_TYPE = 'skills/bundle';
 /** File type used by the SKILL.md index document inside a managed skill bundle. */
 export const SKILL_INDEX_FILE_TYPE = 'skills/index';
 
+/** File type of a script file inside a skill bundle; its language sits in `metadata.language`. */
+export const SKILL_SCRIPT_FILE_TYPE = 'skills/script';
+
+/** File type of one frozen version of a user skill's `SKILL.md`, kept under its bundle. */
+export const SKILL_VERSION_FILE_TYPE = 'skills/version';
+
+/**
+ * Source attribution of a user-level skill: a bundle owned by the user, not
+ * bound to any agent, so any agent or run can load it by name.
+ */
+export const USER_SKILL_SOURCE = 'user-skills';
+
 /** Source attribution stored on documents created by skill-management tooling. */
 export const SKILL_MANAGEMENT_SOURCE = 'agent-signal:skill-management';
 

@@ -18,6 +18,7 @@ const {
   mockGetComposioManifests,
   mockGetLobehubSkillManifests,
   mockHasDocuments,
+  mockListUserSkills,
   mockMessageCreate,
   mockPluginQuery,
   mockSkillFindAll,
@@ -35,6 +36,7 @@ const {
   mockGetComposioManifests: vi.fn().mockResolvedValue([]),
   mockGetLobehubSkillManifests: vi.fn().mockResolvedValue([]),
   mockHasDocuments: vi.fn().mockResolvedValue(false),
+  mockListUserSkills: vi.fn().mockResolvedValue([]),
   mockMessageCreate: vi.fn(),
   mockPluginQuery: vi.fn().mockResolvedValue([]),
   mockSkillFindAll: vi.fn().mockResolvedValue({ data: [], total: 0 }),
@@ -96,6 +98,12 @@ vi.mock('@/server/services/agentDocuments', () => ({
       getAgentSkills: mockGetAgentSkills,
       hasDocuments: mockHasDocuments,
     };
+  }),
+}));
+
+vi.mock('@/server/services/userSkill', () => ({
+  UserSkillService: vi.fn().mockImplementation(function () {
+    return { listRuntimeSkills: mockListUserSkills };
   }),
 }));
 
@@ -255,6 +263,16 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     );
     mockGetAgentSkills.mockResolvedValue([]);
     mockHasDocuments.mockResolvedValue(false);
+    mockListUserSkills.mockResolvedValue([
+      {
+        body: 'PLAN BODY',
+        content: 'PLAN BODY + FILES',
+        description: 'How each unit is done',
+        identifier: 'user-skills:goal-plan-x',
+        name: 'user-skills:goal-plan-x',
+        title: 'Plan',
+      },
+    ]);
     service = new AiAgentService({} as any, 'test-user-id');
   });
 
@@ -403,6 +421,42 @@ describe('AiAgentService.execAgent - pinned skill content injection', () => {
     // so the colliding auto skill stays content-less (lazily activatable).
     expect(skillById('db-skill-auto')?.content).toBeUndefined();
     expect(mockSkillFindByIds).toHaveBeenCalledWith([]);
+  });
+
+  it('lists the user skill library to every run, content-less until a run names a skill', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' } as any);
+
+    expect(skillById('user-skills:goal-plan-x')).toBeDefined();
+    expect(skillById('user-skills:goal-plan-x')?.content).toBeUndefined();
+  });
+
+  it('injects a user skill the run names in its plugins, as a goal batch unit does', async () => {
+    mockGetAgentConfig.mockResolvedValue({
+      chatConfig: {},
+      id: 'agent-1',
+      model: 'gpt-4',
+      plugins: [],
+      provider: 'openai',
+      systemRole: 'You are a helper',
+    });
+
+    await service.execAgent({
+      additionalPluginIds: ['lobe-task', 'user-skills:goal-plan-x'],
+      agentId: 'agent-1',
+      prompt: 'Hello',
+    } as any);
+
+    expect(operationSkillSetArg()?.enabledPluginIds).toContain('user-skills:goal-plan-x');
+    expect(skillById('user-skills:goal-plan-x')?.content).toBe('PLAN BODY + FILES');
   });
 
   it('appends the resource tree to a pinned skill body, mirroring activateSkill', async () => {
