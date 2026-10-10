@@ -17,9 +17,6 @@ import {
   toProjectFilterValue,
 } from './projectFilterState';
 
-/** Past this many projects the popup renders only the rows in view. */
-const VIRTUAL_THRESHOLD = 50;
-
 interface ProjectFilterProps {
   error?: unknown;
   isValidating: boolean;
@@ -91,8 +88,10 @@ const ProjectFilter = ({
         prefix={FolderKanbanIcon}
         size={'small'}
         style={{ maxWidth: 260, minWidth: 160 }}
+        // Not `virtual`: the virtual list counts the whole project group as one
+        // row and crashes once search shrinks the options; search is the way
+        // through a long list.
         value={toProjectFilterValue(value)}
-        virtual={projectOptions.length > VIRTUAL_THRESHOLD}
         onChange={(next) => {
           if (typeof next === 'string') onChange(fromProjectFilterValue(next));
         }}

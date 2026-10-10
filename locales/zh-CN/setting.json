@@ -1967,6 +1967,7 @@
   "tools.title": "技能",
   "trash.actions.empty": "清空回收站",
   "trash.actions.emptyFiltered": "清空筛选结果（{{count}}）",
+  "trash.actions.emptyFilteredPending": "清空筛选结果",
   "trash.actions.emptyType": "清空{{type}}",
   "trash.actions.loadMore": "加载更多",
   "trash.actions.purge": "彻底删除",

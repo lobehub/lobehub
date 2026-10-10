@@ -47,21 +47,26 @@ export const resolveProjectAvailability = ({
 /**
  * "Empty" sweeps every root the view covers, so it is only offered on a
  * settled view: a confirmed project (never one that is still loading or gone),
- * loaded counts to show what will be purged, and no failed request whose
- * stale rows could misstate it.
+ * counts the server has just confirmed (not a cached copy still revalidating)
+ * to show what will be purged, and no failed request whose stale rows could
+ * misstate it.
  */
 export const canEmptyTrashView = ({
   availability,
+  countsSettled,
   filterCount,
   hasError,
   itemCount,
 }: {
   availability: ProjectFilterAvailability;
+  /** The counts are not being revalidated right now. */
+  countsSettled: boolean;
   /** Roots the view covers; `undefined` while the counts are not loaded. */
   filterCount: number | undefined;
   hasError: boolean;
   itemCount: number;
-}): boolean => availability === 'available' && !hasError && itemCount > 0 && !!filterCount;
+}): boolean =>
+  availability === 'available' && countsSettled && !hasError && itemCount > 0 && !!filterCount;
 
 /** The server refused the project filter: the project is gone or no longer readable. */
 export const isProjectRefusedError = (error: unknown): boolean =>

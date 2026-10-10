@@ -202,9 +202,37 @@ describe('TrashAction', () => {
         [started, null],
         [started, null],
       ]);
+      // No view keeps rows the sweep may have reached; each reloads when shown.
       expect(ids(started)).toEqual([]);
-      expect(ids()).toEqual(['in_b']);
-      expect(ids({ projectId: 'proj_b' })).toEqual(['in_b']);
+      expect(ids()).toEqual([]);
+      expect(ids({ projectId: 'proj_b' })).toEqual([]);
+    });
+
+    it('drops the cached counts of other views after a write, and their rows after a sweep', async () => {
+      const active = { projectId: 'proj_a' } as const;
+      const other = { projectId: 'proj_b' } as const;
+      useTrashStore.setState({
+        projectSelection: { projectId: 'proj_a', scope: 'u1:personal' },
+        trashCountMap: {
+          'all': { topic: 9 },
+          'project:proj_a': { topic: 1 },
+          'project:proj_b': { topic: 4 },
+        },
+        trashListMap: {
+          [trashListKey(active)]: view([buildItem({ id: 'in_a' })]),
+          [trashListKey(other)]: view([buildItem({ id: 'in_b' })]),
+        },
+      });
+      vi.mocked(trashService.purge).mockResolvedValue({ purged: 1 });
+
+      await useTrashStore.getState().purge(['in_a']);
+      // Other views' counts are unknown now (not stale numbers); their rows stay.
+      expect(Object.keys(useTrashStore.getState().trashCountMap)).toEqual(['project:proj_a']);
+      expect(ids(other)).toEqual(['in_b']);
+
+      vi.mocked(trashService.emptyTrash).mockResolvedValue({ hasMore: false, purged: 1 });
+      await useTrashStore.getState().emptyTrash(active);
+      expect(Object.keys(useTrashStore.getState().trashListMap)).toEqual([trashListKey(active)]);
     });
 
     it('emptyTrash stops, without touching the new scope, when the scope switches mid-sweep', async () => {

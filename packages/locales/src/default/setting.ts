@@ -1849,6 +1849,7 @@ When I am ___, I need ___
   'tools.builtins.lobe-attachments.title': 'Attachments',
   'trash.actions.empty': 'Empty trash',
   'trash.actions.emptyFiltered': 'Empty filtered ({{count}})',
+  'trash.actions.emptyFilteredPending': 'Empty filtered',
   'trash.actions.emptyType': 'Empty {{type}}',
   'trash.actions.loadMore': 'Load more',
   'trash.actions.purge': 'Delete forever',

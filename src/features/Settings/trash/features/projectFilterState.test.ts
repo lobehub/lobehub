@@ -52,6 +52,7 @@ describe('trash project filter state', () => {
   it('offers "empty" only on a settled, confirmed view', () => {
     const settled = {
       availability: 'available' as const,
+      countsSettled: true,
       filterCount: 3,
       hasError: false,
       itemCount: 3,
@@ -59,6 +60,8 @@ describe('trash project filter state', () => {
     expect(canEmptyTrashView(settled)).toBe(true);
     expect(canEmptyTrashView({ ...settled, availability: 'unknown' })).toBe(false);
     expect(canEmptyTrashView({ ...settled, availability: 'unavailable' })).toBe(false);
+    // A cached count still being revalidated may be stale.
+    expect(canEmptyTrashView({ ...settled, countsSettled: false })).toBe(false);
     expect(canEmptyTrashView({ ...settled, filterCount: undefined })).toBe(false);
     expect(canEmptyTrashView({ ...settled, filterCount: 0 })).toBe(false);
     expect(canEmptyTrashView({ ...settled, hasError: true })).toBe(false);

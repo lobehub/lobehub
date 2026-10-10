@@ -170,6 +170,7 @@ const TrashList = () => {
 
   const canEmpty = canEmptyTrashView({
     availability,
+    countsSettled: !countSync.isValidating,
     filterCount,
     hasError: !!error || !!countSync.error,
     itemCount: items.length,
@@ -186,7 +187,10 @@ const TrashList = () => {
   };
   const emptyLabel = (view: TrashViewFilter, count?: number) => {
     if (view.projectId !== undefined)
-      return t('trash.actions.emptyFiltered', { count: count ?? 0 });
+      // Never a confident zero while the counts are still unknown.
+      return count === undefined
+        ? t('trash.actions.emptyFilteredPending')
+        : t('trash.actions.emptyFiltered', { count });
     if (view.resourceType)
       return t('trash.actions.emptyType', { type: typeLabel(view.resourceType) });
     return t('trash.actions.empty');

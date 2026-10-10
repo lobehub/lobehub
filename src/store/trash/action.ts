@@ -15,6 +15,7 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import type { TrashListData } from './initialState';
 import {
+  trashCountKey,
   trashCountResource,
   trashListKey,
   type TrashListParams,
@@ -157,7 +158,34 @@ export class TrashActionImpl {
     for (const id of ids) this.#trashList.updateEntity(id, () => undefined);
   };
 
-  #withLoading = async (ids: string[], run: () => Promise<void>) => {
+  /**
+   * After a write, the counts of every view but the one on screen are stale,
+   * and so are their rows after a sweep (it reaches past the loaded pages).
+   * Drop them, memory and persisted copy, so a later visit loads them instead
+   * of painting numbers or rows that no longer exist. The view on screen is
+   * revalidated in place by `refresh`.
+   */
+  #dropOtherViews = ({ rows }: { rows: boolean }) => {
+    const { activeType, projectSelection, trashCountMap, trashListMap } = this.#get();
+    const projectId =
+      projectSelection?.scope === cacheScope.get() ? projectSelection.projectId : undefined;
+    const countKey = trashCountKey(projectId);
+    for (const key of Object.keys(trashCountMap)) {
+      if (key !== countKey) this.#trashCount.remove(key);
+    }
+    if (!rows) return;
+    const listKey = trashListKey({ projectId, resourceType: activeType });
+    for (const key of Object.keys(trashListMap)) {
+      if (key !== listKey) this.#trashList.remove(key);
+    }
+  };
+
+  #withLoading = async (
+    ids: string[],
+    run: () => Promise<void>,
+    { sweep = false }: { sweep?: boolean } = {},
+  ) => {
+    const scope = cacheScope.get();
     this.#set({ loadingIds: [...this.#get().loadingIds, ...ids] }, false, n('loading/start'));
     try {
       await run();
@@ -168,6 +196,8 @@ export class TrashActionImpl {
         false,
         n('loading/end'),
       );
+      // Views of another scope are not ours to drop (a switch resets them anyway).
+      if (cacheScope.get() === scope) this.#dropOtherViews({ rows: sweep });
       await this.refresh();
     }
   };
@@ -208,35 +238,39 @@ export class TrashActionImpl {
     const workspaceId = getActiveWorkspaceId();
     const key = trashListKey(filter);
     const ids = this.#get().trashListMap[key]?.items.map((item) => item.id) ?? [];
-    await this.#withLoading(ids, async () => {
-      // The server purges one bounded batch per call so no single request runs
-      // away on a large bin; keep going until it reports nothing left.
-      for (;;) {
-        if (cacheScope.get() !== scope) throw new TrashEmptyScopeChangedError();
-        const { hasMore } = await trashService.emptyTrash(filter, workspaceId);
-        if (!hasMore) break;
-      }
-      // The view lives in the scope the sweep ran in; do not touch another's.
-      if (cacheScope.get() !== scope) return;
-      // Its rows are gone from every other loaded view too (the same root can
-      // sit under "All", its type and its project).
-      this.#dropRows(ids);
-      // The view is swept server-side across every page, so it collapses to an
-      // empty head page rather than dropping only loaded rows.
-      this.#trashList.update(key, (data) =>
-        data
-          ? {
-              ...data,
-              currentPage: 0,
-              hasMore: false,
-              items: [],
-              nextCursor: null,
-              pages: [{ count: 0, next: null }],
-              total: 0,
-            }
-          : data,
-      );
-    });
+    await this.#withLoading(
+      ids,
+      async () => {
+        // The server purges one bounded batch per call so no single request runs
+        // away on a large bin; keep going until it reports nothing left.
+        for (;;) {
+          if (cacheScope.get() !== scope) throw new TrashEmptyScopeChangedError();
+          const { hasMore } = await trashService.emptyTrash(filter, workspaceId);
+          if (!hasMore) break;
+        }
+        // The view lives in the scope the sweep ran in; do not touch another's.
+        if (cacheScope.get() !== scope) return;
+        // Its rows are gone from every other loaded view too (the same root can
+        // sit under "All", its type and its project).
+        this.#dropRows(ids);
+        // The view is swept server-side across every page, so it collapses to an
+        // empty head page rather than dropping only loaded rows.
+        this.#trashList.update(key, (data) =>
+          data
+            ? {
+                ...data,
+                currentPage: 0,
+                hasMore: false,
+                items: [],
+                nextCursor: null,
+                pages: [{ count: 0, next: null }],
+                total: 0,
+              }
+            : data,
+        );
+      },
+      { sweep: true },
+    );
   };
 
   /**
