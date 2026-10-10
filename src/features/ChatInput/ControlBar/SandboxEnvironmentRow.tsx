@@ -6,7 +6,6 @@ import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, DropdownMenu, Popover } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import {
-  AppWindowMacIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   CircleStopIcon,
@@ -96,8 +95,6 @@ export interface SandboxEnvironmentRowProps {
   /** Picks an environment with no copy yet — its creator's copy is made first. */
   onSelectLazy: () => void;
   onStop: (copy: SandboxPickerCopy) => void;
-  /** The repository path the environment builds from, when it is one. */
-  repository?: string;
   row: EnvironmentRowState<SandboxPickerCopy>;
   /** Copies whose run is being stopped from this menu. */
   stopping: (id: string) => boolean;
@@ -122,7 +119,6 @@ const SandboxEnvironmentRow = memo<SandboxEnvironmentRowProps>(
     onSelectCopy,
     onSelectLazy,
     onStop,
-    repository,
     row,
     stopping,
   }) => {
@@ -131,11 +127,7 @@ const SandboxEnvironmentRow = memo<SandboxEnvironmentRowProps>(
     const [expanded, setExpanded] = useState(false);
 
     const icon = (size: number): ReactNode =>
-      repository ? (
-        <Github size={size} />
-      ) : (
-        <Icon icon={kind === 'files' ? FolderIcon : AppWindowMacIcon} size={size} />
-      );
+      kind === 'files' ? <Icon icon={FolderIcon} size={size} /> : <Github size={size} />;
 
     const statusTag = (copy: SandboxPickerCopy | undefined): ReactNode => {
       if (!copy) return undefined;

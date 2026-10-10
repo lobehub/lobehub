@@ -6,7 +6,6 @@ import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { confirmModal, Popover, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
-  AppWindowMacIcon,
   ChevronDownIcon,
   FolderClockIcon,
   FolderIcon,
@@ -22,7 +21,6 @@ import useSWR from 'swr';
 
 import { openSandboxStorageUpsell } from '@/business/client/features/SandboxStorageUpsell';
 import { describeError } from '@/features/EnvironmentManager/errorMessage';
-import { repositoryPath } from '@/features/EnvironmentManager/repository';
 import { settleThenRefresh } from '@/features/EnvironmentManager/settleThenRefresh';
 import { useCanEditEnvironment } from '@/features/EnvironmentManager/useCanEditEnvironment';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
@@ -185,8 +183,6 @@ interface SandboxInstancePickerProps {
   /** Where this conversation keeps its files today. */
   value: SandboxSelection;
 }
-
-const INSTANCE_ICON = AppWindowMacIcon;
 
 /** How often a building copy is re-listed while the picker can see it. */
 const BUILD_REFRESH_MS = 4000;
@@ -388,7 +384,6 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
           isCreator={isCreator}
           key={environment.id}
           kind={kind}
-          repository={repositoryPath(environment.configuration)}
           row={row}
           stopping={stopping.has}
           onReopen={() => void createCopyAndBind(environment.id, 'sandboxStorage.reopenCopyFailed')}
@@ -407,8 +402,8 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
     // purpose — and otherwise the slot itself, the same words the local chip
     // shows before a folder is chosen. The default is not a choice, so it does
     // not get named as one.
-    // A node rather than an icon component, because the repository mark is not
-    // a lucide glyph and the chip has to be able to show it.
+    // A node rather than an icon component, because the GitHub mark a code
+    // environment shows is not a lucide glyph.
     const chipIcon = (() => {
       if (!current) {
         return value.mode === 'ephemeral' ? (
@@ -418,13 +413,10 @@ const SandboxInstancePicker = memo<SandboxInstancePickerProps>(
         );
       }
       if (currentBlocked) return <Icon icon={LockIcon} size={14} />;
-      if (repositoryPath(currentEnvironment?.configuration)) return <Github size={14} />;
-
-      return (
-        <Icon
-          icon={environmentKind(currentEnvironment) === 'files' ? FolderIcon : INSTANCE_ICON}
-          size={14}
-        />
+      return environmentKind(currentEnvironment) === 'files' ? (
+        <Icon icon={FolderIcon} size={14} />
+      ) : (
+        <Github size={14} />
       );
     })();
 
