@@ -11,7 +11,7 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
   cells: css`
     display: grid;
-    grid-template-columns: minmax(0, 1fr) 80px 88px 64px 32px;
+    grid-template-columns: minmax(0, 1fr) 80px 88px 64px 60px;
     flex: 1;
     align-items: center;
 
@@ -79,9 +79,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
   node: css`
     cursor: default;
 
-    &:hover [data-stop-cell],
-    &[aria-selected='true'] [data-stop-cell],
-    &:focus-within [data-stop-cell] {
+    &:hover [data-row-actions],
+    &[aria-selected='true'] [data-row-actions],
+    &:focus-within [data-row-actions] {
       visibility: visible;
     }
   `,
@@ -152,7 +152,9 @@ export const styles = createStaticStyles(({ css, cssVar }) => ({
     font-size: 11.5px;
     color: ${cssVar.colorTextTertiary};
   `,
-  stop: css`
+  actions: css`
+    display: flex;
+    gap: 2px;
     justify-self: end;
     visibility: hidden;
   `,

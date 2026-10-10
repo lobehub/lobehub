@@ -11,6 +11,7 @@ import { type Mock } from 'vitest';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { messageService } from '@/services/message';
+import { useAgentStore } from '@/store/agent';
 import { useChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import { useToolStore } from '@/store/tool';
@@ -310,6 +311,51 @@ describe('ChatPluginAction', () => {
         scope: 'page',
         topicId: 'topic-1',
       });
+    });
+
+    it("should tag the in-process tool context with the agent's own workspace", async () => {
+      const hasExecutorModule = await import('@/store/tool/slices/builtin/executors');
+      vi.spyOn(hasExecutorModule, 'hasExecutor').mockResolvedValue(true);
+      const previousAgentMap = useAgentStore.getState().agentMap;
+      useAgentStore.setState({
+        agentMap: { ...previousAgentMap, 'agent-ws': { workspaceId: 'ws-agent' } as any },
+      });
+
+      const { result } = renderHook(() => useChatStore());
+      const messageId = 'workspace-tool-message-id';
+
+      act(() => {
+        const rootOperationId = result.current.startOperation({
+          type: 'execAgentRuntime',
+          context: { agentId: 'agent-ws', topicId: 'topic-1' },
+        }).operationId;
+        const toolOperationId = result.current.startOperation({
+          type: 'executeToolCall',
+          context: { messageId },
+          parentOperationId: rootOperationId,
+        }).operationId;
+        result.current.associateMessageWithOperation(messageId, toolOperationId);
+      });
+
+      let capturedContext: any;
+      vi.spyOn(useToolStore.getState(), 'invokeBuiltinTool').mockImplementation(
+        async (_id, _api, _params, ctx) => {
+          capturedContext = ctx;
+          return { success: true };
+        },
+      );
+
+      await act(async () => {
+        await result.current.invokeBuiltinTool(messageId, {
+          identifier: 'lobe-local-system',
+          apiName: 'runCommand',
+          arguments: JSON.stringify({ command: 'npm run dev' }),
+          type: 'builtin',
+        } as ChatToolPayload);
+      });
+
+      useAgentStore.setState({ agentMap: previousAgentMap });
+      expect(capturedContext).toMatchObject({ agentId: 'agent-ws', workspaceId: 'ws-agent' });
     });
 
     it('should pass tool call id and explicit source user message id to Tool Store executor', async () => {

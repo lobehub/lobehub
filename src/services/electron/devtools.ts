@@ -13,6 +13,10 @@ class DevtoolsService {
   openProcessExplorer(): Promise<void> {
     return ensureElectronIpc().devtools.openProcessExplorer();
   }
+  /** Route the main window from a secondary one (e.g. Process Explorer). */
+  openInMainWindow(path: string, options?: { escape?: boolean }): Promise<void> {
+    return ensureElectronIpc().windows.openInMainWindow({ ...options, path });
+  }
   async openDevtools(): Promise<void> {
     return ensureElectronIpc().devtools.openDevtools();
   }

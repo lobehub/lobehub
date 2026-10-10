@@ -14,8 +14,14 @@ const exec = promisify(execFile);
 
 export interface ProcessOwner {
   agentId?: string;
+  /** Set when the command ran in a group conversation, whose topics live under the group. */
+  groupId?: string;
   label?: string;
+  /** The message (tool call) that started the process, so the UI can jump back to it. */
+  messageId?: string;
   topicId?: string;
+  /** The workspace the run belonged to; absent for a personal run. Links must open in this scope. */
+  workspaceId?: string;
 }
 
 export interface ManagedProcessInfo extends ProcessOwner {
@@ -49,6 +55,19 @@ interface RootProcess {
   group: boolean;
   owner: ProcessOwner;
 }
+
+/**
+ * How far before its PID file a browser daemon's launch may have been asked for.
+ * See {@link ManagedProcessRegistry.browserLaunches}.
+ */
+const BROWSER_LAUNCH_WINDOW_MS = 30_000;
+
+/** One browser per topic (or per agent outside a topic), reused by every command there. */
+const browserNamespace = (owner: ProcessOwner) =>
+  createHash('sha256')
+    .update(owner.topicId ?? owner.agentId ?? 'shared')
+    .digest('hex')
+    .slice(0, 12);
 
 const exists = (pid: number) => {
   try {
@@ -143,6 +162,16 @@ export class ManagedProcessRegistry {
   private rows: ManagedProcessInfo[] = [];
   private sampledAt = 0;
   private browserScopes = new Map<string, ProcessOwner>();
+  /**
+   * Every owner that handed this namespace's browser env to a command, and
+   * when. The namespace is per topic, so concurrent calls in one topic — from
+   * one agent, or from several members of a group — share it, and
+   * `browserScopes` only remembers the latest; the daemon is not seen until the
+   * next sample, by which time a sibling call may have replaced that owner.
+   * Discovery keeps an agent or message on the daemon only when every call that
+   * asked for the browser shortly before it started agrees on it.
+   */
+  private browserLaunches = new Map<string, { at: number; owner: ProcessOwner }[]>();
   private browserActivity = new Map<string, number>();
   private idleStopping = new Set<string>();
   private browserBase = path.join(
@@ -152,16 +181,23 @@ export class ManagedProcessRegistry {
 
   environment(owner: ProcessOwner, browserSession = 'default'): Record<string, string> {
     this.assertCanSpawn();
-    const namespace = createHash('sha256')
-      .update(owner.topicId ?? owner.agentId ?? 'shared')
-      .digest('hex')
-      .slice(0, 12);
+    const namespace = browserNamespace(owner);
+    const now = Date.now();
     this.browserScopes.set(namespace, owner);
-    this.browserActivity.set(namespace, Date.now());
+    this.browserActivity.set(namespace, now);
+    this.browserLaunches.set(namespace, [
+      ...(this.browserLaunches.get(namespace) ?? []).filter(
+        (launch) => now - launch.at < BROWSER_LAUNCH_WINDOW_MS,
+      ),
+      { at: now, owner },
+    ]);
     return {
       LOBEHUB_PROCESS_TOPIC: owner.topicId ?? '',
       LOBEHUB_PROCESS_AGENT: owner.agentId ?? '',
+      LOBEHUB_PROCESS_GROUP: owner.groupId ?? '',
       LOBEHUB_PROCESS_LABEL: owner.label ?? '',
+      LOBEHUB_PROCESS_MESSAGE: owner.messageId ?? '',
+      LOBEHUB_PROCESS_WORKSPACE: owner.workspaceId ?? '',
       AGENT_BROWSER_SOCKET_DIR: this.browserBase,
       AGENT_BROWSER_NAMESPACE: namespace,
       AGENT_BROWSER_SESSION: browserSession,
@@ -245,10 +281,31 @@ export class ManagedProcessRegistry {
         if (!row || this.descendants.has(pid)) continue;
         // Reject a stale PID file pointing at a later, unrelated browser daemon.
         if (Date.parse(row.started) > modified + 1000) continue;
+        // Topic, group and workspace belong to the namespace and every caller
+        // shares them. The agent (a group topic has several members) and the
+        // message are the launcher's own: keep one only when every call that
+        // could have started this daemon agrees, rather than hand it to a
+        // sibling that merely reused the namespace.
+        const launchers = (this.browserLaunches.get(namespace) ?? [])
+          .filter(
+            (launch) =>
+              launch.at <= modified + 1000 && launch.at > modified - BROWSER_LAUNCH_WINDOW_MS,
+          )
+          .map((launch) => launch.owner);
+        const agreed = (key: 'agentId' | 'messageId') => {
+          const values = new Set(launchers.map((launcher) => launcher[key]));
+          return values.size === 1 ? [...values][0] : undefined;
+        };
         this.descendants.set(pid, row);
         this.owners.set(pid, {
           rootId: `${pid}:${row.started}`,
-          owner: { ...owner, label: `Agent Browser · ${file.slice(0, -4)}` },
+          owner: {
+            ...owner,
+            // Outside a topic the namespace is the agent's own, so it is certain.
+            agentId: owner.topicId ? agreed('agentId') : owner.agentId,
+            label: `Agent Browser · ${file.slice(0, -4)}`,
+            messageId: agreed('messageId'),
+          },
         });
       }
     }
@@ -301,11 +358,13 @@ export class ManagedProcessRegistry {
     // Old system agent-browser versions do not implement idle-timeout. Reap only
     // once all commands for this topic have ended and the reuse window expires.
     if (!this.stopping)
-      for (const [namespace, owner] of this.browserScopes) {
+      // Match by namespace, not by agent: any member's command in a group
+      // topic keeps the shared browser alive, and a daemon whose launcher was
+      // ambiguous carries no agent at all.
+      for (const namespace of this.browserScopes.keys()) {
         const active = [...this.roots.values()].some(
           (root) =>
-            root.owner.topicId === owner.topicId &&
-            root.owner.agentId === owner.agentId &&
+            browserNamespace(root.owner) === namespace &&
             root.child.exitCode === null &&
             root.child.signalCode === null,
         );
@@ -313,13 +372,12 @@ export class ManagedProcessRegistry {
         if (now - (this.browserActivity.get(namespace) ?? now) < 900000) continue;
         const browsers = this.rows.filter(
           (item) =>
-            item.label?.startsWith('Agent Browser ·') &&
-            item.topicId === owner.topicId &&
-            item.agentId === owner.agentId,
+            item.label?.startsWith('Agent Browser ·') && browserNamespace(item) === namespace,
         );
         if (!browsers.length) {
           this.browserScopes.delete(namespace);
           this.browserActivity.delete(namespace);
+          this.browserLaunches.delete(namespace);
         }
         for (const row of browsers) {
           if (this.idleStopping.has(row.rootId)) continue;
@@ -500,7 +558,10 @@ export const spawnManaged: typeof spawn = ((...args: Parameters<typeof spawn>) =
   registry?.register(child, options?.detached ?? false, {
     topicId: options?.env?.LOBEHUB_PROCESS_TOPIC || undefined,
     agentId: options?.env?.LOBEHUB_PROCESS_AGENT || undefined,
+    groupId: options?.env?.LOBEHUB_PROCESS_GROUP || undefined,
     label: options?.env?.LOBEHUB_PROCESS_LABEL || path.basename(args[0]),
+    messageId: options?.env?.LOBEHUB_PROCESS_MESSAGE || undefined,
+    workspaceId: options?.env?.LOBEHUB_PROCESS_WORKSPACE || undefined,
   });
   return child;
 }) as typeof spawn;

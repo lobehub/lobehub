@@ -1,27 +1,33 @@
 import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, Skeleton } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ChevronRightIcon,
   CpuIcon,
   MessageSquareIcon,
+  MessageSquareShareIcon,
   RefreshCwIcon,
   TriangleAlertIcon,
 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useChatStore } from '@/store/chat';
 
+import { AgentName } from './AgentName';
 import {
   type Activity,
+  activityLocation,
   formatCpu,
   formatMemory,
+  groupByConversation,
   processTree,
   refreshActivities,
   useActivities,
 } from './state';
 import StopButton from './StopButton';
+import { useWorkspaceSlugOf } from './useWorkspaceSlugOf';
 
 export const topicName = (id?: string) => {
   if (!id) return undefined;
@@ -34,7 +40,7 @@ export const topicName = (id?: string) => {
   );
 };
 
-const GRID = '16px minmax(0, 1fr) 88px 72px 56px 28px';
+const GRID = '16px minmax(0, 1fr) 88px 72px 56px 52px';
 
 const tableStyles = createStaticStyles(({ css }) => ({
   alert: css`
@@ -51,6 +57,11 @@ const tableStyles = createStaticStyles(({ css }) => ({
 
     background: ${cssVar.colorErrorBg};
   `,
+  actions: css`
+    display: flex;
+    gap: 2px;
+    justify-content: flex-end;
+  `,
   chevron: css`
     color: ${cssVar.colorTextQuaternary};
     transition: transform 0.15s ease;
@@ -58,8 +69,20 @@ const tableStyles = createStaticStyles(({ css }) => ({
   chevronOpen: css`
     transform: rotate(90deg);
   `,
+  conversation: css`
+    display: inline-flex;
+    gap: 6px;
+    align-items: center;
+    min-width: 0;
+  `,
   critical: css`
     color: ${cssVar.colorError};
+  `,
+  ellipsis: css`
+    overflow: hidden;
+    min-width: 0;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   `,
   group: css`
     position: sticky;
@@ -161,17 +184,39 @@ const tableStyles = createStaticStyles(({ css }) => ({
   stale: css`
     opacity: 0.55;
   `,
+  separator: css`
+    color: ${cssVar.colorTextQuaternary};
+  `,
   warning: css`
     color: ${cssVar.colorWarning};
   `,
 }));
 
-export function TopicTitle({ id }: { id: string }) {
-  const { t } = useTranslation('chat');
+/** "Agent / Topic" — tells the user which conversation a background process belongs to. */
+export function ConversationTitle({ agentId, topicId }: { agentId?: string; topicId: string }) {
+  if (!agentId) return <TopicTitle id={topicId} />;
+  return (
+    <span className={tableStyles.conversation}>
+      <AgentName id={agentId} />
+      <span className={tableStyles.separator}>/</span>
+      <span className={tableStyles.ellipsis}>
+        <TopicTitle id={topicId} />
+      </span>
+    </span>
+  );
+}
+
+/** Topic title for a background activity; fetches the topic when it isn't cached yet. */
+export const useTopicTitle = (id?: string) => {
   const title = useChatStore(() => topicName(id));
   const useFetchTopicDetail = useChatStore((s) => s.useFetchTopicDetail);
   useFetchTopicDetail(title ? undefined : id);
-  return title || t('backgroundActivity.topic');
+  return title;
+};
+
+export function TopicTitle({ id }: { id: string }) {
+  const { t } = useTranslation('chat');
+  return useTopicTitle(id) || t('backgroundActivity.topic');
 }
 
 function ActivityRows({ activity, selected }: { activity: Activity; selected: boolean }) {
@@ -183,6 +228,9 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
     setOpen(true);
     ref.current?.scrollIntoView({ block: 'nearest' });
   }, [selected]);
+  const navigate = useWorkspaceAwareNavigate();
+  const slugOf = useWorkspaceSlugOf();
+  const location = activityLocation(activity, slugOf);
   const alert = activity.severity !== 'normal';
   const tone = activity.severity === 'critical' ? tableStyles.critical : tableStyles.warning;
   return (
@@ -219,7 +267,20 @@ function ActivityRows({ activity, selected }: { activity: Activity; selected: bo
           {formatMemory(activity.memoryMB)}
         </span>
         <span className={tableStyles.num}>{formatCpu(activity.cpuPercent)}</span>
-        <StopButton rootId={activity.rootId} />
+        <span className={tableStyles.actions}>
+          {location && (
+            <ActionIcon
+              icon={MessageSquareShareIcon}
+              size={'small'}
+              title={t('backgroundActivity.openMessage')}
+              onClick={(event) => {
+                event.stopPropagation();
+                navigate(location.href, { escape: true });
+              }}
+            />
+          )}
+          <StopButton rootId={activity.rootId} />
+        </span>
       </div>
       {open &&
         processTree(activity.processes).map(({ depth, row }) => (
@@ -248,9 +309,7 @@ export default function ActivityTable() {
         <Skeleton.Text rows={3} />
       </Flexbox>
     );
-  const groups = [...new Set(state.activities.map((row) => row.topicId))].sort(
-    (a, b) => Number(a === undefined) - Number(b === undefined),
-  );
+  const conversations = groupByConversation(state.activities);
   return (
     <Flexbox>
       {state.error && (
@@ -287,23 +346,32 @@ export default function ActivityTable() {
             <span className={tableStyles.headNum}>{t('backgroundActivity.cpu')}</span>
             <span />
           </div>
-          {groups.map((group) => (
-            <div key={group ?? 'shared'}>
-              <div className={tableStyles.group}>
-                <Icon icon={group ? MessageSquareIcon : CpuIcon} size={13} />
-                {group ? <TopicTitle id={group} /> : t('backgroundActivity.shared')}
-              </div>
-              {state.activities
-                .filter((row) => row.topicId === group)
-                .map((activity) => (
+          {conversations.map(({ activities, agentId, key, topicId }) => {
+            return (
+              <div key={key}>
+                <div className={tableStyles.group}>
+                  {topicId ? (
+                    <>
+                      {!agentId && <Icon icon={MessageSquareIcon} size={13} />}
+                      <ConversationTitle agentId={agentId} topicId={topicId} />
+                    </>
+                  ) : (
+                    <>
+                      <Icon icon={CpuIcon} size={13} />
+                      {t('backgroundActivity.shared')}
+                    </>
+                  )}
+                </div>
+                {activities.map((activity) => (
                   <ActivityRows
                     activity={activity}
                     key={activity.rootId}
                     selected={state.selected === activity.rootId}
                   />
                 ))}
-            </div>
-          ))}
+              </div>
+            );
+          })}
         </div>
       )}
     </Flexbox>

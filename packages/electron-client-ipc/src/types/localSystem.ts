@@ -436,6 +436,10 @@ export interface RunCommandParams {
   description?: string;
   /** Merged into the child process environment (after `process.env`). */
   env?: Record<string, string>;
+  /** Group conversation the command ran in; its topics are routed under the group. */
+  groupId?: string;
+  /** The tool message that issued the command; lets the process monitor link back to it. */
+  messageId?: string;
   run_in_background?: boolean;
   /**
    * Run this command inside the device sandbox (writes confined to `cwd` + the
@@ -459,6 +463,8 @@ export interface RunCommandParams {
   sandboxNetwork?: boolean;
   timeout?: number;
   topicId?: string;
+  /** Workspace the run belongs to (absent for personal), so links open in that scope. */
+  workspaceId?: string;
 }
 
 /**

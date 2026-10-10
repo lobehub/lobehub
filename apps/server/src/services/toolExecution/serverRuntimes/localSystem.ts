@@ -131,8 +131,18 @@ export const localSystemRuntime: ServerRuntimeRegistration = {
         // script, a Makefile) inherits the scope too. The model's own `env`
         // wins: it may be deliberately overriding the scope.
         if (api.name === LocalSystemApiName.runCommand && typeof finalArgs?.command === 'string') {
-          finalArgs = { ...finalArgs, topicId: context.topicId, agentId: context.agentId };
-          const lhEnv = buildDeviceLhEnv(await getContentWorkspaceId());
+          // Owner of any process the command leaves running: the device's process
+          // monitor shows it and links back to the tool message that started it.
+          const contentWorkspaceId = await getContentWorkspaceId();
+          finalArgs = {
+            ...finalArgs,
+            topicId: context.topicId,
+            agentId: context.agentId,
+            groupId: context.groupId ?? undefined,
+            messageId: context.toolMessageId,
+            workspaceId: contentWorkspaceId,
+          };
+          const lhEnv = buildDeviceLhEnv(contentWorkspaceId);
           if (lhEnv) finalArgs = { ...finalArgs, env: { ...lhEnv, ...finalArgs.env } };
 
           // The sandbox decision belongs to the run's owner, not to the model:

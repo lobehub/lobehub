@@ -786,6 +786,12 @@ export interface BuiltinToolContext {
    * When set, file operations should be restricted to this directory
    */
   workingDirectory?: string;
+
+  /**
+   * The workspace the run executes in; absent for a personal run. Lets a tool
+   * record where its side effects belong (e.g. which scope a link opens in).
+   */
+  workspaceId?: string;
 }
 
 /**

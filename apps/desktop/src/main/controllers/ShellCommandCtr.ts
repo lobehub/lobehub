@@ -242,23 +242,20 @@ export default class ShellCommandCtr extends ControllerModule {
 
   @IpcMethod()
   async handleRunCommand(params: RunCommandParams): Promise<RunCommandResult> {
-    const spawnProcess = spawnManagedFor({
+    const owner = {
       topicId: params.topicId,
       agentId: params.agentId,
+      groupId: params.groupId,
       label: params.description || 'Shell',
-    });
+      messageId: params.messageId,
+      workspaceId: params.workspaceId,
+    };
+    const spawnProcess = spawnManagedFor(owner);
     params = {
       ...params,
       env: {
         ...params.env,
-        ...managedProcessEnvironment(
-          {
-            topicId: params.topicId,
-            agentId: params.agentId,
-            label: params.description || 'Shell',
-          },
-          params.env?.AGENT_BROWSER_SESSION,
-        ),
+        ...managedProcessEnvironment(owner, params.env?.AGENT_BROWSER_SESSION),
       },
     };
     if (SIMPLE_LH_PREFIX.test(params.command)) {

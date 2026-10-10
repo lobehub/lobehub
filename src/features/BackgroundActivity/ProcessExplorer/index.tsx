@@ -1,6 +1,7 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
 import { Flexbox, Icon } from '@lobehub/ui';
 import {
+  ActionIcon,
   Input,
   showContextMenu,
   Skeleton,
@@ -17,6 +18,7 @@ import {
   GpuIcon,
   type LucideIcon,
   MessageSquareIcon,
+  MessageSquareShareIcon,
   SearchIcon,
   SquareTerminalIcon,
 } from 'lucide-react';
@@ -24,10 +26,13 @@ import { type KeyboardEvent, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useAppProcessMetrics } from '@/features/DevDock/widgets/appProcessMetrics';
+import { electronDevtoolsService } from '@/services/electron/devtools';
 
-import { topicName, TopicTitle } from '../ActivityTable';
+import { ConversationTitle, topicName } from '../ActivityTable';
+import { agentName } from '../AgentName';
 import { formatCpu, formatMemory, stopActivity, useActivities } from '../state';
 import StopButton from '../StopButton';
+import { useWorkspaceSlugOf } from '../useWorkspaceSlugOf';
 import {
   buildProcessTree,
   type RowModel,
@@ -47,10 +52,21 @@ const APP_ICONS: Record<string, LucideIcon> = {
 const rowIcon = (row: RowModel): LucideIcon | undefined => {
   if (row.kind === 'app') return APP_ICONS[row.appType ?? ''] ?? BoxIcon;
   if (row.kind === 'activity') return SquareTerminalIcon;
-  if (row.kind === 'conversation') return row.topicId ? MessageSquareIcon : CpuIcon;
+  if (row.kind === 'conversation') {
+    if (row.agentId && row.topicId) return undefined;
+    return row.topicId ? MessageSquareIcon : CpuIcon;
+  }
 };
 
+// The href already names the launching workspace (see activityLocation), so the
+// main window must not prefix whichever workspace it happens to have open.
+const openMessage = (href: string) =>
+  electronDevtoolsService
+    .openInMainWindow(href, { escape: true })
+    .catch((error) => console.error(error));
+
 function Cells({ row }: { row: RowModel }) {
+  const { t } = useTranslation('chat');
   const icon = rowIcon(row);
   const hot = row.cpuHot || row.memoryHot;
   return (
@@ -59,7 +75,11 @@ function Cells({ row }: { row: RowModel }) {
         {icon && <Icon className={styles.kind} icon={icon} size={14} />}
         {hot && <i className={styles.dot} />}
         <span className={styles.label} title={row.label}>
-          {row.kind === 'conversation' && row.topicId ? <TopicTitle id={row.topicId} /> : row.label}
+          {row.kind === 'conversation' && row.topicId ? (
+            <ConversationTitle agentId={row.agentId} topicId={row.topicId} />
+          ) : (
+            row.label
+          )}
         </span>
         {row.sub && <span className={styles.sub}>{row.sub}</span>}
       </span>
@@ -68,9 +88,20 @@ function Cells({ row }: { row: RowModel }) {
         {formatMemory(row.memory)}
       </span>
       <span className={styles.pid}>{row.pid}</span>
-      {row.stopId ? (
-        <span data-stop-cell className={styles.stop}>
-          <StopButton rootId={row.stopId} />
+      {row.stopId || row.href ? (
+        <span data-row-actions className={styles.actions}>
+          {row.href && (
+            <ActionIcon
+              icon={MessageSquareShareIcon}
+              size={'small'}
+              title={t('backgroundActivity.openMessage')}
+              onClick={(event) => {
+                event.stopPropagation();
+                void openMessage(row.href!);
+              }}
+            />
+          )}
+          {row.stopId && <StopButton rootId={row.stopId} />}
         </span>
       ) : (
         <span />
@@ -101,11 +132,13 @@ export default function ProcessExplorer() {
     () => selectedActivity && `activity:${selectedActivity}`,
   );
   const [toggled, setToggled] = useState<ReadonlySet<string>>(() => new Set());
+  const workspaceSlug = useWorkspaceSlugOf();
 
   const { rows, treeData } = useMemo(
     () =>
       buildProcessTree({
         activities,
+        agentTitle: agentName,
         appProcesses: metrics?.processes ?? null,
         labels: {
           app: BRANDING_NAME,
@@ -122,8 +155,9 @@ export default function ProcessExplorer() {
         sort,
         topicTitle: topicName,
         totalMemoryMB,
+        workspaceSlug,
       }),
-    [activities, metrics, query, sort, t, totalMemoryMB],
+    [activities, metrics, query, sort, t, totalMemoryMB, workspaceSlug],
   );
 
   const expandedKeys = collectExpandable(treeData).filter(
@@ -220,6 +254,12 @@ export default function ProcessExplorer() {
               event.preventDefault();
               setSelected(node.key);
               showContextMenu([
+                {
+                  disabled: !row.href,
+                  key: 'open-message',
+                  label: t('backgroundActivity.openMessage'),
+                  onClick: () => row.href && void openMessage(row.href),
+                },
                 {
                   danger: true,
                   disabled: !row.stopId,

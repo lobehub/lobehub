@@ -5,6 +5,7 @@ import {
 } from '@lobechat/types';
 import debug from 'debug';
 
+import { resolveRunWorkspaceId } from '@/helpers/agentWorkspace';
 import { resolveEffectiveWorkingDirectory } from '@/helpers/effectiveWorkingDirectory';
 import { resolveClientLocalSandbox } from '@/helpers/localSandbox';
 import { type MCPToolCallResult } from '@/libs/mcp';
@@ -228,6 +229,7 @@ export class PluginTypesActionImpl {
             topicId ?? rootRuntimeOperationContext?.topicId,
             agentId ?? rootRuntimeOperationContext?.agentId,
           ),
+          workspaceId: resolveRunWorkspaceId(agentId ?? rootRuntimeOperationContext?.agentId),
         });
 
       log('[BuiltinToolCall] invoke:end', {

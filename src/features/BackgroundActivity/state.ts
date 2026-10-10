@@ -1,3 +1,4 @@
+import { AGENT_CHAT_TOPIC_URL, GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import { useSyncExternalStore } from 'react';
 
 import { isDesktop } from '@/const/version';
@@ -7,7 +8,10 @@ export type ProcessSnapshot = Awaited<
   ReturnType<typeof electronDevtoolsService.getManagedProcesses>
 >;
 export type ProcessRow = ProcessSnapshot['processes'][number];
-export interface Activity extends Pick<ProcessRow, 'rootId' | 'topicId' | 'agentId' | 'label'> {
+export interface Activity extends Pick<
+  ProcessRow,
+  'rootId' | 'topicId' | 'agentId' | 'groupId' | 'label' | 'messageId' | 'workspaceId'
+> {
   cpuPercent: number | null;
   memoryMB: number;
   processes: ProcessRow[];
@@ -23,6 +27,9 @@ export const groupActivities = (snapshot: ProcessSnapshot): Activity[] => {
         rootId: row.rootId,
         topicId: row.topicId,
         agentId: row.agentId,
+        groupId: row.groupId,
+        messageId: row.messageId,
+        workspaceId: row.workspaceId,
         label: row.label || row.name,
         memoryMB: 0,
         cpuPercent: null,
@@ -31,6 +38,7 @@ export const groupActivities = (snapshot: ProcessSnapshot): Activity[] => {
       };
       groups.set(row.rootId, group);
     }
+    group.messageId ??= row.messageId;
     group.memoryMB += row.memoryMB;
     if (row.cpuPercent !== null) group.cpuPercent = (group.cpuPercent ?? 0) + row.cpuPercent;
     group.processes.push(row);
@@ -46,6 +54,68 @@ export const groupActivities = (snapshot: ProcessSnapshot): Activity[] => {
           : 'normal';
   }
   return [...groups.values()];
+};
+
+export interface ActivityConversation {
+  activities: Activity[];
+  agentId?: string;
+  /** Unique per topic and owning agent; `shared` for activities no conversation owns. */
+  key: string;
+  topicId?: string;
+}
+
+/**
+ * Activities by the conversation that owns them. A group topic holds several
+ * member agents, each the owner of its own commands, so the owner is the topic
+ * AND the agent — a topic alone would file every member's commands under the
+ * first one. Unowned activities come last.
+ */
+export const groupByConversation = (activities: Activity[]): ActivityConversation[] => {
+  const conversations = new Map<string, ActivityConversation>();
+  for (const activity of activities) {
+    const { topicId } = activity;
+    const agentId = topicId ? activity.agentId : undefined;
+    const key = topicId ? (agentId ? `${topicId}:${agentId}` : topicId) : 'shared';
+    let conversation = conversations.get(key);
+    if (!conversation) {
+      conversation = { activities: [], agentId, key, topicId };
+      conversations.set(key, conversation);
+    }
+    conversation.activities.push(activity);
+  }
+  return [...conversations.values()].sort(
+    (a, b) => Number(a.topicId === undefined) - Number(b.topicId === undefined),
+  );
+};
+
+/** Workspace id → its URL slug, or undefined when the user cannot reach that workspace. */
+export type WorkspaceSlugOf = (workspaceId: string) => string | undefined;
+
+/**
+ * The conversation an activity belongs to, scrolled to the message that started
+ * it. A process outlives the scope it was launched from, so the path names that
+ * scope itself — the launching workspace's slug, or none for a personal run —
+ * and callers must navigate with `escape` rather than prefix the active one.
+ */
+export const activityLocation = (
+  {
+    agentId,
+    groupId,
+    messageId,
+    topicId,
+    workspaceId,
+  }: Pick<Activity, 'agentId' | 'groupId' | 'messageId' | 'topicId' | 'workspaceId'>,
+  slugOf: WorkspaceSlugOf,
+) => {
+  if (!topicId || (!groupId && !agentId)) return;
+  const slug = workspaceId ? slugOf(workspaceId) : undefined;
+  if (workspaceId && !slug) return;
+  const conversation = groupId
+    ? GROUP_CHAT_TOPIC_URL(groupId, topicId)
+    : AGENT_CHAT_TOPIC_URL(agentId!, topicId);
+  const path = slug ? `/${slug}${conversation}` : conversation;
+  const hash = messageId ? encodeURIComponent(messageId) : undefined;
+  return { hash, href: hash ? `${path}#${hash}` : path, path };
 };
 
 export const formatMemory = (mb: number) =>

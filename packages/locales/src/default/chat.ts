@@ -1,12 +1,17 @@
 export default {
+  'backgroundActivity.agent': 'Agent',
   'backgroundActivity.alertDesc': '{{name}} is using {{memory}} of memory and {{cpu}} CPU.',
+  'backgroundActivity.alertDescInTopic':
+    '{{label}} in <0>{{topic}}</0> is using {{memory}} of memory and {{cpu}} CPU.',
   'backgroundActivity.cpu': 'CPU',
   'backgroundActivity.details': 'View details',
   'backgroundActivity.empty': 'No background activity',
   'backgroundActivity.emptyDesc':
     'Dev servers, shells, and agents started from conversations appear here while they run.',
   'backgroundActivity.highUsage': 'High resource usage',
+  'backgroundActivity.highUsageByAgent': '“{{agent}}” is using too many resources',
   'backgroundActivity.memory': 'Memory',
+  'backgroundActivity.openMessage': 'Go to message',
   'backgroundActivity.processCount_one': '{{count}} process',
   'backgroundActivity.processCount_other': '{{count}} processes',
   'backgroundActivity.retry': 'Retry',

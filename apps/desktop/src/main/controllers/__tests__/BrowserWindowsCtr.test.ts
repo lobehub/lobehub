@@ -132,6 +132,22 @@ describe('BrowserWindowsCtr', () => {
     });
   });
 
+  describe('openInMainWindow', () => {
+    it('shows the main window and routes it to the given path, hash included', () => {
+      browserWindowsCtr.openInMainWindow({ path: '/agent/agt_1/tpc_1#msg_1' });
+      expect(mockShow).toHaveBeenCalled();
+      expect(mockBroadcast).toHaveBeenCalledWith('navigate', { path: '/agent/agt_1/tpc_1#msg_1' });
+    });
+
+    it('keeps an already-scoped path from being prefixed with the active workspace', () => {
+      browserWindowsCtr.openInMainWindow({ escape: true, path: '/acme/agent/agt_1/tpc_1' });
+      expect(mockBroadcast).toHaveBeenCalledWith('navigate', {
+        escape: true,
+        path: '/acme/agent/agt_1/tpc_1',
+      });
+    });
+  });
+
   describe('closeWindow', () => {
     it('should close the window with the given sender identifier', () => {
       const sender = {} as any;

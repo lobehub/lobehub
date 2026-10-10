@@ -1,14 +1,23 @@
 import type { AppProcessRow } from '@lobechat/electron-client-ipc';
 import type { TreeDataNode } from '@lobehub/ui/base-ui';
 
-import type { Activity, ProcessRow } from '../state';
+import {
+  type Activity,
+  activityLocation,
+  groupByConversation,
+  type ProcessRow,
+  type WorkspaceSlugOf,
+} from '../state';
 
 export type SortKey = 'cpu' | 'memory';
 
 export interface RowModel {
+  agentId?: string;
   appType?: string;
   cpu: number | null;
   cpuHot?: boolean;
+  /** In-app location of the message that started the activity. */
+  href?: string;
   kind: 'app' | 'activity' | 'conversation' | 'process' | 'section';
   label: string;
   memory: number;
@@ -33,12 +42,14 @@ export interface TreeLabels {
 
 export interface BuildTreeInput {
   activities: Activity[];
+  agentTitle: (id: string) => string | undefined;
   appProcesses: AppProcessRow[] | null;
   labels: TreeLabels;
   query: string;
   sort: SortKey;
   topicTitle: (id: string) => string | undefined;
   totalMemoryMB: number;
+  workspaceSlug: WorkspaceSlugOf;
 }
 
 export const SECTION_BACKGROUND = 'section:background';
@@ -106,12 +117,14 @@ const processDrafts = (processes: ProcessRow[]): Draft[] => {
 
 export const buildProcessTree = ({
   activities,
+  agentTitle,
   appProcesses,
   labels,
   query,
   sort,
   topicTitle,
   totalMemoryMB,
+  workspaceSlug,
 }: BuildTreeInput) => {
   const needle = query.trim().toLowerCase();
   const matches = (...values: (number | string | undefined)[]) =>
@@ -119,11 +132,12 @@ export const buildProcessTree = ({
     values.some((value) => value !== undefined && String(value).toLowerCase().includes(needle));
   const memoryLimit = Math.min(2048, totalMemoryMB * 0.15 || 2048);
 
-  const topics = [...new Set(activities.map((row) => row.topicId))];
-  const conversations: Draft[] = topics.flatMap((topicId) => {
-    const title = topicId ? (topicTitle(topicId) ?? labels.conversation) : labels.shared;
-    const children = activities
-      .filter((row) => row.topicId === topicId)
+  const conversations: Draft[] = groupByConversation(activities).flatMap((conversation) => {
+    const { activities: topicActivities, agentId, topicId } = conversation;
+    const agent = agentId && agentTitle(agentId);
+    const topic = topicId ? (topicTitle(topicId) ?? labels.conversation) : labels.shared;
+    const title = agent ? `${agent} / ${topic}` : topic;
+    const children = topicActivities
       .filter((row) => matches(title, row.label, ...row.processes.flatMap((p) => [p.name, p.pid])))
       .map<Draft>((activity) => {
         const hot = activity.severity !== 'normal';
@@ -133,6 +147,7 @@ export const buildProcessTree = ({
           row: {
             cpu: activity.cpuPercent,
             cpuHot: hot && (activity.cpuPercent ?? 0) >= 200,
+            href: activityLocation(activity, workspaceSlug)?.href,
             kind: 'activity',
             label: activity.label ?? '',
             memory: activity.memoryMB,
@@ -149,8 +164,14 @@ export const buildProcessTree = ({
     return [
       {
         children,
-        key: `conversation:${topicId ?? 'shared'}`,
-        row: { ...sum(children.map((c) => c.row)), kind: 'conversation', label: title, topicId },
+        key: `conversation:${conversation.key}`,
+        row: {
+          ...sum(children.map((c) => c.row)),
+          agentId,
+          kind: 'conversation',
+          label: title,
+          topicId,
+        },
       },
     ];
   });
