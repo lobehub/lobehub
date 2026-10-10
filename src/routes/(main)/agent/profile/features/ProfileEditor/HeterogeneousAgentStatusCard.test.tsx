@@ -55,120 +55,130 @@ vi.mock('@lobechat/heterogeneous-agents/client', () => ({
   isRemoteHeterogeneousType: (type: string) => ['openclaw', 'hermes'].includes(type),
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  CopyButton: () => <button type="button">Copy</button>,
-  Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  Icon: () => <span>Icon</span>,
-  Input: ({
-    onBlur,
-    onChange,
-    onKeyDown,
-    placeholder,
-    ref,
-    value,
-  }: {
-    onBlur?: () => void;
-    onChange?: (event: { target: { value: string } }) => void;
-    onKeyDown?: (event: { key: string; preventDefault: () => void }) => void;
-    placeholder?: string;
-    ref?: React.Ref<HTMLInputElement>;
-    value?: string;
-  }) => (
-    <input
-      placeholder={placeholder}
-      ref={ref}
-      value={value}
-      onBlur={onBlur}
-      onChange={(event) => {
-        onChange?.({ target: { value: event.target.value } });
-      }}
-      onKeyDown={(event) => {
-        onKeyDown?.({ key: event.key, preventDefault: () => event.preventDefault() });
-      }}
-    />
-  ),
-  Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-  TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ActionIcon: ({
-    'aria-label': ariaLabel,
-    className,
-    onClick,
-  }: {
-    'aria-label'?: string;
-    'className'?: string;
-    'onClick'?: () => void;
-  }) => (
-    <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
-      Refresh
-    </button>
-  ),
-  Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
-    <button type="button" onClick={onClick}>
-      {children}
-    </button>
-  ),
-  Segmented: ({
-    disabled,
-    onChange,
-    options,
-  }: {
-    disabled?: boolean;
-    onChange?: (value: string) => void;
-    options: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
-  }) => (
-    <div>
-      {options.map((option) => (
-        <button
-          disabled={disabled || option.disabled}
-          key={option.value}
-          type="button"
-          onClick={() => onChange?.(option.value)}
-        >
-          {option.label}
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      CopyButton: () => <button type="button">Copy</button>,
+      Flexbox: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      Icon: () => <span>Icon</span>,
+      Input: ({
+        onBlur,
+        onChange,
+        onKeyDown,
+        placeholder,
+        ref,
+        value,
+      }: {
+        onBlur?: () => void;
+        onChange?: (event: { target: { value: string } }) => void;
+        onKeyDown?: (event: { key: string; preventDefault: () => void }) => void;
+        placeholder?: string;
+        ref?: React.Ref<HTMLInputElement>;
+        value?: string;
+      }) => (
+        <input
+          placeholder={placeholder}
+          ref={ref}
+          value={value}
+          onBlur={onBlur}
+          onChange={(event) => {
+            onChange?.({ target: { value: event.target.value } });
+          }}
+          onKeyDown={(event) => {
+            onKeyDown?.({ key: event.key, preventDefault: () => event.preventDefault() });
+          }}
+        />
+      ),
+      Tooltip: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+      TooltipGroup: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      ActionIcon: ({
+        'aria-label': ariaLabel,
+        className,
+        onClick,
+      }: {
+        'aria-label'?: string;
+        'className'?: string;
+        'onClick'?: () => void;
+      }) => (
+        <button aria-label={ariaLabel} className={className} type="button" onClick={onClick}>
+          Refresh
         </button>
-      ))}
-    </div>
-  ),
-  Select: ({
-    onChange,
-    options,
-    value,
-  }: {
-    onChange?: (value: string) => void;
-    options?: Array<{
-      disabled?: boolean;
-      label?: ReactNode;
-      options?: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
-      value?: string;
-    }>;
-    value?: string;
-  }) => (
-    <select value={value} onChange={(event) => onChange?.(event.target.value)}>
-      {options?.flatMap((option) =>
-        option.options
-          ? option.options.map((child) => (
-              <option disabled={child.disabled} key={child.value} value={child.value}>
-                {child.label}
-              </option>
-            ))
-          : option.value
-            ? [
-                <option disabled={option.disabled} key={option.value} value={option.value}>
-                  {option.label}
-                </option>,
-              ]
-            : [],
-      )}
-    </select>
-  ),
-  Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-  Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-}));
+      ),
+      Button: ({ children, onClick }: { children?: ReactNode; onClick?: () => void }) => (
+        <button type="button" onClick={onClick}>
+          {children}
+        </button>
+      ),
+      Segmented: ({
+        disabled,
+        onChange,
+        options,
+      }: {
+        disabled?: boolean;
+        onChange?: (value: string) => void;
+        options: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
+      }) => (
+        <div>
+          {options.map((option) => (
+            <button
+              disabled={disabled || option.disabled}
+              key={option.value}
+              type="button"
+              onClick={() => onChange?.(option.value)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      ),
+      Select: ({
+        onChange,
+        options,
+        value,
+      }: {
+        onChange?: (value: string) => void;
+        options?: Array<{
+          disabled?: boolean;
+          label?: ReactNode;
+          options?: Array<{ disabled?: boolean; label: ReactNode; value: string }>;
+          value?: string;
+        }>;
+        value?: string;
+      }) => (
+        <select value={value} onChange={(event) => onChange?.(event.target.value)}>
+          {options?.flatMap((option) =>
+            option.options
+              ? option.options.map((child) => (
+                  <option disabled={child.disabled} key={child.value} value={child.value}>
+                    {child.label}
+                  </option>
+                ))
+              : option.value
+                ? [
+                    <option disabled={option.disabled} key={option.value} value={option.value}>
+                      {option.label}
+                    </option>,
+                  ]
+                : [],
+          )}
+        </select>
+      ),
+      Tag: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+      Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

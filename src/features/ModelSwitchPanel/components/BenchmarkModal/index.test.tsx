@@ -8,12 +8,46 @@ import { describe, expect, it, vi } from 'vitest';
 
 import BenchmarkModalContent from './index';
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createStaticStyles: () =>
-    new Proxy({}, { get: (_target, prop: string) => prop }) as Record<string, string>,
-  cssVar: new Proxy({}, { get: (_target, token) => `var(--${String(token)})` }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createStaticStyles: () =>
+        new Proxy({}, { get: (_target, prop: string) => prop }) as Record<string, string>,
+      cssVar: new Proxy({}, { get: (_target, token) => `var(--${String(token)})` }),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
+        <span>
+          <span data-testid={'tooltip'}>{title}</span>
+          {children}
+        </span>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createModal: vi.fn(),
+      DropdownMenu: ({ children, items }: { children: ReactNode; items: MockMenuItem[] }) => (
+        <div>
+          {children}
+          {items.map((item) => (
+            <button key={item.key} type={'button'} onClick={item.onClick}>
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 // recharts needs a measured container — stub the chart with its data flattened to text nodes
 vi.mock('@lobehub/charts', () => ({
@@ -30,36 +64,11 @@ vi.mock('@lobehub/charts', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Tooltip: ({ children, title }: { children: ReactNode; title?: ReactNode }) => (
-    <span>
-      <span data-testid={'tooltip'}>{title}</span>
-      {children}
-    </span>
-  ),
-}));
-
 interface MockMenuItem {
   key: string;
   label: ReactNode;
   onClick: () => void;
 }
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createModal: vi.fn(),
-  DropdownMenu: ({ children, items }: { children: ReactNode; items: MockMenuItem[] }) => (
-    <div>
-      {children}
-      {items.map((item) => (
-        <button key={item.key} type={'button'} onClick={item.onClick}>
-          {item.label}
-        </button>
-      ))}
-    </div>
-  ),
-}));
 
 // hoisted so the vi.mock factories below can reference it safely
 const { translate } = vi.hoisted(() => {

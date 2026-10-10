@@ -62,16 +62,26 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  confirmModal: ui.confirmModal,
-  toast: { error: ui.error, success: ui.success },
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  copyToClipboard: vi.fn(),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      confirmModal: ui.confirmModal,
+      toast: { error: ui.error, success: ui.success },
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      copyToClipboard: vi.fn(),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 // ─── fixtures ─────────────────────────────────────────────────────────────────
 

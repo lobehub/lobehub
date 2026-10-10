@@ -66,103 +66,113 @@ const mocks = vi.hoisted(() => ({
 const serializeSize = (size: unknown) =>
   size === undefined ? '' : typeof size === 'string' ? size : JSON.stringify(size);
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  copyToClipboard: vi.fn(),
-  DropdownMenu: ({
-    children,
-    items,
-  }: {
-    children?: ReactNode;
-    items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
-  }) => (
-    <>
-      {children}
-      {items?.map((item) =>
-        item.type === 'divider' ? null : (
-          <button key={item.key} onClick={item.onClick}>
-            {item.label}
-          </button>
-        ),
-      )}
-    </>
-  ),
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ActionIcon: ({
-    disabled,
-    icon,
-    onClick,
-    size,
-    title,
-  }: {
-    disabled?: boolean;
-    icon?: { name?: string };
-    onClick?: () => void;
-    size?: unknown;
-    title?: string;
-  }) => (
-    <button
-      data-icon={icon?.name}
-      data-size={serializeSize(size)}
-      data-testid="header-action-icon"
-      disabled={disabled}
-      title={title}
-      onClick={onClick}
-    >
-      {title}
-    </button>
-  ),
-  FloatingPanel: ({
-    actions,
-    children,
-    height,
-    minHeight,
-    minWidth,
-    open,
-    placement,
-    resizable = true,
-    styles,
-    title,
-    width,
-  }: {
-    actions?: ReactNode;
-    children?: ReactNode;
-    height?: unknown;
-    minHeight?: number;
-    minWidth?: number;
-    open?: boolean;
-    placement?: string;
-    resizable?: boolean;
-    styles?: { body?: CSSProperties; panel?: CSSProperties; title?: CSSProperties };
-    title?: ReactNode;
-    width?: unknown;
-  }) =>
-    open ? (
-      <div
-        data-height={serializeSize(height)}
-        data-min-height={serializeSize(minHeight)}
-        data-min-width={serializeSize(minWidth)}
-        data-panel-background={serializeSize(styles?.panel?.background)}
-        data-placement={placement}
-        data-resizable={String(resizable)}
-        data-testid="topic-panel"
-        data-width={serializeSize(width)}
-        style={styles?.panel}
-      >
-        <div data-testid="panel-title-slot" style={styles?.title}>
-          {title}
-        </div>
-        <div data-testid="panel-actions-slot">{actions}</div>
-        <button data-testid="panel-close-icon" />
-        <div data-testid="panel-body-slot" style={styles?.body}>
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      copyToClipboard: vi.fn(),
+      DropdownMenu: ({
+        children,
+        items,
+      }: {
+        children?: ReactNode;
+        items?: { key: string; label?: ReactNode; onClick?: () => void; type?: string }[];
+      }) => (
+        <>
           {children}
-        </div>
-      </div>
-    ) : null,
-}));
+          {items?.map((item) =>
+            item.type === 'divider' ? null : (
+              <button key={item.key} onClick={item.onClick}>
+                {item.label}
+              </button>
+            ),
+          )}
+        </>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      ActionIcon: ({
+        disabled,
+        icon,
+        onClick,
+        size,
+        title,
+      }: {
+        disabled?: boolean;
+        icon?: { name?: string };
+        onClick?: () => void;
+        size?: unknown;
+        title?: string;
+      }) => (
+        <button
+          data-icon={icon?.name}
+          data-size={serializeSize(size)}
+          data-testid="header-action-icon"
+          disabled={disabled}
+          title={title}
+          onClick={onClick}
+        >
+          {title}
+        </button>
+      ),
+      FloatingPanel: ({
+        actions,
+        children,
+        height,
+        minHeight,
+        minWidth,
+        open,
+        placement,
+        resizable = true,
+        styles,
+        title,
+        width,
+      }: {
+        actions?: ReactNode;
+        children?: ReactNode;
+        height?: unknown;
+        minHeight?: number;
+        minWidth?: number;
+        open?: boolean;
+        placement?: string;
+        resizable?: boolean;
+        styles?: { body?: CSSProperties; panel?: CSSProperties; title?: CSSProperties };
+        title?: ReactNode;
+        width?: unknown;
+      }) =>
+        open ? (
+          <div
+            data-height={serializeSize(height)}
+            data-min-height={serializeSize(minHeight)}
+            data-min-width={serializeSize(minWidth)}
+            data-panel-background={serializeSize(styles?.panel?.background)}
+            data-placement={placement}
+            data-resizable={String(resizable)}
+            data-testid="topic-panel"
+            data-width={serializeSize(width)}
+            style={styles?.panel}
+          >
+            <div data-testid="panel-title-slot" style={styles?.title}>
+              {title}
+            </div>
+            <div data-testid="panel-actions-slot">{actions}</div>
+            <button data-testid="panel-close-icon" />
+            <div data-testid="panel-body-slot" style={styles?.body}>
+              {children}
+            </div>
+          </div>
+        ) : null,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('next/dynamic', () => ({
   default: () =>
@@ -369,7 +379,7 @@ describe('TopicChatDrawer', () => {
 
     expect(getByTestId('topic-panel')).toHaveAttribute(
       'data-panel-background',
-      'var(--ant-color-bg-container)',
+      'var(--lobe-color-bg-container)',
     );
   });
 

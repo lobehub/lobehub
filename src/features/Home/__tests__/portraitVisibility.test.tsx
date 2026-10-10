@@ -214,7 +214,8 @@ describe('Home portrait visibility', () => {
 describe('Home input banner queue', () => {
   it('reveals the next available segment after dismissing the current one', async () => {
     vi.resetModules();
-    vi.doMock('@lobehub/ui/base-ui', () => ({
+    vi.doMock('@lobehub/ui', async (importOriginal) => ({
+      ...(await importOriginal<Record<string, unknown>>()),
       ActionIcon: ({
         onClick,
         title,

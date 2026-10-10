@@ -12,52 +12,62 @@ import WorkflowCollapse from './WorkflowCollapse';
 let mockIsGenerating = true;
 let mockDbMessages: { createdAt?: Date; id: string; updatedAt?: Date }[] = [];
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
-    IconComponent ? (
-      <div
-        data-icon={IconComponent.displayName || IconComponent.name || 'unknown'}
-        data-testid="icon"
-      >
-        <IconComponent />
-      </div>
-    ) : (
-      <div />
-    ),
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ...(await import('~base-ui-stubs')).baseUiStubs,
-  Accordion: ({
-    items,
-    onValueChange,
-    value,
-  }: {
-    items?: { action?: ReactNode; children?: ReactNode; key: string; title?: ReactNode }[];
-    onValueChange?: (keys: string[]) => void;
-    value?: string[];
-  }) => {
-    const isExpanded = (value ?? []).includes('workflow');
-    return (
-      <div data-expanded-keys={JSON.stringify(value ?? [])} data-testid="workflow-accordion">
-        <button
-          aria-label="toggle-accordion-header"
-          type="button"
-          onClick={() => onValueChange?.(isExpanded ? [] : ['workflow'])}
-        />
-        {items?.map((item) => (
-          <div key={item.key}>
-            <div>{item.title}</div>
-            <div>{item.action}</div>
-            <div>{item.children}</div>
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Icon: ({ icon: IconComponent }: { icon?: ComponentType }) =>
+        IconComponent ? (
+          <div
+            data-icon={IconComponent.displayName || IconComponent.name || 'unknown'}
+            data-testid="icon"
+          >
+            <IconComponent />
           </div>
-        ))}
-      </div>
-    );
-  },
-}));
+        ) : (
+          <div />
+        ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      ...(await import('~base-ui-stubs')).baseUiStubs,
+      Accordion: ({
+        items,
+        onValueChange,
+        value,
+      }: {
+        items?: { action?: ReactNode; children?: ReactNode; key: string; title?: ReactNode }[];
+        onValueChange?: (keys: string[]) => void;
+        value?: string[];
+      }) => {
+        const isExpanded = (value ?? []).includes('workflow');
+        return (
+          <div data-expanded-keys={JSON.stringify(value ?? [])} data-testid="workflow-accordion">
+            <button
+              aria-label="toggle-accordion-header"
+              type="button"
+              onClick={() => onValueChange?.(isExpanded ? [] : ['workflow'])}
+            />
+            {items?.map((item) => (
+              <div key={item.key}>
+                <div>{item.title}</div>
+                <div>{item.action}</div>
+                <div>{item.children}</div>
+              </div>
+            ))}
+          </div>
+        );
+      },
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('motion/react', () => ({
   AnimatePresence: ({ children }: { children?: ReactNode }) => <>{children}</>,

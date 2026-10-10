@@ -18,57 +18,67 @@ const userState = {
 
 const mockConfirmModal = vi.fn();
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Select: ({
-    classNames,
-    options,
-  }: {
-    classNames?: { value?: string };
-    options: { label: ReactNode; value: string }[];
-  }) => (
-    <div data-testid="scope-select" data-value-class={classNames?.value}>
-      {options.map((option) => (
-        <div data-testid={`scope-option-${option.value}`} key={option.value}>
-          {option.label}
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Select: ({
+        classNames,
+        options,
+      }: {
+        classNames?: { value?: string };
+        options: { label: ReactNode; value: string }[];
+      }) => (
+        <div data-testid="scope-select" data-value-class={classNames?.value}>
+          {options.map((option) => (
+            <div data-testid={`scope-option-${option.value}`} key={option.value}>
+              {option.label}
+            </div>
+          ))}
         </div>
-      ))}
-    </div>
-  ),
-  Tag: ({ children }: { children?: ReactNode }) => (
-    <span data-testid="personal-tag">{children}</span>
-  ),
-  Text: ({
-    children,
-    ellipsis,
-  }: {
-    children?: ReactNode;
-    ellipsis?: boolean | { tooltip?: boolean | string };
-  }) => (
-    <span
-      title={
-        typeof ellipsis === 'object' && typeof ellipsis.tooltip === 'string'
-          ? ellipsis.tooltip
-          : undefined
-      }
-    >
-      {children}
-    </span>
-  ),
-  confirmModal: (...args: unknown[]) => mockConfirmModal(...args),
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createStaticStyles: () => ({
-    backButton: 'backButton',
-    card: 'card',
-    emptyRow: 'emptyRow',
-    rowIcon: 'rowIcon',
-    rowIdentity: 'rowIdentity',
-    scopeValue: 'scopeValue',
-  }),
-}));
+      ),
+      Tag: ({ children }: { children?: ReactNode }) => (
+        <span data-testid="personal-tag">{children}</span>
+      ),
+      Text: ({
+        children,
+        ellipsis,
+      }: {
+        children?: ReactNode;
+        ellipsis?: boolean | { tooltip?: boolean | string };
+      }) => (
+        <span
+          title={
+            typeof ellipsis === 'object' && typeof ellipsis.tooltip === 'string'
+              ? ellipsis.tooltip
+              : undefined
+          }
+        >
+          {children}
+        </span>
+      ),
+      confirmModal: (...args: unknown[]) => mockConfirmModal(...args),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createStaticStyles: () => ({
+        backButton: 'backButton',
+        card: 'card',
+        emptyRow: 'emptyRow',
+        rowIcon: 'rowIcon',
+        rowIdentity: 'rowIdentity',
+        scopeValue: 'scopeValue',
+      }),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

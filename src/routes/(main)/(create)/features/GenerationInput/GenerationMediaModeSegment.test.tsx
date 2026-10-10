@@ -20,33 +20,43 @@ const componentMocks = vi.hoisted(() => ({
   segmented: undefined as SegmentedCapture | undefined,
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({ title }: { title?: ReactNode }) => (
-    <button aria-label={typeof title === 'string' ? title : 'action'} type="button" />
-  ),
-  Segmented: (props: SegmentedCapture) => {
-    componentMocks.segmented = props;
-    return (
-      <div data-testid="mode-toggle-group">
-        {props.options?.map((option) => (
-          <span key={option.value}>{option.icon}</span>
-        ))}
-      </div>
-    );
-  },
-  Select: () => <div data-testid="mode-select" />,
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  createStaticStyles: () => ({
-    heroSelect: 'hero-select',
-    heroText: 'hero-text',
-    toolbarItem: 'toolbar-item',
-    toolbarLabel: 'toolbar-label',
-  }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      ActionIcon: ({ title }: { title?: ReactNode }) => (
+        <button aria-label={typeof title === 'string' ? title : 'action'} type="button" />
+      ),
+      Segmented: (props: SegmentedCapture) => {
+        componentMocks.segmented = props;
+        return (
+          <div data-testid="mode-toggle-group">
+            {props.options?.map((option) => (
+              <span key={option.value}>{option.icon}</span>
+            ))}
+          </div>
+        );
+      },
+      Select: () => <div data-testid="mode-select" />,
+    }),
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      createStaticStyles: () => ({
+        heroSelect: 'hero-select',
+        heroText: 'hero-text',
+        toolbarItem: 'toolbar-item',
+        toolbarLabel: 'toolbar-label',
+      }),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => componentMocks.navigate,

@@ -149,81 +149,91 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('@lobehub/ui', async (importOriginal) => {
-  return {
-    ...(await importOriginal<object>()),
-    ActionIcon: ({
-      disabled,
-      onClick,
-      title,
-    }: {
-      disabled?: boolean;
-      onClick?: () => void;
-      title?: string;
-    }) => (
-      <button
-        aria-label={title}
-        data-testid={title ? 'calendar' : 'refresh'}
-        disabled={disabled}
-        type="button"
-        onClick={onClick}
-      />
-    ),
-    Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
-      <div className={className}>{children}</div>
-    ),
-    Icon: () => <svg />,
-    // Render the popover content unconditionally so window rows are assertable
-    // without driving the open/close interaction.
-    Popover: ({
-      children,
-      content,
-      onOpenChange,
-    }: {
-      children?: ReactNode;
-      content?: ReactNode;
-      onOpenChange?: (open: boolean) => void;
-    }) => (
-      <div>
-        <div data-testid="popover-content">{content}</div>
-        <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
-          {children}
-        </div>
-      </div>
-    ),
-    Skeleton: { Button: () => <div data-testid="skeleton" /> },
-    Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
-    Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  };
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => {
+      return {
+        ...(await importOriginal<object>()),
+        ActionIcon: ({
+          disabled,
+          onClick,
+          title,
+        }: {
+          disabled?: boolean;
+          onClick?: () => void;
+          title?: string;
+        }) => (
+          <button
+            aria-label={title}
+            data-testid={title ? 'calendar' : 'refresh'}
+            disabled={disabled}
+            type="button"
+            onClick={onClick}
+          />
+        ),
+        Flexbox: ({ children, className }: { children?: ReactNode; className?: string }) => (
+          <div className={className}>{children}</div>
+        ),
+        Icon: () => <svg />,
+        // Render the popover content unconditionally so window rows are assertable
+        // without driving the open/close interaction.
+        Popover: ({
+          children,
+          content,
+          onOpenChange,
+        }: {
+          children?: ReactNode;
+          content?: ReactNode;
+          onOpenChange?: (open: boolean) => void;
+        }) => (
+          <div>
+            <div data-testid="popover-content">{content}</div>
+            <div data-testid="quota-trigger" onClick={() => onOpenChange?.(true)}>
+              {children}
+            </div>
+          </div>
+        ),
+        Skeleton: { Button: () => <div data-testid="skeleton" /> },
+        Text: ({ children }: { children?: ReactNode }) => <span>{children}</span>,
+        Tooltip: ({ children }: { children?: ReactNode }) => <>{children}</>,
+      };
+    },
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      ActionIcon: ({
+        onClick,
+        title,
+        disabled,
+      }: {
+        disabled?: boolean;
+        onClick?: (e: React.MouseEvent) => void;
+        title?: string;
+      }) => (
+        <button
+          aria-label={title}
+          data-testid={title ? 'calendar' : 'refresh'}
+          disabled={disabled}
+          type="button"
+          onClick={onClick}
+        />
+      ),
+      confirmModal: confirmModalMock,
+      Skeleton: ({ height }: { height?: number }) => (
+        <div data-height={height} data-testid="skeleton" />
+      ),
+      toast: {
+        error: toastErrorMock,
+        success: toastSuccessMock,
+      },
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
 });
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({
-    onClick,
-    title,
-    disabled,
-  }: {
-    disabled?: boolean;
-    onClick?: (e: React.MouseEvent) => void;
-    title?: string;
-  }) => (
-    <button
-      aria-label={title}
-      data-testid={title ? 'calendar' : 'refresh'}
-      disabled={disabled}
-      type="button"
-      onClick={onClick}
-    />
-  ),
-  confirmModal: confirmModalMock,
-  Skeleton: ({ height }: { height?: number }) => (
-    <div data-height={height} data-testid="skeleton" />
-  ),
-  toast: {
-    error: toastErrorMock,
-    success: toastSuccessMock,
-  },
-}));
 
 const claudeSnapshot = (
   overrides: Partial<ElectronClientIpcModule.ClaudeCodeQuotaSnapshot> = {},

@@ -13,45 +13,54 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   isDesktop: true,
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  createStaticStyles: () => ({
-    card: 'card',
-    key: 'key',
-    row: 'row',
-    value: 'value',
-  }),
-  cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
-  cssVar: {
-    colorBgContainer: 'var(--color-bg-container)',
-    colorBorderSecondary: 'var(--color-border-secondary)',
-    colorTextSecondary: 'var(--color-text-secondary)',
-    fontFamilyCode: 'monospace',
-  },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      createStaticStyles: () => ({
+        card: 'card',
+        key: 'key',
+        row: 'row',
+        value: 'value',
+      }),
+      cx: (...args: unknown[]) => args.filter(Boolean).join(' '),
+      cssVar: {
+        colorBgContainer: 'var(--color-bg-container)',
+        colorBorderSecondary: 'var(--color-border-secondary)',
+        colorTextSecondary: 'var(--color-text-secondary)',
+        fontFamilyCode: 'monospace',
+      },
+    }),
+    () => ({
+      ActionIcon: () => null,
+      Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
+      Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      Icon: () => null,
+      Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
+      Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+      Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+    }),
+    () => ({
+      Tabs: () => null,
+      Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
+      ToggleGroup: () => null,
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  ActionIcon: () => null,
-  Center: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Empty: ({ description }: { description?: ReactNode }) => <div>{description}</div>,
-  Flexbox: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Icon: () => null,
-  Image: ({ alt, src }: { alt?: string; src?: string }) => <img alt={alt} src={src} />,
-  Markdown: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
-}));
-
-vi.mock('@lobehub/ui', () => ({
-  Tabs: () => null,
-  Text: ({ children }: { children: ReactNode }) => <span>{children}</span>,
-  ToggleGroup: () => null,
 }));
 
 vi.mock('@/components/CodeEditorPane', () => ({

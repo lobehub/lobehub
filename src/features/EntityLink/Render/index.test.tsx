@@ -20,23 +20,33 @@ vi.mock('@lobechat/const', async (importOriginal) => ({
   },
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
-    <button {...rest} aria-label={title} type="button" onClick={onClick} />
-  ),
-}));
-
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  // Keep content mounted after dismissal to model the popover's exit animation.
-  Popover: ({ children, content, onOpenChange }: any) => (
-    <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
-      {children}
-      {content}
-    </div>
-  ),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      ActionIcon: ({ icon: _icon, onClick, title, ...rest }: any) => (
+        <button {...rest} aria-label={title} type="button" onClick={onClick} />
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      // Keep content mounted after dismissal to model the popover's exit animation.
+      Popover: ({ children, content, onOpenChange }: any) => (
+        <div onMouseEnter={() => onOpenChange?.(true)} onMouseLeave={() => onOpenChange?.(false)}>
+          {children}
+          {content}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 // `enableMessageLinkIcon` is read via useUserStore(selector). We drive the
 // selector's return value through this module-level flag so each case can flip
