@@ -163,7 +163,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     if (!writeQueue) return;
     const known = indexed.get(scope) ?? new Set<string>();
     indexed.set(scope, known);
-    if (known.has(queryKey) === present) return;
+    // `known` only holds the keys THIS instance wrote. A row an earlier session
+    // persisted is absent from it yet still listed in the index, so an addition
+    // already made needs no second write, but a removal must always reach the
+    // index — the updater leaves it alone when the key is genuinely gone.
+    if (present && known.has(queryKey)) return;
     if (present) known.add(queryKey);
     else known.delete(queryKey);
     writeQueue.update(indexKey(scope), (current) => {

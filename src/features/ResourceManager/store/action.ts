@@ -125,6 +125,12 @@ export class ResourceManagerStoreActionImpl {
   readonly #recentSearchScope = new WeakMap<string[], string>();
   /** Recency lists whose persisted keys are already folded in. */
   readonly #seededRecentSearches = new WeakSet<string[]>();
+  /**
+   * The sidebar search entry on screen, if any. The sync driver revalidates
+   * only mounted queries, so this is the one entry whose head a refresh can
+   * repair (see `collapseHierarchySearch`).
+   */
+  #activeHierarchySearchKey?: string;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
     void _api;
@@ -228,16 +234,25 @@ export class ResourceManagerStoreActionImpl {
    * would linger in that tail; dropping the loaded pages first means the head
    * that comes back is the only thing left to show.
    *
-   * A query an earlier session persisted is in neither memory nor the SWR
-   * cache, so neither the collapse loop nor `revalidateReplica` reaches it, and
-   * a revisit would paint the pre-mutation hit until the network answered.
-   * Dropping its stored row extends the same guarantee to it: the next visit
-   * has nothing stale to hydrate.
+   * Only the entry on screen gets that treatment. The driver revalidates just
+   * mounted queries, so every other entry — a search left behind in memory, or
+   * one only an earlier session had persisted — would keep its stale head
+   * forever (and offline, indefinitely). Those are dropped outright: a revisit
+   * then has nothing stale to hydrate.
    */
   collapseHierarchySearch = async (): Promise<void> => {
     const loaded = new Set(Object.keys(this.#get().hierarchySearchEntries));
-    for (const key of loaded) this.#hierarchySearch.collapse(key);
+    const active = this.#activeHierarchySearchKey;
+    for (const key of loaded) {
+      if (key === active) this.#hierarchySearch.collapse(key);
+      else this.#hierarchySearch.remove(key);
+    }
+
+    const scope = hierarchySearchResource.scope.get();
     const persisted = await readReplicaStoredKeys(hierarchySearchResource);
+    // The identity can change while the index is read; those rows are not ours
+    // to touch, and `remove` resolves against the *current* scope.
+    if (hierarchySearchResource.scope.get() !== scope) return;
     for (const key of persisted) {
       if (!loaded.has(key)) this.#hierarchySearch.remove(key);
     }
@@ -550,6 +565,16 @@ export class ResourceManagerStoreActionImpl {
           hierarchySearchResource,
         );
       }
+    }, [key]);
+    // The driver revalidates only mounted queries, so remember which entry the
+    // sidebar is showing: `collapseHierarchySearch` collapses that one's head
+    // (the refetch repairs it) and drops the heads of the rest.
+    useLayoutEffect(() => {
+      if (!key) return;
+      this.#activeHierarchySearchKey = key;
+      return () => {
+        if (this.#activeHierarchySearchKey === key) this.#activeHierarchySearchKey = undefined;
+      };
     }, [key]);
     return this.#hierarchySearch.useSync(params);
   };

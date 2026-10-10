@@ -452,6 +452,20 @@ describe('ResourceManager search replicas', () => {
     expect(remove).not.toHaveBeenCalledWith(
       expect.objectContaining({ queryKey: evicted('fresh') }),
     );
+
+    // The evicted keys must leave the persisted index too: they were never
+    // written by this instance, and a leftover entry would survive every reload.
+    await waitFor(async () => {
+      const index = await explorerSearchResource.storage!.get({
+        queryKey: REPLICA_INDEX_KEY,
+        scope,
+      });
+      const stored = (index?.data as unknown as string[] | undefined) ?? [];
+      expect(stored).toHaveLength(MAX_RECENT_SEARCHES);
+      for (const q of previous.slice(0, previous.length - MAX_RECENT_SEARCHES + 1)) {
+        expect(stored).not.toContain(evicted(q));
+      }
+    });
   });
 
   it('drops a sidebar search an earlier session persisted when the tree changes', async () => {
@@ -493,5 +507,75 @@ describe('ResourceManager search replicas', () => {
         await hierarchySearchResource.storage!.get({ queryKey: staleKey, scope }),
       ).toBeUndefined();
     });
+  });
+
+  it('drops a search left behind in memory, keeping only the on-screen entry collapsible', async () => {
+    fetchSpy.mockImplementation(({ q }: { q?: string }) =>
+      Promise.resolve(page([item(`${q}-hit`)], 1)),
+    );
+
+    const leftParams: HierarchySearchParams = {
+      libraryId: 'kb-1',
+      pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+      q: 'left',
+    };
+    const shownParams: HierarchySearchParams = {
+      libraryId: 'kb-1',
+      pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+      q: 'shown',
+    };
+
+    const hook = renderHook(
+      (props: { q: string }) =>
+        useResourceManagerStore((s) => s.useFetchHierarchySearch)({
+          libraryId: 'kb-1',
+          pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+          q: props.q,
+        }),
+      { initialProps: { q: 'left' }, wrapper },
+    );
+
+    await waitFor(() => expect(ids(hierarchyEntry(leftParams))).toEqual(['left-hit']));
+
+    // Searching again leaves the first query in memory but with no mounted
+    // query, so nothing would ever revalidate its head.
+    hook.rerender({ q: 'shown' });
+    await waitFor(() => expect(ids(hierarchyEntry(shownParams))).toEqual(['shown-hit']));
+    expect(hierarchyEntry(leftParams)).toBeDefined();
+
+    await act(async () => {
+      await useResourceManagerStore.getState().collapseHierarchySearch();
+    });
+
+    expect(hierarchyEntry(leftParams)).toBeUndefined();
+    expect(hierarchyEntry(shownParams)).toBeDefined();
+  });
+
+  it('leaves the new scope alone when the identity changes while the index is read', async () => {
+    const staleParams: HierarchySearchParams = {
+      libraryId: 'kb-1',
+      pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+      q: 'stale',
+    };
+    const staleKey = hierarchySearchResource.storageKey(staleParams);
+    const previousScope = scope;
+
+    const remove = vi.spyOn(hierarchySearchResource.storage!, 'remove');
+    vi.spyOn(hierarchySearchResource.storage!, 'get').mockImplementation(async (key) => {
+      if (key.queryKey === REPLICA_INDEX_KEY) {
+        // The user switches workspaces while the index row is in flight.
+        useScope(`${previousScope}-next`);
+        return { data: [staleKey], updatedAt: 1 };
+      }
+      return undefined;
+    });
+
+    await act(async () => {
+      await useResourceManagerStore.getState().collapseHierarchySearch();
+    });
+
+    // The keys belong to the scope that was read; `remove` would resolve them
+    // against the new one, so the whole cleanup must be abandoned.
+    expect(remove).not.toHaveBeenCalled();
   });
 });

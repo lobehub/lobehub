@@ -50,7 +50,7 @@ const createMemoryStorage = (delays: Record<string, number> = {}) => {
       rows.set(`${scope}|${queryKey}`, projection);
     },
   };
-  return { rows, storage, writes };
+  return { indexRows, rows, storage, writes };
 };
 
 const setup = ({
@@ -387,6 +387,23 @@ describe('createReplicaSlice', () => {
         await v2.slice.hydrate({ id: 'a' });
       });
       expect(v2.store.getState().lists.a).toBeUndefined();
+    });
+  });
+
+  describe('persisted index', () => {
+    it('removes a key this instance never wrote from the stored index', async () => {
+      const storage = createMemoryStorage();
+      // An earlier session persisted this row and listed it in the index. This
+      // instance has no memory of the key — the eviction / invalidation case
+      // where the index write must still reach storage.
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      storage.indexRows.set('user-1:personal', { data: ['a'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      act(() => slice.remove('a'));
+
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+      await waitFor(() => expect(storage.indexRows.get('user-1:personal')?.data).toEqual([]));
     });
   });
 
