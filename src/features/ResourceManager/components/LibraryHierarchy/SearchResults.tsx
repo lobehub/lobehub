@@ -21,6 +21,7 @@ import {
 import { toTreeItem } from '@/store/tree';
 
 import { HierarchyNode } from './HierarchyNode';
+import { resolveSearchViewState } from './searchViewState';
 import { resolveHierarchySelectedKey } from './selection';
 import TreeSkeleton from './TreeSkeleton';
 
@@ -99,6 +100,10 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
   // it has not been issued yet, so treat it as loading instead of "no results".
   const isWaitingForDebounce = !debouncedQuery || debouncedQuery !== query.trim();
 
+  // A persisted head paints before the refresh lands, and a non-empty one is
+  // content worth keeping; an empty one is not (see `resolveSearchViewState`).
+  const viewState = resolveSearchViewState({ entry: current, error, isWaitingForDebounce });
+
   const emptyState = (
     <Center gap={12} padding={24} style={{ height: '100%', textAlign: 'center' }}>
       <Icon color={cssVar.colorTextQuaternary} icon={SearchXIcon} size={32} />
@@ -110,14 +115,12 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
 
   return (
     <AsyncBoundary
-      data={current}
+      data={viewState.data}
       empty={emptyState}
       error={error}
       errorVariant={'block'}
-      isEmpty={rows.length === 0}
-      // No current-query data yet (initial load or a query change) counts as
-      // loading unless the request already failed, so the error state can show.
-      isLoading={(!current && !error) || isWaitingForDebounce}
+      isEmpty={viewState.isEmpty}
+      isLoading={viewState.isLoading}
       loading={<TreeSkeleton />}
       onRetry={() => revalidate()}
     >
