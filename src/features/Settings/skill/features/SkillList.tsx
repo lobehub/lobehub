@@ -137,7 +137,9 @@ const SkillList = memo<SkillListProps>(
       void lobehubSkillsSWR.mutate();
       void composioSWR.mutate();
       void agentSkillsSWR.mutate();
-      void builtinToolsSWR.mutate();
+      // The uninstalled-builtin list is a replica now: revalidate re-runs its
+      // network sync without blanking the painted list.
+      void builtinToolsSWR.revalidate();
     };
 
     // Load custom connectors (new connector store) so user-added OAuth MCP
