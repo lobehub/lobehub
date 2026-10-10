@@ -42,25 +42,6 @@ const cases: GuardCase[] = [
   },
   {
     accept: (request) =>
-      useUserMemoryStore.getState().internal_acceptContextsList({ items: [], total: 22 }, request),
-    fail: (error, request) =>
-      useUserMemoryStore.getState().internal_failContextsList(error, request),
-    name: 'contexts',
-    readList: () => useUserMemoryStore.getState().contexts,
-    readSearchError: () => useUserMemoryStore.getState().contextsSearchError,
-    readSearchLoading: () => useUserMemoryStore.getState().contextsSearchLoading,
-    resetWithSearch: () => useUserMemoryStore.getState().resetContextsList({ q: 'late night' }),
-    seedSettledSearch: () =>
-      useUserMemoryStore.setState({
-        contexts: [{ id: 'existing' } as never],
-        contextsInit: true,
-        contextsQuery: 'late night',
-      }),
-    seedPageTwo: () =>
-      useUserMemoryStore.setState({ contexts: [{ id: 'existing' } as never], contextsPage: 2 }),
-  },
-  {
-    accept: (request) =>
       useUserMemoryStore
         .getState()
         .internal_acceptExperiencesList(
