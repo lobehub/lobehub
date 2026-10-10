@@ -16,6 +16,7 @@ import {
 } from './paging';
 import type { ReplicaAction, ReplicaEffect, ReplicaViewWrite } from './reducer';
 import { replicaReducer } from './reducer';
+import { createTombstones } from './tombstones';
 import type { ReplicaResource, ReplicaState } from './types';
 import { ReplicaWriteQueue } from './writeQueue';
 
@@ -156,7 +157,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   // scope+key is remembered as removed and refuses hydration until a server
   // value supersedes it, otherwise the late read resurrects the exact value the
   // removal just dropped.
-  const removedEntries = new Map<string, Set<string>>();
+  const removedEntries = createTombstones();
   /**
    * Keys whose persisted row delete was actually queued. `runEffects` refuses to
    * write while the scope is untrusted, so a removal made on a cold boot can arm
@@ -164,22 +165,15 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
    * a later removal into a no-op, or the stale row would survive and hydrate
    * again once the scope becomes trusted.
    */
-  const purgedEntries = new Map<string, Set<string>>();
-  const addTo = (map: Map<string, Set<string>>, scope: string, key: string) => {
-    const keys = map.get(scope) ?? new Set<string>();
-    map.set(scope, keys);
-    keys.add(key);
-  };
-  const hasIn = (map: Map<string, Set<string>>, scope: string, key: string) =>
-    map.get(scope)?.has(key) ?? false;
-  const markRemoved = (scope: string, key: string) => addTo(removedEntries, scope, key);
+  const purgedEntries = createTombstones();
+  const markRemoved = (scope: string, key: string) => removedEntries.add(scope, key);
   const clearRemoved = (scope: string, key: string) => {
-    removedEntries.get(scope)?.delete(key);
-    purgedEntries.get(scope)?.delete(key);
+    removedEntries.clear(scope, key);
+    purgedEntries.clear(scope, key);
   };
-  const isRemoved = (scope: string, key: string) => hasIn(removedEntries, scope, key);
-  const markPurged = (scope: string, key: string) => addTo(purgedEntries, scope, key);
-  const isPurged = (scope: string, key: string) => hasIn(purgedEntries, scope, key);
+  const isRemoved = (scope: string, key: string) => removedEntries.has(scope, key);
+  const markPurged = (scope: string, key: string) => purgedEntries.add(scope, key);
+  const isPurged = (scope: string, key: string) => purgedEntries.has(scope, key);
 
   const getSlot = port.getState;
   const storageKey = (key: string, query?: string) => ({
