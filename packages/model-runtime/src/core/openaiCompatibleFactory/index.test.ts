@@ -2887,7 +2887,7 @@ describe('LobeOpenAICompatibleFactory', () => {
       );
     });
 
-    it('should return undefined when JSON parsing fails', async () => {
+    it('should reject when JSON parsing fails', async () => {
       const mockResponse = {
         output_text: 'invalid json string',
       };
@@ -2905,10 +2905,10 @@ describe('LobeOpenAICompatibleFactory', () => {
         },
       };
 
-      const result = await instance.generateObject(payload);
-
-      expect(consoleSpy).toHaveBeenCalledWith('parse json error:', 'invalid json string');
-      expect(result).toBeUndefined();
+      await expect(instance.generateObject(payload)).rejects.toMatchObject({
+        name: 'StructuredOutputError',
+      });
+      expect(consoleSpy).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });
@@ -2931,10 +2931,10 @@ describe('LobeOpenAICompatibleFactory', () => {
         },
       };
 
-      const result = await instance.generateObject(payload);
-
-      expect(consoleSpy).toHaveBeenCalledWith('parse json error:', '');
-      expect(result).toBeUndefined();
+      await expect(instance.generateObject(payload)).rejects.toMatchObject({
+        name: 'StructuredOutputError',
+      });
+      expect(consoleSpy).not.toHaveBeenCalled();
 
       consoleSpy.mockRestore();
     });
@@ -3184,7 +3184,7 @@ describe('LobeOpenAICompatibleFactory', () => {
         );
       });
 
-      it('should return undefined when JSON parsing fails with chat completions API', async () => {
+      it('should reject when JSON parsing fails with chat completions API', async () => {
         const mockResponse = {
           choices: [
             {
@@ -3210,10 +3210,10 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
         };
 
-        const result = await instance.generateObject(payload);
-
-        expect(consoleSpy).toHaveBeenCalledWith('parse json error:', 'This is not valid JSON');
-        expect(result).toBeUndefined();
+        await expect(instance.generateObject(payload)).rejects.toMatchObject({
+          name: 'StructuredOutputError',
+        });
+        expect(consoleSpy).not.toHaveBeenCalled();
 
         consoleSpy.mockRestore();
       });
@@ -3244,10 +3244,10 @@ describe('LobeOpenAICompatibleFactory', () => {
           },
         };
 
-        const result = await instance.generateObject(payload);
-
-        expect(consoleSpy).toHaveBeenCalledWith('parse json error:', '');
-        expect(result).toBeUndefined();
+        await expect(instance.generateObject(payload)).rejects.toMatchObject({
+          name: 'StructuredOutputError',
+        });
+        expect(consoleSpy).not.toHaveBeenCalled();
 
         consoleSpy.mockRestore();
       });
@@ -4489,5 +4489,33 @@ describe('LobeOpenAICompatibleFactory', () => {
 
       await expect(instance.transcribe!({ file, model: 'whisper-1' })).rejects.toBeDefined();
     });
+  });
+});
+
+describe('schema response JSON fences', () => {
+  it.each([false, true])('accepts one JSON fence through responseApi=%s', async (responseApi) => {
+    const Runtime = createOpenAICompatibleRuntime({ provider: ModelProvider.OpenAI });
+    const runtime = new Runtime({ apiKey: 'test' });
+    const text = 'Analysis summary.\n```json\n{"ready":true}\n```';
+    if (responseApi) {
+      vi.spyOn(runtime['client'].responses, 'create').mockResolvedValue({
+        output_text: text,
+      } as any);
+    } else {
+      vi.spyOn(runtime['client'].chat.completions, 'create').mockResolvedValue({
+        choices: [{ message: { content: text } }],
+      } as any);
+    }
+    await expect(
+      runtime.generateObject({
+        model: 'gpt-4o',
+        responseApi,
+        messages: [{ role: 'user', content: 'Return ready' }],
+        schema: {
+          name: 'ready',
+          schema: { type: 'object', properties: { ready: { type: 'boolean' } } },
+        },
+      }),
+    ).resolves.toEqual({ ready: true });
   });
 });

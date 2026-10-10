@@ -93,7 +93,11 @@ import {
   recordOpenAIResponsesResponse,
   resolveOpenAIResponseWithMetadata,
 } from './providerDiagnostics';
-import { parseStructuredToolArguments, StructuredOutputError } from './structuredOutput';
+import {
+  parseStructuredOutputText,
+  parseStructuredToolArguments,
+  StructuredOutputError,
+} from './structuredOutput';
 
 export type { PollVideoStatusResult };
 export * from './createVideo';
@@ -1233,15 +1237,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
 
           const text = res.output_text;
           log('received structured output from Responses API, length: %d', text?.length || 0);
-          try {
-            const result = JSON.parse(text);
-            log('successfully parsed JSON output');
-            return result;
-          } catch (error) {
-            log('failed to parse JSON output: %O', error);
-            console.error('parse json error:', text);
-            return undefined;
-          }
+          return parseStructuredOutputText(text);
         }
 
         log('calling chat.completions.create for structured output');
@@ -1275,19 +1271,11 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
           await options?.onUsage?.(convertOpenAIUsage(res.usage, usagePayload));
         }
 
-        const text = res.choices[0].message.content!;
+        const text = res.choices?.[0]?.message?.content;
 
         log('received structured output from Chat Completions API, length: %d', text?.length || 0);
 
-        try {
-          const result = JSON.parse(text);
-          log('successfully parsed JSON output');
-          return result;
-        } catch (error) {
-          log('failed to parse JSON output: %O', error);
-          console.error('parse json error:', text);
-          return undefined;
-        }
+        return parseStructuredOutputText(text);
       } catch (error) {
         // Provider HTTP normalization must not hide the structured-output recovery signal.
         if (error instanceof StructuredOutputError) throw error;

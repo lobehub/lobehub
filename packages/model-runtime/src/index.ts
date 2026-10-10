@@ -4,6 +4,7 @@ export { mergeModelRuntimeHooks } from './core/mergeHooks';
 export type { ModelRuntimeHooks } from './core/ModelRuntime';
 export { ModelRuntime } from './core/ModelRuntime';
 export { createOpenAICompatibleRuntime } from './core/openaiCompatibleFactory';
+export { StructuredOutputError } from './core/openaiCompatibleFactory/structuredOutput';
 export * from './core/RouterRuntime';
 export { createCallbacksTransformer } from './core/streams/protocol';
 export * from './core/usageConverters';
