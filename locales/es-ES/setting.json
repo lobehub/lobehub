@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} instancias",
   "environments.instances.create": "Nueva instancia",
   "environments.instances.createFailed": "No se pudo crear la instancia",
+  "environments.instances.defaultUndeletable": "Esta es la copia predeterminada del entorno y no se puede eliminar por sí sola: reconstruirla o eliminar el entorno",
   "environments.instances.desc": "Una instancia es una copia de trabajo de este entorno, con su propia carpeta y sus propios paquetes instalados. Las conversaciones se ejecutan dentro de una instancia, y varias pueden ejecutarse en paralelo sin interferir entre sí.",
   "environments.instances.directoryHint": "Ruta de la carpeta. No se puede cambiar una vez creada.",
   "environments.instances.directoryLabel": "Directorio",

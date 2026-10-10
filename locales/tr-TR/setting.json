@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} örnek",
   "environments.instances.create": "Yeni örnek",
   "environments.instances.createFailed": "Örnek oluşturulamadı",
+  "environments.instances.defaultUndeletable": "Bu, ortamın varsayılan kopyasıdır ve tek başına silinemez — yeniden oluşturun veya ortamı silin",
   "environments.instances.desc": "Bir örnek, bu ortamın bir çalışma kopyasıdır, kendi klasörü ve kendi yüklenmiş paketleri vardır. Konuşmalar bir örnek içinde çalışır ve birkaç tanesi birbirine dokunmadan yan yana çalışabilir.",
   "environments.instances.directoryHint": "Klasör yolu. Oluşturulduktan sonra değiştirilemez.",
   "environments.instances.directoryLabel": "Dizin",

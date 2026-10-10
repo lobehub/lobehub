@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} مثيلات",
   "environments.instances.create": "مثيل جديد",
   "environments.instances.createFailed": "تعذر إنشاء المثيل",
+  "environments.instances.defaultUndeletable": "هذه هي النسخة الافتراضية للبيئة ولا يمكن حذفها بمفردها — قم بإعادة بنائها أو حذف البيئة",
   "environments.instances.desc": "المثيل هو نسخة عمل من هذه البيئة، مع مجلدها الخاص وحزمها المثبتة الخاصة. يتم تشغيل المحادثات داخل المثيل، ويمكن تشغيل عدة محادثات جنبًا إلى جنب دون التأثير على بعضها البعض.",
   "environments.instances.directoryHint": "مسار المجلد. لا يمكن تغييره بمجرد إنشائه.",
   "environments.instances.directoryLabel": "الدليل",

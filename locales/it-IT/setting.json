@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} istanze",
   "environments.instances.create": "Nuova istanza",
   "environments.instances.createFailed": "Impossibile creare l'istanza",
+  "environments.instances.defaultUndeletable": "Questa è la copia predefinita dell'ambiente e non può essere eliminata da sola — ricostruiscila o elimina l'ambiente",
   "environments.instances.desc": "Un'istanza è una copia di lavoro di questo ambiente, con la sua cartella e i suoi pacchetti installati. Le conversazioni si svolgono all'interno di un'istanza, e diverse possono essere eseguite contemporaneamente senza interferire tra loro.",
   "environments.instances.directoryHint": "Percorso della cartella. Non può essere modificato una volta creato.",
   "environments.instances.directoryLabel": "Directory",
