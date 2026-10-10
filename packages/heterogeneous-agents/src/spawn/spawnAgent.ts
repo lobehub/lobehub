@@ -710,7 +710,7 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
     inputArgs: inputPlan.args,
     resumeSessionId: options.resumeSessionId,
   });
-  const childEnv = {
+  const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     ...(options.agentType === 'codebuddy' ? { CODEBUDDY_CODE_DISABLE_BACKGROUND_TASKS: '1' } : {}),
     ...options.env,
@@ -727,11 +727,11 @@ export const spawnAgent = async (options: SpawnAgentOptions): Promise<SpawnAgent
   const initialSessionCostUsd =
     options.agentType === 'claude-code' && options.resumeSessionId
       ? await readClaudeCodeSessionCost({
-          configDir: options.env?.CLAUDE_CONFIG_DIR ?? process.env.CLAUDE_CONFIG_DIR,
+          configDir: childEnv.CLAUDE_CONFIG_DIR,
           cwd,
           // Resolve from the child's environment: an overridden HOME moves the
           // transcript the CLI resumes from.
-          home: options.env?.HOME,
+          home: childEnv.HOME,
           sessionId: options.resumeSessionId,
         })
       : undefined;

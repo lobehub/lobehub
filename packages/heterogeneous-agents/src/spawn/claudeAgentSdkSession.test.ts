@@ -1,11 +1,22 @@
 import { EventEmitter } from 'node:events';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { resolveClaudeSdkExecutablePath, spawnClaudeCodeCliProcess } from './claudeAgentSdkSession';
+import {
+  ClaudeAgentSdkSession,
+  resolveClaudeSdkExecutablePath,
+  spawnClaudeCodeCliProcess,
+} from './claudeAgentSdkSession';
+import { resolveClaudeCodeTranscriptPath } from './ensureResumeTranscript';
 
 const resolveCliSpawnPlanMock = vi.hoisted(() => vi.fn());
 const spawnMock = vi.hoisted(() => vi.fn());
+const sdkQueryMock = vi.hoisted(() => vi.fn());
+
+vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: sdkQueryMock }));
 
 vi.mock('./cliSpawn', () => ({ resolveCliSpawnPlan: resolveCliSpawnPlanMock }));
 vi.mock('node:child_process', async (importOriginal) => ({
@@ -130,5 +141,75 @@ describe('spawnClaudeCodeCliProcess', () => {
     child.stderr.emit('data', Buffer.from('boom'));
 
     expect(onStderr).toHaveBeenCalledWith('boom');
+  });
+});
+
+describe('ClaudeAgentSdkSession resume cost', () => {
+  const tempDirs: string[] = [];
+
+  afterEach(async () => {
+    sdkQueryMock.mockReset();
+    await Promise.all(tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true })));
+  });
+
+  it('emits a resumed run its own cost, using the profile dir the CLI resumes from', async () => {
+    const configDir = await mkdtemp(path.join(os.tmpdir(), 'lobe-sdk-profile-'));
+    const cwd = await mkdtemp(path.join(os.tmpdir(), 'lobe-sdk-cwd-'));
+    tempDirs.push(configDir, cwd);
+    const sessionId = '72f65fa9-0355-45d3-b903-8f41027ed5f2';
+    const transcript = (await resolveClaudeCodeTranscriptPath({ configDir, cwd, sessionId }))!;
+    await mkdir(path.dirname(transcript), { recursive: true });
+    await writeFile(
+      transcript,
+      `${JSON.stringify({ sessionId, totalCostUSD: 69.67, type: 'cost-state' })}\n`,
+    );
+
+    const messages = [
+      { model: 'claude-sonnet-4-6', session_id: sessionId, subtype: 'init', type: 'system' },
+      {
+        is_error: false,
+        result: 'done',
+        session_id: sessionId,
+        subtype: 'success',
+        total_cost_usd: 76.43,
+        type: 'result',
+        usage: { input_tokens: 10, output_tokens: 5 },
+      },
+    ];
+    sdkQueryMock.mockImplementation(() => ({
+      async *[Symbol.asyncIterator]() {
+        yield* messages;
+      },
+      close: vi.fn(),
+    }));
+
+    const events: any[] = [];
+    const session = new ClaudeAgentSdkSession({
+      args: [],
+      commandPath: 'claude',
+      configDir,
+      cwd,
+      env: {} as NodeJS.ProcessEnv,
+      onEvents: (batch) => {
+        events.push(...batch);
+      },
+      onRawMessage: () => {},
+      onRuntimeStatus: () => {},
+      onSessionId: () => {},
+      onStderr: () => {},
+      operationId: 'op-sdk-resume',
+      resumeSessionId: sessionId,
+      sessionId: 'session-1',
+      stdinPayload: `${JSON.stringify({
+        message: { content: 'continue', role: 'user' },
+        type: 'user',
+      })}\n`,
+    });
+    await session.run();
+
+    const resultUsage = events.find(
+      (e) => e.type === 'step_complete' && e.data?.phase === 'result_usage',
+    );
+    expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
   });
 });

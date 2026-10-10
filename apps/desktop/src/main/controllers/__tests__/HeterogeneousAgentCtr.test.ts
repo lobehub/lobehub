@@ -251,8 +251,9 @@ const {
   piRpcSessionRunMock: vi.fn(),
 }));
 
-const { ensureResumeTranscriptMock } = vi.hoisted(() => ({
+const { ensureResumeTranscriptMock, readClaudeCodeSessionCostMock } = vi.hoisted(() => ({
   ensureResumeTranscriptMock: vi.fn(async () => ({ path: '', written: false })),
+  readClaudeCodeSessionCostMock: vi.fn(async (): Promise<number | undefined> => undefined),
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
@@ -601,6 +602,7 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => {
   return {
     ...actual,
     ensureClaudeCodeResumeTranscript: ensureResumeTranscriptMock,
+    readClaudeCodeSessionCost: readClaudeCodeSessionCostMock,
     ClaudeAgentSdkSession: MockClaudeAgentSdkSession,
     CodexAppServerClient: MockCodexAppServerClient,
     CodexThreadSession: MockCodexThreadSession,
@@ -1756,6 +1758,32 @@ describe('HeterogeneousAgentCtr', () => {
 
       expect(cliArgs).toContain('--model');
       expect(cliArgs[cliArgs.indexOf('--model') + 1]).toBe('gpt-5.4');
+    });
+
+    it("emits a resumed run's own cost over the session baseline", async () => {
+      const send = vi.fn();
+      mockGetAllWindows.mockReturnValue([{ isDestroyed: () => false, webContents: { send } }]);
+      readClaudeCodeSessionCostMock.mockResolvedValueOnce(69.67);
+
+      const { options } = await runSendPrompt('carry on', { resumeSessionId: 'sess-live' }, [
+        `${JSON.stringify({ session_id: 'sess-live', subtype: 'init', type: 'system' })}\n`,
+        `${JSON.stringify({
+          is_error: false,
+          result: 'done',
+          total_cost_usd: 76.43,
+          type: 'result',
+          usage: { input_tokens: 10, output_tokens: 5 },
+        })}\n`,
+      ]);
+
+      expect(readClaudeCodeSessionCostMock).toHaveBeenCalledWith(
+        expect.objectContaining({ home: options.env.HOME, sessionId: 'sess-live' }),
+      );
+      const resultUsage = send.mock.calls
+        .filter(([channel]) => channel === 'heteroAgentEvent')
+        .map(([, payload]) => payload.event)
+        .find((event) => event.type === 'step_complete' && event.data?.phase === 'result_usage');
+      expect(resultUsage?.data.costUsd).toBeCloseTo(6.76);
     });
 
     it('captures the Claude Code session id from stream-json init events', async () => {
