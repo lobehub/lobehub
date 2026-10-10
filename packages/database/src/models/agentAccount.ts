@@ -4,7 +4,7 @@ import type {
   AgentAccountKind,
   AgentAccountStatus,
 } from '@lobechat/types';
-import { and, desc, eq, inArray, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
