@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "Pozostaje w bibliotece, w której ją umieściłeś — inni członkowie po prostu przestają ją tam widzieć",
   "visibilityConfirm.makePrivate.itemLoaded": "Treści, które inni już załadowali, nie mogą zostać cofnięte",
   "visibilityConfirm.makePrivate.itemReferences": "Istniejące załączniki wiadomości i odniesienia będą wyświetlane jako niedostępne",
-  "visibilityConfirm.publish.itemCapturedState": "Członkowie mogą uruchamiać jego instancje i uzyskiwać dostęp do wszystkiego, co zostało przez niego przechwycone — plików, logowań CLI, Twojej zalogowanej tożsamości",
+  "visibilityConfirm.publish.itemCapturedState": "Członkowie mogą uruchamiać jego kopie i uzyskiwać dostęp do wszystkiego, co zostało przez niego przechwycone — plików, logowań CLI, Twojej zalogowanej tożsamości",
   "visibilityConfirm.publish.itemLoaded": "Po przełączeniu z powrotem treści, które inni już załadowali, nie mogą zostać cofnięte",
   "visibilityConfirm.publish.itemReversible": "Możesz później przełączyć z powrotem na prywatne z tego samego menu",
   "visibilityConfirm.publish.itemVisible": "Wszyscy członkowie przestrzeni roboczej zobaczą to natychmiast",

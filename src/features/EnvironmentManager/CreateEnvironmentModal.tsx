@@ -21,7 +21,7 @@ import VisibilityConfirmContent from '@/features/VisibilityConfirmContent';
 import { useIMECompositionEvent } from '@/hooks/useIMECompositionEvent';
 
 import GithubRepositoryPicker, { type GithubRepositorySelection } from './GithubRepositoryPicker';
-import { useEnvironmentActions } from './useEnvironmentData';
+import { type CreatedEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
   kind: css`
@@ -74,12 +74,12 @@ const KINDS: { icon: LucideIcon; kind: EnvironmentKind }[] = [
  */
 interface CreateEnvironmentContentProps {
   /**
-   * Called with the new environment's id once it exists. An environment is a
-   * specification; nothing runs in it until it has an instance, so creating one
-   * is the middle of the task rather than the end of it and the caller takes
-   * the person to that next step instead of returning them to a list.
+   * Called with the new environment once it exists, together with the default
+   * instance the server created alongside it. Nothing is asked about that
+   * instance: the caller opens the environment and starts its build, so the
+   * person lands on something that is already on its way to being usable.
    */
-  onCreated?: (environmentId: string) => void;
+  onCreated?: (environment: CreatedEnvironment) => void;
   visibility?: EnvironmentVisibility;
 }
 
@@ -145,8 +145,8 @@ const CreateEnvironmentContent = memo<CreateEnvironmentContentProps>(
         });
         close();
         // After the dialog, not instead of it: the person sees the environment
-        // land and is then asked for the one thing that makes it runnable.
-        if (created?.id) onCreated?.(created.id);
+        // land with its default copy already in it.
+        if (created?.id) onCreated?.(created);
       } catch (cause) {
         // The one failure the user can act on is a name already taken, and it is
         // fixed by typing a different one — so it belongs next to the field
@@ -277,7 +277,7 @@ CreateEnvironmentContent.displayName = 'CreateEnvironmentContent';
 
 export const openCreateEnvironmentModal = (
   visibility?: EnvironmentVisibility,
-  onCreated?: (environmentId: string) => void,
+  onCreated?: (environment: CreatedEnvironment) => void,
 ) =>
   createModal({
     content: <CreateEnvironmentContent visibility={visibility} onCreated={onCreated} />,

@@ -8,6 +8,7 @@ import {
   CircleAlertIcon,
   CircleDashedIcon,
   CircleStopIcon,
+  CopyIcon,
   FolderOpenIcon,
   LayersIcon,
   Loader2Icon,
@@ -19,11 +20,22 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { openCreateInstanceModal, openEditInstanceModal } from './CreateInstanceModal';
+import {
+  openCopyInstanceModal,
+  openCreateInstanceModal,
+  openEditInstanceModal,
+} from './CreateInstanceModal';
 import { describeError } from './errorMessage';
+import {
+  canCopyInstance,
+  copyBlockReason,
+  copyEntryTitle,
+  deleteEntry,
+  recheckCopySource,
+} from './instanceActions';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
-import { useInstanceBuild } from './useEnvironmentData';
+import { useBuildStarting, useInstanceBuild, useInstances } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
   /**
@@ -87,6 +99,8 @@ interface InstanceListProps {
   occupancyUnavailable: boolean;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Deletes the whole environment; the only copy's delete entry. */
+  onRemoveEnvironment?: () => void;
   /** Ends the run holding an instance; `stopped: false` when nothing was. */
   onStop: (id: string) => Promise<{ stopped: boolean }>;
   /** `owner/name` of the environment's checkout, when it builds from one. */
@@ -97,16 +111,22 @@ interface InstanceListProps {
    * its rows would describe work that never happens.
    */
   showBuild: boolean;
+  /** The environment's only copy, shown as the environment itself. */
+  single?: boolean;
 }
 
 interface InstanceRowProps {
   editable: boolean;
   instance: SandboxInstance;
+  occupancyUnavailable: boolean;
   onBuild: (id: string) => Promise<void>;
   onRemove: (id: string) => Promise<void>;
+  /** Deletes the whole environment; the only copy's delete entry. */
+  onRemoveEnvironment?: () => void;
   onStop: (id: string) => Promise<{ stopped: boolean }>;
   repository?: string;
   showBuild: boolean;
+  single?: boolean;
 }
 
 /**
@@ -191,8 +211,20 @@ BuildLine.displayName = 'InstanceBuildLine';
  * so the one thing worth explaining was the one thing an inline editor hid.
  */
 const InstanceRow = memo<InstanceRowProps>(
-  ({ editable, instance, onBuild, onRemove, onStop, repository, showBuild }) => {
+  ({
+    editable,
+    instance,
+    occupancyUnavailable,
+    onBuild,
+    onRemove,
+    onRemoveEnvironment,
+    onStop,
+    repository,
+    showBuild,
+    single,
+  }) => {
     const { t } = useTranslation('setting');
+    const { refreshRows } = useInstances();
 
     // Worth following only while something is in flight. A settled instance
     // must not keep a poll running: the query writes when a build ends, so an
@@ -215,7 +247,11 @@ const InstanceRow = memo<InstanceRowProps>(
     // request is not instant — starting a build cold-starts a sandbox — and
     // without this the row would look untouched for that whole time, which is
     // exactly what the dialog used to cover by staying open.
-    const [starting, setStarting] = useState(false);
+    const [startingHere, setStartingHere] = useState(false);
+    // Or a build started from elsewhere — the page starts a new environment's
+    // default copy the moment it is created, before this row even exists.
+    const startingElsewhere = useBuildStarting(instance.id);
+    const starting = startingHere || startingElsewhere;
     // Same bridge for a delete, which is slower still: it cold-starts a sandbox
     // and then removes the whole archive, gigabytes of it. The row says so and
     // comes back if the execution plane refuses.
@@ -229,6 +265,22 @@ const InstanceRow = memo<InstanceRowProps>(
     // publishes and the execution plane will not cut it off; its own line
     // already says it is building.
     const stoppable = editable && instance.inUse && instance.status !== 'pending';
+
+    const copyBlocked = copyBlockReason(instance, occupancyUnavailable);
+    const deletes = deleteEntry(instance, { editable, single: Boolean(single) });
+    const [checkingCopy, setCheckingCopy] = useState(false);
+    // Read again on the click rather than trusted from whenever the list was
+    // fetched; see `recheckCopySource`.
+    const startCopy = async () => {
+      setCheckingCopy(true);
+      const blocked = await recheckCopySource(instance.id, refreshRows);
+      setCheckingCopy(false);
+      if (blocked) {
+        toast.error(t(copyEntryTitle(blocked)));
+        return;
+      }
+      openCopyInstanceModal(instance);
+    };
 
     // Asked first: the run it ends may be a conversation in the middle of a
     // step, and the icon sits beside the badge that only meant to explain.
@@ -275,12 +327,12 @@ const InstanceRow = memo<InstanceRowProps>(
         // the usual one — leave the row as it was, so the toast still carries
         // the reason; it now lands over the list rather than over a dialog.
         onOk: () => {
-          setStarting(true);
+          setStartingHere(true);
           void onBuild(instance.id)
             .catch((error: unknown) =>
               toast.error(describeError(error, t, t('environments.instances.buildStartFailed'))),
             )
-            .finally(() => setStarting(false));
+            .finally(() => setStartingHere(false));
         },
         title: t(
           unbuilt
@@ -369,12 +421,24 @@ const InstanceRow = memo<InstanceRowProps>(
           {/* Reading what an instance kept is not an edit, so it stays
         available in an environment someone else published — that is
         most of what having access to one is for. */}
-          <ActionIcon
-            icon={FolderOpenIcon}
-            size={'small'}
-            title={t('environments.files.browse')}
-            onClick={() => openInstanceFileBrowser(instance)}
-          />
+          {/* Named outright on the only copy: there it is how the environment's
+            files are reached, not one row's action among several. */}
+          {single ? (
+            <Button
+              icon={<Icon icon={FolderOpenIcon} />}
+              size={'small'}
+              onClick={() => openInstanceFileBrowser(instance)}
+            >
+              {t('environments.files.browse')}
+            </Button>
+          ) : (
+            <ActionIcon
+              icon={FolderOpenIcon}
+              size={'small'}
+              title={t('environments.files.browse')}
+              onClick={() => openInstanceFileBrowser(instance)}
+            />
+          )}
           {/* Rebuilding a working copy is how it gets back to a clean checkout,
             so it sits with the row's own actions once the instance is ready.
             An instance a conversation holds is refused by the server, and
@@ -395,6 +459,31 @@ const InstanceRow = memo<InstanceRowProps>(
               onClick={confirmBuild}
             />
           )}
+          {/* Copying is the owner's, like adding a copy is: a colleague who can
+            run in a published environment cannot take its state with them.
+            Greyed out rather than hidden while the source is held, with the
+            reason as its tooltip, so the entry does not vanish and come back
+            as runs start and end. */}
+          {canCopyInstance(editable) &&
+            (copyBlocked ? (
+              // The reason rides on a wrapper: a disabled button takes no
+              // pointer events, so its own tooltip would never open and the
+              // entry would be grey with nothing saying why.
+              <Tooltip title={t(copyEntryTitle(copyBlocked))}>
+                <span style={{ cursor: 'not-allowed', display: 'inline-flex' }}>
+                  <ActionIcon disabled icon={CopyIcon} size={'small'} />
+                </span>
+              </Tooltip>
+            ) : (
+              <ActionIcon
+                disabled={checkingCopy}
+                icon={CopyIcon}
+                loading={checkingCopy}
+                size={'small'}
+                title={t(copyEntryTitle(undefined))}
+                onClick={() => void startCopy()}
+              />
+            ))}
           {editable && (
             <ActionIcon
               icon={PencilIcon}
@@ -403,7 +492,17 @@ const InstanceRow = memo<InstanceRowProps>(
               onClick={() => openEditInstanceModal(instance)}
             />
           )}
-          {editable && (
+          {/* The only copy's delete entry deletes the environment; the
+            default copy among several has none. See `deleteEntry`. */}
+          {deletes === 'environment' && onRemoveEnvironment && (
+            <ActionIcon
+              icon={Trash2Icon}
+              size={'small'}
+              title={t('environments.remove')}
+              onClick={onRemoveEnvironment}
+            />
+          )}
+          {deletes === 'instance' && (
             <ActionIcon
               disabled={removing}
               icon={Trash2Icon}
@@ -513,9 +612,11 @@ const InstanceList = memo<InstanceListProps>(
     occupancyUnavailable,
     onBuild,
     onRemove,
+    onRemoveEnvironment,
     onStop,
     repository,
     showBuild,
+    single,
   }) => {
     const { t } = useTranslation('setting');
 
@@ -558,10 +659,13 @@ const InstanceList = memo<InstanceListProps>(
                 editable={editable}
                 instance={instance}
                 key={instance.id}
+                occupancyUnavailable={occupancyUnavailable}
                 repository={repository}
                 showBuild={showBuild}
+                single={single}
                 onBuild={onBuild}
                 onRemove={onRemove}
+                onRemoveEnvironment={onRemoveEnvironment}
                 onStop={onStop}
               />
             ))}

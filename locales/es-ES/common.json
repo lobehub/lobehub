@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "Permanece en la biblioteca en la que lo archivaste; los demás miembros simplemente dejan de verlo allí",
   "visibilityConfirm.makePrivate.itemLoaded": "El contenido que otros ya han cargado no se puede recuperar",
   "visibilityConfirm.makePrivate.itemReferences": "Los archivos adjuntos y referencias existentes en los mensajes aparecerán como no disponibles",
-  "visibilityConfirm.publish.itemCapturedState": "Los miembros pueden ejecutar sus instancias y acceder a todo lo que ha capturado: archivos, inicios de sesión de CLI, tu identidad iniciada en sesión",
+  "visibilityConfirm.publish.itemCapturedState": "Los miembros pueden ejecutar sus copias y acceder a todo lo que ha capturado: archivos, inicios de sesión de CLI, tu identidad iniciada sesión",
   "visibilityConfirm.publish.itemLoaded": "Después de cambiar, el contenido que otros ya han cargado no se puede recuperar",
   "visibilityConfirm.publish.itemReversible": "Puedes cambiarlo a privado más tarde desde el mismo menú",
   "visibilityConfirm.publish.itemVisible": "Todos los miembros del espacio de trabajo verán esto de inmediato",

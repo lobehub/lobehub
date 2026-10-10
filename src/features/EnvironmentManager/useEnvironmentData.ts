@@ -1,5 +1,5 @@
 import type { EnvironmentVisibility } from '@lobechat/types';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import { useSWRConfig } from 'swr';
 
 import { useClientDataSWR } from '@/libs/swr';
@@ -229,6 +229,40 @@ export const useInstanceBuild = (instanceId: string, active: boolean, buildId?: 
   };
 };
 
+/**
+ * Instances whose build has been asked for and not yet answered.
+ *
+ * Starting a build cold-starts a sandbox, so for a few seconds the row reads
+ * `pending` with no build id — the same thing an instance that was never built
+ * looks like. A row opened in that window would offer "Build" for a build that
+ * is already on its way. Held outside React because the call is fired from the
+ * page (straight after an environment is created) and read by a row that may
+ * mount only once the refreshed list arrives.
+ */
+const startingBuilds = new Set<string>();
+const startingListeners = new Set<() => void>();
+
+const setBuildStarting = (id: string, starting: boolean) => {
+  if (starting) startingBuilds.add(id);
+  else startingBuilds.delete(id);
+  for (const listener of startingListeners) listener();
+};
+
+const subscribeStartingBuilds = (listener: () => void) => {
+  startingListeners.add(listener);
+  return () => {
+    startingListeners.delete(listener);
+  };
+};
+
+/** Whether a build of this instance has been asked for and has not started yet. */
+export const useBuildStarting = (instanceId: string) =>
+  useSyncExternalStore(
+    subscribeStartingBuilds,
+    () => startingBuilds.has(instanceId),
+    () => false,
+  );
+
 const SESSIONS_KEY = 'sandbox-environment-sessions';
 
 /**
@@ -254,6 +288,11 @@ export type SandboxSessionRecord = NonNullable<
 export type SandboxInstance = NonNullable<
   ReturnType<typeof useInstances>['data']
 >['instances'][number];
+
+/** A new environment as `createEnvironment` returns it: with its default instance. */
+export type CreatedEnvironment = Awaited<
+  ReturnType<typeof sandboxStorageService.createEnvironment>
+>;
 
 export type SandboxEnvironment = NonNullable<
   ReturnType<typeof useEnvironments>['data']
@@ -286,11 +325,12 @@ export const useEnvironmentActions = () => {
       name: string;
       visibility?: EnvironmentVisibility;
     }) => {
-      // Returned, not discarded: an environment with no instance cannot run
-      // anything, so the caller chains straight into creating the first one and
-      // needs the id to do it.
+      // Returned, not discarded: it carries the default instance the server
+      // made alongside the environment, and the caller starts its build.
       const created = await sandboxStorageService.createEnvironment(params);
-      await refreshEnvironments();
+      // The rows too: the default instance arrived with the environment, and
+      // the panel that opens next should show it rather than an empty list.
+      await Promise.all([refreshEnvironments(), refreshRows()]);
 
       return created;
     },
@@ -305,12 +345,19 @@ export const useEnvironmentActions = () => {
      * somewhere it cannot be read twice.
      */
     buildInstance: async (id: string) => {
+      setBuildStarting(id, true);
       try {
         await sandboxStorageService.startInstanceBuild({ id });
       } catch {
         /* recorded on the instance; the list shows it */
       }
-      await refreshInstances();
+      try {
+        await refreshInstances();
+      } finally {
+        // After the refresh, so the row goes from "starting" straight to the
+        // build it now has an id for, without a beat of "not built" between.
+        setBuildStarting(id, false);
+      }
     },
 
     /**

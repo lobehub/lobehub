@@ -474,7 +474,7 @@ export default {
   'visibilityConfirm.publish.itemReversible':
     'You can switch it back to private later from the same menu',
   'visibilityConfirm.publish.itemCapturedState':
-    'Members can run its instances and reach everything it has captured — files, CLI logins, your signed-in identity',
+    'Members can run its copies and reach everything it has captured — files, CLI logins, your signed-in identity',
   'visibilityConfirm.publish.itemLoaded':
     'After switching back, content others have already loaded can’t be pulled back',
   'retry': 'Retry',
