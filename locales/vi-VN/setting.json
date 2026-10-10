@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} phiên bản",
   "environments.instances.create": "Phiên bản mới",
   "environments.instances.createFailed": "Không thể tạo phiên bản",
+  "environments.instances.defaultUndeletable": "Đây là bản sao mặc định của môi trường và không thể tự xóa — hãy xây dựng lại nó hoặc xóa môi trường",
   "environments.instances.desc": "Một phiên bản là một bản sao làm việc của môi trường này, với thư mục riêng và các gói đã cài đặt riêng. Các cuộc hội thoại chạy bên trong một phiên bản, và nhiều phiên bản có thể chạy song song mà không ảnh hưởng lẫn nhau.",
   "environments.instances.directoryHint": "Đường dẫn thư mục. Không thể thay đổi sau khi tạo.",
   "environments.instances.directoryLabel": "Thư mục",

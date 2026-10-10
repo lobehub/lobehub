@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} 個實例",
   "environments.instances.create": "新建實例",
   "environments.instances.createFailed": "無法創建實例",
+  "environments.instances.defaultUndeletable": "這是環境的預設副本，無法單獨刪除 — 請重建它，或刪除整個環境",
   "environments.instances.desc": "實例是此環境的工作副本，擁有自己的文件夾和已安裝的包。對話在實例內運行，並且可以並行運行多個實例而互不影響。",
   "environments.instances.directoryHint": "文件夾路徑。創建後無法更改。",
   "environments.instances.directoryLabel": "目錄",

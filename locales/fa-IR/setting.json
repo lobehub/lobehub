@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} نمونه",
   "environments.instances.create": "نمونه جدید",
   "environments.instances.createFailed": "امکان ایجاد نمونه وجود ندارد",
+  "environments.instances.defaultUndeletable": "این نسخه پیش‌فرض محیط است و نمی‌توان آن را به‌تنهایی حذف کرد — آن را بازسازی کنید یا محیط را حذف کنید",
   "environments.instances.desc": "یک نمونه یک کپی کاری از این محیط است، با پوشه و بسته‌های نصب شده خود. مکالمات در داخل یک نمونه اجرا می‌شوند و چندین نمونه می‌توانند به صورت همزمان اجرا شوند بدون اینکه یکدیگر را تحت تأثیر قرار دهند.",
   "environments.instances.directoryHint": "مسیر پوشه. پس از ایجاد نمی‌توان آن را تغییر داد.",
   "environments.instances.directoryLabel": "دایرکتوری",

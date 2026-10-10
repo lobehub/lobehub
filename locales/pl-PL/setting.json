@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} instancji",
   "environments.instances.create": "Nowa instancja",
   "environments.instances.createFailed": "Nie udało się utworzyć instancji",
+  "environments.instances.defaultUndeletable": "To jest domyślna kopia środowiska i nie można jej usunąć samodzielnie — odbuduj ją lub usuń środowisko",
   "environments.instances.desc": "Instancja to robocza kopia tego środowiska, z własnym folderem i zainstalowanymi pakietami. Rozmowy odbywają się wewnątrz instancji, a kilka z nich może działać równolegle, nie wpływając na siebie nawzajem.",
   "environments.instances.directoryHint": "Ścieżka folderu. Nie można jej zmienić po utworzeniu.",
   "environments.instances.directoryLabel": "Katalog",
