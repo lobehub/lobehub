@@ -1,7 +1,7 @@
 import { type IdentityListItem } from '@lobechat/types';
 import { memo } from 'react';
 
-import { useUserMemoryStore } from '@/store/userMemory';
+import { identitySelectors, useUserMemoryStore } from '@/store/userMemory';
 
 import { GridView } from '../../../../features/GridView';
 import IdentityCard from './IdentityCard';
@@ -14,7 +14,7 @@ interface GridViewProps {
 
 const IdentityGridView = memo<GridViewProps>(({ identities, isLoading, onClick }) => {
   const loadMoreIdentities = useUserMemoryStore((s) => s.loadMoreIdentities);
-  const identitiesHasMore = useUserMemoryStore((s) => s.identitiesHasMore);
+  const identitiesHasMore = useUserMemoryStore(identitySelectors.identitiesHasMore);
 
   return (
     <GridView
