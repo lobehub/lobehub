@@ -4,7 +4,7 @@ import type {
   WorkingDirConfigValue,
   WorkingDirEntry,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath } from '@lobechat/types';
+import { getWorkingDirEffectivePath, getWorkingDirSourcePath } from '@lobechat/types';
 import { confirmModal } from '@lobehub/ui/base-ui';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
