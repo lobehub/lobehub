@@ -10,11 +10,12 @@ import {
   projects,
   trashItems,
   users,
+  widgets as widgetsTable,
   workspaces,
 } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { ScopeLevelError } from '../../utils/scopeLevel';
-import { DashboardModel } from '../dashboard';
+import { DASHBOARD_MAX_ITEMS, DashboardItemLimitError, DashboardModel } from '../dashboard';
 import { WidgetModel } from '../widget';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -345,6 +346,32 @@ describe('DashboardModel', () => {
       expect(await model.removeItems(dashboard.id, [i2!.id])).toBe(1);
       expect(await model.removeItems(dashboard.id, [])).toBe(0);
       expect((await model.listItems(dashboard.id)).map((r) => r.widget.id)).toEqual([w1.id]);
+    });
+
+    it('refuses a new widget on a full board but still updates placed ones', async () => {
+      const model = new DashboardModel(serverDB, userId);
+      const dashboard = await model.create({ title: 'Full' });
+      const seeded = await serverDB
+        .insert(widgetsTable)
+        .values(
+          Array.from({ length: DASHBOARD_MAX_ITEMS + 1 }, (_, i) => ({ title: `w${i}`, userId })),
+        )
+        .returning({ id: widgetsTable.id });
+      const [extra, ...placed] = seeded;
+      await serverDB.insert(dashboardItems).values(
+        placed.map(({ id }, sortOrder) => ({
+          dashboardId: dashboard.id,
+          sortOrder,
+          userId,
+          widgetId: id,
+        })),
+      );
+
+      await expect(model.addItem(dashboard.id, extra.id)).rejects.toBeInstanceOf(
+        DashboardItemLimitError,
+      );
+      const moved = await model.addItem(dashboard.id, placed[0].id, { sortOrder: 999 });
+      expect(moved?.sortOrder).toBe(999);
     });
 
     it('refuses items on boards or widgets the caller cannot manage or see', async () => {

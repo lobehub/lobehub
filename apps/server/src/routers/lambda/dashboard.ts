@@ -7,7 +7,7 @@ import {
   requireWorkspaceRoleWhenScoped,
   wsCompatProcedure,
 } from '@/business/server/trpc-middlewares/workspaceAuth';
-import { DashboardModel } from '@/database/models/dashboard';
+import { DASHBOARD_MAX_ITEMS, DashboardModel } from '@/database/models/dashboard';
 import type { LobeChatDatabase } from '@/database/type';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -173,7 +173,7 @@ export const dashboardRouter = router({
     }),
 
   removeItems: dashboardWriteProcedure
-    .input(z.object({ dashboardId: uuid, itemIds: z.array(uuid).max(200) }))
+    .input(z.object({ dashboardId: uuid, itemIds: z.array(uuid).max(DASHBOARD_MAX_ITEMS) }))
     .mutation(async ({ ctx, input }) => {
       try {
         const data = await ctx.dashboardService.removeItems(input.dashboardId, input.itemIds);
@@ -290,7 +290,7 @@ export const dashboardRouter = router({
               sortOrder: z.number().int().optional(),
             }),
           )
-          .max(200),
+          .max(DASHBOARD_MAX_ITEMS),
       }),
     )
     .mutation(async ({ ctx, input }) => {
