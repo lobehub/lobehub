@@ -6,6 +6,7 @@ import {
   type ToolManifestInfo,
 } from '@lobechat/builtin-tool-activator/executionRuntime';
 import { SkillsExecutionRuntime } from '@lobechat/builtin-tool-skills/executionRuntime';
+import { resolveShareAllowedSkillIds } from '@lobechat/const';
 import { describeLockedDevicePicker, getDisabledPluginIds } from '@lobechat/types';
 
 import { AgentModel } from '@/database/models/agent';
@@ -86,22 +87,39 @@ export const activatorRuntime: ServerRuntimeRegistration = {
         disabledSkillIds = new Set(getDisabledPluginIds(agentConfig?.plugins ?? undefined));
       }
 
+      // An Agent Share visitor reaches only the skills the creator listed in
+      // `shareConfig.skillGrants`. `activateTools` falls back to this runtime
+      // for any identifier that is not a tool, so without this check a
+      // model-supplied name would open a skill the share never granted —
+      // the same model-supplied-name hole the skills runtime closes with its
+      // own `isSkillGranted` predicate (`skills.ts`).
+      const shareVisitor = context.agentShareVisitor;
+      const isSkillReachable = (identifier: string) =>
+        !disabledSkillIds.has(identifier) &&
+        (!shareVisitor || resolveShareAllowedSkillIds([identifier], shareVisitor).length > 0);
+
       skillsRuntime = new SkillsExecutionRuntime({
         // Same device gate as the skills runtime: device-only skills are
         // activatable in device-capable runs (matching <available_skills>),
         // with `activeDeviceId` as the fallback for callers without a plan.
         builtinSkills: filterBuiltinSkills(builtinSkills, {
           canExecuteOnDevice: context.deviceCapable ?? !!context.activeDeviceId,
-        }).filter((skill) => !disabledSkillIds.has(skill.identifier)),
+        }).filter((skill) => isSkillReachable(skill.identifier)),
         service: {
-          findAll: () => skillModel.findAll(),
+          findAll: async () => {
+            const result = await skillModel.findAll();
+            if (!shareVisitor) return result;
+
+            const data = result.data.filter((skill) => isSkillReachable(skill.identifier));
+            return { data, total: data.length };
+          },
           findById: async (id) => {
             const skill = await skillModel.findById(id);
-            return skill && disabledSkillIds.has(skill.identifier) ? undefined : skill;
+            return skill && isSkillReachable(skill.identifier) ? skill : undefined;
           },
           findByName: async (name) => {
             const skill = await skillModel.findByName(name);
-            return skill && disabledSkillIds.has(skill.identifier) ? undefined : skill;
+            return skill && isSkillReachable(skill.identifier) ? skill : undefined;
           },
           readResource: async () => {
             throw new Error('readResource not available in tools runtime');

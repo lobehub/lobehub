@@ -226,7 +226,7 @@ export const runtimeManagedToolIds = [
  * (`lobe-agent-management`, `lobe-task`, `lobe-creds`, `lobe-message`,
  * `lobe-skill-store`, `lobe-agent-builder`,
  * `lobe-group-agent-builder`, `lobe-group-management`, `agent-signal-review`,
- * `lobe-user-interaction`, `lobe-activator`,
+ * `lobe-user-interaction`,
  * `lobe-local-system`, `lobe-browser`, `lobe-remote-device`,
  * `lobe-topic-reference`, and the hidden system-only self-iteration tools),
  * see the denied-builtins section of
@@ -258,6 +258,13 @@ export const AGENT_SHARE_ALLOWED_BUILTIN_IDENTIFIERS = new Set<string>([
   KnowledgeBaseManifest.identifier,
   MemoryManifest.identifier,
   AgentDocumentsManifest.identifier,
+  // `lobe-activator`: never picked in the owner's tool picker — it is implied
+  // (scoped to `activateTools`) by any tool grant and kept only while the
+  // gated set still holds a granted tool to activate. It can only surface
+  // manifests from that already-gated set, and its skill fallback re-checks
+  // `shareConfig.skillGrants`. See the allowed-builtins section of
+  // `shareGate/README.md`.
+  LobeActivatorManifest.identifier,
   // `lobe-skills`: a skill-driven agent is broken the moment it is shared
   // without this, since skills are loaded on demand through this tool. It is
   // allowed only in the narrow shape `DATA_TOOL_ACCESS_RULES` gives it —

@@ -1,3 +1,4 @@
+import { ActivatorApiName, LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import {
   AgentDocumentsApiName,
   AgentDocumentsIdentifier,
@@ -333,6 +334,65 @@ describe('isShareBlockedBuiltinDispatch', () => {
     // per-API scoping is what blocks it here.
     expect(
       isShareBlockedBuiltinDispatch(enabled, LobeAgentIdentifier, LobeAgentApiName.updatePlan),
+    ).toBe(true);
+  });
+});
+
+describe('isShareBlockedBuiltinDispatch — lobe-activator', () => {
+  it('allows activateTools once the share grants any tool', () => {
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: CalculatorIdentifier }] },
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateTools,
+      ),
+    ).toBe(false);
+  });
+
+  it('blocks the activator on a share that grants no tool', () => {
+    expect(
+      isShareBlockedBuiltinDispatch({}, LobeActivatorIdentifier, ActivatorApiName.activateTools),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { skillGrants: ['pdf-report'] },
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateTools,
+      ),
+    ).toBe(true);
+  });
+
+  it('blocks the runtime-only activateSkill method even under a stored toolset-level entry', () => {
+    expect(
+      isShareBlockedBuiltinDispatch(
+        { toolGrants: [{ identifier: LobeActivatorIdentifier }, { identifier: 'mcp-github' }] },
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateSkill,
+      ),
+    ).toBe(true);
+  });
+
+  it('still blocks an ungranted builtin called after an activation in the same run', () => {
+    // Activation only changes what the model is offered. The call itself is
+    // re-checked against the share grant at dispatch.
+    const permissions = { toolGrants: [{ identifier: CalculatorIdentifier }] };
+
+    expect(
+      isShareBlockedBuiltinDispatch(
+        permissions,
+        LobeActivatorIdentifier,
+        ActivatorApiName.activateTools,
+      ),
+    ).toBe(false);
+    expect(
+      isShareBlockedBuiltinDispatch(
+        permissions,
+        LobeAgentIdentifier,
+        LobeAgentApiName.analyzeMedia,
+      ),
+    ).toBe(true);
+    expect(
+      isShareBlockedBuiltinDispatch(permissions, AgentManagementIdentifier, 'searchAgent'),
     ).toBe(true);
   });
 });
