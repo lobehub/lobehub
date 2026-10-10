@@ -15,6 +15,7 @@ import electron from './electron';
 import error from './error';
 import eval_ from './eval';
 import file from './file';
+import heterogeneousError from './heterogeneousError';
 import home from './home';
 import hotkey from './hotkey';
 import image from './image';
@@ -27,7 +28,6 @@ import messenger from './messenger';
 import metadata from './metadata';
 import migration from './migration';
 import modelProvider from './modelProvider';
-import modelRuntime from './modelRuntime';
 import models from './models';
 import notification from './notification';
 import oauth from './oauth';
@@ -40,6 +40,7 @@ import portal from './portal';
 import project from './project';
 import providers from './providers';
 import ragEval from './ragEval';
+import runtimeError from './runtimeError';
 import selfLearning from './selfLearning';
 import setting from './setting';
 import spend from './spend';
@@ -83,7 +84,8 @@ const resources = {
   metadata,
   migration,
   modelProvider,
-  modelRuntime,
+  runtimeError,
+  heterogeneousError,
   models,
   notification,
   oauth,

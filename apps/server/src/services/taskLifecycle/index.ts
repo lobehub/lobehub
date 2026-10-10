@@ -370,7 +370,7 @@ export class TaskLifecycleService {
       //    in the card's meta row, so the headline needn't repeat it.
       //  - summary: map the structured error code to the same human, localized
       //    message the chat error card shows. The copy for a code lives in exactly
-      //    one of two namespaces — `modelRuntime:<code>` (runtime codes) or
+      //    one of two namespaces — `runtimeError:<code>` (runtime codes) or
       //    `error:response.<code>` (HTTP status / Cloud ChatErrorType such as
       //    `InsufficientBudgetForModel`) — so try both and take whichever resolves
       //    (the server `t` returns the key unchanged when it has no entry). Fall
@@ -379,7 +379,7 @@ export class TaskLifecycleService {
       const locale = await this.systemAgentService.getUserLocale();
       const [{ t: tHome }, { t: tRuntime }, { t: tError }] = await Promise.all([
         translation('home', locale),
-        translation('modelRuntime', locale),
+        translation('runtimeError', locale),
         translation('error', locale),
       ]);
       const resolveErrorSummary = () => {

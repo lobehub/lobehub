@@ -224,7 +224,7 @@ const getErrorAlertConfig = (
 };
 
 export const useErrorContent = (error: any) => {
-  const { t } = useTranslation(['error', 'modelRuntime']);
+  const { t } = useTranslation(['error', 'runtimeError']);
   const providerName = useProviderName(error?.body?.provider || '');
   const businessAlertConfig = useBusinessErrorAlertConfig(error?.type);
   const {

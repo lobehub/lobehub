@@ -115,7 +115,7 @@ describe('getMessageError', () => {
   });
 
   it('should look runtime error codes up in the modelRuntime namespace', async () => {
-    // Regression: these keys live under `modelRuntime:<code>`, not the legacy
+    // Regression: these keys live under `runtimeError:<code>`, not the legacy
     // `error:response.<code>` map, so the old lookup echoed the raw key back and
     // users saw literal `response.InvalidProviderAPIKey` in the failure toast.
     const mockErrorResponse: ErrorResponse = {
@@ -129,7 +129,7 @@ describe('getMessageError', () => {
     // `provider` is resolved from the id on the body to the provider's display name.
     expect(t).toHaveBeenCalledWith('InvalidProviderAPIKey', {
       defaultValue: 'translated_response.UnknownChatFetchError',
-      ns: 'modelRuntime',
+      ns: 'runtimeError',
       provider: 'Meta',
     });
     expect(error.message).toBe('translated_InvalidProviderAPIKey');
@@ -146,7 +146,7 @@ describe('getMessageError', () => {
 
     expect(t).toHaveBeenCalledWith(
       'InvalidProviderAPIKey',
-      expect.objectContaining({ ns: 'modelRuntime', provider: 'not-a-provider' }),
+      expect.objectContaining({ ns: 'runtimeError', provider: 'not-a-provider' }),
     );
   });
 
@@ -158,12 +158,12 @@ describe('getMessageError', () => {
 
     expect(t).toHaveBeenCalledWith(
       'ContextEnginePipelineError',
-      expect.objectContaining({ ns: 'modelRuntime' }),
+      expect.objectContaining({ ns: 'runtimeError' }),
     );
   });
 
   it('should prefer the backend message as the fallback for codes without a locale entry', async () => {
-    // `NoAvailableProvider` is a registered runtime code with no `modelRuntime`
+    // `NoAvailableProvider` is a registered runtime code with no `runtimeError`
     // key yet; without a defaultValue the toast would show the bare code.
     const mockResponse = createMockResponse(
       { body: { message: 'empty providers', provider: 'meta' }, errorType: 'NoAvailableProvider' },
@@ -175,7 +175,7 @@ describe('getMessageError', () => {
 
     expect(t).toHaveBeenCalledWith('NoAvailableProvider', {
       defaultValue: 'empty providers',
-      ns: 'modelRuntime',
+      ns: 'runtimeError',
       provider: 'Meta',
     });
   });
@@ -191,7 +191,7 @@ describe('getMessageError', () => {
 
     await getMessageError(mockResponse as any);
 
-    expect(loadNamespaces).toHaveBeenCalledWith(['error', 'modelRuntime']);
+    expect(loadNamespaces).toHaveBeenCalledWith(['error', 'runtimeError']);
   });
 
   it('should keep app-only error types on the legacy error namespace', async () => {

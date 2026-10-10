@@ -7,18 +7,18 @@ describe('getRuntimeErrorI18nKey', () => {
   it('routes registered runtime codes to the modelRuntime namespace', () => {
     expect(getRuntimeErrorI18nKey(AgentRuntimeErrorType.InvalidProviderAPIKey)).toEqual({
       key: 'InvalidProviderAPIKey',
-      ns: 'modelRuntime',
+      ns: 'runtimeError',
     });
   });
 
   it('canonicalises deprecated aliases so the lookup hits an existing key', () => {
     expect(getRuntimeErrorI18nKey('PipelineError')).toEqual({
       key: AgentRuntimeErrorType.ContextEnginePipelineError,
-      ns: 'modelRuntime',
+      ns: 'runtimeError',
     });
     expect(getRuntimeErrorI18nKey(AgentRuntimeErrorType.QuotaLimitReached)).toEqual({
       key: AgentRuntimeErrorType.RateLimitExceeded,
-      ns: 'modelRuntime',
+      ns: 'runtimeError',
     });
   });
 

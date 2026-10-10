@@ -1,0 +1,6 @@
+{
+  "exclude": [],
+  "extends": "../../tsconfig.json",
+  "include": ["./*.ts"],
+  "references": []
+}

@@ -5,9 +5,8 @@ import {
 import { formatHeteroErrorId, HETERO_ERROR_SPECS } from '@lobechat/heterogeneous-agents/errors';
 import type { ChatErrorHeterogeneousContext } from '@lobechat/types';
 
-import english from '@/locales/default/modelRuntime';
+import { getServerTranslations } from '@/libs/i18n/serverTranslation';
 
-import chinese from '../../../../../locales/zh-CN/modelRuntime.json';
 import type { BotReplyLocale } from './platforms/const';
 
 /** Render only allowlisted context. Raw CLI stderr and paths stay in diagnostics. */
@@ -22,16 +21,13 @@ export const renderHeterogeneousError = (
   )
     return;
   const spec = HETERO_ERROR_SPECS[context.kind as keyof typeof HETERO_ERROR_SPECS];
-  const catalog: Record<string, string> = lng === 'zh-CN' ? chinese : english;
-  const prefix = `heterogeneous.${spec.kind}`;
+  const { t } = getServerTranslations('heterogeneousError', lng);
+  const prefix = `heterogeneous.${spec.kind}` as const;
   const agent = getHeterogeneousTypeLabel(context.agentType) ?? 'Agent';
-  const lines = [
-    `**${agent}: ${catalog[`${prefix}.title`]}**`,
-    catalog[`${prefix}.description`].replaceAll('{{agent}}', agent),
-  ];
+  const lines = [`**${agent}: ${t(`${prefix}.title`)}**`, t(`${prefix}.description`, { agent })];
   if (spec.kind === 'usage_limit') {
     if (context.rateLimitType === 'seven_day' || context.rateLimitType === 'five_hour') {
-      lines.push(catalog[`heterogeneous.window.${context.rateLimitType}`]);
+      lines.push(t(`heterogeneous.window.${context.rateLimitType}`));
     }
     if (
       typeof context.resetsAt === 'number' &&
@@ -40,7 +36,7 @@ export const renderHeterogeneousError = (
       context.resetsAt < 8640000000000
     ) {
       const time = new Date(context.resetsAt * 1000).toISOString().replace('T', ' ').slice(0, 16);
-      lines.push(catalog['heterogeneous.reset'].replace('{{time}}', time));
+      lines.push(t('heterogeneous.reset', { time }));
     }
   }
   lines.push(`${lng === 'zh-CN' ? '错误码' : 'Error code'}: \`${formatHeteroErrorId(spec.kind)}\``);

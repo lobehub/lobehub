@@ -23,7 +23,7 @@ interface VideoErrorItemProps {
 const VideoErrorItem = memo<VideoErrorItemProps>(
   ({ generation, aspectRatio, onDelete, onCopyError }) => {
     const { t } = useTranslation('video');
-    const { t: tError } = useTranslation(['error', 'modelRuntime']);
+    const { t: tError } = useTranslation(['error', 'runtimeError']);
 
     const errorMessage = useMemo(() => {
       if (!generation.task.error) return '';
@@ -35,7 +35,7 @@ const VideoErrorItem = memo<VideoErrorItemProps>(
         const translated = getRuntimeErrorMessage(tError, errorBody);
         if (
           translated &&
-          translated !== `modelRuntime:${errorBody}` &&
+          translated !== `runtimeError:${errorBody}` &&
           translated !== `response.${errorBody}`
         ) {
           return translated;

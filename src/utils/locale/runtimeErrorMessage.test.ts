@@ -10,7 +10,7 @@ const createTranslator =
 describe('getRuntimeErrorMessage', () => {
   it('returns the localized runtime error message when the key exists', () => {
     const t = createTranslator({
-      'modelRuntime:ModelEmptyCompletion': 'Localized empty completion',
+      'runtimeError:ModelEmptyCompletion': 'Localized empty completion',
     });
 
     expect(getRuntimeErrorMessage(t, AgentRuntimeErrorType.ModelEmptyCompletion)).toBe(
@@ -20,7 +20,7 @@ describe('getRuntimeErrorMessage', () => {
 
   it('translates deprecated alias codes under their canonical key', () => {
     const t = createTranslator({
-      'modelRuntime:ContextEnginePipelineError': 'Localized pipeline error',
+      'runtimeError:ContextEnginePipelineError': 'Localized pipeline error',
     });
 
     expect(getRuntimeErrorMessage(t, 'PipelineError')).toBe('Localized pipeline error');

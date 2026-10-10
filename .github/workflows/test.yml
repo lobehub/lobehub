@@ -42,8 +42,34 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  server-i18n:
+    name: Generate server translations
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        env:
+          REF_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+          REPOSITORY: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name || github.repository }}
+        run: |
+          git init .
+          git remote add origin "https://github.com/${REPOSITORY}.git"
+          git fetch --no-tags --depth=1 origin "${REF_SHA}"
+          git checkout --force FETCH_HEAD
+
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+      - run: pnpm install
+      - run: /usr/bin/time -v bun run i18n:server
+      - run: bunx vitest run --config scripts/serverI18n/vitest.config.ts --silent=passed-only
+      - uses: actions/upload-artifact@v6
+        with:
+          name: server-i18n
+          path: src/libs/i18n/server/generated/resources.js
+          if-no-files-found: error
+
   # Package tests - all packages in single job to save runner resources
   test-packages:
+    needs: server-i18n
     runs-on: ubuntu-latest
     name: Test Packages
     env:
@@ -74,6 +100,11 @@ jobs:
 
       - name: Install deps
         run: pnpm install
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: server-i18n
+          path: src/libs/i18n/server/generated
 
       - name: Install CLI deps
         run: pnpm install
@@ -187,6 +218,7 @@ jobs:
 
   # App tests - run sharded tests
   test-app:
+    needs: server-i18n
     strategy:
       matrix:
         shard: [1, 2, 3]
@@ -208,6 +240,11 @@ jobs:
 
       - name: Install deps
         run: pnpm install
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: server-i18n
+          path: src/libs/i18n/server/generated
 
       - name: Run tests
         run: bunx vitest --coverage --silent='passed-only' --reporter=default --project app --shard=${{ matrix.shard }}/3
@@ -368,6 +405,7 @@ jobs:
           fi
 
   test-server:
+    needs: server-i18n
     strategy:
       matrix:
         shard: [1, 2]
@@ -391,6 +429,11 @@ jobs:
 
       - name: Install deps
         run: pnpm install
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: server-i18n
+          path: src/libs/i18n/server/generated
 
       - name: Test Server Coverage
         run: bunx vitest --coverage --silent='passed-only' --reporter=default --coverage.reportsDirectory=./apps/server/coverage --project server --shard=${{ matrix.shard }}/2

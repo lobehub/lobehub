@@ -38,7 +38,7 @@ providerContentModerationKeyByDefaultMessage.set(
 export const ErrorState = memo<ErrorStateProps>(
   ({ generation, generationBatch, aspectRatio, onDelete, onCopyError }) => {
     const { t } = useTranslation('image');
-    const { t: tError, i18n } = useTranslation(['error', 'modelRuntime']);
+    const { t: tError, i18n } = useTranslation(['error', 'runtimeError']);
     const taskError = generation.task.error;
     const retryAt = typeof taskError?.body === 'object' ? taskError.body?.retryAt : undefined;
     const retryTime = retryAt ? Date.parse(retryAt) : NaN;
@@ -107,11 +107,11 @@ export const ErrorState = memo<ErrorStateProps>(
         }
 
         // Try the unified ERROR_CODE_SPECS-driven lookup (routes to either the
-        // new `modelRuntime` namespace or legacy `error.response.<X>`).
+        // new `runtimeError` namespace or legacy `error.response.<X>`).
         const runtimeMessage = getRuntimeErrorMessage(tError, errorBody);
         if (
           runtimeMessage &&
-          runtimeMessage !== `modelRuntime:${errorBody}` &&
+          runtimeMessage !== `runtimeError:${errorBody}` &&
           runtimeMessage !== `response.${errorBody}`
         ) {
           return runtimeMessage;

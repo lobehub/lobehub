@@ -24,7 +24,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 const Error = memo<{ error: ChatMessageError }>(({ error }) => {
-  const { t } = useTranslation(['error', 'modelRuntime']);
+  const { t } = useTranslation(['error', 'runtimeError']);
   const providerName = useProviderName(error.body?.provider);
   const bodyMessage = isRecord(error.body)
     ? pickTrimmedString(error.body.message)

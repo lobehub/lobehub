@@ -5,9 +5,8 @@ import {
 } from '@lobechat/model-runtime/errors';
 import type { ChatErrorBudgetContext, ChatErrorHeterogeneousContext } from '@lobechat/types';
 
-import modelRuntimeEnglish from '@/locales/default/modelRuntime';
+import { getServerTranslations } from '@/libs/i18n/serverTranslation';
 
-import modelRuntimeChinese from '../../../../../locales/zh-CN/modelRuntime.json';
 import type { StepPresentationData } from '../agentRuntime/types';
 import { getExtremeAck } from './ackPhrases';
 // Import from the leaf modules (`const` / `utils`) instead of the
@@ -769,9 +768,8 @@ export function renderAgentError(
   if (!friendlyKey && spec && !spec.isFallback) {
     // Reuse the same maintained translations as message error cards. Never
     // interpolate raw provider error text into a shared IM channel.
-    const catalog: Record<string, string> =
-      lng === 'zh-CN' ? modelRuntimeChinese : modelRuntimeEnglish;
-    const copy = catalog[spec.code];
+    const { find } = getServerTranslations('runtimeError', lng);
+    const copy = find(spec.code);
     if (copy && !copy.includes('{{')) return withReference(`${strings.error}\n${copy}`);
   }
   const stringKey =

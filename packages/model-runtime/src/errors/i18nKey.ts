@@ -3,14 +3,14 @@ import { getErrorCodeSpec } from './specs';
 export interface RuntimeErrorI18nKey {
   /** Flat key inside `ns`, e.g. `InvalidProviderAPIKey` or `response.401`. */
   key: string;
-  ns: 'error' | 'modelRuntime';
+  ns: 'error' | 'runtimeError';
 }
 
 /**
  * Locate the localized message for an error type.
  *
  * Runtime error codes (everything in `ERROR_CODE_SPECS`) live in the dedicated
- * `modelRuntime` namespace, one key per canonical code. HTTP statuses, `Plugin*`
+ * `runtimeError` namespace, one key per canonical code. HTTP statuses, `Plugin*`
  * and Cloud-only `ChatErrorType` values stay in the legacy `error:response.<X>`
  * map. Deprecated aliases (`PipelineError`, `QuotaLimitReached`) resolve to their
  * canonical code so the lookup hits the key that actually exists.
@@ -22,5 +22,5 @@ export interface RuntimeErrorI18nKey {
 export const getRuntimeErrorI18nKey = (code: string | number): RuntimeErrorI18nKey => {
   const spec = typeof code === 'string' ? getErrorCodeSpec(code) : undefined;
 
-  return spec ? { key: spec.code, ns: 'modelRuntime' } : { key: `response.${code}`, ns: 'error' };
+  return spec ? { key: spec.code, ns: 'runtimeError' } : { key: `response.${code}`, ns: 'error' };
 };

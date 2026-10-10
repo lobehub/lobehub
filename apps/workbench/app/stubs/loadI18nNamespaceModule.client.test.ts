@@ -8,7 +8,7 @@ describe('workbench model runtime translations', () => {
       defaultLang: 'en-US',
       lng,
       normalizeLocale: (locale) => locale ?? 'en-US',
-      ns: 'modelRuntime',
+      ns: 'runtimeError',
     });
 
     expect(module.default.ModelEmptyCompletion).toEqual(expect.any(String));

@@ -186,3 +186,7 @@ apps/desktop/core-dist
 # Packaged builtin desktop core
 /apps/desktop/core.asar
 /apps/desktop/core.asar.unpacked/
+
+# Build-time server translation projection
+/src/libs/i18n/server/generated/*
+!/src/libs/i18n/server/generated/resources.d.ts

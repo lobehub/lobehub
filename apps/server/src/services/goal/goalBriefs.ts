@@ -10,12 +10,12 @@ import { translation } from '@/libs/i18n/serverTranslation';
 import { SystemAgentService } from '@/server/services/systemAgent';
 
 /** Option ids the coordinator writes; anything else is the main Agent's or the planner's. */
-const COORDINATOR_OPTION_KEYS: Record<string, string> = {
+const COORDINATOR_OPTION_KEYS = {
   fail: 'goalProcess.gate.option.fail',
   retire: 'goalProcess.gate.option.retire',
   retry: 'goalProcess.gate.option.retry',
   [GOAL_CLARIFICATION_OPTION.assume]: 'goalProcess.gate.option.assume',
-};
+} as const;
 
 /** How the coordinator words a machine gate's question (see `openFailureDecisionLocked`). */
 const MACHINE_GATE_TAIL = /Fix it, then retry or retire this task node\?$/;
@@ -87,7 +87,7 @@ export class GoalBriefService {
         const key =
           machine && option.id === 'retry'
             ? 'goalProcess.gate.option.fixedRetry'
-            : COORDINATOR_OPTION_KEYS[option.id];
+            : COORDINATOR_OPTION_KEYS[option.id as keyof typeof COORDINATOR_OPTION_KEYS];
         return key ? t(key) : option.label;
       };
       const recommended = input.options?.find((o) => o.id === input.recommendedOptionId);

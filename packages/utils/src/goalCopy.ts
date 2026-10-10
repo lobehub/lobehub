@@ -8,7 +8,7 @@
  */
 
 export interface LocalizedCopyRef {
-  key: string;
+  key: (typeof REASON_PATTERNS)[number]['key'];
   params?: Record<string, string>;
 }
 
@@ -32,13 +32,7 @@ export const coordinatorGateReason = (question?: string | null): string | undefi
 };
 
 /** Known coordinator reason templates → chat-ns locale refs. */
-const REASON_PATTERNS: Array<{
-  key: string;
-  param?: string;
-  /** Names for several capture groups, in order; `param` names just the first. */
-  params?: string[];
-  pattern: RegExp;
-}> = [
+const REASON_PATTERNS = [
   // Machine gates (see `machineRecovery.ts`): what broke, then what to change.
   {
     key: 'goalProcess.gate.reason.setupWorkingDirectory',
@@ -118,12 +112,15 @@ const REASON_PATTERNS: Array<{
     param: 'code',
     pattern: /^([A-Z][a-z0-9]+[A-Z][A-Za-z0-9]*)$/,
   },
-];
+] as const;
 
 export const coordinatorReasonCopy = (reason?: string | null): LocalizedCopyRef | undefined => {
   if (!reason) return undefined;
   const trimmed = reason.trim();
-  for (const { key, param, params, pattern } of REASON_PATTERNS) {
+  for (const entry of REASON_PATTERNS) {
+    const { key, pattern } = entry;
+    const param = 'param' in entry ? entry.param : undefined;
+    const params = 'params' in entry ? entry.params : undefined;
     const match = pattern.exec(trimmed);
     if (!match) continue;
     const names = params ?? (param ? [param] : []);

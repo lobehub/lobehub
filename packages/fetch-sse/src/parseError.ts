@@ -5,7 +5,7 @@ import i18next, { t } from 'i18next';
 import { getProviderDisplayName } from 'model-bank/modelProviders';
 
 /**
- * Runtime error codes live in their own `modelRuntime` namespace while HTTP
+ * Runtime error codes live in their own `runtimeError` namespace while HTTP
  * statuses and app-only codes stay under the legacy `error:response.<X>` map;
  * `getRuntimeErrorI18nKey` owns that routing (and alias canonicalisation).
  * Looking a runtime code up in the wrong place makes i18next echo the key back,
@@ -38,7 +38,7 @@ const translateErrorType = (errorType: ChatMessageError['type'], body: unknown) 
  */
 const ensureNamespaces = async () => {
   try {
-    await i18next.loadNamespaces(['error', 'modelRuntime']);
+    await i18next.loadNamespaces(['error', 'runtimeError']);
   } catch {
     // a failed namespace load must not swallow the error we came here to report
   }

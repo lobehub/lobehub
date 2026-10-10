@@ -786,7 +786,7 @@ describe('ErrorMessageExtra', () => {
   });
 
   it('falls back to the raw message for a known error when localized content is unavailable', () => {
-    missingTranslationKeys.add('modelRuntime:ExceededToolLimit');
+    missingTranslationKeys.add('runtimeError:ExceededToolLimit');
 
     render(
       <ErrorMessageWithContent
@@ -801,6 +801,6 @@ describe('ErrorMessageExtra', () => {
     );
 
     expect(screen.getByText('The provider rejected the tool count.')).toBeInTheDocument();
-    expect(screen.queryByText('modelRuntime:ExceededToolLimit')).not.toBeInTheDocument();
+    expect(screen.queryByText('runtimeError:ExceededToolLimit')).not.toBeInTheDocument();
   });
 });

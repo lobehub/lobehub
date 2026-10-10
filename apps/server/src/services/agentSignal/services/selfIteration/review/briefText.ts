@@ -1,4 +1,4 @@
-import home from '@/locales/default/home';
+import { getServerTranslations, type ServerTranslate } from '@/libs/i18n/serverTranslation';
 
 /**
  * Counts of self-review actions grouped by execution status.
@@ -29,10 +29,7 @@ export interface SelfReviewBriefTextActionSummaries {
 /**
  * Translation function used to render persisted Agent Signal Daily Brief text.
  */
-export interface SelfReviewBriefTextTranslator {
-  /** Resolves a `home` namespace key with simple string interpolation. */
-  (key: string, options?: Record<string, string>): string;
-}
+export type SelfReviewBriefTextTranslator = ServerTranslate<'home'>;
 
 /**
  * Input context for deterministic nightly self-review Daily Brief copy.
@@ -62,19 +59,10 @@ export interface SelfReviewBriefText {
   type: 'decision' | 'error' | 'insight';
 }
 
-const defaultTranslate: SelfReviewBriefTextTranslator = (key, options = {}) => {
-  const template = home[key as keyof typeof home] ?? key;
-
-  return Object.entries(options).reduce(
-    (content, [name, value]) => content.replace(`{{${name}}}`, value),
-    template,
-  );
-};
-
 const actionCountKey = (input: {
   count: number;
-  pluralKey: string;
-  singularKey: string;
+  pluralKey: `brief.agentSignal.selfReview.${string}`;
+  singularKey: `brief.agentSignal.selfReview.${string}`;
   t: SelfReviewBriefTextTranslator;
 }) =>
   input.t(input.count === 1 ? input.singularKey : input.pluralKey, {
@@ -104,7 +92,7 @@ const withDetails = (summary: string, heading: string, details: string[] = []) =
  * - Deterministic brief text without making a model call
  */
 export const createSelfReviewBriefText = (input: SelfReviewBriefTextInput): SelfReviewBriefText => {
-  const t = input.t ?? defaultTranslate;
+  const t = input.t ?? getServerTranslations('home', 'en-US').t;
 
   if (input.outcome === 'proposal') {
     const summary = actionCountKey({
