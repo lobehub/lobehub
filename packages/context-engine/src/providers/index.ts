@@ -48,6 +48,7 @@ export {
   SelectedToolInjector,
 } from './SelectedToolInjector';
 export { selectActivatedSkills, SkillContextProvider } from './SkillContextProvider';
+export { SkillDiscoveryProvider } from './SkillDiscoveryProvider';
 export {
   extractSkillImportRoutes,
   formatSkillImportRoutes,
@@ -133,6 +134,7 @@ export type { RuntimeAdditionalContextProviderConfig } from './RuntimeAdditional
 export type { SelectedSkillInjectorConfig } from './SelectedSkillInjector';
 export type { SelectedToolInjectorConfig } from './SelectedToolInjector';
 export type { SkillContextProviderConfig, SkillMeta } from './SkillContextProvider';
+export type { SkillDiscoveryProviderConfig } from './SkillDiscoveryProvider';
 export type { SkillImportRoute, SkillImportRouteInjectorConfig } from './SkillImportRouteInjector';
 export type { SystemDateProviderConfig } from './SystemDateProvider';
 export type { SystemRoleInjectorConfig } from './SystemRoleInjector';

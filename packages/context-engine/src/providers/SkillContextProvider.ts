@@ -1,4 +1,4 @@
-import { type SkillItem, type SkillSource, skillsPrompts } from '@lobechat/prompts';
+import type { SkillSource } from '@lobechat/prompts';
 import debug from 'debug';
 
 import { BaseSystemRoleProvider } from '../base/BaseSystemRoleProvider';
@@ -62,8 +62,9 @@ export const selectActivatedSkills = (enabledSkills?: SkillMeta[]): SkillMeta[] 
 
 /**
  * Skill Context Provider
- * Injects lightweight skill metadata into the system prompt so the LLM knows
- * which skills are available and can invoke them via `activateSkill`.
+ * Injects the full content of activated skills into the system prompt. The
+ * `<available_skills>` list of not-yet-activated skills is injected separately
+ * by SkillDiscoveryProvider, before the first user message.
  */
 export class SkillContextProvider extends BaseSystemRoleProvider {
   readonly name = 'SkillContextProvider';
@@ -78,58 +79,24 @@ export class SkillContextProvider extends BaseSystemRoleProvider {
   protected buildSystemRoleContent(_context: PipelineContext): string | null {
     if (this.config.enabled === false) return null;
 
-    const { enabledSkills } = this.config;
+    const activatedSkills = selectActivatedSkills(this.config.enabledSkills);
 
-    if (!enabledSkills || enabledSkills.length === 0) {
-      log('No enabled skills, skipping injection');
+    if (activatedSkills.length === 0) {
+      log('No activated skills, skipping injection');
       return null;
     }
 
-    // Separate activated skills (inject content directly) from available skills (list only)
-    const activatedSkills = selectActivatedSkills(enabledSkills);
-    const availableSkills = enabledSkills.filter((s) => !s.activated);
-
-    const contentParts: string[] = [];
-
-    // Inject activated skill content directly into system prompt
     for (const skill of activatedSkills) {
-      contentParts.push(skill.content!);
       log('Auto-activated skill: %s', skill.identifier);
     }
 
-    // Generate <available_skills> list for non-activated skills
-    if (availableSkills.length > 0) {
-      const skills: SkillItem[] = availableSkills.map((skill) => ({
-        description: skill.description,
-        identifier: skill.identifier,
-        location: skill.location,
-        name: skill.name,
-        source: skill.source,
-      }));
-
-      const availableSkillsContent = skillsPrompts(skills);
-      if (availableSkillsContent) {
-        contentParts.push(availableSkillsContent);
-      }
-    }
-
-    if (contentParts.length === 0) {
-      log('No skill content generated, skipping injection');
-      return null;
-    }
-
-    log(
-      'Skill context prepared: %d activated, %d available',
-      activatedSkills.length,
-      availableSkills.length,
-    );
-    return contentParts.join('\n\n');
+    return activatedSkills.map((skill) => skill.content!).join('\n\n');
   }
 
   protected onInjected(context: PipelineContext): void {
     context.metadata.skillContext = {
       injected: true,
-      skillsCount: this.config.enabledSkills?.length ?? 0,
+      skillsCount: selectActivatedSkills(this.config.enabledSkills).length,
     };
   }
 }

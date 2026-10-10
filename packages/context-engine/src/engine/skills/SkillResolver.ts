@@ -58,7 +58,7 @@ export class SkillResolver {
       // skill whose content is deliberately withheld until `activateSkill`
       // mounts its bundle (see resolveClientSkills / aiAgent's skills build).
       // Force-activating it anyway would make it vanish from BOTH the
-      // injected content (no content to show) and SkillContextProvider's
+      // injected content (no content to show) and SkillDiscoveryProvider's
       // <available_skills> list (which only lists non-activated skills) —
       // making a pinned-but-unmounted skill invisible to the model entirely.
       // Falling through here keeps it listed as available so the model can

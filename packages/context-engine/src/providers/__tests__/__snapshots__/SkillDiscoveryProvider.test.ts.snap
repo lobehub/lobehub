@@ -1,0 +1,10 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`SkillDiscoveryProvider > should inject <available_skills> before the first user message, not into system 1`] = `
+"<available_skills>
+  <skill name="Artifacts" location="/path/to/skills/artifacts/SKILL.md">Generate interactive UI components</skill>
+  <skill name="My Skill">Custom skill description</skill>
+</available_skills>
+
+Use the activateSkill tool to activate a skill when needed."
+`;

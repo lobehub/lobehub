@@ -61,6 +61,14 @@ const getCurrentDateContent = () => {
   return `Current date: ${year}-${month}-${day} (${tz})`;
 };
 
+// Builtin skills are always listed in agent mode, as a context message injected
+// before the first user message.
+const skillDiscoveryMessage = () =>
+  expect.objectContaining({
+    content: expect.stringContaining('<available_skills>'),
+    role: 'user',
+  });
+
 /**
  * Default mock resolvedAgentConfig for tests
  */
@@ -299,8 +307,8 @@ describe('ChatService', () => {
 
         const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
 
-        // System date + (2 history messages + 1 current user message)
-        expect(calledMessages).toHaveLength(4);
+        // System date + skill discovery + (2 history messages + 1 current user message)
+        expect(calledMessages).toHaveLength(5);
         expect(calledMessages[0]).toEqual(
           expect.objectContaining({
             content: expect.stringContaining(getCurrentDateContent()),
@@ -308,6 +316,7 @@ describe('ChatService', () => {
           }),
         );
         expect(calledMessages.slice(1)).toEqual([
+          skillDiscoveryMessage(),
           expect.objectContaining({ content: 'History 2', role: 'user' }),
           expect.objectContaining({ content: 'Response 2', role: 'assistant' }),
           expect.objectContaining({ content: 'Current message', role: 'user' }),
@@ -353,15 +362,16 @@ describe('ChatService', () => {
 
         const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
 
-        // System date + current user message only
-        expect(calledMessages).toHaveLength(2);
+        // System date + skill discovery + current user message only
+        expect(calledMessages).toHaveLength(3);
         expect(calledMessages[0]).toEqual(
           expect.objectContaining({
             content: expect.stringContaining(getCurrentDateContent()),
             role: 'system',
           }),
         );
-        expect(calledMessages[1]).toEqual(
+        expect(calledMessages[1]).toEqual(skillDiscoveryMessage());
+        expect(calledMessages[2]).toEqual(
           expect.objectContaining({ content: 'Current message', role: 'user' }),
         );
       });
@@ -405,8 +415,8 @@ describe('ChatService', () => {
 
         const calledMessages = getChatCompletionSpy.mock.calls[0][0].messages as any[];
 
-        // System date + all original messages
-        expect(calledMessages).toHaveLength(4);
+        // System date + skill discovery + all original messages
+        expect(calledMessages).toHaveLength(5);
         expect(calledMessages[0]).toEqual(
           expect.objectContaining({
             content: expect.stringContaining(getCurrentDateContent()),
@@ -414,6 +424,7 @@ describe('ChatService', () => {
           }),
         );
         expect(calledMessages.slice(1)).toEqual([
+          skillDiscoveryMessage(),
           expect.objectContaining({ content: 'History 1', role: 'user' }),
           expect.objectContaining({ content: 'Response 1', role: 'assistant' }),
           expect.objectContaining({ content: 'Current message', role: 'user' }),
@@ -743,6 +754,7 @@ describe('ChatService', () => {
                 content: expect.stringContaining('Current date:'),
                 role: 'system',
               }),
+              skillDiscoveryMessage(),
               {
                 content: [
                   {
@@ -806,6 +818,7 @@ describe('ChatService', () => {
                 content: expect.stringContaining('Current date:'),
                 role: 'system',
               }),
+              skillDiscoveryMessage(),
               { content: 'Hello', role: 'user' },
               { content: 'Hey', role: 'assistant' },
             ],
@@ -895,6 +908,7 @@ describe('ChatService', () => {
                 content: expect.stringContaining('Current date:'),
                 role: 'system',
               }),
+              skillDiscoveryMessage(),
               {
                 content: [
                   {
@@ -996,6 +1010,7 @@ describe('ChatService', () => {
                 content: expect.stringContaining('Current date:'),
                 role: 'system',
               }),
+              skillDiscoveryMessage(),
               {
                 content: [
                   {
@@ -1107,9 +1122,9 @@ describe('ChatService', () => {
         expect(imageUrlToBase64).toHaveBeenCalledWith('http://127.0.0.1:8080/local2.gif');
         expect(imageUrlToBase64).toHaveBeenCalledTimes(2); // Only for local URLs
 
-        // Verify the final result has correct URLs (index 1 because index 0 is system date)
+        // Verify the final result has correct URLs (index 2: system date, then skill discovery)
         const callArgs = getChatCompletionSpy.mock.calls[0][0];
-        const imageContent = (callArgs.messages?.[1].content as any[])?.filter(
+        const imageContent = (callArgs.messages?.[2].content as any[])?.filter(
           (c) => c.type === 'image_url',
         );
 
@@ -1258,12 +1273,14 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
-        expect(requestMessages[0].content).toContain(
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
+        expect(requestMessages[0].content).toContain('<tool name="SEO">');
+        expect(requestMessages[1].role).toBe('user');
+        expect(requestMessages[1].content).toContain('<available_skills>');
+        expect(requestMessages[1].content).toContain(
           'Use the activateSkill tool to activate a skill when needed.',
         );
-        expect(requestMessages[0].content).toContain('<tool name="SEO">');
-        expect(requestMessages[1]).toEqual(
+        expect(requestMessages[2]).toEqual(
           expect.objectContaining({
             content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
             role: 'user',
@@ -1407,9 +1424,10 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).toContain('<tool name="SEO">');
-        expect(requestMessages[1]).toEqual(
+        expect(requestMessages[1].content).toContain('<available_skills>');
+        expect(requestMessages[2]).toEqual(
           expect.objectContaining({
             content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
             role: 'user',
@@ -1459,9 +1477,10 @@ describe('ChatService', () => {
             role: 'system',
           }),
         );
-        expect(requestMessages[0].content).toContain('<available_skills>');
+        expect(requestMessages[0].content).not.toContain('<available_skills>');
         expect(requestMessages[0].content).not.toContain('<tool name="SEO">');
-        expect(requestMessages[1]).toEqual(
+        expect(requestMessages[1].content).toContain('<available_skills>');
+        expect(requestMessages[2]).toEqual(
           expect.objectContaining({
             content: expect.stringContaining('https://vercel.com/ 请分析 chatGPT 关键词'),
             role: 'user',
