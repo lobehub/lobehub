@@ -4054,6 +4054,16 @@ When I am ___, I need ___
   'environments.form.exclude': 'Regenerable paths',
   'environments.form.excludeHint':
     'One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.',
+  'environments.form.filesDesc': 'What this folder is called and what it holds for the agent.',
+  'environments.kind.code': 'Code',
+  'environments.kind.codeDesc':
+    'Clone a repository, set variables and run setup before the agent starts.',
+  'environments.kind.files': 'Files',
+  'environments.kind.filesDesc':
+    'Upload files for an agent to work on. Ready as soon as it is created.',
+  'environments.kind.filesHint':
+    'A folder you upload files to for an agent to work on. Nothing is cloned or installed, so there is no build — it is ready the moment it is created.',
+  'environments.kind.label': 'Type',
   'environments.meta.creatorTooltip': 'Created by {{name}}',
   'environments.meta.unknownCreator': 'Unknown',
   'environments.meta.createdAt': 'Created {{time}}',
