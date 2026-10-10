@@ -206,18 +206,27 @@ type PlanAdmission =
       opStatus?: string;
       unfinished: GoalGraphNode[];
     }
-  | { code: 'duplicate'; ok: true; submitted: NonNullable<GoalManagerState['submitted']> }
+  | {
+      code: 'duplicate';
+      ok: true;
+      /** Never set here — the duplicate branch returns before the run is resolved. */
+      opStatus?: string;
+      submitted: NonNullable<GoalManagerState['submitted']>;
+    }
   | {
       code: PlanRejectionCode;
       message: string;
       ok: false;
+      /** The turn's run status when it was already resolved, so a refusal can still name it. */
+      opStatus?: string;
       trpcCode: (typeof PLAN_REJECTION)[PlanRejectionCode]['trpc'];
     };
 
-const rejectPlan = (code: PlanRejectionCode): PlanAdmission => ({
+const rejectPlan = (code: PlanRejectionCode, opStatus?: string): PlanAdmission => ({
   code,
   message: PLAN_REJECTION[code].message,
   ok: false,
+  opStatus,
   trpcCode: PLAN_REJECTION[code].trpc,
 });
 
@@ -1360,18 +1369,20 @@ export class GoalManagerService {
       // whose id the conversation environment carried when the goal was created.
       const localAdoptedRun = !!state.adopted && !op && input.operationId === state.operationId;
       if (!localAdoptedRun && (op?.id !== input.operationId || op.agentId !== agentId))
-        return rejectPlan('operation_mismatch');
+        return rejectPlan('operation_mismatch', op?.status);
     }
     const graph = await this.graph(db).getGraph(goal.id);
-    if (!graph || !activeStatuses.has(goal.status)) return rejectPlan('inactive');
-    if (graph.decisions.some((d) => d.status === 'pending')) return rejectPlan('pending_decision');
+    if (!graph || !activeStatuses.has(goal.status)) return rejectPlan('inactive', op?.status);
+    if (graph.decisions.some((d) => d.status === 'pending'))
+      return rejectPlan('pending_decision', op?.status);
     if (state.submitted) return { code: 'duplicate', ok: true, submitted: state.submitted };
-    if (state.consumed) return rejectPlan('consumed');
-    if (op && op.status !== 'running') return rejectPlan('turn_settled');
-    if (managerSnapshot(graph) !== state.snapshot) return rejectPlan('stale_input');
+    if (state.consumed) return rejectPlan('consumed', op?.status);
+    if (op && op.status !== 'running') return rejectPlan('turn_settled', op?.status);
+    if (managerSnapshot(graph) !== state.snapshot) return rejectPlan('stale_input', op?.status);
     if (state.reviewSnapshot && (await this.reviews(graph, db)).hash !== state.reviewSnapshot)
-      return rejectPlan('review_changed');
-    if ((await this.budgetFacts(graph, db)).blocked) return rejectPlan('budget_exhausted');
+      return rejectPlan('review_changed', op?.status);
+    if ((await this.budgetFacts(graph, db)).blocked)
+      return rejectPlan('budget_exhausted', op?.status);
     const unfinished = graph.nodes.filter((n) => n.kind === 'task' && !terminalNodes.has(n.status));
     // A takeover of the terminal acceptance can only be answered with `escalate`.
     // The acceptance task is matched by TITLE regardless of status, so a corrective
@@ -1390,7 +1401,7 @@ export class GoalManagerService {
           n.title === GOAL_ACCEPTANCE_TASK_TITLE,
       )
     )
-      return rejectPlan('acceptance_escalate_only');
+      return rejectPlan('acceptance_escalate_only', op?.status);
     // The unfinished-work guard asks whether an UNINVITED turn may plan while
     // work is in flight; it would double-plan the frontier. A takeover turn
     // inherits work that is stuck by definition — the coordinator only handed it
@@ -1404,10 +1415,11 @@ export class GoalManagerService {
         (plan.action === 'verify' &&
           !graph.nodes.some((n) => n.kind === 'task' && n.status === 'resolved')))
     )
-      return rejectPlan('existing_work');
-    if (plan?.action === 'wait' && unfinished.length) return rejectPlan('wait_unsettled');
+      return rejectPlan('existing_work', op?.status);
+    if (plan?.action === 'wait' && unfinished.length)
+      return rejectPlan('wait_unsettled', op?.status);
     if (plan?.action === 'wait' && Date.parse(plan.until) <= Date.now())
-      return rejectPlan('wait_until_past');
+      return rejectPlan('wait_until_past', op?.status);
     return { agentId, code: 'ok', graph, ok: true, opStatus: op?.status, unfinished };
   };
 
@@ -1478,7 +1490,7 @@ export class GoalManagerService {
             dispatchNeverStarted: !!state.dispatchNeverStarted,
             failedTurns: state.failedTurns ?? 0,
             operationId: state.operationId ?? null,
-            opStatus: verdict.ok && verdict.code === 'ok' ? (verdict.opStatus ?? null) : null,
+            opStatus: verdict.opStatus ?? null,
             problem: state.problem ?? null,
             problemTaskId: state.problemTaskId ?? null,
             retryAfter: state.retryAfter ?? null,

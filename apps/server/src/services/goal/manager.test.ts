@@ -751,6 +751,13 @@ describe('CLI main Agent planning', () => {
       code: 'inactive',
       ok: false,
     });
+
+    // A token that is not this turn's is named as such, rather than reported as
+    // whatever precondition happens to fail next.
+    expect((await manager().admission(id, { token: 'not-the-token' })).admission).toMatchObject({
+      code: 'turn_owner',
+      ok: false,
+    });
   });
 
   it('pages the goal audit trail newest first and refuses another owner', async () => {

@@ -336,7 +336,7 @@ function printGoalState(
  */
 async function explainPlanRefusal(
   id: string,
-  options: { operation?: string },
+  options: { operation?: string; token?: string },
 ): Promise<string | undefined> {
   try {
     const { data } = await (
@@ -344,6 +344,7 @@ async function explainPlanRefusal(
     ).goal.planContext.query({
       id,
       operationId: options.operation ?? process.env.LOBEHUB_OPERATION_ID,
+      token: options.token,
     });
     if (data.admission.ok) return undefined;
     const lines = [`Refused (${data.admission.code}): ${admissionHint[data.admission.code] ?? ''}`];

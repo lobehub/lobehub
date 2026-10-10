@@ -1025,6 +1025,9 @@ describe('goal plan refusal', () => {
     expect(mockClient.goal.planContext.query).toHaveBeenCalledWith({
       id: 'goal-1',
       operationId: 'op-env',
+      // The submitted token travels too: without it the verdict would name the
+      // next failing precondition instead of the token mismatch the server threw.
+      token: 'tok',
     });
     const text = output();
     expect(text).toContain('Refused (stale_input)');
