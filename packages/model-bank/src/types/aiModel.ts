@@ -770,11 +770,15 @@ export const UpdateAiModelSchema = z.object({
   // NOTE: `chatConfig` is deliberately NOT accepted here — model-instance reasoning
   // defaults go through the dedicated updateAiModelReasoningConfig procedure so the
   // generic update path can never carry (and thus never stomp) that namespace.
+  // `null` is accepted alongside `undefined` (and means the same thing): the
+  // model-config modal submits the whole model card back, and a model whose
+  // `config` column is NULL reads back as `null`. Rejecting it made every save
+  // of such a model fail with a BAD_REQUEST.
   config: z
     .object({
       deploymentName: z.string().optional(),
     })
-    .optional(),
+    .nullish(),
   contextWindowTokens: z.number().nullish(),
   displayName: z.string().nullish(),
   settings: AiModelSettingsSchema.optional(),

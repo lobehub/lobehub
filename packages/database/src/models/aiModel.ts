@@ -211,7 +211,12 @@ export class AiModelModel {
     // config (the model-config modal only knows `deploymentName`), and a full
     // replace would silently wipe sibling keys such as the user's `chatConfig`
     // model-instance reasoning defaults.
-    if (normalizedValue.config !== undefined && normalizedValue.config !== null) {
+    if (normalizedValue.config === null) {
+      // `null` means "no config submitted" (see UpdateAiModelSchema): drop the key
+      // from the update set so echoing back a NULL column can never erase siblings
+      // such as the user's `config.chatConfig` reasoning defaults.
+      delete set.config;
+    } else if (normalizedValue.config !== undefined) {
       set.config = sql`COALESCE(ai_models.config, '{}'::jsonb) || excluded.config`;
     }
 
