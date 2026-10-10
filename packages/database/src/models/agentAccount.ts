@@ -3,7 +3,7 @@ import type {
   AgentAccountCredentialHint,
   AgentAccountKind,
 } from '@lobechat/types';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
 import { agentAccounts } from '../schemas';
@@ -249,6 +249,12 @@ export class AgentAccountModel {
    * Resolve an account from the routing key on an inbound webhook, before any
    * user is known. Authorization is the caller's job — this reaches rows
    * belonging to anyone, exactly like `AgentBotProviderModel.findByPlatformAndAppId`.
+   *
+   * A revoked row never routes. The unique indexes on the routing key are
+   * partial (`status <> 'revoked'`), so a released handle can be bound again and
+   * the key may then carry both the revoked row and its live replacement; this
+   * filter mirrors that index so inbound traffic (and the credential used to
+   * verify it) always resolves to the live account.
    */
   static findByRoutingKey = async (
     db: LobeChatDatabase,
@@ -258,7 +264,13 @@ export class AgentAccountModel {
     const [row] = await db
       .select(viewColumns)
       .from(agentAccounts)
-      .where(and(eq(agentAccounts.provider, provider), eq(agentAccounts.identifier, identifier)))
+      .where(
+        and(
+          eq(agentAccounts.provider, provider),
+          eq(agentAccounts.identifier, identifier),
+          ne(agentAccounts.status, 'revoked'),
+        ),
+      )
       .limit(1);
 
     return row;
