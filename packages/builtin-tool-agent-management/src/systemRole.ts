@@ -194,7 +194,7 @@ export const buildSystemPrompt = (
     ? `
 
 **Execution:**
-- **callAgent**: Invoke an agent to handle a task`
+- **callAgent**: Dispatch an agent to handle a task. It returns immediately with a thread id — the called agent runs in the background and its result is written back to the call agent card when it completes. Check progress with \`lh thread view <threadId>\`; do not wait for a result in the same turn.`
     : ''
 }
 </core_capabilities>
