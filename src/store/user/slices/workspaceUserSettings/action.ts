@@ -2,6 +2,7 @@ import type { ReplicaSlice } from '@lobechat/replica/zustand';
 import type { WorkspaceUserPreference } from '@lobechat/types';
 import { mergeNotificationSettings } from '@lobechat/utils/mergeNotificationSettings';
 import isEqual from 'fast-deep-equal';
+import { useSyncExternalStore } from 'react';
 
 import {
   getActiveWorkspaceId,
@@ -10,9 +11,10 @@ import {
 import { createReplicaSlice, type ReplicaLens } from '@/libs/replica';
 import { workspaceUserSettingsService } from '@/services/workspaceUserSettings';
 import { type StoreSetter } from '@/store/types';
-import { type UserStore, useUserStore } from '@/store/user';
 import { setNamespace } from '@/utils/storeDebug';
 
+import type { UserState } from '../../initialState';
+import type { UserStore } from '../../store';
 import {
   getWorkspaceUserPreferenceResource,
   type WorkspaceUserPreferenceParams,
@@ -28,6 +30,20 @@ type PreferenceSlice = ReplicaSlice<
   WorkspaceUserPreference,
   WorkspaceUserPreference | null
 >;
+
+/**
+ * Read side of the store api this slice needs to observe its own view. It reads
+ * through the store instead of importing `useUserStore`: this slice is part of
+ * that store, so a value import closes the `store → slice → store` module cycle
+ * the circular lint rejects (see `useFetchWorkspaceUserPreference`).
+ */
+interface PreferenceStoreApi {
+  getState: () => UserState;
+  subscribe: (listener: () => void) => () => void;
+}
+
+/** Never notifies — what the snapshot falls back to when no store api is wired. */
+const EMPTY_SUBSCRIBE = () => () => {};
 
 /**
  * Fold a preference patch onto the current bucket, mirroring the server's deep
@@ -97,10 +113,11 @@ const workspaceUserPreferenceLens: ReplicaLens<UserStore, WorkspaceUserPreferenc
 export const createWorkspaceUserSettingsSlice = (
   set: Setter,
   get: () => UserStore,
-  _api?: unknown,
+  _api?: PreferenceStoreApi,
 ) => new WorkspaceUserSettingsActionImpl(set, get, _api);
 
 export class WorkspaceUserSettingsActionImpl {
+  readonly #api: PreferenceStoreApi | undefined;
   readonly #get: () => UserStore;
   readonly #set: Setter;
   /**
@@ -113,8 +130,8 @@ export class WorkspaceUserSettingsActionImpl {
    */
   #preference?: PreferenceSlice;
 
-  constructor(set: Setter, get: () => UserStore, _api?: unknown) {
-    void _api;
+  constructor(set: Setter, get: () => UserStore, _api?: PreferenceStoreApi) {
+    this.#api = _api;
     this.#set = set;
     this.#get = get;
   }
@@ -151,10 +168,20 @@ export class WorkspaceUserSettingsActionImpl {
       enabled: !!workspaceId,
     });
 
-    const data = useUserStore((s) =>
-      workspaceId && s.workspaceUserPreferenceWorkspaceId === workspaceId
-        ? s.workspaceUserPreference
-        : undefined,
+    // Read the view through the store api rather than `useUserStore`: importing
+    // the store hook here would close a `store → slice → store` module cycle
+    // (`dpdm` rejects it). Same reactive read, no module edge — the shape
+    // mirrors `useChatInputResourceAccess`.
+    const api = this.#api;
+    const data = useSyncExternalStore(
+      api ? api.subscribe : EMPTY_SUBSCRIBE,
+      () => {
+        const state = api ? api.getState() : this.#get();
+        return workspaceId && state.workspaceUserPreferenceWorkspaceId === workspaceId
+          ? state.workspaceUserPreference
+          : undefined;
+      },
+      () => undefined,
     );
 
     return {
