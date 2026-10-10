@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDiscoverStore } from '@/store/discover';
+import { socialSelectors } from '@/store/discover/selectors';
 
 import { useOrganizationDetailContext } from './DetailProvider';
 
@@ -15,9 +16,11 @@ const FollowStats = memo(() => {
 
   // Fall back to the static profile counts (sourced from the authoritative
   // `accounts.*_count` columns) whenever the live count is missing or 0, so a
-  // not-yet-populated live query never clobbers a real count.
+  // not-yet-populated live entry never clobbers a real count.
   const useFollowCounts = useDiscoverStore((s) => s.useFollowCounts);
-  const { data: followCounts } = useFollowCounts(user.id);
+  const { queryKey } = useFollowCounts(user.id);
+  // The replica view of this entry; the sync hook only reports the fetch flags.
+  const followCounts = useDiscoverStore(socialSelectors.followCounts(queryKey));
 
   const followingCount = followCounts?.followingCount || user.followingCount || 0;
   const followersCount = followCounts?.followersCount || user.followersCount || 0;
