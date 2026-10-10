@@ -252,11 +252,25 @@ const PlatformDetail = memo<PlatformDetailProps>(
       stopConnectPolling();
     }, [platformDef.id, stopConnectPolling]);
 
-    // Sync form with saved config
+    // Sync form with saved config. The provider list is replica-backed, so on a
+    // revisit the form paints the persisted config first and the live fetch
+    // replaces it in the background. Adopting that background copy while the
+    // user is mid-edit would silently discard their input, so a replacement of
+    // the *same* provider is ignored until the form is clean again (after a
+    // save / discard, or when a different provider arrives).
+    const previousConfigRef = useRef<CurrentConfig | undefined>(undefined);
     useEffect(() => {
+      const previous = previousConfigRef.current;
+      previousConfigRef.current = currentConfig;
+
+      const isSameProvider =
+        previous?.id === currentConfig?.id && previous?.platform === currentConfig?.platform;
+
+      if (isSameProvider && isDirty) return;
+
       form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
-    }, [currentConfig, form, platformDef.schema]);
+    }, [currentConfig, form, platformDef.schema, isDirty]);
 
     useEffect(() => {
       if (!currentConfig?.enabled) {
