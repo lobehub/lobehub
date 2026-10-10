@@ -19,7 +19,7 @@ const LinkModalContent = memo<LinkModalContentProps>(({ appId, botUsername, name
   const renderBody = () => {
     switch (platform) {
       case 'slack': {
-        return <SlackLinkBody />;
+        return <SlackLinkBody name={name} />;
       }
       case 'discord': {
         return <DiscordLinkBody appId={appId} name={name} />;

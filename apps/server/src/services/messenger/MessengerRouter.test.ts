@@ -225,6 +225,7 @@ vi.mock('./platforms/slack/binder', () => ({
 }));
 
 const mockTelegramBinder = {
+  completeStartLink: vi.fn(),
   createClient: () => ({
     createAdapter: () => ({}),
     // Telegram thread ids are `telegram:<chatId>[:<messageThreadId>]`.
@@ -1140,6 +1141,49 @@ describe('MessengerRouter slash command dispatch', () => {
       }),
     );
     expect(mockTelegramBinder.sendDmText).not.toHaveBeenCalled();
+  });
+
+  it('completes a web-initiated bind from a private /start <code> deep link', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue(null);
+    mockTelegramBinder.completeStartLink.mockResolvedValueOnce(true);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeTelegramSlashEvent({ text: 'TG_0123456789ABCDEF01234567' }));
+
+    expect(mockTelegramBinder.completeStartLink).toHaveBeenCalledWith({
+      authorUserId: '123',
+      authorUserName: 'alice',
+      chatId: '123',
+      payload: 'TG_0123456789ABCDEF01234567',
+    });
+    expect(mockTelegramBinder.handleUnlinkedMessage).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the verify-im onboarding when the /start payload is not a code', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue(null);
+    mockTelegramBinder.completeStartLink.mockResolvedValueOnce(false);
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(fakeTelegramSlashEvent({ text: 'link' }));
+
+    expect(mockTelegramBinder.handleUnlinkedMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('never completes a start code from a Telegram group', async () => {
+    await loadTelegramBot();
+    mockFindLink.mockResolvedValue({ activeAgentId: 'agt_a', userId: 'user-1' });
+
+    const handler = mockChatBot.onSlashCommand.mock.calls[0][1] as (event: any) => Promise<void>;
+    await handler(
+      fakeTelegramSlashEvent({
+        channel: { id: 'telegram:-100123', isDM: false, post: vi.fn() },
+        text: 'TG_0123456789ABCDEF01234567',
+      }),
+    );
+
+    expect(mockTelegramBinder.completeStartLink).not.toHaveBeenCalled();
   });
 
   it('keeps an unlinked Telegram group /start visible without leaking a link token', async () => {

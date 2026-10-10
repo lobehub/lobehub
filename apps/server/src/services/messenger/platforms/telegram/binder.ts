@@ -1,3 +1,5 @@
+import { randomBytes } from 'node:crypto';
+
 import type { Message } from 'chat';
 import debug from 'debug';
 
@@ -13,6 +15,8 @@ import {
 } from '@/server/services/bot/platforms/telegram/threadId';
 import { renderGuestCopy } from '@/server/services/bot/replyTemplate';
 
+import { greetAfterBind } from '../../bind/greeting';
+import { linkSenderByCode } from '../../bind/linkByCode';
 import { issueLinkToken } from '../../linkTokenStore';
 import type {
   AgentPickerEntry,
@@ -42,6 +46,32 @@ const buildSwitchKeyboard = (
   ]);
 
 const log = debug('lobe-server:messenger:telegram');
+
+/**
+ * Web-initiated link codes ride in the `start` parameter of a
+ * `t.me/<bot>?start=<code>` link, which Telegram limits to `[A-Za-z0-9_-]`
+ * and 64 chars. Nobody types these, so they are long and unguessable.
+ */
+const TELEGRAM_START_CODE_PATTERN = /^TG_[\dA-F]{24}$/i;
+
+export const createTelegramStartCode = (): string =>
+  `TG_${randomBytes(12).toString('hex').toUpperCase()}`;
+
+export const isTelegramStartCode = (payload: string): boolean =>
+  TELEGRAM_START_CODE_PATTERN.test(payload.trim());
+
+export const buildTelegramStartLink = (botUsername: string, code: string): string =>
+  `https://t.me/${encodeURIComponent(botUsername.replace(/^@/, '').trim())}?start=${encodeURIComponent(code)}`;
+
+export const TELEGRAM_START_LINK_REPLY = {
+  alreadyLinkedToOther:
+    'This Telegram account is already connected to a different LobeHub account. Disconnect it there first, then try again.',
+  codeInvalid:
+    'This link has expired or was already used. Open LobeHub → Settings → Messenger → Telegram to get a fresh one.',
+  linked: '✅ Linked successfully! Your LobeHub account is now connected.',
+  unlinkBeforeRelink:
+    'Your LobeHub account is already connected to another Telegram account. Disconnect it in Settings → Messenger first, then try again.',
+} as const;
 
 const buildVerifyImUrl = (params: {
   appUrl: string;
@@ -94,6 +124,48 @@ export class MessengerTelegramBinder implements MessengerPlatformBinder {
       },
       { appUrl: appEnv.APP_URL },
     );
+  }
+
+  async completeStartLink(params: {
+    authorUserId: string;
+    authorUserName?: string;
+    chatId: string;
+    payload: string;
+  }): Promise<boolean> {
+    const code = params.payload.trim();
+    if (!isTelegramStartCode(code)) return false;
+
+    const outcome = await linkSenderByCode({
+      code,
+      platform: 'telegram',
+      senderId: params.authorUserId,
+      senderName: params.authorUserName,
+    });
+    switch (outcome.status) {
+      case 'linked': {
+        await this.sendDmText(params.chatId, TELEGRAM_START_LINK_REPLY.linked);
+        await greetAfterBind({
+          agentId: outcome.payload.activeAgentId,
+          locale: outcome.payload.locale,
+          platform: 'telegram',
+          userId: outcome.payload.userId,
+        });
+        break;
+      }
+      case 'invalid': {
+        await this.sendDmText(params.chatId, TELEGRAM_START_LINK_REPLY.codeInvalid);
+        break;
+      }
+      case 'already_linked_to_other': {
+        await this.sendDmText(params.chatId, TELEGRAM_START_LINK_REPLY.alreadyLinkedToOther);
+        break;
+      }
+      case 'unlink_before_relink': {
+        await this.sendDmText(params.chatId, TELEGRAM_START_LINK_REPLY.unlinkBeforeRelink);
+        break;
+      }
+    }
+    return true;
   }
 
   async handleUnlinkedMessage(ctx: UnlinkedMessageContext): Promise<void> {

@@ -14,6 +14,7 @@ import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPer
 import {
   getEnabledMessengerPlatforms,
   getMessengerDiscordConfig,
+  getMessengerLinkTokenTtl,
   getMessengerLinqConfig,
   getMessengerSlackConfig,
   getMessengerTelegramConfig,
@@ -35,6 +36,7 @@ import { WorkspaceModel } from '@/database/models/workspace';
 import { agents, users } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
 import { notTrashed } from '@/database/utils/softDelete';
+import { appEnv } from '@/envs/app';
 import { authedProcedure, publicProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 import { getServerFeatureFlagsStateFromRuntimeConfig } from '@/server/featureFlags';
@@ -65,9 +67,26 @@ import {
   peekWechatQrSession,
   releaseWechatQrFinalizeLock,
 } from '@/server/services/messenger';
+import { greetAfterBind } from '@/server/services/messenger/bind/greeting';
+import {
+  createBindPollId,
+  isBindSessionExpired,
+  peekBindSession,
+  saveBindSession,
+  settleBindSession,
+} from '@/server/services/messenger/bind/sessionStore';
+import type {
+  BindFailureReason,
+  BindPollStatus,
+  StartBindResult,
+} from '@/server/services/messenger/bind/types';
 import { wechatInstallationKey } from '@/server/services/messenger/installations';
 import { issueLinkCode, peekLinkCodeStatus } from '@/server/services/messenger/linkTokenStore';
 import { pickLinqPoolNumber } from '@/server/services/messenger/platforms/linq/pool';
+import {
+  buildTelegramStartLink,
+  createTelegramStartCode,
+} from '@/server/services/messenger/platforms/telegram/binder';
 import {
   getMessengerPushWindow,
   MESSENGER_PUSH_PLATFORMS,
@@ -196,6 +215,14 @@ const messengerProcedure = authedProcedure.use(serverDatabase).use(async (opts) 
 });
 const messengerWriteProcedure = messengerProcedure.use(withScopedPermission('agent:update'));
 
+/** The slice of the messenger procedure context shared helpers need. */
+interface MessengerContext {
+  getAgentModel: (workspaceId?: string | null) => AgentModel;
+  messengerLinkModel: MessengerAccountLinkModel;
+  serverDB: LobeChatDatabase;
+  userId: string;
+}
+
 /**
  * Resolve the workspace scope of an agent the user wants to route the System
  * Bot to, authorizing access along the way. Because the bot is shared and
@@ -248,6 +275,229 @@ const resolveAuthorizedAgentScope = async (
     throw new TRPCError({ code: 'FORBIDDEN', message: 'messenger.error.agentNotFound' });
   }
   return { title: agentRow.title, workspaceId: agentRow.workspaceId };
+};
+
+/** Map a bind-conflict tRPC error onto the unified `failed` reason. */
+const toBindFailureReason = (error: unknown): BindFailureReason | undefined => {
+  if (!(error instanceof TRPCError) || error.code !== 'CONFLICT') return undefined;
+  if (error.message.endsWith('alreadyLinkedToOther')) return 'already_linked_to_other';
+  if (error.message.endsWith('unlinkBeforeRelink')) return 'unlink_before_relink';
+  return undefined;
+};
+
+/**
+ * Poll a WeChat iLink QR session and finalize the user-owned account
+ * connection exactly once when WeChat confirms it. Shared by the legacy
+ * `pollWechatQrSession` and the unified `pollBind`. The browser never receives
+ * the raw QR token or bot credential bundle.
+ */
+const finalizeWechatQrSession = async (
+  ctx: MessengerContext,
+  sessionId: string,
+  options: { locale?: string; preferredAgentId?: string | null } = {},
+) => {
+  const session = await peekWechatQrSession(sessionId, ctx.userId);
+  if (!session) return { status: 'expired' as const };
+
+  let qrStatus;
+  try {
+    qrStatus = await pollQrStatus(session.qrcode);
+  } catch (error) {
+    throw new TRPCError({
+      cause: error,
+      code: 'BAD_GATEWAY',
+      message: 'messenger.wechat.error.pollFailed',
+    });
+  }
+
+  if (qrStatus.status === 'wait' || qrStatus.status === 'scaned') {
+    return { status: qrStatus.status };
+  }
+  if (qrStatus.status === 'expired') {
+    await consumeWechatQrSession(sessionId);
+    return { status: 'expired' as const };
+  }
+  if (
+    !qrStatus.bot_token ||
+    !qrStatus.ilink_bot_id ||
+    !qrStatus.ilink_user_id ||
+    !qrStatus.baseurl
+  ) {
+    throw new TRPCError({
+      code: 'BAD_GATEWAY',
+      message: 'messenger.wechat.error.incompleteConfirmation',
+    });
+  }
+
+  const lockToken = await acquireWechatQrFinalizeLock(sessionId);
+  if (!lockToken) return { status: 'scaned' as const };
+
+  try {
+    const platformUserId = qrStatus.ilink_user_id;
+    const botId = qrStatus.ilink_bot_id;
+    const botToken = qrStatus.bot_token;
+    const baseUrl = qrStatus.baseurl;
+    const existingIdentity = await MessengerAccountLinkModel.findByPlatformUser(
+      ctx.serverDB,
+      'wechat',
+      platformUserId,
+      platformUserId,
+    );
+    if (existingIdentity && existingIdentity.userId !== ctx.userId) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'messenger.wechat.error.alreadyLinkedToOther',
+      });
+    }
+
+    const existingUserLink = await ctx.messengerLinkModel.findByPlatform('wechat');
+    if (existingUserLink && existingUserLink.platformUserId !== platformUserId) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'messenger.wechat.error.unlinkBeforeRelink',
+      });
+    }
+
+    // A first scan should be immediately usable, so route it to the user's
+    // personal inbox (LobeAI). A rescan preserves an authorized Agent
+    // choice, but repairs stale/deauthorized links with the same fallback.
+    const inboxAgentId = (await ctx.getAgentModel().getBuiltinAgent(INBOX_SESSION_ID))?.id ?? null;
+    let activeAgentId = options.preferredAgentId ?? existingUserLink?.activeAgentId ?? inboxAgentId;
+    let workspaceId: string | null = null;
+
+    if (activeAgentId) {
+      try {
+        workspaceId = (await resolveAuthorizedAgentScope(ctx.serverDB, ctx.userId, activeAgentId))
+          .workspaceId;
+      } catch (error) {
+        const isStaleAgent =
+          error instanceof TRPCError && (error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN');
+        if (!isStaleAgent || activeAgentId === inboxAgentId) throw error;
+
+        activeAgentId = inboxAgentId;
+        workspaceId = activeAgentId
+          ? (await resolveAuthorizedAgentScope(ctx.serverDB, ctx.userId, activeAgentId)).workspaceId
+          : null;
+      }
+    }
+    const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+    const previousWechatLink = existingUserLink
+      ? await ctx.messengerLinkModel.findByIdWithCredentials(
+          existingUserLink.id,
+          'wechat',
+          gateKeeper,
+        )
+      : undefined;
+    const link = await ctx.serverDB.transaction(async (tx) => {
+      const txDB = tx as LobeChatDatabase;
+      return new MessengerAccountLinkModel(txDB, ctx.userId).upsertForPlatform(
+        {
+          activeAgentId,
+          applicationId: botId,
+          credentials: { baseUrl, botId, botToken },
+          platform: 'wechat',
+          platformUserId,
+          platformUsername: null,
+          tenantId: platformUserId,
+          workspaceId,
+        },
+        gateKeeper,
+      );
+    });
+
+    if (existingUserLink) await disconnectWechatAccountLink(existingUserLink, ctx.userId);
+    const gateway = new GatewayService();
+    const connectionId = await gateway.ensureUserMessengerConnected({
+      installationKey: wechatInstallationKey(platformUserId),
+      platform: 'wechat',
+      userId: ctx.userId,
+    });
+    if (!connectionId) {
+      // The gateway resolves credentials from the committed account link.
+      // Compensate a failed first connection by deleting it; on a rescan,
+      // restore the previous credential bundle so a failed replacement
+      // never destroys a working user-owned connection.
+      const previousApplicationId = previousWechatLink?.applicationId;
+      if (previousWechatLink && previousApplicationId) {
+        await ctx.serverDB.transaction(async (tx) => {
+          const txDB = tx as LobeChatDatabase;
+          await new MessengerAccountLinkModel(txDB, ctx.userId).upsertForPlatform(
+            {
+              activeAgentId: previousWechatLink.activeAgentId,
+              applicationId: previousApplicationId,
+              credentials: previousWechatLink.credentials,
+              platform: 'wechat',
+              platformUserId: previousWechatLink.platformUserId,
+              platformUsername: previousWechatLink.platformUsername,
+              tenantId: previousWechatLink.tenantId,
+              workspaceId: previousWechatLink.workspaceId,
+            },
+            gateKeeper,
+          );
+        });
+        await gateway.ensureUserMessengerConnected({
+          installationKey: wechatInstallationKey(previousWechatLink.tenantId),
+          platform: 'wechat',
+          userId: ctx.userId,
+        });
+      } else {
+        await ctx.serverDB.transaction(async (tx) => {
+          const txDB = tx as LobeChatDatabase;
+          await new MessengerAccountLinkModel(txDB, ctx.userId).deleteByPlatform(
+            'wechat',
+            platformUserId,
+          );
+        });
+      }
+      throw new TRPCError({
+        code: 'BAD_GATEWAY',
+        message: 'messenger.wechat.error.connectionFailed',
+      });
+    }
+
+    const runtime = await getBotRuntimeStatus('wechat', botId);
+    await consumeWechatQrSession(sessionId);
+
+    // WeChat only delivers inside a window the person's own message opens,
+    // so this greeting is usually queued and lands right after their first
+    // message — still the agent speaking first in the conversation.
+    await greetAfterBind({
+      agentId: activeAgentId,
+      locale: options.locale,
+      platform: 'wechat',
+      serverDB: ctx.serverDB,
+      userId: ctx.userId,
+    });
+
+    return {
+      installation: {
+        applicationId: botId,
+        id: link.id,
+        installedAt: link.createdAt,
+        platform: link.platform,
+        tenantId: link.tenantId,
+        tenantName: 'WeChat',
+      },
+      link,
+      runtime,
+      status: 'confirmed' as const,
+    };
+  } catch (error) {
+    await releaseWechatQrFinalizeLock(sessionId, lockToken);
+    if (error instanceof MessengerAccountLinkConflictError) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'messenger.wechat.error.alreadyLinkedToOther',
+      });
+    }
+    if (error instanceof MessengerAccountLinkRelinkRequiredError) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'messenger.wechat.error.unlinkBeforeRelink',
+      });
+    }
+    throw error;
+  }
 };
 
 export const messengerRouter = router({
@@ -361,201 +611,7 @@ export const messengerRouter = router({
         userId: ctx.userId,
       });
 
-      const session = await peekWechatQrSession(input.sessionId, ctx.userId);
-      if (!session) return { status: 'expired' as const };
-
-      let qrStatus;
-      try {
-        qrStatus = await pollQrStatus(session.qrcode);
-      } catch (error) {
-        throw new TRPCError({
-          cause: error,
-          code: 'BAD_GATEWAY',
-          message: 'messenger.wechat.error.pollFailed',
-        });
-      }
-
-      if (qrStatus.status === 'wait' || qrStatus.status === 'scaned') {
-        return { status: qrStatus.status };
-      }
-      if (qrStatus.status === 'expired') {
-        await consumeWechatQrSession(input.sessionId);
-        return { status: 'expired' as const };
-      }
-      if (
-        !qrStatus.bot_token ||
-        !qrStatus.ilink_bot_id ||
-        !qrStatus.ilink_user_id ||
-        !qrStatus.baseurl
-      ) {
-        throw new TRPCError({
-          code: 'BAD_GATEWAY',
-          message: 'messenger.wechat.error.incompleteConfirmation',
-        });
-      }
-
-      const lockToken = await acquireWechatQrFinalizeLock(input.sessionId);
-      if (!lockToken) return { status: 'scaned' as const };
-
-      try {
-        const platformUserId = qrStatus.ilink_user_id;
-        const botId = qrStatus.ilink_bot_id;
-        const botToken = qrStatus.bot_token;
-        const baseUrl = qrStatus.baseurl;
-        const existingIdentity = await MessengerAccountLinkModel.findByPlatformUser(
-          ctx.serverDB,
-          'wechat',
-          platformUserId,
-          platformUserId,
-        );
-        if (existingIdentity && existingIdentity.userId !== ctx.userId) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'messenger.wechat.error.alreadyLinkedToOther',
-          });
-        }
-
-        const existingUserLink = await ctx.messengerLinkModel.findByPlatform('wechat');
-        if (existingUserLink && existingUserLink.platformUserId !== platformUserId) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'messenger.wechat.error.unlinkBeforeRelink',
-          });
-        }
-
-        // A first scan should be immediately usable, so route it to the user's
-        // personal inbox (LobeAI). A rescan preserves an authorized Agent
-        // choice, but repairs stale/deauthorized links with the same fallback.
-        const inboxAgentId =
-          (await ctx.getAgentModel().getBuiltinAgent(INBOX_SESSION_ID))?.id ?? null;
-        let activeAgentId = existingUserLink?.activeAgentId ?? inboxAgentId;
-        let workspaceId: string | null = null;
-
-        if (activeAgentId) {
-          try {
-            workspaceId = (
-              await resolveAuthorizedAgentScope(ctx.serverDB, ctx.userId, activeAgentId)
-            ).workspaceId;
-          } catch (error) {
-            const isStaleAgent =
-              error instanceof TRPCError &&
-              (error.code === 'NOT_FOUND' || error.code === 'FORBIDDEN');
-            if (!isStaleAgent || activeAgentId === inboxAgentId) throw error;
-
-            activeAgentId = inboxAgentId;
-            workspaceId = activeAgentId
-              ? (await resolveAuthorizedAgentScope(ctx.serverDB, ctx.userId, activeAgentId))
-                  .workspaceId
-              : null;
-          }
-        }
-        const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
-        const previousWechatLink = existingUserLink
-          ? await ctx.messengerLinkModel.findByIdWithCredentials(
-              existingUserLink.id,
-              'wechat',
-              gateKeeper,
-            )
-          : undefined;
-        const link = await ctx.serverDB.transaction(async (tx) => {
-          const txDB = tx as LobeChatDatabase;
-          return new MessengerAccountLinkModel(txDB, ctx.userId).upsertForPlatform(
-            {
-              activeAgentId,
-              applicationId: botId,
-              credentials: { baseUrl, botId, botToken },
-              platform: 'wechat',
-              platformUserId,
-              platformUsername: null,
-              tenantId: platformUserId,
-              workspaceId,
-            },
-            gateKeeper,
-          );
-        });
-
-        if (existingUserLink) await disconnectWechatAccountLink(existingUserLink, ctx.userId);
-        const gateway = new GatewayService();
-        const connectionId = await gateway.ensureUserMessengerConnected({
-          installationKey: wechatInstallationKey(platformUserId),
-          platform: 'wechat',
-          userId: ctx.userId,
-        });
-        if (!connectionId) {
-          // The gateway resolves credentials from the committed account link.
-          // Compensate a failed first connection by deleting it; on a rescan,
-          // restore the previous credential bundle so a failed replacement
-          // never destroys a working user-owned connection.
-          const previousApplicationId = previousWechatLink?.applicationId;
-          if (previousWechatLink && previousApplicationId) {
-            await ctx.serverDB.transaction(async (tx) => {
-              const txDB = tx as LobeChatDatabase;
-              await new MessengerAccountLinkModel(txDB, ctx.userId).upsertForPlatform(
-                {
-                  activeAgentId: previousWechatLink.activeAgentId,
-                  applicationId: previousApplicationId,
-                  credentials: previousWechatLink.credentials,
-                  platform: 'wechat',
-                  platformUserId: previousWechatLink.platformUserId,
-                  platformUsername: previousWechatLink.platformUsername,
-                  tenantId: previousWechatLink.tenantId,
-                  workspaceId: previousWechatLink.workspaceId,
-                },
-                gateKeeper,
-              );
-            });
-            await gateway.ensureUserMessengerConnected({
-              installationKey: wechatInstallationKey(previousWechatLink.tenantId),
-              platform: 'wechat',
-              userId: ctx.userId,
-            });
-          } else {
-            await ctx.serverDB.transaction(async (tx) => {
-              const txDB = tx as LobeChatDatabase;
-              await new MessengerAccountLinkModel(txDB, ctx.userId).deleteByPlatform(
-                'wechat',
-                platformUserId,
-              );
-            });
-          }
-          throw new TRPCError({
-            code: 'BAD_GATEWAY',
-            message: 'messenger.wechat.error.connectionFailed',
-          });
-        }
-
-        const runtime = await getBotRuntimeStatus('wechat', botId);
-        await consumeWechatQrSession(input.sessionId);
-
-        return {
-          installation: {
-            applicationId: botId,
-            id: link.id,
-            installedAt: link.createdAt,
-            platform: link.platform,
-            tenantId: link.tenantId,
-            tenantName: 'WeChat',
-          },
-          link,
-          runtime,
-          status: 'confirmed' as const,
-        };
-      } catch (error) {
-        await releaseWechatQrFinalizeLock(input.sessionId, lockToken);
-        if (error instanceof MessengerAccountLinkConflictError) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'messenger.wechat.error.alreadyLinkedToOther',
-          });
-        }
-        if (error instanceof MessengerAccountLinkRelinkRequiredError) {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'messenger.wechat.error.unlinkBeforeRelink',
-          });
-        }
-        throw error;
-      }
+      return finalizeWechatQrSession(ctx, input.sessionId);
     }),
 
   /**
@@ -619,6 +675,233 @@ export const messengerRouter = router({
 
       const link = await ctx.messengerLinkModel.findByPlatform('linq', '');
       return { ...result, link: link ?? null };
+    }),
+
+  /**
+   * Unified one-click bind. Starts whatever flow the platform binds through
+   * and returns how to present it — `{ kind, payload, pollId }`:
+   *
+   * - WeChat   → `qr`: scan `payload.qrValue` with WeChat (iLink).
+   * - iMessage → `deeplink`: `sms:` link prefilled with a one-time code.
+   * - Telegram → `deeplink`: `t.me/<bot>?start=<code>`; tapping Start binds.
+   * - Slack / Discord → `oauth`: the install consent screen also binds the
+   *   person who approves it.
+   *
+   * `agentId` picks the agent the chat lands on (default: the inbox agent);
+   * that agent greets the person as soon as the bind completes. Poll the
+   * outcome with `pollBind`.
+   */
+  startBind: messengerProcedure
+    .input(
+      z.object({
+        agentId: z.string().min(1).optional(),
+        locale: z.string().max(35).optional(),
+        platform: platformEnum,
+      }),
+    )
+    .mutation(async ({ ctx, input }): Promise<StartBindResult> => {
+      const { platform } = input;
+      if (!(await isMessengerPlatformEnabled(platform))) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'messenger.error.platformNotConfigured',
+        });
+      }
+      await assertBotFeatureAccess({ action: 'manage', platform, userId: ctx.userId });
+
+      const agentId =
+        input.agentId ?? (await ctx.getAgentModel().getBuiltinAgent(INBOX_SESSION_ID))?.id ?? null;
+      const workspaceId = agentId
+        ? (await resolveAuthorizedAgentScope(ctx.serverDB, ctx.userId, agentId)).workspaceId
+        : null;
+      const session = { agentId, locale: input.locale, platform, userId: ctx.userId, workspaceId };
+
+      switch (platform) {
+        case 'wechat': {
+          let qr;
+          try {
+            qr = await fetchQrCode();
+          } catch (error) {
+            throw new TRPCError({
+              cause: error,
+              code: 'BAD_GATEWAY',
+              message: 'messenger.wechat.error.qrUnavailable',
+            });
+          }
+          if (!qr.qrcode || !qr.qrcode_img_content) {
+            throw new TRPCError({
+              code: 'BAD_GATEWAY',
+              message: 'messenger.wechat.error.qrUnavailable',
+            });
+          }
+          const { expiresAt, sessionId } = await issueWechatQrSession({
+            qrcode: qr.qrcode,
+            userId: ctx.userId,
+          });
+          await saveBindSession({ ...session, kind: 'qr', pollId: sessionId });
+          return {
+            expiresAt,
+            kind: 'qr',
+            payload: { qrValue: qr.qrcode_img_content },
+            platform,
+            pollId: sessionId,
+          };
+        }
+
+        case 'linq':
+        case 'telegram': {
+          if (await ctx.messengerLinkModel.findByPlatform(platform, '')) {
+            throw new TRPCError({ code: 'CONFLICT', message: 'verify.error.unlinkBeforeRelink' });
+          }
+
+          let buildUrl: (code: string) => { recipient?: string; url: string } | undefined;
+          let mintCode: () => string;
+          if (platform === 'linq') {
+            const config = await getMessengerLinqConfig();
+            if (!config) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: 'messenger.error.platformNotConfigured',
+              });
+            }
+            mintCode = createLinqLinkCode;
+            buildUrl = (code) => {
+              // `sms:` rather than `imessage:` — it opens Messages on Apple
+              // devices too, and still works from an Android phone (SMS).
+              const link = buildLinqDeepLink({
+                code,
+                number: pickLinqPoolNumber(config.numbers, ctx.userId),
+              });
+              return link && { recipient: link.number, url: link.sms };
+            };
+          } else {
+            const botUsername = (await getMessengerTelegramConfig())?.botUsername;
+            if (!botUsername) {
+              throw new TRPCError({
+                code: 'BAD_REQUEST',
+                message: 'messenger.error.platformNotConfigured',
+              });
+            }
+            mintCode = createTelegramStartCode;
+            buildUrl = (code) => ({ url: buildTelegramStartLink(botUsername, code) });
+          }
+
+          const { code, expiresAt, pollId } = await issueLinkCode({
+            activeAgentId: agentId,
+            locale: input.locale,
+            mintCode,
+            platform,
+            userId: ctx.userId,
+            workspaceId,
+          });
+          const link = buildUrl(code);
+          if (!link) {
+            throw new TRPCError({
+              code: 'INTERNAL_SERVER_ERROR',
+              message: 'messenger.error.platformNotConfigured',
+            });
+          }
+          await saveBindSession({ ...session, kind: 'deeplink', pollId });
+          return {
+            expiresAt,
+            kind: 'deeplink',
+            payload: { code, qrValue: link.url, recipient: link.recipient, url: link.url },
+            platform,
+            pollId,
+          };
+        }
+
+        case 'slack':
+        case 'discord': {
+          const oauth = messengerPlatformRegistry.getPlatform(platform)?.oauth;
+          if (!oauth || !(await oauth.getAppConfig()) || !appEnv.APP_URL) {
+            throw new TRPCError({
+              code: 'BAD_REQUEST',
+              message: 'messenger.error.platformNotConfigured',
+            });
+          }
+          const pollId = createBindPollId();
+          const { createdAt } = await saveBindSession({ ...session, kind: 'oauth', pollId });
+          const url = new URL(`/api/agent/messenger/${platform}/install`, appEnv.APP_URL);
+          url.searchParams.set('bind', pollId);
+          return {
+            expiresAt: createdAt + getMessengerLinkTokenTtl() * 1000,
+            kind: 'oauth',
+            payload: { url: url.toString() },
+            platform,
+            pollId,
+          };
+        }
+      }
+    }),
+
+  /**
+   * Poll a bind started by `startBind`. A mutation, not a query: for WeChat a
+   * poll is what finalizes the connection once the phone confirms the scan.
+   * Returns the platform's link row once `linked`.
+   */
+  pollBind: messengerProcedure
+    .input(z.object({ pollId: z.string().min(8) }))
+    .mutation(async ({ ctx, input }) => {
+      const session = await peekBindSession(input.pollId, ctx.userId);
+      if (!session) return { link: null, platform: null, status: 'expired' as const };
+
+      let result: BindPollStatus;
+      switch (session.platform) {
+        case 'wechat': {
+          // A confirmed scan consumes the QR session, so a retried poll could
+          // no longer reach WeChat; answer from the recorded outcome instead.
+          if (session.result.status === 'linked' || session.result.status === 'failed') {
+            result = session.result;
+            break;
+          }
+          try {
+            const wechat = await finalizeWechatQrSession(ctx, input.pollId, {
+              locale: session.locale,
+              preferredAgentId: session.agentId,
+            });
+            result =
+              wechat.status === 'confirmed'
+                ? {
+                    linkedAt: Date.now(),
+                    platformUserId: wechat.link.platformUserId,
+                    status: 'linked',
+                  }
+                : wechat.status === 'wait'
+                  ? { status: 'pending' }
+                  : wechat.status === 'scaned'
+                    ? { status: 'scanned' }
+                    : { status: 'expired' };
+          } catch (error) {
+            const reason = toBindFailureReason(error);
+            if (!reason) throw error;
+            result = { reason, status: 'failed' };
+          }
+          if (result.status === 'linked' || result.status === 'failed') {
+            await settleBindSession(input.pollId, result);
+          }
+          break;
+        }
+        case 'linq':
+        case 'telegram': {
+          result = await peekLinkCodeStatus(input.pollId, ctx.userId);
+          break;
+        }
+        case 'slack':
+        case 'discord': {
+          result = isBindSessionExpired(session) ? { status: 'expired' } : session.result;
+          break;
+        }
+      }
+
+      const link =
+        result.status === 'linked'
+          ? ((await ctx.messengerLinkModel.list()).find(
+              (row) =>
+                row.platform === session.platform && row.platformUserId === result.platformUserId,
+            ) ?? null)
+          : null;
+      return { ...result, link, platform: session.platform };
     }),
 
   /**
@@ -803,12 +1086,22 @@ export const messengerRouter = router({
         throw error;
       }
 
-      // Best-effort confirmation back to the IM platform.
+      // Best-effort confirmation back to the IM platform, then the agent says
+      // hello in its own voice — in that order, so the greeting reads as the
+      // first thing the agent says once the chat is live.
       void notifyLinkSuccess(payload.platform, {
         activeAgentName: agentScope.title ?? undefined,
         platformUserId: payload.platformUserId,
         tenantId: payload.tenantId,
-      });
+      }).then(() =>
+        greetAfterBind({
+          agentId: input.initialAgentId,
+          platform: payload.platform,
+          serverDB: ctx.serverDB,
+          tenantId: payload.tenantId,
+          userId: ctx.userId,
+        }),
+      );
 
       return { data: link, success: true };
     }),

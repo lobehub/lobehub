@@ -1,45 +1,19 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
-import { useTranslation } from 'react-i18next';
 
-import { PlatformAvatar } from '../constants';
-import { useMessengerInstallHref } from '../installHref';
+import OneClickBind from './OneClickBind';
 
 interface SlackLinkBodyProps {
-  disabled?: boolean;
+  /** Brand-name label (e.g. `"Slack"`) sourced from the registry. */
+  name: string;
 }
 
-const SlackLinkBody = memo<SlackLinkBodyProps>(({ disabled }) => {
-  const { t } = useTranslation('messenger');
-  const installHref = useMessengerInstallHref('slack');
-
-  return (
-    <>
-      <PlatformAvatar platform="slack" size={64} />
-      <Flexbox align="center" gap={6}>
-        <Text strong style={{ fontSize: 18 }}>
-          {t('messenger.slack.connectModal.title')}
-        </Text>
-        <Text style={{ textAlign: 'center' }} type="secondary">
-          {t('messenger.slack.connectModal.description')}
-        </Text>
-      </Flexbox>
-      <Button
-        block
-        disabled={disabled || !installHref}
-        href={disabled ? undefined : installHref}
-        size="large"
-        target="_blank"
-        type="primary"
-      >
-        {t('messenger.slack.connectModal.continueButton')}
-      </Button>
-    </>
-  );
-});
+// The install consent screen also links the person who approves it, so one
+// OAuth round trip leaves them connected — no follow-up DM to the bot.
+const SlackLinkBody = memo<SlackLinkBodyProps>(({ name }) => (
+  <OneClickBind name={name} platform="slack" />
+));
 
 SlackLinkBody.displayName = 'MessengerSlackLinkBody';
 

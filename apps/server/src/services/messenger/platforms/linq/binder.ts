@@ -1,26 +1,13 @@
 import { extractLinqLinkCode } from '@lobechat/agent-address-linq';
-import debug from 'debug';
 
 import { getMessengerLinqConfig, type MessengerLinqConfig } from '@/config/messenger';
-import { getServerDB } from '@/database/core/db-adaptor';
-import {
-  MessengerAccountLinkConflictError,
-  MessengerAccountLinkModel,
-  MessengerAccountLinkRelinkRequiredError,
-} from '@/database/models/messengerAccountLink';
 import { appEnv } from '@/envs/app';
 import type { PlatformClient } from '@/server/services/bot/platforms';
 
-import {
-  consumeLinkCode,
-  type LinkCodePayload,
-  restoreLinkCode,
-  settleLinkCode,
-} from '../../linkTokenStore';
+import { greetAfterBind } from '../../bind/greeting';
+import { type LinkByCodeOutcome, linkSenderByCode } from '../../bind/linkByCode';
 import type { MessengerPlatformBinder, UnlinkedMessageContext } from '../../types';
 import { LinqMessengerClient, sendLinqTextToHandle } from './client';
-
-const log = debug('lobe-server:messenger:linq:binder');
 
 const settingsUrl = (): string | undefined => {
   if (!appEnv.APP_URL) return undefined;
@@ -45,88 +32,15 @@ export const LINQ_REPLY = {
     'Your LobeHub account is already connected to another number. Disconnect it in Settings → Messenger first, then send your code again.',
 } as const;
 
-type LinkOutcome =
-  | { activeAgentId: string | null; status: 'linked' }
-  | { status: 'already_linked_to_other' | 'invalid' | 'unlink_before_relink' };
-
 /**
  * Bind `senderHandle` to whoever issued `code`. The code is consumed before
  * anything is written so a replayed or forwarded code can never link twice.
  */
-export const linkLinqSenderByCode = async (
+export const linkLinqSenderByCode = (
   code: string,
   senderHandle: string,
-): Promise<LinkOutcome> => {
-  const payload = await consumeLinkCode(code, 'linq');
-  if (!payload) return { status: 'invalid' };
-
-  try {
-    return await bindConsumedCode(payload, senderHandle);
-  } catch (error) {
-    // The code was taken atomically, but nothing got bound. Put it back so
-    // resending the same code (or the delivery retry) can still complete.
-    await restoreLinkCode(code, payload).catch((restoreError: unknown) => {
-      log('restoreLinkCode failed: %O', restoreError);
-    });
-    throw error;
-  }
-};
-
-const bindConsumedCode = async (
-  payload: LinkCodePayload,
-  senderHandle: string,
-): Promise<LinkOutcome> => {
-  const serverDB = await getServerDB();
-  const owner = await MessengerAccountLinkModel.findByPlatformUser(
-    serverDB,
-    'linq',
-    senderHandle,
-    '',
-  );
-  if (owner && owner.userId !== payload.userId) {
-    await settleLinkCode(payload.pollId, {
-      reason: 'already_linked_to_other',
-      status: 'failed',
-    });
-    return { status: 'already_linked_to_other' };
-  }
-
-  try {
-    await new MessengerAccountLinkModel(serverDB, payload.userId).upsertForPlatform({
-      activeAgentId: payload.activeAgentId,
-      platform: 'linq',
-      platformUserId: senderHandle,
-      platformUsername: senderHandle,
-      tenantId: '',
-      workspaceId: payload.workspaceId,
-    });
-  } catch (error) {
-    const reason =
-      error instanceof MessengerAccountLinkConflictError
-        ? ('already_linked_to_other' as const)
-        : error instanceof MessengerAccountLinkRelinkRequiredError
-          ? ('unlink_before_relink' as const)
-          : undefined;
-    if (!reason) throw error;
-    await settleLinkCode(payload.pollId, { reason, status: 'failed' });
-    return { status: reason };
-  }
-
-  // The link is committed. A failed poll-status write must not reach the
-  // caller's restore path — that would resurrect a code for a sender who now
-  // routes as linked, so the page would wait on it until expiry.
-  try {
-    await settleLinkCode(payload.pollId, {
-      linkedAt: Date.now(),
-      platformUserId: senderHandle,
-      status: 'linked',
-    });
-  } catch (error) {
-    log('settleLinkCode after link failed: %O', error);
-  }
-  log('linked linq sender for user=%s', payload.userId);
-  return { activeAgentId: payload.activeAgentId, status: 'linked' };
-};
+): Promise<LinkByCodeOutcome> =>
+  linkSenderByCode({ code, platform: 'linq', senderId: senderHandle, senderName: senderHandle });
 
 /**
  * Binder for the shared Linq pool. Unlike Telegram/Slack — where the bot
@@ -156,6 +70,12 @@ export class MessengerLinqBinder implements MessengerPlatformBinder {
     switch (outcome.status) {
       case 'linked': {
         await this.sendDmText(ctx.chatId, LINQ_REPLY.linked());
+        await greetAfterBind({
+          agentId: outcome.payload.activeAgentId,
+          locale: outcome.payload.locale,
+          platform: 'linq',
+          userId: outcome.payload.userId,
+        });
         return;
       }
       case 'invalid': {

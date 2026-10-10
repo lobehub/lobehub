@@ -69,6 +69,22 @@ class MessengerService {
     return lambdaClient.messenger.pollLinqLink.query({ pollId });
   };
 
+  /**
+   * Unified one-click bind: `{ kind: qr | deeplink | oauth, payload, pollId }`.
+   * `agentId` picks the agent the chat lands on (and that greets afterwards).
+   */
+  startBind = async (params: {
+    agentId?: string;
+    locale?: string;
+    platform: MessengerPlatform;
+  }) => {
+    return lambdaClient.messenger.startBind.mutate(params);
+  };
+
+  pollBind = async (pollId: string) => {
+    return lambdaClient.messenger.pollBind.mutate({ pollId });
+  };
+
   getMessengerPushWindow = async (platform: MessengerPlatform, tenantId?: string) => {
     return lambdaClient.messenger.getMessengerPushWindow.query({ platform, tenantId });
   };

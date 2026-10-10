@@ -5,7 +5,11 @@ import { getServerDB } from '@/database/core/db-adaptor';
 import { MessengerInstallationModel } from '@/database/models/messengerInstallation';
 import { appEnv } from '@/envs/app';
 import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
-import { consumeOAuthState } from '@/server/services/messenger/oauth/stateStore';
+import { completeOAuthBind, failOAuthBind } from '@/server/services/messenger/bind/oauthBind';
+import {
+  consumeOAuthState,
+  type OAuthStatePayload,
+} from '@/server/services/messenger/oauth/stateStore';
 import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 
 const log = debug('lobe-server:messenger:oauth-callback');
@@ -24,6 +28,24 @@ const errorRedirect = (origin: string, platform: string, code: string, extra?: U
   const params = new URLSearchParams(extra);
   params.set('error', code);
   return redirectToPlatform(origin, platform, params.toString());
+};
+
+/**
+ * A one-click bind waits on this callback; settle it as failed on every
+ * terminal error so the page that started it stops polling. Best-effort — the
+ * redirect still goes out if the settle itself fails.
+ */
+const settleFailedBind = async (platform: string, statePayload: OAuthStatePayload | null) => {
+  if (!statePayload?.bindPollId) return;
+  try {
+    await failOAuthBind({
+      platform,
+      pollId: statePayload.bindPollId,
+      userId: statePayload.lobeUserId,
+    });
+  } catch (error) {
+    log('callback[%s]: failed to settle bind %s: %O', platform, statePayload.bindPollId, error);
+  }
 };
 
 /**
@@ -61,6 +83,10 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
   const errorParam = url.searchParams.get('error');
   if (errorParam) {
     log('callback[%s]: user denied or upstream error: %s', platform, errorParam);
+    // Slack and Discord echo `state` on a denial; consuming it both burns the
+    // single-use token and tells us which bind to stop.
+    const deniedState = url.searchParams.get('state');
+    if (deniedState) await settleFailedBind(platform, await consumeOAuthState(deniedState));
     return errorRedirect(url.origin, platform, errorParam);
   }
 
@@ -104,6 +130,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
     });
   } catch (error) {
     log('callback[%s]: exchangeCode failed: %O', platform, error);
+    await settleFailedBind(platform, statePayload);
     return errorRedirect(url.origin, platform, 'exchange_failed');
   }
 
@@ -142,6 +169,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
       platform,
       error,
     );
+    await settleFailedBind(platform, statePayload);
     return new Response(
       `Server is missing KEY_VAULTS_SECRET — ${definition.name} install token cannot be encrypted.`,
       { status: 503 },
@@ -170,13 +198,38 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
     );
   } catch (error) {
     log('callback[%s]: failed to persist installation row: %O', platform, error);
+    await settleFailedBind(platform, statePayload);
     return errorRedirect(url.origin, platform, 'persist_failed');
   }
 
-  // 5. Branch on outcome. Takeover attempts get bounced to settings with a
+  // 5. One-click bind: the person who approved the install is linked on the
+  // spot and the page that started it stops polling. A tenant already owned
+  // by someone else does not block this — the personal link is theirs to make.
+  let bindLinked = false;
+  if (statePayload.bindPollId && (platform === 'slack' || platform === 'discord')) {
+    try {
+      const bind = await completeOAuthBind({
+        install,
+        platform,
+        pollId: statePayload.bindPollId,
+        serverDB,
+        userId: statePayload.lobeUserId,
+      });
+      bindLinked = bind.status === 'linked';
+      if (bind.status === 'failed') {
+        return errorRedirect(url.origin, platform, `bind_${bind.reason}`);
+      }
+    } catch (error) {
+      log('callback[%s]: one-click bind failed: %O', platform, error);
+      await settleFailedBind(platform, statePayload);
+      return errorRedirect(url.origin, platform, 'bind_failed');
+    }
+  }
+
+  // 6. Branch on outcome. Takeover attempts get bounced to settings with a
   // dedicated error so the page can render a Modal explaining the situation
   // (tenant name lets the UI name the workspace/guild).
-  if (isTakeoverAttempt) {
+  if (isTakeoverAttempt && !bindLinked) {
     log(
       'callback[%s]: refreshed credentials for tenant=%s but preserved owner=%s (blocked takeover by user=%s)',
       platform,
@@ -189,7 +242,7 @@ export async function messengerOAuthCallback(c: Context): Promise<Response> {
     return errorRedirect(url.origin, platform, 'already_installed', extra);
   }
 
-  // 6. Hand off to the platform's deep-link if it provides one, otherwise
+  // 7. Hand off to the platform's deep-link if it provides one, otherwise
   // fall back to the settings page with a `<platform>_installed=ok` flag.
   const deepLink = definition.oauth.buildPostInstallRedirect?.(install, url.origin);
   if (deepLink) {

@@ -4,8 +4,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TelegramApi } from '@/server/services/bot/platforms/telegram/api';
 import { TelegramClientFactory } from '@/server/services/bot/platforms/telegram/client';
 
+import { greetAfterBind } from '../../bind/greeting';
+import { linkSenderByCode } from '../../bind/linkByCode';
 import { issueLinkToken } from '../../linkTokenStore';
-import { MessengerTelegramBinder } from './binder';
+import {
+  buildTelegramStartLink,
+  createTelegramStartCode,
+  isTelegramStartCode,
+  MessengerTelegramBinder,
+  TELEGRAM_START_LINK_REPLY,
+} from './binder';
 
 vi.mock('@/envs/app', () => ({
   appEnv: { APP_URL: 'https://app.example.com' },
@@ -18,6 +26,10 @@ vi.mock('@/config/messenger', () => ({
 vi.mock('../../linkTokenStore', () => ({
   issueLinkToken: vi.fn(),
 }));
+
+vi.mock('../../bind/linkByCode', () => ({ linkSenderByCode: vi.fn() }));
+
+vi.mock('../../bind/greeting', () => ({ greetAfterBind: vi.fn() }));
 
 vi.mock('@/server/services/bot/platforms/telegram/api', () => ({
   TelegramApi: vi.fn(),
@@ -537,5 +549,79 @@ describe('MessengerTelegramBinder.acknowledgeCallback', () => {
       {},
     );
     expect(answerCallbackQuery).not.toHaveBeenCalled();
+  });
+});
+
+describe('Telegram start-token links', () => {
+  it('mints codes that fit a t.me start parameter and recognises them', () => {
+    const code = createTelegramStartCode();
+    expect(code).toMatch(/^TG_[\dA-F]{24}$/);
+    expect(isTelegramStartCode(code)).toBe(true);
+    expect(isTelegramStartCode('link')).toBe(false);
+    expect(buildTelegramStartLink('@lobehub_bot', code)).toBe(
+      `https://t.me/lobehub_bot?start=${code}`,
+    );
+  });
+
+  it('leaves a non-code /start payload to the regular onboarding', async () => {
+    const handled = await new MessengerTelegramBinder().completeStartLink({
+      authorUserId: '42',
+      chatId: '42',
+      payload: 'link',
+    });
+
+    expect(handled).toBe(false);
+    expect(linkSenderByCode).not.toHaveBeenCalled();
+  });
+
+  it('binds the sender from /start <code>, confirms, then lets the agent greet', async () => {
+    vi.mocked(linkSenderByCode).mockResolvedValue({
+      payload: {
+        activeAgentId: 'agent-toby',
+        createdAt: 0,
+        locale: 'zh-CN',
+        platform: 'telegram',
+        pollId: 'poll-1',
+        userId: 'user-1',
+        workspaceId: null,
+      },
+      status: 'linked',
+    });
+    const code = createTelegramStartCode();
+
+    const handled = await new MessengerTelegramBinder().completeStartLink({
+      authorUserId: '42',
+      authorUserName: 'alice',
+      chatId: '42',
+      payload: code,
+    });
+
+    expect(handled).toBe(true);
+    expect(linkSenderByCode).toHaveBeenCalledWith({
+      code,
+      platform: 'telegram',
+      senderId: '42',
+      senderName: 'alice',
+    });
+    expect(sendMessage).toHaveBeenCalledWith('42', TELEGRAM_START_LINK_REPLY.linked);
+    expect(greetAfterBind).toHaveBeenCalledWith({
+      agentId: 'agent-toby',
+      locale: 'zh-CN',
+      platform: 'telegram',
+      userId: 'user-1',
+    });
+  });
+
+  it('explains an expired code without greeting', async () => {
+    vi.mocked(linkSenderByCode).mockResolvedValue({ status: 'invalid' });
+
+    await new MessengerTelegramBinder().completeStartLink({
+      authorUserId: '42',
+      chatId: '42',
+      payload: createTelegramStartCode(),
+    });
+
+    expect(sendMessage).toHaveBeenCalledWith('42', TELEGRAM_START_LINK_REPLY.codeInvalid);
+    expect(greetAfterBind).not.toHaveBeenCalled();
   });
 });

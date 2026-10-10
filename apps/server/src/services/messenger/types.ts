@@ -78,6 +78,19 @@ export interface MessengerPlatformBinder {
     ack: CallbackAcknowledgement,
   ) => Promise<void>;
 
+  /**
+   * Finish a web-initiated link whose code rode in on `/start <payload>` (the
+   * Telegram `t.me/<bot>?start=<code>` deep link). Resolves `false` when the
+   * payload is not one of this platform's link codes, so the router falls back
+   * to the regular `/start` onboarding; `true` once the binder has replied.
+   */
+  completeStartLink?: (params: {
+    authorUserId: string;
+    authorUserName?: string;
+    chatId: string;
+    payload: string;
+  }) => Promise<boolean>;
+
   /** Construct the underlying platform client. Returns null if config is missing.
    *  Async because the credential lookup (`SystemBotProviderModel`) hits the DB. */
   createClient: () => Promise<PlatformClient | null>;

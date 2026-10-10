@@ -179,6 +179,8 @@ export interface LinkCodePayload {
   /** Agent the first inbound message lands on once the link exists. */
   activeAgentId: string | null;
   createdAt: number;
+  /** UI locale of the page that minted the code; picks the greeting language. */
+  locale?: string;
   platform: MessengerPlatform;
   /** Opaque id the web page polls; never reveals the code itself. */
   pollId: string;
@@ -235,6 +237,7 @@ export const issueLinkCode = async (
         const updated: LinkCodePayload = {
           ...live,
           activeAgentId: payload.activeAgentId,
+          locale: payload.locale,
           workspaceId: payload.workspaceId,
         };
         await redis.set(linkCodeKey(existing), JSON.stringify(updated), 'EX', ttl);

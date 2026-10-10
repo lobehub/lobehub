@@ -12,6 +12,11 @@ const KEY_PREFIX = 'messenger:slack-oauth-state:';
 const stateKey = (state: string): string => `${KEY_PREFIX}${state}`;
 
 export interface OAuthStatePayload {
+  /**
+   * Set when the install was started by a one-click bind (`startBind`): the
+   * callback then also links the approving user and settles this poll.
+   */
+  bindPollId?: string;
   /** LobeHub user who clicked "Connect Slack". Persisted on the install row. */
   lobeUserId: string;
   /** Where to send the user after the callback finishes (relative path). */

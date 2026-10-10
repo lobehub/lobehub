@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { greetAfterBind } from '../../bind/greeting';
 import { linkLinqSenderByCode, LINQ_REPLY, MessengerLinqBinder } from './binder';
 
 const mocks = vi.hoisted(() => ({
@@ -42,6 +43,8 @@ vi.mock('@/database/models/messengerAccountLink', () => {
     MessengerAccountLinkRelinkRequiredError,
   };
 });
+
+vi.mock('../../bind/greeting', () => ({ greetAfterBind: vi.fn() }));
 
 vi.mock('../../linkTokenStore', () => ({
   consumeLinkCode: mocks.consumeLinkCode,
@@ -104,6 +107,12 @@ describe('MessengerLinqBinder.handleUnlinkedMessage', () => {
       expect.objectContaining({ platformUserId: SENDER, status: 'linked' }),
     );
     expect(mocks.sendText).toHaveBeenCalledWith('chat_1', LINQ_REPLY.linked());
+    expect(greetAfterBind).toHaveBeenCalledWith({
+      agentId: 'agt_inbox',
+      locale: undefined,
+      platform: 'linq',
+      userId: 'user_alice',
+    });
   });
 
   it('points a cold message without a code at the connect page and binds nothing', async () => {
@@ -159,7 +168,7 @@ describe('linkLinqSenderByCode', () => {
     mocks.settleLinkCode.mockRejectedValueOnce(new Error('redis timeout'));
 
     await expect(linkLinqSenderByCode('LH-7Q2M4XKP', SENDER)).resolves.toEqual({
-      activeAgentId: 'agt_inbox',
+      payload: pendingCode,
       status: 'linked',
     });
     expect(mocks.upsertForPlatform).toHaveBeenCalledTimes(1);

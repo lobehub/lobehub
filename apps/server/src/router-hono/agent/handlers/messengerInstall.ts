@@ -3,6 +3,10 @@ import type { Context } from 'hono';
 
 import { auth } from '@/auth';
 import { appEnv } from '@/envs/app';
+import {
+  isBindSessionExpired,
+  peekBindSession,
+} from '@/server/services/messenger/bind/sessionStore';
 import { issueOAuthState } from '@/server/services/messenger/oauth/stateStore';
 import { messengerPlatformRegistry } from '@/server/services/messenger/platforms';
 
@@ -51,7 +55,7 @@ export async function messengerInstall(c: Context): Promise<Response> {
     session = null;
   }
   if (!session?.user?.id) {
-    const callbackUrl = encodeURIComponent(`/api/agent/messenger/${platform}/install`);
+    const callbackUrl = encodeURIComponent(`/api/agent/messenger/${platform}/install${url.search}`);
     return Response.redirect(new URL(`/signin?callbackUrl=${callbackUrl}`, url.origin), 302);
   }
 
@@ -74,7 +78,19 @@ export async function messengerInstall(c: Context): Promise<Response> {
 
   // 4. Mint an OAuth state, store the originating user → Redis (10-min TTL).
   const returnTo = url.searchParams.get('returnTo') || undefined;
-  const state = await issueOAuthState({ lobeUserId: session.user.id, returnTo });
+  // A one-click bind (`messenger.startBind`) rides along in `?bind=`. Only
+  // carry it into the state when it is this user's pending OAuth bind for this
+  // platform — a forged or stale id must not settle someone else's poll.
+  const bindParam = url.searchParams.get('bind');
+  const bindSession = bindParam ? await peekBindSession(bindParam, session.user.id) : null;
+  const bindPollId =
+    bindSession?.platform === platform &&
+    bindSession.kind === 'oauth' &&
+    bindSession.result.status === 'pending' &&
+    !isBindSessionExpired(bindSession)
+      ? bindSession.pollId
+      : undefined;
+  const state = await issueOAuthState({ bindPollId, lobeUserId: session.user.id, returnTo });
 
   // 5. Build the platform's authorize URL and 302. The redirect_uri must
   // match exactly at the callback — we generate it the same way both sides.

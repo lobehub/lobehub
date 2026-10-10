@@ -55,9 +55,6 @@ export const PlatformBrandIcon = ({
 export const buildTelegramBotUrl = (botUsername: string): string =>
   `https://t.me/${botUsername.replace(/^@/, '')}`;
 
-export const buildTelegramDeepLink = (botUsername: string): string =>
-  `${buildTelegramBotUrl(botUsername)}?start=messenger`;
-
 /**
  * Slack bot deep link. Prefer the `app_redirect` form when both `appId` and
  * `tenantId` are known — Slack handles desktop hand-off and lands the user in

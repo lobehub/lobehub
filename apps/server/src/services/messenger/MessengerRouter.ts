@@ -934,6 +934,20 @@ export class MessengerRouter {
         description: 'Bind your account to LobeHub',
         handler: async (ctx) => {
           const strings = getMessengerSystemStrings(ctx.platform);
+          // A `/start <code>` from a web-initiated deep link carries its own
+          // binding: the code says which LobeHub account and agent to link,
+          // so it wins over both the already-linked reply and the verify-im
+          // onboarding below. Only honoured in a DM — the code is one-shot
+          // and must not be completed (or echoed) in a shared chat.
+          if (ctx.args && ctx.isDM && ctx.binder.completeStartLink) {
+            const handled = await ctx.binder.completeStartLink({
+              authorUserId: ctx.authorUserId,
+              authorUserName: ctx.authorUserName,
+              chatId: ctx.chatId,
+              payload: ctx.args,
+            });
+            if (handled) return;
+          }
           // Already-linked short-circuit: re-running `/start` while bound
           // would issue a fresh verify-im token and, on completion,
           // overwrite the user's `messenger_account_links` row via
