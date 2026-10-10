@@ -62,7 +62,7 @@ allowBuilds:
   workerd: true
 
 overrides:
-  '@lobehub/ui': https://pkg.pr.new/@lobehub/ui@a8c66a4
+  '@lobehub/ui': https://pkg.pr.new/@lobehub/ui@7f8f8c2
   '@lobehub/icons': https://pkg.pr.new/@lobehub/icons@51fdd35
   '@lobehub/editor': https://pkg.pr.new/%40lobehub%2Feditor%406a85671
   '@lobehub/charts': https://pkg.pr.new/@lobehub/charts@7299e60

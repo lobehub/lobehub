@@ -324,7 +324,7 @@
     "@lobehub/icons": "https://pkg.pr.new/@lobehub/icons@51fdd35",
     "@lobehub/market-sdk": "0.42.0",
     "@lobehub/tts": "https://pkg.pr.new/@lobehub/tts@8d29894",
-    "@lobehub/ui": "https://pkg.pr.new/@lobehub/ui@a8c66a4",
+    "@lobehub/ui": "https://pkg.pr.new/@lobehub/ui@7f8f8c2",
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@neondatabase/serverless": "^1.1.0",
     "@next/third-parties": "^16.3.0",
