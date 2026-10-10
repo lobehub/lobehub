@@ -19,6 +19,7 @@ import { eq } from 'drizzle-orm';
 import OpenAI from 'openai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { MessageModel } from '@/database/models/message';
 import { inMemoryAgentStateManager } from '@/server/modules/AgentRuntime/InMemoryAgentStateManager';
 import { inMemoryStreamEventManager } from '@/server/modules/AgentRuntime/InMemoryStreamEventManager';
 
@@ -212,9 +213,14 @@ afterEach(async () => {
 });
 
 describe('Server callSubAgent suspend/resume', () => {
-  it.each([undefined, 'allow', 'deny'] as const)(
-    'publishes the child result after %s control and resumes the parent',
-    async (decision) => {
+  it.each([
+    { decision: undefined, reason: undefined },
+    { decision: 'allow', reason: undefined },
+    { decision: 'deny', reason: undefined },
+    { decision: 'deny', reason: '' },
+  ] as const)(
+    'publishes the child result after $decision control with reason=$reason and resumes the parent',
+    async ({ decision, reason }) => {
       const pendingContents: (string | null)[] = [];
       const reviewedResults: string[] = [];
       const fetchHook = vi.fn(async (_url: string, init: RequestInit) => {
@@ -225,7 +231,7 @@ describe('Server callSubAgent suspend/resume', () => {
           .where(eq(messages.id, payload.toolMessageId));
         pendingContents.push(placeholder.content);
         reviewedResults.push(payload.result.content);
-        return new Response(JSON.stringify({ decision }));
+        return new Response(JSON.stringify({ decision, reason }));
       });
       if (decision) {
         vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/subagent-result');
@@ -300,7 +306,22 @@ describe('Server callSubAgent suspend/resume', () => {
       expect(parentInput).toContain(
         decision === 'deny' ? 'Blocked by afterToolCall hook.' : SUB_AGENT_ANSWER,
       );
-      if (decision === 'deny') expect(parentInput).not.toContain(SUB_AGENT_ANSWER);
+      if (decision === 'deny') {
+        expect(parentInput).not.toContain(SUB_AGENT_ANSWER);
+        // A replay after removal of the environment hook must not replace the first final result.
+        vi.unstubAllEnvs();
+        const messageModel = new MessageModel(serverDB, userId);
+        const replay = await messageModel.updateToolMessage(subAgentToolMessage!.id, {
+          content: SUB_AGENT_ANSWER,
+          pluginState: { status: 'completed' },
+          pluginError: null,
+          onlyIfEmpty: true,
+        });
+        expect(replay).toMatchObject({ success: true, applied: false });
+        const persisted = await messageModel.findById(subAgentToolMessage!.id);
+        expect(persisted?.content).toBe('Blocked by afterToolCall hook.');
+        expect(JSON.stringify(persisted)).not.toContain(SUB_AGENT_ANSWER);
+      }
     },
   );
 });

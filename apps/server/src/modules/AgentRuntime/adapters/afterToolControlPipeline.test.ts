@@ -399,7 +399,7 @@ describe('afterToolCall control pipeline', () => {
     expect(JSON.stringify(result)).not.toContain(secret);
   });
 
-  it.each(['', ' \n自定义 "reason"\n ', secret])(
+  it.each([' \n自定义 "reason"\n ', secret])(
     'preserves an explicitly provided denial reason verbatim: %j',
     async (reason) => {
       const fixture = setup([control()]);
@@ -418,6 +418,22 @@ describe('afterToolCall control pipeline', () => {
       expect(archive).not.toHaveBeenCalled();
     },
   );
+
+  it.each([false, true])('uses the default for an empty denial reason, queue=%s', async (queue) => {
+    queueMode.mockReturnValue(queue);
+    const fixture = setup([control()]);
+    fixture.execute.mockResolvedValue(raw());
+    fetchHook.mockImplementation(async () => response('deny', ''));
+
+    await fixture.step();
+
+    expect(fixture.rows[0]).toMatchObject({
+      content: defaultReason,
+      pluginError: 'hook_denied',
+      pluginState: { reason: defaultReason, type: 'blocked', phase: 'afterToolCall' },
+    });
+    expect(JSON.stringify(fixture.rows)).not.toContain(secret);
+  });
 
   it('evaluates a failed result after the last tool retry only', async () => {
     const fixture = setup([control()]);

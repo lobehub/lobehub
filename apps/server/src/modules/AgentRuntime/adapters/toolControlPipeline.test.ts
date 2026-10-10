@@ -195,11 +195,16 @@ describe('beforeToolCall control pipeline', () => {
     },
   );
 
-  it.each([false, true])(
-    'denies before mock/execution and persists attempts=0, queue=%s',
-    async (queue) => {
+  it.each([
+    { queue: false, reason: undefined },
+    { queue: true, reason: undefined },
+    { queue: false, reason: '' },
+    { queue: true, reason: '' },
+  ])(
+    'denies before mock/execution and persists attempts=0, queue=$queue, reason=$reason',
+    async ({ queue, reason }) => {
       queueMode.mockReturnValue(queue);
-      fetchHook.mockImplementation(async () => response('deny'));
+      fetchHook.mockImplementation(async () => response('deny', reason));
       const mock = vi.fn(async (event) => {
         (event as ToolCallHookEvent).mock({ content: 'mock', success: true });
       });

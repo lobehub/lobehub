@@ -3753,6 +3753,89 @@ describe('AgentRuntimeService', () => {
       expect(resumeSpy).toHaveBeenCalled();
     });
 
+    it('completes a multi-member empty-reason denial and retains it after callback replay', async () => {
+      const privateContent = 'synthetic-private-member-answer';
+      const defaultReason = 'Blocked by afterToolCall hook.';
+      const anchors = [
+        { id: 'anchor-0', content: '', state: {} },
+        { id: 'anchor-1', content: '', state: {} },
+      ];
+      const group = { id: 'grp-tool-1', parentId: 'assistant', content: '', state: {} };
+      const rows = [...anchors, group];
+      (service as any).serverDB.query = {
+        messages: { findMany: vi.fn(async () => anchors) },
+        messagePlugins: { findFirst: vi.fn().mockResolvedValue({ state: {} }) },
+      };
+      (service as any).messageModel.findById = vi.fn(async (id) =>
+        rows.find((row) => row.id === id),
+      );
+      (service as any).messageModel.findMessagePlugin = vi.fn(async (id) => ({
+        id,
+        toolCallId: 'group-call',
+        identifier: 'lobe-group-management',
+        apiName: 'executeAgentTasks',
+        arguments: '{}',
+      }));
+      updateToolMessage.mockImplementation(async (id, value) => {
+        const row = rows.find((row) => row.id === id)!;
+        if (row.content && value.onlyIfEmpty) return { success: true, applied: false };
+        row.content = value.content;
+        row.state = value.pluginState;
+        return { success: true, applied: true };
+      });
+      mockCoordinator.loadAgentState.mockResolvedValue({
+        operationId: 'parent-1',
+        stepCount: 1,
+        status: 'waiting_for_async_tool',
+        host: {
+          hooks: [
+            {
+              id: 'after-control',
+              type: 'afterToolCall',
+              webhook: { url: 'https://hooks.example/control', responseHandling: 'toolCall' },
+            },
+          ],
+        },
+      });
+      const fetchHook = vi
+        .spyOn(globalThis, 'fetch')
+        .mockImplementation(
+          async () => new Response(JSON.stringify({ decision: 'deny', reason: '' })),
+        );
+      const complete = (anchorMessageId: string) =>
+        service.completeGroupActionMember({
+          anchorMessageId,
+          expectedMembers: 2,
+          finalState: {
+            ...memberState,
+            messages: [{ role: 'assistant', content: privateContent }],
+          } as any,
+          groupToolMessageId: group.id,
+          mode: 'isolated',
+          onComplete: 'resume',
+          operationId: `child-${anchorMessageId}`,
+          parentOperationId: 'parent-1',
+          reason: 'done',
+        });
+      try {
+        expect(await complete('anchor-0')).toBe(false);
+        expect(resumeSpy).not.toHaveBeenCalled();
+        expect(await complete('anchor-1')).toBe(true);
+        expect(resumeSpy).toHaveBeenCalledTimes(1);
+        expect(fetchHook).toHaveBeenCalledTimes(3);
+        expect(rows.every((row) => row.content === defaultReason)).toBe(true);
+        expect(JSON.stringify(rows)).not.toContain(privateContent);
+
+        mockCoordinator.loadAgentState.mockResolvedValue(null);
+        await complete('anchor-0');
+        expect(fetchHook).toHaveBeenCalledTimes(3);
+        expect(rows.every((row) => row.content === defaultReason)).toBe(true);
+        expect(JSON.stringify(rows)).not.toContain(privateContent);
+      } finally {
+        fetchHook.mockRestore();
+      }
+    });
+
     it('throws when the anchor backfill fails so the webhook redelivers', async () => {
       updateToolMessage.mockResolvedValue({ success: false });
 
@@ -3829,95 +3912,104 @@ describe('AgentRuntimeService', () => {
       );
     });
 
-    it('gates deferred output before backfill and parent resume, including callback replay', async () => {
-      const privateContent = 'synthetic-private-child-answer';
-      const denialReason = 'The child result is restricted by policy.';
-      const stored = {
-        id: 'tool-msg-1',
-        identifier: 'lobe-agent',
-        apiName: 'callSubAgent',
-        arguments: '{"instruction":"original"}',
-        toolCallId: 'native-child',
-        state: {},
-      };
-      (service as any).messageModel.findMessagePlugin = vi.fn(async () => stored);
-      (service as any).messageModel.findById = vi
-        .fn()
-        .mockResolvedValue({ id: 'tool-msg-1', parentId: 'assistant' });
-      const fetchHook = vi
-        .spyOn(globalThis, 'fetch')
-        .mockImplementation(
-          async () => new Response(JSON.stringify({ decision: 'deny', reason: denialReason })),
-        );
-      const hooks = [
-        {
-          id: 'after-control',
-          type: 'afterToolCall',
-          webhook: { url: 'https://hooks.example/control', responseHandling: 'toolCall' },
-        },
-      ];
-      mockCoordinator.loadAgentState.mockResolvedValue({
-        operationId: 'parent-op-1',
-        stepCount: 3,
-        host: { hooks },
-      });
-      updateToolMessage.mockImplementation(async (_id, value) => {
-        if ((stored as any).content && value.onlyIfEmpty) return { success: true, applied: false };
-        (stored as any).content = value.content;
-        stored.state = value.pluginState;
-        (service as any).messageModel.findById.mockResolvedValue({
+    it.each([
+      {
+        reason: 'The child result is restricted by policy.',
+        expected: 'The child result is restricted by policy.',
+      },
+      { reason: '', expected: 'Blocked by afterToolCall hook.' },
+    ])(
+      'gates deferred output before backfill and parent resume, including callback replay, reason=$reason',
+      async ({ reason, expected: denialReason }) => {
+        const privateContent = 'synthetic-private-child-answer';
+        const stored = {
           id: 'tool-msg-1',
-          parentId: 'assistant',
-          content: value.content,
-        });
-        return { success: true };
-      });
-      try {
-        await service.completeSubAgentBridge({
-          ...bridgeParams,
-          finalState: {
-            ...childState,
-            messages: [{ role: 'assistant', content: privateContent }],
-          } as any,
-        });
-        expect(JSON.parse(String(fetchHook.mock.calls[0][1]?.body))).toMatchObject({
-          args: { instruction: 'original' },
+          identifier: 'lobe-agent',
+          apiName: 'callSubAgent',
+          arguments: '{"instruction":"original"}',
           toolCallId: 'native-child',
-          result: { content: expect.stringContaining(privateContent) },
+          state: {},
+        };
+        (service as any).messageModel.findMessagePlugin = vi.fn(async () => stored);
+        (service as any).messageModel.findById = vi
+          .fn()
+          .mockResolvedValue({ id: 'tool-msg-1', parentId: 'assistant' });
+        const fetchHook = vi
+          .spyOn(globalThis, 'fetch')
+          .mockImplementation(
+            async () => new Response(JSON.stringify({ decision: 'deny', reason })),
+          );
+        const hooks = [
+          {
+            id: 'after-control',
+            type: 'afterToolCall',
+            webhook: { url: 'https://hooks.example/control', responseHandling: 'toolCall' },
+          },
+        ];
+        mockCoordinator.loadAgentState.mockResolvedValue({
+          operationId: 'parent-op-1',
+          stepCount: 3,
+          host: { hooks },
         });
-        expect(JSON.stringify(updateToolMessage.mock.calls)).not.toContain(privateContent);
-        expect(updateToolMessage).toHaveBeenCalledWith(
-          'tool-msg-1',
-          expect.objectContaining({
-            content: denialReason,
-            pluginError: 'hook_denied',
-            pluginState: expect.objectContaining({
-              phase: 'afterToolCall',
-              reason: denialReason,
-              type: 'blocked',
+        updateToolMessage.mockImplementation(async (_id, value) => {
+          if ((stored as any).content && value.onlyIfEmpty)
+            return { success: true, applied: false };
+          (stored as any).content = value.content;
+          stored.state = value.pluginState;
+          (service as any).messageModel.findById.mockResolvedValue({
+            id: 'tool-msg-1',
+            parentId: 'assistant',
+            content: value.content,
+          });
+          return { success: true };
+        });
+        try {
+          await service.completeSubAgentBridge({
+            ...bridgeParams,
+            finalState: {
+              ...childState,
+              messages: [{ role: 'assistant', content: privateContent }],
+            } as any,
+          });
+          expect(JSON.parse(String(fetchHook.mock.calls[0][1]?.body))).toMatchObject({
+            args: { instruction: 'original' },
+            toolCallId: 'native-child',
+            result: { content: expect.stringContaining(privateContent) },
+          });
+          expect(JSON.stringify(updateToolMessage.mock.calls)).not.toContain(privateContent);
+          expect(updateToolMessage).toHaveBeenCalledWith(
+            'tool-msg-1',
+            expect.objectContaining({
+              content: denialReason,
+              pluginError: 'hook_denied',
+              pluginState: expect.objectContaining({
+                phase: 'afterToolCall',
+                reason: denialReason,
+                type: 'blocked',
+              }),
+              replacePluginState: true,
+              onlyIfEmpty: true,
             }),
-            replacePluginState: true,
-            onlyIfEmpty: true,
-          }),
-        );
-        expect(resumeSpy).toHaveBeenCalledTimes(1);
-        // A duplicate callback cannot restore the raw child answer after configuration removal.
-        mockCoordinator.loadAgentState.mockResolvedValue(null);
-        await service.completeSubAgentBridge({
-          ...bridgeParams,
-          finalState: {
-            ...childState,
-            messages: [{ role: 'assistant', content: privateContent }],
-          } as any,
-        });
-        expect(fetchHook).toHaveBeenCalledTimes(1);
-        expect((stored as any).content).toBe(denialReason);
-        expect(stored.state).toMatchObject({ reason: denialReason, type: 'blocked' });
-        expect(JSON.stringify(stored.state)).not.toContain(privateContent);
-      } finally {
-        fetchHook.mockRestore();
-      }
-    });
+          );
+          expect(resumeSpy).toHaveBeenCalledTimes(1);
+          // A duplicate callback cannot restore the raw child answer after configuration removal.
+          mockCoordinator.loadAgentState.mockResolvedValue(null);
+          await service.completeSubAgentBridge({
+            ...bridgeParams,
+            finalState: {
+              ...childState,
+              messages: [{ role: 'assistant', content: privateContent }],
+            } as any,
+          });
+          expect(fetchHook).toHaveBeenCalledTimes(1);
+          expect((stored as any).content).toBe(denialReason);
+          expect(stored.state).toMatchObject({ reason: denialReason, type: 'blocked' });
+          expect(JSON.stringify(stored.state)).not.toContain(privateContent);
+        } finally {
+          fetchHook.mockRestore();
+        }
+      },
+    );
 
     it('ends a callSubAgent result with the sub-agent id so the parent can continue it', async () => {
       (service as any).messageModel.findMessagePlugin = vi

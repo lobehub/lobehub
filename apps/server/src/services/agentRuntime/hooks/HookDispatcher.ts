@@ -220,7 +220,7 @@ export class HookDispatcher {
       if (response.status === 'success' && response.decision.decision === 'deny') {
         return {
           status: 'blocked',
-          reason: response.decision.reason ?? `Blocked by ${type} hook.`,
+          reason: response.decision.reason || `Blocked by ${type} hook.`,
         };
       }
       if (response.status === 'error') {
