@@ -13,6 +13,7 @@ import { shareChatService } from '@/services/shareChat';
 import { topicService } from '@/services/topic';
 import { getChatGroupStoreState, useAgentGroupStore } from '@/store/agentGroup';
 import { topicSelectors } from '@/store/chat/slices/topic/selectors';
+import type { ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 import * as serverConfigStore from '@/store/serverConfig';
 
@@ -287,6 +288,49 @@ describe('GatewayActionImpl', () => {
       expect(state.gatewayConnections['op-1']).toBeDefined();
       expect(state.gatewayConnections['op-1'].status).toBe('connecting');
       expect(mockClient.connect).toHaveBeenCalledOnce();
+    });
+
+    it('preserves the local run across a transport handoff and ignores the old reconcile', async () => {
+      const { action, mockClient, state } = createTestAction();
+      state.operations = {
+        'local-1': {
+          id: 'local-1',
+          type: 'execServerAgentRuntime',
+          status: 'running',
+          metadata: { serverOperationId: 'op-1' },
+        },
+      };
+      state.completeOperation = vi.fn();
+      let resolveRunOver!: (value: boolean) => void;
+      const onSilentEnd = vi.fn(
+        () =>
+          new Promise<boolean>((resolve) => {
+            resolveRunOver = resolve;
+          }),
+      );
+      const onSessionComplete = vi.fn();
+      const params = {
+        gatewayUrl: 'https://gateway.test.com',
+        localOperationId: 'local-1',
+        operationId: 'op-1',
+        token: 'test-token',
+        topicId: TEST_TOPIC_ID,
+        onSilentEnd,
+        onSessionComplete,
+      };
+      action.connectToGateway(params);
+      mockClient.emitEvent('reconnecting', 1000);
+      await vi.waitFor(() => expect(onSilentEnd).toHaveBeenCalledOnce());
+      const replacement = createMockClient();
+      action.createClient = vi.fn(() => replacement);
+      action.connectToGateway(params);
+      resolveRunOver(true);
+      for (let i = 0; i < 10; i++) await Promise.resolve();
+      expect(state.completeOperation).not.toHaveBeenCalled();
+      expect(onSessionComplete).not.toHaveBeenCalled();
+      expect(state.gatewayConnections['op-1'].client).toBe(replacement);
+      replacement.emitEvent('session_complete', { source: 'raw_session_complete' });
+      expect(onSessionComplete).toHaveBeenCalledOnce();
     });
 
     it('should wire up status_changed listener', () => {
@@ -957,6 +1001,124 @@ describe('GatewayActionImpl', () => {
       topicId: 'topic-1',
       userMessageId: 'user-1',
     };
+
+    it.each(['reconnect-first', 'primary-first', 'primary-completed', 'token-rejected'] as const)(
+      'keeps one local owner when continuation races reconnect: %s',
+      async (order) => {
+        const reconnectFirst = order === 'reconnect-first';
+        const { action, get, state } = createExecuteTestAction();
+        const operations: ChatStore['operations'] = {};
+        state.operations = operations;
+        let startedOperations = 0;
+        state.messagesMap = {};
+        const originalGet = get.getMockImplementation()!;
+        const completeOperation = vi.fn((id: string) => {
+          operations[id].status = 'completed';
+        });
+        const clients: ReturnType<typeof createMockClient>[] = [];
+        action.createClient = vi.fn(() => {
+          const client = createMockClient();
+          client.disconnect.mockImplementation(() => client.emitEvent('disconnected'));
+          clients.push(client);
+          return client;
+        });
+        get.mockImplementation(() => ({
+          ...originalGet(),
+          completeOperation,
+          connectToGateway: action.connectToGateway,
+          internal_pinTopicStatus: vi.fn(),
+          startOperation: (params: Parameters<ChatStore['startOperation']>[0]) => {
+            const id = `local-${++startedOperations}`;
+            operations[id] = {
+              ...params,
+              abortController: new AbortController(),
+              context: params.context ?? {},
+              metadata: { startTime: Date.now(), ...params.metadata },
+              id,
+              status: 'running',
+            };
+            return { operationId: id };
+          },
+        }));
+        vi.mocked(topicService.getTopicDetail).mockResolvedValue({
+          id: 'topic-1',
+          metadata: { runningOperation: { operationId: 'server-op-resumed' } },
+        } as never);
+        let releaseToken!: (value: { token: string }) => void;
+        let rejectToken!: (error: Error) => void;
+        vi.mocked(aiAgentService.refreshGatewayToken).mockImplementationOnce(
+          () =>
+            new Promise((resolve, reject) => {
+              releaseToken = resolve;
+              rejectToken = reject;
+            }),
+        );
+        const reconnect = action.reconnectToGatewayOperation({
+          agentId: 'agent-1',
+          assistantMessageId: 'ast-resumed',
+          heteroType: null,
+          operationId: 'server-op-resumed',
+          topicId: 'topic-1',
+        });
+        operations.unrelated = {
+          ...operations['local-1'],
+          id: 'unrelated',
+          metadata: { startTime: Date.now(), serverOperationId: 'other-server-run' },
+        };
+        if (reconnectFirst) {
+          releaseToken({ token: 'fresh-token' });
+          await reconnect;
+          operations.reasoning = {
+            ...operations['local-1'],
+            id: 'reasoning',
+            type: 'reasoning',
+            parentOperationId: 'local-1',
+            metadata: { startTime: Date.now() },
+          };
+        }
+        await action.executeGatewayAgent({
+          context: { agentId: 'agent-1', topicId: 'topic-1' },
+          message: '',
+          parentMessageId: 'answered-tool',
+          precreatedResult: precreatedInterventionResult,
+        });
+        if (order === 'primary-completed') {
+          clients.at(-1)!.emitEvent('session_complete', { source: 'raw_session_complete' });
+        }
+        if (!reconnectFirst) {
+          if (order === 'token-rejected') rejectToken(new Error('superseded token request failed'));
+          else releaseToken({ token: 'fresh-token' });
+          await reconnect;
+        }
+        // The primary must remain the executor; a passive token refresh cannot replace it.
+        expect(clients).toHaveLength(reconnectFirst ? 2 : 1);
+        const running = Object.values(operations).filter(
+          (op) => op.id !== 'unrelated' && op.status === 'running',
+        );
+        expect(running.map((op) => op.id)).toEqual(
+          order === 'primary-completed' ? [] : ['local-2'],
+        );
+        expect(aiAgentService.interruptTask).not.toHaveBeenCalled();
+        expect(topicService.settleRunningOperation).not.toHaveBeenCalled();
+        if (reconnectFirst) {
+          // Late signals from the replaced subscription must not delete or settle its successor.
+          clients[0].emitEvent('session_complete', { source: 'raw_session_complete' });
+          clients[0].emitEvent('auth_failed', 'late auth failure');
+          clients[0].emitEvent('status_changed', 'disconnected');
+          expect(state.gatewayConnections['server-op-resumed']?.client).toBe(clients[1]);
+          expect(operations['local-2'].status).toBe('running');
+        }
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+        clients.at(-1)!.emitEvent('session_complete', { source: 'raw_session_complete' });
+        for (let i = 0; i < 10; i++) await Promise.resolve();
+        expect(operations.unrelated.status).toBe('running');
+        if (reconnectFirst) expect(operations.reasoning.status).toBe('completed');
+        expect(['local-1', 'local-2'].map((id) => operations[id].status)).toEqual([
+          'completed',
+          'completed',
+        ]);
+      },
+    );
 
     it.each(['approved', 'rejected'] as const)(
       'removes a %s question from pending interventions before connecting the precreated continuation',

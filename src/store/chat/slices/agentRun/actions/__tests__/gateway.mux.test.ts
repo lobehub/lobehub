@@ -241,7 +241,10 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       expect(action.createClient).not.toHaveBeenCalled();
       expect(muxClient.connect).toHaveBeenCalled();
       expect(v1Client.connect).not.toHaveBeenCalled();
-      expect(state.gatewayConnections['op-1']).toEqual({ client: muxClient, status: 'connecting' });
+      expect(state.gatewayConnections['op-1']).toMatchObject({
+        client: muxClient,
+        status: 'connecting',
+      });
     });
 
     it('keeps the v1 per-operation socket byte-for-byte outside the rollout', () => {
@@ -293,7 +296,10 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       expect(action.createClient).not.toHaveBeenCalled();
       expect(muxClient.connect).toHaveBeenCalled();
       expect(v1Client.connect).not.toHaveBeenCalled();
-      expect(state.gatewayConnections['op-1']).toEqual({ client: muxClient, status: 'connecting' });
+      expect(state.gatewayConnections['op-1']).toMatchObject({
+        client: muxClient,
+        status: 'connecting',
+      });
     });
 
     it('resolves the page-wide registry mux by default', () => {
@@ -398,6 +404,7 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
     const connectParams = (operationId: string) => ({
       executor: true,
       gatewayUrl: GATEWAY_URL,
+      localOperationId: `local-${operationId}`,
       operationId,
       token: 'tok',
       topicId: 'topic-1',
@@ -405,6 +412,18 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
 
     it('re-establishes every live operation on the v1 socket, resuming', () => {
       const { action, mux, state, v1Client } = createTestAction();
+      state.operations = Object.fromEntries(
+        ['op-1', 'op-2'].map((id) => [
+          `local-${id}`,
+          {
+            id: `local-${id}`,
+            type: 'execServerAgentRuntime',
+            status: 'running',
+            metadata: { serverOperationId: id },
+          },
+        ]),
+      );
+      state.completeOperation = vi.fn();
 
       action.connectToGateway(connectParams('op-1'));
       action.connectToGateway(connectParams('op-2'));
@@ -425,6 +444,7 @@ describe('GatewayActionImpl (multiplexed gateway transport)', () => {
       expect(v1Client.connect).toHaveBeenCalledTimes(2);
       expect(state.gatewayConnections['op-1'].client).toBe(v1Client);
       expect(state.gatewayConnections['op-2'].client).toBe(v1Client);
+      expect(state.completeOperation).not.toHaveBeenCalled();
     });
 
     it('resumes the v1 socket from the cursor the mux had already delivered', () => {
