@@ -40,6 +40,30 @@ const rectSchema = z.object({
   y: z.number().min(0).max(1),
 });
 
+/**
+ * The product page a remark was made on (embedded review toolbar). Bounded so
+ * a page cannot park an arbitrary blob on the acceptance: a handful of short
+ * facts is what reproducing the remark needs.
+ */
+export const acceptanceCommentSourceSchema = z.object({
+  commit: z.string().trim().max(64).optional(),
+  consoleErrors: z.array(z.string().max(1000)).max(20).optional(),
+  elementText: z.string().max(500).optional(),
+  extra: z
+    .record(z.string().max(64), z.union([z.string().max(500), z.number(), z.boolean()]))
+    .refine((value) => Object.keys(value).length <= 20, 'At most 20 extra facts')
+    .optional(),
+  kind: z.literal('product-page'),
+  rect: z
+    .object({ height: z.number(), width: z.number(), x: z.number(), y: z.number() })
+    .optional(),
+  selector: z.string().max(1000).optional(),
+  title: z.string().max(300).optional(),
+  url: z.string().url().max(2000),
+  userAgent: z.string().max(500).optional(),
+  viewport: z.object({ height: z.number(), width: z.number() }).optional(),
+});
+
 const createSchema = z
   .object({
     acceptanceId: z.string().min(1),
@@ -252,6 +276,9 @@ const enrich = async (
     reactionsByComment.set(row.parentCommentId, byEmoji);
   }
 
+  const mayReadPrivate = (row: AcceptanceCommentRow) =>
+    Boolean(scope.canModerate) || (Boolean(scope.userId) && row.authorUserId === scope.userId);
+
   return rows
     .filter((row) => row.kind !== 'reaction')
     .map((row) => ({
@@ -279,11 +306,17 @@ const enrich = async (
       evidenceId: row.evidenceId,
       id: row.id,
       kind: row.kind,
+      // Page context (user agent, console errors, build) and the server's own
+      // bag are for the delivery's reviewers and the remark's author, not for
+      // every holder of a public link.
+      metadata: row.deletedAt || !mayReadPrivate(row) ? null : (row.metadata ?? null),
       parentCommentId: row.parentCommentId,
       reactions: [...(reactionsByComment.get(row.id)?.values() ?? [])],
       rect: row.anchorRect,
       resolvedAt: row.resolvedAt,
       resolvedByUserId: row.resolvedByUserId,
+      // A tombstone keeps its place in the thread, not the page it pointed at.
+      source: row.deletedAt || !mayReadPrivate(row) ? null : (row.source ?? null),
       updatedAt: row.updatedAt,
     }));
 };

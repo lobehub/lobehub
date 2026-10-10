@@ -1,4 +1,20 @@
 export default {
+  'acceptanceReview.allow': 'Allow reviewing from this site',
+  'acceptanceReview.capability.comment': 'Leave remarks with screenshots',
+  'acceptanceReview.capability.reject': 'Send the delivery back for repair',
+  'acceptanceReview.delivery': 'Delivery',
+  'acceptanceReview.deny': 'Deny',
+  'acceptanceReview.description':
+    'A page of the delivered product wants to let you review this delivery right on the page.',
+  'acceptanceReview.done': 'Approved. You can close this window and go back to the page.',
+  'acceptanceReview.hint':
+    'Remarks you make there are posted as you, on this delivery only. The permission ends in an hour.',
+  'acceptanceReview.loading': 'Loading…',
+  'acceptanceReview.noAccess': 'You can read this delivery but cannot review it.',
+  'acceptanceReview.noOpener':
+    'This window lost the page that opened it. Go back to the product page and open review again.',
+  'acceptanceReview.site': 'Site',
+  'acceptanceReview.title': 'Review from the product page',
   'authorizeError.backToHome': 'Back to Home',
   'authorizeError.code': 'Error code',
   'authorizeError.reason.access_denied': 'The authorization was denied.',

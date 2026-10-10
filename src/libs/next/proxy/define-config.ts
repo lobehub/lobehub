@@ -220,6 +220,9 @@ export function defineConfig() {
     '/trpc(.*)',
     // version
     '/api/version',
+    // Embedded review toolbar: called cross-origin from a product page with its
+    // own acceptance-review bearer token, never a session cookie.
+    '/api/acceptance-review/(.*)',
     '/api/desktop/(.*)',
     // Composio OAuth callback — hit via a cross-site redirect from the provider
     // after Composio-managed auth; only renders a popup-closing page, so it must

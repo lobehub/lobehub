@@ -174,6 +174,8 @@ export const TRPC_NAMESPACE_API_KEY_RULES: Record<string, TrpcNamespaceScopeRule
   acceptance: 'blocked',
   // the discussion on an acceptance follows the acceptance itself
   acceptanceComment: 'blocked',
+  // Mints review sessions for a third-party page — a person approves that, never a key.
+  acceptanceReview: 'blocked',
   agent: rw('agent:read', 'agent:write'),
   // bot channel wiring carries channel credentials
   agentBotProvider: 'blocked',

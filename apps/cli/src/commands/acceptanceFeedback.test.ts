@@ -51,11 +51,13 @@ const comment = (
   evidenceId: 'image',
   id,
   kind: 'comment',
+  metadata: null,
   parentCommentId: null,
   reactions: [],
   rect,
   resolvedAt: null,
   resolvedByUserId: null,
+  source: null,
   updatedAt: new Date('2026-09-22T14:09:00Z'),
   ...overrides,
 });
@@ -240,6 +242,50 @@ it('prints readable region, attachment and overall rejection context in plain te
   expect(text).toContain('attachment');
   expect(text).toContain('https://example.com/expected.png');
   expect(text).not.toContain('No actionable feedback');
+});
+
+it('hands the repair agent the product page a remark was made on', async () => {
+  const stdout = vi.spyOn(console, 'log').mockImplementation(() => {});
+  const source = {
+    commit: 'abc1234',
+    consoleErrors: ['TypeError: x is undefined'],
+    elementText: '失败',
+    extra: { scenario: 'training-mixed', seed: 7 },
+    kind: 'product-page' as const,
+    selector: '[data-testid="run-status"]',
+    title: '实验',
+    url: 'https://product.example.com/experiments',
+  };
+  listComments.mockResolvedValue({
+    items: [
+      comment('page', {
+        anchorType: 'acceptance',
+        checkItemId: null,
+        content: '失败原因看不出来',
+        evidenceId: null,
+        rect: null,
+        source,
+      }),
+      comment('reply', { parentCommentId: 'page', content: '补充：最好直接显示 OOM' }),
+    ],
+  });
+
+  const json = await feedback('--actionable', '--json');
+  expect(json.entries.filter((entry: { kind: string }) => entry.kind === 'comment')).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ commentId: 'page', source }),
+      // A reply answers the page its thread was opened on.
+      expect.objectContaining({ commentId: 'reply', source }),
+    ]),
+  );
+
+  await feedback('--actionable');
+  const text = stdout.mock.calls.flat().join('\n');
+  expect(text).toContain('page: https://product.example.com/experiments (实验)');
+  expect(text).toContain('element: [data-testid="run-status"]');
+  expect(text).toContain('context: scenario=training-mixed, seed=7');
+  expect(text).toContain('build: abc1234');
+  expect(text).toContain('console error: TypeError: x is undefined');
 });
 
 it('reports a comment read failure instead of claiming there is no feedback', async () => {

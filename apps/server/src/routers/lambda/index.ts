@@ -22,6 +22,7 @@ import { publicProcedure, router } from '@/libs/trpc/lambda';
 
 import { acceptanceRouter } from './acceptance';
 import { acceptanceCommentRouter } from './acceptanceComment';
+import { acceptanceReviewRouter } from './acceptanceReview';
 import { agentRouter } from './agent';
 import { agentBotProviderRouter } from './agentBotProvider';
 import { agentDocumentRouter } from './agentDocument';
@@ -113,6 +114,7 @@ import { workspaceUserSettingsRouter } from './workspaceUserSettings';
 export const lambdaRouter = router({
   acceptance: acceptanceRouter,
   acceptanceComment: acceptanceCommentRouter,
+  acceptanceReview: acceptanceReviewRouter,
   agent: agentRouter,
   agentBotProvider: agentBotProviderRouter,
   agentNotify: agentNotifyRouter,
