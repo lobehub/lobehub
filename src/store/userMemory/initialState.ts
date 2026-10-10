@@ -8,15 +8,13 @@ import { type ContextSliceState } from './slices/context';
 import { contextInitialState } from './slices/context';
 import { type ExperienceSliceState } from './slices/experience';
 import { experienceInitialState } from './slices/experience';
+import { homeInitialState, type HomeSliceState } from './slices/home/initialState';
 import { type IdentitySliceState } from './slices/identity';
 import { identityInitialState } from './slices/identity';
 import { type PreferenceSliceState } from './slices/preference';
 import { preferenceInitialState } from './slices/preference';
 
-export interface PersonaData {
-  content: string;
-  summary: string;
-}
+export type { PersonaData } from './slices/home/projection';
 
 export interface UserMemoryStoreState
   extends
@@ -24,6 +22,7 @@ export interface UserMemoryStoreState
     AgentMemorySliceState,
     ContextSliceState,
     ExperienceSliceState,
+    HomeSliceState,
     IdentitySliceState,
     PreferenceSliceState {
   activeParams?: RetrieveMemoryParams;
@@ -33,11 +32,6 @@ export interface UserMemoryStoreState
   editingMemoryLayer?: 'activity' | 'context' | 'experience' | 'identity' | 'preference';
   memoryFetchedAtMap: Record<string, number>;
   memoryMap: Record<string, RetrieveMemoryResult>;
-  persona?: PersonaData;
-  personaInit: boolean;
-  roles: { count: number; tag: string }[];
-  tags: { count: number; tag: string }[];
-  tagsInit: boolean;
 }
 
 export const initialState: UserMemoryStoreState = {
@@ -45,6 +39,7 @@ export const initialState: UserMemoryStoreState = {
   ...agentMemoryInitialState,
   ...contextInitialState,
   ...experienceInitialState,
+  ...homeInitialState,
   ...identityInitialState,
   ...preferenceInitialState,
   activeParams: undefined,
@@ -54,9 +49,4 @@ export const initialState: UserMemoryStoreState = {
   editingMemoryLayer: undefined,
   memoryFetchedAtMap: {},
   memoryMap: {},
-  persona: undefined,
-  personaInit: false,
-  roles: [],
-  tags: [],
-  tagsInit: false,
 };
