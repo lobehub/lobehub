@@ -325,6 +325,14 @@ const resolveWorkspaceInit = async (
         : await deviceModel.findByDeviceId(activeDeviceId);
       const current = latest?.workingDirs ?? workingDirs;
 
+      // The entry this scan refreshes was removed mid-scan. Writing it back
+      // would resurrect it — and `workingDirs` is the allowlist for device
+      // file-operation roots — so keep the answer for this turn only.
+      if (cached && !current.some((dir) => dir.path === cached.path)) {
+        log('execAgent: %s was removed during the scan; skip the writeback', cached.path);
+        return scanned;
+      }
+
       const updated = upsertWorkspaceScan(current, cached?.path ?? boundCwd, scanned, Date.now());
       if (deviceWorkspaceId) {
         await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });

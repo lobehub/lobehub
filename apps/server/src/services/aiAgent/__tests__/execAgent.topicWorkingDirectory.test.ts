@@ -417,6 +417,38 @@ describe('AiAgentService.execAgent - topic working directory binding', () => {
     );
   });
 
+  it('does not resurrect a directory the user removed mid-scan', async () => {
+    const staleEntry = {
+      path: '/repo/default',
+      workspace: { instructions: [], skills: [] },
+      workspaceScannedAt: Date.now() - 2 * 60 * 60 * 1000,
+    };
+
+    let scanStarted = false;
+    mockInitWorkspace.mockImplementation(async () => {
+      scanStarted = true;
+      return { instructions: [], skills: [] };
+    });
+    mockFindByDeviceId.mockImplementation(async () => ({
+      defaultCwd: '/repo/default',
+      deviceId: DEVICE_ID,
+      workingDirs: scanStarted ? [{ path: '/repo/other', workspaceScannedAt: 1 }] : [staleEntry],
+    }));
+    mockGetAgentConfig.mockResolvedValue(
+      createAgentConfig({ boundDeviceId: DEVICE_ID, executionTarget: 'device' }),
+    );
+
+    await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(mockInitWorkspace).toHaveBeenCalledTimes(1);
+    // `workingDirs` is the file-operation allowlist: the removal must stick.
+    expect(mockUpdateDevice).not.toHaveBeenCalledWith(
+      DEVICE_ID,
+      expect.objectContaining({ workingDirs: expect.anything() }),
+    );
+  });
+
   it('still refreshes when the Redis claim command fails', async () => {
     mockFindByDeviceId.mockResolvedValue({
       defaultCwd: '/repo/default',

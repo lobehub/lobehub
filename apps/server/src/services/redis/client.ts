@@ -74,7 +74,11 @@ export const getRedisServiceClient = async (): Promise<BaseRedisProvider | null>
   const client = await withDeadline(
     tryInitializeRedisWithPrefix(
       { ...config, commandTimeoutMs: COMMAND_TIMEOUT_MS, connectTimeoutMs: CONNECT_TIMEOUT_MS },
-      RedisKeyNamespace.SEND_PATH_CACHE,
+      // Compose with REDIS_PREFIX rather than replace it: deployments sharing
+      // one Redis isolate by prefix, and their user/device ids can collide.
+      config.prefix
+        ? `${config.prefix}:${RedisKeyNamespace.SEND_PATH_CACHE}`
+        : RedisKeyNamespace.SEND_PATH_CACHE,
     ),
     ACQUIRE_TIMEOUT_MS,
   );

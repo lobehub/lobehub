@@ -53,8 +53,22 @@ describe('getRedisServiceClient', () => {
 
     expect(mockTryInitializeRedisWithPrefix).toHaveBeenCalledWith(
       expect.objectContaining({ commandTimeoutMs: 1000, connectTimeoutMs: 1000 }),
-      'sendPathCache',
+      'lobe:sendPathCache',
     );
+  });
+
+  it('keeps REDIS_PREFIX so deployments sharing a Redis do not read each other', async () => {
+    mockTryInitializeRedisWithPrefix.mockResolvedValue({ get: vi.fn(), set: vi.fn() });
+
+    mockGetRedisConfig.mockReturnValue({ ...enabledConfig, prefix: 'staging' });
+    await (await loadClient()).getRedisServiceClient();
+    mockGetRedisConfig.mockReturnValue({ ...enabledConfig, prefix: 'production' });
+    await (await loadClient()).getRedisServiceClient();
+
+    expect(mockTryInitializeRedisWithPrefix.mock.calls.map(([, prefix]) => prefix)).toEqual([
+      'staging:sendPathCache',
+      'production:sendPathCache',
+    ]);
   });
 
   it('opens the circuit after a failed acquisition so later sends do not retry', async () => {
