@@ -44,6 +44,17 @@ const safeSegment = (value: string): string => value.replaceAll(/[^\w-]/g, '') |
 /** A command that starts with an `lh`/`lobe`/`lobehub` invocation (keyword + boundary). */
 const SIMPLE_LH_PREFIX = /^\s*(?:lh|lobe|lobehub)(?=\s|$)/;
 
+/**
+ * The CLI named anywhere in a command as a standalone word — `echo …; lh …`,
+ * `if lh whoami`, `$x = lh …`, a loop body — not only at its start. Same rule
+ * as the cloud sandbox's `isLhCommand`, so a command shape that authenticates
+ * there authenticates on a device too. Erring permissive costs one unused
+ * credential on a command that merely mentions `lh`; a miss costs a broken
+ * one. Paths and longer names (`./lh`, `lobe-chat`, `app.lobehub.com`) are not
+ * matches.
+ */
+const MENTIONS_LH = /(?<![\w./~-])(?:lh|lobe|lobehub)(?![\w./-])/;
+
 export default class ShellCommandCtr extends ControllerModule {
   static override readonly groupName = 'shellCommand';
 
@@ -284,7 +295,42 @@ export default class ShellCommandCtr extends ControllerModule {
       }
     }
 
-    if (!params.sandbox) return runCommand(params, { logger, processManager, spawnProcess });
+    if (!params.sandbox) {
+      // A command that reaches the CLI later in its text gets credentials too.
+      // Without them, `lh` fell back to the device's own stored login — on most
+      // devices missing or long expired — and failed with "No authentication
+      // found" or `invalid_grant`, alternating with successes depending only
+      // on how the model happened to start each command.
+      //
+      // Unlike the prefixed route above, the token is not exported to the
+      // shell: it rides a per-command `lh` shim (`CliCtr.buildIndirectCliEnv`)
+      // so `npm install && lh …` does not hand it to the install, and it is
+      // gated on the text so a command that never names the CLI gets nothing.
+      const cliCtr = this.app.getController(CliCtr);
+      if (!cliCtr || !MENTIONS_LH.test(params.command)) {
+        return runCommand(params, { logger, processManager, spawnProcess });
+      }
+
+      const { dispose, env } = await cliCtr.buildIndirectCliEnv(params.env);
+      let spawned = false;
+      const spawnThenDispose = ((...args: Parameters<typeof spawnProcess>) => {
+        const child = spawnProcess(...args);
+        spawned = true;
+        child.once('exit', dispose);
+        child.once('error', dispose);
+        return child;
+      }) as typeof spawnProcess;
+
+      try {
+        return await runCommand(
+          { ...params, env },
+          { logger, processManager, spawnProcess: spawnThenDispose },
+        );
+      } finally {
+        // Nothing was spawned (bad cwd, early refusal): no exit is coming.
+        if (!spawned) dispose();
+      }
+    }
 
     // Sandboxed run. The policy is scoped to the run's working directory, so
     // without one there is nothing to scope to — refuse rather than fall back
