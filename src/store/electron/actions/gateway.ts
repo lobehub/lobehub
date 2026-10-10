@@ -1,5 +1,5 @@
 import { isDesktop } from '@lobechat/const';
-import type { GatewayConnectionStatus } from '@lobechat/electron-client-ipc';
+import type { GatewayConnectionState } from '@lobechat/electron-client-ipc';
 import { type SWRResponse } from 'swr';
 import useSWR from 'swr';
 
@@ -29,11 +29,13 @@ export class ElectronGatewayActionImpl {
   }
 
   connectGateway = async (): Promise<void> => {
-    this.#set({ gatewayConnectionStatus: 'connecting' });
+    this.#set({ gatewayConnectionError: undefined, gatewayConnectionStatus: 'connecting' });
     try {
       const result = await gatewayConnectionService.connect();
       if (!result.success) {
-        this.#set({ gatewayConnectionStatus: 'disconnected' });
+        // The main process owns the outcome (and its reason); a superseded
+        // attempt may already be connecting again, so take its state as is.
+        this.setGatewayConnectionState(await gatewayConnectionService.getConnectionStatus());
       }
     } catch (error) {
       console.error('Gateway connect failed:', error);
@@ -44,14 +46,18 @@ export class ElectronGatewayActionImpl {
   disconnectGateway = async (): Promise<void> => {
     try {
       await gatewayConnectionService.disconnect();
-      this.#set({ gatewayConnectionStatus: 'disconnected' });
+      this.#set({ gatewayConnectionError: undefined, gatewayConnectionStatus: 'disconnected' });
     } catch (error) {
       console.error('Gateway disconnect failed:', error);
     }
   };
 
-  setGatewayConnectionStatus = (status: GatewayConnectionStatus): void => {
-    this.#set({ gatewayConnectionStatus: status }, false, 'setGatewayConnectionStatus');
+  setGatewayConnectionState = ({ error, status }: GatewayConnectionState): void => {
+    this.#set(
+      { gatewayConnectionError: error, gatewayConnectionStatus: status },
+      false,
+      'setGatewayConnectionState',
+    );
   };
 
   useFetchGatewayDeviceInfo = (): SWRResponse<GatewayDeviceInfo> => {
@@ -67,15 +73,11 @@ export class ElectronGatewayActionImpl {
     );
   };
 
-  useFetchGatewayStatus = (): SWRResponse<{ status: GatewayConnectionStatus }> => {
-    return useSWR<{ status: GatewayConnectionStatus }>(
+  useFetchGatewayStatus = (): SWRResponse<GatewayConnectionState> => {
+    return useSWR<GatewayConnectionState>(
       isDesktop ? 'electron:getGatewayConnectionStatus' : null,
       async () => gatewayConnectionService.getConnectionStatus(),
-      {
-        onSuccess: (data) => {
-          this.#set({ gatewayConnectionStatus: data.status }, false, 'setGatewayConnectionStatus');
-        },
-      },
+      { onSuccess: (data) => this.setGatewayConnectionState(data) },
     );
   };
 }

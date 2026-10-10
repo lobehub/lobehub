@@ -108,6 +108,42 @@ describe('RemoteServerConfigCtr', () => {
         ...newConfig,
       });
     });
+
+    it('closes the device gateway connection when switching to another server', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: true,
+        remoteServerUrl: 'https://a.example.com',
+        storageMode: 'selfHost',
+      });
+
+      await controller.setRemoteServerConfig({
+        active: false,
+        remoteServerUrl: 'https://b.example.com',
+        storageMode: 'selfHost',
+      });
+
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the device gateway connection when the login is deactivated', async () => {
+      mockStoreManager.get.mockReturnValue({ active: true, storageMode: 'cloud' });
+
+      await controller.setRemoteServerConfig({ active: false });
+
+      expect(mockGatewayConnectionSrv.disconnect).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the connection when re-activating the same server after sign-in', async () => {
+      mockStoreManager.get.mockReturnValue({
+        active: false,
+        remoteServerUrl: 'https://a.example.com',
+        storageMode: 'selfHost',
+      });
+
+      await controller.setRemoteServerConfig({ active: true });
+
+      expect(mockGatewayConnectionSrv.disconnect).not.toHaveBeenCalled();
+    });
   });
 
   describe('clearRemoteServerConfig', () => {

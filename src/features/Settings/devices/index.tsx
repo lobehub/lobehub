@@ -21,7 +21,7 @@ import RightPanel from '@/features/RightPanel';
 import SettingContainer from '@/features/Setting/SettingContainer';
 import { useElectronStore } from '@/store/electron';
 
-import KeepAwake from './KeepAwake';
+import ThisComputer from './ThisComputer';
 
 const styles = createStaticStyles(({ css }) => ({
   // The device rows carry their own padding and hover fill; a thin, even inset
@@ -111,7 +111,7 @@ const Page = memo<PageProps>(({ mobile }) => {
         ]}
         {...FORM_STYLE}
       />
-      {isDesktop && <KeepAwake />}
+      {isDesktop && <ThisComputer />}
     </Flexbox>
   );
 

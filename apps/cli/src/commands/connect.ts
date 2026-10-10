@@ -32,7 +32,6 @@ import {
   CLI_DISPLAY_NAME,
   CLI_PRIMARY_BIN,
 } from '../constants/identity';
-import { OFFICIAL_GATEWAY_URL } from '../constants/urls';
 import { CliMaintenance } from '../daemon/maintenance';
 import {
   appendLog,
@@ -49,6 +48,12 @@ import {
 } from '../daemon/manager';
 import { listTasks } from '../daemon/taskRegistry';
 import { spawnHeteroAgentRun } from '../device/agentRun';
+import {
+  describeDeviceGateway,
+  describeDeviceGatewayFailure,
+  rememberGatewayOverride,
+  resolveCliDeviceGateway,
+} from '../device/gatewayEndpoint';
 import {
   mintWorkspaceConnectToken,
   registerDevice,
@@ -68,12 +73,9 @@ import {
 import {
   addWorkspaceEnrollment,
   loadOrCreateConnectionId,
-  loadSettings,
   loadWorkspaceEnrollments,
-  normalizeUrl,
   removeWorkspaceEnrollment,
   resolveDeviceMetricsBacklogPath,
-  saveSettings,
 } from '../settings';
 import { executeToolCall } from '../tools';
 import { cleanupAllProcesses, getActiveShellCount } from '../tools/shell';
@@ -148,7 +150,7 @@ export function registerConnectCommand(program: Command) {
       if (status) {
         log.info(`  Started at       : ${status.startedAt}`);
         log.info(`  Connection       : ${status.connectionStatus}`);
-        log.info(`  Gateway          : ${status.gatewayUrl}`);
+        log.info(`  Gateway          : ${formatStatusGateway(status)}`);
         const uptime = formatUptime(new Date(status.startedAt));
         log.info(`  Uptime           : ${uptime}`);
       }
@@ -266,7 +268,7 @@ export function registerConnectCommand(program: Command) {
       }
       if (status) {
         log.info(`  Connection       : ${status.connectionStatus}`);
-        log.info(`  Gateway          : ${status.gatewayUrl}`);
+        log.info(`  Gateway          : ${formatStatusGateway(status)}`);
         const uptime = formatUptime(new Date(status.startedAt));
         log.info(`  Uptime           : ${uptime}`);
       }
@@ -328,22 +330,35 @@ function buildDaemonArgs(options: ConnectOptions): string[] {
 
 async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
   let auth = await resolveToken(options);
-  const settings = loadSettings();
-  const gatewayUrl = normalizeUrl(options.gateway) || settings?.gatewayUrl;
 
-  if (!gatewayUrl && settings?.serverUrl) {
-    log.error(
-      `Current login uses custom --server ${settings?.serverUrl}. Please also provide '--gateway <url>' for the device gateway.`,
+  const info = (msg: string) => {
+    if (isDaemonChild) appendLog(msg);
+    else log.info(msg);
+  };
+
+  const error = (msg: string) => {
+    if (isDaemonChild) appendLog(`[ERROR] ${msg}`);
+    else log.error(msg);
+  };
+
+  // Resolved once per process, against the server the token belongs to. The
+  // client's own reconnects and every workspace share connection reuse it.
+  const gateway = await resolveCliDeviceGateway({
+    override: options.gateway,
+    serverUrl: auth.serverUrl,
+  });
+  if (!gateway.ok) {
+    const { detail, fix } = describeDeviceGatewayFailure(gateway, auth.serverUrl);
+    // Thrown, so a daemon parent reports it as the startup error too.
+    throw new Error(`${detail} ${fix}`);
+  }
+  const resolvedGatewayUrl = gateway.endpoint.url;
+  const gatewayDescription = describeDeviceGateway(gateway.endpoint);
+  if (rememberGatewayOverride(auth.serverUrl, gateway.endpoint)) {
+    info(
+      `Saved ${resolvedGatewayUrl} as the device gateway for ${auth.serverUrl}; later runs use it ahead of the server's own address.`,
     );
-    process.exit(1);
-    throw new Error('process.exit');
   }
-
-  if (options.gateway && gatewayUrl) {
-    saveSettings({ ...settings, gatewayUrl });
-  }
-
-  const resolvedGatewayUrl = gatewayUrl || OFFICIAL_GATEWAY_URL;
 
   // Workspace enrollment: the device joins a workspace pool (reachable by all
   // members) instead of the personal pool. It authenticates with a minted
@@ -400,22 +415,12 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     workspaceId,
   });
 
-  const info = (msg: string) => {
-    if (isDaemonChild) appendLog(msg);
-    else log.info(msg);
-  };
-
-  const error = (msg: string) => {
-    if (isDaemonChild) appendLog(`[ERROR] ${msg}`);
-    else log.error(msg);
-  };
-
   // Print device info
   info(`─── ${CLI_DISPLAY_NAME} ───`);
   info(`  Device ID : ${client.currentDeviceId}`);
   info(`  Hostname  : ${os.hostname()}`);
   info(`  Platform  : ${process.platform}`);
-  info(`  Gateway   : ${resolvedGatewayUrl}`);
+  info(`  Gateway   : ${gatewayDescription}`);
   info(`  Auth      : ${auth.tokenType}`);
   info(`  Mode      : ${isDaemonChild ? 'daemon' : 'foreground'}`);
   info('───────────────────');
@@ -428,6 +433,7 @@ async function runConnect(options: ConnectOptions, isDaemonChild: boolean) {
     writeStatus({
       connectionStatus,
       deviceId: client.currentDeviceId,
+      gatewaySource: gateway.endpoint.source,
       gatewayUrl: resolvedGatewayUrl,
       lastRequestAt,
       pid: process.pid,
@@ -1062,6 +1068,12 @@ function createDaemonLogger() {
     info: (msg: string) => appendLog(`[INFO] ${msg}`),
     warn: (msg: string) => appendLog(`[WARN] ${msg}`),
   };
+}
+
+function formatStatusGateway(status: { gatewaySource?: string; gatewayUrl: string }): string {
+  return status.gatewaySource
+    ? `${status.gatewayUrl} (${status.gatewaySource})`
+    : status.gatewayUrl;
 }
 
 function formatUptime(startedAt: Date): string {

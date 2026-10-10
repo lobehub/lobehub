@@ -1,6 +1,12 @@
 {
   "gateway.enableConnection": "连接到网关",
+  "gateway.error.authFailed": "设备网关拒绝了当前登录凭证。请重试、检查网关地址，或重新登录。",
+  "gateway.error.configUnavailable": "无法读取当前服务器的配置。请检查网络后重试。",
+  "gateway.error.configure": "网关设置",
+  "gateway.error.invalidUrl": "当前使用的设备网关地址无效，请在网关设置中填写有效地址。",
+  "gateway.error.notSignedIn": "登录后即可连接此设备。",
   "gateway.manageDevices": "管理设备",
+  "gateway.retry": "重试",
   "gateway.statusConnected": "本机已连接设备网关",
   "gateway.statusConnectedConnections_one": "在线 · {{count}} 个连接",
   "gateway.statusConnectedConnections_other": "在线 · {{count}} 个连接",

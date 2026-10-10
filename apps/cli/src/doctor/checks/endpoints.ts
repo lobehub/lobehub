@@ -1,11 +1,11 @@
 import fs from 'node:fs';
 
+import { isOfficialCloudServer } from '@lobechat/const';
+
+import { pickAuthSource } from '../../auth/source';
+import { OFFICIAL_AGENT_GATEWAY_URL } from '../../constants/urls';
 import {
-  OFFICIAL_AGENT_GATEWAY_URL,
-  OFFICIAL_GATEWAY_URL,
-  OFFICIAL_SERVER_URL,
-} from '../../constants/urls';
-import {
+  loadDeviceGatewayUrl,
   loadSettings,
   normalizeUrl,
   resolveAgentGatewayUrl,
@@ -18,20 +18,24 @@ import type { CheckOutcome, DoctorCheck } from '../types';
 export interface ResolvedEndpoints {
   agentGatewaySource: string;
   agentGatewayUrl?: string;
-  gatewaySource: string;
-  gatewayUrl: string;
+  /**
+   * Device gateway saved for this server (by `--gateway`); it is used ahead of
+   * the server's own. Without one the address is asked of the server at
+   * connect time (see `device.gateway`), so it has no static value here.
+   */
+  savedDeviceGatewayUrl?: string;
   serverSource: string;
   serverUrl: string;
 }
 
 /**
- * The three URLs the CLI talks to, each with the reason it has that value.
+ * The URLs the CLI talks to, each with the reason it has that value.
  *
  * They do not share a resolution rule — `LOBEHUB_SERVER` and
- * `AGENT_GATEWAY_URL` exist but there is no env var for the device gateway,
- * and `settings.json` is deleted whenever every URL is back to default. So
- * "my config looks right but the CLI behaves like it isn't" has three separate
- * causes, and printing the winner plus its source is what tells them apart.
+ * `AGENT_GATEWAY_URL` exist, the device gateway is asked of the server, and
+ * `settings.json` is deleted whenever every URL is back to default. So "my
+ * config looks right but the CLI behaves like it isn't" has separate causes,
+ * and printing the winner plus its source is what tells them apart.
  */
 export function resolveEndpoints(): ResolvedEndpoints {
   const settings = loadSettings();
@@ -45,8 +49,7 @@ export function resolveEndpoints(): ResolvedEndpoints {
         ? 'settings.json'
         : 'built-in default',
     agentGatewayUrl,
-    gatewaySource: settings?.gatewayUrl ? 'settings.json' : 'built-in default',
-    gatewayUrl: normalizeUrl(settings?.gatewayUrl) || OFFICIAL_GATEWAY_URL,
+    savedDeviceGatewayUrl: loadDeviceGatewayUrl(serverUrl),
     serverSource: process.env.LOBEHUB_SERVER
       ? 'LOBEHUB_SERVER'
       : settings?.serverUrl
@@ -67,37 +70,40 @@ const endpointResolution: DoctorCheck = {
     // the checks that connect with them.
     const shown = {
       agentGatewayUrl: redactUrlCredentials(endpoints.agentGatewayUrl),
-      gatewayUrl: redactUrlCredentials(endpoints.gatewayUrl),
+      savedDeviceGatewayUrl: redactUrlCredentials(endpoints.savedDeviceGatewayUrl),
       serverUrl: redactUrlCredentials(endpoints.serverUrl),
     };
     const evidence = { ...endpoints, ...shown };
-    const selfHosted = endpoints.serverUrl !== OFFICIAL_SERVER_URL;
+    const selfHosted = !isOfficialCloudServer(endpoints.serverUrl);
 
-    // A self-hosted server with the official device gateway is the trap: only
-    // `lh status` complains today, while every other device command connects to
-    // a gateway that has never heard of that server.
-    //
-    // A warning, not a failure: an installation that only uses the HTTP API
-    // never needs a device gateway, and failing here would skip every check
-    // below through the dependency chain — leaving doctor unable to say
-    // anything at all about an otherwise healthy server. The device profile's
-    // own handshake check is what fails concretely when it matters.
-    if (selfHosted && endpoints.gatewaySource === 'built-in default')
+    // `LOBEHUB_SERVER` redirects this run, but a stored login belongs to the
+    // server `lh login` used. (Env credentials are issued for LOBEHUB_SERVER.)
+    const loginServerUrl = normalizeUrl(loadSettings()?.serverUrl);
+    if (
+      process.env.LOBEHUB_SERVER &&
+      loginServerUrl &&
+      loginServerUrl !== endpoints.serverUrl &&
+      pickAuthSource().kind === 'stored'
+    )
       return {
-        detail: `Server is ${shown.serverUrl} but the device gateway is still the official ${OFFICIAL_GATEWAY_URL}, which has never heard of that server.`,
-        evidence,
-        fix: "Only matters for device commands: pass --gateway <url> to 'lh connect' (it is persisted).",
+        detail: `LOBEHUB_SERVER points at ${shown.serverUrl}, but the saved login is for ${redactUrlCredentials(loginServerUrl)}.`,
+        evidence: { ...evidence, loginServerUrl: redactUrlCredentials(loginServerUrl) },
+        fix: `Unset LOBEHUB_SERVER, or run 'lh login --server ${shown.serverUrl}' so the credential belongs to the server it is sent to.`,
         status: 'warn',
       };
 
-    // A gateway that only exists on this machine cannot be dispatched to by a
-    // remote server (and vice versa). Left over from local gateway work, this
-    // shows up later as an opaque "credential rejected" handshake failure.
-    if (isLoopback(endpoints.gatewayUrl) !== isLoopback(endpoints.serverUrl))
+    // A saved gateway that only exists on this machine cannot be dispatched to
+    // by a remote server (and vice versa). Left over from local gateway work,
+    // it wins over the server's own address and shows up later as an opaque
+    // "credential rejected" handshake failure.
+    if (
+      endpoints.savedDeviceGatewayUrl &&
+      isLoopback(endpoints.savedDeviceGatewayUrl) !== isLoopback(endpoints.serverUrl)
+    )
       return {
-        detail: `Server ${shown.serverUrl} and device gateway ${shown.gatewayUrl} are not on the same side of localhost.`,
+        detail: `Server ${shown.serverUrl} and its saved device gateway ${shown.savedDeviceGatewayUrl} are not on the same side of localhost.`,
         evidence,
-        fix: isLoopback(endpoints.gatewayUrl)
+        fix: isLoopback(endpoints.savedDeviceGatewayUrl)
           ? "Drop the local gateway: 'lh connect --gateway <the server's gateway>'."
           : 'Point --gateway at the gateway that belongs to this server.',
         status: 'warn',
@@ -112,7 +118,7 @@ const endpointResolution: DoctorCheck = {
       };
 
     return {
-      detail: `server ${shown.serverUrl} (${endpoints.serverSource}), device gateway ${shown.gatewayUrl} (${endpoints.gatewaySource}).`,
+      detail: `server ${shown.serverUrl} (${endpoints.serverSource}); device gateway ${shown.savedDeviceGatewayUrl ? `${shown.savedDeviceGatewayUrl} (saved for this server)` : 'asked of the server'}.`,
       evidence,
       status: 'ok',
     };

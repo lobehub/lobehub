@@ -6,15 +6,19 @@ import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { FORM_STYLE } from '@/const/layoutTokens';
+import { useGatewayEndpoint } from '@/features/Electron/connection/useGatewayEndpoint';
 import { useGatewayKeepAwake } from '@/features/Electron/connection/useGatewayKeepAwake';
 
+import GatewayAddress from './GatewayAddress';
+
 /**
- * Desktop-only: keep this computer from idle-sleeping while it is connected as
- * a device, so remote runs can still reach it after the user walks away.
+ * Desktop-only settings for this computer as a device: staying awake while
+ * connected, and which Device Gateway the current login connects through.
  */
-const KeepAwake = memo(() => {
+const ThisComputer = memo(() => {
   const { t } = useTranslation('setting');
   const { enabled, isLoading, setKeepAwake } = useGatewayKeepAwake();
+  const { data: gateway, mutate: refreshGateway } = useGatewayEndpoint();
   const form = useForm();
 
   const items: FormGroupItem = {
@@ -31,6 +35,23 @@ const KeepAwake = memo(() => {
         label: t('devices.keepAwake.title'),
         minWidth: undefined,
       },
+      // Signed in only: what is in use depends on the current server.
+      ...(gateway?.serverUrl
+        ? [
+            {
+              children: (
+                <GatewayAddress
+                  info={gateway}
+                  key={`${gateway.serverUrl}|${gateway.manualUrl ?? ''}`}
+                  onSaved={() => void refreshGateway()}
+                />
+              ),
+              desc: t('devices.gateway.desc'),
+              label: t('devices.gateway.title'),
+              minWidth: undefined,
+            },
+          ]
+        : []),
     ],
     title: t('devices.thisComputer'),
   };
@@ -47,6 +68,6 @@ const KeepAwake = memo(() => {
   );
 });
 
-KeepAwake.displayName = 'KeepAwake';
+ThisComputer.displayName = 'ThisComputer';
 
-export default KeepAwake;
+export default ThisComputer;

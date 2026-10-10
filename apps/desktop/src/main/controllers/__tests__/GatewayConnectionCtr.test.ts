@@ -2,10 +2,12 @@ import type * as ChildProcessModule from 'node:child_process';
 import type * as CryptoModule from 'node:crypto';
 import { EventEmitter } from 'node:events';
 
+import type * as DeviceMetricsModule from '@lobechat/device-control/metrics';
 import { deriveDeviceId, deriveScopedFallbackId } from '@lobechat/device-identity';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { App } from '@/core/App';
+import type * as DesktopEnvModule from '@/env';
 import AuvService from '@/services/auvSrv';
 import GatewayConnectionService from '@/services/gatewayConnectionSrv';
 import ImessageBridgeService from '@/services/imessageBridgeSrv';
@@ -24,8 +26,11 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 
   // Must be defined inside vi.hoisted so it's available when vi.mock factories run
   class _MockGatewayClient extends EventEmitter {
+    static instances: _MockGatewayClient[] = [];
     static lastInstance: _MockGatewayClient | null = null;
     static lastOptions: any = null;
+
+    options: any;
 
     connectionStatus = 'disconnected' as string;
     currentDeviceId: string;
@@ -45,10 +50,15 @@ const { ipcMainHandleMock, MockGatewayClient } = vi.hoisted(() => {
 
     constructor(options: any) {
       super();
+      this.options = options;
       this.currentDeviceId = options.deviceId || 'mock-device-id';
+      _MockGatewayClient.instances.push(this);
       _MockGatewayClient.lastInstance = this;
       _MockGatewayClient.lastOptions = options;
     }
+
+    updateToken = vi.fn();
+    reconnect = vi.fn(async () => {});
 
     // Test helpers
     simulateConnected() {
@@ -229,6 +239,41 @@ vi.mock('@lobechat/device-gateway-client', () => ({
   GatewayClient: MockGatewayClient,
 }));
 
+// Logged-in sessions (a JWT with `sub`) start the metrics sampler; keep it inert.
+vi.mock('@lobechat/device-control/metrics', async (importOriginal) => ({
+  ...(await importOriginal<typeof DeviceMetricsModule>()),
+  DeviceMetricsSampler: vi.fn().mockImplementation(function () {
+    return {
+      flush: vi.fn().mockResolvedValue(undefined),
+      start: vi.fn().mockResolvedValue(undefined),
+      stop: vi.fn().mockResolvedValue(undefined),
+    };
+  }),
+}));
+
+// `getDesktopEnv` is memoized; read the override per call so a test can stub it.
+vi.mock('@/env', async (importOriginal) => {
+  const actual = await importOriginal<typeof DesktopEnvModule>();
+  return {
+    ...actual,
+    getDesktopEnv: () => ({
+      ...actual.getDesktopEnv(),
+      DEVICE_GATEWAY_URL: process.env.DEVICE_GATEWAY_URL || undefined,
+    }),
+  };
+});
+
+// Device gateway discovery goes through Electron's network stack.
+const netFetchMock = vi.hoisted(() => vi.fn());
+vi.mock('@/utils/net-fetch', () => ({ netFetch: netFetchMock }));
+
+const SERVER_URL = 'https://server.example.com';
+const SERVER_GATEWAY_URL = 'https://device-gateway.server.example.com';
+
+/** Answer `config.getGlobalConfig` the way the tRPC lambda router does. */
+const globalConfigResponse = (serverConfig: Record<string, unknown>) =>
+  Response.json({ result: { data: { json: { serverConfig } } } });
+
 vi.mock('@/services/imessageBridgeSrv', () => ({
   default: class ImessageBridgeService {},
 }));
@@ -297,6 +342,11 @@ const mockMcpCtr = {
 
 const mockRemoteServerConfigCtr = {
   getAccessToken: vi.fn().mockResolvedValue('mock-access-token'),
+  getRemoteServerConfig: vi.fn().mockResolvedValue({
+    active: true,
+    remoteServerUrl: 'https://server.example.com',
+    storageMode: 'selfHost',
+  }),
   getRemoteServerUrl: vi.fn().mockResolvedValue('https://server.example.com'),
   isRemoteServerConfigured: vi.fn().mockResolvedValue(true),
   refreshAccessToken: vi.fn().mockResolvedValue({ success: true }),
@@ -305,6 +355,7 @@ const mockRemoteServerConfigCtr = {
 const mockBroadcast = vi.fn();
 const mockStoreGet = vi.fn();
 const mockStoreSet = vi.fn();
+const mockStoreDelete = vi.fn();
 
 const mockApp = {
   browserManager: { broadcastToAllWindows: mockBroadcast },
@@ -322,7 +373,7 @@ const mockApp = {
     if (Cls === ImessageBridgeService) return mockImessageBridgeSrv;
     return null;
   }),
-  storeManager: { get: mockStoreGet, set: mockStoreSet },
+  storeManager: { delete: mockStoreDelete, get: mockStoreGet, set: mockStoreSet },
 } as unknown as App;
 
 // Lazily initialized — created in beforeEach so it uses the current mockApp
@@ -355,8 +406,15 @@ describe('GatewayConnectionCtr', () => {
       }),
     );
     executeRemotePlatformMock.mockResolvedValue({ stderr: '', stdout: '' });
+    MockGatewayClient.instances = [];
     MockGatewayClient.lastInstance = null;
     MockGatewayClient.lastOptions = null;
+    netFetchMock.mockImplementation(async () =>
+      globalConfigResponse({ deviceGatewayUrl: SERVER_GATEWAY_URL }),
+    );
+    vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(SERVER_URL);
+    vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue('mock-access-token');
+    vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockResolvedValue({ success: true });
     mockStoreGet.mockImplementation((key: string) => {
       if (key === 'gatewayEnabled') return true;
       return undefined;
@@ -392,15 +450,16 @@ describe('GatewayConnectionCtr', () => {
       expect(options).not.toBeNull();
       expect(options.token).toBe('mock-access-token');
       expect(options.deviceId).toBe('stored-device-id');
-      expect(options.gatewayUrl).toBe('https://device-gateway.lobehub.com');
+      expect(options.gatewayUrl).toBe(SERVER_GATEWAY_URL);
       expect(options.logger).toBeDefined();
       expect(options.userAgent).toBe('LobeHub Desktop/1.2.3');
     });
 
-    it('should use custom gateway URL from store when set', async () => {
+    it('uses the address the server advertises over the official gateway older installs saved', async () => {
       mockStoreGet.mockImplementation((key: string) => {
         if (key === 'gatewayEnabled') return true;
-        if (key === 'gatewayUrl') return 'http://localhost:8787';
+        // Older installs persisted the default itself; it is not a choice.
+        if (key === 'gatewayUrl') return 'https://device-gateway.lobehub.com';
         return undefined;
       });
 
@@ -408,7 +467,15 @@ describe('GatewayConnectionCtr', () => {
       ctr.afterFirstFrame();
       await vi.advanceTimersByTimeAsync(0);
 
-      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
+      expect(netFetchMock).toHaveBeenCalledWith(
+        `${SERVER_URL}/trpc/lambda/config.getGlobalConfig`,
+        expect.objectContaining({ method: 'GET' }),
+      );
+      // Discovery is public: the login's token is never sent with it.
+      expect(JSON.stringify(netFetchMock.mock.calls[0][1].headers)).not.toContain(
+        'mock-access-token',
+      );
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
     });
 
     it('should return success:false when no access token', async () => {
@@ -420,7 +487,11 @@ describe('GatewayConnectionCtr', () => {
       vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValueOnce(null);
 
       const result = await ctr.connect();
-      expect(result).toEqual({ error: 'No access token available', success: false });
+      expect(result).toEqual({
+        error: 'No access token available',
+        errorCode: 'not_signed_in',
+        success: false,
+      });
       expect(MockGatewayClient.lastInstance).toBeNull();
     });
 
@@ -516,6 +587,530 @@ describe('GatewayConnectionCtr', () => {
       MockGatewayClient.lastInstance!.simulateConnected();
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
         status: 'connected',
+      });
+    });
+  });
+
+  // ─── Device Gateway Discovery ───
+
+  describe('device gateway discovery', () => {
+    const OFFICIAL_SERVER_URL = 'https://lobehub.com';
+    const OFFICIAL_GATEWAY_URL = 'https://device-gateway.lobehub.com';
+
+    /** Unsigned JWT: the desktop only reads `sub` from it. */
+    const jwtFor = (sub: string) =>
+      [
+        Buffer.from('{"alg":"none"}').toString('base64url'),
+        Buffer.from(JSON.stringify({ sub })).toString('base64url'),
+        'sig',
+      ].join('.');
+
+    let store: Record<string, unknown>;
+
+    /** A store that remembers writes, seeded with `initial`. */
+    const useStore = (initial: Record<string, unknown>) => {
+      store = { gatewayDeviceId: 'mock-device-uuid', gatewayEnabled: true, ...initial };
+      mockStoreGet.mockImplementation((key: string) => store[key]);
+      mockStoreSet.mockImplementation((key: string, value: unknown) => {
+        store[key] = value;
+      });
+      mockStoreDelete.mockImplementation((key: string) => {
+        delete store[key];
+      });
+    };
+
+    const deferred = <T>() => {
+      let resolve!: (value: T) => void;
+      const promise = new Promise<T>((r) => {
+        resolve = r;
+      });
+      return { promise, resolve };
+    };
+
+    const startCtr = async () => {
+      ctr = new GatewayConnectionCtr(mockApp);
+      ctr.afterFirstFrame();
+      await vi.advanceTimersByTimeAsync(0);
+    };
+
+    const lastBroadcast = () => {
+      const calls = mockBroadcast.mock.calls.filter(
+        ([event]) => event === 'gatewayConnectionStatusChanged',
+      );
+      return calls.at(-1)?.[1];
+    };
+
+    const workspaceDeviceId = (workspaceId: string) =>
+      deriveDeviceId(`workspace:${workspaceId}`, {
+        fallbackId: deriveScopedFallbackId('mock-device-uuid', `workspace:${workspaceId}`),
+      }).deviceId;
+
+    beforeEach(() => {
+      useStore({});
+    });
+
+    it('prefers a custom saved address over the advertised one, without asking', async () => {
+      useStore({ gatewayUrl: 'https://gw.self.example' });
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('https://gw.self.example');
+      expect(await ctr.getGatewayEndpoint()).toEqual({
+        endpoint: { source: 'manual', url: 'https://gw.self.example' },
+        manualUrl: 'https://gw.self.example',
+        serverUrl: SERVER_URL,
+      });
+    });
+
+    it('keeps using a custom saved address on official cloud too', async () => {
+      useStore({ gatewayUrl: 'http://localhost:8788' });
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+        OFFICIAL_SERVER_URL,
+      );
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8788');
+    });
+
+    it('connects with the saved address while the server config is unreachable', async () => {
+      useStore({ gatewayUrl: 'https://gw.self.example' });
+      netFetchMock.mockImplementation(async () => {
+        throw new TypeError('fetch failed');
+      });
+
+      await startCtr();
+
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('https://gw.self.example');
+      expect(lastBroadcast()).toEqual({ status: 'connecting' });
+    });
+
+    it.each([
+      ['nothing saved', {}],
+      ['the official gateway saved by an older install', { gatewayUrl: OFFICIAL_GATEWAY_URL }],
+    ])("uses this self-hosted server's advertised address with %s", async (_label, saved) => {
+      useStore(saved);
+
+      await startCtr();
+
+      expect(netFetchMock).toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+      expect((await ctr.getGatewayEndpoint()).endpoint).toEqual({
+        source: 'server',
+        url: SERVER_GATEWAY_URL,
+      });
+    });
+
+    it.each([
+      ['official cloud', 'https://lobehub.com'],
+      ['a self-hosted server', SERVER_URL],
+    ])(
+      'uses the official gateway for %s when it answers without an address',
+      async (_label, serverUrl) => {
+        useStore({ gatewayUrl: OFFICIAL_GATEWAY_URL });
+        vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(serverUrl);
+        netFetchMock.mockImplementation(async () => globalConfigResponse({}));
+
+        await startCtr();
+
+        expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(OFFICIAL_GATEWAY_URL);
+        expect((await ctr.getGatewayEndpoint()).endpoint).toEqual({
+          source: 'official',
+          url: OFFICIAL_GATEWAY_URL,
+        });
+      },
+    );
+
+    it('reports an unusable saved address instead of discovering around it', async () => {
+      useStore({ gatewayUrl: 'wss://gw.self.example' });
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.instances).toHaveLength(0);
+      expect(lastBroadcast()).toMatchObject({
+        error: { code: 'invalid_gateway_url' },
+        status: 'disconnected',
+      });
+      expect(await ctr.getConnectionStatus()).toEqual(lastBroadcast());
+    });
+
+    it.each([
+      ['an HTTP error', async () => new Response('boom', { status: 500 })],
+      ['a tRPC 404', async () => Response.json({ error: { code: -32_004 } }, { status: 404 })],
+      ['an HTML page', async () => new Response('<html>login</html>', { status: 200 })],
+      [
+        'a network failure',
+        async () => {
+          throw new TypeError('fetch failed');
+        },
+      ],
+    ])(
+      'reports %s while loading the config instead of using the default',
+      async (_label, respond) => {
+        useStore({ gatewayUrl: OFFICIAL_GATEWAY_URL });
+        netFetchMock.mockImplementation(respond);
+
+        await startCtr();
+
+        expect(MockGatewayClient.instances).toHaveLength(0);
+        expect(lastBroadcast()).toMatchObject({
+          error: { code: 'config_unavailable' },
+          status: 'disconnected',
+        });
+      },
+    );
+
+    it('does not fall back to the official gateway for official cloud when the config read fails', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+        OFFICIAL_SERVER_URL,
+      );
+      netFetchMock.mockImplementation(async () => new Response('down', { status: 503 }));
+
+      await startCtr();
+
+      expect(MockGatewayClient.instances).toHaveLength(0);
+      expect(lastBroadcast()?.error?.code).toBe('config_unavailable');
+    });
+
+    it('reconnects through a saved address, and back to the server after clearing it', async () => {
+      await startCtr();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+
+      await expect(ctr.setGatewayManualUrl({ url: 'https://gw.pinned.example/' })).resolves.toEqual(
+        {
+          savedUrl: 'https://gw.pinned.example',
+          success: true,
+        },
+      );
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(store.gatewayUrl).toBe('https://gw.pinned.example');
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('https://gw.pinned.example');
+
+      await ctr.setGatewayManualUrl({ url: null });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(store).not.toHaveProperty('gatewayUrl');
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+    });
+
+    it('treats saving the official gateway as choosing nothing', async () => {
+      useStore({ gatewayUrl: 'https://gw.pinned.example' });
+      await startCtr();
+
+      await expect(
+        ctr.setGatewayManualUrl({ url: 'https://device-gateway.lobehub.com/' }),
+      ).resolves.toEqual({ success: true });
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(store).not.toHaveProperty('gatewayUrl');
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+    });
+
+    it.each([
+      ['an advertised', { deviceGatewayUrl: SERVER_GATEWAY_URL }, SERVER_GATEWAY_URL],
+      ['the default', {}, OFFICIAL_GATEWAY_URL],
+    ])(
+      'never writes %s address into the saved setting',
+      async (_label, serverConfig, expectedUrl) => {
+        netFetchMock.mockImplementation(async () => globalConfigResponse(serverConfig));
+
+        await startCtr();
+
+        expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(expectedUrl);
+        expect(mockStoreSet.mock.calls.map(([key]) => key)).not.toContain('gatewayUrl');
+        expect(store).not.toHaveProperty('gatewayUrl');
+      },
+    );
+
+    it('rejects an unusable address without saving it', async () => {
+      await startCtr();
+
+      await expect(ctr.setGatewayManualUrl({ url: 'gateway.example' })).resolves.toEqual({
+        error: 'invalid_url',
+        success: false,
+      });
+      expect(store).not.toHaveProperty('gatewayUrl');
+    });
+
+    it('rejects an advertised value that is not a gateway URL', async () => {
+      netFetchMock.mockImplementation(async () => globalConfigResponse({ deviceGatewayUrl: null }));
+
+      await startCtr();
+
+      expect(MockGatewayClient.instances).toHaveLength(0);
+      expect(lastBroadcast()?.error?.code).toBe('invalid_gateway_url');
+    });
+
+    it('keeps the path prefix of an advertised public address', async () => {
+      netFetchMock.mockImplementation(async () =>
+        globalConfigResponse({ deviceGatewayUrl: 'https://edge.example.com/device-gateway/' }),
+      );
+
+      await startCtr();
+
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(
+        'https://edge.example.com/device-gateway',
+      );
+    });
+
+    it('lets DEVICE_GATEWAY_URL win without depending on the config read', async () => {
+      vi.stubEnv('DEVICE_GATEWAY_URL', 'http://localhost:8787');
+      useStore({ gatewayUrl: 'https://gw.self.example' });
+      netFetchMock.mockImplementation(async () => {
+        throw new TypeError('fetch failed');
+      });
+
+      await startCtr();
+
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe('http://localhost:8787');
+    });
+
+    it('keeps DEVICE_GATEWAY_URL explicit even when it is the official gateway', async () => {
+      vi.stubEnv('DEVICE_GATEWAY_URL', OFFICIAL_GATEWAY_URL);
+
+      await startCtr();
+
+      // The server advertises its own gateway, but the env choice stands.
+      expect(netFetchMock).not.toHaveBeenCalled();
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(OFFICIAL_GATEWAY_URL);
+      expect((await ctr.getGatewayEndpoint()).endpoint).toEqual({
+        source: 'override',
+        url: OFFICIAL_GATEWAY_URL,
+      });
+    });
+
+    it('discovers the gateway for a deep-link reconnect as well', async () => {
+      vi.mocked(mockRemoteServerConfigCtr.isRemoteServerConfigured).mockResolvedValueOnce(false);
+      await startCtr();
+
+      await ctr.reconnectFromProtocol({ deviceId: 'mock-device-uuid' });
+
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+    });
+
+    it('surfaces a gateway auth rejection as a retryable error once the refresh did not help', async () => {
+      await startCtr();
+      const first = MockGatewayClient.lastInstance!;
+
+      // The first rejection refreshes the token and reconnects to the same gateway.
+      first.emit('auth_failed', 'crypto/rsa: verification error');
+      first.simulateStatusChanged('disconnected');
+      await vi.advanceTimersByTimeAsync(0);
+      expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalledTimes(1);
+      expect(MockGatewayClient.instances).toHaveLength(2);
+      expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+      expect(lastBroadcast()?.error).toBeUndefined();
+
+      // The refreshed token is rejected too: that is what the user sees.
+      const second = MockGatewayClient.lastInstance!;
+      second.emit('auth_failed', 'crypto/rsa: verification error');
+      second.simulateStatusChanged('disconnected');
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockRemoteServerConfigCtr.refreshAccessToken).toHaveBeenCalledTimes(1);
+      expect(MockGatewayClient.instances).toHaveLength(2);
+      expect(lastBroadcast()).toEqual({
+        error: { code: 'auth_failed', detail: 'crypto/rsa: verification error' },
+        status: 'disconnected',
+      });
+
+      // Retrying clears the reason while it connects again.
+      await ctr.connect();
+      expect(lastBroadcast()).toEqual({ status: 'connecting' });
+    });
+
+    describe('races', () => {
+      it('never opens a socket for a config answer that lands after sign-out', async () => {
+        const answer = deferred<Response>();
+        netFetchMock.mockImplementation(() => answer.promise);
+
+        await startCtr();
+        expect(lastBroadcast()).toEqual({ status: 'connecting' });
+        const { signal } = netFetchMock.mock.calls[0][1];
+
+        // `clearTokens` on sign-out
+        await mockGatewayConnectionSrv.disconnect();
+        expect(signal.aborted).toBe(true);
+
+        answer.resolve(globalConfigResponse({ deviceGatewayUrl: SERVER_GATEWAY_URL }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(MockGatewayClient.instances).toHaveLength(0);
+        expect(lastBroadcast()).toEqual({ status: 'disconnected' });
+      });
+
+      it("never sends the new login's token to the previous server's gateway", async () => {
+        const answerFromA = deferred<Response>();
+        netFetchMock.mockImplementationOnce(() => answerFromA.promise);
+        vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+          'https://a.example.com',
+        );
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-a'));
+        await startCtr();
+
+        // Sign in to server B while A's config read is still in flight.
+        vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValue(
+          'https://b.example.com',
+        );
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-b'));
+        netFetchMock.mockImplementation(async () =>
+          globalConfigResponse({ deviceGatewayUrl: 'https://gw.b.example.com' }),
+        );
+        await mockGatewayConnectionSrv.restart();
+
+        answerFromA.resolve(globalConfigResponse({ deviceGatewayUrl: 'https://gw.a.example.com' }));
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(MockGatewayClient.instances.map((c) => c.options.gatewayUrl)).toEqual([
+          'https://gw.b.example.com',
+        ]);
+        expect(MockGatewayClient.lastOptions.token).toBe(jwtFor('user-b'));
+      });
+
+      it('does not reconnect when signed out during an auth refresh', async () => {
+        await startCtr();
+        const client = MockGatewayClient.lastInstance!;
+        client.simulateConnected();
+        const refresh = deferred<{ success: boolean }>();
+        vi.mocked(mockRemoteServerConfigCtr.refreshAccessToken).mockReturnValueOnce(
+          refresh.promise,
+        );
+
+        client.simulateAuthExpired();
+        await vi.advanceTimersByTimeAsync(0);
+        await mockGatewayConnectionSrv.disconnect();
+        refresh.resolve({ success: true });
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(MockGatewayClient.instances).toEqual([client]);
+      });
+
+      it('reconnects an auth refresh to the same gateway without re-reading the config', async () => {
+        await startCtr();
+        const client = MockGatewayClient.lastInstance!;
+        client.simulateConnected();
+
+        client.simulateAuthExpired();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(netFetchMock).toHaveBeenCalledTimes(1);
+        expect(MockGatewayClient.instances).toHaveLength(2);
+        expect(MockGatewayClient.lastOptions.gatewayUrl).toBe(SERVER_GATEWAY_URL);
+      });
+    });
+
+    describe('workspace shares', () => {
+      const ACCOUNT = `${SERVER_URL}#user-1`;
+
+      /** `device.listDevices` / `device.mintWorkspaceConnectToken` on the server. */
+      const serveWorkspaceApi = (enrollers: Record<string, string>) => {
+        vi.mocked(fetch).mockImplementation(async (input, init) => {
+          const url = String(input);
+          const workspaceId = (init?.headers as Record<string, string>)?.['X-Workspace-Id'];
+          if (url.endsWith('/device.listDevices')) {
+            const enroller = enrollers[workspaceId];
+            return Response.json({
+              result: {
+                data: {
+                  json: enroller
+                    ? [
+                        {
+                          deviceId: workspaceDeviceId(workspaceId),
+                          enroller: { userId: enroller },
+                          registered: true,
+                        },
+                      ]
+                    : [],
+                },
+              },
+            });
+          }
+          if (url.endsWith('/device.mintWorkspaceConnectToken')) {
+            return Response.json({
+              result: { data: { json: { token: `ws-token-${workspaceId}` } } },
+            });
+          }
+          return Response.json({ result: { data: { json: null } } });
+        });
+      };
+
+      const workspaceClients = () =>
+        MockGatewayClient.instances.filter((client) => client.options.workspaceId);
+
+      beforeEach(() => {
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-1'));
+      });
+
+      it("opens a share on the personal connection's gateway and keeps it for this account", async () => {
+        await startCtr();
+
+        await mockGatewayConnectionSrv.enrollWorkspace({ token: 'ws-token', workspaceId: 'ws-1' });
+
+        expect(MockGatewayClient.lastOptions).toMatchObject({
+          gatewayUrl: SERVER_GATEWAY_URL,
+          token: 'ws-token',
+          workspaceId: 'ws-1',
+        });
+        expect(store.gatewayWorkspaceEnrollmentsByAccount).toEqual({ [ACCOUNT]: ['ws-1'] });
+      });
+
+      it("restores only this account's shares, on the same gateway and server", async () => {
+        useStore({
+          gatewayWorkspaceEnrollmentsByAccount: {
+            [ACCOUNT]: ['ws-own'],
+            [`${SERVER_URL}#user-2`]: ['ws-other-account'],
+            ['https://other.example.com#user-1']: ['ws-other-server'],
+          },
+        });
+        serveWorkspaceApi({
+          'ws-other-account': 'user-2',
+          'ws-other-server': 'user-1',
+          'ws-own': 'user-1',
+        });
+
+        await startCtr();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(workspaceClients().map((c) => c.options)).toEqual([
+          expect.objectContaining({
+            gatewayUrl: SERVER_GATEWAY_URL,
+            token: 'ws-token-ws-own',
+            workspaceId: 'ws-own',
+          }),
+        ]);
+        expect(
+          vi.mocked(fetch).mock.calls.every(([url]) => String(url).startsWith(SERVER_URL)),
+        ).toBe(true);
+      });
+
+      it('adopts a pre-scoping share only when the server shows this account enrolled it', async () => {
+        useStore({ gatewayWorkspaceEnrollments: ['ws-mine', 'ws-theirs'] });
+        serveWorkspaceApi({ 'ws-mine': 'user-1', 'ws-theirs': 'user-2' });
+
+        await startCtr();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(workspaceClients().map((c) => c.options.workspaceId)).toEqual(['ws-mine']);
+        expect(store.gatewayWorkspaceEnrollmentsByAccount).toEqual({ [ACCOUNT]: ['ws-mine'] });
+        // Not ours to restore, and not ours to delete either.
+        expect(store.gatewayWorkspaceEnrollments).toEqual(['ws-theirs']);
+      });
+
+      it('closes the previous login’s shares when another account signs in', async () => {
+        await startCtr();
+        await mockGatewayConnectionSrv.enrollWorkspace({ token: 'ws-token', workspaceId: 'ws-1' });
+        const [share] = workspaceClients();
+
+        vi.mocked(mockRemoteServerConfigCtr.getAccessToken).mockResolvedValue(jwtFor('user-2'));
+        await mockGatewayConnectionSrv.restart();
+
+        expect(share.disconnect).toHaveBeenCalled();
+        expect(workspaceClients()).toEqual([share]);
       });
     });
   });
@@ -1035,6 +1630,7 @@ describe('GatewayConnectionCtr', () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(mockBroadcast).toHaveBeenCalledWith('gatewayConnectionStatusChanged', {
+        error: { code: 'auth_failed', detail: 'invalid_grant' },
         status: 'disconnected',
       });
     });
@@ -1183,9 +1779,9 @@ describe('GatewayConnectionCtr', () => {
     });
 
     it('sends rejected ack when remote server URL is not configured', async () => {
-      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
-
       const client = await connectAndOpen();
+      // After connect, which resolves the server URL for discovery itself.
+      vi.mocked(mockRemoteServerConfigCtr.getRemoteServerUrl).mockResolvedValueOnce('');
       client.simulateAgentRunRequest('openclaw', 'op-fail');
       await vi.advanceTimersByTimeAsync(0);
 
