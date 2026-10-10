@@ -39,16 +39,19 @@ import {
   graphNodeLabel,
   isContainerKind,
 } from '../../Experiments/model';
+import { useGateCheckCopy } from '../BatchGate/useGateCheckCopy';
 import {
   type GoalGraphView,
   type GoalNodeView,
   isRunningNode,
   scopeGraphView,
 } from '../goalGraphViewModel';
-import { KindDot } from '../shared';
+import { GATE_COLOR, KindDot } from '../shared';
 import {
   BatchExperimentProbeGroup,
-  BatchRedispatchGroup,
+  BatchRoundFrame,
+  type BatchRoundFrameData,
+  type BatchWavesData,
   BatchWavesGroup,
   CELL_VISUAL,
 } from './BatchGroups';
@@ -58,6 +61,7 @@ import {
   type BatchModel,
   type BatchRound,
   buildBatchModel,
+  verdictChecks,
 } from './batchModel';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
@@ -363,7 +367,7 @@ const edgeTypes = { exploration: ExplorationEdge };
 
 const nodeTypes = {
   goalBatchExperimentProbe: BatchExperimentProbeGroup,
-  goalBatchRedispatch: BatchRedispatchGroup,
+  goalBatchRound: BatchRoundFrame,
   goalBatchWaves: BatchWavesGroup,
   goalExperiment: GraphNodeView,
   goalExperimentGroup: ExperimentGroup,
@@ -374,7 +378,7 @@ const nodeTypes = {
 /** Frames and groups a click passes through: their own buttons and cards act. */
 const PASSIVE_NODE_TYPES = new Set([
   'goalBatchExperimentProbe',
-  'goalBatchRedispatch',
+  'goalBatchRound',
   'goalBatchWaves',
   'goalExperimentGroup',
   'goalGhost',
@@ -393,15 +397,34 @@ type BatchRole = { kind: 'assay' | 'template'; model: BatchModel; round: BatchRo
 
 const useBatchCopy = () => {
   const { t } = useTranslation('chat');
+  const checkCopy = useGateCheckCopy();
   return useMemo(
     () => ({
       gate: (round: BatchRound, model: BatchModel): GraphNodeData['presentation'] => {
         const { key, ...chip } = GATE_CHIP[round.gate];
-        const checks = model.gateChecks.map((check) =>
-          check.key === 'external'
-            ? t('goalBatch.gate.check.external', { title: check.title })
-            : t(`goalBatch.gate.check.${check.key}` as const),
+        // The latest verdict's checks with their results — a unit hold included —
+        // and before any verdict, the plan.
+        const latest = round.evaluations.at(-1);
+        const judged = latest ? verdictChecks(latest) : [];
+        // What the latest verdict found, at a glance: "3 ✓ · 1 ✗". Before any
+        // verdict, how many checks it will run.
+        const passed = judged.filter((check) => check.passed).length;
+        const failed = judged.length - passed;
+        // Green what passed, red what did not — the tally is the whole subtitle.
+        const tally = latest ? (
+          <span data-gate-tally>
+            {passed > 0 && <span style={{ color: CELL_VISUAL.done.color }}>{`${passed} ✓`}</span>}
+            {passed > 0 && failed > 0 && ' · '}
+            {failed > 0 && <span style={{ color: cssVar.colorError }}>{`${failed} ✗`}</span>}
+          </span>
+        ) : (
+          t('goalBatch.gate.checkCount', { count: model.gateChecks.length })
         );
+        const checks = (latest ? judged : model.gateChecks).map((check) => {
+          const { detail, label } = checkCopy(check);
+          const mark = 'passed' in check ? (check.passed ? '✓ ' : '✗ ') : '';
+          return `${mark}${label}${detail ? `（${detail}）` : ''}`;
+        });
         return {
           chip: { ...chip, text: t(`goalBatch.gate.status.${key}` as any) },
           // How many conditions decide the release, and which, one hover away.
@@ -409,14 +432,15 @@ const useBatchCopy = () => {
             <Flexbox gap={4}>
               <span>{t('goalBatch.gate.hintTitle')}</span>
               {checks.map((text, index) => (
-                <span key={index}>{`${index + 1}. ${text}`}</span>
+                <span key={index}>{latest ? text : `${index + 1}. ${text}`}</span>
               ))}
             </Flexbox>
           ),
           icon: DoorOpen,
-          subtitle: `${t('goalBatch.gate.checkCount', { count: checks.length })} · ${t(
-            `goalBatch.gate.subtitle.${key}` as any,
-          )}`,
+          palette: GATE_COLOR,
+          // Passed / sent back / waiting sits after the title, right-aligned.
+          trailingChip: true,
+          subtitle: tally,
           title:
             round.revision > 1
               ? t('goalBatch.gate.titleRound', { revision: round.revision })
@@ -431,7 +455,7 @@ const useBatchCopy = () => {
           : t('goalBatch.template.title', { revision: round.revision }),
       }),
     }),
-    [t],
+    [t, checkCopy],
   );
 };
 
@@ -770,16 +794,37 @@ const Canvas = memo<
       ],
     );
 
-    // The synthetic groups an open batch is drawn with: its trials, its waves
-    // and one re-dispatch group per re-opened round. They are not graph nodes;
-    // their cards and squares open the real node underneath.
+    // The synthetic groups an open batch is drawn with: its trials, each
+    // round's waves and the frame each round's nodes sit in. They are not graph
+    // nodes; their cards and squares open the real node underneath.
     const batchFlowNodes: FlowNode[] = useMemo(
       () =>
         [...batches].flatMap(([batchId, { layout, model }]) => {
           if (!layout || !visibleIds.has(batchId)) return [];
           const [first] = model.rounds;
+          // The roster waves a round owns, keeping each one's roster position.
+          const rowsOf = (revision: number) =>
+            model.waves.flatMap((cells, wave) =>
+              model.waveRounds[wave] === revision ? [{ cells, wave }] : [],
+            );
           return layout.groups.map((group) => {
             const round = model.rounds[group.revision - 1];
+            const base = {
+              draggable: false,
+              id: group.id,
+              ...placeInMap(group.id, group.box, batchId),
+              selectable: false,
+              width: group.box.width,
+            };
+            // A round's frame sits behind its nodes and the links between them.
+            if (group.kind === 'round')
+              return {
+                ...base,
+                data: { revision: group.revision } satisfies BatchRoundFrameData,
+                style: { height: group.box.height, width: group.box.width },
+                type: 'goalBatchRound',
+                zIndex: -1,
+              } satisfies FlowNode;
             const data =
               group.kind === 'experimentProbe'
                 ? {
@@ -789,37 +834,25 @@ const Canvas = memo<
                     started: first.probes.some((probe) => probe.state !== 'backlog'),
                     views: graph.byId,
                   }
-                : group.kind === 'waves'
-                  ? {
-                      onEnter: () => onEnter(batchId),
-                      onSelect,
-                      started:
-                        !first.assayId || first.gate === 'passed' || first.gate === 'rejected',
-                      waves: model.waves,
-                    }
-                  : {
-                      onEnter: () => onEnter(batchId),
-                      onSelect,
-                      probes: round.probes,
-                      revision: group.revision,
-                      waveSize: model.waveSize,
-                      started: round.probes.some((probe) => probe.state !== 'backlog'),
-                    };
+                : ({
+                    onEnter: () => onEnter(batchId),
+                    onSelect,
+                    probes: round.probes,
+                    revision: group.revision,
+                    rows: rowsOf(group.revision),
+                    started:
+                      group.revision === 1
+                        ? !first.assayId || first.gate === 'passed' || first.gate === 'rejected'
+                        : round.probes.some((probe) => probe.state !== 'backlog'),
+                    waveSize: model.waveSize,
+                  } satisfies BatchWavesData);
             return {
+              ...base,
               data,
-              draggable: false,
-              id: group.id,
-              ...placeInMap(group.id, group.box, batchId),
-              selectable: false,
               // Width is the layout's; height hugs the content, the layout only reserves it.
               style: { width: group.box.width },
               type:
-                group.kind === 'experimentProbe'
-                  ? 'goalBatchExperimentProbe'
-                  : group.kind === 'waves'
-                    ? 'goalBatchWaves'
-                    : 'goalBatchRedispatch',
-              width: group.box.width,
+                group.kind === 'experimentProbe' ? 'goalBatchExperimentProbe' : 'goalBatchWaves',
             } satisfies FlowNode;
           });
         }),
@@ -909,6 +942,9 @@ const Canvas = memo<
               ({
                 data: { lane: 0 },
                 id: edge.id,
+                ...(edge.label
+                  ? { label: t('goalBatch.round.reviseEdge'), labelShowBg: true }
+                  : {}),
                 markerEnd: marker,
                 source: edge.source,
                 sourceHandle: edge.sourceHandle,

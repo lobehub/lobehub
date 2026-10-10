@@ -51,6 +51,12 @@ export interface RunTaskResult extends ExecAgentResult {
   taskIdentifier: string;
 }
 
+/** The skill identifiers a task's config names under `skills`. */
+export const readTaskSkillIds = (config: Record<string, unknown>): string[] =>
+  Array.isArray(config.skills)
+    ? config.skills.filter((id): id is string => typeof id === 'string' && !!id)
+    : [];
+
 /**
  * TaskRunnerService — orchestrates a single Task run.
  *
@@ -244,6 +250,9 @@ export class TaskRunnerService {
       if (additionalPluginIds) pluginIds.push(...additionalPluginIds);
 
       const taskConfig = (task.config ?? {}) as Record<string, unknown>;
+      // Skills the task itself names for every run — a goal batch's units name
+      // the batch's plan skill — so a re-run or a manual run loads them too.
+      pluginIds.push(...readTaskSkillIds(taskConfig));
 
       // Backfill model snapshot for tasks created before the snapshot logic
       // landed, or whose assignee was set after creation. Once written, the

@@ -44,7 +44,11 @@ export interface GraphNodeData extends Record<string, unknown> {
     /** Detail behind an info icon beside the title, e.g. what a gate checks. */
     hint?: ReactNode;
     icon?: LucideIcon;
-    subtitle?: string;
+    /** Glyph colours when the card is not its kind — a release gate. */
+    palette?: { line: string; soft: string };
+    /** Put the state chip at the right of the title instead of a row above it. */
+    trailingChip?: boolean;
+    subtitle?: ReactNode;
     title?: string;
   };
   running: boolean;
@@ -318,7 +322,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
   const { presentation } = nodeData;
   const chip = presentation && 'chip' in presentation ? presentation.chip : stateChip;
   const kind = nodeData.kind ?? node.kind;
-  const palette = KIND_COLOR[kind];
+  const palette = nodeData.presentation?.palette ?? KIND_COLOR[kind];
   const isTask = node.kind === 'task';
   const attempts = view.attempts.length;
   // Coordinator-authored node titles are English; recognized ones localize.
@@ -354,7 +358,7 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
       >
         {/* Status reads first: its own top row, left-aligned, with the running
             clock riding right behind it (review: bottom placements read poorly). */}
-        {(chip || highlighted || view.humanTouches.length > 0) && (
+        {!presentation?.trailingChip && (chip || highlighted || view.humanTouches.length > 0) && (
           <div className={styles.statusRow}>
             {highlighted && (
               <span className={styles.chipText} style={{ color: cssVar.colorWarningText }}>
@@ -412,6 +416,14 @@ const GraphNodeView = memo<NodeProps>(({ data }) => {
               <span className={styles.subtitle}>{presentation?.subtitle ?? subtitle}</span>
             )}
           </Flexbox>
+          {presentation?.trailingChip && chip && (
+            <Flexbox horizontal align={'center'} gap={5} style={{ flex: 'none' }}>
+              {chip.icon && <Icon color={chip.color} icon={chip.icon} size={13} />}
+              <span className={styles.chipText} style={{ color: chip.color }}>
+                {chip.text}
+              </span>
+            </Flexbox>
+          )}
         </div>
         {node.kind === 'experiment' && (
           <div className={styles.metrics}>

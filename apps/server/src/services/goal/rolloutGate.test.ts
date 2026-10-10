@@ -1,7 +1,7 @@
 import type { GoalGraphNode, GoalGraphSnapshot, GoalRolloutState } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { evaluateRolloutGate } from './rolloutGate';
+import { evaluateRolloutGate, GATE_LOG_PER_ROUND, withGateVerdict } from './rolloutGate';
 
 const node = (id: string, overrides: Partial<GoalGraphNode> = {}): GoalGraphNode =>
   ({
@@ -52,6 +52,27 @@ describe('evaluateRolloutGate', () => {
     expect(result.blockers).toEqual([]);
     // R3: the probe wave alone is provisional, never proof of the class.
     expect(result.provisional).toBe(true);
+  });
+
+  it('reports every condition it judged, passed or not, with the nodes behind it', () => {
+    const result = evaluateRolloutGate({
+      graph: graph([
+        node('probe', { status: 'rejected' }),
+        node('template', { description: 'recipe', kind: 'finding' }),
+      ]),
+      policy: {
+        spec: { repeatable: true, variantAxes: [{ axis: 'mode', values: ['probe'] }] },
+        trigger: 'canary',
+      },
+      state: state(),
+    });
+    expect(result.checks).toEqual([
+      { count: 1, key: 'units_settled', passed: true, total: 1 },
+      { count: 0, key: 'units_succeeded', nodeIds: ['probe'], passed: false, total: 1 },
+      { key: 'no_open_decision', passed: true },
+      { key: 'plan_written', nodeIds: ['template'], passed: true },
+      { key: 'axes_covered', passed: true },
+    ]);
   });
 
   it('is no longer provisional once a later wave has run', () => {
@@ -160,5 +181,29 @@ describe('evaluateRolloutGate', () => {
     });
     expect(result.met).toBe(false);
     expect(result.blockers.join(' ')).toContain('untested axes');
+  });
+});
+
+describe('withGateVerdict', () => {
+  const verdict = (revision: number) => ({
+    checks: [],
+    outcome: 'blocked' as const,
+    revision,
+    trigger: 'gate' as const,
+    waveIndex: 0,
+  });
+
+  it("keeps each round's latest verdicts, however busy a later round is", () => {
+    let next = withGateVerdict(state(), verdict(1));
+    for (let i = 0; i < GATE_LOG_PER_ROUND + 5; i++) next = withGateVerdict(next, verdict(2));
+    expect(next.gateLog!.filter((item) => item.revision === 1)).toHaveLength(1);
+    expect(next.gateLog!.filter((item) => item.revision === 2)).toHaveLength(GATE_LOG_PER_ROUND);
+  });
+
+  it('numbers verdicts within their round and keeps counting after older ones drop', () => {
+    let next = state();
+    for (let i = 0; i < GATE_LOG_PER_ROUND + 5; i++) next = withGateVerdict(next, verdict(1));
+    expect(next.gateLog!.at(-1)!.seq).toBe(GATE_LOG_PER_ROUND + 5);
+    expect(withGateVerdict(next, verdict(2)).gateLog!.at(-1)!.seq).toBe(1);
   });
 });

@@ -3,7 +3,14 @@ import {
   GOAL_BATCH_TEMPLATE_TITLE,
   ROLLOUT_WAVE_SIZE_DEFAULT,
 } from '@lobechat/const/goal';
-import type { GoalRolloutPhase } from '@lobechat/types';
+import type {
+  GoalRolloutGateCheck,
+  GoalRolloutGateCheckKey,
+  GoalRolloutGateEvaluation,
+  GoalRolloutLearning,
+  GoalRolloutPhase,
+  GoalRolloutPlanSkill,
+} from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
 
 import { type GoalGraphView, type GoalNodeView, isRunningNode } from '../goalGraphViewModel';
@@ -53,13 +60,28 @@ export interface BatchProbe {
 /** `locked` until its probes settle, `checking` once they did, `rejected` when a person sent it back. */
 export type BatchGateState = 'locked' | 'checking' | 'passed' | 'human' | 'rejected';
 
+/**
+ * A gate verdict, plus which roster wave a release put out. The coordinator's
+ * `waveIndex` restarts with each round; the roster's waves do not, and every
+ * release puts out exactly the next one — so the wave is the release's ordinal.
+ */
+export interface BatchGateVerdict extends GoalRolloutGateEvaluation {
+  wave?: number;
+}
+
 export interface BatchRound {
   assayId?: string;
+  /** This round's gate verdicts, oldest first — what the gate actually judged. */
+  evaluations: BatchGateVerdict[];
   /** Answered as "a new class", not as a revision of the previous recipe. */
   forked: boolean;
   gate: BatchGateState;
   /** Which group the break that opened this round surfaced in (rounds ≥ 2). */
-  origin?: { kind: 'probes' } | { kind: 'waves' } | { kind: 'round'; revision: number };
+  origin?:
+    | { kind: 'probes' }
+    | { kind: 'round'; revision: number }
+    /** `wave`: the 0-based roster wave the re-opened units ran in. */
+    | { kind: 'waves'; wave: number };
   probes: BatchProbe[];
   /** 1-based recipe revision. */
   revision: number;
@@ -67,20 +89,34 @@ export interface BatchRound {
 }
 
 /**
- * One condition the release gate checks, mirroring the coordinator's
- * `evaluateRolloutGate`: three always, plus each declared external check and
- * variant-axis coverage when the plan declared them.
+ * One condition the release gate will check, before any verdict exists —
+ * mirroring the coordinator's `evaluateRolloutGate`: the same keys in the same
+ * order, an external check per declared one, and axis coverage when declared.
  */
-export type BatchGateCheck =
-  { key: 'axes' | 'decisions' | 'plan' | 'units' } | { key: 'external'; title: string };
+export interface BatchGateCheck {
+  key: GoalRolloutGateCheckKey;
+  /** An external check's title. */
+  title?: string;
+}
 
 export interface BatchModel {
   batchId: string;
   /** Other decisions inside the batch — e.g. a machine gate on one unit. */
   decisionIds: string[];
+  /** What the gate checks, for a round no verdict has reached yet. */
   gateChecks: BatchGateCheck[];
+  /** What the batch's breaks taught it, oldest first. */
+  learnings: GoalRolloutLearning[];
   phase?: GoalRolloutPhase;
+  /** The execution plan as a skill in the user's library; round N is its version N. */
+  planSkill?: GoalRolloutPlanSkill;
   rounds: BatchRound[];
+  /**
+   * The round (1-based revision) each wave belongs to. A released wave belongs
+   * to the plan it went out under; the waves not yet released belong to the
+   * latest round — so after v2 opens, the rest of the roster moves under v2.
+   */
+  waveRounds: number[];
   /** The roster outside the first round's probes, chunked into waves. */
   waves: BatchCell[][];
   waveSize: number;
@@ -95,7 +131,9 @@ export const batchCellState = (
 ): BatchCellState => {
   if (!view) return 'backlog';
   const { status } = view.node;
-  if (status === 'retired' || status === 'rejected') return 'stale';
+  // Retired is superseded; rejected is a unit that broke and waits on a person.
+  if (status === 'retired') return 'stale';
+  if (status === 'rejected') return 'human';
   if (status === 'resolved') return 'done';
   if (status === 'waiting' || view.decision || view.isStale || waitingOn.has(view.node.id))
     return 'human';
@@ -118,7 +156,17 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
       .map((view) => view.gateSubjectId)
       .filter((id): id is string => !!id),
   );
-  const cellOf = (id?: string) => batchCellState(id ? graph.byId[id] : undefined, waitingOn);
+  // A unit that failed its own check held the batch (R6): its node can still
+  // read active, but the batch is waiting on a person because of it.
+  const held = state?.phase === 'pattern_break' ? state.gateLog?.at(-1) : undefined;
+  if (held?.trigger === 'unit' && held.nodeId) waitingOn.add(held.nodeId);
+  // A unit a later round re-opened (`derived_from` it) is superseded, whatever
+  // state it ended in — a rejected trial must not read "needs you" forever.
+  const superseded = new Set(
+    graph.edges.filter((edge) => edge.kind === 'derived_from').map((edge) => edge.targetNodeId),
+  );
+  const cellOf = (id?: string): BatchCellState =>
+    id && superseded.has(id) ? 'stale' : batchCellState(id ? graph.byId[id] : undefined, waitingOn);
 
   const templates = members.filter(
     (view) => view.node.kind === 'finding' && view.node.title === GOAL_BATCH_TEMPLATE_TITLE,
@@ -191,6 +239,22 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     );
   });
 
+  // A released unit went out under the latest plan at the time it was created.
+  const roundAt = (view: GoalNodeView) => {
+    let round = 1;
+    templates.forEach((template, r) => {
+      if (byCreatedAt(template, view) <= 0) round = r + 1;
+    });
+    return round;
+  };
+  const waveRounds = waves.map((wave) => {
+    const released = wave.find((cell) => cell.nodeId && !cell.runIn);
+    if (released?.nodeId && graph.byId[released.nodeId])
+      return roundAt(graph.byId[released.nodeId]);
+    const runIn = wave.find((cell) => cell.runIn)?.runIn;
+    return runIn ?? roundCount;
+  });
+
   // Where a re-opened unit ran before: the most recent earlier node with its title.
   const originOf = (view: GoalNodeView): BatchUnitOrigin | undefined => {
     const earlier = (tasksByTitle.get(view.node.title) ?? []).filter(
@@ -200,10 +264,21 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     if (!previous) return undefined;
     const round = roundOfProbe.get(previous.node.id);
     if (round === 0) return { index: probeIdsByRound[0].indexOf(previous.node.id), kind: 'probe' };
-    if (round !== undefined) return { kind: 'round', revision: round + 1 };
+    // Re-opened again: follow it back to the batch it first ran in (第 3 批),
+    // naming the round only when there is no batch to name.
+    if (round !== undefined) return originOf(previous) ?? { kind: 'round', revision: round + 1 };
     const slot = waveOf.get(previous.node.id);
     return slot ? { ...slot, kind: 'wave' } : undefined;
   };
+
+  // The coordinator writes each release's roster wave; a verdict from before it
+  // did falls back to counting the releases kept in the log.
+  let releases = 0;
+  const verdicts: BatchGateVerdict[] = (state?.gateLog ?? []).map((entry) => {
+    if (entry.outcome !== 'released') return entry;
+    releases = entry.wave ?? releases + 1;
+    return { ...entry, wave: releases };
+  });
 
   const rounds: BatchRound[] = probeIdsByRound.map((ids, r) => {
     const probes = ids
@@ -231,6 +306,7 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
       );
     return {
       assayId: assay?.node.id,
+      evaluations: verdicts.filter((entry) => entry.revision === r + 1),
       forked,
       gate: gateState(assay, r === roundCount - 1, state?.phase, probes),
       origin: r > 0 ? roundOrigin(probes, r) : undefined,
@@ -247,17 +323,29 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
 
   const policy = config?.rollout;
   const gateChecks: BatchGateCheck[] = [
-    { key: 'units' },
-    { key: 'decisions' },
-    { key: 'plan' },
+    { key: 'units_settled' },
+    { key: 'units_succeeded' },
+    { key: 'no_open_decision' },
+    { key: 'plan_written' },
     ...(policy?.gate?.externalChecks ?? []).map((check) => ({
       key: 'external' as const,
       title: check.title,
     })),
-    ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes' as const }] : []),
+    ...(policy?.spec?.variantAxes?.length ? [{ key: 'axes_covered' as const }] : []),
   ];
 
-  return { batchId, decisionIds, gateChecks, phase: state?.phase, rounds, waves, waveSize };
+  return {
+    batchId,
+    decisionIds,
+    gateChecks,
+    learnings: state?.learnings ?? [],
+    phase: state?.phase,
+    planSkill: state?.planSkill,
+    rounds,
+    waveRounds,
+    waves,
+    waveSize,
+  };
 };
 
 const gateState = (
@@ -277,7 +365,7 @@ const gateState = (
 /** A round re-opens units from where they broke; the first one names the source. */
 const roundOrigin = (probes: BatchProbe[], r: number): BatchRound['origin'] => {
   const from = probes.find((probe) => probe.from)?.from;
-  if (from?.kind === 'wave') return { kind: 'waves' };
+  if (from?.kind === 'wave') return { kind: 'waves', wave: from.wave };
   if (from?.kind === 'round') return { kind: 'round', revision: from.revision };
   if (from?.kind === 'probe' || r === 1) return { kind: 'probes' };
   return { kind: 'round', revision: r };
@@ -293,4 +381,87 @@ export const countCells = (cells: { state: BatchCellState }[]) => {
   };
   for (const cell of cells) counts[cell.state] += 1;
   return counts;
+};
+
+/**
+ * The batch and round a release gate belongs to, when `nodeId` is one — so a
+ * surface that opens the gate can show its verdicts rather than a bare decision.
+ */
+export const findBatchGate = (
+  graph: GoalGraphView,
+  nodeId: string,
+): { model: BatchModel; round: BatchRound } | undefined => {
+  const batchId = graph.edges.find(
+    (edge) =>
+      edge.kind === 'contains' &&
+      edge.targetNodeId === nodeId &&
+      graph.byId[edge.sourceNodeId]?.node.kind === 'batch',
+  )?.sourceNodeId;
+  if (!batchId) return undefined;
+  const model = buildBatchModel(graph, batchId);
+  const round = model.rounds.find((item) => item.assayId === nodeId);
+  return round ? { model, round } : undefined;
+};
+
+/**
+ * The checks a verdict stands on. A unit that failed its own check (R6) held
+ * the batch without the gate running, so it records none — it reads as the one
+ * check it broke, naming the unit.
+ */
+export const verdictChecks = (evaluation: GoalRolloutGateEvaluation): GoalRolloutGateCheck[] =>
+  evaluation.trigger === 'unit'
+    ? [
+        {
+          key: 'units_succeeded',
+          nodeIds: evaluation.nodeId ? [evaluation.nodeId] : undefined,
+          passed: false,
+        },
+      ]
+    : evaluation.checks;
+
+/**
+ * A round's re-opened units as rows, grouped by where they came from — so each
+ * row can say which batch it is (第 3 批) — and capped at the wave size.
+ */
+export const reopenedRows = (
+  probes: BatchProbe[],
+  waveSize: number,
+): { from?: BatchUnitOrigin; probes: BatchProbe[] }[] => {
+  const groups = new Map<string, BatchProbe[]>();
+  for (const probe of probes) {
+    const from = probe.from;
+    const key =
+      from?.kind === 'wave'
+        ? `wave:${from.wave}`
+        : from?.kind === 'round'
+          ? `round:${from.revision}`
+          : (from?.kind ?? 'none');
+    groups.set(key, [...(groups.get(key) ?? []), probe]);
+  }
+  return [...groups.values()].flatMap((group) =>
+    Array.from({ length: Math.ceil(group.length / waveSize) }, (_, i) => ({
+      from: group[0].from,
+      probes: group.slice(i * waveSize, (i + 1) * waveSize),
+    })),
+  );
+};
+
+/**
+ * The batch and round a plan version belongs to, when `nodeId` is one — so the
+ * panel that opens on it can show every version and what changed between them.
+ */
+export const findBatchPlan = (
+  graph: GoalGraphView,
+  nodeId: string,
+): { model: BatchModel; round: BatchRound } | undefined => {
+  const batchId = graph.edges.find(
+    (edge) =>
+      edge.kind === 'contains' &&
+      edge.targetNodeId === nodeId &&
+      graph.byId[edge.sourceNodeId]?.node.kind === 'batch',
+  )?.sourceNodeId;
+  if (!batchId) return undefined;
+  const model = buildBatchModel(graph, batchId);
+  const round = model.rounds.find((item) => item.templateId === nodeId);
+  return round ? { model, round } : undefined;
 };

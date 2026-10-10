@@ -50,6 +50,7 @@ import {
   isLhCommand,
   preprocessLhCommand,
 } from '@/server/services/toolExecution/preprocessLhCommand';
+import { UserSkillService } from '@/server/services/userSkill';
 
 import { resolveContentWorkspaceId, resolveRunWorkspaceId } from './resolveWorkspaceScope';
 import { type ServerRuntimeRegistration } from './types';
@@ -984,6 +985,30 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           })
       : [];
 
+    // The user's own skill library, on the same carrier shape: activateSkill
+    // resolves `user-skills:<name>`, readReference serves its scripts.
+    const userSkillBuiltins: BuiltinSkill[] = context.userId
+      ? await new UserSkillService(context.serverDB, context.userId, context.workspaceId)
+          .listRuntimeSkills()
+          .then((skills) =>
+            skills
+              .filter((skill) => isSkillReachable(skill.identifier))
+              .map((skill) => ({
+                content: skill.body,
+                description: skill.description,
+                identifier: skill.identifier,
+                name: skill.name,
+                resources: skill.resources,
+                source: 'builtin' as const,
+                title: skill.title,
+              })),
+          )
+          .catch((error) => {
+            log('failed to load user skills: %O', error);
+            return [];
+          })
+      : [];
+
     // Project/device skills live on the execution device filesystem. Read them through the
     // device gateway by reusing the local-system tools — no special
     // file-read primitive, just the existing capabilities over deviceGateway.
@@ -1069,6 +1094,7 @@ export const skillsRuntime: ServerRuntimeRegistration = {
           canExecuteOnDevice: context.deviceCapable ?? !!activeDeviceId,
         }).filter((skill) => isSkillReachable(skill.identifier)),
         ...agentSkillBuiltins,
+        ...userSkillBuiltins,
       ],
       deviceFileAccess,
       // Filesystem skills carry no identifier of their own; the skill pool

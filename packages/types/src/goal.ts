@@ -442,6 +442,67 @@ export interface GoalRolloutPolicy {
   waveSize?: number;
 }
 
+/**
+ * One condition the release gate judged. Mirrors `evaluateRolloutGate`: the
+ * same keys, in the same order, with what each one found — so the person can see
+ * why a gate passed or held, not only that it did.
+ */
+export type GoalRolloutGateCheckKey =
+  | 'axes_covered'
+  | 'external'
+  | 'no_open_decision'
+  | 'plan_written'
+  | 'units_settled'
+  | 'units_succeeded';
+
+export interface GoalRolloutGateCheck {
+  /** For a count check: how many of `total` held, e.g. 5 of 5 units ran through. */
+  count?: number;
+  /** Free-form specifics: an external check's title, an uncovered `axis=value`. */
+  details?: string[];
+  key: GoalRolloutGateCheckKey;
+  /** The nodes the check is about — the units that failed, the open decision. */
+  nodeIds?: string[];
+  passed: boolean;
+  total?: number;
+}
+
+/**
+ * One gate verdict and what the coordinator did with it. Appended on every
+ * release and every hold, so the gate keeps its own record instead of the
+ * decision's prose being the only trace.
+ */
+export interface GoalRolloutGateEvaluation {
+  /** ISO time of the verdict. */
+  at: string;
+  /** What the gate judged; empty when a unit's own check held the batch (R6). */
+  checks: GoalRolloutGateCheck[];
+  /** The coordinator's English summary, kept for the trace. */
+  message?: string;
+  /** The unit whose own check held the batch, when `trigger` is `unit`. */
+  nodeId?: string;
+  outcome: 'blocked' | 'released';
+  /** Units the release put into the next wave. */
+  releasedCount?: number;
+  /** The recipe revision (round) this verdict belongs to. */
+  revision: number;
+  /**
+   * 1-based ordinal of this verdict within its round. Written by the
+   * coordinator so it keeps counting after older verdicts were dropped.
+   */
+  seq?: number;
+  /** `gate`: the gate judged a settled wave. `unit`: one unit failed its own check. */
+  trigger: 'gate' | 'unit';
+  /**
+   * The roster wave a release put out, counted across every round. Written by
+   * the coordinator because the log is capped — counting the kept entries would
+   * renumber the history once the oldest fall off.
+   */
+  wave?: number;
+  /** Waves released in this round when the verdict was taken (after a release). */
+  waveIndex: number;
+}
+
 /** Where a batch rollout currently stands. */
 export type GoalRolloutPhase = 'probe' | 'assay' | 'mass' | 'pattern_break' | 'done';
 
@@ -450,11 +511,42 @@ export type GoalRolloutPhase = 'probe' | 'assay' | 'mass' | 'pattern_break' | 'd
  * coordinator's own gate moves, never by a policy edit — the same rule that
  * keeps `managerState` server-owned.
  */
+/**
+ * What one break taught the batch: a rule in the batch's expertise domain,
+ * compiled into a verify criterion every later unit is judged against.
+ */
+export interface GoalRolloutLearning {
+  /** The criterion the rule compiled into; later units' acceptances carry it. */
+  criterionId?: string;
+  lessonCode?: string;
+  lessonId: string;
+  /** The round whose gate broke and taught it. */
+  revision: number;
+  title: string;
+}
+
+/** The batch's execution plan, kept as a skill in the user's own skill library. */
+export interface GoalRolloutPlanSkill {
+  /** The skill bundle's document id. */
+  id: string;
+  /** The skill's name: units load it as `user-skills:<name>`. */
+  name: string;
+}
+
 export interface GoalRolloutState {
   /** The gate (Assay) decision node, once decomposition created it. */
   assayNodeId?: string;
   /** The `batch` container node. */
   batchNodeId: string;
+  /**
+   * Gate verdicts, oldest first. Each round keeps its most recent few, so a
+   * round that was judged never loses its latest verdict to later rounds.
+   */
+  gateLog?: GoalRolloutGateEvaluation[];
+  /** The expertise domain the batch's breaks teach, once one has. */
+  learningDomainId?: string;
+  /** Every rule a break taught, oldest first. */
+  learnings?: GoalRolloutLearning[];
   /**
    * Node ids of the mass tasks the current round released, oldest wave first.
    * A restarted canary starts a new round and clears it.
@@ -462,6 +554,8 @@ export interface GoalRolloutState {
   massNodeIds?: string[];
   /** Phase the rollout is in; the coordinator reads this to pick its move. */
   phase: GoalRolloutPhase;
+  /** The execution plan as a user skill; each Template revision is one of its versions. */
+  planSkill?: GoalRolloutPlanSkill;
   /** Node ids of the probe tasks that must run before the gate passes. */
   probeNodeIds: string[];
   /** How many roster entries have been materialized (probes + released waves). */
@@ -474,6 +568,8 @@ export interface GoalRolloutState {
   unitTitles?: string[];
   /** How many mass waves have been released. */
   waveIndex: number;
+  /** Roster waves released so far across every round; `waveIndex` restarts per round. */
+  wavesReleased?: number;
 }
 
 export interface GoalConfig {

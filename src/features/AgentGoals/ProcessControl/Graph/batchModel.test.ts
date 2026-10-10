@@ -10,7 +10,13 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
-import { buildBatchModel } from './batchModel';
+import {
+  buildBatchModel,
+  findBatchGate,
+  findBatchPlan,
+  reopenedRows,
+  verdictChecks,
+} from './batchModel';
 
 const T0 = new Date('2026-10-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -239,7 +245,7 @@ describe('buildBatchModel', () => {
     expect(model.waves[0][1]).toMatchObject({ nodeId: 'm4', reopenedIn: 2, state: 'stale' });
     // No `revises` edge: the person split it off as a new class.
     expect(model.rounds[1].forked).toBe(true);
-    expect(model.rounds[1].origin).toEqual({ kind: 'waves' });
+    expect(model.rounds[1].origin).toEqual({ kind: 'waves', wave: 0 });
     expect(model.rounds[1].probes[0].from).toEqual({ index: 1, kind: 'wave', wave: 0 });
   });
   it('lets a unit a later round first released follow that round, not read as superseded', () => {
@@ -263,48 +269,301 @@ describe('buildBatchModel', () => {
   });
 });
 
-describe('layoutBatch', () => {
-  it('stacks trials → plan → gate → waves and puts v2 beside v1', () => {
+describe('unit states', () => {
+  it('reads a rejected unit as waiting on a person and only a retired one as superseded', () => {
     const graph = buildGoalGraphView(
       batchSnapshot({
-        decisions: [humanAnswer('a1')],
-        extraEdges: [edge('t2', 't1', 'revises'), edge('a2', 'p2b', 'depends_on')],
         extraNodes: [
-          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
-          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
-          node('p2b', 'task', 42, { title: 'U2' }),
+          node('m3', 'task', 10, { status: 'rejected', title: 'U3' }),
+          node('m4', 'task', 10, { status: 'retired', title: 'U4' }),
         ],
-        state: { assayNodeId: 'a2', probeNodeIds: ['p2b'], templateNodeId: 't2' },
+        state: { massNodeIds: ['m3', 'm4'], phase: 'pattern_break', waveIndex: 1 },
       }),
       NOW,
     );
-    const layout = layoutBatch(graph, buildBatchModel(graph, 'batch'));
-    const probes = layout.boxes[batchGroupId('batch', 'experimentProbe')];
-    const waves = layout.boxes[batchGroupId('batch', 'waves')];
-    const redispatch = layout.boxes[batchGroupId('batch', 'redispatch', 2)];
-    const { a1, a2, t1, t2 } = layout.boxes;
+    const [first] = buildBatchModel(graph, 'batch').waves;
+    expect(first.slice(0, 2).map((cell) => cell.state)).toEqual(['human', 'stale']);
+  });
 
-    // Round 1 reads top to bottom.
-    expect(probes.y + probes.height).toBeLessThan(t1.y);
-    expect(t1.y + t1.height).toBeLessThan(a1.y);
-    expect(a1.y + a1.height).toBeLessThan(waves.y);
-    // v2 is a column of its own, level with v1 and to its right.
-    expect(t2.y).toBe(t1.y);
-    expect(a2.y).toBe(a1.y);
-    expect(redispatch.y).toBe(waves.y);
-    expect(t2.x).toBeGreaterThan(Math.max(probes.x + probes.width, t1.x + t1.width));
-    // Task-produced findings and unit tasks never land as loose cards.
-    expect([...layout.nodeIds].sort()).toEqual(['a1', 'a2', 't1', 't2']);
-    // v2 is fed by the group the break surfaced in, as an ordinary link.
-    expect(layout.edges).toContainEqual(
-      expect.objectContaining({ source: batchGroupId('batch', 'experimentProbe'), target: 't2' }),
+  it('reads the unit that held the batch as waiting on a person, though its node is active', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        extraNodes: [node('m3', 'task', 10, { status: 'active', title: 'U3', updatedAt: at(59) })],
+        state: {
+          gateLog: [
+            {
+              at: at(59).toISOString(),
+              checks: [],
+              nodeId: 'm3',
+              outcome: 'blocked',
+              revision: 1,
+              trigger: 'unit',
+              waveIndex: 1,
+            },
+          ],
+          massNodeIds: ['m3'],
+          phase: 'pattern_break',
+          waveIndex: 1,
+        },
+      }),
+      NOW,
     );
-    // Links into the batch land on its experiment probe — there is no frame to land on.
-    expect(layout.entryId).toBe(batchGroupId('batch', 'experimentProbe'));
-    // The slot the map reserves holds everything placed.
-    for (const box of Object.values(layout.boxes)) {
-      expect(box.x + box.width).toBeLessThanOrEqual(layout.width);
-      expect(box.y + box.height).toBeLessThanOrEqual(layout.height);
+    expect(buildBatchModel(graph, 'batch').waves[0][0].state).toBe('human');
+  });
+});
+
+describe('superseded trials', () => {
+  it('reads a rejected trial a later round re-opened as superseded, not waiting on a person', () => {
+    const snapshot = batchSnapshot({
+      decisions: [humanAnswer('a1')],
+      extraEdges: [
+        edge('t2', 't1', 'revises'),
+        edge('a2', 'p2b', 'depends_on'),
+        edge('p2b', 'p2', 'derived_from'),
+      ],
+      extraNodes: [
+        node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+        node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+        node('p2b', 'task', 42, { title: 'U2' }),
+      ],
+      state: { assayNodeId: 'a2', probeNodeIds: ['p2b'], templateNodeId: 't2' },
+    });
+    snapshot.nodes = snapshot.nodes.map((n) => (n.id === 'p2' ? { ...n, status: 'rejected' } : n));
+    const model = buildBatchModel(buildGoalGraphView(snapshot, NOW), 'batch');
+    expect(model.rounds[0].probes.find((probe) => probe.nodeId === 'p2')?.state).toBe('stale');
+  });
+});
+
+describe('gate verdicts', () => {
+  it('keeps the wave the coordinator wrote, even once older verdicts were trimmed', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        state: {
+          gateLog: [
+            {
+              at: '2026-10-01T00:20:00.000Z',
+              checks: [],
+              outcome: 'released',
+              releasedCount: 1,
+              revision: 1,
+              trigger: 'gate',
+              wave: 31,
+              waveIndex: 31,
+            },
+          ],
+        },
+      }),
+      NOW,
+    );
+    expect(findBatchGate(graph, 'a1')?.round.evaluations[0].wave).toBe(31);
+  });
+
+  it('reads a unit hold as the one check it broke, naming the unit', () => {
+    expect(
+      verdictChecks({
+        at: '2026-10-01T00:30:00.000Z',
+        checks: [],
+        nodeId: 'm4',
+        outcome: 'blocked',
+        revision: 1,
+        trigger: 'unit',
+        waveIndex: 1,
+      }),
+    ).toEqual([{ key: 'units_succeeded', nodeIds: ['m4'], passed: false }]);
+  });
+
+  it('gives each round its own verdicts and finds the round from its gate', () => {
+    const released = {
+      at: '2026-10-01T00:20:00.000Z',
+      checks: [{ count: 2, key: 'units_succeeded' as const, passed: true, total: 2 }],
+      outcome: 'released' as const,
+      releasedCount: 4,
+      revision: 1,
+      trigger: 'gate' as const,
+      waveIndex: 1,
+    };
+    const held = {
+      at: '2026-10-01T00:30:00.000Z',
+      checks: [],
+      nodeId: 'm4',
+      outcome: 'blocked' as const,
+      revision: 1,
+      trigger: 'unit' as const,
+      waveIndex: 1,
+    };
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1')],
+        extraEdges: [edge('t2', 't1', 'revises'), edge('a2', 'm4b', 'depends_on')],
+        extraNodes: [
+          node('m4', 'task', 10, { status: 'retired', title: 'U4' }),
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('m4b', 'task', 42, { title: 'U4' }),
+        ],
+        state: {
+          assayNodeId: 'a2',
+          gateLog: [released, held, { ...released, at: '2026-10-01T00:50:00.000Z', revision: 2 }],
+          probeNodeIds: ['m4b'],
+        },
+      }),
+      NOW,
+    );
+
+    const first = findBatchGate(graph, 'a1');
+    expect(first?.round.revision).toBe(1);
+    expect(first?.round.evaluations).toEqual([{ ...released, wave: 1 }, held]);
+    // The round's own wave count restarts; the roster's does not — v2's first
+    // release puts out the roster's second wave.
+    const second = findBatchGate(graph, 'a2');
+    expect(second?.round.evaluations.map((entry) => entry.wave)).toEqual([2]);
+    // What a gate checks before its first verdict.
+    expect(second?.model.gateChecks.map((check) => check.key)).toEqual([
+      'units_settled',
+      'units_succeeded',
+      'no_open_decision',
+      'plan_written',
+    ]);
+    // Any other node is not a gate.
+    expect(findBatchGate(graph, 't1')).toBeUndefined();
+  });
+});
+
+describe('wave ownership', () => {
+  it('keeps a released wave with its plan and moves the waves not yet out to the latest round', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1')],
+        extraEdges: [edge('t2', 't1', 'revises'), edge('a2', 'm4b', 'depends_on')],
+        extraNodes: [
+          node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+          node('m4', 'task', 10, { status: 'retired', title: 'U4' }),
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('m4b', 'task', 42, { title: 'U4' }),
+        ],
+        state: { assayNodeId: 'a2', massNodeIds: ['m3', 'm4'], probeNodeIds: ['m4b'] },
+      }),
+      NOW,
+    );
+    // Wave 1 (U3–U6) went out under v1; wave 2 (U7–U10) has not gone out — it
+    // waits under v2, the latest plan.
+    expect(buildBatchModel(graph, 'batch').waveRounds).toEqual([1, 2]);
+  });
+});
+
+describe('plans and re-opened rows', () => {
+  it('finds the round a plan version belongs to', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1')],
+        extraEdges: [edge('t2', 't1', 'revises')],
+        extraNodes: [
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+        ],
+        state: { assayNodeId: 'a2', probeNodeIds: [], templateNodeId: 't2' },
+      }),
+      NOW,
+    );
+    expect(findBatchPlan(graph, 't2')?.round.revision).toBe(2);
+    expect(findBatchPlan(graph, 'a2')).toBeUndefined();
+  });
+
+  it('groups re-opened units by the batch they came from', () => {
+    const probe = (nodeId: string, wave: number) => ({
+      from: { index: 0, kind: 'wave' as const, wave },
+      nodeId,
+      state: 'backlog' as const,
+      title: nodeId,
+    });
+    const rows = reopenedRows([probe('a', 2), probe('b', 2), probe('c', 3)], 10);
+    expect(rows.map((row) => [row.from, row.probes.map((p) => p.nodeId)])).toEqual([
+      [{ index: 0, kind: 'wave', wave: 2 }, ['a', 'b']],
+      [{ index: 0, kind: 'wave', wave: 3 }, ['c']],
+    ]);
+  });
+});
+
+describe('layoutBatch', () => {
+  it('lays the cold start and each round left to right, each break feeding the next round', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1'), humanAnswer('a2')],
+        extraEdges: [
+          edge('t2', 't1', 'revises'),
+          edge('t3', 't2', 'revises'),
+          edge('a2', 'p2b', 'depends_on'),
+          edge('a3', 'm7b', 'depends_on'),
+          edge('p2b', 'p2', 'derived_from'),
+          edge('m7b', 'm7', 'derived_from'),
+        ],
+        extraNodes: [
+          node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('p2b', 'task', 42, { status: 'resolved', title: 'U2' }),
+          // U7 opens the roster's second wave, released under v2 — then broke.
+          node('m7', 'task', 50, { status: 'retired', title: 'U7' }),
+          node('t3', 'finding', 60, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a3', 'decision', 61, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('m7b', 'task', 62, { title: 'U7' }),
+        ],
+        state: { assayNodeId: 'a3', massNodeIds: ['m3', 'm7'], probeNodeIds: ['m7b'] },
+      }),
+      NOW,
+    );
+    const model = buildBatchModel(graph, 'batch');
+    const layout = layoutBatch(graph, model);
+    const cold = layout.boxes[batchGroupId('batch', 'experimentProbe')];
+    const [r1, r2, r3] = [1, 2, 3].map((r) => layout.boxes[batchGroupId('batch', 'round', r)]);
+
+    // One row, left to right, top-aligned: cold start, then round 1, 2, 3.
+    expect([cold, r1, r2, r3].map((box) => box.y)).toEqual([0, 0, 0, 0]);
+    expect(cold.x + cold.width).toBeLessThan(r1.x);
+    expect(r1.x + r1.width).toBeLessThan(r2.x);
+    expect(r2.x + r2.width).toBeLessThan(r3.x);
+    // Each round feeds the next — the break at v2's gate revises into v3 —
+    // and only the hand-offs after a break carry the "revise" label.
+    const frame = (r: number) => batchGroupId('batch', 'round', r);
+    expect(
+      layout.edges.filter((e) => e.sourceHandle === 'r').map((e) => [e.source, e.target, e.label]),
+    ).toEqual([
+      [batchGroupId('batch', 'experimentProbe'), frame(1), undefined],
+      [frame(1), frame(2), 'revise'],
+      [frame(2), frame(3), 'revise'],
+    ]);
+    // Plan, gate and waves stay their own nodes, stacked top to bottom inside
+    // their round's frame and linked plan → gate → waves.
+    const rounds = [
+      ['t1', 'a1', 1, r1],
+      ['t2', 'a2', 2, r2],
+      ['t3', 'a3', 3, r3],
+    ] as const;
+    for (const [plan, gate, r, box] of rounds) {
+      const waves = batchGroupId('batch', 'waves', r);
+      const column = [plan, gate, waves].map((id) => layout.boxes[id]);
+      for (const inner of column) {
+        expect(inner.x).toBeGreaterThanOrEqual(box.x);
+        expect(inner.x + inner.width).toBeLessThanOrEqual(box.x + box.width);
+        expect(inner.y + inner.height).toBeLessThanOrEqual(box.y + box.height);
+      }
+      expect(column[0].y).toBeLessThan(column[1].y);
+      expect(column[1].y).toBeLessThan(column[2].y);
+      expect(
+        layout.edges
+          .filter((e) => !e.sourceHandle && [plan, gate].includes(e.source as never))
+          .map((e) => [e.source, e.target]),
+      ).toEqual([
+        [plan, gate],
+        [gate, waves],
+      ]);
+      expect(layout.nodeIds.has(plan) && layout.nodeIds.has(gate)).toBe(true);
     }
+    // Links into the batch land on the cold start, lined up under the problem.
+    expect(layout.entryId).toBe(batchGroupId('batch', 'experimentProbe'));
+    expect(layout.anchorX).toBe(cold.x + cold.width / 2);
+    // The re-opened unit is named by the batch it first ran in.
+    expect(model.rounds[2].probes[0].from).toEqual({ index: 0, kind: 'wave', wave: 1 });
   });
 });
