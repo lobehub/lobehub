@@ -175,6 +175,28 @@ describe('dataset replica', () => {
     expect(agentEvalService.getDataset).toHaveBeenCalledWith(DETAIL_ID);
   });
 
+  it('keeps embedded test cases out of the stored and persisted detail', async () => {
+    vi.spyOn(agentEvalService, 'getDataset').mockResolvedValue({
+      id: DETAIL_ID,
+      name: 'MMLU',
+      testCases: [{ id: 'tc-1' }, { id: 'tc-2' }],
+    } as any);
+
+    renderDetail(DETAIL_ID);
+
+    await waitFor(() =>
+      expect(useEvalStore.getState().datasetDetailMap[DETAIL_ID]?.name).toBe('MMLU'),
+    );
+    expect(useEvalStore.getState().datasetDetailMap[DETAIL_ID]).not.toHaveProperty('testCases');
+    await waitFor(async () => {
+      const persisted = await datasetDetailResource.storage!.get({
+        queryKey: DETAIL_STORAGE_KEY,
+        scope,
+      });
+      expect(persisted?.data).toEqual({ id: DETAIL_ID, name: 'MMLU' });
+    });
+  });
+
   it('repaints the refreshed benchmark list after a mutation', async () => {
     const listDatasets = vi
       .spyOn(agentEvalService, 'listDatasets')

@@ -5,7 +5,12 @@ import { agentEvalService } from '@/services/agentEval';
 import { type EvalStore, useEvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
 
-import { ALL_DATASETS_KEY, datasetDetailResource, datasetListResource } from './projection';
+import {
+  ALL_DATASETS_KEY,
+  datasetDetailResource,
+  datasetListResource,
+  toDatasetDetail,
+} from './projection';
 
 type Setter = StoreSetter<EvalStore>;
 
@@ -62,7 +67,7 @@ export class DatasetActionImpl {
     });
     this.#detail = createReplicaSlice(datasetDetailResource, {
       actionPrefix: 'datasetDetail',
-      fetcher: (id) => agentEvalService.getDataset(id),
+      fetcher: async (id) => toDatasetDetail(await agentEvalService.getDataset(id)),
       get,
       set,
       stateKey: 'datasetDetailReplica',
