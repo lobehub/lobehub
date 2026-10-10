@@ -1,8 +1,10 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { SWRConfig } from 'swr';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ChatSettingsTabs } from '@/store/global/initialState';
+import { useUserStore } from '@/store/user';
 
 import Content from './Content';
 
@@ -20,6 +22,7 @@ const mocks = vi.hoisted(() => ({
     featureFlags: {
       enableAgentSelfIteration: true,
     },
+    serverConfig: { agentIdentityProviders: [] as string[] },
   },
 }));
 
@@ -45,6 +48,9 @@ vi.mock('@/features/AgentSetting', () => ({
     </div>
   ),
 }));
+
+const accountService = vi.hoisted(() => ({ list: vi.fn(async () => [] as unknown[]) }));
+vi.mock('@/services/agentAccount', () => ({ agentAccountService: accountService }));
 
 vi.mock('@/store/agent', () => {
   const useAgentStore = (selector: (state: typeof mocks.agentState) => unknown) =>
@@ -72,10 +78,15 @@ vi.mock('@/store/serverConfig', () => ({
     selector(mocks.serverState),
 }));
 
+const setIdentityLab = (enabled: boolean) =>
+  useUserStore.setState({ preference: { lab: { enableAgentIdentity: enabled } } } as any);
+
 describe('AgentSettings Content', () => {
   beforeEach(() => {
     mocks.agentState.isInbox = true;
     mocks.serverState.featureFlags.enableAgentSelfIteration = true;
+    mocks.serverState.serverConfig.agentIdentityProviders = [];
+    setIdentityLab(false);
   });
 
   it('exposes both tabs for inbox when feature is on', () => {
@@ -124,5 +135,53 @@ describe('AgentSettings Content', () => {
 
     const layout = screen.getByTestId('layout');
     expect(layout).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+  });
+
+  it('shows identity only with the Labs toggle on and a provider configured', () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+    mocks.serverState.serverConfig.agentIdentityProviders = ['agent-mail'];
+
+    const { unmount } = render(<Content />);
+    // A configured provider alone does not surface the experiment.
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+    unmount();
+
+    setIdentityLab(true);
+    render(<Content />);
+    expect(screen.getByTestId('layout')).toHaveAttribute(
+      'data-tabs',
+      `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
+    );
+  });
+
+  it('hides identity when the deployment has no identity provider, even in Labs', () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+    setIdentityLab(true);
+
+    render(<Content />);
+
+    expect(screen.getByTestId('layout')).toHaveAttribute('data-tabs', ChatSettingsTabs.Opening);
+  });
+
+  it('keeps identity reachable for an agent that already owns an address, even with no provider', async () => {
+    mocks.serverState.featureFlags.enableAgentSelfIteration = false;
+    setIdentityLab(true);
+    accountService.list.mockResolvedValueOnce([
+      { id: 'acc_1', identifier: 'toby@lobe.id', status: 'active' },
+    ]);
+
+    render(
+      <SWRConfig value={{ dedupingInterval: 0, provider: () => new Map() }}>
+        <Content />
+      </SWRConfig>,
+    );
+
+    await waitFor(() =>
+      expect(screen.getByTestId('layout')).toHaveAttribute(
+        'data-tabs',
+        `${ChatSettingsTabs.Opening},${ChatSettingsTabs.Identity}`,
+      ),
+    );
+    expect(accountService.list).toHaveBeenCalledWith({ agentId: 'inbox-agent' });
   });
 });

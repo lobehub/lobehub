@@ -4,6 +4,9 @@ export default {
   'features.agentGraphConfig.desc':
     'Show graph runtime configuration in an agent profile advanced settings.',
   'features.agentGraphConfig.title': 'Agent Graph Runtime Configuration',
+  'features.agentIdentity.desc':
+    'Give an agent its own email address or phone number, and read what arrives in its inbox from the agent settings.',
+  'features.agentIdentity.title': 'Agent Identity',
   'features.agentSelfIteration.desc':
     'Allow the agent to reflect, build self-awareness, and continuously iterate through ongoing attempts and interactions.',
   'features.agentSelfIteration.title': 'Agent Self-iteration',

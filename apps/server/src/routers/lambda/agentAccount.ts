@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
 import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
 import type { LobeChatDatabase } from '@/database/type';
+import { AgentInboxModel } from '@/database/models/agentInbox';
 import { assertAgentUsableBy } from '@/database/utils/agent-access';
 import { router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -33,14 +34,18 @@ import { assertCanEditResource } from '@/server/services/resourcePermission';
  */
 const agentAccountProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) => {
   const gateKeeper = await KeyVaultsGateKeeper.initWithEnvKey();
+  const workspaceId = opts.ctx.workspaceId ?? undefined;
 
   return opts.next({
     ctx: {
       agentAccountService: new AgentAccountService(opts.ctx.serverDB, opts.ctx.userId, {
         gateKeeper,
         registry: createDefaultAgentAccountRegistry(),
-        workspaceId: opts.ctx.workspaceId ?? undefined,
+        workspaceId,
       }),
+      // The inbox is scoped exactly like the accounts: by the caller's
+      // ownership, so an id from someone else's inbox resolves to nothing.
+      agentInboxModel: new AgentInboxModel(opts.ctx.serverDB, opts.ctx.userId, workspaceId),
     },
   });
 });
@@ -68,6 +73,20 @@ const credentialSchema = z
   .refine((value) => Object.keys(value).length > 0, 'credential must not be empty');
 
 const ACCOUNT_NOT_FOUND_MESSAGE = 'Agent account not found';
+const MESSAGE_NOT_FOUND_MESSAGE = 'Agent inbox message not found';
+
+/**
+ * A preferred handle for a new account — the local part of a mail address.
+ *
+ * Kept to the character set every provider accepts, so a rejection is the
+ * provider's ("already taken") rather than a validation surprise.
+ */
+const prefixSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(64)
+  .regex(/^[\w.-]+$/, 'prefix may only contain letters, numbers, dot, underscore and dash');
 
 /** Surface a service-layer refusal as a tRPC error the caller can act on. */
 const mapAccountError = (error: unknown, operation: string): never => {
@@ -196,12 +215,18 @@ export const agentAccountRouter = router({
    * Ask a provider to issue a brand-new account (a lobe.id inbox, a Linq
    * number) and persist it. A provider-issued secret — an inbox signing key —
    * is stored encrypted and never returned, exactly like a caller-supplied one.
+   *
+   * `prefix` is a *preference*, not a contract: a mail inbox is opened at
+   * `<prefix>@…` when the provider can honour it. The response always carries
+   * the identifier that was actually issued, so the caller shows the real
+   * address rather than the one it asked for.
    */
   provision: agentAccountWriteProcedure
     .input(
       z.object({
         agentId: z.string().min(1),
         displayName: z.string().min(1).optional(),
+        prefix: prefixSchema.optional(),
         provider: z.string().min(1),
       }),
     )
@@ -287,4 +312,72 @@ export const agentAccountRouter = router({
       }
       return { id: revoked, success: true as const };
     }),
+
+  /**
+   * The agent's inbox: what its accounts have received.
+   *
+   * Reads return the caller's own rows only — the model scopes by ownership, so
+   * an id from someone else's inbox resolves to nothing. Ingest lives on the
+   * webhook path, not here: nothing in this router can fabricate a delivery.
+   * Opening a message is the one state change, and it is deliberately
+   * auth-and-scope only rather than an `agent:update` edit — reading your own
+   * mail is not a change to the agent's configuration.
+   */
+  inbox: router({
+    list: agentAccountProcedure
+      .input(
+        z.object({
+          accountId: z.string().min(1).optional(),
+          agentId: z.string().min(1),
+          /** Keyset cursor: the last row of the previous page. */
+          before: z.object({ id: z.string().min(1), receivedAt: z.coerce.date() }).optional(),
+          limit: z.number().int().min(1).max(100).optional(),
+          unreadOnly: z.boolean().optional(),
+        }),
+      )
+      .query(async ({ ctx, input }) => {
+        await assertAgentUsableBy(ctx.serverDB, input.agentId, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+
+        return ctx.agentInboxModel.list(input);
+      }),
+
+    unreadCount: agentAccountProcedure
+      .input(z.object({ agentId: z.string().min(1) }))
+      .query(async ({ ctx, input }) => {
+        await assertAgentUsableBy(ctx.serverDB, input.agentId, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+
+        return { unreadCount: await ctx.agentInboxModel.unreadCount(input.agentId) };
+      }),
+
+    get: agentAccountProcedure.input(idInput).query(async ({ ctx, input }) => {
+      const message = await ctx.agentInboxModel.findById(input.id);
+      if (!message) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: MESSAGE_NOT_FOUND_MESSAGE });
+      }
+      return message;
+    }),
+
+    markRead: agentAccountProcedure
+      .input(z.object({ ids: z.array(z.string().min(1)).min(1).max(200) }))
+      .mutation(async ({ ctx, input }) => ({
+        count: await ctx.agentInboxModel.markRead(input.ids),
+      })),
+
+    markAllRead: agentAccountProcedure
+      .input(z.object({ agentId: z.string().min(1) }))
+      .mutation(async ({ ctx, input }) => {
+        await assertAgentUsableBy(ctx.serverDB, input.agentId, {
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId ?? undefined,
+        });
+
+        return { count: await ctx.agentInboxModel.markAllRead(input.agentId) };
+      }),
+  }),
 });

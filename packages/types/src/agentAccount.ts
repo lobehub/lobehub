@@ -97,6 +97,8 @@ export interface AgentAccountInboundMessage {
 export interface AgentInboxMessage {
   /** The account that received it — the routing key resolved to an account id. */
   accountId: string;
+  /** Media the sender attached, as the provider hosts it (e.g. a photo-only message). */
+  attachments?: AgentAccountAttachment[];
   agentId: string;
   /** Verification codes pulled out of the body (3–8 digits), for the `wait` primitive. */
   codes: string[];
@@ -203,6 +205,14 @@ export interface AgentAccountProvisionInput {
    * to pick a free unit instead of colliding on the routing key.
    */
   isIdentifierHeld?: (identifier: string) => Promise<boolean>;
+  /**
+   * Preferred handle the caller asks for, when the provider can honour it —
+   * the local part of a `mail` address, for example. A provider that cannot
+   * honour a preference ignores it and mints its own identifier; a provider
+   * that can either returns the requested prefix or fails, never a silent
+   * substitute.
+   */
+  prefix?: string;
   userId: string;
   workspaceId?: string;
 }
