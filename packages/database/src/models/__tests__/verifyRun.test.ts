@@ -8,6 +8,7 @@ import { getTestDB } from '../../core/getTestDB';
 import { acceptances, agentOperations, users, verifyRuns } from '../../schemas';
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
+import { VerifyCheckResultModel } from '../verifyCheckResult';
 import { VerifyRunModel } from '../verifyRun';
 
 const serverDB: LobeChatDatabase = await getTestDB();
@@ -62,6 +63,71 @@ const statusOf = async (runId: string) => {
 beforeEach(async () => {
   await serverDB.delete(users);
   await serverDB.insert(users).values([{ id: userId }, { id: otherUserId }]);
+});
+
+describe('VerifyRunModel.replaceUntouchedDraftPlan', () => {
+  const refined = [
+    {
+      id: 'refined-1',
+      index: 0,
+      onFail: 'manual' as const,
+      required: true,
+      title: 'first named criterion',
+      verifierConfig: {},
+      verifierType: 'agent' as const,
+    },
+  ];
+
+  const planIdsOf = async (runId: string) => {
+    const [row] = await serverDB
+      .select({ plan: verifyRuns.plan })
+      .from(verifyRuns)
+      .where(eq(verifyRuns.id, runId));
+    return (row?.plan ?? []).map((item) => item.id);
+  };
+
+  it('replaces a draft plan that is still the expected one', async () => {
+    const runId = await buildRun('op-cas-replace');
+    const model = new VerifyRunModel(serverDB, userId);
+    const expected = await planIdsOf(runId);
+
+    await expect(model.replaceUntouchedDraftPlan(runId, expected, refined)).resolves.toBe(true);
+    expect(await planIdsOf(runId)).toEqual(['refined-1']);
+  });
+
+  it('keeps a plan whose ids are already being evidenced', async () => {
+    const runId = await buildRun('op-cas-evidenced');
+    const model = new VerifyRunModel(serverDB, userId);
+    const expected = await planIdsOf(runId);
+    await new VerifyCheckResultModel(serverDB, userId).upsertByCheckItem({
+      checkItemId: expected[0],
+      checkItemIndex: 0,
+      checkItemTitle: 'goal met',
+      operationId: 'op-cas-evidenced',
+      required: true,
+      verifierType: 'agent',
+      verifyRunId: runId,
+    });
+
+    await expect(model.replaceUntouchedDraftPlan(runId, expected, refined)).resolves.toBe(false);
+    expect(await planIdsOf(runId)).toEqual(expected);
+  });
+
+  it('keeps a plan that changed or was confirmed since it was read', async () => {
+    const changedId = await buildRun('op-cas-changed');
+    const model = new VerifyRunModel(serverDB, userId);
+    await expect(
+      model.replaceUntouchedDraftPlan(changedId, ['some-other-id'], refined),
+    ).resolves.toBe(false);
+
+    const confirmedId = await buildRun('op-cas-confirmed');
+    const expected = await planIdsOf(confirmedId);
+    await model.confirmPlan(confirmedId);
+    await expect(model.replaceUntouchedDraftPlan(confirmedId, expected, refined)).resolves.toBe(
+      false,
+    );
+    expect(await planIdsOf(confirmedId)).toEqual(expected);
+  });
 });
 
 describe('VerifyRunModel.claimVerifying', () => {

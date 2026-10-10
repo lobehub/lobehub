@@ -1,5 +1,7 @@
+import type { VerifyCheckItem } from '@lobechat/types';
 import debug from 'debug';
 
+import { AgentOperationModel } from '@/database/models/agentOperation';
 import { GoalModel } from '@/database/models/goal';
 import { TaskModel } from '@/database/models/task';
 import { VerifyRunModel } from '@/database/models/verifyRun';
@@ -10,6 +12,22 @@ import { VerifyPlanGeneratorService } from './planGenerator';
 import { attachTaskRunToAcceptance, resolveTaskAcceptance } from './taskAcceptance';
 
 const log = debug('lobe-server:verify-plan-instantiation');
+
+/**
+ * Whether the run still carries exactly the floor plan we just wrote — i.e.
+ * nothing else has authored or confirmed a checklist in the meantime.
+ *
+ * The guard the refinement step writes behind: `setPlan` replaces the whole
+ * plan, so replacing a checklist someone else authored (a builder that hit
+ * `authorCriteria` while the generation call was in flight) would invalidate ids
+ * they are already evidencing.
+ */
+const isUntouchedFloorPlan = (
+  run: { plan?: VerifyCheckItem[] | null; planConfirmedAt?: Date | null },
+  floorItems: VerifyCheckItem[],
+): boolean =>
+  !run.planConfirmedAt &&
+  (run.plan ?? []).map((item) => item.id).join() === floorItems.map((item) => item.id).join();
 
 export interface InstantiateVerifyPlanParams {
   operationId: string;
@@ -27,7 +45,13 @@ export interface InstantiateVerifyPlanParams {
  * scenario doesn't show a "confirm plan" step). Only the undecomposed path
  * spends an AI call: the acceptance requirement is split into named criteria so
  * the checklist shows distinguishable items, with the single holistic check as
- * the fallback when generation fails.
+ * the floor.
+ *
+ * Ordered so the plan cannot depend on an external call: the floor plan is
+ * written and bound first, and the generation call only *refines* what is
+ * already there. Generating first meant one provider throw left the run with no
+ * plan, no criteria to read, no way to submit evidence and no round on the
+ * Task's Acceptance — with the error swallowed.
  *
  * Fire-and-forget + idempotent: never throws (verify must not affect the run),
  * and skips when a plan already exists (recordStart can re-fire).
@@ -115,19 +139,17 @@ export const instantiateVerifyPlanOnStart = async (
     }
 
     const planGenerator = new VerifyPlanGeneratorService(db, userId, workspaceId);
-    // Undecomposed acceptance (goal-dispatched Task, one-sentence requirement):
-    // spend one generation call splitting the requirement into named criteria,
-    // so the checklist reads as distinguishable items instead of one generic
-    // "Task delivery acceptance" row. The split runs on the pinned plan model
-    // (VERIFY_PLAN_MODEL_CONFIG), not the verifier agent's chat model.
-    await planGenerator.generateDraftPlan({
-      // Ground the generated criteria in the acceptance text, not just the title.
+
+    // ── The floor ────────────────────────────────────────────────────────────
+    // Everything up to here reads local rows. The plan is written HERE, before
+    // any model resolution or generation call, so the run always ends up with a
+    // checklist to evidence no matter how the provider behaves.
+    const floorItems = await planGenerator.generateDraftPlan({
       context: requirement,
-      // Configured rubric/criteria ARE the plan — no AI proposal on that path.
-      enableAiGeneration: holistic,
+      enableAiGeneration: false,
       goal,
-      // Still fall back to the single agent-type holistic check when the
-      // generation fails or returns nothing, so verify runs either way.
+      // The single agent-type holistic check when nothing decomposed into
+      // criteria, so verify still runs instead of no-oping.
       holisticFallback: holistic,
       operationId: params.operationId,
       requirement,
@@ -135,34 +157,99 @@ export const instantiateVerifyPlanOnStart = async (
       verifyRubricId: verifyConfig.verifyRubricId,
     });
 
-    // generateDraftPlan only sets the (draft) plan; the task scenario auto-confirms
-    // so the completion gate treats it as ready instead of a pending draft.
     const run = await runModel.findByOperation(params.operationId);
-    if (run?.plan?.length) {
-      // Carry the Acceptance repair/re-run cap onto
-      // the run so auto-repair honors it. Without this the repair path falls back
-      // to the source rubric's config or the default, dropping the task cap for
-      // ad-hoc-criteria or per-task-override tasks.
-      if (typeof verifyConfig.maxIterations === 'number') {
-        await runModel.setMetadata(run.id, { maxRepairRounds: verifyConfig.maxIterations });
+    if (!run?.plan?.length) return;
+    let finalItemCount = run.plan.length;
+
+    // ── Refinement ───────────────────────────────────────────────────────────
+    // Undecomposed acceptance (goal-dispatched Task, one-sentence requirement):
+    // spend one generation call splitting the requirement into named criteria, so
+    // the checklist reads as distinguishable items instead of one generic "Task
+    // delivery acceptance" row. The split runs on the pinned plan model
+    // (VERIFY_PLAN_MODEL_CONFIG), not the verifier agent's chat model.
+    // Best-effort by construction: a throw here leaves the floor standing.
+    //
+    // Skipped when the plan is no longer the floor we just wrote (a builder that
+    // got there first through authorCriteria) or is already confirmed — replacing
+    // either would invalidate a checklist someone else is working from.
+    if (holistic && isUntouchedFloorPlan(run, floorItems)) {
+      try {
+        const proposed = await planGenerator.proposeAiCriteria({
+          // Ground the generated criteria in the acceptance text, not just the title.
+          context: requirement,
+          existingTitles: [],
+          goal,
+          operationId: params.operationId,
+        });
+        if (proposed.length) {
+          // proposeAiCriteria leaves every item at index 0; results order by
+          // checkItemIndex, so the plan needs its positions.
+          const refined = proposed.map((item, index) => ({ ...item, index }));
+          // The generation call took seconds, and the floor was readable the
+          // whole time: a builder may have listed it and submitted evidence
+          // against its ids, or authored its own set. Swap only if the run
+          // still carries the untouched floor — re-read and written under one
+          // row lock, so nothing evidenced in the meantime is stranded.
+          const replaced = await runModel.replaceUntouchedDraftPlan(
+            run.id,
+            run.plan.map((item) => item.id),
+            refined,
+          );
+          if (replaced) {
+            finalItemCount = refined.length;
+            log(
+              'refined verify plan for op %s with %d generated items',
+              params.operationId,
+              refined.length,
+            );
+          } else {
+            log('floor plan for op %s moved on during refinement; kept it', params.operationId);
+          }
+        }
+      } catch (error) {
+        log(
+          'AI criteria generation failed for op %s; keeping the floor plan: %O',
+          params.operationId,
+          error,
+        );
       }
-      await runModel.confirmPlan(run.id);
-
-      // A task verification round belongs to its business-level Acceptance from
-      // the moment the plan is confirmed. This lets the task surface show live
-      // planned/verifying/repairing progress instead of waiting for an external
-      // ingest command to create the aggregate after verification has finished.
-      const acceptanceService = new AcceptanceService(db, userId, workspaceId);
-      await acceptanceService.attachPolicyRun(run.id, acceptance.id);
-
-      log(
-        'instantiated + confirmed verify plan for op %s (%d items), acceptance %s',
-        params.operationId,
-        run.plan.length,
-        acceptance.id,
-      );
     }
+
+    // ── Confirm + bind ───────────────────────────────────────────────────────
+    // Reached on every path, so the round is a real round with a real plan even
+    // when the refinement above never ran.
+    // Carry the Acceptance repair/re-run cap onto the run so auto-repair honors
+    // it. Without this the repair path falls back to the source rubric's config
+    // or the default, dropping the task cap for ad-hoc-criteria or
+    // per-task-override tasks.
+    if (typeof verifyConfig.maxIterations === 'number') {
+      await runModel.setMetadata(run.id, { maxRepairRounds: verifyConfig.maxIterations });
+    }
+    await runModel.confirmPlan(run.id);
+
+    // A task verification round belongs to its business-level Acceptance from the
+    // moment the plan is confirmed. This lets the task surface show live
+    // planned/verifying/repairing progress instead of waiting for an external
+    // ingest command to create the aggregate after verification has finished.
+    await new AcceptanceService(db, userId, workspaceId).attachPolicyRun(run.id, acceptance.id);
+
+    log(
+      'instantiated + confirmed verify plan for op %s (%d items), acceptance %s',
+      params.operationId,
+      finalItemCount,
+      acceptance.id,
+    );
   } catch (error) {
     log('instantiateVerifyPlanOnStart failed for op %s (non-fatal): %O', params.operationId, error);
+    // Non-fatal for the run, but it must not stay invisible: the builder's
+    // `listCriteria` reports this reason, so a run with no criteria says why
+    // instead of reading as "this Task has no Acceptance".
+    try {
+      await new AgentOperationModel(db, userId, workspaceId).mergeMetadata(params.operationId, {
+        verifyPlanError: error instanceof Error ? error.message : String(error),
+      });
+    } catch (recordError) {
+      log('failed to record the plan error for op %s: %O', params.operationId, recordError);
+    }
   }
 };

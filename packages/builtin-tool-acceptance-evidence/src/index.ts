@@ -4,5 +4,7 @@ export {
   type AcceptanceCriterionSummary,
   AcceptanceEvidenceApiName,
   type AcceptanceEvidenceType,
+  type AuthorAcceptanceCriteriaItem,
+  type AuthorAcceptanceCriteriaParams,
   type SubmitAcceptanceEvidenceParams,
 } from './types';

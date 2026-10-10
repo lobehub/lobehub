@@ -4,13 +4,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 
 const mocks = vi.hoisted(() => ({
+  attachPolicyRun: vi.fn(),
   documentFindByIds: vi.fn(),
   evidenceCreateMany: vi.fn(),
   evidenceListByRun: vi.fn(),
   fileFindById: vi.fn(),
   operationFindById: vi.fn(),
+  resolveTaskAcceptance: vi.fn(),
+  resultDelete: vi.fn(),
   resultUpsert: vi.fn(),
+  runConfirmPlan: vi.fn(),
+  runEnsureForOperation: vi.fn(),
   runFindByOperation: vi.fn(),
+  runSetPlan: vi.fn(),
 }));
 
 vi.mock('@/database/models/agentOperation', () => ({
@@ -30,7 +36,7 @@ vi.mock('@/database/models/file', () => ({
 }));
 vi.mock('@/database/models/verifyCheckResult', () => ({
   VerifyCheckResultModel: vi.fn(function () {
-    return { upsertByCheckItem: mocks.resultUpsert };
+    return { delete: mocks.resultDelete, upsertByCheckItem: mocks.resultUpsert };
   }),
 }));
 vi.mock('@/database/models/verifyEvidence', () => ({
@@ -43,8 +49,21 @@ vi.mock('@/database/models/verifyEvidence', () => ({
 }));
 vi.mock('@/database/models/verifyRun', () => ({
   VerifyRunModel: vi.fn(function () {
-    return { findByOperation: mocks.runFindByOperation };
+    return {
+      confirmPlan: mocks.runConfirmPlan,
+      ensureForOperation: mocks.runEnsureForOperation,
+      findByOperation: mocks.runFindByOperation,
+      setPlan: mocks.runSetPlan,
+    };
   }),
+}));
+vi.mock('@/server/services/verify/acceptanceService', () => ({
+  AcceptanceService: vi.fn(function () {
+    return { attachPolicyRun: mocks.attachPolicyRun };
+  }),
+}));
+vi.mock('@/server/services/verify/taskAcceptance', () => ({
+  resolveTaskAcceptance: mocks.resolveTaskAcceptance,
 }));
 
 describe('acceptanceEvidenceRuntime', () => {
@@ -73,7 +92,17 @@ describe('acceptanceEvidenceRuntime', () => {
     mocks.resultUpsert.mockResolvedValue({ id: 'result-1' });
     mocks.evidenceCreateMany.mockResolvedValue([]);
     mocks.evidenceListByRun.mockResolvedValue([]);
+    mocks.runEnsureForOperation.mockResolvedValue({ id: 'authored-run', plan: [] });
+    mocks.resolveTaskAcceptance.mockResolvedValue(undefined);
   });
+
+  const runtimeFor = (operationId: string) =>
+    acceptanceEvidenceRuntime.factory({
+      operationId,
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
 
   it('records a documents.id reference as first-class evidence', async () => {
     mocks.documentFindByIds.mockResolvedValue([{ id: 'docs_123' }]);
@@ -137,6 +166,40 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(mocks.resultUpsert).toHaveBeenCalledWith(
       expect.objectContaining({ operationId: 'task-op' }),
     );
+  });
+
+  it('drops the result when the plan was refined away while it was being recorded', async () => {
+    const floor = {
+      id: 'floor-1',
+      index: 0,
+      required: true,
+      title: 'Task delivery',
+      verifierType: 'agent',
+    };
+    const refined = {
+      id: 'generated-1',
+      index: 0,
+      required: true,
+      title: 'Repro runs',
+      verifierType: 'agent',
+    };
+    // First read sees the floor; the run-start refinement swaps it before the
+    // result write lands, so the re-read sees the refined plan.
+    mocks.runFindByOperation.mockImplementation(async () => ({
+      id: 'run-1',
+      plan: mocks.resultUpsert.mock.calls.length > 0 ? [refined] : [floor],
+    }));
+    const runtime = runtimeFor('task-op');
+
+    const result = await runtime.submitEvidence({
+      checkItemId: 'floor-1',
+      evidence: [{ content: 'it runs', type: 'text' }],
+    });
+
+    expect(result).toEqual(expect.objectContaining({ error: 'UNKNOWN_CRITERION', success: false }));
+    expect(result.content).toContain('generated-1');
+    expect(mocks.resultDelete).toHaveBeenCalledWith('result-1');
+    expect(mocks.evidenceCreateMany).not.toHaveBeenCalled();
   });
 
   it('submits repair evidence into the repair round instead of its failed parent', async () => {
@@ -391,5 +454,151 @@ describe('acceptanceEvidenceRuntime', () => {
 
     expect(result).toEqual(expect.objectContaining({ error: 'UNKNOWN_FILE', success: false }));
     expect(mocks.evidenceCreateMany).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The run-start plan is minted fire-and-forget and its failure is swallowed
+   * (verify must never break a run), so a builder can land on an operation with no
+   * session at all. That used to be a dead end: no criteria to read and nowhere to
+   * put evidence, so the delivery's Acceptance stayed `pending` with zero rounds.
+   * The standard Acceptance flow authors the checklist when none exists; this is
+   * the in-Task arm of that.
+   */
+  it('authors the checklist for a run that has none, and binds it to the task acceptance', async () => {
+    mocks.operationFindById.mockResolvedValue({
+      id: 'task-op',
+      parentOperationId: null,
+      taskId: 'task-1',
+    });
+    mocks.runFindByOperation.mockResolvedValue(null);
+    mocks.resolveTaskAcceptance.mockResolvedValue({ acceptance: { id: 'acc-1' } });
+
+    const result = await runtimeFor('task-op').authorCriteria({
+      items: [
+        { description: 'Two PRs, merged separately', title: 'Each transport package ships alone' },
+        { title: 'The identity branch rebases onto canary without conflicts' },
+      ],
+    });
+
+    expect(result.success).toBe(true);
+    expect(mocks.runSetPlan).toHaveBeenCalledWith('authored-run', [
+      expect.objectContaining({
+        index: 0,
+        required: true,
+        title: 'Each transport package ships alone',
+        verifierType: 'agent',
+      }),
+      expect.objectContaining({ index: 1, required: true }),
+    ]);
+    expect(mocks.runConfirmPlan).toHaveBeenCalledWith('authored-run');
+    expect(mocks.attachPolicyRun).toHaveBeenCalledWith('authored-run', 'acc-1');
+    // The ids come back in the answer, so the builder can start evidencing
+    // without a second round-trip.
+    expect(result.criteria).toHaveLength(2);
+    expect(result.content).toContain('Each transport package ships alone');
+  });
+
+  it('evidences a self-authored criterion', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.runFindByOperation.mockResolvedValue(null);
+    const runtime = runtimeFor('task-op');
+
+    const signedOff = await runtime.authorCriteria({ items: [{ title: 'PRs are separate' }] });
+    const plan = mocks.runSetPlan.mock.calls[0][1];
+    mocks.runFindByOperation.mockResolvedValue({ id: 'authored-run', plan });
+
+    const submitted = await runtime.submitEvidence({
+      checkItemId: plan[0].id,
+      evidence: [{ content: 'PR #20271 and PR #20272, merged separately', type: 'text' }],
+    });
+
+    expect(signedOff.success).toBe(true);
+    expect(submitted.success).toBe(true);
+    expect(mocks.resultUpsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        checkItemId: plan[0].id,
+        checkItemTitle: 'PRs are separate',
+        verifyRunId: 'authored-run',
+      }),
+    );
+  });
+
+  it('keeps the checklist a run already has instead of authoring a second one', async () => {
+    const existing = [
+      { id: 'criterion-1', index: 0, required: true, title: 'Document', verifierType: 'llm' },
+    ];
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.runFindByOperation.mockResolvedValue({ id: 'run-1', plan: existing });
+    mocks.runEnsureForOperation.mockResolvedValue({ id: 'run-1', plan: existing });
+
+    const result = await runtimeFor('task-op').authorCriteria({ items: [{ title: 'Mine' }] });
+
+    expect(result).toEqual(
+      expect.objectContaining({ error: 'PLAN_ALREADY_EXISTS', success: false }),
+    );
+    expect(result.content).toContain('criterion-1');
+    expect(mocks.runSetPlan).not.toHaveBeenCalled();
+  });
+
+  it('refuses to author over a plan that is already frozen', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.runFindByOperation.mockResolvedValue(null);
+    // `setPlan` refuses a confirmed round rather than overwriting its checklist.
+    mocks.runSetPlan.mockRejectedValue(new Error('Draft verification round required'));
+
+    const result = await runtimeFor('task-op').authorCriteria({ items: [{ title: 'Mine' }] });
+
+    expect(result).toEqual(expect.objectContaining({ error: 'PLAN_NOT_WRITABLE', success: false }));
+    expect(mocks.runConfirmPlan).not.toHaveBeenCalled();
+  });
+
+  it('needs at least one titled item to author a checklist', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.runFindByOperation.mockResolvedValue(null);
+
+    const result = await runtimeFor('task-op').authorCriteria({ items: [{ title: '   ' }] });
+
+    expect(result).toEqual(expect.objectContaining({ error: 'INVALID_ARGUMENTS', success: false }));
+    expect(mocks.runSetPlan).not.toHaveBeenCalled();
+  });
+
+  it('names the way out when a submit arrives before any criteria exist', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    mocks.runFindByOperation.mockResolvedValue({ id: 'run-1', plan: [] });
+
+    const result = await runtimeFor('task-op').submitEvidence({
+      checkItemId: 'criterion-x',
+      evidence: [{ content: 'observed', type: 'text' }],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        canAuthor: true,
+        error: 'UNKNOWN_CRITERION',
+        success: false,
+      }),
+    );
+    expect(result.content).toContain('authorCriteria');
+  });
+
+  it('reports why the run-start plan never landed, and how to recover', async () => {
+    mocks.operationFindById.mockResolvedValue({
+      id: 'task-op',
+      metadata: { verifyPlanError: 'provider unreachable' },
+      parentOperationId: null,
+    });
+    mocks.runFindByOperation.mockResolvedValue(null);
+
+    const result = await runtimeFor('task-op').listCriteria();
+
+    expect(result).toEqual(
+      expect.objectContaining({
+        canAuthor: true,
+        error: 'NO_ACCEPTANCE_PLAN',
+        success: false,
+      }),
+    );
+    expect(result.content).toContain('authorCriteria');
+    expect(result.content).toContain('provider unreachable');
   });
 });

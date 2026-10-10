@@ -285,7 +285,7 @@ export class VerifyPlanGeneratorService {
     // 3. AI-generate complementary criteria (the "auto-create verify" path).
     if (params.enableAiGeneration) {
       try {
-        const generated = await this.generateCriteriaWithAi({
+        const generated = await this.proposeAiCriteria({
           context: params.context,
           existingTitles: items.map((i) => i.title),
           goal: params.goal,
@@ -316,18 +316,31 @@ export class VerifyPlanGeneratorService {
     return items;
   }
 
-  private async generateCriteriaWithAi(params: {
+  /**
+   * Propose criteria for a run from its goal/requirement, without touching the
+   * run's plan.
+   *
+   * Split out of {@link generateDraftPlan} for the run-start path, which has to
+   * write a plan *before* spending an LLM call: the proposal is composed into a
+   * plan that already exists rather than being the only reason one exists, so a
+   * provider failure can no longer leave the run with no checklist at all.
+   *
+   * Throws on failure — the caller decides whether that is fatal (it never is:
+   * the floor plan is already in place) and whether to record it.
+   */
+  async proposeAiCriteria(params: {
     context?: string;
     existingTitles: string[];
     goal: string;
-    maxCriteria: number;
+    maxCriteria?: number;
     operationId: string;
   }): Promise<VerifyCheckItem[]> {
+    const maxCriteria = params.maxCriteria ?? DEFAULT_MAX_AI_CRITERIA;
     const chain = chainVerifyPlan({
       context: params.context,
       existingTitles: params.existingTitles,
       goal: params.goal,
-      maxCriteria: params.maxCriteria,
+      maxCriteria,
     });
 
     const ai = new AiGenerationService(this.db, this.userId);
@@ -357,7 +370,7 @@ export class VerifyPlanGeneratorService {
     // Like the agent-authored path, the detailed instruction lives in a document
     // (the single source of truth) referenced by documentId — never inline.
     return Promise.all(
-      withoutProgrammaticTests(parsed.data.criteria.slice(0, params.maxCriteria)).map(async (c) => {
+      withoutProgrammaticTests(parsed.data.criteria.slice(0, maxCriteria)).map(async (c) => {
         let documentId: string | null = null;
         if (c.instruction) {
           const doc = await this.documentModel.create({

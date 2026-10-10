@@ -518,6 +518,57 @@ export class VerifyRunModel {
     await this.writeDraftPlan(runId, items, false);
   };
 
+  /**
+   * Compare-and-set for a draft plan: replace it with `items` only while the
+   * run still carries exactly the plan identified by `expectedItemIds`, is
+   * unconfirmed, and has no check result recorded against it.
+   *
+   * For a writer that read the plan, spent time elsewhere (an LLM call), and
+   * now wants to swap it. The re-read and the write share one row lock, so a
+   * builder that authored, confirmed or evidenced the plan in the meantime
+   * keeps it — a result row means its ids are already being evidenced, and
+   * replacing them would strand that evidence outside the plan. Recording a
+   * result takes a key-share lock on this row (the FK), so it cannot slip in
+   * between the check and the write.
+   *
+   * @returns true when the plan was replaced, false when it had moved on.
+   */
+  replaceUntouchedDraftPlan = async (
+    runId: string,
+    expectedItemIds: string[],
+    items: VerifyCheckItem[],
+  ): Promise<boolean> =>
+    this.db.transaction(async (tx) => {
+      const [run] = await tx
+        .select()
+        .from(verifyRuns)
+        .where(and(eq(verifyRuns.id, runId), this.ownership()))
+        .for('update');
+      if (!run || run.planConfirmedAt || run.flowSnapshots?.length) return false;
+      const currentIds = (run.plan ?? []).map((item) => item.id);
+      if (
+        currentIds.length !== expectedItemIds.length ||
+        currentIds.some((id, index) => id !== expectedItemIds[index])
+      ) {
+        return false;
+      }
+      const [result] = await tx
+        .select({ id: verifyCheckResults.id })
+        .from(verifyCheckResults)
+        .where(eq(verifyCheckResults.verifyRunId, runId))
+        .limit(1);
+      if (result) return false;
+      const plan = await new VerifyCriterionModel(tx, this.userId, this.workspaceId).materialize(
+        items,
+        run.acceptanceId ?? run.id,
+      );
+      await tx
+        .update(verifyRuns)
+        .set({ plan, status: 'planned' as const })
+        .where(eq(verifyRuns.id, runId));
+      return true;
+    });
+
   private writeDraftPlan = async (
     runId: string,
     items: VerifyCheckItem[],

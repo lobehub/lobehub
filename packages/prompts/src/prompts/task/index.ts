@@ -756,7 +756,10 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
   // Gated on `enabled` alone: every Task that carries an Acceptance runs it
   // in-Task. A criteria-less Acceptance still materializes a plan at run start,
   // and the builder reads those criterion ids at runtime — so having nothing to
-  // print here is not a reason to withhold the instruction.
+  // print here is not a reason to withhold the instruction. The run-start plan
+  // can also be missing entirely (the instantiation is best-effort and its
+  // failure is non-fatal), which is why the instruction names the author path
+  // instead of assuming the ids exist.
   if (task.verify?.enabled) {
     taskLines.push('');
     taskLines.push(
@@ -779,7 +782,10 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
       '  Run the Acceptance inside this Task, not after it: drive the real product surface and submit each artifact as soon as the criterion it proves is provable.',
     );
     taskLines.push(
-      '  Criterion ids are minted when this run starts, so they are not listed above. Read them at runtime with `listCriteria`, or `lh verify plan state "$LOBEHUB_OPERATION_ID" --json` if you have a shell.',
+      '  Criterion ids are minted when this run starts, so they are not listed above. Read them at runtime with `listCriteria`; `lh verify plan state "$LOBEHUB_OPERATION_ID" --json` reads the same plan if you have a shell.',
+    );
+    taskLines.push(
+      '  If the run has no criteria yet, do not finish without a checklist: call `authorCriteria` once to state the standards this delivery must meet (one item per standard — what must be true for the work to be acceptable), then evidence their ids. Your items go through the same review as a minted plan.',
     );
     // Two builder shapes, two toolchains. The portable `acceptance` skill is
     // pulled to disk by external CLI builders and is deliberately absent from
