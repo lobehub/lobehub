@@ -103,6 +103,60 @@ export class TaskRunnerService {
     log('runTask: synced topic %s execution metadata', topicId);
   }
 
+  /**
+   * Reject a `continueTopicId` the caller may not continue under this Task.
+   *
+   * Use when:
+   * - `task.run` (or the agent `runTask` tool) asks to continue an existing Topic.
+   *
+   * Expects:
+   * - `taskTopics` comes from {@link TaskTopicModel.findByTaskId}: rows owned
+   *   directly by this Task, already scoped to the caller's user / workspace.
+   *   A descendant Task's run has its own row under the child Task, so it is
+   *   absent here, like a Topic of another Task, user or workspace.
+   *
+   * Returns:
+   * - Nothing; throws `NOT_FOUND` for a Topic that is not a run of this Task,
+   *   `CONFLICT` for a running Topic or one that belongs to another Agent.
+   *
+   * Mirrors the Topic drawer's `canContinueTask` gate
+   * (`src/features/AgentTasks/AgentTaskDetail/TopicChatDrawer/index.tsx`) so a
+   * crafted request cannot continue a Topic the UI does not offer.
+   */
+  private async assertContinuableTopic(
+    assigneeAgentRef: string,
+    topicId: string,
+    taskTopics: { status: string | null; topicId: string | null }[],
+  ): Promise<void> {
+    const target = taskTopics.find((t) => t.topicId === topicId);
+    if (!target) {
+      throw new TRPCError({
+        code: 'NOT_FOUND',
+        message: `Topic ${topicId} is not a run of this task.`,
+      });
+    }
+    if (target.status === 'running') {
+      throw new TRPCError({ code: 'CONFLICT', message: `Topic ${topicId} is already running.` });
+    }
+
+    const topic = await this.topicModel.findById(topicId);
+    if (!topic) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: `Topic ${topicId} not found.` });
+    }
+
+    // A Topic without an agent (legacy rows) has no owner to compare, same as the UI.
+    if (!topic.agentId) return;
+    const assigneeAgentId = assigneeAgentRef.startsWith('agt_')
+      ? assigneeAgentRef
+      : await this.agentModel.resolveIdBySlug(assigneeAgentRef);
+    if (topic.agentId !== assigneeAgentId) {
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: `Topic ${topicId} belongs to another agent than the task assignee.`,
+      });
+    }
+  }
+
   async runTask(params: RunTaskParams): Promise<RunTaskResult> {
     const {
       additionalPluginIds,
@@ -150,13 +204,7 @@ export class TaskRunnerService {
       const existingTopics = await this.taskTopicModel.findByTaskId(task.id);
 
       if (continueTopicId) {
-        const target = existingTopics.find((t) => t.topicId === continueTopicId);
-        if (target?.status === 'running') {
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: `Topic ${continueTopicId} is already running.`,
-          });
-        }
+        await this.assertContinuableTopic(task.assigneeAgentId!, continueTopicId, existingTopics);
       } else {
         const runningTopic = existingTopics.find((t) => t.status === 'running');
         if (runningTopic) {
