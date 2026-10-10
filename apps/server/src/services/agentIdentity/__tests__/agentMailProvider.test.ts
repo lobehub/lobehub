@@ -368,7 +368,7 @@ describe('agent-mail provider — inbound', () => {
 
 describe('agent-mail provider — outbound', () => {
   it('sends through the inbox and returns the provider message id', async () => {
-    const { fetchImpl } = createMailFetch();
+    const { calls, fetchImpl } = createMailFetch();
     const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
 
     const result = await provider.send(ref(), {
@@ -378,6 +378,53 @@ describe('agent-mail provider — outbound', () => {
     });
 
     expect(result).toEqual({ providerMessageId: 'msg_out_1' });
+    const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
+    expect(send?.body).toMatchObject({
+      html: '<p>hi back</p>',
+      subject: 'Re: Hello',
+      text: 'hi back',
+      to: 'human@example.com',
+    });
+  });
+
+  it('answers through the reply call so the reply lands in the original thread', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    const result = await provider.send(ref(), {
+      replyToProviderMessageId: 'msg_in_1',
+      text: '**thanks**',
+      threadKey: '<root@example.com>',
+      to: 'human@example.com',
+    });
+
+    expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
+    expect(calls.some((c) => c.path === '/v1/inboxes/inb_1/messages')).toBe(false);
+    expect(calls).toContainEqual({
+      body: { html: '<p><strong>thanks</strong></p>', text: 'thanks' },
+      method: 'POST',
+      path: '/v1/messages/msg_in_1/reply',
+    });
+  });
+
+  it('renders the agent Markdown into an HTML part plus a plain-text alternative', async () => {
+    const { calls, fetchImpl } = createMailFetch();
+    const provider = createAgentMailProvider({ apiKey: 'am_test', fetchImpl });
+
+    await provider.send(ref(), {
+      subject: 'Brief',
+      text: '**Done.** See [the docs](https://lobehub.com/docs)\n\n1. one\n2. two',
+      to: 'human@example.com',
+    });
+
+    const send = calls.find((c) => c.method === 'POST' && c.path === '/v1/inboxes/inb_1/messages');
+    const body = send?.body as undefined | { html?: string; text?: string };
+    expect(body?.html).toContain('<strong>Done.</strong>');
+    expect(body?.html).toContain('<a href="https://lobehub.com/docs"');
+    expect(body?.html).toContain('<ol><li>one</li><li>two</li></ol>');
+    expect(body?.html).not.toContain('**');
+    expect(body?.text).toBe('Done. See the docs (https://lobehub.com/docs)\n\n- one\n- two');
+    expect(body?.text).not.toContain('**');
   });
 
   it('answers within the thread when the caller names the message it replies to', async () => {
@@ -394,7 +441,11 @@ describe('agent-mail provider — outbound', () => {
     // through `sendMessage` would start a second conversation with the same
     // subject instead of answering the human in theirs.
     expect(calls.filter((call) => call.method === 'POST')).toEqual([
-      { body: { text: 'hi back' }, method: 'POST', path: '/v1/messages/msg_in_1/reply' },
+      {
+        body: { html: '<p>hi back</p>', text: 'hi back' },
+        method: 'POST',
+        path: '/v1/messages/msg_in_1/reply',
+      },
     ]);
     expect(result).toEqual({ providerMessageId: 'msg_out_reply_1' });
   });
