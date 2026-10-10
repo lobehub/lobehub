@@ -19,6 +19,8 @@ const REGISTER_CHUNK_SIZE = 500;
 
 export interface TrashRegisterEntry {
   meta?: TrashItemMeta | null;
+  /** Captured from the source row by the server in the deletion transaction. */
+  projectId: string | null;
   resourceId: string;
   resourceType: TrashResourceType;
   title?: string | null;
@@ -131,6 +133,7 @@ export class TrashModel {
       const rootValues: NewTrashItemRow[] = params.cascades.map(({ root }) => ({
         ...stamp,
         meta: root.meta ?? null,
+        projectId: root.projectId,
         resourceId: root.resourceId,
         resourceType: root.resourceType,
         rootId: null,
@@ -142,6 +145,7 @@ export class TrashModel {
           .insert(trashItems)
           .values(rootValues.slice(i, i + REGISTER_CHUNK_SIZE))
           .onConflictDoUpdate({
+            // Preserve the first project context, including historical NULL, on retries.
             set: {
               deletedAt: sql`excluded.deleted_at`,
               deletedByUserId: sql`excluded.deleted_by_user_id`,
@@ -161,6 +165,7 @@ export class TrashModel {
         return (children ?? []).map((child) => ({
           ...stamp,
           meta: child.meta ?? null,
+          projectId: child.projectId,
           resourceId: child.resourceId,
           resourceType: child.resourceType,
           rootId: rootRow.id,

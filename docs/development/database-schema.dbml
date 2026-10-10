@@ -3898,6 +3898,7 @@ table trash_items {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   resource_type text [not null]
   resource_id text [not null]
+  project_id text
   title text
   meta jsonb
   root_id uuid

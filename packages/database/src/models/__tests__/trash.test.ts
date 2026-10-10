@@ -1,5 +1,8 @@
+// @vitest-environment node
+import { readFile } from 'node:fs/promises';
+
 import { TRASH_RETENTION_MS } from '@lobechat/const';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../core/getTestDB';
@@ -31,16 +34,77 @@ afterEach(async () => {
 });
 
 describe('TrashModel', () => {
+  it('preserves first project values including legacy null across root and child conflicts', async () => {
+    for (const projectId of ['first-project', null]) {
+      const resourceId = `retry-${projectId}`;
+      const root = await model.register({
+        deletedAt: new Date(),
+        root: { projectId, resourceId, resourceType: 'topic' },
+      });
+      const again = await model.register({
+        deletedAt: new Date(),
+        root: { projectId: 'later-project', resourceId, resourceType: 'topic' },
+      });
+      expect(again).toMatchObject({ id: root.id, projectId });
+      const parent = await model.register({
+        children: [{ projectId: 'later-project', resourceId, resourceType: 'topic' }],
+        deletedAt: new Date(),
+        root: { projectId: null, resourceId: `parent-${resourceId}`, resourceType: 'agent' },
+      });
+      expect(await model.findChildren(parent.id)).toEqual([]);
+      expect(await model.findById(root.id)).toMatchObject({ projectId, rootId: null });
+    }
+  });
+
+  it('concurrent registrations converge on one first project value without replacing null', async () => {
+    const roots = await Promise.all(
+      ['first', 'second'].map((projectId) =>
+        model.register({
+          deletedAt: new Date(),
+          root: { projectId, resourceId: 'concurrent', resourceType: 'topic' },
+        }),
+      ),
+    );
+    expect(roots[0].id).toBe(roots[1].id);
+    expect(roots[0].projectId).toBe(roots[1].projectId);
+  });
+
+  it('migration leaves existing trash rows null and is safe to replay', async () => {
+    const migration = await readFile(
+      new URL('../../../migrations/0176_trash_project_context.sql', import.meta.url),
+      'utf8',
+    );
+    await serverDB.transaction(async (tx) => {
+      await tx.execute(sql`ALTER TABLE trash_items DROP COLUMN project_id`);
+      await tx.execute(
+        sql`INSERT INTO trash_items (resource_type, resource_id, user_id, expires_at) VALUES ('topic', 'legacy-row', ${userId}, now())`,
+      );
+      await tx.execute(sql.raw(migration));
+      await tx.execute(sql.raw(migration));
+      const [legacy] = await tx
+        .select()
+        .from(trashItems)
+        .where(eq(trashItems.resourceId, 'legacy-row'));
+      expect(legacy.projectId).toBeNull();
+    });
+  });
+
   describe('register', () => {
     it('registers a root with children and stamps expiry from the retention window', async () => {
       const deletedAt = at('2026-08-01T00:00:00Z');
       const root = await model.register({
         children: [
-          { resourceId: 'tpc_1', resourceType: 'topic', title: 'first' },
-          { resourceId: 'tpc_2', resourceType: 'topic', title: 'second' },
+          { projectId: null, resourceId: 'tpc_1', resourceType: 'topic', title: 'first' },
+          { projectId: null, resourceId: 'tpc_2', resourceType: 'topic', title: 'second' },
         ],
         deletedAt,
-        root: { meta: { childCount: 2 }, resourceId: 'agt_1', resourceType: 'agent', title: 'Bot' },
+        root: {
+          projectId: null,
+          meta: { childCount: 2 },
+          resourceId: 'agt_1',
+          resourceType: 'agent',
+          title: 'Bot',
+        },
       });
 
       expect(root.rootId).toBeNull();
@@ -58,19 +122,19 @@ describe('TrashModel', () => {
       // after the agent is restored.
       const topicRoot = await model.register({
         deletedAt: at('2026-08-01T00:00:00Z'),
-        root: { resourceId: 'tpc_old', resourceType: 'topic', title: 'old' },
+        root: { projectId: null, resourceId: 'tpc_old', resourceType: 'topic', title: 'old' },
       });
       const agentRoot = await model.register({
         children: [
-          { resourceId: 'tpc_old', resourceType: 'topic', title: 'old' },
-          { resourceId: 'tpc_new', resourceType: 'topic', title: 'new' },
+          { projectId: null, resourceId: 'tpc_old', resourceType: 'topic', title: 'old' },
+          { projectId: null, resourceId: 'tpc_new', resourceType: 'topic', title: 'new' },
         ],
         deletedAt: at('2026-08-08T00:00:00Z'),
-        root: { resourceId: 'agt_1', resourceType: 'agent', title: 'Bot' },
+        root: { projectId: null, resourceId: 'agt_1', resourceType: 'agent', title: 'Bot' },
       });
       const again = await model.register({
         deletedAt: at('2026-08-09T00:00:00Z'),
-        root: { resourceId: 'agt_1', resourceType: 'agent', title: 'Bot renamed' },
+        root: { projectId: null, resourceId: 'agt_1', resourceType: 'agent', title: 'Bot renamed' },
       });
 
       expect(again.id).toBe(agentRoot.id);
@@ -88,8 +152,13 @@ describe('TrashModel', () => {
   describe('registerMany', () => {
     it('registers many roots with their children in one call, in input order', async () => {
       const cascades = Array.from({ length: 3 }, (_, i) => ({
-        children: [{ resourceId: `msg_${i}`, resourceType: 'message' as const }],
-        root: { resourceId: `tpc_${i}`, resourceType: 'topic' as const, title: `t${i}` },
+        children: [{ projectId: null, resourceId: `msg_${i}`, resourceType: 'message' as const }],
+        root: {
+          projectId: null,
+          resourceId: `tpc_${i}`,
+          resourceType: 'topic' as const,
+          title: `t${i}`,
+        },
       }));
       const roots = await model.registerMany({
         cascades,
@@ -117,18 +186,28 @@ describe('TrashModel', () => {
     it('lists roots only, newest first, scoped to the caller, with type filter and keyset paging', async () => {
       for (let i = 0; i < 5; i++) {
         await model.register({
-          children: [{ resourceId: `child_${i}`, resourceType: 'topic' }],
+          children: [{ projectId: null, resourceId: `child_${i}`, resourceType: 'topic' }],
           deletedAt: at(`2026-08-0${i + 1}T00:00:00Z`),
-          root: { resourceId: `agt_${i}`, resourceType: 'agent', title: `agent ${i}` },
+          root: {
+            projectId: null,
+            resourceId: `agt_${i}`,
+            resourceType: 'agent',
+            title: `agent ${i}`,
+          },
         });
       }
       await model.register({
         deletedAt: at('2026-08-09T00:00:00Z'),
-        root: { resourceId: 'msg_1', resourceType: 'message', title: 'a message' },
+        root: { projectId: null, resourceId: 'msg_1', resourceType: 'message', title: 'a message' },
       });
       await otherModel.register({
         deletedAt: at('2026-08-10T00:00:00Z'),
-        root: { resourceId: 'agt_other', resourceType: 'agent', title: 'not mine' },
+        root: {
+          projectId: null,
+          resourceId: 'agt_other',
+          resourceType: 'agent',
+          title: 'not mine',
+        },
       });
 
       const first = await model.list({ limit: 3 });
@@ -152,11 +231,11 @@ describe('TrashModel', () => {
       const wsOther = new TrashModel(serverDB, otherUserId, workspaceId);
       await wsModel.register({
         deletedAt: at('2026-08-01T00:00:00Z'),
-        root: { resourceId: 'tpc_ws', resourceType: 'topic', title: 'spec' },
+        root: { projectId: null, resourceId: 'tpc_ws', resourceType: 'topic', title: 'spec' },
       });
       await model.register({
         deletedAt: at('2026-08-02T00:00:00Z'),
-        root: { resourceId: 'tpc_personal', resourceType: 'topic', title: 'mine' },
+        root: { projectId: null, resourceId: 'tpc_personal', resourceType: 'topic', title: 'mine' },
       });
 
       const seenByTeammate = await wsOther.list();
@@ -169,11 +248,21 @@ describe('TrashModel', () => {
       const wsOther = new TrashModel(serverDB, otherUserId, workspaceId);
       await wsModel.register({
         deletedAt: at('2026-08-01T00:00:00Z'),
-        root: { resourceId: 'msg_owner', resourceType: 'message', title: 'private excerpt' },
+        root: {
+          projectId: null,
+          resourceId: 'msg_owner',
+          resourceType: 'message',
+          title: 'private excerpt',
+        },
       });
       await wsOther.register({
         deletedAt: at('2026-08-02T00:00:00Z'),
-        root: { resourceId: 'tpc_member', resourceType: 'topic', title: 'member topic' },
+        root: {
+          projectId: null,
+          resourceId: 'tpc_member',
+          resourceType: 'topic',
+          title: 'member topic',
+        },
       });
 
       const own = await wsOther.list({ deletedByUserId: otherUserId });
@@ -187,9 +276,9 @@ describe('TrashModel', () => {
   describe('removeByIds', () => {
     it('drops the root and cascades its children', async () => {
       const root = await model.register({
-        children: [{ resourceId: 'tpc_1', resourceType: 'topic' }],
+        children: [{ projectId: null, resourceId: 'tpc_1', resourceType: 'topic' }],
         deletedAt: at('2026-08-01T00:00:00Z'),
-        root: { resourceId: 'agt_1', resourceType: 'agent' },
+        root: { projectId: null, resourceId: 'agt_1', resourceType: 'agent' },
       });
       await model.removeByIds([root.id]);
       expect(await serverDB.select().from(trashItems)).toHaveLength(0);
@@ -201,15 +290,15 @@ describe('TrashModel', () => {
       const now = at('2026-09-15T00:00:00Z');
       await model.register({
         deletedAt: at('2026-08-01T00:00:00Z'), // expires 08-31
-        root: { resourceId: 'agt_expired', resourceType: 'agent' },
+        root: { projectId: null, resourceId: 'agt_expired', resourceType: 'agent' },
       });
       await otherModel.register({
         deletedAt: at('2026-07-01T00:00:00Z'), // expires 07-31
-        root: { resourceId: 'agt_older', resourceType: 'agent' },
+        root: { projectId: null, resourceId: 'agt_older', resourceType: 'agent' },
       });
       await model.register({
         deletedAt: at('2026-09-10T00:00:00Z'), // not yet
-        root: { resourceId: 'agt_fresh', resourceType: 'agent' },
+        root: { projectId: null, resourceId: 'agt_fresh', resourceType: 'agent' },
       });
 
       const due = await TrashModel.listExpiredRoots(serverDB, { limit: 10, now });
@@ -224,10 +313,16 @@ describe('TrashModel', () => {
       ]);
       await model.register({
         deletedAt,
-        root: { resourceId: 'tpc_stamped', resourceType: 'topic' },
+        root: { projectId: null, resourceId: 'tpc_stamped', resourceType: 'topic' },
       });
-      await model.register({ deletedAt, root: { resourceId: 'tpc_live', resourceType: 'topic' } });
-      await model.register({ deletedAt, root: { resourceId: 'tpc_gone', resourceType: 'topic' } });
+      await model.register({
+        deletedAt,
+        root: { projectId: null, resourceId: 'tpc_live', resourceType: 'topic' },
+      });
+      await model.register({
+        deletedAt,
+        root: { projectId: null, resourceId: 'tpc_gone', resourceType: 'topic' },
+      });
 
       const pruned = await TrashModel.pruneOrphans(serverDB);
       expect(pruned).toBe(2);
@@ -246,9 +341,12 @@ describe('TrashModel', () => {
         .returning();
       await model.register({
         deletedAt,
-        root: { resourceId: stamped.id, resourceType: 'widget' },
+        root: { projectId: null, resourceId: stamped.id, resourceType: 'widget' },
       });
-      await model.register({ deletedAt, root: { resourceId: live.id, resourceType: 'widget' } });
+      await model.register({
+        deletedAt,
+        root: { projectId: null, resourceId: live.id, resourceType: 'widget' },
+      });
 
       const pruned = await TrashModel.pruneOrphans(serverDB);
       expect(pruned).toBe(1);

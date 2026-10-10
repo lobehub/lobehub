@@ -251,7 +251,12 @@ export class WidgetModel {
       await this.trashRegistry(tx).register(
         {
           deletedAt: now,
-          root: { resourceId: widget.id, resourceType: 'widget', title: widget.title },
+          root: {
+            projectId: widget.projectId,
+            resourceId: widget.id,
+            resourceType: 'widget',
+            title: widget.title,
+          },
         },
         tx,
       );

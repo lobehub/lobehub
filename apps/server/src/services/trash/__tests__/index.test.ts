@@ -678,7 +678,7 @@ describe('TrashService', () => {
       // and one orphan registry row whose topic vanished through another path
       await trashModel.register({
         deletedAt: new Date(),
-        root: { resourceId: 'tpc_ghost', resourceType: 'topic' },
+        root: { projectId: null, resourceId: 'tpc_ghost', resourceType: 'topic' },
       });
 
       const outcome = await TrashService.sweepExpired(serverDB);

@@ -180,7 +180,12 @@ export class DashboardModel {
       await this.trashRegistry(tx).register(
         {
           deletedAt: now,
-          root: { resourceId: dashboard.id, resourceType: 'dashboard', title: dashboard.title },
+          root: {
+            projectId: dashboard.projectId,
+            resourceId: dashboard.id,
+            resourceType: 'dashboard',
+            title: dashboard.title,
+          },
         },
         tx,
       );
