@@ -447,25 +447,6 @@ export const serverConfigKeys = {
 // (see localStorageProvider.ts) so this key-convergence introduces no new
 // persistence — they stay memory-only exactly as before.
 export const discoverKeys = {
-  assistantCategories: def('discover:assistantCategories', (locale: string, params: unknown) => [
-    'discover:assistantCategories',
-    locale,
-    params,
-  ]),
-  assistantDetail: def('discover:assistantDetail', (locale: string, params: unknown) => [
-    'discover:assistantDetail',
-    locale,
-    params,
-  ]),
-  assistantIdentifiers: def('discover:assistantIdentifiers', (source?: string) => [
-    'discover:assistantIdentifiers',
-    source,
-  ]),
-  assistantList: def('discover:assistantList', (locale: string, params: unknown) => [
-    'discover:assistantList',
-    locale,
-    params,
-  ]),
   favoriteAgents: def('discover:favoriteAgents', (userId: number, params?: unknown) => [
     'discover:favoriteAgents',
     userId,

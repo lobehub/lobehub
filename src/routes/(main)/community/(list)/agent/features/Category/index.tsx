@@ -12,21 +12,29 @@ import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
 import { useQuery } from '@/hooks/useQuery';
 import { SCROLL_PARENT_ID } from '@/routes/(main)/community/features/const';
 import { useDiscoverStore } from '@/store/discover';
+import { assistantSelectors } from '@/store/discover/selectors';
 import { AssistantCategory, type AssistantQueryParams, AssistantSorts } from '@/types/discover';
 
 import CategoryMenu from '../../../../components/CategoryMenu';
 import { useCategory } from './useCategory';
 
 const Category = memo(() => {
-  const useAssistantCategories = useDiscoverStore((s) => s.useAssistantCategories);
-  const useAssistantList = useDiscoverStore((s) => s.useAssistantList);
+  const useAssistantCategories = useDiscoverStore((s) => s.useFetchAssistantCategories);
+  const useAssistantList = useDiscoverStore((s) => s.useFetchAssistantList);
   const query = useQuery() as AssistantQueryParams;
   const { category = AssistantCategory.Discover, q, source } = query;
-  const { data } = useAssistantList(buildAssistantListQuery(query), { keepPreviousData: true });
-  const shouldLoadFallbackCategories = data !== undefined && data.categoryCounts === undefined;
-  const { data: fallbackItems = [] } = useAssistantCategories(
+  const { queryKey } = useAssistantList(buildAssistantListQuery(query));
+  const data = useDiscoverStore(assistantSelectors.assistantList(queryKey));
+  // Fallback counts while the list entry converges: the categories query is
+  // keyed by `q` + `source` only, so switching category keeps its rows on screen
+  // (the replica replacement for the old SWR `keepPreviousData`).
+  const shouldLoadFallbackCategories = data?.categoryCounts === undefined;
+  const { queryKey: categoriesQueryKey } = useAssistantCategories(
     { q, source },
     { enabled: shouldLoadFallbackCategories },
+  );
+  const fallbackItems = useDiscoverStore(
+    assistantSelectors.assistantCategories(categoriesQueryKey),
   );
   const items = data?.categoryCounts ?? fallbackItems;
   const navigate = useWorkspaceAwareNavigate();
