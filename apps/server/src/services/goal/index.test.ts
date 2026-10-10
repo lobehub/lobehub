@@ -2104,6 +2104,66 @@ describe('GoalService', () => {
     expect(next.probeNodeIds.length).toBeGreaterThan(0);
   });
 
+  it('re-opens the broken unit as a new task when the canary loop restarts', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+    await service.tick(graph.goal.id);
+
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const before = await service.graph(graph.goal.id);
+    const state = before.goal.config!.rolloutState!;
+    const [broken, ...settled] = state.probeNodeIds;
+    for (const id of settled) await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
+    await graphModel.updateNodeStatus(graph.goal.id, broken, 'waiting');
+
+    const decision = await graphModel.createDecision(graph.goal.id, state.assayNodeId!, {
+      authority: 'user',
+      options: [
+        { description: '修订配方', id: 'revise', label: '修订配方并重探' },
+        { description: '新类型', id: 'new_class', label: '作为新类型并排处理' },
+      ],
+      question: 'Unit 1 did not pass',
+      requestedUserId: userId,
+    });
+    await graphModel.updateNodeStatus(graph.goal.id, state.assayNodeId!, 'waiting');
+    await goalModel.updateRolloutState(graph.goal.id, { ...state, phase: 'pattern_break' });
+    await serverDB.update(goals).set({ status: 'paused' }).where(eq(goals.id, graph.goal.id));
+
+    await service.decide(graph.goal.id, decision!.id, 'revise', '补上冷启动这一步');
+
+    const after = await service.graph(graph.goal.id);
+    const next = after.goal.config!.rolloutState!;
+    // Decision #4: the broken unit runs again as a new task, the old one retires.
+    expect(after.nodes.find((n) => n.id === broken)?.status).toBe('retired');
+    expect(next.probeNodeIds).toHaveLength(1);
+    const reopened = after.nodes.find((n) => n.id === next.probeNodeIds[0])!;
+    expect(reopened.title).toBe('Unit 1');
+    expect(
+      after.edges.some(
+        (e) =>
+          e.kind === 'derived_from' && e.sourceNodeId === reopened.id && e.targetNodeId === broken,
+      ),
+    ).toBe(true);
+    // Re-opening is not a new release: the roster cursor stays where it was.
+    expect(next.releasedCount).toBe(state.releasedCount);
+  });
+
   it('asks a blocking question before planning, then plans once with the answer', async () => {
     const planner = vi
       .spyOn(GoalCriteriaGeneratorService.prototype, 'decompose')

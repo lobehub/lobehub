@@ -4116,10 +4116,18 @@ export class GoalService {
     }
 
     // 2. Retire the members that broke or were superseded, never delete them —
-    // the new round is `derived_from` them (decision #4).
+    // the new round is `derived_from` them (decision #4). A member an earlier
+    // round already re-opened is history, not a unit to re-open again.
     const memberIds = new Set([...state.probeNodeIds, ...(state.massNodeIds ?? [])]);
+    const reopenedIds = new Set(
+      graph.edges.filter((edge) => edge.kind === 'derived_from').map((edge) => edge.targetNodeId),
+    );
+    const broken: { id: string; title: string }[] = [];
     for (const node of graph.nodes) {
-      if (memberIds.has(node.id) && !TERMINAL_NODE_STATUSES.has(node.status)) {
+      if (!memberIds.has(node.id) || node.status === 'resolved' || reopenedIds.has(node.id))
+        continue;
+      broken.push({ id: node.id, title: node.title });
+      if (!TERMINAL_NODE_STATUSES.has(node.status)) {
         await this.coordinatorGraph.updateNodeStatus(
           goalId,
           node.id,
@@ -4139,27 +4147,33 @@ export class GoalService {
     });
     if (!assay) return;
 
-    // 4. Re-probe the next roster slice as the new canary.
+    // 4. The new canary re-opens the units that broke, as new tasks that
+    // supersede the retired ones (decision #4: new task + retire, never move).
+    // Only a gate that blocked with every member resolved has nothing to
+    // re-open; it re-probes the next roster slice instead.
     const canarySize = Math.max(
       2,
       Math.min(policy.canarySize ?? ROLLOUT_CANARY_SIZE_DEFAULT, ROLLOUT_MAX_CANARY_SIZE),
     );
-    const wave = roster.slice(released, released + canarySize);
-    const precedence = state.probeNodeIds[0] ?? memberIds.values().next().value;
+    const fresh = broken.length ? [] : roster.slice(released, released + canarySize);
+    const units = [
+      ...broken.map((unit) => ({ from: unit.id, title: unit.title })),
+      ...fresh.map((title) => ({ from: undefined, title })),
+    ];
     const probeIds: string[] = [];
-    for (const title of wave) {
+    for (const unit of units) {
       const nodeId = await createRecipeUnitTask(
         this.coordinatorGraph,
         goalId,
         batchId,
-        title,
+        unit.title,
         policy.spec?.recipeOutline,
       );
       if (!nodeId) continue;
       probeIds.push(nodeId);
-      if (precedence) {
+      if (unit.from) {
         await this.coordinatorGraph
-          .createEdge(goalId, nodeId, precedence, 'derived_from')
+          .createEdge(goalId, nodeId, unit.from, 'derived_from')
           .catch(() => {});
       }
     }
@@ -4173,7 +4187,8 @@ export class GoalService {
       assayNodeId: assay.id,
       phase: 'probe',
       probeNodeIds: probeIds,
-      releasedCount: released + probeIds.length,
+      // A re-opened unit was already counted when it was first released.
+      releasedCount: released + fresh.length,
       templateNodeId: template?.id ?? state.templateNodeId,
       templateRevision: state.templateRevision + 1,
       waveIndex: 0,
