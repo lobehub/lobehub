@@ -65,13 +65,17 @@ const ProjectFilter = ({
   const options: SelectOptions = [
     { label: t('trash.filter.project.all'), value: PROJECT_FILTER_ALL },
     { label: t('trash.filter.project.none'), value: PROJECT_FILTER_NONE },
-    projects && projects.length === 0
-      ? {
-          label: t('trash.filter.project.group'),
-          options: [{ disabled: true, label: t('trash.filter.project.empty'), value: '__empty__' }],
-        }
-      : { label: t('trash.filter.project.group'), options: projectOptions },
   ];
+  // Until the list loads (or while it fails) there is no project group to show.
+  if (projects) {
+    options.push({
+      label: t('trash.filter.project.group'),
+      options:
+        projects.length === 0
+          ? [{ disabled: true, label: t('trash.filter.project.empty'), value: '__empty__' }]
+          : projectOptions,
+    });
+  }
   // A selected project that is gone keeps the view restricted, without its name.
   if (unavailable && typeof value === 'string') {
     options.push({ disabled: true, label: t('trash.filter.project.unavailable'), value });
@@ -100,13 +104,16 @@ const ProjectFilter = ({
         }}
       />
       {!projects && !!error && (
-        <AsyncError
-          error={error}
-          retrying={isValidating}
-          title={t('trash.filter.project.loadFailed')}
-          variant={'inline'}
-          onRetry={onRetry}
-        />
+        // Keeps its own width: the filter row wraps before the message squeezes.
+        <div style={{ flex: 'none', whiteSpace: 'nowrap' }}>
+          <AsyncError
+            error={error}
+            retrying={isValidating}
+            title={t('trash.filter.project.loadFailed')}
+            variant={'inline'}
+            onRetry={onRetry}
+          />
+        </div>
       )}
     </Flexbox>
   );
