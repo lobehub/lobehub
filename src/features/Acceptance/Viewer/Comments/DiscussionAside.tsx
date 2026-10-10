@@ -83,15 +83,12 @@ const DiscussionAside = memo<DiscussionAsideProps>(
 
     return (
       <aside aria-label={t('acceptance.comments.aside.label')} className={styles.aside}>
+        {status && (
+          <div aria-label={t('acceptance.comments.aside.status')}>
+            <AcceptanceStatusPill status={status} />
+          </div>
+        )}
         <dl className={styles.list}>
-          {status && (
-            <>
-              <dt className={styles.term}>{t('acceptance.comments.aside.status')}</dt>
-              <dd className={styles.value}>
-                <AcceptanceStatusPill status={status} />
-              </dd>
-            </>
-          )}
           {latestRound !== undefined && (
             <>
               <dt className={styles.term}>{t('acceptance.comments.aside.round')}</dt>
