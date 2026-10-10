@@ -10,8 +10,8 @@ import { type ExperienceSliceState } from './slices/experience';
 import { experienceInitialState } from './slices/experience';
 import { type IdentitySliceState } from './slices/identity';
 import { identityInitialState } from './slices/identity';
-import { type PreferenceSliceState } from './slices/preference';
-import { preferenceInitialState } from './slices/preference';
+import { type PreferenceSliceState } from './slices/preference/initialState';
+import { preferenceInitialState } from './slices/preference/initialState';
 
 export interface PersonaData {
   content: string;
