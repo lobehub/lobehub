@@ -18,30 +18,6 @@ interface GuardCase {
 const cases: GuardCase[] = [
   {
     accept: (request) =>
-      useUserMemoryStore
-        .getState()
-        .internal_acceptActivitiesList(
-          { items: [], page: request.page, pageSize: request.pageSize, total: 22 },
-          request,
-        ),
-    fail: (error, request) =>
-      useUserMemoryStore.getState().internal_failActivitiesList(error, request),
-    name: 'activities',
-    readList: () => useUserMemoryStore.getState().activities,
-    readSearchError: () => useUserMemoryStore.getState().activitiesSearchError,
-    readSearchLoading: () => useUserMemoryStore.getState().activitiesSearchLoading,
-    resetWithSearch: () => useUserMemoryStore.getState().resetActivitiesList({ q: 'late night' }),
-    seedSettledSearch: () =>
-      useUserMemoryStore.setState({
-        activities: [{ id: 'existing' } as never],
-        activitiesInit: true,
-        activitiesQuery: 'late night',
-      }),
-    seedPageTwo: () =>
-      useUserMemoryStore.setState({ activities: [{ id: 'existing' } as never], activitiesPage: 2 }),
-  },
-  {
-    accept: (request) =>
       useUserMemoryStore.getState().internal_acceptContextsList({ items: [], total: 22 }, request),
     fail: (error, request) =>
       useUserMemoryStore.getState().internal_failContextsList(error, request),
