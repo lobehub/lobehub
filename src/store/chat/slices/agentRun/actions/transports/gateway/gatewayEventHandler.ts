@@ -1069,6 +1069,11 @@ export const createGatewayEventHandler = (
             if (!isCurrentCallback()) return;
             pendingInterventionToolCallIds.delete(data.toolCallId);
           }
+          // A native cancellation (Stop this turn, approval timeout) ends the run
+          // right after its receipt. The terminal event and the session settle are
+          // not queued behind this refresh, so writing `running` now would
+          // overwrite the settled topic status and leave it running forever.
+          if (terminalState) return;
           if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
         });
         break;

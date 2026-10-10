@@ -1475,4 +1475,59 @@ describe('createGatewayEventHandler', () => {
       );
     },
   );
+
+  /** @example A native Stop or approval timeout leaves the settled topic out of `running`. */
+  it.each([
+    ['Stop this turn', { result: { decision: 'cancel' } }],
+    ['approval timeout', { cancelReason: 'timeout', cancelled: true }],
+  ])('does not resume the topic after %s ends the run', async (_, response) => {
+    // ROOT CAUSE:
+    // The terminal receipt queued a refresh followed by `running`. The run's
+    // terminal event and session settle are not queued, so they finished first
+    // and the late `running` write overwrote the settled topic status.
+    const tool = {
+      id: 'native-tool',
+      parentId: 'answer-msg',
+      role: 'tool',
+      tool_call_id: 'native-item',
+      pluginIntervention: { interventionId: 'callback-a', status: 'pending' },
+    } as UIChatMessage;
+    vi.spyOn(messageService, 'getMessages').mockResolvedValue([tool]);
+    const store = createStore({ [messageMapKey(context)]: [tool] });
+    store.updateTopicStatus = vi.fn().mockResolvedValue(undefined);
+    store.markTopicUnread = vi.fn();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'answer-msg',
+      context,
+      operationId: 'op-1',
+      runtimeType: 'hetero',
+    });
+    handler(
+      makeEvent('agent_intervention_request', {
+        apiName: 'command_execution',
+        arguments: '{}',
+        deadline: Date.now() + 60_000,
+        identifier: 'codex',
+        interactionKind: 'permission',
+        interventionId: 'callback-a',
+        provider: 'codex',
+        toolCallId: 'native-item',
+      }),
+    );
+    handler(
+      makeEvent('agent_intervention_response', {
+        ...response,
+        interventionId: 'callback-a',
+        producerAck: true,
+        resolutionRequestId: 'resolution-a',
+        toolCallId: 'native-item',
+      }),
+    );
+    handler(makeEvent('agent_runtime_end', { reason: 'interrupted' }));
+    await flush();
+
+    expect(store.updateTopicStatus).not.toHaveBeenCalledWith(
+      expect.objectContaining({ status: 'running' }),
+    );
+  });
 });
