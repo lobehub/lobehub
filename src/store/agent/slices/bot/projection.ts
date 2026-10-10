@@ -1,4 +1,4 @@
-import { isMaskedBotCredential } from '@lobechat/const';
+import { BOT_CREDENTIAL_MASK, isMaskedBotCredential } from '@lobechat/const';
 
 import { defineReplica } from '@/libs/replica';
 import type { SerializedPlatformDefinition } from '@/server/services/bot/platforms/types';
@@ -21,8 +21,8 @@ export interface BotProvidersParams {
 }
 
 /**
- * The persisted shape of a provider row: every credential value that is not
- * already a mask is dropped.
+ * The persisted shape of a provider row: every credential value is replaced by
+ * the mask, and the *key set is kept whole*.
  *
  * `getByAgentId` masks the credentials it classifies as secret, but a platform
  * may publish a credential as an *identifier* and still have it authenticate
@@ -33,22 +33,26 @@ export interface BotProvidersParams {
  * as "what may sit in IndexedDB after the tab closes", and the frontend cannot
  * answer the second one from the masked payload alone.
  *
- * Only masks survive the write. A mask is not a secret — the server's
- * `resolveMaskedCredentials` turns it back into the stored value on save, so a
- * hydrated first frame can still show which credentials are configured, and an
- * untouched save still round-trips. Everything else stays in the in-memory row
- * for the session, exactly as the memory-only `agentBot` SWR cache this resource
- * replaces did. The persisted row is read for the channel *list* first frame
- * (platform grid, connected state), which needs no credential value at all.
+ * No cleartext value survives the write — a mask is not a secret. But the keys
+ * do have to survive: the server replaces the credential blob wholesale on
+ * update, so a persisted row that dropped the values the server left in the
+ * clear (WeChat's `botId`/`userId`, Discord's `publicKey`) would submit an
+ * incomplete blob on the next save and delete them. Keeping every key — masked —
+ * lets the first frame identify what is configured and lets an untouched save
+ * round-trip through `resolveMaskedCredentials`, which turns each mask back into
+ * the stored value. An empty value stays empty so "not configured" remains
+ * readable.
  */
 export const withoutBotProviderSecrets = (providers: BotProviderItem[]): BotProviderItem[] =>
-  providers.map((provider) => {
-    const entries = Object.entries(provider.credentials ?? {});
-    const kept = entries.filter(([, value]) => isMaskedBotCredential(value));
-    if (kept.length === entries.length) return provider;
-
-    return { ...provider, credentials: Object.fromEntries(kept) };
-  });
+  providers.map((provider) => ({
+    ...provider,
+    credentials: Object.fromEntries(
+      Object.entries(provider.credentials ?? {}).map(([key, value]) => [
+        key,
+        !value || isMaskedBotCredential(value) ? value : BOT_CREDENTIAL_MASK,
+      ]),
+    ),
+  }));
 
 /**
  * One agent's channel providers, one entry per agent. Persisted so a revisit

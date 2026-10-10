@@ -8,6 +8,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { BOT_CREDENTIAL_MASK } from '@lobechat/const';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
@@ -123,10 +124,10 @@ describe('bot replicas', () => {
     expect(sync.result.current.isValidating).toBe(true);
   });
 
-  it('drops cleartext credentials from the persisted copy but keeps them in memory', async () => {
+  it('masks every cleartext credential in the persisted copy but keeps them in memory', async () => {
     // A platform may hand a credential back in the clear — iMessage's
     // `webhookSecret` is public *and* the bearer secret inbound webhooks are
-    // checked against — so the persisted copy must not carry it.
+    // checked against — so the persisted copy must never carry a cleartext value.
     const imessage: BotProviderItem = {
       ...provider('bot-2', 'imessage'),
       credentials: { desktopDeviceId: 'dev-1', webhookSecret: 'shared-secret' },
@@ -135,42 +136,56 @@ describe('bot replicas', () => {
 
     renderHook(() => useAgentStore((s) => s.useFetchBotProviders)(AGENT_ID), { wrapper });
 
-    // The in-memory view keeps the credentials, so an edit form can seed from it.
+    // The in-memory view keeps the real values, so an edit form can seed from it.
     await waitFor(() =>
       expect(useAgentStore.getState().botProvidersMap[AGENT_ID]?.[0]?.credentials).toEqual({
         desktopDeviceId: 'dev-1',
         webhookSecret: 'shared-secret',
       }),
     );
-    // The persisted row drops them entirely — no bearer secret left on disk.
+    // The persisted row masks every value — no bearer secret, and no cleartext
+    // identifier, reaches disk.
     await waitFor(async () =>
       expect(
         (await botProvidersResource.storage!.get({ queryKey: PROVIDERS_STORAGE_KEY, scope }))?.data,
-      ).toEqual([provider('bot-2', 'imessage')]),
+      ).toEqual([
+        {
+          ...provider('bot-2', 'imessage'),
+          credentials: {
+            desktopDeviceId: BOT_CREDENTIAL_MASK,
+            webhookSecret: BOT_CREDENTIAL_MASK,
+          },
+        },
+      ]),
     );
   });
 
-  it('keeps the masked placeholders — not a secret — in the persisted copy', async () => {
-    const discord: BotProviderItem = {
-      ...provider('bot-3', 'discord'),
-      credentials: { botToken: '••••••••', publicKey: 'a'.repeat(64) },
+  it('keeps every credential key — masked — so a save cannot delete the omitted ones', async () => {
+    // WeChat provisions `botId`/`userId` through a QR handshake and declares them
+    // public, so the server hands them back in the clear. The update replaces the
+    // credential blob wholesale, so a persisted row that dropped them (or a form
+    // that never carried them) would delete them on the next save.
+    const wechat: BotProviderItem = {
+      ...provider('bot-4', 'wechat'),
+      credentials: { botId: 'bot-1', botToken: 'real-token', userId: 'user-1' },
     };
-    vi.mocked(agentBotProviderService.getByAgentId).mockResolvedValue([discord]);
+    vi.mocked(agentBotProviderService.getByAgentId).mockResolvedValue([wechat]);
 
     renderHook(() => useAgentStore((s) => s.useFetchBotProviders)(AGENT_ID), { wrapper });
 
-    await waitFor(() =>
-      expect(useAgentStore.getState().botProvidersMap[AGENT_ID]?.[0]?.credentials).toEqual({
-        botToken: '••••••••',
-        publicKey: 'a'.repeat(64),
-      }),
-    );
-    // The mask survives (a hydrated edit form can still show the field is set and
-    // round-trip it on save); the cleartext identifier does not.
     await waitFor(async () =>
       expect(
         (await botProvidersResource.storage!.get({ queryKey: PROVIDERS_STORAGE_KEY, scope }))?.data,
-      ).toEqual([{ ...provider('bot-3', 'discord'), credentials: { botToken: '••••••••' } }]),
+      ).toEqual([
+        {
+          ...provider('bot-4', 'wechat'),
+          credentials: {
+            botId: BOT_CREDENTIAL_MASK,
+            botToken: BOT_CREDENTIAL_MASK,
+            userId: BOT_CREDENTIAL_MASK,
+          },
+        },
+      ]),
     );
   });
 

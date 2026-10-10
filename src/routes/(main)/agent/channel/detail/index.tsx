@@ -22,7 +22,12 @@ import {
 import { keepPendingConnectResult, toTestResult } from './actionResults';
 import Body from './Body';
 import Footer from './Footer';
-import { getChannelFormValues, mergeSettingsWithDefaults } from './formState';
+import {
+  getChannelFormValues,
+  mergeCredentialsForSave,
+  mergeSettingsWithDefaults,
+  shouldAdoptIncomingConfig,
+} from './formState';
 import { type ChannelPostSave, ChannelPostSaveContext } from './postSaveContext';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
@@ -263,10 +268,7 @@ const PlatformDetail = memo<PlatformDetailProps>(
       const previous = previousConfigRef.current;
       previousConfigRef.current = currentConfig;
 
-      const isSameProvider =
-        previous?.id === currentConfig?.id && previous?.platform === currentConfig?.platform;
-
-      if (isSameProvider && isDirty) return;
+      if (!shouldAdoptIncomingConfig(previous, currentConfig, isDirty)) return;
 
       form.reset(getFormValues(platformDef.schema, currentConfig));
       setIsDirty(false);
@@ -311,10 +313,11 @@ const PlatformDetail = memo<PlatformDetailProps>(
           settings: rawSettings = {},
         } = values;
 
-        // Strip undefined values from credentials (optional fields left empty by antd form)
-        const credentials = Object.fromEntries(
-          Object.entries(rawCredentials).filter(([, v]) => v !== undefined && v !== ''),
-        );
+        // The form may be seeded from the credential-trimmed persisted provider,
+        // so carry any credential key it does not mention from the config the
+        // form was seeded with; the server replaces the blob wholesale and would
+        // otherwise delete those keys. An explicitly cleared field still wins.
+        const credentials = mergeCredentialsForSave(currentConfig?.credentials, rawCredentials);
         const settings = mergeSettingsWithDefaults(
           platformDef.schema,
           omitUndefinedValues(rawSettings),
@@ -381,7 +384,8 @@ const PlatformDetail = memo<PlatformDetailProps>(
         setTestResult(undefined);
 
         try {
-          const { applicationId, credentials } = params;
+          const { applicationId, credentials: authCredentials } = params;
+          const credentials = mergeCredentialsForSave(currentConfig?.credentials, authCredentials);
           const settings = mergeSettingsWithDefaults(
             platformDef.schema,
             omitUndefinedValues(form.getValue('settings') || {}),
