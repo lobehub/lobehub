@@ -29,6 +29,7 @@ import {
   type BatchProbe,
   type BatchUnitOrigin,
   countCells,
+  reopenedRows,
 } from './batchModel';
 
 /**
@@ -664,6 +665,14 @@ export const BatchRedispatchGroup = memo<NodeProps>(({ data }) => {
   const { t } = useTranslation('chat');
   const label = useCellLabel();
   const originCopy = useOriginCopy();
+  const rowLabelOf = (from?: BatchUnitOrigin) =>
+    from?.kind === 'wave'
+      ? t('goalBatch.waves.row', { number: from.wave + 1 })
+      : from?.kind === 'probe'
+        ? t('goalBatch.probes.title')
+        : from?.kind === 'round'
+          ? t('goalBatch.redispatch.labelRound', { revision: from.revision })
+          : t('goalBatch.redispatch.reopenedRow');
   const cells = [...probes, ...rows.flatMap((row) => row.cells)];
   const status = useUnitsStatus()(
     cells,
@@ -688,11 +697,12 @@ export const BatchRedispatchGroup = memo<NodeProps>(({ data }) => {
           wave size; where each came from is on hover. Then the roster waves the
           round released, or still holds as the latest plan. */}
       <div className={styles.wavesBody}>
-        {Array.from({ length: Math.ceil(probes.length / waveSize) }, (_, w) => (
+        {reopenedRows(probes, waveSize).map((row, w) => (
           <Flexbox horizontal align={'center'} data-reopened-row={w} gap={8} key={`reopened-${w}`}>
-            <span className={styles.rowLabel}>{t('goalBatch.redispatch.reopenedRow')}</span>
+            {/* Which batch these came from, the way the roster rows read. */}
+            <span className={styles.rowLabel}>{rowLabelOf(row.from)}</span>
             <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
-              {probes.slice(w * waveSize, (w + 1) * waveSize).map((probe) => (
+              {row.probes.map((probe) => (
                 <Square
                   key={probe.nodeId}
                   nodeId={probe.nodeId}

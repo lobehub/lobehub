@@ -1,5 +1,5 @@
 import type { GoalGraphView } from '../goalGraphViewModel';
-import type { BatchModel, BatchRound } from './batchModel';
+import { type BatchModel, type BatchRound, reopenedRows } from './batchModel';
 import type { LayoutBox } from './layout';
 
 /**
@@ -172,7 +172,10 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
     const origin = round.origin;
     if (origin?.kind === 'probes') return probesId;
     if (origin?.kind === 'round') return roundGroup.get(origin.revision);
-    return wavesId ?? probesId;
+    // A wave lives under the round that released it — v2's waves feed v3 from
+    // v2's group, not from v1's.
+    const owner = origin?.kind === 'waves' ? model.waveRounds[origin.wave] : 1;
+    return (owner > 1 ? roundGroup.get(owner) : wavesId) ?? wavesId ?? probesId;
   };
   const roundWidth = Math.max(ROUND_WIDTH, wavesW);
   for (const round of rounds.slice(1)) {
@@ -205,7 +208,7 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
     if (round.probes.length || ownedRows(round.revision)) {
       // Re-opened units are one batch of their own, capped at the wave size,
       // followed by the roster waves this round released or still holds.
-      const rows = Math.ceil(round.probes.length / model.waveSize) + ownedRows(round.revision);
+      const rows = reopenedRows(round.probes, model.waveSize).length + ownedRows(round.revision);
       const height = groupHeight(stack(rows, BATCH_SQUARE, BATCH_SQUARE_GAP));
       const id = addGroup('redispatch', round.revision, {
         height,

@@ -75,7 +75,11 @@ export interface BatchRound {
   forked: boolean;
   gate: BatchGateState;
   /** Which group the break that opened this round surfaced in (rounds ≥ 2). */
-  origin?: { kind: 'probes' } | { kind: 'waves' } | { kind: 'round'; revision: number };
+  origin?:
+    | { kind: 'probes' }
+    | { kind: 'round'; revision: number }
+    /** `wave`: the 0-based roster wave the re-opened units ran in. */
+    | { kind: 'waves'; wave: number };
   probes: BatchProbe[];
   /** 1-based recipe revision. */
   revision: number;
@@ -254,7 +258,9 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     if (!previous) return undefined;
     const round = roundOfProbe.get(previous.node.id);
     if (round === 0) return { index: probeIdsByRound[0].indexOf(previous.node.id), kind: 'probe' };
-    if (round !== undefined) return { kind: 'round', revision: round + 1 };
+    // Re-opened again: follow it back to the batch it first ran in (第 3 批),
+    // naming the round only when there is no batch to name.
+    if (round !== undefined) return originOf(previous) ?? { kind: 'round', revision: round + 1 };
     const slot = waveOf.get(previous.node.id);
     return slot ? { ...slot, kind: 'wave' } : undefined;
   };
@@ -351,7 +357,7 @@ const gateState = (
 /** A round re-opens units from where they broke; the first one names the source. */
 const roundOrigin = (probes: BatchProbe[], r: number): BatchRound['origin'] => {
   const from = probes.find((probe) => probe.from)?.from;
-  if (from?.kind === 'wave') return { kind: 'waves' };
+  if (from?.kind === 'wave') return { kind: 'waves', wave: from.wave };
   if (from?.kind === 'round') return { kind: 'round', revision: from.revision };
   if (from?.kind === 'probe' || r === 1) return { kind: 'probes' };
   return { kind: 'round', revision: r };
@@ -404,3 +410,50 @@ export const verdictChecks = (evaluation: GoalRolloutGateEvaluation): GoalRollou
         },
       ]
     : evaluation.checks;
+
+/**
+ * A round's re-opened units as rows, grouped by where they came from — so each
+ * row can say which batch it is (第 3 批) — and capped at the wave size.
+ */
+export const reopenedRows = (
+  probes: BatchProbe[],
+  waveSize: number,
+): { from?: BatchUnitOrigin; probes: BatchProbe[] }[] => {
+  const groups = new Map<string, BatchProbe[]>();
+  for (const probe of probes) {
+    const from = probe.from;
+    const key =
+      from?.kind === 'wave'
+        ? `wave:${from.wave}`
+        : from?.kind === 'round'
+          ? `round:${from.revision}`
+          : (from?.kind ?? 'none');
+    groups.set(key, [...(groups.get(key) ?? []), probe]);
+  }
+  return [...groups.values()].flatMap((group) =>
+    Array.from({ length: Math.ceil(group.length / waveSize) }, (_, i) => ({
+      from: group[0].from,
+      probes: group.slice(i * waveSize, (i + 1) * waveSize),
+    })),
+  );
+};
+
+/**
+ * The batch and round a plan version belongs to, when `nodeId` is one — so the
+ * panel that opens on it can show every version and what changed between them.
+ */
+export const findBatchPlan = (
+  graph: GoalGraphView,
+  nodeId: string,
+): { model: BatchModel; round: BatchRound } | undefined => {
+  const batchId = graph.edges.find(
+    (edge) =>
+      edge.kind === 'contains' &&
+      edge.targetNodeId === nodeId &&
+      graph.byId[edge.sourceNodeId]?.node.kind === 'batch',
+  )?.sourceNodeId;
+  if (!batchId) return undefined;
+  const model = buildBatchModel(graph, batchId);
+  const round = model.rounds.find((item) => item.templateId === nodeId);
+  return round ? { model, round } : undefined;
+};

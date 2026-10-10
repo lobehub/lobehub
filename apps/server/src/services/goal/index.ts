@@ -4153,8 +4153,19 @@ export class GoalService {
     const guidance = (resolution ?? chosen?.description ?? '').trim() || policy.spec?.recipeOutline;
 
     // 1. A new recipe revision, or a forked new class (no `revises` chain).
+    // A revision carries the plan forward and appends what changed, so each
+    // version reads whole and diffs against the last one; a fork starts again
+    // from the batch's original outline.
+    const revision = state.templateRevision + 1;
+    const previousPlan = state.templateNodeId
+      ? graph.nodes.find((node) => node.id === state.templateNodeId)?.description?.trim()
+      : undefined;
+    const basePlan = optionId === 'new_class' ? policy.spec?.recipeOutline?.trim() : previousPlan;
+    const planText = [basePlan, guidance && `### v${revision}\n${guidance}`]
+      .filter(Boolean)
+      .join('\n\n');
     const template = await this.coordinatorGraph.createNode(goalId, {
-      description: guidance,
+      description: planText || guidance,
       kind: 'finding',
       scopeId: batchId,
       title: GOAL_BATCH_TEMPLATE_TITLE,

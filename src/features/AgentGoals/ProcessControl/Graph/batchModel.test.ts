@@ -10,7 +10,13 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
-import { buildBatchModel, findBatchGate, verdictChecks } from './batchModel';
+import {
+  buildBatchModel,
+  findBatchGate,
+  findBatchPlan,
+  reopenedRows,
+  verdictChecks,
+} from './batchModel';
 
 const T0 = new Date('2026-10-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -239,7 +245,7 @@ describe('buildBatchModel', () => {
     expect(model.waves[0][1]).toMatchObject({ nodeId: 'm4', reopenedIn: 2, state: 'stale' });
     // No `revises` edge: the person split it off as a new class.
     expect(model.rounds[1].forked).toBe(true);
-    expect(model.rounds[1].origin).toEqual({ kind: 'waves' });
+    expect(model.rounds[1].origin).toEqual({ kind: 'waves', wave: 0 });
     expect(model.rounds[1].probes[0].from).toEqual({ index: 1, kind: 'wave', wave: 0 });
   });
   it('lets a unit a later round first released follow that round, not read as superseded', () => {
@@ -446,7 +452,77 @@ describe('wave ownership', () => {
   });
 });
 
+describe('plans and re-opened rows', () => {
+  it('finds the round a plan version belongs to', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1')],
+        extraEdges: [edge('t2', 't1', 'revises')],
+        extraNodes: [
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+        ],
+        state: { assayNodeId: 'a2', probeNodeIds: [], templateNodeId: 't2' },
+      }),
+      NOW,
+    );
+    expect(findBatchPlan(graph, 't2')?.round.revision).toBe(2);
+    expect(findBatchPlan(graph, 'a2')).toBeUndefined();
+  });
+
+  it('groups re-opened units by the batch they came from', () => {
+    const probe = (nodeId: string, wave: number) => ({
+      from: { index: 0, kind: 'wave' as const, wave },
+      nodeId,
+      state: 'backlog' as const,
+      title: nodeId,
+    });
+    const rows = reopenedRows([probe('a', 2), probe('b', 2), probe('c', 3)], 10);
+    expect(rows.map((row) => [row.from, row.probes.map((p) => p.nodeId)])).toEqual([
+      [{ index: 0, kind: 'wave', wave: 2 }, ['a', 'b']],
+      [{ index: 0, kind: 'wave', wave: 3 }, ['c']],
+    ]);
+  });
+});
+
 describe('layoutBatch', () => {
+  it('feeds a later round from the group whose wave it re-opened', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        decisions: [humanAnswer('a1'), humanAnswer('a2')],
+        extraEdges: [
+          edge('t2', 't1', 'revises'),
+          edge('t3', 't2', 'revises'),
+          edge('a2', 'p2b', 'depends_on'),
+          edge('a3', 'm7b', 'depends_on'),
+          edge('p2b', 'p2', 'derived_from'),
+          edge('m7b', 'm7', 'derived_from'),
+        ],
+        extraNodes: [
+          node('m3', 'task', 10, { status: 'resolved', title: 'U3' }),
+          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('p2b', 'task', 42, { status: 'resolved', title: 'U2' }),
+          // U7 opens the roster's second wave, released under v2 — then broke.
+          node('m7', 'task', 50, { status: 'retired', title: 'U7' }),
+          node('t3', 'finding', 60, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+          node('a3', 'decision', 61, { title: GOAL_BATCH_ASSAY_TITLE }),
+          node('m7b', 'task', 62, { title: 'U7' }),
+        ],
+        state: { assayNodeId: 'a3', massNodeIds: ['m3', 'm7'], probeNodeIds: ['m7b'] },
+      }),
+      NOW,
+    );
+    const layout = layoutBatch(graph, buildBatchModel(graph, 'batch'));
+    // Not from v1's waves: the wave lives under v2, which released it.
+    expect(layout.edges).toContainEqual(
+      expect.objectContaining({ source: batchGroupId('batch', 'redispatch', 2), target: 't3' }),
+    );
+    // And the re-opened unit is named by the batch it first ran in.
+    const model = buildBatchModel(graph, 'batch');
+    expect(model.rounds[2].probes[0].from).toEqual({ index: 0, kind: 'wave', wave: 1 });
+  });
+
   it('stacks trials → plan → gate → waves and puts v2 beside v1', () => {
     const graph = buildGoalGraphView(
       batchSnapshot({

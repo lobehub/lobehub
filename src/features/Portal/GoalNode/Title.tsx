@@ -7,7 +7,10 @@ import { useTranslation } from 'react-i18next';
 import { graphNodeKind } from '@/features/AgentGoals/Experiments/model';
 import { coordinatorNodeTitleKey } from '@/features/AgentGoals/ProcessControl/coordinatorCopy';
 import { buildGoalGraphView } from '@/features/AgentGoals/ProcessControl/goalGraphViewModel';
-import { findBatchGate } from '@/features/AgentGoals/ProcessControl/Graph/batchModel';
+import {
+  findBatchGate,
+  findBatchPlan,
+} from '@/features/AgentGoals/ProcessControl/Graph/batchModel';
 import { GATE_COLOR, KindIcon } from '@/features/AgentGoals/ProcessControl/shared';
 import { useChatStore } from '@/store/chat';
 import { chatPortalSelectors } from '@/store/chat/selectors';
@@ -25,9 +28,13 @@ const Title = memo(() => {
     if (!nodeView) return undefined;
     // Coordinator-authored titles are English; a batch gate also names its round.
     const revision = findBatchGate(graph, nodeView.node.id)?.round.revision;
+    const plan = findBatchPlan(graph, nodeView.node.id)?.round;
     const titleKey = coordinatorNodeTitleKey(nodeView);
-    const title =
-      revision && revision > 1
+    const title = plan
+      ? t(plan.forked ? 'goalBatch.template.forked' : 'goalBatch.template.title', {
+          revision: plan.revision,
+        })
+      : revision && revision > 1
         ? t('goalBatch.gate.titleRound', { revision })
         : titleKey
           ? t(titleKey as any)

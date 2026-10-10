@@ -436,6 +436,8 @@ const useBatchCopy = () => {
           ),
           icon: DoorOpen,
           palette: GATE_COLOR,
+          // Passed / sent back / waiting sits after the title, right-aligned.
+          trailingChip: true,
           subtitle: tally,
           title:
             round.revision > 1
