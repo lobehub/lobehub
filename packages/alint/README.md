@@ -113,6 +113,15 @@ Calibration details and known limitations are recorded in
 analysis can miss caller authorization, vary between runs, or misread large files.
 No zero-false-positive or complete-vulnerability-coverage claim is made.
 
+## Test value rules
+
+| Rule                     | Reports                                                                                                                                                 |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `no-removal-only-tests`  | Dedicated tests that only confirm deleted commands, source/exports or UI registrations are absent.                                                      |
+| `no-constant-stub-tests` | Dedicated tests that only repeat an inert endpoint's unconditional error or placeholder response, including redundant DB setup and unchanged snapshots. |
+
+Both preserve tests of retained runtime behavior and safety policies. They require evidence in the supplied file; an imported implementation or a fixed expected status alone cannot establish a violation. Fixtures hold the detailed boundaries. New rules stay at `warn`; calibration results are recorded in [test-value-calibration.md](test-value-calibration.md).
+
 ## Setup and run
 
 ```bash
@@ -200,5 +209,5 @@ Known remaining false positives: `no-transactions-in-models` still reports a sub
 1. Create `rules/<name>/rule.alint.toml` with `name`, `builtInAgent = "basic-structured"`, and an `instruction`. Write the rule as the reviewer would: what to report, which line to anchor on, what the message and suggestion must contain, and an explicit "do not report" list. The carve-outs are where the false positives live.
 2. Add a `[[config.group]]` for its scope in `alint.config.toml`, and a fixture group `packages/alint/fixtures/<name>/**`.
 3. Add fixtures under `fixtures/<name>/`: at least one `bad-*` file with a standalone `// alint-expect` comment (`{/* alint-expect */}` inside JSX) on the line above the one the finding must anchor to, and one `good-*` file per carve-out. Keep them short and realistic.
-4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite skips itself when there is no setup. The cache is keyed by the rule's text, so an edited rule re-runs on its own; no need to delete `.alintcache`.
+4. Run `bun run alint plugin install`, then `cd packages/alint && bunx vitest run fixtures.test.ts` with a provider set up. The suite recognizes local and global alint models; it skips when neither is configured. A skip is not a passing calibration. The cache is keyed by the rule's text, so an edited rule re-runs on its own; no need to delete `.alintcache`.
 5. Before enabling the rule on a scope, run it over a few dozen real files and read every finding.

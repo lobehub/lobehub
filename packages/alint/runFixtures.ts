@@ -1,5 +1,18 @@
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
+
+/** Ask alint for its merged local/global model configuration, without reading credentials. */
+export const hasFixtureProvider = async (rootDir: string, env = process.env) => {
+  const { stdout } = await execFileAsync(
+    path.join(rootDir, 'node_modules/.bin/alint'),
+    ['config', 'models', 'list'],
+    { cwd: rootDir, env: { ...env, FORCE_COLOR: '0', NO_COLOR: '1' } },
+  );
+  return stdout.trim().length > 0;
+};
 
 export interface FixtureDiagnostic {
   file: string;
