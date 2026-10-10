@@ -338,19 +338,31 @@ function printGoalState(
 }
 
 /**
+ * The plan shape `goal.planContext` accepts, read off the client so the two
+ * cannot drift. A refused `lh goal plan` re-reads the admission with the plan it
+ * just submitted: four guards (`existing_work`, `acceptance_escalate_only`,
+ * `wait_unsettled`, `wait_until_past`) only fire when a plan is present, so
+ * omitting it would report `ok` and explain nothing.
+ */
+type PlanInput = NonNullable<
+  Parameters<Awaited<ReturnType<typeof getTrpcClient>>['goal']['planContext']['query']>[0]['plan']
+>;
+
+/**
  * Explain a refused `lh goal plan` from the server's own admission, so an
  * operator does not have to re-derive it from the graph. Best-effort: a
  * diagnostic that itself fails must never replace the real error.
  */
 async function explainPlanRefusal(
   id: string,
-  options: { operation?: string; token?: string },
+  options: { operation?: string; plan?: PlanInput; token?: string },
 ): Promise<string | undefined> {
   try {
     const reads = await goalReads();
     const { data } = await reads.planContext.query({
       id,
       operationId: options.operation ?? process.env.LOBEHUB_OPERATION_ID,
+      plan: options.plan,
       token: options.token,
     });
     if (data.admission.ok) return undefined;
@@ -476,17 +488,16 @@ export function registerGoalCommand(program: Command) {
       ) => {
         const operationId = options.operation ?? process.env.LOBEHUB_OPERATION_ID;
         if (!operationId) throw new Error('Current manager operation ID required');
+        // Read and parse the plan BEFORE any network call: a missing or malformed
+        // file is a local error, and must not be dressed up as a server refusal
+        // just because the Goal's own admission happens to be non-OK.
+        const plan = JSON.parse(await readFile(options.file, 'utf8'));
         const client = await getTrpcClient();
         const endpoint = hasOperationToken()
           ? client.goal.submitOperationPlan
           : client.goal.submitPlan;
         try {
-          const result = await endpoint.mutate({
-            id,
-            token: options.token,
-            operationId,
-            plan: JSON.parse(await readFile(options.file, 'utf8')),
-          });
+          const result = await endpoint.mutate({ id, token: options.token, operationId, plan });
           if (options.json) outputJson(result.data);
           else
             console.log(
@@ -495,8 +506,13 @@ export function registerGoalCommand(program: Command) {
         } catch (error) {
           // A refusal is a verdict about this turn, so print the server's own
           // admission before the error propagates: the bare message ("Stale
-          // planning input") cannot say which precondition failed.
-          const explanation = await explainPlanRefusal(id, options);
+          // planning input") cannot say which precondition failed. The plan
+          // travels with it — the read is only as specific as the plan it sees.
+          const explanation = await explainPlanRefusal(id, {
+            operation: options.operation,
+            plan,
+            token: options.token,
+          });
           if (explanation) console.log(explanation);
           throw error;
         }

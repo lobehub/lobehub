@@ -211,6 +211,14 @@ export class GoalGraphModel {
    * goal runs, so an offset taken on page one re-serves a row that a later insert
    * pushed down. `(createdAt, id)` is the sort key, so it is also the
    * continuation key.
+   *
+   * `createdAt` is compared and ordered at **millisecond** precision, matching
+   * the cursor. The column is `timestamptz` and can carry microseconds, but the
+   * cursor round-trips through a JS `Date` / ISO string and so only carries
+   * milliseconds; comparing the raw column against that truncated cursor makes a
+   * same-millisecond row match neither the `<` bound nor the `eq`/id tie-break,
+   * silently dropping it from the next page. Truncating both sides keeps the
+   * keyset lossless — the same pattern as `verifyRun.queryPage`.
    */
   listEvents = async (
     goalId: string,
@@ -230,6 +238,9 @@ export class GoalGraphModel {
       .limit(1);
     if (!goal) return undefined;
 
+    // Millisecond-truncated `createdAt`, the precision the cursor round-trips at.
+    const createdAtMs = sql`date_trunc('milliseconds', ${goalEvents.createdAt})`;
+
     const filters = [eq(goalEvents.goalId, goalId)];
     if (options.entityType) filters.push(eq(goalEvents.entityType, options.entityType));
     if (options.eventType) filters.push(eq(goalEvents.eventType, options.eventType));
@@ -237,11 +248,8 @@ export class GoalGraphModel {
     // are ordered by, so a page can neither repeat nor skip.
     const afterCursor = options.cursor
       ? or(
-          lt(goalEvents.createdAt, options.cursor.createdAt),
-          and(
-            eq(goalEvents.createdAt, options.cursor.createdAt),
-            lt(goalEvents.id, options.cursor.id),
-          ),
+          lt(createdAtMs, options.cursor.createdAt),
+          and(eq(createdAtMs, options.cursor.createdAt), lt(goalEvents.id, options.cursor.id)),
         )
       : undefined;
 
@@ -250,7 +258,7 @@ export class GoalGraphModel {
       .select()
       .from(goalEvents)
       .where(and(...filters, afterCursor))
-      .orderBy(desc(goalEvents.createdAt), desc(goalEvents.id))
+      .orderBy(desc(createdAtMs), desc(goalEvents.id))
       .limit(options.limit + 1);
 
     const events = rows.slice(0, options.limit);

@@ -36,7 +36,12 @@ const { mockClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('node:fs/promises', () => ({
-  readFile: async () => JSON.stringify({ action: 'verify', reason: 'Ready' }),
+  readFile: async (path: string) => {
+    // A sentinel local failure so a test can prove the plan command keeps file
+    // errors out of the server-refusal diagnostic.
+    if (path === 'missing.json') throw new Error('ENOENT: no such file or directory');
+    return JSON.stringify({ action: 'verify', reason: 'Ready' });
+  },
 }));
 
 vi.mock('../utils/format', async (importOriginal) => ({
@@ -1066,6 +1071,11 @@ describe('goal plan refusal', () => {
     expect(mockClient.goal.planContext.query).toHaveBeenCalledWith({
       id: 'goal-1',
       operationId: 'op-env',
+      // The submitted plan travels too: four guards (`existing_work`,
+      // `acceptance_escalate_only`, `wait_unsettled`, `wait_until_past`) only
+      // fire with a plan, so without it the read would report `ok` and explain
+      // nothing for exactly those refusals.
+      plan: { action: 'verify', reason: 'Ready' },
       // The submitted token travels too: without it the verdict would name the
       // next failing precondition instead of the token mismatch the server threw.
       token: 'tok',
@@ -1084,6 +1094,36 @@ describe('goal plan refusal', () => {
     mockClient.goal.planContext.query.mockRejectedValue(new Error('network down'));
 
     await expect(createProgram().parseAsync(planArgs)).rejects.toThrow('Stale planning input');
+    expect(output()).not.toContain('Refused');
+  });
+
+  it('keeps a local plan-file error out of the refusal diagnostic', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-env');
+    // The Goal's admission is a non-OK refusal DTO — standing in for "the CLI is
+    // ready to explain one" — and must still stay unprinted: a missing or
+    // malformed file never reached the server, so it is not a server refusal.
+    mockClient.goal.planContext.query.mockResolvedValue({
+      data: { ...goalStateContext, admission: { code: 'existing_work', ok: false } },
+    });
+
+    await expect(
+      createProgram().parseAsync([
+        'node',
+        'test',
+        'goal',
+        'plan',
+        'goal-1',
+        '--token',
+        'tok',
+        '--file',
+        'missing.json',
+      ]),
+    ).rejects.toThrow('ENOENT');
+
+    // The read happens before the mutation, so a local failure never submits and
+    // never asks for a diagnostic that would otherwise print "Refused (...)".
+    expect(mockClient.goal.submitPlan.mutate).not.toHaveBeenCalled();
+    expect(mockClient.goal.planContext.query).not.toHaveBeenCalled();
     expect(output()).not.toContain('Refused');
   });
 });

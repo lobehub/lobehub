@@ -225,6 +225,11 @@ const eventsInput = idInput.extend({
 
 const planContextInput = idInput.extend({
   operationId: z.string().min(1).optional(),
+  // A refused `lh goal plan` re-reads this with the plan it just submitted, so
+  // the plan-specific guards it was refused on (`existing_work`,
+  // `acceptance_escalate_only`, `wait_unsettled`, `wait_until_past`) are
+  // re-evaluated. Without it the read would report `ok` and explain nothing.
+  plan: goalPlanSchema.optional(),
   token: z.string().min(1).optional(),
 });
 
@@ -233,7 +238,11 @@ type PlanContextInput = z.infer<typeof planContextInput>;
 
 /** Shared by the ordinary and the operation-authenticated read; the caller builds the manager. */
 const readPlanContext = (manager: GoalManagerService, input: PlanContextInput) =>
-  manager.admission(input.id, { operationId: input.operationId, token: input.token });
+  manager.admission(input.id, {
+    operationId: input.operationId,
+    plan: input.plan,
+    token: input.token,
+  });
 
 const readEvents = async (goalService: GoalService, input: EventsInput) => {
   const page = await goalService.listEvents(input.id, {

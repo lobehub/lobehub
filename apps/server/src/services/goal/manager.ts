@@ -1430,10 +1430,16 @@ export class GoalManagerService {
    * it, so the CLI explains a refusal from these predicates instead of deriving
    * them from a graph that cannot see the manager or review receipts. Token and
    * operation default to the current turn's — the plan a takeover prompt sends.
+   *
+   * `plan` is forwarded to `evaluateAdmission` because four guards only fire with
+   * one (`existing_work`, `acceptance_escalate_only`, `wait_unsettled`,
+   * `wait_until_past`). A refused `lh goal plan` passes the plan it just
+   * submitted so those refusals are re-derived rather than reported as `ok`;
+   * `lh goal state` has no plan and asks only whether the non-plan guards pass.
    */
   admission = async (
     goalId: string,
-    input: { operationId?: string; token?: string } = {},
+    input: { operationId?: string; plan?: GoalPlan; token?: string } = {},
   ): Promise<GoalPlanContext> => {
     const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findById(goalId);
     if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
@@ -1443,6 +1449,7 @@ export class GoalManagerService {
         ? await this.evaluateAdmission(this.db, {
             goal,
             operationId: input.operationId ?? state.operationId,
+            plan: input.plan,
             state,
             token: input.token ?? state.token,
           })
