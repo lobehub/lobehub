@@ -39,22 +39,90 @@ export interface RunCommandOptions {
    * registers the process with a tracker). Ignored when {@link backend} is set.
    */
   spawnProcess?: typeof spawn;
+  /**
+   * Replaces `os.homedir()` in the cwd fallback chain. Test/DI hook — the
+   * fallback order and its reporting are the behaviors under test, not the
+   * specific directories.
+   */
+  homeOverride?: string;
+  /** Replaces `os.tmpdir()` in the cwd fallback chain. See {@link homeOverride}. */
+  tmpdirOverride?: string;
 }
 
 /**
- * Node reports a missing spawn cwd as `spawn <shell> ENOENT` — blaming the
- * shell binary — so the model goes off debugging a healthy shell. Check the
- * directory first and name the real problem, and the machine it happened on
- * (a cwd pinned on another device is the usual cause).
+ * `true` = resolves to a directory; `false` = resolves to a non-directory
+ * (a regular file); `undefined` = cannot be resolved at all (missing, an
+ * unreadable parent, a symlink loop). Keeping the three cases apart lets the
+ * report name what actually happened instead of guessing.
  */
-const checkWorkingDirectory = async (cwd: string): Promise<string | undefined> => {
+const statIsDirectory = async (dir: string): Promise<boolean | undefined> => {
   try {
-    if ((await stat(cwd)).isDirectory()) return;
-    return `Working directory is not a directory on ${os.hostname()}: ${cwd}`;
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') return;
-    return `Working directory does not exist on ${os.hostname()}: ${cwd}. The shell is fine — run the command from a directory that exists on this device.`;
+    return (await stat(dir)).isDirectory();
+  } catch {
+    return undefined;
   }
+};
+
+interface WorkingDirectoryResolution {
+  /** The directory to spawn in, when the request was honored or a fallback was found. */
+  cwd?: string;
+  /** Structured failure: no usable directory anywhere, or a sandboxed run that must not move. */
+  error?: string;
+  /**
+   * Set when the requested cwd was unusable and the run fell back. Prepended to
+   * the command's output so the model sees the caveat next to whatever the
+   * command printed from the fallback directory.
+   */
+  notice?: string;
+}
+
+/**
+ * Resolve a requested cwd to a directory the shell can actually start in.
+ *
+ * A cwd pinned on another machine (a stale repo path, a moved worktree) would
+ * otherwise kill every command in the run: the run cannot change its own pinned
+ * cwd, callers strip a model-supplied cwd before dispatch, and re-running
+ * `cd` inside the command does not help because the check happens before the
+ * shell exists — so the same failure repeats forever. Un-sandboxed runs fall
+ * back through the home directory and the OS temp directory instead (the same
+ * chain `resolveHeteroSpawnCwd` uses for the hetero wrapper), and the fallback
+ * is reported so nothing downstream mistakes it for the requested directory.
+ *
+ * Sandboxed runs do NOT fall back: the sandbox fence (`createLocalSandboxPolicy`)
+ * is built on the requested cwd, so silently spawning in another directory
+ * would grant writes somewhere the user never approved. Those fail loudly.
+ */
+const resolveWorkingDirectory = async (
+  requestedCwd: string,
+  sandboxRequested: boolean,
+  fallbackDirs: (string | undefined)[],
+): Promise<WorkingDirectoryResolution> => {
+  const usable = await statIsDirectory(requestedCwd);
+  if (usable) return { cwd: requestedCwd };
+
+  const reason =
+    usable === false
+      ? `Working directory is not a directory on ${os.hostname()}: ${requestedCwd}`
+      : `Working directory does not exist on ${os.hostname()}: ${requestedCwd}`;
+
+  if (sandboxRequested) {
+    return {
+      error: `${reason}. A sandboxed run must start in its requested directory — the sandbox fence is built on it — so the command was not run.`,
+    };
+  }
+
+  for (const dir of fallbackDirs) {
+    if (!dir) continue;
+    if ((await statIsDirectory(dir)) === true) {
+      return { cwd: dir, notice: `${reason}. Falling back to ${dir}.` };
+    }
+  }
+
+  // No usable fallback anywhere: keep the structured error instead of letting
+  // the spawn surface a misleading `spawn <shell> ENOENT`.
+  return {
+    error: `${reason}. The shell is fine — run the command from a directory that exists on this device.`,
+  };
 };
 
 export async function runCommand(
@@ -73,6 +141,8 @@ export async function runCommand(
     onSandboxUnavailable,
     sandboxPolicy,
     spawnProcess,
+    homeOverride,
+    tmpdirOverride,
   }: RunCommandOptions,
 ): Promise<RunCommandResult> {
   if (!command) {
@@ -87,9 +157,16 @@ export async function runCommand(
   const logPrefix = `[runCommand: ${description || command.slice(0, 50)}]`;
   logger?.debug(`${logPrefix} Starting`, { background: run_in_background, cwd, timeout });
 
+  let effectiveCwd = cwd;
+  let cwdNotice: string | undefined;
   if (cwd) {
-    const cwdError = await checkWorkingDirectory(cwd);
-    if (cwdError) return { error: cwdError, success: false };
+    const resolution = await resolveWorkingDirectory(cwd, !!sandboxPolicy, [
+      homeOverride ?? os.homedir(),
+      tmpdirOverride ?? os.tmpdir(),
+    ]);
+    if (resolution.error) return { error: resolution.error, success: false };
+    effectiveCwd = resolution.cwd;
+    cwdNotice = resolution.notice;
   }
 
   const requestedEnv = extraEnv ? { ...process.env, ...extraEnv } : process.env;
@@ -126,7 +203,7 @@ export async function runCommand(
       try {
         launchPlan = await createSandboxLaunchPlan({
           command: shellConfig,
-          cwd,
+          cwd: effectiveCwd,
           env: requestedEnv,
           policy: sandboxPolicy,
         });
@@ -144,7 +221,7 @@ export async function runCommand(
     outputFiles = shellOutputFiles;
     const handle = backend.spawn(
       { args: launchCommand.args, cmd: launchCommand.cmd },
-      { cwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
+      { cwd: effectiveCwd, env: launchEnv, outputFiles: shellOutputFiles, shellId },
     );
 
     const shellProcess: ShellProcess = {
@@ -179,7 +256,7 @@ export async function runCommand(
 
     if (run_in_background) {
       return {
-        output: '',
+        output: cwdNotice ?? '',
         output_files: processManager.getOutputFilesInfo(shellOutputFiles),
         sandboxed,
         shell_id: shellId,
@@ -192,10 +269,15 @@ export async function runCommand(
       timeout,
     });
 
+    const result: RunCommandResult = { ...observation, sandboxed, shell_id: shellId };
+    if (!cwdNotice) return result;
+    // Put the caveat before whatever the command printed, so the model reads
+    // the fallback next to the output it produced from the fallback directory.
+    const prefix = `${cwdNotice}\n\n`;
     return {
-      ...observation,
-      sandboxed,
-      shell_id: shellId,
+      ...result,
+      output: `${prefix}${result.output ?? ''}`,
+      stdout: `${prefix}${result.stdout ?? ''}`,
     };
   } catch (error) {
     releaseSandbox?.();

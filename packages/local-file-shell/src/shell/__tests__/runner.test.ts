@@ -130,33 +130,97 @@ describe('runCommand', () => {
       expect(result.stdout).toContain('/tmp');
     });
 
-    it('[R4] reports a missing cwd as a missing working directory, not as a missing shell', async () => {
+    it('[R4] falls back and runs when the requested cwd is missing, naming the fallback', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo reachable && pwd', cwd: missingCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.exit_code).toBe(0);
+      // Node blames the executable (`spawn /bin/sh ENOENT`) when cwd is missing,
+      // which sends the model off debugging a healthy shell.
+      expect(result.error ?? '').not.toMatch(/spawn \S+ ENOENT/);
+      // The fallback is reported, never silent: the model must be able to tell
+      // the command ran somewhere else than the cwd it asked for.
+      expect(result.stdout).toContain('Working directory does not exist');
+      expect(result.stdout).toContain(missingCwd);
+      expect(result.stdout).toContain('Falling back to');
+      // The command actually ran from the fallback directory.
+      expect(result.stdout).toContain('reachable');
+    });
+
+    it('falls back to temp when even home is unusable', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
+      const result = await runCommand(
+        { command: 'echo home-fallback', cwd: missingCwd },
+        {
+          homeOverride: tmpDir,
+          processManager,
+        },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain(`Falling back to ${tmpDir}`);
+      expect(result.stdout).toContain('home-fallback');
+    });
+
+    it('keeps the structured error when no fallback directory exists', async () => {
       const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
         { command: 'echo unreachable', cwd: missingCwd },
-        { processManager },
+        {
+          homeOverride: path.join(tmpDir, 'missing-home'),
+          processManager,
+          tmpdirOverride: path.join(tmpDir, 'missing-tmp'),
+        },
       );
 
       expect(result.success).toBe(false);
       expect(result.exit_code).toBeUndefined();
-      // Node blames the executable (`spawn /bin/sh ENOENT`) when cwd is missing,
-      // which sends the model off debugging a healthy shell.
       expect(result.error).not.toMatch(/spawn \S+ ENOENT/);
       expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
       expect(result.error).toContain(missingCwd);
+      expect(result.error).toContain('The shell is fine');
     });
 
-    it('reports a cwd that is a file as not a directory', async () => {
-      const fileCwd = path.join(tmpDir, 'a-file');
-      fs.writeFileSync(fileCwd, '');
+    it('does not fall back for a sandboxed run: the fence is built on the requested cwd', async () => {
+      const missingCwd = path.join(tmpDir, 'missing-worktree');
       const result = await runCommand(
-        { command: 'echo unreachable', cwd: fileCwd },
-        { processManager },
+        { command: 'echo unreachable', cwd: missingCwd },
+        {
+          processManager,
+          sandboxPolicy: {
+            allowNetwork: false,
+            onUnavailable: 'deny',
+            writableRoots: [tmpDir],
+          },
+        },
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain(`Working directory is not a directory on ${os.hostname()}`);
+      expect(result.exit_code).toBeUndefined();
+      expect(result.error).toContain(`Working directory does not exist on ${os.hostname()}`);
+      expect(result.error).toContain(missingCwd);
+      expect(result.error).toContain('sandboxed run must start in its requested directory');
     });
+
+    it('falls back when the requested cwd is a file, naming the real problem', async () => {
+      const fileCwd = path.join(tmpDir, 'a-file');
+      fs.writeFileSync(fileCwd, '');
+      const result = await runCommand(
+        { command: 'echo via-file-cwd', cwd: fileCwd },
+        { processManager },
+      );
+
+      expect(result.success).toBe(true);
+      expect(result.stdout).toContain('Working directory is not a directory');
+      expect(result.stdout).toContain('Falling back to');
+      expect(result.stdout).toContain('via-file-cwd');
+    });
+
+
 
     it('should merge env into child process environment', async () => {
       const result = await runCommand(
