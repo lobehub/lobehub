@@ -117,9 +117,17 @@ No zero-false-positive or complete-vulnerability-coverage claim is made.
 
 `no-removal-only-tests` comes from the owner's review: “加一个「确认已经删了」的测试就不必了……”. It reports a dedicated test that only confirms a deleted command, export, UI entry or source fragment is absent, including a CLI framework's generic unknown-command response after removing its registration. Deciding whether the test exercises retained behavior is semantic; banning negative assertions with ESLint would discard useful coverage.
 
-Keep compatibility stubs with deliberate business errors and unchanged-data checks, security boundaries, runtime deletion of data, conditional registration, legacy-input transformations, surviving paths, custom command/documentation validation, and ordinary empty states. A negative assertion or a test title alone is insufficient evidence of a removal-only test.
+Keep compatibility handling with actual input-, permission- or state-dependent behavior, security boundaries, runtime deletion of data, conditional registration, legacy-input transformations, surviving paths, custom command/documentation validation, and ordinary empty states. A negative assertion or a test title alone is insufficient evidence of a removal-only test. Unconditional disabled compatibility stubs are covered by the separate rule below.
 
 The rule is registered at `warn` for its 12 calibration inputs (3 bad, 9 good). Its candidate test-file PR scope is commented in `alint.config.toml` until a cold model run and a real-file scan have been reviewed. Local provider setup is currently missing: `alint:setup` exits 2 without `ALINT_API_KEY` or `DEEPSEEK_API_KEY`, and the fixture suite skips without `.alint/config.toml`. This is a calibration blocker, not a passing model run. Enable the candidate scope at `warn` after resolving it; promotion to `error` requires separate real-PR evidence.
+
+## Constant endpoint stub rule (pending calibration)
+
+`no-constant-stub-tests` comes from the owner's follow-up: “这个测试也没必要，删掉并且也加一个 alint 规则去阻止下这种行为（但我不知道咋说，就是这种单纯验证下接口状态？无业务内容？）”. It reports dedicated tests that restate a disabled/retired endpoint's unconditional fixed error or placeholder response. Setting up projects and task trees, looping over equivalent inputs, or comparing unchanged rows around an inert stub does not create a business decision to test.
+
+Keep real validation, authorization, state/dependency decisions, mutations, compatibility translation, custom routing/error mapping/serialization, recovery and readiness computed from live dependencies. Fixed expected statuses alone are not violations. Per-file analysis cannot follow imported handlers: the stub implementation must be visible or explicitly documented in the file; otherwise the rule returns no finding.
+
+The rule has 11 calibration inputs (3 bad, 8 good), registered at `warn` for fixtures. Like `no-removal-only-tests`, its candidate PR scope remains commented until a cold model run and real-file calibration are available; no precision claim is made. These are tooling/test-only changes and do not change product behavior, so existing product acceptance remains applicable.
 
 ## Setup and run
 

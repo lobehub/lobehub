@@ -1,0 +1,25 @@
+name = "no-constant-stub-tests"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one test file. Report dedicated tests that only restate a constant disabled/retired endpoint stub, not tests of business decisions.
+
+Owner's review rejection, verbatim: "这个测试也没必要，删掉并且也加一个 alint 规则去阻止下这种行为（但我不知道咋说，就是这种单纯验证下接口状态？无业务内容？）"
+The rejected example created projects and a parent/child task tree only to call project.moveTask, whose handler unconditionally throws the same PRECONDITION_FAILED error. Checking the error and unchanged database rows does not add a business branch to a handler with no data-dependent work.
+
+Do not report (return no finding):
+- Rejections determined by input validation, identity, permissions, ownership, task/project state, quota, conflicts, dependencies or other business data. A status/error assertion can be the complete useful contract.
+- Actual writes, state transitions, deletion of stored data, runtime feature/capability decisions, recovery, compatibility translation or surviving success paths.
+- A test of custom request routing, error mapping, response serialization or client recovery. These must exercise application behavior beyond the framework's default handling of a constant stub.
+- Readiness/health results computed from live dependencies, rather than a retired/disabled placeholder constant.
+- A mixed test that exercises one of the meaningful behaviors above as well as a constant response. Never suggest deleting its business or safety coverage.
+- Imported handlers whose implementation is unknown in this file. A fixed expected status, business-looking error message, one rejected request or a mock alone is not proof that the real endpoint is an unconditional stub. Do not infer an inert implementation from the test's assertion count.
+
+Report ONLY when ALL of these are visible:
+1. The endpoint is a disabled, retired or placeholder operation that always returns the same literal response or throws the same fixed error. Its inert implementation is present in this file, or an explicit comment documents that exact implementation. No decision depends on input, actor, persisted state or external results.
+2. The dedicated test only calls that stub and matches its fixed status/code/message/response. Fixture creation, loops over equivalent inputs, and before/after snapshots or mock-not-called assertions around this inert stub do not make it a business test.
+3. None of the exclusions above applies. Do not report all API tests or all negative assertions.
+
+Anchor once on the it/test declaration. Name the fixed stub and the constant being repeated; explain why fixtures or unchanged-data assertions add no behavior in this case. Suggest deleting the dedicated test and its now-unused setup, while retaining separate input-, permission-, state- and data-dependent tests. Do not demand a replacement test that proves the same constant again.
+
+Analyze only the supplied file. If the endpoint's inert implementation is not established, return no finding rather than guessing across imports.
+"""

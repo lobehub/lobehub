@@ -7,7 +7,7 @@ Owner's review rejection, verbatim: "加一个「确认已经删了」的测试�
 A code deletion does not need a dedicated test whose only proof is that the deleted code is absent. Keep tests of retained behavior and deliberate runtime policies.
 
 Do not report (return no finding):
-- A retained compatibility endpoint or validator deliberately rejects an old request with a specific business error, especially when the test also proves stored data and identifiers are unchanged. This exercises live rejection logic, not a missing registration.
+- A retained compatibility endpoint or validator performs input-dependent validation, compatibility translation, or a real permission/state decision. A fixed error from an unconditional disabled stub is not a business decision; that separate issue is covered by no-constant-stub-tests, not by this removal-only rule.
 - Authorization, validation, security or isolation tests: denied writes, no secret exposure, forbidden imports, unsafe inputs, sandbox boundaries. Negative assertions can be the actual contract.
 - A runtime deletion operation: deleting a record, file or binding and checking the resulting persisted state. Deleted data is not deleted implementation.
 - Conditional registration or visibility driven by permissions, feature flags, platform capabilities or installed plugins. The runtime decision is still implemented.

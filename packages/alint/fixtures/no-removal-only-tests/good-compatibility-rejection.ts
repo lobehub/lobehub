@@ -1,14 +1,12 @@
 import { expect, it } from 'vitest';
 
-import { createProjectFixture, projectCaller, readTaskRows } from './fixtures';
+const legacyCreateTask = (input: { instruction?: string; prompt?: string }) => {
+  const instruction = input.instruction ?? input.prompt;
+  if (!instruction?.trim()) throw new Error('Missing task instruction');
+  return { instruction };
+};
 
-it('rejects moves through the retained API without changing a task tree', async () => {
-  const { target, parent, child } = await createProjectFixture();
-  const ids = [parent.id, child.id];
-  const before = await readTaskRows(ids);
-  await expect(projectCaller.moveTask({ id: target.id, taskId: parent.id })).rejects.toMatchObject({
-    code: 'PRECONDITION_FAILED',
-    message: 'Moving tasks between projects is temporarily disabled',
-  });
-  expect(await readTaskRows(ids)).toEqual(before);
+it('translates supported legacy input and rejects invalid input', () => {
+  expect(legacyCreateTask({ prompt: 'Launch' })).toEqual({ instruction: 'Launch' });
+  expect(() => legacyCreateTask({ prompt: '' })).toThrow('Missing task instruction');
 });
