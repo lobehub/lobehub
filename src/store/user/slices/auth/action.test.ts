@@ -2,7 +2,6 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { mutate } from '@/libs/swr';
-import { userKeys } from '@/libs/swr/keys';
 import { useUserStore } from '@/store/user';
 import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
 
@@ -48,7 +47,9 @@ describe('createAuthSlice', () => {
         await result.current.refreshUserState();
       });
 
-      expect(mutate).toHaveBeenCalledWith(userKeys.initState());
+      // The bootstrap payload now lives in a replica resource: a refresh
+      // re-mutates the cache through the replica driver's key predicate.
+      expect(mutate).toHaveBeenCalledWith(expect.any(Function));
     });
   });
 

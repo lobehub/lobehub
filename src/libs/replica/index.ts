@@ -28,10 +28,27 @@ import { getCacheScope, isScopeTrusted, useCacheScope } from '@/libs/swr/useCach
  * fetch through the app's SWR hook (workspace-augmented keys, retry policy).
  */
 
+/**
+ * Hook form of `useCacheScope`, named so it is a legal custom-hook call. Kept
+ * as a separate binding so {@link cacheScope} can forward to it lazily.
+ */
+const useReplicaScope = (): string => useCacheScope();
+
+/**
+ * The scope adapter every replica is partitioned by.
+ *
+ * Its members are resolved at read/render time, not by reference, on purpose:
+ * `@/libs/swr/useCacheScope` reads the user store, and the user store's bootstrap
+ * slice imports this module — so the cycle
+ * (`replica wiring → useCacheScope → user store → replica wiring`) can evaluate
+ * this object while `useCacheScope` / `getCacheScope` / `isScopeTrusted` are
+ * still uninitialised. Forwarding calls keeps a partially-evaluated module from
+ * leaving every replica with a scope that has no `get` / `use`.
+ */
 export const cacheScope: ReplicaScope = {
-  canPersist: isScopeTrusted,
-  get: getCacheScope,
-  use: useCacheScope,
+  canPersist: () => isScopeTrusted(),
+  get: () => getCacheScope(),
+  use: useReplicaScope,
 };
 
 export type ReplicaStorageKind = 'indexedDB' | 'localStorage' | 'memory';
