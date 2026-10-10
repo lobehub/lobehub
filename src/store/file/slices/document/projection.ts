@@ -27,23 +27,6 @@ export interface FileDocumentDetail {
  */
 export const fileDocumentResource = defineReplica<string, FileDocumentDetail>({
   key: (id) => id,
-  /**
-   * Keep the newer snapshot. A rename stamps `updatedAt` locally while its
-   * write is still in flight, so a stale server read must not clobber it; an
-   * older row that arrives later than a newer one loses.
-   */
-  merge: (incoming, confirmed) => {
-    const serverRow = incoming.document;
-    const currentRow = confirmed?.document;
-    if (!serverRow) return incoming;
-    if (
-      currentRow &&
-      new Date(currentRow.updatedAt).getTime() > new Date(serverRow.updatedAt).getTime()
-    ) {
-      return undefined;
-    }
-    return incoming;
-  },
   name: 'fileDocument',
   storage: 'indexedDB',
   version: 1,

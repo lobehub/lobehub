@@ -230,6 +230,29 @@ describe('file document replica', () => {
       expect(await storedRow('doc-1', scope)).toBeUndefined();
     });
 
+    it('drops the persisted row when a previously cached document turns out to be gone', async () => {
+      const cached = lobeDocument({ content: '# Cached', title: 'Cached' });
+      await fileDocumentResource.storage!.set(
+        { queryKey: 'doc-1', scope },
+        { data: { document: cached }, updatedAt: 1 },
+      );
+      // The document was deleted / access revoked on another device: the server
+      // now answers not found for it.
+      vi.mocked(documentService.getDocumentById).mockResolvedValue(undefined as any);
+
+      const { result } = renderDetail('doc-1');
+
+      await waitFor(() =>
+        expect(useFileStore.getState().documentMap['doc-1']).toEqual({ document: null }),
+      );
+      expect(result.current.data).toBeNull();
+      // The stale projection must be gone, so a later reload cannot hydrate and
+      // briefly paint a document the server no longer has.
+      await waitFor(async () => {
+        expect(await storedRow('doc-1', scope)).toBeUndefined();
+      });
+    });
+
     it('drops the previous identity’s rows before the next one paints', async () => {
       vi.mocked(documentService.getDocumentById).mockResolvedValue(serverRow() as any);
 

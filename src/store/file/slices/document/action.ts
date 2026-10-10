@@ -5,6 +5,7 @@ import {
 } from '@lobechat/const';
 import { type DocumentItem } from '@lobechat/database/schemas';
 import { createNanoId } from '@lobechat/utils';
+import isEqual from 'fast-deep-equal';
 
 import { createReplicaSlice, recordLens } from '@/libs/replica';
 import { documentService } from '@/services/document';
@@ -85,8 +86,17 @@ export class DocumentActionImpl {
       get,
       set,
       stateKey: 'fileDocumentReplica',
-      // A "not found" answer is a page state, not a document — never persist it.
-      toPersisted: (data) => (data.document ? data : undefined),
+      // The server response is authoritative for a resumed / refocused sync.
+      // Ordering comes from the replica's mutation ordering — a local write
+      // still in flight is preserved by the optimistic overlay and rebased onto
+      // this value — never from comparing a client-clock `updatedAt` against a
+      // server-clock one.
+      merge: (incoming, confirmed) => (isEqual(incoming, confirmed) ? undefined : incoming),
+      // A "not found" answer is a page state, not a document: never persist it,
+      // and `null` (not `undefined`) tells the engine to drop any previously
+      // persisted projection, so a later hydrate cannot paint a document the
+      // server no longer has.
+      toPersisted: (data) => (data.document ? data : null),
       view: recordLens<FileStore, FileDocumentDetail>('documentMap'),
     });
   }
@@ -146,9 +156,15 @@ export class DocumentActionImpl {
     return typeof editorData === 'string' ? JSON.parse(editorData) : editorData;
   };
 
+  /**
+   * Build the next document row. `updatedAt` is the authoritative write time
+   * the update endpoint returned; only when the caller has none (an optimistic
+   * value built before the request) does it fall back to the local clock.
+   */
   #createUpdatedDocument = (
     existingDocument: LobeDocument,
     updates: Partial<LobeDocument>,
+    updatedAt?: Date | string,
   ): LobeDocument => {
     const mergedMetadata =
       updates.metadata !== undefined
@@ -164,7 +180,7 @@ export class DocumentActionImpl {
       ...updates,
       metadata: cleanedMetadata,
       title: updates.title || existingDocument.title,
-      updatedAt: new Date(),
+      updatedAt: this.#normalizeDate(updatedAt, new Date()),
     };
   };
 
@@ -388,7 +404,7 @@ export class DocumentActionImpl {
    * refetch: the replica entry is the single cache the resource manager reads.
    */
   updateDocument = async (id: string, updates: Partial<LobeDocument>): Promise<void> => {
-    await documentService.updateDocument({
+    const result = await documentService.updateDocument({
       content: updates.content ?? undefined,
       editorData: updates.editorData
         ? typeof updates.editorData === 'string'
@@ -404,7 +420,14 @@ export class DocumentActionImpl {
     const existingDocument = this.#get().documentMap[id]?.document;
 
     if (existingDocument) {
-      const updatedDocument = this.#createUpdatedDocument(existingDocument, updates);
+      // Order the projection by the write time the server stamped, not by the
+      // browser clock: a change a collaborator made around this window must not
+      // be judged older just because the local clock runs ahead.
+      const updatedDocument = this.#createUpdatedDocument(
+        existingDocument,
+        updates,
+        result?.updatedAt,
+      );
       this.#documents.replace(id, { document: updatedDocument });
       this.#syncResourceItem(
         this.#createResourceItem(updatedDocument, this.#get().resourceMap.get(id)),
@@ -463,7 +486,7 @@ export class DocumentActionImpl {
     }
 
     try {
-      await documentService.updateDocument({
+      const result = await documentService.updateDocument({
         id: documentId,
         metadata: updatedDocument.metadata || {},
         parentId: updatedDocument.parentId !== undefined ? updatedDocument.parentId : undefined,
@@ -479,10 +502,16 @@ export class DocumentActionImpl {
             }),
       });
 
-      token.commit();
+      // Confirm with the authoritative write time the server returned, so the
+      // persisted / confirmed row is ordered by the server clock rather than the
+      // optimistic local one (which may run ahead).
+      const confirmedDocument = result?.updatedAt
+        ? { ...updatedDocument, updatedAt: new Date(result.updatedAt) }
+        : updatedDocument;
+      token.commit(() => ({ document: confirmedDocument }));
 
       if (existingResource) {
-        this.#syncResourceItem(this.#createResourceItem(updatedDocument, existingResource));
+        this.#syncResourceItem(this.#createResourceItem(confirmedDocument, existingResource));
       }
     } catch (error) {
       console.error('[updateDocumentOptimistically] Failed to sync to DB:', error);
