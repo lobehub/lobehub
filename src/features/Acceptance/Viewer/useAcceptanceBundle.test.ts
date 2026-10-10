@@ -11,9 +11,15 @@ import { useAcceptanceBundle } from './useAcceptanceBundle';
 
 const swr = vi.hoisted(() => {
   const revalidate = vi.fn(async () => undefined);
+  const state: { error: unknown } = { error: undefined };
   return {
     revalidate,
-    useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: revalidate })),
+    state,
+    useClientDataSWR: vi.fn(() => ({
+      error: state.error,
+      isValidating: false,
+      mutate: revalidate,
+    })),
   };
 });
 
@@ -42,6 +48,7 @@ const bundleSyncConfig = async () => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  swr.state.error = undefined;
   useVerifyStore.setState({
     acceptanceBundleMap: {},
     acceptanceBundleReplica: createReplicaState(),
@@ -121,6 +128,23 @@ it('ignores an initial bundle that belongs to another acceptance id', () => {
   const { result } = renderHook(() => useAcceptanceBundle('acceptance-2'), {
     wrapper: initialBundleWrapper('acceptance-1', { acceptance: { status: 'verifying' } }),
   });
+
+  expect(result.current.data).toBeUndefined();
+});
+
+it('stops exposing the initial bundle once the server answers a terminal error', () => {
+  const bundle = { acceptance: { status: 'verifying' } };
+  const { result, rerender } = renderHook(() => useAcceptanceBundle('acceptance-1'), {
+    wrapper: initialBundleWrapper('acceptance-1', bundle),
+  });
+  expect(result.current.data).toBe(bundle);
+
+  // Deleted / access revoked after the loader succeeded: the replica entry is
+  // dropped, and the immutable seed must not be re-exposed behind it — the gate
+  // would otherwise keep painting (and polling) a bundle the server no longer
+  // serves instead of its terminal state.
+  swr.state.error = { data: { code: 'NOT_FOUND' } };
+  rerender();
 
   expect(result.current.data).toBeUndefined();
 });

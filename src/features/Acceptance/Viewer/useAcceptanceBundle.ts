@@ -1,5 +1,6 @@
 import type { AcceptanceBundle } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
 import { useAcceptanceInitialBundle } from './AcceptanceInitialBundle';
 import { LIVE_ACCEPTANCE_STATUSES } from './verdict';
@@ -47,15 +48,28 @@ export const useAcceptanceBundle = (
   // context data; it fills the first paint (server + hydration) until the live
   // replica holds a value of its own.
   const initial = useAcceptanceInitialBundle();
-  const data =
-    replicaData ?? (initial && initial.acceptanceId === acceptanceId ? initial.bundle : undefined);
 
-  const status = data?.acceptance.status;
+  // The poll follows the LIVE replica, not the static loader seed: a snapshot
+  // cannot know whether the round is still moving.
+  const status = replicaData?.acceptance.status;
   const polling = poll && !!status && LIVE_ACCEPTANCE_STATUSES.has(status);
 
   const sync = useFetchAcceptanceBundle(acceptanceId, {
     refreshInterval: polling ? ACCEPTANCE_BUNDLE_POLL_INTERVAL : 0,
   });
+
+  /**
+   * A terminal answer supersedes the loader bundle: once the server says the
+   * acceptance is deleted (NOT_FOUND) or no longer ours (FORBIDDEN), the
+   * immutable seed must not be re-exposed behind the entry the replica just
+   * dropped — the gate would keep painting (and polling) a bundle the server no
+   * longer serves instead of its terminal state.
+   */
+  const terminal =
+    isTrpcErrorCode(sync.error, 'NOT_FOUND') || isTrpcErrorCode(sync.error, 'FORBIDDEN');
+  const seeded =
+    !terminal && initial && initial.acceptanceId === acceptanceId ? initial.bundle : undefined;
+  const data = replicaData ?? seeded;
 
   return {
     data,

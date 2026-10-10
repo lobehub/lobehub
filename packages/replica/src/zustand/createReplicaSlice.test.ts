@@ -641,6 +641,31 @@ describe('createReplicaSlice', () => {
       expect(storage.writes).toEqual([]);
     });
 
+    it('retries a removal whose storage delete failed, instead of treating it as purged', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      const original = storage.storage.remove;
+      let attempts = 0;
+      storage.storage.remove = async (key) => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('IndexedDB delete failed');
+        return original(key);
+      };
+
+      // The first delete is rejected by storage: the guard is armed, but the row
+      // is still on disk and must NOT be treated as purged.
+      act(() => slice.remove('a'));
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(storage.rows.get('user-1:personal|a')).toBeDefined();
+
+      // A later terminal answer must retry the delete rather than no-op.
+      act(() => slice.remove('a'));
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+      expect(attempts).toBeGreaterThanOrEqual(2);
+    });
+
     it('retries the storage delete of a removal made while the scope was untrusted', async () => {
       const storage = createMemoryStorage();
       storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });

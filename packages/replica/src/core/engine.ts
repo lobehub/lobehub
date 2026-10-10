@@ -229,10 +229,14 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
       if (!resource.persistKey(effect.key)) continue;
       const key = { ...storageKey(effect.key, effect.query), scope: effect.scope };
       if (effect.type === 'remove') {
-        writeQueue.remove(key);
-        // The delete is on its way: a repeated removal for this key can now be a
-        // real no-op (see `remove`).
-        markPurged(effect.scope, effect.key);
+        // A repeated removal for this key can be a real no-op (see `remove`) —
+        // but only once the row delete actually landed. A storage that rejects
+        // the delete (a closed IndexedDB, a quota error) must leave the key
+        // unpurged, so the next terminal answer retries it instead of letting a
+        // stale row survive to hydrate again.
+        void writeQueue.remove(key).then((removed) => {
+          if (removed) markPurged(effect.scope, effect.key);
+        });
         trackStorageKey(effect.scope, key.queryKey, false);
         continue;
       }
@@ -435,9 +439,10 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     }
     if (!resource.scope.canPersist()) return false;
     const target = { ...storageKey(key), scope };
-    writeQueue.remove(target);
-    markPurged(scope, key);
     trackStorageKey(scope, target.queryKey, false);
+    void writeQueue.remove(target).then((removed) => {
+      if (removed) markPurged(scope, key);
+    });
     return true;
   };
 
