@@ -510,22 +510,6 @@ export const discoverKeys = {
     locale,
     params,
   ]),
-  mcpCategories: def('discover:mcpCategories', (locale: string, params: unknown) => [
-    'discover:mcpCategories',
-    locale,
-    params,
-  ]),
-  mcpDetail: def('discover:mcpDetail', (locale: string, identifier: string, version?: string) => [
-    'discover:mcpDetail',
-    locale,
-    identifier,
-    version,
-  ]),
-  mcpList: def('discover:mcpList', (locale: string, params: unknown) => [
-    'discover:mcpList',
-    locale,
-    params,
-  ]),
   modelCategories: def('discover:modelCategories', (params: unknown) => [
     'discover:modelCategories',
     params,
