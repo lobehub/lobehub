@@ -1,0 +1,124 @@
+name: Desktop Bundle Size
+
+on:
+  push:
+    branches:
+      - canary
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+  pull_request:
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
+      - '.claude/**'
+      - '.github/ISSUE_TEMPLATE/**'
+  workflow_dispatch: {}
+
+permissions:
+  actions: read
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SIZE_GATE_ENABLED: ${{ github.event_name == 'pull_request' }}
+  # The renderer build never runs Electron; skip the ~100 MB binary download.
+  ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+
+jobs:
+  desktop-entry-graph:
+    name: Desktop first-screen graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      # Same install as the desktop release builds: the renderer must be bundled with
+      # apps/desktop's own vite/rolldown, whose chunking differs from the root toolchain.
+      - name: Setup build environment
+        uses: ./.github/actions/desktop-build-setup
+        with:
+          node-version: 24.11.1
+
+      - name: Build desktop renderer
+        run: pnpm -C apps/desktop run build:renderer
+
+      - name: Find latest canary baseline run
+        if: env.SIZE_GATE_ENABLED == 'true'
+        id: baseline_run
+        uses: actions/github-script@v8
+        with:
+          result-encoding: string
+          script: |
+            const finder = require('${{ github.workspace }}/.github/scripts/find-size-baseline.cjs');
+            return await finder({
+              github,
+              context,
+              workflowId: 'desktop-bundle-size.yml',
+              artifactName: 'bundle-size-baseline-desktop-entry-graph',
+              targetSha: context.payload.pull_request?.head.sha ?? context.sha,
+            });
+
+      - name: Download baseline
+        if: env.SIZE_GATE_ENABLED == 'true' && steps.baseline_run.outputs.result != ''
+        uses: actions/download-artifact@v7
+        with:
+          name: bundle-size-baseline-desktop-entry-graph
+          path: .size-baseline/
+          run-id: ${{ steps.baseline_run.outputs.result }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Measure desktop first-screen graph
+        run: node .github/scripts/bundle-size-gate.cjs measure --type desktop-entry-graph --out size-report/desktop-entry-graph.json
+
+      - name: Upload baseline (canary only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/canary'
+        uses: actions/upload-artifact@v6
+        with:
+          name: bundle-size-baseline-desktop-entry-graph
+          path: size-report/desktop-entry-graph.json
+          retention-days: 30
+
+      - name: Check against baseline
+        if: env.SIZE_GATE_ENABLED == 'true'
+        id: entry_graph_check
+        # Same-repo PRs are blocked by a change-request review; forks cannot post one.
+        continue-on-error: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+        run: node .github/scripts/bundle-size-gate.cjs check --current size-report/desktop-entry-graph.json --baseline .size-baseline/desktop-entry-graph.json --label "Desktop first-screen static import graph (gzip)" --report size-report/report.md --floor 65536
+
+      - name: Upload size report
+        if: always() && env.SIZE_GATE_ENABLED == 'true'
+        uses: actions/upload-artifact@v6
+        with:
+          name: desktop-size-report
+          path: size-report/
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Comment size report on PR
+        if: always() && env.SIZE_GATE_ENABLED == 'true' && github.event.pull_request.head.repo.full_name == github.repository
+        uses: actions/github-script@v8
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('node:fs');
+            const report = fs.existsSync('size-report/report.md')
+              ? fs.readFileSync('size-report/report.md', 'utf8')
+              : 'Build did not reach the size gate step.';
+            const comment = require('${{ github.workspace }}/.github/scripts/size-gate-comment.cjs');
+            await comment({
+              github,
+              context,
+              issueNumber: context.issue.number,
+              title: 'Desktop first screen',
+              report,
+              failed: ${{ steps.entry_graph_check.outcome == 'failure' }},
+              identifier: 'desktop-entry-graph',
+            });
