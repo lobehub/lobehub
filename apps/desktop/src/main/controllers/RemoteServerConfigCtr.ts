@@ -251,6 +251,7 @@ export default class RemoteServerConfigCtr extends ControllerModule {
         lastRefreshAt: this.lastRefreshAt,
         refreshToken: this.encryptedRefreshToken,
       });
+      this.syncGatewayAccessToken(accessToken);
       return;
     }
 
@@ -272,6 +273,22 @@ export default class RemoteServerConfigCtr extends ControllerModule {
       lastRefreshAt: this.lastRefreshAt,
       refreshToken: this.encryptedRefreshToken,
     });
+
+    this.syncGatewayAccessToken(accessToken);
+  }
+
+  /**
+   * Hand a freshly stored access token to the live device-gateway socket.
+   *
+   * The gateway client caches the token it was constructed with and replays it
+   * on every backoff / heartbeat reconnect, while the token itself is rotated
+   * here (AuthCtr's auto-refresh timer). Without this push the refresh only
+   * became visible after the connection had already been torn down and rejected
+   * — the socket dropped, the client replayed the stale token, and `auth_failed`
+   * left the device offline.
+   */
+  private syncGatewayAccessToken(accessToken: string) {
+    this.app.getService(GatewayConnectionService)?.updatePersonalToken(accessToken);
   }
 
   /**
