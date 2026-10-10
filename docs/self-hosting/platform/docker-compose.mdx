@@ -363,6 +363,8 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
   Devices joined with `lh connect --gateway http://your_server_ip:8788` can run local tools for this deployment through the device gateway on port `8788`.
 </Callout>
 
+`DEVICE_GATEWAY_PUBLIC_URL` is optional. Set it in `.env` to the device gateway address as reached by desktop and CLI clients, such as `http://your_server_ip:8788` or a domain you reverse proxy to port `8788` with WebSocket upgrades enabled. LobeHub then publishes it so clients that support discovery get the address from this server. Leave it unset to keep passing the address to each client yourself, as with `--gateway` above; both ways keep working, and existing deployments need no change. Don't copy the `DEVICE_GATEWAY_URL` value into it: `http://gateway:8788` only resolves inside the Compose network.
+
 ## Upgrading an Existing Deployment
 
 <Callout type="warning">

@@ -150,6 +150,20 @@ Business builds enable Gateway Mode automatically. Self-hosted deployments can s
 - Default: -
 - Example: `dev-secret`
 
+### `DEVICE_GATEWAY_URL`
+
+- Type: Optional
+- Description: Device Gateway endpoint for server-to-gateway requests, such as the Docker Compose service name. LobeHub uses it to reach connected devices. It stays on the server and is never sent to clients.
+- Default: -
+- Example: `http://gateway:8788`
+
+### `DEVICE_GATEWAY_PUBLIC_URL`
+
+- Type: Optional
+- Description: Device Gateway address as reached by desktop and CLI clients. When set, LobeHub publishes it in the server config (`deviceGatewayUrl`) so clients that support discovery can get the address from this server. When unset, nothing is published and clients keep the address configured on each of them, for example with `lh connect --gateway <url>`. Both ways work, and you can leave it unset permanently. Use the base address without a path such as `/ws`; a value with credentials, a query string or a fragment fails environment validation, and a trailing slash is removed. `DEVICE_GATEWAY_URL` is never published in its place.
+- Default: -
+- Example: `https://device-gateway.example.com` or `http://your_server_ip:8788`
+
 ### `PROXY_URL`
 
 - Type: Optional

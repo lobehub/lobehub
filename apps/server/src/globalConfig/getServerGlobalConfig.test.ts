@@ -146,6 +146,7 @@ const loadServerConfig = async (
 describe('getServerGlobalConfig', () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it('should only enable LobeHub by default in business feature mode', async () => {
@@ -265,5 +266,16 @@ describe('getServerGlobalConfig', () => {
         toolNameMaxLength: expected,
       });
     }
+  });
+
+  it('should expose DEVICE_GATEWAY_PUBLIC_URL without a device gateway service token', async () => {
+    vi.stubEnv('DEVICE_GATEWAY_PUBLIC_URL', 'https://device-gateway.example.com');
+    vi.stubEnv('DEVICE_GATEWAY_SERVICE_TOKEN', undefined);
+    vi.stubEnv('DEVICE_GATEWAY_URL', undefined);
+
+    await expect(loadServerConfig(false)).resolves.toHaveProperty(
+      'deviceGatewayUrl',
+      'https://device-gateway.example.com',
+    );
   });
 });

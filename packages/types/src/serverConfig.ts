@@ -122,6 +122,11 @@ export interface GlobalServerConfig {
   agentGatewayUrl?: string;
   aiProvider: ServerLanguageModel;
   defaultAgent?: PartialDeep<UserDefaultAgent>;
+  /**
+   * Public Device Gateway base URL (`DEVICE_GATEWAY_PUBLIC_URL`). Absent when not
+   * configured; clients then keep the address they manage themselves.
+   */
+  deviceGatewayUrl?: string;
   disableEmailPassword?: boolean;
   enableBusinessFeatures?: boolean;
   enableComposio?: boolean;

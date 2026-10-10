@@ -7,6 +7,7 @@ import { isDesktop } from '@/const/version';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { fileEnv } from '@/envs/file';
+import { gatewayEnv } from '@/envs/gateway';
 import { imageEnv } from '@/envs/image';
 import { knowledgeEnv } from '@/envs/knowledge';
 import { langfuseEnv } from '@/envs/langfuse';
@@ -124,6 +125,10 @@ export const getServerGlobalConfig = async () => {
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),
     },
+    // Never fall back to the server-internal DEVICE_GATEWAY_URL.
+    ...(gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL
+      ? { deviceGatewayUrl: gatewayEnv.DEVICE_GATEWAY_PUBLIC_URL }
+      : undefined),
     disableEmailPassword: authEnv.AUTH_DISABLE_EMAIL_PASSWORD,
     enableBusinessFeatures: ENABLE_BUSINESS_FEATURES,
     enableEmailVerification: authEnv.AUTH_EMAIL_VERIFICATION,
