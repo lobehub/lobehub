@@ -177,7 +177,7 @@ describe('agent account control plane — end to end', () => {
       identifier: 'agent@github',
       kind: 'service',
       provider: 'user',
-      status: 'provisioning',
+      status: 'active',
     });
     expect(created.data).not.toHaveProperty('credentials');
 
