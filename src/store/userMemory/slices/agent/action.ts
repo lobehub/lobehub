@@ -1,69 +1,46 @@
-import { omit } from 'es-toolkit';
-import { type SWRResponse } from 'swr';
-
-import { useClientDataSWRWithSync } from '@/libs/swr';
-import { userMemoryKeys } from '@/libs/swr/keys';
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { userMemoryService } from '@/services/userMemory';
 import { type StoreSetter } from '@/store/types';
 import { type RetrieveMemoryResult } from '@/types/userMemory';
-import { setNamespace } from '@/utils/storeDebug';
 
 import { type UserMemoryStore } from '../../store';
-
-const n = setNamespace('userMemory/agent');
+import { topicMemoriesResource } from './projection';
 
 type Setter = StoreSetter<UserMemoryStore>;
 export const createAgentMemorySlice = (set: Setter, get: () => UserMemoryStore, _api?: unknown) =>
   new AgentMemoryActionImpl(set, get, _api);
 
 export class AgentMemoryActionImpl {
-  readonly #get: () => UserMemoryStore;
-  readonly #set: Setter;
+  /**
+   * Topic-based memory bundles, keyed by topic id — the replica view the chat
+   * send path reads synchronously (see `resolveTopicMemories`).
+   */
+  readonly #topicMemories;
 
   constructor(set: Setter, get: () => UserMemoryStore, _api?: unknown) {
     void _api;
-    this.#set = set;
-    this.#get = get;
+    this.#topicMemories = createReplicaSlice(topicMemoriesResource, {
+      actionPrefix: 'userMemory/topicMemories',
+      fetcher: (topicId) => userMemoryService.retrieveMemoryForTopic(topicId),
+      get,
+      set,
+      stateKey: 'topicMemoriesReplica',
+      view: recordLens<UserMemoryStore, RetrieveMemoryResult>('topicMemoriesMap'),
+    });
   }
 
+  /** Drop one topic's cached bundle (and its replica bookkeeping entry). */
   clearTopicMemories = (topicId: string): void => {
-    this.#set(
-      { topicMemoriesMap: omit(this.#get().topicMemoriesMap, [topicId]) },
-      false,
-      n('clearTopicMemories', { topicId }),
-    );
+    this.#topicMemories.remove(topicId);
   };
 
-  useFetchMemoriesForTopic = (topicId?: string | null): SWRResponse<RetrieveMemoryResult> => {
-    return useClientDataSWRWithSync<RetrieveMemoryResult>(
-      topicId ? userMemoryKeys.topicMemories(topicId) : null,
-      async () => {
-        // Retrieve memories using topic's context
-        // The backend will use topic info to build the query
-        return await userMemoryService.retrieveMemoryForTopic(topicId!);
-      },
-      {
-        onData: (data) => {
-          if (!topicId || !data) return;
-
-          this.#set(
-            (state) => ({
-              topicMemoriesMap: { ...state.topicMemoriesMap, [topicId]: data },
-            }),
-            false,
-            n('useFetchMemoriesForTopic/success', {
-              activitiesCount: data.activities?.length ?? 0,
-              contextsCount: data.contexts?.length ?? 0,
-              experiencesCount: data.experiences?.length ?? 0,
-              preferencesCount: data.preferences?.length ?? 0,
-              topicId,
-            }),
-          );
-        },
-        revalidateOnFocus: false,
-      },
-    );
-  };
+  /**
+   * Fetch orchestration only; read the bundle through `agentMemorySelectors`.
+   * One replica entry per topic, so switching topics paints the persisted
+   * bundle and the network only confirms it.
+   */
+  useFetchMemoriesForTopic = (topicId?: string | null): ReplicaSyncResult =>
+    this.#topicMemories.useSync(topicId ?? null, { revalidateOnFocus: false });
 }
 
 export type AgentMemoryAction = Pick<AgentMemoryActionImpl, keyof AgentMemoryActionImpl>;
