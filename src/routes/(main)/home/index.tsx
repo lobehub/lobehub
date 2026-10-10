@@ -1,4 +1,4 @@
-import { ScrollArea } from '@lobehub/ui/base-ui';
+import { ScrollArea } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import HomePageTracker from '@/components/Analytics/HomePageTracker';

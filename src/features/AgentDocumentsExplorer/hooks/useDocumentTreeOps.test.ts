@@ -12,7 +12,7 @@ const removeUnreferencedFileMock = vi.hoisted(() => vi.fn());
 const uploadWithProgressMock = vi.hoisted(() => vi.fn());
 const dispatchDockFileListMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   confirmModal: vi.fn(),
   toast: { error: toastError, success: vi.fn() },

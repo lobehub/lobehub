@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Alert, Button, Input, Text } from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Alert, Button, createStaticStyles, Flexbox, Input, Text } from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { PencilIcon, PlusIcon, Trash2Icon } from 'lucide-react';
 import { type FC, useState } from 'react';
 import { useTranslation } from 'react-i18next';

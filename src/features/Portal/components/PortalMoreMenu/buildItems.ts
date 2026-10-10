@@ -1,5 +1,5 @@
 import { Icon } from '@lobehub/ui';
-import { type DropdownItem } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { Copy, FileText, Link, Maximize2, Pencil, RotateCw, Trash2 } from 'lucide-react';
 import { createElement } from 'react';
 

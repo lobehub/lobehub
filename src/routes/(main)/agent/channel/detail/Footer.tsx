@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Tag } from '@lobehub/ui/base-ui';
-import { type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Button, createStaticStyles, Flexbox, Tag } from '@lobehub/ui';
+import { type FormInstance, useWatch } from '@lobehub/ui/form';
 import { RefreshCw, Trash2 } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { Trans, useTranslation } from 'react-i18next';

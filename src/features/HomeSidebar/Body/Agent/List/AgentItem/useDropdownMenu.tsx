@@ -5,9 +5,8 @@ import {
   type SidebarAgentLabel,
   type SidebarVisibility,
 } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast  } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import {
   Check,
@@ -89,7 +88,7 @@ export const useAgentDropdownMenu = ({
   title,
   userId,
   visibility,
-}: UseAgentDropdownMenuParams): (() => MenuProps['items']) => {
+}: UseAgentDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common', 'setting']);
   const navigate = useWorkspaceAwareNavigate();
 
@@ -584,7 +583,7 @@ export const useAgentDropdownMenu = ({
                 : []),
             ]
           : []),
-      ] as MenuProps['items'],
+      ] as DropdownItem[],
     [
       activeWorkspaceId,
       canCreate,

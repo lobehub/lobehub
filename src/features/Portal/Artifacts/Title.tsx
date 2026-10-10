@@ -1,8 +1,5 @@
 import { ArtifactType } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tabs, Text } from '@lobehub/ui/base-ui';
-import { ConfigProvider } from 'antd';
-import { cx } from 'antd-style';
+import { cx, Flexbox, Icon, Tabs, Text } from '@lobehub/ui';
 import { CodeIcon, EyeIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,48 +44,38 @@ const Title = () => {
       <Text className={cx(oneLineEllipsis)} type={'secondary'}>
         {artifactTitle}
       </Text>
-      <ConfigProvider
-        theme={{
-          token: {
-            borderRadiusSM: 16,
-            borderRadiusXS: 16,
-            fontSize: 12,
-          },
-        }}
-      >
-        <Flexbox horizontal align={'center'} gap={4}>
-          <ArtifactDeploymentActions
-            artifactIdentifier={artifactIdentifier}
-            artifactTitle={artifactTitle}
-            artifactType={artifactType}
-            displayMode={displayMode}
-            isArtifactTagClosed={isArtifactTagClosed}
-            messageId={messageId}
-            topicId={topicId}
+      <Flexbox horizontal align={'center'} gap={4}>
+        <ArtifactDeploymentActions
+          artifactIdentifier={artifactIdentifier}
+          artifactTitle={artifactTitle}
+          artifactType={artifactType}
+          displayMode={displayMode}
+          isArtifactTagClosed={isArtifactTagClosed}
+          messageId={messageId}
+          topicId={topicId}
+        />
+        {showSwitch && (
+          <Tabs
+            activeKey={displayMode}
+            size={'small'}
+            items={[
+              {
+                icon: <Icon icon={EyeIcon} />,
+                key: ArtifactDisplayMode.Preview,
+                label: t('artifacts.display.preview'),
+              },
+              {
+                icon: <Icon icon={CodeIcon} />,
+                key: ArtifactDisplayMode.Code,
+                label: t('artifacts.display.code'),
+              },
+            ]}
+            onChange={(key) => {
+              useChatStore.setState({ portalArtifactDisplayMode: key as ArtifactDisplayMode });
+            }}
           />
-          {showSwitch && (
-            <Tabs
-              activeKey={displayMode}
-              size={'small'}
-              items={[
-                {
-                  icon: <Icon icon={EyeIcon} />,
-                  key: ArtifactDisplayMode.Preview,
-                  label: t('artifacts.display.preview'),
-                },
-                {
-                  icon: <Icon icon={CodeIcon} />,
-                  key: ArtifactDisplayMode.Code,
-                  label: t('artifacts.display.code'),
-                },
-              ]}
-              onChange={(key) => {
-                useChatStore.setState({ portalArtifactDisplayMode: key as ArtifactDisplayMode });
-              }}
-            />
-          )}
-        </Flexbox>
-      </ConfigProvider>
+        )}
+      </Flexbox>
     </Flexbox>
   );
 };

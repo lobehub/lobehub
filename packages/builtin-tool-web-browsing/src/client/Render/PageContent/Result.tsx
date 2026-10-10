@@ -2,8 +2,8 @@
 
 import type { CrawlErrorResult, CrawlSuccessResult } from '@lobechat/web-crawler';
 import { Block, Flexbox, stopPropagation } from '@lobehub/ui';
-import { ActionIcon, Alert, Descriptions, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, Alert, Descriptions, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

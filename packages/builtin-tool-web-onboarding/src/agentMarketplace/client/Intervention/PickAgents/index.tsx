@@ -2,8 +2,8 @@
 
 import type { BuiltinInterventionProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Text } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Avatar, Button, Text } from '@lobehub/ui';
+import { cx } from '@lobehub/ui';
 import type { KeyboardEvent } from 'react';
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

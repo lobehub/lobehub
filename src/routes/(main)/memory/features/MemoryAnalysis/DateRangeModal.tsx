@@ -10,7 +10,7 @@ import {
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { t as i18nT } from 'i18next';
 import { memo, useCallback, useMemo, useState } from 'react';

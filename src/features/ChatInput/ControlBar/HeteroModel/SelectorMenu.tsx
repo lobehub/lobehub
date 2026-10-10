@@ -14,7 +14,7 @@ import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
   renderDropdownMenuItems,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

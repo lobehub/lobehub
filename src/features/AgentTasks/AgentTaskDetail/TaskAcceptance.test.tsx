@@ -42,7 +42,7 @@ const mocks = vi.hoisted(() => ({
 
 // Real base-ui ActionIcon only surfaces its title via a hover Tooltip; the
 // assertions click the title text directly.
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
     <button type="button" onClick={onClick}>

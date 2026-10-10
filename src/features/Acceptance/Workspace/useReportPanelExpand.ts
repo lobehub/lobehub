@@ -1,6 +1,6 @@
 'use client';
 
-import { useResponsive } from 'antd-style';
+import { useResponsive } from '@lobehub/ui';
 import { useEffect, useState } from 'react';
 
 import { useGlobalStore } from '@/store/global';

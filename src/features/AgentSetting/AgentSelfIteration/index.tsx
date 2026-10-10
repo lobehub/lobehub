@@ -1,7 +1,7 @@
 'use client';
 
-import { Switch } from '@lobehub/ui/base-ui';
-import { Form, type FormFieldProps, useForm } from '@lobehub/ui/base-ui/form';
+import { Switch } from '@lobehub/ui';
+import { Form, type FormFieldProps, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

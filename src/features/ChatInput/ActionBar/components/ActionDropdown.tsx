@@ -6,18 +6,16 @@ import {
   type DropdownMenuProps,
   type MenuInfo,
   type MenuItemType,
-  type MenuProps,
   type PopoverTrigger,
 } from '@lobehub/ui';
 import {
+createGlobalStyle, createStaticStyles, cssVar, cx, 
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
-  renderDropdownMenuItems,
-} from '@lobehub/ui';
-import { createGlobalStyle, createStaticStyles, cssVar, cx } from 'antd-style';
+  renderDropdownMenuItems} from '@lobehub/ui';
 import { type CSSProperties, type ReactNode } from 'react';
 import {
   isValidElement,
@@ -170,10 +168,10 @@ const MenuItemsHost = memo<MenuItemsHostProps>(({ close, decorate, useItems }) =
 
 MenuItemsHost.displayName = 'ActionDropdownMenuItemsHost';
 
-type ActionDropdownMenu = Omit<
-  Pick<MenuProps<ActionDropdownMenuItem>, 'className' | 'onClick' | 'style'>,
-  'items'
-> & {
+type ActionDropdownMenu = {
+  className?: string;
+  onClick?: (info: MenuInfo) => void;
+  style?: CSSProperties;
   items?: ActionDropdownMenuItems | (() => ActionDropdownMenuItems);
   /**
    * Hook form of `items`, invoked from inside the popup so it only runs while the

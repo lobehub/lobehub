@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { AccordionRoot } from '@lobehub/ui/base-ui';
+import { AccordionRoot } from '@lobehub/ui';
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -26,7 +26,7 @@ vi.mock('../../List/Item', () => ({
   ),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));

@@ -16,7 +16,7 @@ vi.mock('@lobechat/electron-client-ipc', () => ({
   useWatchBroadcast: (event: string, handler: () => void) => mocks.handlers.set(event, handler),
 }));
 
-vi.mock('antd-style', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   createStaticStyles: () => ({ clock: 'clock', root: 'root' }),
 }));

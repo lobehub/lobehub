@@ -32,27 +32,38 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('@/hooks/useIsDark', () => ({ useIsDark: () => false }));
 
-vi.mock('antd-style', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  createStaticStyles: () => ({}),
-  cssVar: new Proxy({}, { get: () => 'var(--x)' }),
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      createStaticStyles: () => ({}),
+      cssVar: new Proxy({}, { get: () => 'var(--x)' }),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
+      Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
+        <div data-testid="author-tooltip" data-title={title}>
+          {children}
+        </div>
+      ),
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 vi.mock('@lobechat/const', () => ({ resolveConnectorCatalogItem: () => undefined }));
 vi.mock('@lobehub/ui/icons', () => ({ McpIcon: () => null }));
 vi.mock('@/components/Plugins/PluginAvatar', () => ({ default: () => null }));
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-}));
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Avatar: ({ title }: { title?: string }) => <span data-testid="author-avatar">{title}</span>,
-  Tooltip: ({ children, title }: { children: ReactNode; title?: string }) => (
-    <div data-testid="author-tooltip" data-title={title}>
-      {children}
-    </div>
-  ),
-}));
 
 // Run selectors against controlled state (the mocked selectors ignore state).
 vi.mock('@/store/tool', () => ({

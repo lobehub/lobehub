@@ -1,6 +1,6 @@
 'use client';
 
-import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui/base-ui';
+import { createModal, type ModalInstance, useModalContext } from '@lobehub/ui';
 import { useTranslation } from 'react-i18next';
 
 import type { VerifyCriterionDraft } from '@/services/verify';

@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import { Check, CheckCheck, CircleDashed, HelpCircle, MessageSquareX, XCircle } from 'lucide-react';
 
 import { userReviewState } from './checkState';

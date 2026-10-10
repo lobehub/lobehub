@@ -1,8 +1,7 @@
 'use client';
 
-import { DropdownMenu, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { type DropdownItem, DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar, createStaticStyles, cx  } from '@lobehub/ui';
 import { Plus } from 'lucide-react';
 import { type ReactNode } from 'react';
 import { memo, useEffect, useRef } from 'react';
@@ -119,7 +118,7 @@ interface ChromeTabsProps {
    * When provided, the add button becomes a dropdown trigger showing these items.
    * Otherwise it falls back to calling `onAdd` directly on click.
    */
-  addMenuItems?: MenuProps['items'];
+  addMenuItems?: DropdownItem[];
   items: ChromeTabItem[];
   onAdd?: () => void;
   onChange: (id: string) => void;

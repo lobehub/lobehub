@@ -1,8 +1,7 @@
 'use client';
 
 import { buildAcceptanceRepairPrompt } from '@lobechat/prompts';
-import { copyToClipboard, Flexbox } from '@lobehub/ui';
-import { Button, Text, toast } from '@lobehub/ui/base-ui';
+import { Button, copyToClipboard, Flexbox, Text, toast } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

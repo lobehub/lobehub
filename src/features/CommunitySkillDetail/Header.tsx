@@ -1,8 +1,19 @@
 'use client';
 
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, responsive, useResponsive } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  confirmModal,
+  createStaticStyles,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  responsive,
+  Text,
+  toast,
+  useResponsive,
+} from '@lobehub/ui';
 import { CheckCircle2, CheckIcon, ChevronDown, Trash2 } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

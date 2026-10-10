@@ -4,7 +4,7 @@ import {
   sanitizeFolderName,
   topologicalSortFolders,
 } from '@lobechat/utils';
-import { toast, type ToastInstance } from '@lobehub/ui/base-ui';
+import { toast, type ToastInstance } from '@lobehub/ui';
 import { t } from 'i18next';
 import pMap from 'p-map';
 

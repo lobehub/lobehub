@@ -1,9 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, SearchBar } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, SearchBar, Skeleton, Text } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { type ChangeEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';

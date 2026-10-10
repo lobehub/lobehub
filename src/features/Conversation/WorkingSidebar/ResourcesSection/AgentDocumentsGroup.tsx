@@ -4,10 +4,19 @@ import {
   buildAgentSkillIdentifier,
   EMPTY_ARRAY,
 } from '@lobechat/const';
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Spin, Text, toast } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Center,
+  confirmModal,
+  createStaticStyles,
+  cx,
+  Empty,
+  Flexbox,
+  Spin,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import type { LucideIcon } from 'lucide-react';

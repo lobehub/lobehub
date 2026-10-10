@@ -13,8 +13,8 @@ import {
   Input,
   InputNumber,
   TextArea,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+} from '@lobehub/ui';
+import { createStaticStyles, useTheme } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Clock, Trash2 } from 'lucide-react';
 import type { ChangeEvent } from 'react';

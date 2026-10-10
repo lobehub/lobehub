@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { FileTextIcon } from 'lucide-react';
 import { memo } from 'react';

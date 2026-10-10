@@ -12,7 +12,7 @@ import type {
   BuiltinRender,
   BuiltinStreaming,
 } from '@lobechat/types';
-import type { MenuProps } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
 import { useMemo } from 'react';
 
 import { getToolRenderFixture, getToolRenderMeta, type ToolRenderFixture } from './fixtures';
@@ -38,7 +38,7 @@ export interface ToolsetEntry {
 
 export interface DevtoolsEntries {
   defaultToolset?: ToolsetEntry;
-  menuItems: MenuProps['items'];
+  menuItems: DropdownItem[];
   toolsetMap: Map<string, ToolsetEntry>;
 }
 
@@ -155,7 +155,7 @@ export const useDevtoolsEntries = (): DevtoolsEntries =>
       left.toolsetName.localeCompare(right.toolsetName),
     );
 
-    const menuItems: MenuProps['items'] = toolsets.map((toolset) => ({
+    const menuItems: DropdownItem[] = toolsets.map((toolset) => ({
       key: toolset.identifier,
       label: toolset.toolsetName,
     }));

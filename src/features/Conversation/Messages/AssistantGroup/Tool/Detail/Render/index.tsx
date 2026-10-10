@@ -1,7 +1,6 @@
 import { getBuiltinRender } from '@lobechat/builtin-tools/renders';
 import { type ChatPluginPayload } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { useToolResultPayload } from '@/hooks/useToolResultPayload';

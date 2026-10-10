@@ -1,6 +1,6 @@
 'use client';
 
-import { Tag, Tooltip } from '@lobehub/ui/base-ui';
+import { Tag, Tooltip } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

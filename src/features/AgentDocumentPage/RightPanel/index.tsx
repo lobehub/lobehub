@@ -1,8 +1,7 @@
 'use client';
 
 import { agentDisplayName } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Icon } from '@lobehub/ui';
 import { ChevronLeftIcon } from 'lucide-react';
 import { memo, type MouseEvent } from 'react';
 import { useTranslation } from 'react-i18next';

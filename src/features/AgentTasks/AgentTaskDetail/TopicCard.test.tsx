@@ -9,7 +9,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import TopicCard from './TopicCard';
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));

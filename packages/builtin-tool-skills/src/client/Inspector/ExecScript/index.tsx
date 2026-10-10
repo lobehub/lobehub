@@ -1,8 +1,8 @@
 'use client';
 
 import { type BuiltinInspectorProps } from '@lobechat/types';
-import { Spin } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Spin } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check, X } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

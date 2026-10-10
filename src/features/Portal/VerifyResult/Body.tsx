@@ -1,8 +1,6 @@
 import type { VerifierType } from '@lobechat/types';
 import { formatDuration as formatDurationMs } from '@lobechat/utils';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { ListTree } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo } from 'react';

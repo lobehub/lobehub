@@ -1,5 +1,5 @@
 import { randomAgentName } from '@lobechat/const';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

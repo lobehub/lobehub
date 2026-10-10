@@ -1,9 +1,8 @@
 'use client';
 
 import { agentDisplayName, type SidebarAgentItem } from '@lobechat/types';
-import type { MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { ActionIcon, DropdownMenu } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { ActionIcon, DropdownMenu,Icon  } from '@lobehub/ui';
 import { EllipsisIcon, EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -12,7 +11,7 @@ import { useGroupDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/Age
 import { useAgentDropdownMenu } from '@/features/HomeSidebar/Body/Agent/List/AgentItem/useDropdownMenu';
 import { useAgentModal } from '@/features/HomeSidebar/Body/Agent/ModalProvider';
 
-type MenuItems = NonNullable<MenuProps['items']>;
+type MenuItems = NonNullable<DropdownItem[]>;
 
 /** Drop leading / trailing / consecutive dividers left behind by filtering. */
 const collapseDividers = (menu: MenuItems): MenuItems => {
@@ -59,13 +58,13 @@ interface ItemActionsProps {
    * Hands the filtered menu-items getter back to the row/card, which feeds it
    * to its ContextMenuTrigger so right-click shows the same menu as "…".
    */
-  onMenuReady?: (getItems: () => MenuProps['items']) => void;
+  onMenuReady?: (getItems: () => DropdownItem[]) => void;
   onToggleSidebar?: (item: SidebarAgentItem) => void;
   sidebarHidden?: boolean;
 }
 
 interface ActionsDropdownProps extends Omit<ItemActionsProps, 'anchor'> {
-  getMenuItems: () => MenuProps['items'];
+  getMenuItems: () => DropdownItem[];
 }
 
 /** Shared "…" trigger: adapts a sidebar item menu for the flat view-all list. */
@@ -82,7 +81,7 @@ const ActionsDropdown = memo<ActionsDropdownProps>(
     const { t } = useTranslation('common');
 
     const items = useMemo(
-      () => (): MenuProps['items'] => {
+      () => (): DropdownItem[] => {
         // Pin and move-to-group organize the sidebar; they're meaningless in
         // this flat view-all list, so drop them (and any dividers left over).
         const menu = collapseDividers(

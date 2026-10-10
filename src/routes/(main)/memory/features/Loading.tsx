@@ -1,6 +1,4 @@
-import { Flexbox, Grid } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Grid, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { type ViewMode } from './ViewModeSwitcher';

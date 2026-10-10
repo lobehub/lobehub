@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Center, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import { FileImage, FileText, FileUpIcon, FolderIcon } from 'lucide-react';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo, useMemo } from 'react';

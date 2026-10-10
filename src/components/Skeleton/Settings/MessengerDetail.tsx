@@ -1,8 +1,6 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

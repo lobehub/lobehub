@@ -1,9 +1,16 @@
 'use client';
 
 import type { ScmInstallationItem } from '@lobechat/database/schemas';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Button, DropdownMenu, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  Button,
+  createStaticStyles,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Text,
+} from '@lobehub/ui';
 import { ChevronDownIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

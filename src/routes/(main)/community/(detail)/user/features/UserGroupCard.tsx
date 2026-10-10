@@ -1,16 +1,20 @@
 'use client';
 
 import {
+  Avatar,
   Block,
+  createStaticStyles,
+  cx,
   DropdownMenu,
   Flexbox,
   Icon,
   stopPropagation,
+  Tag as AntTag,
+  Tag,
+  Text,
   Tooltip,
   TooltipGroup,
 } from '@lobehub/ui';
-import { Avatar, Tag as AntTag, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
 import {
   AlertTriangle,
   ClockIcon,

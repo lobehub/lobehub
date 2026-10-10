@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { useTheme } from 'antd-style';
+import { Icon, useTheme } from '@lobehub/ui';
 import { TriangleAlert } from 'lucide-react';
 import { type CSSProperties, memo } from 'react';
 

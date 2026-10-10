@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, Input } from '@lobehub/ui/base-ui';
+import { ActionIcon, Input } from '@lobehub/ui';
 import { useDebounce } from 'ahooks';
 import { SearchIcon, XIcon } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

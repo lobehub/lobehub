@@ -1,6 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast  } from '@lobehub/ui';
 import { CopyPlus, EyeOffIcon, PanelTop, Pencil, Trash2, UsersIcon } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,10 +22,7 @@ interface ActionProps {
   toggleEditing: (visible?: boolean) => void;
 }
 
-export const useDropdownMenu = ({
-  pageId,
-  toggleEditing,
-}: ActionProps): (() => MenuProps['items']) => {
+export const useDropdownMenu = ({ pageId, toggleEditing }: ActionProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['common', 'file']);
 
   const navigate = useWorkspaceAwareNavigate();
@@ -193,7 +189,7 @@ export const useDropdownMenu = ({
           label: t('delete'),
           onClick: handleDelete,
         },
-      ].filter(Boolean) as MenuProps['items'],
+      ].filter(Boolean) as DropdownItem[],
     [
       t,
       toggleEditing,

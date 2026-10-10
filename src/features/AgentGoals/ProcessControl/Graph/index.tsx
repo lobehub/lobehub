@@ -4,8 +4,16 @@ import '@xyflow/react/dist/style.css';
 
 import type { GoalGraphEdge } from '@lobechat/types';
 import { experimentMembers } from '@lobechat/utils/goalGraph';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, Segmented, Text } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Flexbox,
+  Segmented,
+  Text,
+} from '@lobehub/ui';
 import {
   Background,
   BackgroundVariant,
@@ -20,7 +28,6 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { ChevronRight, Maximize2, X } from 'lucide-react';
 import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';

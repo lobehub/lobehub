@@ -1,5 +1,5 @@
 import { WORKSPACE_FILE_DRAG_MIME } from '@lobechat/const';
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import type React from 'react';
 
 /**

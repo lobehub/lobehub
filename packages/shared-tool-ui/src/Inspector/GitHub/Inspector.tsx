@@ -1,7 +1,7 @@
 'use client';
 
 import type { BuiltinInspector, BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { GitBranch, Hash } from 'lucide-react';
 import { memo } from 'react';
 

@@ -1,6 +1,5 @@
 import { BRANDING_PROVIDER } from '@lobechat/business-const';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { LucideImage } from 'lucide-react';
 import { type AiModelForSelect } from 'model-bank';
 import { memo, useMemo } from 'react';

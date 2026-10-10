@@ -1,18 +1,20 @@
 'use client';
 
 import type { DeviceListItem, DeviceVisibility } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Select,
   Tag,
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { CircleCheck, Lock, Users } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';

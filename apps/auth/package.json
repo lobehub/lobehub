@@ -11,7 +11,6 @@
     "type-check": "tsc --noEmit"
   },
   "devDependencies": {
-    "@ant-design/cssinjs": "^2.1.2",
     "@react-router/dev": "^8.3.0",
     "isbot": "^5.1.32",
     "vite-tsconfig-paths": "^6.1.1",

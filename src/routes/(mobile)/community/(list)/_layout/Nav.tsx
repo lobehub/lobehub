@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Drawer } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, createStaticStyles, cssVar, Drawer, Flexbox } from '@lobehub/ui';
 import { MenuIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 

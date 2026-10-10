@@ -1,8 +1,7 @@
 'use client';
 
 import { DEFAULT_AVATAR, EDITOR_DEBOUNCE_TIME } from '@lobechat/const';
-import { Block, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Input, Skeleton, toast } from '@lobehub/ui/base-ui';
+import { Block, Flexbox, Icon, Input, Skeleton, toast, Tooltip } from '@lobehub/ui';
 import { debounce } from 'es-toolkit/compat';
 import isEqual from 'fast-deep-equal';
 import { PaletteIcon } from 'lucide-react';

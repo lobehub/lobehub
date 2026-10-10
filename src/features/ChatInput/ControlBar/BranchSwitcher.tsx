@@ -1,7 +1,10 @@
 import type { DeviceGitWorktreeListItem } from '@lobechat/types';
-import { copyToClipboard, Icon, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
+  copyToClipboard,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenuFooter,
   DropdownMenuHeader,
   DropdownMenuItem,
@@ -11,10 +14,11 @@ import {
   DropdownMenuRoot,
   DropdownMenuScrollViewport,
   DropdownMenuTrigger,
+  Icon,
   Input,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import {
   CheckIcon,
   CopyIcon,

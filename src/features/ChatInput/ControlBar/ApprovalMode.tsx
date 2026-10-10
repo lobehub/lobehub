@@ -1,7 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { type DropdownItem } from '@lobehub/ui';
+import { Button , Center, createStaticStyles,DropdownMenu, Flexbox, Icon, Tooltip  } from '@lobehub/ui';
 import { Check, ChevronDown, Hand, ListChecks, Zap } from 'lucide-react';
 import { type LucideIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
@@ -97,7 +95,7 @@ const ModeSelector = memo(() => {
   );
 
   const menuItems = useCallback(
-    (): MenuProps['items'] => [
+    (): DropdownItem[] => [
       {
         extra: approvalMode === 'auto-run' ? <Icon icon={Check} /> : undefined,
         key: 'auto-run',

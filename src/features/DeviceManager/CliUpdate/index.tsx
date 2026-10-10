@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Button, confirmModal, Popover, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Button, confirmModal, Flexbox, Popover, Text } from '@lobehub/ui';
 import { RotateCwIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

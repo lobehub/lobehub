@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox } from '@lobehub/ui';
 import { useLocation } from 'react-router';
 
 import NavHeader from '@/features/NavHeader';

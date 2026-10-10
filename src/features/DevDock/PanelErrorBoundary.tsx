@@ -1,4 +1,4 @@
-import { Button } from '@lobehub/ui/base-ui';
+import { Button } from '@lobehub/ui';
 import { Component, type PropsWithChildren } from 'react';
 
 interface PanelErrorBoundaryState {

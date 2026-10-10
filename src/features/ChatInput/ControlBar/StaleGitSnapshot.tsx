@@ -1,14 +1,15 @@
 import type { WorkingDirGitState } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
 import {
+  createStaticStyles,
+  cssVar,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+  Icon,
+} from '@lobehub/ui';
 import { GitBranchIcon, GitForkIcon, GitPullRequest, RotateCcwIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';

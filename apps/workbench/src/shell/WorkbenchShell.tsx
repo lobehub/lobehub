@@ -1,7 +1,6 @@
 'use client';
 
-import { ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui/base-ui';
-import { StyleProvider } from 'antd-style';
+import { ModalHost, ToastHost, TooltipGroup } from '@lobehub/ui';
 import { memo, type PropsWithChildren } from 'react';
 
 import WorkbenchLocale from './WorkbenchLocale';
@@ -20,9 +19,7 @@ const WorkbenchShell = memo<WorkbenchShellProps>(({ children, resources, locale:
   return (
     <WorkbenchLocale defaultLang={locale} resources={resources}>
       <WorkbenchTheme>
-        <TooltipGroup layoutAnimation={false}>
-          <StyleProvider speedy={import.meta.env.PROD}>{children}</StyleProvider>
-        </TooltipGroup>
+        <TooltipGroup layoutAnimation={false}>{children}</TooltipGroup>
         <ModalHost />
         <ToastHost />
       </WorkbenchTheme>

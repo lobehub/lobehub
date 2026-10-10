@@ -1,9 +1,8 @@
 'use client';
 
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox, Icon } from '@lobehub/ui';
-import type { ImperativeModalProps, ModalInstance } from '@lobehub/ui/base-ui';
-import { Button, createModal, ModalFooter } from '@lobehub/ui/base-ui';
+import type { ImperativeModalProps, ModalInstance } from '@lobehub/ui';
+import { Button, createModal, Flexbox, Icon, ModalFooter } from '@lobehub/ui';
 import debug from 'debug';
 import { AlertCircle, LogIn } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

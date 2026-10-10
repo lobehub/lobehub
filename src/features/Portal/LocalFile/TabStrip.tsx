@@ -1,10 +1,9 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { ContextMenuTrigger, type GenericItemType, Icon } from '@lobehub/ui';
-import { confirmModal, ScrollArea } from '@lobehub/ui/base-ui';
+import { ContextMenuTrigger, type DropdownItem, Icon } from '@lobehub/ui';
+import { confirmModal, createStaticStyles,ScrollArea  } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import { XIcon } from 'lucide-react';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -190,7 +189,7 @@ const TabStrip = memo(() => {
   );
 
   const getContextMenuItems = useCallback(
-    (id: string, filePath: string, index: number): GenericItemType[] => [
+    (id: string, filePath: string, index: number): DropdownItem[] => [
       {
         disabled: index === 0,
         key: 'closeLeft',

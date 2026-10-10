@@ -5,18 +5,21 @@ import {
   type RemoteHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
 import type { HeterogeneousProviderConfig } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   Button as BaseButton,
   Button,
   createModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Select,
   Tag,
   Text,
+  Tooltip,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { t as i18nT } from 'i18next';
 import { BotIcon, CheckCircle2, MonitorSmartphone, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';

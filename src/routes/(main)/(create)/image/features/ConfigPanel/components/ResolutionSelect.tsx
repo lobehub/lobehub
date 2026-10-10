@@ -1,4 +1,4 @@
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Tabs } from '@lobehub/ui';
 import { memo, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

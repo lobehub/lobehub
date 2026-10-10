@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, Collapsible, Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Collapsible,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Spin,
+  Text,
+} from '@lobehub/ui';
 import {
   ChevronRight,
   ChevronsDownUp,

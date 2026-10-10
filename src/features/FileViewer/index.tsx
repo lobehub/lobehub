@@ -1,8 +1,7 @@
 'use client';
 
 import { MARKDOWN_MIME_TYPES } from '@lobechat/const';
-import { Center } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui/base-ui';
+import { Center, Spin } from '@lobehub/ui';
 import type { CSSProperties, JSXElementConstructor, ReactNode } from 'react';
 import { memo, useCallback, useEffect, useState } from 'react';
 

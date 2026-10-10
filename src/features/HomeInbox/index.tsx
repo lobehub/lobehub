@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Segmented } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { ActionIcon, createStaticStyles, cx, Flexbox, Segmented } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { ChevronLeftIcon, ChevronRightIcon } from 'lucide-react';
 import { Fragment, memo, type ReactNode, useMemo, useState } from 'react';

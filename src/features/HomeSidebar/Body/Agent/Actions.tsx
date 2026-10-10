@@ -1,12 +1,11 @@
-import type { MenuProps } from '@lobehub/ui';
-import { DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { ActionIcon,DropdownMenu, Flexbox  } from '@lobehub/ui';
 import { MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 
 interface ActionsProps {
-  addMenuItems: MenuProps['items'];
-  dropdownMenu: MenuProps['items'];
+  addMenuItems: DropdownItem[];
+  dropdownMenu: DropdownItem[];
   isLoading?: boolean;
 }
 

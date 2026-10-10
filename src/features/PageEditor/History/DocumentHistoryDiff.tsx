@@ -2,8 +2,7 @@
 
 import type { LexicalDiffProps } from '@lobehub/editor/renderer';
 import { LexicalDiff } from '@lobehub/editor/renderer';
-import { Empty, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Empty, Flexbox } from '@lobehub/ui';
 import type { SerializedEditorState } from 'lexical';
 import { GitCompareArrowsIcon } from 'lucide-react';
 import { memo, useMemo } from 'react';

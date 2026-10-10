@@ -1,6 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
+import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import {
   Button,
   confirmModal,
@@ -13,9 +13,8 @@ import {
   TextArea,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
-import { Form, useForm } from '@lobehub/ui/base-ui/form';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
+import { Form, useForm } from '@lobehub/ui/form';
 import { t as i18nT } from 'i18next';
 import { BrainIcon } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';

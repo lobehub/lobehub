@@ -1,5 +1,5 @@
 import type { DeviceGitPullRequestAction, DeviceGitPullRequestActionResult } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useRef, useState } from 'react';
 
 import { mutate } from '@/libs/swr';

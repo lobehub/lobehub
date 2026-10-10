@@ -1,6 +1,6 @@
 'use client';
 
-import { createGlobalStyle, createStaticStyles } from 'antd-style';
+import { createGlobalStyle, createStaticStyles } from '@lobehub/ui';
 import { type FocusEvent, memo, useCallback, useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 

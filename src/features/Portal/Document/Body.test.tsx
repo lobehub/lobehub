@@ -9,7 +9,7 @@ vi.mock('@/features/FileViewer/FileDocumentPreview', () => ({
   ),
 }));
 
-vi.mock('antd-style', async (importOriginal) => {
+vi.mock('@lobehub/ui', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>;
 
   return {

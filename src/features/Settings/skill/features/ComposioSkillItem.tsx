@@ -1,9 +1,18 @@
 'use client';
 
 import { type ComposioAppType } from '@lobechat/const';
-import { Center, DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, Button as LobeButton, confirmModal } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  Button as LobeButton,
+  Center,
+  confirmModal,
+  cssVar,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  Tooltip,
+} from '@lobehub/ui';
 import {
   CircleCheck,
   MoreHorizontalIcon,

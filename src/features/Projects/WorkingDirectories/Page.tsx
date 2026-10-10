@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Tabs, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Tabs, Text } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';

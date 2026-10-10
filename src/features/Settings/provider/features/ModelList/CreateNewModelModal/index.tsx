@@ -1,8 +1,8 @@
 'use client';
 
-import type { ModalInstance } from '@lobehub/ui/base-ui';
-import { createModal } from '@lobehub/ui/base-ui';
-import type { FormInstance } from '@lobehub/ui/base-ui/form';
+import type { ModalInstance } from '@lobehub/ui';
+import { createModal } from '@lobehub/ui';
+import type { FormInstance } from '@lobehub/ui/form';
 import { t } from 'i18next';
 
 import CreateNewModelContent from './Content';

@@ -1,7 +1,5 @@
 import { type BlockProps } from '@lobehub/ui';
-import { Block, Flexbox } from '@lobehub/ui';
-import { Spin, Statistic, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, responsive } from 'antd-style';
+import { Block, createStaticStyles, Flexbox, responsive, Spin, Statistic, Text } from '@lobehub/ui';
 import { type CSSProperties, type ReactNode } from 'react';
 import { memo } from 'react';
 

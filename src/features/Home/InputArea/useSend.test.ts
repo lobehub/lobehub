@@ -93,7 +93,7 @@ const activeWorkspaceIdMock = vi.hoisted(() => ({
   value: null as string | null,
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast: { error: messageErrorMock, success: messageSuccessMock },
 }));

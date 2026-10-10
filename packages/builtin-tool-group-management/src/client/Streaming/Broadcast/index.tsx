@@ -2,7 +2,7 @@
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Markdown } from '@lobehub/ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { BroadcastParams } from '../../../types';

@@ -24,36 +24,54 @@ vi.mock('@/services/git', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  Icon: ({ icon }: any) => <span data-icon={icon?.displayName ?? icon?.name} data-testid="icon" />,
-  Tooltip: ({ children }: { children: ReactNode }) => (
-    <span data-testid="worktree-tooltip">{children}</span>
-  ),
-}));
-
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  confirmModal: confirmModalMock,
-  DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
-    <button onClick={onClick}>{children}</button>
-  ),
-  DropdownMenuPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuPortal: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuPositioner: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuRoot: ({ children }: { children: ReactNode }) => <div>{children}</div>,
-  DropdownMenuTrigger: ({ children, className }: { children: ReactNode; className?: string }) => (
-    <div className={className} data-testid="worktree-dropdown-trigger">
-      {children}
-    </div>
-  ),
-  toast: {
-    error: messageErrorMock,
-    info: vi.fn(),
-    loading: toastLoadingMock,
-    success: messageSuccessMock,
-  },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      Icon: ({ icon }: any) => (
+        <span data-icon={icon?.displayName ?? icon?.name} data-testid="icon" />
+      ),
+      Tooltip: ({ children }: { children: ReactNode }) => (
+        <span data-testid="worktree-tooltip">{children}</span>
+      ),
+    }),
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      confirmModal: confirmModalMock,
+      DropdownMenuItem: ({ children, onClick }: { children: ReactNode; onClick?: () => void }) => (
+        <button onClick={onClick}>{children}</button>
+      ),
+      DropdownMenuPopup: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      DropdownMenuPortal: ({ children }: { children: ReactNode }) => <>{children}</>,
+      DropdownMenuPositioner: ({ children }: { children: ReactNode }) => <>{children}</>,
+      DropdownMenuRoot: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+      DropdownMenuTrigger: ({
+        children,
+        className,
+      }: {
+        children: ReactNode;
+        className?: string;
+      }) => (
+        <div className={className} data-testid="worktree-dropdown-trigger">
+          {children}
+        </div>
+      ),
+      toast: {
+        error: messageErrorMock,
+        info: vi.fn(),
+        loading: toastLoadingMock,
+        success: messageSuccessMock,
+      },
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

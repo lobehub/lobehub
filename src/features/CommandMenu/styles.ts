@@ -1,4 +1,4 @@
-import { createStaticStyles, keyframes } from 'antd-style';
+import { createStaticStyles, keyframes } from '@lobehub/ui';
 
 const slideDown = keyframes`
   from {

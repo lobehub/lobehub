@@ -1,6 +1,6 @@
 'use client';
 
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import { memo, useId } from 'react';
 
 import { sparklinePoints } from '../../utils/series';

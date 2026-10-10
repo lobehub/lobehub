@@ -56,7 +56,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: (props: Record<string, unknown>) => {
     mocks.actionIconProps.all.push(props);

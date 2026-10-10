@@ -1,4 +1,4 @@
-import { cssVar } from 'antd-style';
+import { cssVar } from '@lobehub/ui';
 import { useMemo } from 'react';
 
 import { useVideoStore } from '@/store/video';

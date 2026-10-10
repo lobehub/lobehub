@@ -1,9 +1,8 @@
 'use client';
 
 import { SOCIAL_URL } from '@lobechat/business-const';
-import { type MenuProps } from '@lobehub/ui';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { ActionIcon,DropdownMenu, Flexbox, Icon  } from '@lobehub/ui';
 import { DiscordIcon, GithubIcon } from '@lobehub/ui/icons';
 import {
   Book,
@@ -34,7 +33,7 @@ import { serverConfigSelectors, useServerConfigStore } from '@/store/serverConfi
 import { useUserStore } from '@/store/user';
 import { userGeneralSettingsSelectors } from '@/store/user/slices/settings/selectors/general';
 
-type FooterMenuItems = NonNullable<MenuProps['items']>;
+type FooterMenuItems = NonNullable<DropdownItem[]>;
 
 /**
  * Wrap each clickable menu item with a unified click tracker, preserving any
@@ -108,7 +107,7 @@ const Footer = memo(() => {
   }, []);
 
   const { helpMenuItems, trackedMenuKeys } = useMemo<{
-    helpMenuItems: MenuProps['items'];
+    helpMenuItems: DropdownItem[];
     trackedMenuKeys: string[];
   }>(() => {
     const ownItems: FooterMenuItems = [

@@ -1,15 +1,15 @@
 import { getWorkingDirSourcePath } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
 import {
   Alert,
   Avatar,
   Button,
   createModal,
+  Flexbox,
   Select,
   Switch,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

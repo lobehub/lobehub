@@ -1,5 +1,5 @@
 import { type BarChartProps } from '@lobehub/charts';
-import { Skeleton, Tabs } from '@lobehub/ui/base-ui';
+import { Skeleton, Tabs } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

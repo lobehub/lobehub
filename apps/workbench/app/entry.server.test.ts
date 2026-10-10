@@ -6,8 +6,6 @@ import { describe, expect, it, vi } from 'vitest';
 
 import handleRequest from './entry.server';
 
-vi.mock('virtual:lobehub/antd-static-css', () => ({ styleKeys: [] }));
-
 vi.mock('react-router', () => ({
   ServerRouter: () => {
     const Report = lazy(async () => ({

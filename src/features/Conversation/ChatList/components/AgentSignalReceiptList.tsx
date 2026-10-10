@@ -1,9 +1,8 @@
 'use client';
 
 import { LayersEnum } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
+import { createStaticStyles, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import type { LucideIcon } from 'lucide-react';
 import { Brain, ClipboardCheck } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';

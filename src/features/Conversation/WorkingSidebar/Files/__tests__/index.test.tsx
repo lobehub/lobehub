@@ -225,64 +225,73 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
-  ...((await importOriginal()) as Record<string, unknown>),
-  confirmModal: uiSpies.confirmModal,
-  toast: { error: uiSpies.toastError, success: uiSpies.toastSuccess },
-  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-    <button title={title} type={'button'} onClick={onClick} />
-  ),
-  Button: ({ children, title }: { children?: ReactNodeType; title?: string }) => (
-    <button title={title} type={'button'}>
-      {children}
-    </button>
-  ),
-  DropdownMenu: ({
-    children,
-    items,
-  }: {
-    children?: ReactNodeType;
-    items: {
-      key: string;
-      label: ReactNodeType;
-      onCheckedChange?: (checked: boolean) => void;
-      onClick?: () => void;
-    }[];
-  }) => (
-    <div>
-      {children}
-      {items.map((item) => (
-        <button
-          key={item.key}
-          type={'button'}
-          onClick={() => {
-            item.onClick?.();
-            item.onCheckedChange?.(true);
-          }}
-        >
-          {item.label}
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...((await importOriginal()) as Record<string, unknown>),
+      confirmModal: uiSpies.confirmModal,
+      toast: { error: uiSpies.toastError, success: uiSpies.toastSuccess },
+      ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+        <button title={title} type={'button'} onClick={onClick} />
+      ),
+      Button: ({ children, title }: { children?: ReactNodeType; title?: string }) => (
+        <button title={title} type={'button'}>
+          {children}
         </button>
-      ))}
-    </div>
-  ),
-}));
+      ),
+      DropdownMenu: ({
+        children,
+        items,
+      }: {
+        children?: ReactNodeType;
+        items: {
+          key: string;
+          label: ReactNodeType;
+          onCheckedChange?: (checked: boolean) => void;
+          onClick?: () => void;
+        }[];
+      }) => (
+        <div>
+          {children}
+          {items.map((item) => (
+            <button
+              key={item.key}
+              type={'button'}
+              onClick={() => {
+                item.onClick?.();
+                item.onCheckedChange?.(true);
+              }}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+      ),
+    }),
+    () => ({
+      Center: ({ children }: { children?: ReactNodeType }) => <div>{children}</div>,
+      copyToClipboard: vi.fn(),
+      Empty: ({ description }: { description?: ReactNodeType }) => <div>{description}</div>,
+      Flexbox: ({ children }: { children?: ReactNodeType }) => <div>{children}</div>,
+      Icon: () => <span />,
+      stopPropagation: vi.fn(),
+    }),
+    async (importOriginal) => {
+      const actual = (await importOriginal()) as Record<string, unknown>;
 
-vi.mock('@lobehub/ui', () => ({
-  Center: ({ children }: { children?: ReactNodeType }) => <div>{children}</div>,
-  copyToClipboard: vi.fn(),
-  Empty: ({ description }: { description?: ReactNodeType }) => <div>{description}</div>,
-  Flexbox: ({ children }: { children?: ReactNodeType }) => <div>{children}</div>,
-  Icon: () => <span />,
-  stopPropagation: vi.fn(),
-}));
-
-vi.mock('antd-style', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-
-  return {
-    ...actual,
-    createStaticStyles: () => () => ({}),
-  };
+      return {
+        ...actual,
+        createStaticStyles: () => () => ({}),
+      };
+    },
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
 });
 
 // ─── helpers ──────────────────────────────────────────────────────────────────

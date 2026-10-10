@@ -8,7 +8,7 @@ import {
   type DropdownItem,
   DropdownMenu,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { MoreHorizontalIcon, PencilIcon, TrashIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

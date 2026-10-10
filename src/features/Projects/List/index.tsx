@@ -1,6 +1,15 @@
 'use client';
 
-import { Center, ContextMenuTrigger, Empty, Flexbox, Icon, SearchBar, Tooltip } from '@lobehub/ui';
+import {
+  Center,
+  ContextMenuTrigger,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Icon,
+  SearchBar,
+  Tooltip,
+} from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -9,8 +18,7 @@ import {
   DropdownMenu,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   FolderClosedIcon,

@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Button, Input, Text } from '@lobehub/ui/base-ui';
+import { Button, Flexbox, Input, Text } from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 import { electronSystemService } from '@/services/electron/system';

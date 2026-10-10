@@ -1,7 +1,4 @@
-import { type ModalProps } from '@lobehub/ui';
-import { Flexbox, Icon, SortableList } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button , createStaticStyles,Flexbox, Icon, SortableList  } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -28,7 +25,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-const ConfigGroupModal = memo<ModalProps>(({ open, onCancel }) => {
+const ConfigGroupModal = memo<{ onCancel?: () => void; open?: boolean }>(({ open, onCancel }) => {
   const { t } = useTranslation('chat');
   const { allowed: canCreate, reason: createReason } = usePermission('create_content');
   const { allowed: canEdit } = usePermission('edit_own_content');

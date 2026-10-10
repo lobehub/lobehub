@@ -61,11 +61,15 @@ allowBuilds:
   workerd: true
 
 overrides:
-  '@ant-design/icons': 6.3.2
+  '@lobehub/ui': ^6.0.0-beta.1
+  '@lobehub/icons': ^6.0.0-beta.1
+  '@lobehub/editor': ^5.0.0-beta.1
+  '@lobehub/charts': ^6.0.0-beta.1
+  '@lobehub/tts': ^6.0.0-beta.1
+  '@lobehub/fluent-emoji': ^5.0.0-beta.1
   '@react-pdf/image': 3.0.4
   '@types/react': 19.2.13
   '@vitest/coverage-v8': 5.0.0
-  antd: 6.3.5
   baseline-browser-mapping: 2.10.31
   drizzle-orm: ^0.45.2
   fast-xml-parser: 5.4.2

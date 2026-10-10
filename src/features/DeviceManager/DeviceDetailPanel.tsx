@@ -2,19 +2,22 @@
 
 import { isDesktop } from '@lobechat/const';
 import type { DeviceListItem, DeviceWorkspaceShare } from '@lobechat/types';
-import { Flexbox, Icon, SortableList } from '@lobehub/ui';
 import {
   ActionIcon,
   Avatar,
   Button,
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
   Input,
+  SortableList,
   Tabs,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { FolderOpenIcon, FolderPlusIcon, LockIcon, XIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

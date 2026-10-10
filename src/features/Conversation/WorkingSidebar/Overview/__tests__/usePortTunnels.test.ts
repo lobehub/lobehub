@@ -48,10 +48,21 @@ vi.mock('@lobechat/const', () => ({
   },
 }));
 
-vi.mock('@lobehub/ui', () => ({ copyToClipboard }));
-vi.mock('@lobehub/ui/base-ui', () => ({
-  toast: { error: toastError, success: toastSuccess },
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    () => ({ copyToClipboard }),
+    () => ({
+      toast: { error: toastError, success: toastSuccess },
+    }),
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
+});
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),

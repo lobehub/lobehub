@@ -1,8 +1,7 @@
 'use client';
 
-import { Icon, Tooltip } from '@lobehub/ui';
-import { type MenuProps } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, Icon, toast,Tooltip  } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 import { EyeOffIcon, Trash, UsersIcon } from 'lucide-react';
 import type { CSSProperties } from 'react';
 import { memo, useState } from 'react';
@@ -111,7 +110,7 @@ const TopicItem = memo<TopicItemProps>(({ topic, showMoreInfo, style }) => {
     });
   };
 
-  const menuItems: MenuProps['items'] = [
+  const menuItems: DropdownItem[] = [
     ...(canPublish
       ? [
           {

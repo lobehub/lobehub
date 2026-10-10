@@ -8,7 +8,7 @@ import type { Plugin, PluginOption } from 'vite';
 const NAMED_EXPORT_PREFIX = 'virtual:lobe-ui-named:';
 const RESOLVED_NAMED_EXPORT_PREFIX = `\0${NAMED_EXPORT_PREFIX}`;
 
-const BARRELS = ['', 'awesome', 'base-ui', 'brand', 'chat', 'color', 'icons', 'mdx'] as const;
+const BARRELS = ['', 'awesome', 'brand', 'chat', 'color', 'icons', 'mdx'] as const;
 
 interface MemberSource {
   imported: string;

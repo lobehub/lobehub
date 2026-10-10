@@ -1,6 +1,5 @@
 import { DEFAULT_SECURITY_BLACKLIST, InterventionChecker } from '@lobechat/agent-runtime';
-import { Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert, Flexbox } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 

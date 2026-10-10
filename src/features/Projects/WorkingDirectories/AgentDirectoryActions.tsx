@@ -1,5 +1,5 @@
 import type { ChatTopic } from '@lobechat/types';
-import { ActionIcon, DropdownMenu, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, DropdownMenu, toast } from '@lobehub/ui';
 import { MoreHorizontalIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

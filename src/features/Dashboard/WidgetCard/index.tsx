@@ -1,9 +1,7 @@
 'use client';
 
 import type { WidgetView } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Spin, Text, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { Center, createStaticStyles, cssVar, cx,Flexbox, Icon, Spin, Text, Tooltip   } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CircleDashedIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';

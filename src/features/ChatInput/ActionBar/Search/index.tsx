@@ -1,5 +1,5 @@
+import { cssVar } from '@lobehub/ui';
 import { GlobeOffIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import { Globe } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

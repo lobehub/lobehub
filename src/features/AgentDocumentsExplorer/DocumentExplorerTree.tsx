@@ -1,7 +1,6 @@
 import { AGENT_DOCUMENT_CATEGORY } from '@lobechat/const';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
+import { Center, createStaticStyles, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import { FileTextIcon, Maximize2Icon, PenLineIcon, Trash2Icon } from 'lucide-react';
 import type { ChangeEvent, CSSProperties } from 'react';
 import { memo, useCallback, useMemo, useRef } from 'react';

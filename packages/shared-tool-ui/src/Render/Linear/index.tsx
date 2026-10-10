@@ -3,8 +3,8 @@
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { fromNow } from '@lobechat/utils/time';
 import { Block, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Tag, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ExternalLink, Inbox, Link2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useMemo } from 'react';

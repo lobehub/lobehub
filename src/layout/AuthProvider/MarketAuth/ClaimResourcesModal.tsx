@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Checkbox, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Checkbox, cssVar, Flexbox, Text, toast } from '@lobehub/ui';
 import { Package, Wrench } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

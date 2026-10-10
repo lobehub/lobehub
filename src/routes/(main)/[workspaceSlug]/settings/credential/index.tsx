@@ -1,8 +1,16 @@
 'use client';
 
-import { Block, Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Tabs, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Block,
+  Button,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Icon,
+  Tabs,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { Plus, UserRoundIcon, UsersIcon } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

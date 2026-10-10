@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ChatInputCredits from '@/business/client/features/ChatInputCredits';

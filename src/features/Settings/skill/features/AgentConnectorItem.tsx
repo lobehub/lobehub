@@ -1,10 +1,8 @@
 'use client';
 
 import { getComposioAppByIdentifier, getLobehubSkillProviderById } from '@lobechat/const';
-import { Icon } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui/base-ui';
+import { Avatar, cssVar, Icon, Tag } from '@lobehub/ui';
 import { McpIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import { memo } from 'react';
 
 import NavItem from '@/features/NavPanel/components/NavItem';

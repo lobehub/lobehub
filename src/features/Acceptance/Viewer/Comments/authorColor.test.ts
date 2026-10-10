@@ -1,3 +1,4 @@
+import { cssVar } from '@lobehub/ui';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -52,7 +53,6 @@ describe('acceptanceAuthorColor', () => {
   });
 
   it('leaves the verdict colours to verdicts', () => {
-    const { cssVar } = require('antd-style');
     for (const semantic of [cssVar.volcano, cssVar.green, cssVar.colorError, cssVar.colorSuccess]) {
       expect(ACCEPTANCE_AUTHOR_COLORS).not.toContain(semantic);
     }

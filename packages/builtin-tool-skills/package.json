@@ -19,7 +19,6 @@
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",
-    "antd-style": "*",
     "react": "*",
     "react-i18next": "*"
   }

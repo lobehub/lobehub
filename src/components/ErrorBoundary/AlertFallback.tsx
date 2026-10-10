@@ -1,6 +1,6 @@
 'use client';
 
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert } from '@lobehub/ui';
 import { lazy, memo, Suspense } from 'react';
 
 const Highlighter = lazy(() => import('@lobehub/ui/es/Highlighter/index'));

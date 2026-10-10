@@ -1,7 +1,7 @@
 'use client';
 
-import { DraggablePanel } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { DraggablePanel } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { CHAT_PORTAL_TOOL_UI_WIDTH } from '@/const/layoutTokens';

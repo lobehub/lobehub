@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 const DetailsLoading = memo(() => {

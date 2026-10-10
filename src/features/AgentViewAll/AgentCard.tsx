@@ -3,9 +3,8 @@
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
-import { Avatar, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, responsive } from 'antd-style';
+import { Block, ContextMenuTrigger, type DropdownItem, Flexbox, Tooltip } from '@lobehub/ui';
+import { Avatar, createStaticStyles, responsive,Tag, Text  } from '@lobehub/ui';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -115,8 +114,8 @@ const AgentCard = memo<AgentCardProps>(
     // mounts on the card's pointer-enter and hands its items back via ref.
     const [menuActivated, setMenuActivated] = useState(false);
     const activateMenu = useCallback(() => setMenuActivated(true), []);
-    const menuItemsRef = useRef<(() => MenuProps['items']) | null>(null);
-    const handleMenuReady = useCallback((getItems: () => MenuProps['items']) => {
+    const menuItemsRef = useRef<(() => DropdownItem[]) | null>(null);
+    const handleMenuReady = useCallback((getItems: () => DropdownItem[]) => {
       menuItemsRef.current = getItems;
     }, []);
     const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);

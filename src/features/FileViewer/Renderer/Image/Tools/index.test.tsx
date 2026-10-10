@@ -65,7 +65,7 @@ vi.mock('./AIEdit/deps', async (importOriginal) => {
 });
 
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn() }));
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   toast,
 }));

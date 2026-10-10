@@ -1,4 +1,4 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 export const gitMenuTriggerStyles = createStaticStyles(({ css }) => ({
   trigger: css`

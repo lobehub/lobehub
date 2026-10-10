@@ -1,8 +1,7 @@
 'use client';
 
-import { type MenuProps } from '@lobehub/ui';
-import { List, type ListItem, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { type DropdownItem, List, type ListItem, Text  } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { devDockPanelStyles } from '@/features/DevDock/panelStyles';
@@ -29,7 +28,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
 }));
 
 interface SidebarProps {
-  items: MenuProps['items'];
+  items: DropdownItem[];
   onSelect: (key: string) => void;
   selectedKey?: string;
 }

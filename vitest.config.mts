@@ -240,7 +240,6 @@ export default defineConfig({
           // modal-stack contexts don't match the chunk's
           include: [
             '@lobehub/ui',
-            '@lobehub/ui/base-ui',
             '@lobehub/ui/icons',
             '@lobehub/ui/mobile',
             '@lobehub/ui/chat',

@@ -1,6 +1,6 @@
 import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Skeleton, Text } from '@lobehub/ui';
+import { createStaticStyles, cx } from '@lobehub/ui';
 import { SearchIcon } from 'lucide-react';
 import { memo } from 'react';
 

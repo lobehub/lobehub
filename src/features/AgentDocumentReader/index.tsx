@@ -1,11 +1,10 @@
 'use client';
 
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, createStaticStyles, cssVar } from '@lobehub/ui';
 import ActionIcon from '@lobehub/ui/es/ActionIcon/index';
 import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Markdown from '@lobehub/ui/es/Markdown/index';
 import Text from '@lobehub/ui/es/Text/index';
-import { createStaticStyles, cssVar } from 'antd-style';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

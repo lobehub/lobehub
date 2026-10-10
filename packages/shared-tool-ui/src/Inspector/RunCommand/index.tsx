@@ -2,7 +2,7 @@
 
 import type { RunCommandState } from '@lobechat/tool-runtime';
 import type { BuiltinInspectorProps } from '@lobechat/types';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx } from '@lobehub/ui';
 import { Check, SquareChevronRight, X } from 'lucide-react';
 import { type ComponentType, memo } from 'react';
 import { useTranslation } from 'react-i18next';

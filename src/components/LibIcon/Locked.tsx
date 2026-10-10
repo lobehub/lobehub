@@ -1,7 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar, Icon } from '@lobehub/ui';
 import { LockIcon } from 'lucide-react';
 import { memo } from 'react';
 

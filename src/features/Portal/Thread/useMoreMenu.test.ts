@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   updateThreadTitle: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ confirmModal: mocks.confirmModal }));
+vi.mock('@lobehub/ui', () => ({ confirmModal: mocks.confirmModal }));
 vi.mock('@/components/RenameModal', () => ({ openRenameModal: mocks.openRenameModal }));
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: true }) }));
 vi.mock('@/hooks/useAppOrigin', () => ({ useAppOrigin: () => 'https://app.lobehub.com' }));

@@ -1,9 +1,16 @@
 'use client';
 
 import type { DocumentLikeSummary } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Skeleton, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Avatar,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { ThumbsUp } from 'lucide-react';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -13,7 +13,7 @@ const { insertLocalPathTagsMock, toastInfoMock } = vi.hoisted(() => ({
   toastInfoMock: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { info: toastInfoMock } }));
+vi.mock('@lobehub/ui', () => ({ toast: { info: toastInfoMock } }));
 vi.mock('@/features/ChatInput/InputEditor/insertLocalFileTags', () => ({
   insertLocalPathTags: insertLocalPathTagsMock,
 }));

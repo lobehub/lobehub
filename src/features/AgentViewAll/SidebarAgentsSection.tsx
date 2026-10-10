@@ -3,9 +3,8 @@
 import { AGENT_CHAT_URL, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { Block, ContextMenuTrigger, Flexbox, Icon, type MenuProps } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, responsive } from 'antd-style';
+import { Block, ContextMenuTrigger, type DropdownItem,Flexbox, Icon } from '@lobehub/ui';
+import { createStaticStyles, cssVar, responsive,Tag, Text  } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronUpIcon } from 'lucide-react';
 import { memo, useCallback, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -111,8 +110,8 @@ const SidebarMiniCard = memo<SidebarMiniCardProps>(({ item, onToggleSidebar }) =
 
   const [menuActivated, setMenuActivated] = useState(false);
   const activateMenu = useCallback(() => setMenuActivated(true), []);
-  const menuItemsRef = useRef<(() => MenuProps['items']) | null>(null);
-  const handleMenuReady = useCallback((getItems: () => MenuProps['items']) => {
+  const menuItemsRef = useRef<(() => DropdownItem[]) | null>(null);
+  const handleMenuReady = useCallback((getItems: () => DropdownItem[]) => {
     menuItemsRef.current = getItems;
   }, []);
   const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);

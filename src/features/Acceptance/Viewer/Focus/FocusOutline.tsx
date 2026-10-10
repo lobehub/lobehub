@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceChecklistItem } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon, Tag, Text } from '@lobehub/ui';
 import { BadgeCheck, Ban, ChevronRight, CircleDashed, PencilLine, RotateCcw } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

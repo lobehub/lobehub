@@ -12,7 +12,7 @@ const toastError = vi.hoisted(() => vi.fn());
 
 vi.mock('@/services/git', () => ({ gitService: { pushGitBranch, runPullRequestAction } }));
 vi.mock('@/libs/swr', () => ({ mutate }));
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: toastError } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: toastError } }));
 
 const params = { deviceId: 'dev-1', number: 7, workingDirectory: '/repo' };
 

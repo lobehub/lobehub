@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Divider, Switch, Tabs, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Divider, Flexbox, Switch, Tabs, Text } from '@lobehub/ui';
 import { Images } from 'lucide-react';
 import { memo, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

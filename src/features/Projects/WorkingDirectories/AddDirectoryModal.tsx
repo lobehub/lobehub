@@ -1,13 +1,13 @@
-import { Flexbox } from '@lobehub/ui';
 import {
   Alert,
   Button,
   createModal,
+  Flexbox,
   Input,
   Select,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

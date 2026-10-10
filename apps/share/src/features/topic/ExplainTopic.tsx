@@ -1,4 +1,4 @@
-import { Button, toast } from '@lobehub/ui/base-ui';
+import { Button, toast } from '@lobehub/ui';
 import { Sparkles } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

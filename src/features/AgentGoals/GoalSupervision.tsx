@@ -1,7 +1,7 @@
 import { AGENT_CHAT_TOPIC_URL } from '@lobechat/const';
 import { agentDisplayName } from '@lobechat/types';
 import { copyToClipboard, type DropdownItem, DropdownMenu, Flexbox } from '@lobehub/ui';
-import { ActionIcon, Text, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, Text, toast } from '@lobehub/ui';
 import {
   CopyIcon,
   ExternalLink,

@@ -1,7 +1,7 @@
 import { type OpenAIChatMessage, type VoiceMessageRecording } from '@lobechat/types';
 import { type IEditor, type SlashOptions } from '@lobehub/editor';
 import { type ChatInputProps } from '@lobehub/editor/react';
-import { type MenuProps } from '@lobehub/ui';
+import { type DropdownItem } from '@lobehub/ui';
 
 import { type ActionKeys } from '@/features/ChatInput';
 
@@ -89,7 +89,7 @@ export interface PublicState {
   resolveSendBlocked?: () => boolean;
   rightActions: ActionKeys[];
   sendButtonProps?: SendButtonProps;
-  sendMenu?: MenuProps;
+  sendMenu?: { items: DropdownItem[] };
   showTypoBar?: boolean;
   /**
    * Slash menu placement: 'bottom' for home page (input in center), 'top' for page input (at bottom)

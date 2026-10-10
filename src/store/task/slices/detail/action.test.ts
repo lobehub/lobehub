@@ -3,7 +3,7 @@ import {
   readTaskExecutionConfig,
   toTaskExecutionConfigPatch,
 } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -55,7 +55,7 @@ vi.mock('@/libs/swr', () => ({
   useClientDataSWR: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   ...(await import('~base-ui-stubs')).baseUiStubs,
 }));
@@ -643,7 +643,7 @@ describe('TaskDetailSliceAction', () => {
     });
 
     it('should propagate error, mark saveStatus failed, refresh, and toast on failure', async () => {
-      const { toast } = await import('@lobehub/ui/base-ui');
+      const { toast } = await import('@lobehub/ui');
       useTaskStore.setState({
         taskDetailMap: {
           'T-1': { identifier: 'T-1', instruction: 'Test', status: 'backlog' },
@@ -665,7 +665,7 @@ describe('TaskDetailSliceAction', () => {
 
     it('should reload retry content after an editor autosave failure rolls back', async () => {
       const { mutate } = await import('@/libs/swr');
-      const { toast } = await import('@lobehub/ui/base-ui');
+      const { toast } = await import('@lobehub/ui');
       useTaskStore.setState({
         activeTaskId: 'T-1',
         taskDetailMap: {

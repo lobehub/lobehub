@@ -1,20 +1,24 @@
 'use client';
 
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import type { DraggablePanelProps, DropdownItem } from '@lobehub/ui/base-ui';
+import type { DraggablePanelProps, DropdownItem } from '@lobehub/ui';
 import {
   Accordion,
   ActionIcon,
   Button,
+  Center,
   Checkbox,
+  createStaticStyles,
+  cssVar,
   DraggablePanel,
   DraggablePanelContainer,
   DropdownMenu,
+  Empty,
+  Flexbox,
+  Icon,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useDebounce } from 'ahooks';
-import { createStaticStyles, cssVar } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import {
   ArrowLeft,

@@ -1,18 +1,21 @@
 import { deriveWorktreePath, type DeviceGitWorktreeListItem } from '@lobechat/types';
-import { Icon, Tooltip } from '@lobehub/ui';
 import {
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenuItem,
   DropdownMenuPopup,
   DropdownMenuPortal,
   DropdownMenuPositioner,
   DropdownMenuRoot,
   DropdownMenuTrigger,
+  Icon,
   Input,
   Spin,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import {
   CheckIcon,
   FolderPlusIcon,

@@ -1,8 +1,7 @@
 'use client';
 
 import type { WidgetView } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Tag, Text  } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

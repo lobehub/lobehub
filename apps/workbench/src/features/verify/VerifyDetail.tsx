@@ -2,7 +2,7 @@
 
 import { Flexbox } from '@lobehub/ui/es/Flex/index';
 import Text from '@lobehub/ui/es/Text/index';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useParams } from 'react-router';

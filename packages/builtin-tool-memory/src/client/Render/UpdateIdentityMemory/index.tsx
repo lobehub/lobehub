@@ -2,7 +2,7 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
-import { Tag, Text } from '@lobehub/ui/base-ui';
+import { Tag, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { UpdateIdentityMemoryParams, UpdateIdentityMemoryState } from '../../../types';

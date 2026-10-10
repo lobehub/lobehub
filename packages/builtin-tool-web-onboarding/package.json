@@ -22,8 +22,6 @@
   },
   "peerDependencies": {
     "@lobehub/ui": "^5",
-    "antd": "^6",
-    "antd-style": "*",
     "react": "*",
     "react-i18next": "*",
     "swr": "^2"

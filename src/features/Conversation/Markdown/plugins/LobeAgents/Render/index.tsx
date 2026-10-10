@@ -1,9 +1,7 @@
 'use client';
 
 import { AGENT_CHAT_URL } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Avatar, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ArrowRight } from 'lucide-react';
 import { memo, useCallback } from 'react';
 

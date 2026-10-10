@@ -1,7 +1,7 @@
 'use client';
 
 import { isDesktop } from '@lobechat/const';
-import { Flexbox } from '@lobehub/ui';
+import { createStaticStyles, Flexbox } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -13,8 +13,7 @@ import {
   TabsRoot,
   TabsTab,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+} from '@lobehub/ui';
 import {
   CopyXIcon,
   PlusIcon,

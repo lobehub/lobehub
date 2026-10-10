@@ -1,6 +1,4 @@
-import { Center } from '@lobehub/ui';
-import { Spin } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Center, cssVar, Spin } from '@lobehub/ui';
 
 const VirtuosoLoading = () => {
   return (

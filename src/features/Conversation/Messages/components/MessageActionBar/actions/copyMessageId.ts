@@ -1,5 +1,4 @@
-import { copyToClipboard } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { copyToClipboard, toast } from '@lobehub/ui';
 import { Braces } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

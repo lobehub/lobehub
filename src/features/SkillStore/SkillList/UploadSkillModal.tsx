@@ -10,7 +10,7 @@ import {
   toast,
   Upload,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { sha256 } from 'js-sha256';
 import { ArrowLeftRight, InboxIcon, Sparkles, Upload as UploadIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

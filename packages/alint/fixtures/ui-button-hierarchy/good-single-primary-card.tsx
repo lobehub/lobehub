@@ -1,6 +1,6 @@
 // Fixture: a card with one primary action and a fill secondary — taste, not this rule.
 import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
+import { Button, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

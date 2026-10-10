@@ -1,8 +1,16 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton, Tag, Text, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Icon,
+  Skeleton,
+  Tag,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { Check, Plus, Target } from 'lucide-react';
 import { memo, useMemo } from 'react';

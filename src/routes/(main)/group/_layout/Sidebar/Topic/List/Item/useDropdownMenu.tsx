@@ -1,8 +1,7 @@
 import { GROUP_CHAT_TOPIC_URL } from '@lobechat/const';
 import type { ChatTopicStatus } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { Icon, toast  } from '@lobehub/ui';
 import {
   Archive,
   ArchiveRestore,
@@ -40,7 +39,7 @@ export const useTopicItemDropdownMenu = ({
   id,
   status,
   toggleEditing,
-}: TopicItemDropdownMenuProps): (() => MenuProps['items']) => {
+}: TopicItemDropdownMenuProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['topic', 'common']);
 
   const navigate = useWorkspaceAwareNavigate();
@@ -190,7 +189,7 @@ export const useTopicItemDropdownMenu = ({
         },
         sfSymbol: 'trash',
       },
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
     id,
     isCompleted,

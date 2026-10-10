@@ -1,7 +1,5 @@
 import { useWatchBroadcast } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Popover, Switch } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox, Popover, Switch } from '@lobehub/ui';
 import { HardDrive, SettingsIcon } from 'lucide-react';
 import { memo, useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -69,11 +67,7 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
   useFetchGatewayStatus();
   useElectronStore((s) => s.useFetchGatewayDeviceInfo)();
   const gatewayDeviceInfo = useElectronStore((s) => s.gatewayDeviceInfo);
-  const {
-    data: devices,
-    error: deviceListError,
-    isLoading: isDeviceListLoading,
-  } = useDeviceList();
+  const { data: devices, error: deviceListError, isLoading: isDeviceListLoading } = useDeviceList();
 
   useWatchBroadcast('gatewayConnectionStatusChanged', ({ status }) => {
     setGatewayConnectionStatus(status);
@@ -109,20 +103,19 @@ const DeviceGateway = memo<DeviceGatewayProps>(({ workspaceScoped }) => {
     deviceListError,
   );
   const scopeConnected = workspaceScoped ? workspaceConnectionState === 'connected' : isConnected;
-  const connectionHint =
-    workspaceScoped
-      ? workspaceConnectionState === 'unavailable'
-        ? t('gateway.workspaceStatusUnavailable')
-        : workspaceConnectionState === 'connecting'
-          ? t('gateway.statusConnecting')
-          : workspaceConnectionState === 'connected'
-            ? t('gateway.workspaceStatusConnections', { count: connectionCount })
-            : t('gateway.workspaceStatusDisconnected')
-        : isConnecting
-          ? t('gateway.statusConnecting')
-          : isConnected && connectionCount
-            ? t('gateway.statusConnectedConnections', { count: connectionCount })
-            : t(isConnected ? 'gateway.statusConnected' : 'gateway.statusDisconnected');
+  const connectionHint = workspaceScoped
+    ? workspaceConnectionState === 'unavailable'
+      ? t('gateway.workspaceStatusUnavailable')
+      : workspaceConnectionState === 'connecting'
+        ? t('gateway.statusConnecting')
+        : workspaceConnectionState === 'connected'
+          ? t('gateway.workspaceStatusConnections', { count: connectionCount })
+          : t('gateway.workspaceStatusDisconnected')
+    : isConnecting
+      ? t('gateway.statusConnecting')
+      : isConnected && connectionCount
+        ? t('gateway.statusConnectedConnections', { count: connectionCount })
+        : t(isConnected ? 'gateway.statusConnected' : 'gateway.statusDisconnected');
 
   const popoverContent = (
     <Flexbox className={styles.popoverContent} gap={4}>

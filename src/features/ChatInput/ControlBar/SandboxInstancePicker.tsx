@@ -1,17 +1,21 @@
 'use client';
 
 import { Github } from '@lobehub/icons';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   confirmModal,
+  createStaticStyles,
+  cssVar,
+  cx,
   DropdownMenu,
+  Flexbox,
+  Icon,
   Popover,
   Skeleton,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+  Tooltip,
+} from '@lobehub/ui';
 import {
   AppWindowMacIcon,
   ChevronDownIcon,

@@ -1,8 +1,8 @@
 'use client';
 
 import { isMaskedBotCredential } from '@lobechat/const';
-import { Button, toast } from '@lobehub/ui/base-ui';
-import { useFormInstance, useWatch } from '@lobehub/ui/base-ui/form';
+import { Button, toast } from '@lobehub/ui';
+import { useFormInstance, useWatch } from '@lobehub/ui/form';
 import { Download } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

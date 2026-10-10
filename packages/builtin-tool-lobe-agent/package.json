@@ -27,8 +27,6 @@
   "peerDependencies": {
     "@lobehub/editor": "^4",
     "@lobehub/ui": "^5",
-    "antd": "^6",
-    "antd-style": "*",
     "lucide-react": "*",
     "react": "*"
   }

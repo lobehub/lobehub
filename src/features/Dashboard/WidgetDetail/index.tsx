@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Drawer, Tabs, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Alert, createStaticStyles, cssVar,Drawer, Flexbox, Tabs, Text   } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';

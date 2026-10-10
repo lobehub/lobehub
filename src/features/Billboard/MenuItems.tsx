@@ -1,4 +1,4 @@
-import type { MenuProps } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
 import { Icon } from '@lobehub/ui';
 import { Megaphone } from 'lucide-react';
 import { useMemo } from 'react';
@@ -10,7 +10,7 @@ import { useServerConfigStore } from '@/store/serverConfig';
 import { billboardDismissKey } from './index';
 import { resolveBillboardTitle } from './locale';
 
-export const useBillboardMenuItems = (): MenuProps['items'] => {
+export const useBillboardMenuItems = (): DropdownItem[] => {
   const billboard = useServerConfigStore((s) => s.billboard);
   const updateSystemStatus = useGlobalStore((s) => s.updateSystemStatus);
   const { i18n } = useTranslation();

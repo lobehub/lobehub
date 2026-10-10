@@ -1,16 +1,15 @@
 'use client';
 
-import 'antd/dist/reset.css';
+import '@lobehub/ui/theme.css';
+import '@lobehub/ui/global.css';
+import '@lobehub/ui/style.css';
 
-import { ConfigProvider, ThemeProvider } from '@lobehub/ui';
-import { ToastHost } from '@lobehub/ui/base-ui';
-import { App } from 'antd';
+import { ConfigProvider, ToastHost  } from '@lobehub/ui';
 import { domMax, LazyMotion } from 'motion/react';
 import * as m from 'motion/react-m';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 
-import { useIsDark } from '@/hooks/useIsDark';
 import Image from '@/libs/next/Image';
 import Link from '@/libs/next/Link';
 
@@ -19,9 +18,6 @@ interface AuthThemeLiteProps extends PropsWithChildren {
 }
 
 const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
-  const isDark = useIsDark();
-  const currentAppearance = isDark ? 'dark' : 'light';
-
   return (
     <ConfigProvider
       motion={m}
@@ -32,21 +28,10 @@ const AuthThemeLite = memo<AuthThemeLiteProps>(({ children, globalCDN }) => {
         proxy: globalCDN ? 'unpkg' : undefined,
       }}
     >
-      <ThemeProvider
-        appearance={currentAppearance}
-        className={'auth-layout'}
-        defaultAppearance={currentAppearance}
-        defaultThemeMode={currentAppearance}
-        style={{ height: '100%' }}
-        theme={{
-          cssVar: { key: 'lobe-vars' },
-        }}
-      >
-        <App style={{ height: '100%' }}>
-          <LazyMotion features={domMax}>{children}</LazyMotion>
-          <ToastHost />
-        </App>
-      </ThemeProvider>
+      <div className={'auth-layout'} style={{ height: '100%' }}>
+        <LazyMotion features={domMax}>{children}</LazyMotion>
+        <ToastHost />
+      </div>
     </ConfigProvider>
   );
 });

@@ -9,7 +9,7 @@ vi.mock('@/libs/better-auth/auth-client', () => ({
   sendVerificationEmail: mockSendVerificationEmail,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', () => ({
   toast: { error: vi.fn(), success: vi.fn() },
 }));
 

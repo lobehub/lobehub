@@ -1,13 +1,16 @@
-import { Block, Center, Empty, Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionRoot,
   AccordionTrigger,
+  Block,
+  Center,
+  cssVar,
   Divider,
+  Empty,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import { ClipboardCheckIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';

@@ -1,7 +1,6 @@
 'use client';
 
-import { Center, Empty, Flexbox } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, Center, Empty, Flexbox } from '@lobehub/ui';
 import { AlertTriangleIcon } from 'lucide-react';
 import { memo, type PropsWithChildren } from 'react';
 import { useTranslation } from 'react-i18next';

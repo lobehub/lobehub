@@ -1,8 +1,7 @@
 'use client';
 
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, cx, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
 import { FileBox, type LucideIcon, Repeat2, ShieldCheck } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

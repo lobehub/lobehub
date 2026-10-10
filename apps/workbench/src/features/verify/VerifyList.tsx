@@ -4,7 +4,7 @@ import Empty from '@lobehub/ui/es/Empty/index';
 import { Center, Flexbox } from '@lobehub/ui/es/Flex/index';
 import Icon from '@lobehub/ui/es/Icon/index';
 import Text from '@lobehub/ui/es/Text/index';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { ClipboardCheck, Search, TriangleAlert } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

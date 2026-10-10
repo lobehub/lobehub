@@ -5,7 +5,7 @@ import {
   type ExpertiseEnforcement,
   type ExpertiseReasonKind,
 } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
+import { Block, createStaticStyles, cssVar, cx, Flexbox, Icon } from '@lobehub/ui';
 import {
   ActionIcon,
   Button,
@@ -15,8 +15,7 @@ import {
   Tag,
   Text,
   TextArea,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import {
   ActivityIcon,

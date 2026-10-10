@@ -1,6 +1,6 @@
 'use client';
 
-import { type DropdownItem, DropdownMenu, Switch } from '@lobehub/ui/base-ui';
+import { type DropdownItem, DropdownMenu, Switch } from '@lobehub/ui';
 import { Component, memo, type PropsWithChildren, Suspense, useSyncExternalStore } from 'react';
 
 import {

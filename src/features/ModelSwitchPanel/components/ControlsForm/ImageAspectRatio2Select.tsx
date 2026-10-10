@@ -1,4 +1,4 @@
-import { Select } from '@lobehub/ui/base-ui';
+import { Select } from '@lobehub/ui';
 import { memo, useMemo } from 'react';
 
 import { useAgentId } from '@/features/ChatInput/hooks/useAgentId';

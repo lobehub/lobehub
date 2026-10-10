@@ -1,5 +1,4 @@
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Text } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 

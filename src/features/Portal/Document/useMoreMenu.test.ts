@@ -20,7 +20,7 @@ const mocks = vi.hoisted(() => ({
   url: 'https://app.lobehub.com/agent/agt_1/docs/doc_1' as string | undefined,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', () => ({
   confirmModal: mocks.confirmModal,
   toast: { error: mocks.toastError, success: mocks.toastSuccess },
 }));

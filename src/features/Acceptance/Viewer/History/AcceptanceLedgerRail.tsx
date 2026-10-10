@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { DraggablePanel, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, useResponsive } from 'antd-style';
+import {
+  createStaticStyles,
+  cssVar,
+  DraggablePanel,
+  Flexbox,
+  Icon,
+  Text,
+  useResponsive,
+} from '@lobehub/ui';
 import { PanelRightOpen } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useParams, useSearchParams } from 'react-router';

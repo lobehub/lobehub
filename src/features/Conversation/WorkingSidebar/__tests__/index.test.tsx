@@ -326,83 +326,97 @@ vi.mock('@/const/version', () => ({
     return platform.isDesktop;
   },
 }));
-vi.mock('@lobehub/ui', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-    <button aria-label={title} type="button" onClick={onClick} />
-  ),
-  Skeleton: () => <div data-testid="params-loading" />,
-}));
+vi.mock('@lobehub/ui', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>();
+  const factories: ((original: typeof importOriginal) => unknown)[] = [
+    async (importOriginal) => ({
+      ...(await importOriginal<object>()),
+      ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+        <button aria-label={title} type="button" onClick={onClick} />
+      ),
+      Skeleton: () => <div data-testid="params-loading" />,
+    }),
+    async (importOriginal) => {
+      const { useState } = await import('react');
+      const actual = (await importOriginal()) as Record<string, unknown>;
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => {
-  const { useState } = await import('react');
-  const actual = (await importOriginal()) as Record<string, unknown>;
+      return {
+        ...actual,
+        ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
+          <button aria-label={title} type="button" onClick={onClick} />
+        ),
+        ContextMenuTrigger: ({ children, items }: { children: ReactNode; items: any[] }) => {
+          const [open, setOpen] = useState(false);
+          const menuItems = items.filter((item) => item && item.type !== 'divider');
 
-  return {
-    ...actual,
-    ActionIcon: ({ onClick, title }: { onClick?: () => void; title?: string }) => (
-      <button aria-label={title} type="button" onClick={onClick} />
-    ),
-    ContextMenuTrigger: ({ children, items }: { children: ReactNode; items: any[] }) => {
-      const [open, setOpen] = useState(false);
-      const menuItems = items.filter((item) => item && item.type !== 'divider');
+          return (
+            <span
+              onContextMenu={(event: MouseEvent) => {
+                event.preventDefault();
+                setOpen(true);
+              }}
+            >
+              {children}
+              {open &&
+                menuItems.map((item) => (
+                  <button
+                    disabled={item.disabled}
+                    key={item.key}
+                    type="button"
+                    onClick={item.onClick}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+            </span>
+          );
+        },
+        DropdownMenu: ({
+          children,
+          items,
+          onOpenChangeComplete,
+        }: {
+          children: ReactNode;
+          items: any[] | (() => any[]);
+          onOpenChangeComplete?: (open: boolean) => void;
+        }) => {
+          const [open, setOpen] = useState(false);
+          const resolvedItems = typeof items === 'function' ? items() : items;
+          const menuItems = resolvedItems.flatMap((item) => item.children ?? []);
+          dropdownMenuState.items = resolvedItems;
+          dropdownMenuState.onOpenChangeComplete = onOpenChangeComplete;
 
-      return (
-        <span
-          onContextMenu={(event: MouseEvent) => {
-            event.preventDefault();
-            setOpen(true);
-          }}
-        >
-          {children}
-          {open &&
-            menuItems.map((item) => (
-              <button disabled={item.disabled} key={item.key} type="button" onClick={item.onClick}>
-                {item.label}
-              </button>
-            ))}
-        </span>
-      );
+          return (
+            <div>
+              <span onClick={() => setOpen((value) => !value)}>{children}</span>
+              {open &&
+                menuItems.map((item) => (
+                  <button key={item.key} type="button" onClick={item.onClick}>
+                    {item.label}
+                  </button>
+                ))}
+            </div>
+          );
+        },
+        Skeleton: {
+          Text: () => <div data-testid="params-loading" />,
+        },
+      };
     },
-    DropdownMenu: ({
-      children,
-      items,
-      onOpenChangeComplete,
-    }: {
-      children: ReactNode;
-      items: any[] | (() => any[]);
-      onOpenChangeComplete?: (open: boolean) => void;
-    }) => {
-      const [open, setOpen] = useState(false);
-      const resolvedItems = typeof items === 'function' ? items() : items;
-      const menuItems = resolvedItems.flatMap((item) => item.children ?? []);
-      dropdownMenuState.items = resolvedItems;
-      dropdownMenuState.onOpenChangeComplete = onOpenChangeComplete;
-
-      return (
-        <div>
-          <span onClick={() => setOpen((value) => !value)}>{children}</span>
-          {open &&
-            menuItems.map((item) => (
-              <button key={item.key} type="button" onClick={item.onClick}>
-                {item.label}
-              </button>
-            ))}
-        </div>
-      );
+    async (importOriginal) => {
+      const actual = (await importOriginal()) as Record<string, unknown>;
+      return {
+        ...actual,
+        createStaticStyles: () => () => ({}),
+      };
     },
-    Skeleton: {
-      Text: () => <div data-testid="params-loading" />,
-    },
-  };
-});
-
-vi.mock('antd-style', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
-  return {
-    ...actual,
-    createStaticStyles: () => () => ({}),
-  };
+  ];
+  const merged: Record<string, unknown> = { ...actual };
+  for (const factory of factories) {
+    const part = (await factory(importOriginal)) as Record<string, unknown>;
+    for (const [key, value] of Object.entries(part)) if (value !== actual[key]) merged[key] = value;
+  }
+  return merged;
 });
 
 beforeEach(() => {

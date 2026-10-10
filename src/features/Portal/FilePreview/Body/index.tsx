@@ -1,5 +1,4 @@
-import { Flexbox, Icon, Markdown } from '@lobehub/ui';
-import { Tabs } from '@lobehub/ui/base-ui';
+import { Flexbox, Icon, Markdown, Tabs } from '@lobehub/ui';
 import { BoltIcon, FileIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

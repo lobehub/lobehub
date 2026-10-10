@@ -3,8 +3,8 @@
 import { DEFAULT_AVATAR } from '@lobechat/const';
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar, Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { Avatar, Tag } from '@lobehub/ui';
+import { createStaticStyles, useTheme } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { GetAgentDetailParams, GetAgentDetailState } from '../../../types';

@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   isThreadMode: false,
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({
+vi.mock('@lobehub/ui', () => ({
   toast: { warning: vi.fn() },
 }));
 

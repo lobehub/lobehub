@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 import { TAB_ICON_SIZE, TAB_INLINE_INSET } from './tabLayout';
 

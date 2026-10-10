@@ -1,9 +1,7 @@
 'use client';
 
 import type { AcceptanceCommentThread } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Button, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar, Flexbox, Text } from '@lobehub/ui';
 import { BadgeCheck, Undo2 } from 'lucide-react';
 import { nanoid } from 'nanoid';
 import { memo, useCallback, useMemo, useState } from 'react';

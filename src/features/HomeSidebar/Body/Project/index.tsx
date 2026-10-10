@@ -7,9 +7,9 @@ import {
   accordionStyles,
   AccordionTrigger,
   ActionIcon,
+  cx,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { ArrowRightIcon, PlusIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

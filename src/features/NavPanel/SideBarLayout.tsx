@@ -1,5 +1,4 @@
-import { Flexbox, TooltipGroup } from '@lobehub/ui';
-import { ScrollArea } from '@lobehub/ui/base-ui';
+import { Flexbox, ScrollArea, TooltipGroup } from '@lobehub/ui';
 import { type ReactNode, type UIEvent } from 'react';
 import { memo, Suspense, useCallback, useLayoutEffect, useRef } from 'react';
 

@@ -1,9 +1,19 @@
 'use client';
 
 import type { TaskStatus, WorkSummaryItem } from '@lobechat/types';
-import { Block, Center, Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Button, Progress, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Block,
+  Button,
+  Center,
+  createStaticStyles,
+  cssVar,
+  Empty,
+  Flexbox,
+  Icon,
+  Progress,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import {
   BadgeCheckIcon,
   CheckCircle2Icon,

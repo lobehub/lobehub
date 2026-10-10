@@ -2,9 +2,21 @@
 
 import { AGENT_CHAT_URL, DEFAULT_INBOX_AVATAR } from '@lobechat/const';
 import { Claude, Cline, Cursor, OpenAI } from '@lobehub/icons';
-import { Block, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Avatar, Button, Divider, Select, Tabs, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Avatar,
+  Block,
+  Button,
+  createStaticStyles,
+  cx,
+  Divider,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Markdown,
+  Select,
+  Tabs,
+  Text,
+} from '@lobehub/ui';
 import { BotIcon, UserRoundIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

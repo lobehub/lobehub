@@ -1,7 +1,6 @@
 'use client';
 
-import { Markdown } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Markdown, Skeleton, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

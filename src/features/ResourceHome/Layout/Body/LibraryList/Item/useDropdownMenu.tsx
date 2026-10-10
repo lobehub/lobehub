@@ -1,6 +1,5 @@
-import type { MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast  } from '@lobehub/ui';
 import { EyeOffIcon, FileText, GlobeIcon, PencilLine, Trash, UsersIcon } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -35,7 +34,7 @@ export const useDropdownMenu = ({
   toggleEditing,
   userId,
   visibility,
-}: ActionProps): (() => MenuProps['items']) => {
+}: ActionProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['file', 'common', 'chat', 'setting']);
 
   const removeKnowledgeBase = useKnowledgeBaseStore((s) => s.removeKnowledgeBase);
@@ -154,7 +153,7 @@ export const useDropdownMenu = ({
     // Assemble the menu as ordered groups and let the dividers fall out of which
     // groups survived. Hand-wiring a divider next to each entry silently drops
     // or duplicates separators as soon as one capability combination changes.
-    const groups: NonNullable<MenuProps['items']>[] = [
+    const groups: NonNullable<DropdownItem[]>[] = [
       // Content edits: gated by the workspace role only. Row ownership no longer
       // gates them — the server accepts any member holding an `edit` grant.
       canEdit
@@ -211,7 +210,7 @@ export const useDropdownMenu = ({
             }
           : null,
         memberPermissionMenuItem,
-      ].filter(Boolean) as NonNullable<MenuProps['items']>,
+      ].filter(Boolean) as NonNullable<DropdownItem[]>,
       // Cross-workspace move / copy: creator-or-owner only.
       canEdit && canManage ? (transferMenuItems ?? []) : [],
       canEdit

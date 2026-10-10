@@ -1,4 +1,4 @@
-import { useTheme } from 'antd-style';
+import { useTheme } from '@lobehub/ui';
 import { darken, lighten, mix, rgba, saturate } from 'polished';
 import { useMemo } from 'react';
 

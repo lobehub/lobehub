@@ -1,5 +1,4 @@
-import { Highlighter } from '@lobehub/ui';
-import { cx } from 'antd-style';
+import { cx, Highlighter } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { containerStyles } from '../style';

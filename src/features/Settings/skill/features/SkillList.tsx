@@ -8,9 +8,8 @@ import {
   resolveConnectorCatalogItem,
 } from '@lobechat/const';
 import type { BuiltinSkillManifest, LobeBuiltinTool } from '@lobechat/types';
-import { Center, Empty } from '@lobehub/ui';
+import { Center, createStaticStyles, Empty } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles } from 'antd-style';
 import isEqual from 'fast-deep-equal';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import type React from 'react';

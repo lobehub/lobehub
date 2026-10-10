@@ -1,4 +1,4 @@
-import type { GenericItemType } from '@lobehub/ui';
+import type { DropdownItem } from '@lobehub/ui';
 
 type TabContextMenuLabelKey =
   | 'tab.closeCurrentTab'
@@ -47,7 +47,7 @@ export const buildTabContextMenuItems = ({
   splitViewEnabled,
   t,
   totalCount,
-}: TabContextMenuParams): GenericItemType[] => {
+}: TabContextMenuParams): DropdownItem[] => {
   const closableLeft = Math.max(0, index - pinnedCount);
   const closableRight = Math.max(0, totalCount - Math.max(index + 1, pinnedCount));
   const closableOthers = totalCount - pinnedCount - (pinned ? 0 : 1);

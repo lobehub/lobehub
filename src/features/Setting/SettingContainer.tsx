@@ -1,8 +1,7 @@
 'use client';
 
 import { type FlexboxProps } from '@lobehub/ui';
-import { Flexbox } from '@lobehub/ui';
-import { cssVar, useTheme } from 'antd-style';
+import { cssVar, Flexbox, useTheme } from '@lobehub/ui';
 import { type PropsWithChildren, type ReactNode } from 'react';
 import { memo } from 'react';
 

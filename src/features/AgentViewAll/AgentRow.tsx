@@ -3,9 +3,8 @@
 import { AGENT_CHAT_URL, DEFAULT_AVATAR, GROUP_CHAT_URL } from '@lobechat/const';
 import type { SidebarAgentItem } from '@lobechat/types';
 import { agentDisplayName, agentSecondaryDisplayName } from '@lobechat/types';
-import { ContextMenuTrigger, Flexbox, type MenuProps, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ContextMenuTrigger, type DropdownItem, Flexbox, Tooltip } from '@lobehub/ui';
+import { ActionIcon, Avatar, createStaticStyles, cssVar,Tag, Text  } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { EyeIcon, EyeOffIcon } from 'lucide-react';
 import { memo, type MouseEvent, useCallback, useRef, useState } from 'react';
@@ -112,8 +111,8 @@ const AgentRow = memo<AgentRowProps>(
     // its filtered items back via ref for the ContextMenuTrigger.
     const [menuActivated, setMenuActivated] = useState(false);
     const activateMenu = useCallback(() => setMenuActivated(true), []);
-    const menuItemsRef = useRef<(() => MenuProps['items']) | null>(null);
-    const handleMenuReady = useCallback((getItems: () => MenuProps['items']) => {
+    const menuItemsRef = useRef<(() => DropdownItem[]) | null>(null);
+    const handleMenuReady = useCallback((getItems: () => DropdownItem[]) => {
       menuItemsRef.current = getItems;
     }, []);
     const getContextMenuItems = useCallback(() => menuItemsRef.current?.() ?? [], []);

@@ -1,6 +1,5 @@
 import { type DropdownItem, type DropdownMenuCheckboxItem } from '@lobehub/ui';
-import { DropdownMenu, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
+import { Button, DropdownMenu, Icon } from '@lobehub/ui';
 import { ArrowDownWideNarrow, ChevronDown } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

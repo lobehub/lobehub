@@ -1,14 +1,12 @@
-import { type ListItemProps } from '@lobehub/ui';
-import { List } from '@lobehub/ui';
-import { Avatar } from '@lobehub/ui/base-ui';
+import { Avatar, createStaticStyles, cx  } from '@lobehub/ui';
 import { useHover } from 'ahooks';
-import { createStaticStyles, cx } from 'antd-style';
 import { memo, useMemo, useRef } from 'react';
 
 import GroupAvatar from '@/features/GroupAvatar';
 import { useServerConfigStore } from '@/store/serverConfig';
 
-const { Item } = List;
+import Item from './BaseListItem';
+import type { ListItemProps } from './type';
 
 const styles = createStaticStyles(({ css, cssVar }) => {
   return {

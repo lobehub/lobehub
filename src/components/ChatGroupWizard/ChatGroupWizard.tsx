@@ -1,8 +1,22 @@
 'use client';
 
-import { Empty, Flexbox, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
-import { Accordion, Avatar, Button, Checkbox, List, Switch, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import {
+  Accordion,
+  Avatar,
+  Button,
+  Checkbox,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  List,
+  SearchBar,
+  stopPropagation,
+  Switch,
+  Text,
+  Tooltip,
+} from '@lobehub/ui';
 import { omit } from 'es-toolkit/compat';
 import { Users } from 'lucide-react';
 import { type ChangeEvent } from 'react';

@@ -1,10 +1,17 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { getWorkingDirEffectivePath } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
-import { Flexbox, Icon, type IconProps } from '@lobehub/ui';
-import { ActionIcon, type DropdownItem, DropdownMenu, Skeleton } from '@lobehub/ui/base-ui';
+import {
+  ActionIcon,
+  type DropdownItem,
+  DropdownMenu,
+  Flexbox,
+  Icon,
+  type IconProps,
+  Skeleton,
+} from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar } from 'antd-style';
 import {
   BoxesIcon,
   CheckIcon,

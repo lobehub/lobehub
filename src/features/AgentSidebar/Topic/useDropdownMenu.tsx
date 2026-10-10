@@ -1,8 +1,6 @@
 import { isDesktop } from '@lobechat/const';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast, Upload } from '@lobehub/ui/base-ui';
-import { css, cx } from 'antd-style';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, css, cx,Icon, toast, Upload   } from '@lobehub/ui';
 import { Archive, HardDriveDownload, Hash, Import, LucideCheck, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,7 +34,7 @@ type TopicMaintenanceScope = 'own' | 'workspace';
 
 export const useTopicActionsDropdownMenu = (
   options: UseTopicActionsDropdownMenuOptions = {},
-): (() => MenuProps['items']) => {
+): (() => DropdownItem[]) => {
   const { t } = useTranslation(['topic', 'common']);
   const { onUploadClose } = options;
   const activeWorkspaceId = useActiveWorkspaceId();
@@ -123,7 +121,7 @@ export const useTopicActionsDropdownMenu = (
 
   const enableHeteroSessionImport = useUserStore(labPreferSelectors.enableHeteroSessionImport);
 
-  return useCallback((): MenuProps['items'] => {
+  return useCallback((): DropdownItem[] => {
     const pageSizeOptions = [20, 40, 60, 100];
     const pageSizeItems = pageSizeOptions.map((size) => ({
       icon: topicPageSize === size ? <Icon icon={LucideCheck} /> : <div />,
@@ -243,7 +241,7 @@ export const useTopicActionsDropdownMenu = (
             },
           ]
         : []),
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
     topicPageSize,
     updateSystemStatus,

@@ -1,8 +1,7 @@
 import { CUSTOM_FOLDER_FILE_TYPE, DERIVED_DOCUMENT_SOURCE_TYPE } from '@lobechat/const';
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import type { ItemType } from '@lobehub/ui';
-import { copyToClipboard, Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, copyToClipboard, Icon, toast } from '@lobehub/ui';
 import {
   BookMinusIcon,
   BookPlusIcon,

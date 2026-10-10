@@ -1,6 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast  } from '@lobehub/ui';
 import { LucideCopy, Pen, PictureInPicture2Icon, Pin, PinOff, Trash } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,7 +36,7 @@ export const useGroupDropdownMenu = ({
   pinned,
   title,
   userId,
-}: UseGroupDropdownMenuParams): (() => MenuProps['items']) => {
+}: UseGroupDropdownMenuParams): (() => DropdownItem[]) => {
   const { t } = useTranslation(['chat', 'common']);
 
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -155,7 +154,7 @@ export const useGroupDropdownMenu = ({
               },
             ]
           : []),
-      ] as MenuProps['items'],
+      ] as DropdownItem[],
     [
       anchor,
       avatar,

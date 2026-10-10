@@ -1,5 +1,5 @@
 import { DESKTOP_HEADER_ICON_SMALL_SIZE } from '@lobechat/const';
-import { ActionIcon } from '@lobehub/ui/base-ui';
+import { ActionIcon } from '@lobehub/ui';
 import { ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

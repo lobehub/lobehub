@@ -1,13 +1,13 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Flexbox,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import {
   Activity,
   Award,

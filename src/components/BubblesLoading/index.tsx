@@ -1,6 +1,5 @@
-import { Center } from '@lobehub/ui';
+import { Center, cssVar } from '@lobehub/ui';
 import { LoadingDots } from '@lobehub/ui/chat';
-import { cssVar } from 'antd-style';
 
 const BubblesLoading = () => {
   return (

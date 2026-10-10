@@ -1,7 +1,5 @@
 import { agentDisplayName, type ConversationContext, type UIChatMessage } from '@lobechat/types';
-import { Flexbox, Markdown } from '@lobehub/ui';
-import { Avatar, Text } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Avatar, cx, Flexbox, Markdown, Text } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { ProductLogo } from '@/components/Branding';

@@ -1,6 +1,5 @@
 import { type UIChatMessage } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { createModal, Tabs } from '@lobehub/ui/base-ui';
+import { createModal, Flexbox, Tabs } from '@lobehub/ui';
 import { t } from 'i18next';
 import { memo, useId, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

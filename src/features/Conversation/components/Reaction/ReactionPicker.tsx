@@ -2,9 +2,7 @@
 
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Popover } from '@lobehub/ui/base-ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox, Popover, Tooltip, useTheme } from '@lobehub/ui';
 import { PlusIcon, SmilePlus } from 'lucide-react';
 import { type FC, memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';

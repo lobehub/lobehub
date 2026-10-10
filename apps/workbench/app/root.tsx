@@ -11,8 +11,6 @@ import {
   useRouteLoaderData,
 } from 'react-router';
 import { isRtlLang } from 'rtl-detect';
-import { href as antdStaticCssHref } from 'virtual:lobehub/antd-static-css';
-import { href as themeVarsCssHref } from 'virtual:lobehub/theme-vars-css';
 
 import ErrorCapture, { type ErrorType } from '@/components/Error';
 import { resolveRequestLocale } from '@/locales/requestLocale';
@@ -57,7 +55,7 @@ export const Layout = ({ children }: PropsWithChildren) => {
       data-theme={data?.embedConfig.theme}
       dir={data?.dir ?? 'ltr'}
       lang={data?.locale ?? 'en-US'}
-      // Override ThemeProvider's scroll containment so an embedded report yields to its host page.
+      // Override global.css's scroll containment so an embedded report yields to its host page.
       style={data?.embedConfig.embed ? { overscrollBehaviorY: 'auto' } : undefined}
     >
       <head>
@@ -66,8 +64,6 @@ export const Layout = ({ children }: PropsWithChildren) => {
         <Meta />
         <Links />
         <style dangerouslySetInnerHTML={{ __html: bodyBackground }} />
-        <link href={themeVarsCssHref} rel="stylesheet" />
-        <link href={antdStaticCssHref} rel="stylesheet" />
       </head>
       <body>
         {children}

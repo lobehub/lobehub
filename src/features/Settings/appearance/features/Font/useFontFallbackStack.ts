@@ -1,4 +1,4 @@
-import type { SelectOption } from '@lobehub/ui/base-ui';
+import type { SelectOption } from '@lobehub/ui';
 import { useMemo } from 'react';
 
 import { APPLICATION_DEFAULT_FONT } from '../useSystemFontOptions';

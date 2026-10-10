@@ -1,9 +1,7 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Alert, Breadcrumb, Text, toast } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
-import { createStaticStyles } from 'antd-style';
+import { Alert, Breadcrumb, createStaticStyles, Flexbox, Icon, Text, toast } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { ChevronRight, InfoIcon, UsersIcon } from 'lucide-react';
 import { memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';

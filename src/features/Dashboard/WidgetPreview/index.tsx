@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button, Skeleton, Tag, Text, toast, Tooltip } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Button, createStaticStyles, cssVar,Flexbox, Icon, Skeleton, Tag, Text, toast, Tooltip   } from '@lobehub/ui';
 import { ArrowUpRightIcon, PanelRightOpenIcon, RocketIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

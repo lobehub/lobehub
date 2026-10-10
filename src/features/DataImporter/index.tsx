@@ -2,9 +2,7 @@
 
 import { type ErrorShape, type ImportFileUploadState } from '@lobechat/types';
 import { ImportStage } from '@lobechat/types';
-import { Center } from '@lobehub/ui';
-import { Button, toast, Upload } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { Button, Center, createStaticStyles, cx, toast, Upload } from '@lobehub/ui';
 import { ImportIcon } from 'lucide-react';
 import { type ReactNode } from 'react';
 import React, { memo, useCallback, useMemo, useState } from 'react';

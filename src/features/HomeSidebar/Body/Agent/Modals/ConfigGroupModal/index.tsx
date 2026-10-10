@@ -1,7 +1,4 @@
-import { type ModalProps, SortableList } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { Button } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Button , createStaticStyles,Flexbox, Icon , SortableList  } from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { Plus } from 'lucide-react';
 import { memo, useState } from 'react';
@@ -28,7 +25,9 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   `,
 }));
 
-interface ConfigGroupModalProps extends ModalProps {
+interface ConfigGroupModalProps {
+  onCancel?: () => void;
+  open?: boolean;
   scope?: 'private' | 'public';
 }
 

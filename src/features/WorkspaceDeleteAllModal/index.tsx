@@ -8,7 +8,7 @@ import {
   type ModalInstance,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { memo, useCallback, useState } from 'react';
 
 interface WorkspaceDeleteAllModalContentProps {

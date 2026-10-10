@@ -2,8 +2,8 @@
 
 import type { BuiltinRenderProps } from '@lobechat/types';
 import { Block, Markdown } from '@lobehub/ui';
-import { ActionIcon, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { ActionIcon, Text } from '@lobehub/ui';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import { PanelRight, PanelRightClose } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

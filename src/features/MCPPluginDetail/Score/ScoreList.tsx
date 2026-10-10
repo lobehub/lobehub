@@ -1,5 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { Divider } from '@lobehub/ui/base-ui';
+import { Divider, Flexbox } from '@lobehub/ui';
 import { Fragment, memo } from 'react';
 
 import { type ScoreItemProps } from './ScoreItem';

@@ -1,9 +1,8 @@
 'use client';
 
 import { type UserMemoryEffort, type UserMemorySettings } from '@lobechat/types';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Skeleton, Switch } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Flexbox, Icon, Skeleton, Switch, Tooltip } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { CircleHelpIcon } from 'lucide-react';
 import { memo } from 'react';

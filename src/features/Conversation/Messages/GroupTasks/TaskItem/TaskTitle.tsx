@@ -1,9 +1,7 @@
 'use client';
 
 import { ThreadStatus } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { Avatar, Spin, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { Avatar, Block, cssVar, Flexbox, Icon, Spin, Text } from '@lobehub/ui';
 import { Footprints, ListChecksIcon, Wrench, XIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

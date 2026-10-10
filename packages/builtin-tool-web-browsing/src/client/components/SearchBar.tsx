@@ -1,7 +1,7 @@
 import type { SearchQuery } from '@lobechat/types';
 import { Block, Flexbox, SearchBar as Search, Tooltip } from '@lobehub/ui';
-import { CheckboxGroup, Segmented, Select, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { CheckboxGroup, Segmented, Select, Text } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

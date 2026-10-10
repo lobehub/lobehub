@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionIcon, toast } from '@lobehub/ui/base-ui';
+import { ActionIcon, toast } from '@lobehub/ui';
 import { ArrowUpRight, ChevronUp } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

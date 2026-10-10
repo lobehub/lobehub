@@ -1,5 +1,5 @@
 import type { DashboardItemLayout } from '@lobechat/types';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import type { CSSProperties } from 'react';
 
 import { DASHBOARD_GRID_COLUMNS, DASHBOARD_GRID_GAP, DASHBOARD_ROW_HEIGHT } from '../utils/layout';

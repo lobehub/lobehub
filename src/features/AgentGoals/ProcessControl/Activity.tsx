@@ -1,8 +1,6 @@
 'use client';
 
-import { Empty, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { createStaticStyles, cssVar, cx, Empty, Flexbox, Icon, Text } from '@lobehub/ui';
 import { BotMessageSquare, ChevronRight } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

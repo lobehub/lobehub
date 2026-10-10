@@ -1,4 +1,8 @@
-import { Flexbox, ThemeProvider } from '@lobehub/ui';
+import '@lobehub/ui/theme.css';
+import '@lobehub/ui/global.css';
+import '@lobehub/ui/style.css';
+
+import { Flexbox } from '@lobehub/ui';
 import { type ReactNode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 
@@ -18,7 +22,7 @@ const Case = ({ children, title }: { children: ReactNode; title: string }) => (
 );
 
 createRoot(document.querySelector('#root')!).render(
-  <ThemeProvider>
+  <>
     <Flexbox style={{ margin: '0 auto', maxWidth: 900 }} width={'100%'}>
       <Case title="ArticleSkeleton — title + 3 rows">
         <ArticleSkeleton rows={3} />
@@ -48,5 +52,5 @@ createRoot(document.querySelector('#root')!).render(
         <ConversationListSkeleton />
       </Case>
     </Flexbox>
-  </ThemeProvider>,
+  </>,
 );

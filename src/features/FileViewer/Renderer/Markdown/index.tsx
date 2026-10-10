@@ -1,8 +1,16 @@
 'use client';
 
-import { Center, Flexbox, Highlighter, Icon, Markdown } from '@lobehub/ui';
-import { Spin, Tabs } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Center,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Highlighter,
+  Icon,
+  Markdown,
+  Spin,
+  Tabs,
+} from '@lobehub/ui';
 import { CodeIcon, EyeIcon } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

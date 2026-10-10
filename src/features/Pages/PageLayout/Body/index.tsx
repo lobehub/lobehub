@@ -1,6 +1,5 @@
 'use client';
 
-import { Block, Center, ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
@@ -8,10 +7,15 @@ import {
   AccordionRoot,
   accordionStyles,
   AccordionTrigger,
+  Block,
+  Center,
+  ContextMenuTrigger,
+  cx,
+  Flexbox,
+  Icon,
   Spin,
   Text,
-} from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+} from '@lobehub/ui';
 import { PlusIcon } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

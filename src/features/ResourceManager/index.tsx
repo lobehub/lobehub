@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { createStaticStyles, useTheme } from 'antd-style';
+import { createStaticStyles, Flexbox, useTheme } from '@lobehub/ui';
 import { memo, type ReactNode, useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router';
 

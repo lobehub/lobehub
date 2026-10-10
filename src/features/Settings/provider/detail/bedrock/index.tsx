@@ -1,6 +1,6 @@
 'use client';
 
-import { Select, Tabs, type TabsItem } from '@lobehub/ui/base-ui';
+import { Select, Tabs, type TabsItem } from '@lobehub/ui';
 import { BedrockProviderCard } from 'model-bank/modelProviders';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,4 +1,4 @@
-import { Input, InputPassword, toast } from '@lobehub/ui/base-ui';
+import { Input, InputPassword, toast } from '@lobehub/ui';
 import { ChevronDownIcon, ChevronRightIcon } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

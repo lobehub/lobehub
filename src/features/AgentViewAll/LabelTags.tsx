@@ -1,7 +1,7 @@
 'use client';
 
 import { type SidebarAgentLabel } from '@lobechat/types';
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({

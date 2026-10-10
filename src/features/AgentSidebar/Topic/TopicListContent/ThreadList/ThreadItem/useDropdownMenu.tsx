@@ -1,6 +1,5 @@
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal,Icon  } from '@lobehub/ui';
 import { PanelRight, PencilLine, Trash } from 'lucide-react';
 import { useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,7 +18,7 @@ export const useThreadItemDropdownMenu = ({
   id,
   sourceMessageId,
   title,
-}: ThreadItemDropdownMenuProps): (() => MenuProps['items']) => {
+}: ThreadItemDropdownMenuProps): (() => DropdownItem[]) => {
   const { t } = useTranslation(['thread', 'common']);
   const { allowed: canEditThread } = usePermission('edit_own_content');
 
@@ -78,7 +77,7 @@ export const useThreadItemDropdownMenu = ({
         },
         sfSymbol: 'trash',
       },
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
     id,
     sourceMessageId,

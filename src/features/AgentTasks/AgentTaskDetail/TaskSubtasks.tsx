@@ -1,8 +1,17 @@
 import type { TaskDetailSubtask } from '@lobechat/types';
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import type { TreeDataNode } from '@lobehub/ui/base-ui';
-import { ActionIcon, Collapsible, confirmModal, Text, toast, Tree } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import type { TreeDataNode } from '@lobehub/ui';
+import {
+  ActionIcon,
+  Block,
+  Collapsible,
+  confirmModal,
+  cssVar,
+  Flexbox,
+  Icon,
+  Text,
+  toast,
+  Tree,
+} from '@lobehub/ui';
 import { ListTodoIcon, PlayCircle, Plus } from 'lucide-react';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';

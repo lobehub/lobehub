@@ -1,6 +1,6 @@
 'use client';
 
-import { createStaticStyles, cx, responsive } from 'antd-style';
+import { createStaticStyles, cx, responsive } from '@lobehub/ui';
 import { memo } from 'react';
 
 import { ArticleSkeleton } from '@/components/Skeleton';

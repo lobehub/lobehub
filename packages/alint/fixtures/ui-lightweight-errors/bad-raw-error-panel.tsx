@@ -1,6 +1,6 @@
 // Fixture: a card dumping the raw provider error into a red Alert.
 import { Flexbox } from '@lobehub/ui';
-import { Alert } from '@lobehub/ui/base-ui';
+import { Alert } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

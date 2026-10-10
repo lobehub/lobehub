@@ -1,6 +1,13 @@
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Skeleton, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  createStaticStyles,
+  cx,
+  Flexbox,
+  Skeleton,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

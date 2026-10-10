@@ -1,6 +1,6 @@
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import type { Edge, EdgeProps } from '@xyflow/react';
 import { BaseEdge, EdgeLabelRenderer, getSmoothStepPath } from '@xyflow/react';
-import { createStaticStyles, cssVar } from 'antd-style';
 
 import { getFlowEdgeLabelLayout } from './flowEdgeLabel';
 

@@ -1,7 +1,6 @@
 import { isDesktop } from '@lobechat/const';
-import { type MenuProps } from '@lobehub/ui';
-import { DropdownMenu, Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, confirmModal, Text } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { ActionIcon, confirmModal, DropdownMenu, Flexbox, Text,Tooltip  } from '@lobehub/ui';
 import { ArrowRight, Plus, Unlink } from 'lucide-react';
 import { type CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
@@ -86,7 +85,7 @@ export const SSOProvidersList = memo(() => {
   };
 
   // Dropdown menu items for linking new providers
-  const linkMenuItems: MenuProps['items'] = availableProviders.map((provider) => ({
+  const linkMenuItems: DropdownItem[] = availableProviders.map((provider) => ({
     icon: AuthIcons(provider, 16),
     key: provider,
     label: <span style={providerNameStyle}>{provider}</span>,

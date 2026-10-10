@@ -1,6 +1,5 @@
 import { ChatInput, ChatInputActionBar, SendButton } from '@lobehub/editor/react';
-import { Flexbox } from '@lobehub/ui';
-import { toast } from '@lobehub/ui/base-ui';
+import { Flexbox, toast } from '@lobehub/ui';
 import { memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 

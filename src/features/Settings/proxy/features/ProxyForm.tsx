@@ -1,17 +1,17 @@
 'use client';
 
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { Flexbox } from '@lobehub/ui';
 import {
   Button,
+  Flexbox,
   Input,
   InputPassword,
   RadioGroup,
   Skeleton,
   Switch,
   toast,
-} from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/base-ui/form';
+} from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm, useWatch } from '@lobehub/ui/form';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

@@ -1,5 +1,4 @@
-import { Flexbox, Icon, stopPropagation } from '@lobehub/ui';
-import { Checkbox, Spin } from '@lobehub/ui/base-ui';
+import { Checkbox, Flexbox, Icon, Spin, stopPropagation } from '@lobehub/ui';
 import { SquareArrowOutUpRight } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';

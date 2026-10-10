@@ -1,10 +1,8 @@
 'use client';
 
 import { validateVideoFileSize } from '@lobechat/utils/client';
-import { Icon, Popover } from '@lobehub/ui';
-import { toast, Upload } from '@lobehub/ui/base-ui';
+import { css, cssVar, cx, Icon, Popover, toast, Upload } from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { css, cssVar, cx } from 'antd-style';
 import {
   CheckIcon,
   ChevronRight,

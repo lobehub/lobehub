@@ -1,9 +1,8 @@
 'use client';
 
 import type { TrashProjectFilter } from '@lobechat/types';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { controlHeight, Select, type SelectOptions, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar,Flexbox, Icon  } from '@lobehub/ui';
+import { controlHeight, Select, type SelectOptions, Text } from '@lobehub/ui';
 import { FolderKanbanIcon, LockIcon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

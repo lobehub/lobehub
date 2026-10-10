@@ -1,9 +1,7 @@
 'use client';
 
 import type { VerifyEvidenceChapter } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Button, DropdownMenu } from '@lobehub/ui/base-ui';
-import { cx } from 'antd-style';
+import { Button, Center, cx, DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
 import {
   AlertTriangle,
   Captions,

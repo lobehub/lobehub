@@ -1,9 +1,7 @@
 'use client';
 
 import type { WidgetLevelFilter } from '@lobechat/types';
-import { Center, Flexbox, Icon } from '@lobehub/ui';
-import { Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Center, createStaticStyles, cssVar,Flexbox, Icon, Text   } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { LayoutDashboardIcon } from 'lucide-react';
 import { memo } from 'react';

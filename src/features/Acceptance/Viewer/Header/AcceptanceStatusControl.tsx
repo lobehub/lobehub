@@ -1,8 +1,7 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
-import { toast } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { Icon, toast } from '@lobehub/ui';
 import { CircleCheck, RotateCcw, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 

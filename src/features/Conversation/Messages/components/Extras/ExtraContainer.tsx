@@ -1,4 +1,4 @@
-import { Divider } from '@lobehub/ui/base-ui';
+import { Divider } from '@lobehub/ui';
 import { type PropsWithChildren } from 'react';
 import { memo } from 'react';
 

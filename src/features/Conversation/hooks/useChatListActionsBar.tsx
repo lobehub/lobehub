@@ -1,6 +1,6 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type ActionIconGroupItemType } from '@lobehub/ui';
-import { css, cx } from 'antd-style';
+import { css, cx } from '@lobehub/ui';
 import {
   ArrowDownFromLine,
   Copy,

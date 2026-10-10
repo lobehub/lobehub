@@ -7,19 +7,22 @@ import type {
   TrashProjectFilter,
   TrashResourceType,
 } from '@lobechat/types';
-import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import {
   Avatar,
   Button,
+  Center,
   confirmModal,
   controlHeight,
+  createStaticStyles,
+  Empty,
+  Flexbox,
+  Icon,
   Segmented,
   Tag,
   Text,
   toast,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { useSize } from 'ahooks';
-import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Trash2Icon } from 'lucide-react';

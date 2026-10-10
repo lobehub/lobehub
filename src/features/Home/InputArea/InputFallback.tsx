@@ -1,6 +1,4 @@
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, createStaticStyles, Flexbox } from '@lobehub/ui';
 import { ArrowUpIcon, PlusIcon } from 'lucide-react';
 import { type ChangeEventHandler, type CompositionEventHandler, memo } from 'react';
 import { useTranslation } from 'react-i18next';

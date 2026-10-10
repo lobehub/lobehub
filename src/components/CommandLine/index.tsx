@@ -1,7 +1,6 @@
 'use client';
 
-import { CopyButton } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { CopyButton, createStaticStyles, cssVar } from '@lobehub/ui';
 import { memo } from 'react';
 
 const styles = createStaticStyles(({ css }) => ({

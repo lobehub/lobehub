@@ -1,8 +1,6 @@
 'use client';
 
-import { Flexbox } from '@lobehub/ui';
-import { ActionIcon } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, cssVar, Flexbox } from '@lobehub/ui';
 import { ArrowLeft } from 'lucide-react';
 import { memo } from 'react';
 import { useLocation } from 'react-router';

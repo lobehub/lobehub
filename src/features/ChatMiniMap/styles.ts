@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 export const minimapStyles = createStaticStyles(({ css, cssVar }) => ({
   container: css`

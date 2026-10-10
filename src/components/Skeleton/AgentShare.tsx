@@ -1,7 +1,6 @@
 'use client';
 
-import { Block, Flexbox } from '@lobehub/ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { Block, createStaticStyles, cssVar, Flexbox } from '@lobehub/ui';
 import type { ReactNode } from 'react';
 
 import WideScreenContainer from '@/features/WideScreenContainer';

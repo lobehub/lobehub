@@ -1,6 +1,4 @@
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Flexbox, Icon, Tag, Tooltip } from '@lobehub/ui';
 import { BoltIcon, RotateCwIcon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

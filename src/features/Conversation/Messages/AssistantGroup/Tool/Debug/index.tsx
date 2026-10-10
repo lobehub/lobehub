@@ -1,6 +1,6 @@
 import { type ToolIntervention } from '@lobechat/types';
 import { Block, Highlighter, Icon } from '@lobehub/ui';
-import { Tabs, type TabsProps } from '@lobehub/ui/base-ui';
+import { Tabs, type TabsProps } from '@lobehub/ui';
 import {
   BracesIcon,
   CircleAlertIcon,

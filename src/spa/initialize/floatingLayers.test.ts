@@ -1,5 +1,5 @@
 import { TITLE_BAR_HEIGHT } from '@lobechat/desktop-bridge';
-import { getFloatingCollisionPadding, setFloatingCollisionPadding } from '@lobehub/ui/base-ui';
+import { getFloatingCollisionPadding, setFloatingCollisionPadding } from '@lobehub/ui';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { reserveTitleBarForFloatingLayers } from './floatingLayers';

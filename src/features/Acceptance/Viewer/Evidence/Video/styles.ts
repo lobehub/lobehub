@@ -1,5 +1,5 @@
 import type { VerifyEvidenceChapterKind } from '@lobechat/types';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 /**
  * The player chrome is dark in both themes, as video chrome is everywhere: it

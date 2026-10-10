@@ -1,8 +1,8 @@
 'use client';
 
 import { type UIChatMessage } from '@lobechat/types';
-import { ActionIcon, FloatingSheet, type FloatingSheetProps } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { ActionIcon, FloatingSheet, type FloatingSheetProps } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { ChevronDown } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';

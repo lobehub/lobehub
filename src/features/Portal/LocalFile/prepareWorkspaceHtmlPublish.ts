@@ -8,7 +8,7 @@ import {
   type WorkspaceHtmlArtifactPublisher,
   type WorkspaceHtmlArtifactPublishResult,
 } from '@lobechat/html-artifact';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 
 import { readExternalAssetForPublish } from './readExternalAssetForPublish';

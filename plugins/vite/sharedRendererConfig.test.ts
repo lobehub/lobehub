@@ -51,10 +51,8 @@ describe('lobe-dev-editor-provider', () => {
 });
 
 describe('sharedOptimizeDeps', () => {
-  it('pre-bundles the root and base-ui entrypoints together', () => {
-    expect(sharedOptimizeDeps.include).toEqual(
-      expect.arrayContaining(['@lobehub/ui', '@lobehub/ui/base-ui']),
-    );
+  it('pre-bundles the @lobehub/ui root entrypoint', () => {
+    expect(sharedOptimizeDeps.include).toContain('@lobehub/ui');
   });
 });
 

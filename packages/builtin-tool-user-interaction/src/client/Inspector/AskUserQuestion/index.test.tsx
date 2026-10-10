@@ -19,7 +19,7 @@ vi.mock('@lobechat/shared-tool-ui/styles', () => ({
 
 vi.mock('@lobehub/ui', () => ({}));
 
-vi.mock('@lobehub/ui/base-ui', () => ({}));
+vi.mock('@lobehub/ui', () => ({}));
 
 describe('AskUserQuestionInspector', () => {
   afterEach(cleanup);

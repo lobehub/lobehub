@@ -1,7 +1,7 @@
 /**
  * @vitest-environment happy-dom
  */
-import { useForm } from '@lobehub/ui/base-ui/form';
+import { useForm } from '@lobehub/ui/form';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
@@ -112,7 +112,7 @@ vi.mock('@/hooks/useAppOrigin', () => ({
   useAppOrigin: () => 'https://example.test',
 }));
 
-vi.mock('@lobehub/ui/base-ui', async (importOriginal) => ({
+vi.mock('@lobehub/ui', async (importOriginal) => ({
   ...((await importOriginal()) as Record<string, unknown>),
   ActionIcon: ({
     'aria-label': ariaLabel,

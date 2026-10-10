@@ -1,6 +1,6 @@
 'use client';
 
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';

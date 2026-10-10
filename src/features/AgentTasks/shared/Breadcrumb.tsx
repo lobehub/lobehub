@@ -1,6 +1,5 @@
 import { agentDisplayName } from '@lobechat/types';
-import { Icon } from '@lobehub/ui';
-import { Breadcrumb as BaseBreadcrumb, Text } from '@lobehub/ui/base-ui';
+import { Breadcrumb as BaseBreadcrumb, Icon, Text } from '@lobehub/ui';
 import { ChevronRight } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';

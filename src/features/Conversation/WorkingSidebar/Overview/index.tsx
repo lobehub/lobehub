@@ -1,10 +1,19 @@
 'use client';
 
 import type { DeviceGitLinkedPullRequest } from '@lobechat/types';
-import { Empty, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Skeleton, toast } from '@lobehub/ui/base-ui';
+import {
+  Button,
+  createStaticStyles,
+  cssVar,
+  cx,
+  Empty,
+  Flexbox,
+  Icon,
+  Skeleton,
+  toast,
+  Tooltip,
+} from '@lobehub/ui';
 import { SkillsIcon } from '@lobehub/ui/icons';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
 import {
   ArrowDownIcon,
   ArrowUpIcon,

@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import i18next from 'i18next';
 import { FlaskConical } from 'lucide-react';
 import { useMemo } from 'react';

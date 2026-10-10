@@ -8,7 +8,7 @@ import type {
   HeterogeneousProviderConfig,
 } from '@lobechat/types';
 import { applyTopicModelToHeterogeneousProvider, resolveAgentAgencyConfig } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { t } from 'i18next';
 import { type StateCreator } from 'zustand';
 

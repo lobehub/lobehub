@@ -1,5 +1,5 @@
 import { FileSource } from '@lobechat/types';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { confirmModal, toast } from '@lobehub/ui';
 import { nanoid } from 'nanoid';
 import { useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';

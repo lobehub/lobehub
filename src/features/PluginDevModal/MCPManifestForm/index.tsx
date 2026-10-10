@@ -1,7 +1,6 @@
 import { type LobeToolCustomPlugin } from '@lobechat/types';
-import { Flexbox } from '@lobehub/ui';
-import { Alert, Button, Divider, Input, InputPassword, RadioGroup } from '@lobehub/ui/base-ui';
-import { type FieldPath, Form, type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
+import { Alert, Button, Divider, Flexbox, Input, InputPassword, RadioGroup } from '@lobehub/ui';
+import { type FieldPath, Form, type FormInstance, useWatch } from '@lobehub/ui/form';
 import isEqual from 'fast-deep-equal';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

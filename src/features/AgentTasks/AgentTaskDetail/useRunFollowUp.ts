@@ -1,7 +1,7 @@
 'use client';
 
 import type { ConversationContext, TaskDetailActivity } from '@lobechat/types';
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

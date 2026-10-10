@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   uploadWithProgress: vi.fn(),
 }));
 
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: mocks.toastError } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: mocks.toastError } }));
 
 vi.mock('@/store/file', () => ({
   useFileStore: (selector: (s: unknown) => unknown) =>

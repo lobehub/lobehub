@@ -1,8 +1,7 @@
 'use client';
 
-import { Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui/base-ui';
-import { Form, useForm, useWatch } from '@lobehub/ui/base-ui/form';
-import { cssVar } from 'antd-style';
+import { cssVar, Input, Select, TextArea, toast, useModalContext } from '@lobehub/ui';
+import { Form, useForm, useWatch } from '@lobehub/ui/form';
 import { type FC, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

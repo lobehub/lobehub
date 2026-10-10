@@ -1,8 +1,6 @@
 import type { TaskDetailSubtask, TaskSubtaskProgress } from '@lobechat/types';
-import { Block, Flexbox } from '@lobehub/ui';
-import type { DropdownMenuProps } from '@lobehub/ui/base-ui';
-import { DropdownMenu, Progress, Text, toast } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import type { DropdownMenuProps } from '@lobehub/ui';
+import { Block, cssVar, DropdownMenu, Flexbox, Progress, Text, toast } from '@lobehub/ui';
 import type { MouseEvent } from 'react';
 import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

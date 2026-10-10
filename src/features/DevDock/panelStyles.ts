@@ -1,4 +1,4 @@
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 
 export const devDockPanelStyles = createStaticStyles(({ css }) => ({
   flatSection: css`

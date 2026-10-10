@@ -1,7 +1,6 @@
 'use client';
 
-import { Flexbox, Highlighter } from '@lobehub/ui';
-import { Skeleton, Text } from '@lobehub/ui/base-ui';
+import { Flexbox, Highlighter, Skeleton, Text  } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

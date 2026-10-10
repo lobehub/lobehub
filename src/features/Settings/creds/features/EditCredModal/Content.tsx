@@ -1,7 +1,7 @@
 'use client';
 
 import { type UserCredSummary } from '@lobechat/types';
-import { useModalContext } from '@lobehub/ui/base-ui';
+import { useModalContext } from '@lobehub/ui';
 import { type FC } from 'react';
 
 import { type CredsApi } from '../useCredsApi';

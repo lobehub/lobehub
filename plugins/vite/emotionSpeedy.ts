@@ -14,7 +14,7 @@ export function viteEmotionSpeedy(): Plugin {
     name: 'emotion-speedy',
     enforce: 'pre',
     transform(code, id) {
-      if (id.includes('antd-style') && code.includes('speedy: false')) {
+      if (/antd-style|@lobehub\/ui\/es\/styles\/css/.test(id) && code.includes('speedy: false')) {
         return {
           code: code.replaceAll('speedy: false', 'speedy: true'),
           map: null,

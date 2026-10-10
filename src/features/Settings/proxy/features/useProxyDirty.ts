@@ -1,5 +1,5 @@
 import { type NetworkProxySettings } from '@lobechat/electron-client-ipc';
-import { type FormInstance, useWatch } from '@lobehub/ui/base-ui/form';
+import { type FormInstance, useWatch } from '@lobehub/ui/form';
 import { useMemo } from 'react';
 
 const WATCH_FIELDS: readonly (keyof NetworkProxySettings)[] = [

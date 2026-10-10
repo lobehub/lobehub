@@ -1,7 +1,5 @@
-import { Block, Flexbox, Icon } from '@lobehub/ui';
-import { ActionIcon, Button, DropdownMenu, Text } from '@lobehub/ui/base-ui';
+import { ActionIcon, Block, Button, cssVar, DropdownMenu, Flexbox, Icon, Text } from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
-import { cssVar } from 'antd-style';
 import { ChevronDownIcon, FolderIcon, PencilIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';

@@ -1,4 +1,4 @@
-import { createStaticStyles, responsive } from 'antd-style';
+import { createStaticStyles, responsive } from '@lobehub/ui';
 
 // Dynamic styles with widthMode prop - converted to CSS variables
 export { styles as containerStyles } from './useContainerStyles';

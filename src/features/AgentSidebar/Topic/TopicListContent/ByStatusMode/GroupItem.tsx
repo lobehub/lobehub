@@ -1,11 +1,13 @@
-import { Center, Flexbox, Icon } from '@lobehub/ui';
 import {
   AccordionHeader,
   AccordionItem,
   AccordionPanel,
   AccordionTrigger,
+  Center,
+  Flexbox,
+  Icon,
   Text,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import isEqual from 'fast-deep-equal';
 import { memo } from 'react';
 

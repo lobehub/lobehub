@@ -2,8 +2,8 @@
 
 import type { BuiltinStreamingProps } from '@lobechat/types';
 import { Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Tag } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Tag } from '@lobehub/ui';
+import { createStaticStyles } from '@lobehub/ui';
 import { memo } from 'react';
 
 import type { CreateAgentParams } from '../../../types';

@@ -1,8 +1,6 @@
 'use client';
 
-import { Icon } from '@lobehub/ui';
-import { Tooltip } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Icon, Tooltip } from '@lobehub/ui';
 import {
   CircleCheck,
   CircleDashed,

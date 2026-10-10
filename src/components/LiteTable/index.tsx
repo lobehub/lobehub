@@ -1,5 +1,4 @@
-import { Skeleton } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cx } from 'antd-style';
+import { createStaticStyles, cx, Skeleton } from '@lobehub/ui';
 import { type ReactNode } from 'react';
 import { memo } from 'react';
 

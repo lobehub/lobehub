@@ -1,9 +1,7 @@
 'use client';
 
-import { type BlockProps, type GenericItemType, type IconProps } from '@lobehub/ui';
-import { Block, Center, ContextMenuTrigger, Flexbox, Icon } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { type BlockProps, type DropdownItem, type IconProps } from '@lobehub/ui';
+import { Block, Center, ContextMenuTrigger, createStaticStyles, cssVar, cx,Flexbox, Icon, Spin, Text   } from '@lobehub/ui';
 import { type FocusEvent, type PointerEvent, type ReactNode } from 'react';
 import { memo } from 'react';
 
@@ -72,7 +70,7 @@ export interface NavItemProps extends Omit<BlockProps, 'children' | 'title'> {
    */
   actions?: LazyActions;
   active?: boolean;
-  contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
+  contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
   /**
    * Optional second line rendered under the title (e.g. a topic's project
    * directory). When set, the row grows to fit both lines; when omitted the

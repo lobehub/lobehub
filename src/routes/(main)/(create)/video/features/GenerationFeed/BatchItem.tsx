@@ -1,8 +1,16 @@
 'use client';
 
-import { ActionIconGroup, Block, Flexbox, Markdown } from '@lobehub/ui';
-import { Button, Tag, Text, toast } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  ActionIconGroup,
+  Block,
+  Button,
+  createStaticStyles,
+  Flexbox,
+  Markdown,
+  Tag,
+  Text,
+  toast,
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CopyIcon, RotateCcwSquareIcon, SquarePenIcon, Trash2, XIcon } from 'lucide-react';
 import { type RuntimeVideoGenParams } from 'model-bank';

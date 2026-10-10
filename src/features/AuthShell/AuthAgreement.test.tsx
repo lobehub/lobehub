@@ -1,5 +1,5 @@
-import * as BaseUI from '@lobehub/ui/base-ui';
-import { useForm } from '@lobehub/ui/base-ui/form';
+import * as BaseUI from '@lobehub/ui';
+import { useForm } from '@lobehub/ui/form';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';

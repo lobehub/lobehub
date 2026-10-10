@@ -3,7 +3,7 @@
 import type { VerifyRunStatus, VerifyVerdict } from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui/es/Flex/index';
 import Icon from '@lobehub/ui/es/Icon/index';
-import { createStaticStyles, cssVar } from 'antd-style';
+import { createStaticStyles, cssVar } from '@lobehub/ui';
 import dayjs from 'dayjs';
 import { CircleCheck, CircleHelp, CircleX, LoaderCircle } from 'lucide-react';
 import { memo } from 'react';

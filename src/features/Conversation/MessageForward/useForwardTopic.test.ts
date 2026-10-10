@@ -19,7 +19,7 @@ vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
   useWorkspaceAwareNavigate: () => mocks.navigate,
 }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@lobehub/ui/base-ui', () => ({ toast: { error: mocks.error, success: mocks.success } }));
+vi.mock('@lobehub/ui', () => ({ toast: { error: mocks.error, success: mocks.success } }));
 
 describe('topic handoff acceptance', () => {
   beforeEach(() => vi.clearAllMocks());

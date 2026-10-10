@@ -1,5 +1,5 @@
 import { type ChatMessageError } from '@lobechat/types';
-import { type AlertProps, Skeleton } from '@lobehub/ui/base-ui';
+import { type AlertProps, Skeleton } from '@lobehub/ui';
 import { memo } from 'react';
 
 import ErrorContent from '@/features/Conversation/ChatItem/components/ErrorContent';

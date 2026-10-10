@@ -1,8 +1,14 @@
 'use client';
 
-import { Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Button, Carousel } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  ActionIcon,
+  Button,
+  Carousel,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Tooltip,
+} from '@lobehub/ui';
 import { X } from 'lucide-react';
 import * as m from 'motion/react-m';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';

@@ -1,7 +1,5 @@
 import type { WorkVersionItem } from '@lobechat/types';
-import { Center, Flexbox } from '@lobehub/ui';
-import { Spin, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import { Center, createStaticStyles, Flexbox, Spin, Text } from '@lobehub/ui';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 

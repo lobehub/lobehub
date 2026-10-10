@@ -1,8 +1,7 @@
 'use client';
 
-import { type GenericItemType } from '@lobehub/ui';
-import { ActionIcon, Avatar } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { type DropdownItem } from '@lobehub/ui';
+import { ActionIcon, Avatar, cssVar  } from '@lobehub/ui';
 import { Trash } from 'lucide-react';
 import type { CSSProperties, MouseEvent } from 'react';
 import { memo } from 'react';
@@ -14,7 +13,7 @@ import { type ImageGenerationTopic } from '@/types/generation';
 import { useGenerationTopicContext } from '../StoreContext';
 
 interface TopicItemProps {
-  contextMenuItems?: GenericItemType[] | (() => GenericItemType[]);
+  contextMenuItems?: DropdownItem[] | (() => DropdownItem[]);
   isActive?: boolean;
   isLoading?: boolean;
   isUpdating?: boolean;

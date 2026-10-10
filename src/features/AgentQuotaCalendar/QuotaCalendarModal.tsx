@@ -2,7 +2,7 @@
 
 import type { QuotaLimitReading } from '@lobechat/heterogeneous-agents/quota';
 import { projectWindows } from '@lobechat/heterogeneous-agents/quota';
-import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
+import { createStaticStyles, cssVar, Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import {
   ActionIcon,
   createModal,
@@ -10,8 +10,7 @@ import {
   Segmented,
   Skeleton,
   Text,
-} from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+} from '@lobehub/ui';
 import dayjs from 'dayjs';
 import type { TFunction } from 'i18next';
 import { t as i18nT } from 'i18next';

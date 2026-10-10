@@ -1,6 +1,12 @@
-import { Flexbox } from '@lobehub/ui';
-import { Accordion, ActionIcon, Skeleton, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles } from 'antd-style';
+import {
+  Accordion,
+  ActionIcon,
+  createStaticStyles,
+  Flexbox,
+  Skeleton,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { Maximize2 } from 'lucide-react';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

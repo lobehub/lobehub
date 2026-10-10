@@ -10,7 +10,7 @@ import {
   Text,
   toast,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { GithubIcon } from '@lobehub/ui/icons';
 import { ArrowLeftRight, Sparkles } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';

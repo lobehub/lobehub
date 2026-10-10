@@ -1,6 +1,4 @@
-import { Block, Flexbox, Tooltip } from '@lobehub/ui';
-import { ActionIcon, Avatar, Text } from '@lobehub/ui/base-ui';
-import { cssVar } from 'antd-style';
+import { ActionIcon, Avatar, Block, cssVar, Flexbox, Text, Tooltip } from '@lobehub/ui';
 import { X } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';

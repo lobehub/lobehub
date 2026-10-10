@@ -1,8 +1,7 @@
 'use client';
 
-import { Grid, Icon } from '@lobehub/ui';
-import { DatePicker, Divider, Tabs } from '@lobehub/ui/base-ui';
-import { Form } from '@lobehub/ui/base-ui/form';
+import { DatePicker, Divider, Grid, Icon, Tabs } from '@lobehub/ui';
+import { Form } from '@lobehub/ui/form';
 import { ProviderIcon } from '@lobehub/ui/icons';
 import dayjs from 'dayjs';
 import { Brain, UserIcon } from 'lucide-react';

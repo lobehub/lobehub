@@ -1,7 +1,6 @@
 'use client';
 
-import { CodeDiff, Flexbox } from '@lobehub/ui';
-import { Select, Text } from '@lobehub/ui/base-ui';
+import { CodeDiff, Flexbox, Select, Text  } from '@lobehub/ui';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 

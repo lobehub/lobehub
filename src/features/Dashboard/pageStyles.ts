@@ -1,4 +1,4 @@
-import { createStaticStyles } from 'antd-style';
+import { createStaticStyles } from '@lobehub/ui';
 
 /**
  * Page chrome shared by the dashboard pages (board list, one board, a

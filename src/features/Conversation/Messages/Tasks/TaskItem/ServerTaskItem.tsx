@@ -1,7 +1,6 @@
 'use client';
 
-import { Block } from '@lobehub/ui';
-import { Accordion } from '@lobehub/ui/base-ui';
+import { Accordion, Block } from '@lobehub/ui';
 import { memo, useMemo, useState } from 'react';
 
 import { type UIChatMessage } from '@/types/index';

@@ -1,5 +1,5 @@
 import { type EmojiPickerProps } from '@lobehub/ui';
-import { Skeleton } from '@lobehub/ui/base-ui';
+import { Skeleton } from '@lobehub/ui';
 import { lazy, memo, Suspense } from 'react';
 
 import { useGlobalStore } from '@/store/global';

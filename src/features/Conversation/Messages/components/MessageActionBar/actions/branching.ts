@@ -1,4 +1,4 @@
-import { toast } from '@lobehub/ui/base-ui';
+import { toast } from '@lobehub/ui';
 import { Split } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';

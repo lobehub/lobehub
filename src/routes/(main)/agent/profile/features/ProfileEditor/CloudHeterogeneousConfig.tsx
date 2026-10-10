@@ -2,9 +2,19 @@
 
 import { type HeterogeneousProviderConfig, type UserCredSummary } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
-import { Flexbox } from '@lobehub/ui';
-import { Avatar, Button, Input, InputPassword, Select, Spin, Tag, Text } from '@lobehub/ui/base-ui';
-import { createStaticStyles, cssVar } from 'antd-style';
+import {
+  Avatar,
+  Button,
+  createStaticStyles,
+  cssVar,
+  Flexbox,
+  Input,
+  InputPassword,
+  Select,
+  Spin,
+  Tag,
+  Text,
+} from '@lobehub/ui';
 import { CheckCircle2, KeyRound, X } from 'lucide-react';
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';

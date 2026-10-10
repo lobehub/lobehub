@@ -1,8 +1,7 @@
 'use client';
 
 import type { ItemType } from '@lobehub/ui';
-import { Flexbox, Icon } from '@lobehub/ui';
-import { cssVar } from 'antd-style';
+import { cssVar, Flexbox, Icon } from '@lobehub/ui';
 import { SendIcon, Settings2Icon } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import useSWR from 'swr';

@@ -1,9 +1,8 @@
 'use client';
 
 import { type BinaryStatus } from '@lobechat/electron-client-ipc';
-import { CopyButton, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Button, Spin, Tag, Text } from '@lobehub/ui/base-ui';
-import { Form, type FormGroupItem, useForm } from '@lobehub/ui/base-ui/form';
+import { Button, CopyButton, Flexbox, Icon, Spin, Tag, Text, Tooltip } from '@lobehub/ui';
+import { Form, type FormGroupItem, useForm } from '@lobehub/ui/form';
 import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';

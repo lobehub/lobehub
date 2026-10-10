@@ -11,8 +11,6 @@ import {
   useRouteLoaderData,
 } from 'react-router';
 import { isRtlLang } from 'rtl-detect';
-import { href as antdStaticCssHref } from 'virtual:lobehub/antd-static-css';
-import { href as themeVarsCssHref } from 'virtual:lobehub/theme-vars-css';
 
 import ErrorCapture, { type ErrorType } from '@/components/Error';
 import NextThemeProvider from '@/layout/GlobalProvider/NextThemeProvider';
@@ -58,8 +56,6 @@ export const Layout = ({ children }: PropsWithChildren) => {
         <Meta />
         <Links />
         <style dangerouslySetInnerHTML={{ __html: bodyBackground }} />
-        <link href={themeVarsCssHref} rel="stylesheet" />
-        <link href={antdStaticCssHref} rel="stylesheet" />
       </head>
       <body>
         {children}

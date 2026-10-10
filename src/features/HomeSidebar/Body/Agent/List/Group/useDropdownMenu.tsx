@@ -1,8 +1,7 @@
 import type { SFSymbol } from '@lobechat/electron-client-ipc';
 import { type SidebarVisibility } from '@lobechat/types';
-import { type MenuProps } from '@lobehub/ui';
-import { Icon } from '@lobehub/ui';
-import { confirmModal, toast } from '@lobehub/ui/base-ui';
+import { type DropdownItem } from '@lobehub/ui';
+import { confirmModal, Icon, toast  } from '@lobehub/ui';
 import { EyeOffIcon, GlobeIcon } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,7 +32,7 @@ export const useGroupDropdownMenu = ({
   name,
   openConfigGroupModal,
   visibility,
-}: GroupDropdownMenuProps): MenuProps['items'] => {
+}: GroupDropdownMenuProps): DropdownItem[] => {
   const { t } = useTranslation(['common', 'chat']);
 
   const { allowed: canEdit } = usePermission('edit_own_content');
@@ -152,7 +151,7 @@ export const useGroupDropdownMenu = ({
             deleteItem,
           ]
         : [configItem]),
-    ].filter(Boolean) as MenuProps['items'];
+    ].filter(Boolean) as DropdownItem[];
   }, [
     anchor,
     isCustomGroup,

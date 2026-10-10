@@ -1,8 +1,7 @@
 'use client';
 
-import type { MenuProps } from '@lobehub/ui';
-import { DropdownMenu, Flexbox, Icon } from '@lobehub/ui';
-import { AccordionRoot, ActionIcon } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
+import { AccordionRoot, ActionIcon,DropdownMenu, Flexbox, Icon  } from '@lobehub/ui';
 import { EyeOffIcon, MoreHorizontalIcon, SlidersHorizontalIcon } from 'lucide-react';
 import type { Key, ReactElement } from 'react';
 import { memo, useCallback, useMemo } from 'react';
@@ -107,7 +106,7 @@ const Body = memo(() => {
   );
 
   const getContextMenuItems = useCallback(
-    (key: string): MenuProps['items'] => {
+    (key: string): DropdownItem[] => {
       const items: NativeContextMenuItem[] = [
         {
           icon: <Icon icon={EyeOffIcon} />,
@@ -125,7 +124,7 @@ const Body = memo(() => {
           sfSymbol: 'gearshape',
         },
       ];
-      return items as MenuProps['items'];
+      return items as DropdownItem[];
     },
     [t, hideSection],
   );

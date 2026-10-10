@@ -1,14 +1,15 @@
-import { Flexbox, Icon } from '@lobehub/ui';
 import {
   Alert,
   Avatar,
   Button,
   createModal,
+  Flexbox,
+  Icon,
   ModalFooter,
   Select,
   Text,
   useModalContext,
-} from '@lobehub/ui/base-ui';
+} from '@lobehub/ui';
 import { t } from 'i18next';
 import { FolderIcon, PlusIcon } from 'lucide-react';
 import { useState } from 'react';

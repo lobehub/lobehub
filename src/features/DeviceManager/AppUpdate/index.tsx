@@ -1,6 +1,6 @@
 'use client';
 
-import { Button, confirmModal, Text } from '@lobehub/ui/base-ui';
+import { Button, confirmModal, Text } from '@lobehub/ui';
 import type { CSSProperties, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 

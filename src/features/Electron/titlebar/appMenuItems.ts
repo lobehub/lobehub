@@ -1,5 +1,5 @@
 import type { AppMenuNode } from '@lobechat/electron-client-ipc';
-import type { DropdownItem } from '@lobehub/ui/base-ui';
+import type { DropdownItem } from '@lobehub/ui';
 
 export const formatMenuAccelerator = (accelerator?: string): string | undefined => {
   if (!accelerator) return undefined;
