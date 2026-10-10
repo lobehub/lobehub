@@ -125,6 +125,14 @@ export interface ChatTopicMetadata {
   boundDeviceId?: string;
   cronJobId?: string;
   /**
+   * Set on a topic created by editing and resending a user message of a
+   * runtime whose native history cannot be rewound (Codex). The topic holds a
+   * copy of the source ancestry but no native session, so a fresh local run
+   * replays the copied history as `<previous_conversation>`. Ordinary topics
+   * never carry it, so their fresh sessions keep starting without replay.
+   */
+  editedFrom?: { messageId: string; topicId: string };
+  /**
    * The agent whose Profile page this Agent Builder conversation was started
    * from (mirrors `ExecAgentAppContext.editingAgentId`).
    *

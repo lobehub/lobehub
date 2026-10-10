@@ -1,16 +1,35 @@
+import type * as LobechatConst from '@lobechat/const';
 import { cleanup, renderHook } from '@testing-library/react';
 import { act } from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
 
 import { useActionsBarConfig } from './useActionsBarConfig';
+
+const runtime = vi.hoisted(() => ({ isDesktop: true }));
+vi.mock('@lobechat/const', async (importOriginal) => ({
+  ...(await importOriginal<typeof LobechatConst>()),
+  get isDesktop() {
+    return runtime.isDesktop;
+  },
+}));
+vi.mock('@/hooks/useEffectiveAgencyConfig', () => ({
+  useEffectiveAgencyConfig: () => ({
+    agencyConfig: useAgentStore((s) =>
+      s.activeAgentId ? s.agentMap[s.activeAgentId]?.agencyConfig : undefined,
+    ),
+    isPreferenceLoading: false,
+    workspaceScoped: false,
+  }),
+}));
 
 const initialState = useAgentStore.getState();
 
 /** @example A completed Codex reply exposes the existing regenerate action. */
 describe('useActionsBarConfig', () => {
   beforeEach(() => {
+    runtime.isDesktop = true;
     useAgentStore.setState({
       activeAgentId: 'codex-agent',
       agentMap: {
@@ -48,8 +67,44 @@ describe('useActionsBarConfig', () => {
 
     /** @example The user menu still supports restoring the original prompt. */
     expect(result.current.user?.menu).toContain('restoreToInput');
-    /** @example The user quick action remains copy. */
-    expect(result.current.user?.bar).toEqual(['copy']);
+    /** @example User edits and the existing copy action are both available. */
+    expect(result.current.user?.bar).toEqual(['edit', 'copy']);
+    /** @example Historical user prompts also expose Edit in the overflow menu. */
+    expect(result.current.user?.menu).toContain('edit');
+  });
+
+  /** @example Only executable local or bound-device targets advertise Edit. */
+  it('offers device Edit while keeping unbound Web and sandbox unavailable', () => {
+    // ROOT CAUSE:
+    // Provider-only slots originally advertised Edit even when gateway editing
+    // was unsupported. The device dispatch now hydrates durable edit context;
+    // unbound Web and sandbox still have no supported edit execution target.
+    const { result, rerender } = renderHook(() => useActionsBarConfig());
+    runtime.isDesktop = false;
+    rerender();
+    /** @example Web never advertises an in-process edit operation. */
+    expect(result.current.user?.menu).not.toContain('edit');
+    runtime.isDesktop = true;
+    for (const executionTarget of ['sandbox', 'device'] as const) {
+      act(() =>
+        useAgentStore.setState({
+          agentMap: {
+            'codex-agent': {
+              agencyConfig: {
+                executionTarget,
+                boundDeviceId: 'remote',
+                heterogeneousProvider: { type: 'codex' },
+              },
+            },
+          },
+        }),
+      );
+      rerender();
+      /** @example A bound device can edit; sandbox keeps its existing copy action. */
+      expect(result.current.user?.bar).toEqual(
+        executionTarget === 'device' ? ['edit', 'copy'] : ['copy'],
+      );
+    }
   });
 
   /** @example Switching from Codex to Claude Code removes the Codex-only action. */
@@ -67,9 +122,7 @@ describe('useActionsBarConfig', () => {
     /** @example Claude Code keeps its current quick actions. */
     expect(result.current.assistant?.bar).toEqual(['copy']);
     /** @example Claude Code keeps its current overflow menu. */
-    expect(result.current.assistant?.menu).toEqual([
-      'copy', 'divider', 'select', 'divider', 'del',
-    ]);
+    expect(result.current.assistant?.menu).toEqual(['copy', 'divider', 'select', 'divider', 'del']);
   });
 
   /** @example A native agent keeps the default actions provided by the message components. */
