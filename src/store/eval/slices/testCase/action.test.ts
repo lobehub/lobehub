@@ -230,6 +230,29 @@ describe('eval testCase slice replicas', () => {
     expect(testCaseSelectors.testCases(PAGE_2)(state())[0]?.id).toBe('page-2');
   });
 
+  it('keeps the hydrated count when switching to an uncached page', async () => {
+    await testCaseListResource.storage!.set(
+      { queryKey: LIST_KEY, scope },
+      { data: { items: [testCase(CASE)], total: 7 }, updatedAt: 1 },
+    );
+    // Page 1 is restored from storage and the network never answers.
+    vi.mocked(agentEvalService.listTestCases).mockImplementation(pending);
+
+    const sync = renderHook(
+      (query: TestCaseListQuery) => useEvalStore((s) => s.useFetchTestCases)(query),
+      { initialProps: PAGE, wrapper },
+    );
+    await waitFor(() =>
+      expect(testCaseSelectors.testCaseTotal(PAGE)(useEvalStore.getState())).toBe(7),
+    );
+
+    // Page 2 has no local copy yet, but the dataset count is still known.
+    sync.rerender(PAGE_2);
+    const state = () => useEvalStore.getState();
+    expect(testCaseSelectors.testCases(PAGE_2)(state())).toEqual([]);
+    expect(testCaseSelectors.testCaseTotal(PAGE_2)(state())).toBe(7);
+  });
+
   it('disables the sync when no dataset is requested', async () => {
     renderHook(() => useEvalStore((s) => s.useFetchTestCases)(null), { wrapper });
 

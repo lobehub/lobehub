@@ -47,3 +47,17 @@ export const testCaseDetailResource = defineReplica<string, TestCaseDetail, GetT
   storage: 'indexedDB',
   version: 1,
 });
+
+/**
+ * The dataset a page key belongs to. A page key is its query's JSON, so the
+ * owning dataset can be read back where only the key is at hand — the page lens
+ * mirrors each committed page's count into `testCaseTotalMap`.
+ */
+export const datasetIdOfPageKey = (key: string): string | undefined => {
+  try {
+    const parsed = JSON.parse(key) as { datasetId?: string } | null;
+    return parsed?.datasetId;
+  } catch {
+    return undefined;
+  }
+};

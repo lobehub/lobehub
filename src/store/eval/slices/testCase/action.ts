@@ -1,10 +1,16 @@
-import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
+import {
+  createReplicaSlice,
+  recordLens,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { agentEvalService } from '@/services/agentEval';
 import { type EvalStore, useEvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import {
+  datasetIdOfPageKey,
   type TestCaseDetail,
   testCaseDetailResource,
   type TestCaseListQuery,
@@ -28,23 +34,49 @@ export interface TestCaseDetailSyncResult {
   mutate: () => Promise<unknown>;
 }
 
+/**
+ * Where the case pages live, plus the dataset count derived from them.
+ *
+ * Every committed page — hydrated from storage or answered by the network —
+ * refreshes its dataset's count in the SAME commit. Keeping it derived means a
+ * page restored from IndexedDB publishes its cached total too; without that,
+ * switching from a hydrated page to a page with no local copy yet would fall
+ * back to a count nobody wrote and collapse the pager to 0.
+ */
+const testCasePageLens: ReplicaLens<EvalStore, TestCaseListValue> = {
+  clear: () => ({ testCaseListMap: {}, testCaseTotalMap: {} }),
+  get: (state, key) => state.testCaseListMap[key],
+  keys: (state) => Object.keys(state.testCaseListMap),
+  set: (state, key, data) => {
+    const testCaseListMap = { ...state.testCaseListMap };
+    let testCaseTotalMap = state.testCaseTotalMap;
+    if (data === undefined) {
+      delete testCaseListMap[key];
+    } else {
+      testCaseListMap[key] = data;
+      const datasetId = datasetIdOfPageKey(key);
+      if (datasetId) testCaseTotalMap = { ...testCaseTotalMap, [datasetId]: data.total };
+    }
+    return { testCaseListMap, testCaseTotalMap };
+  },
+};
+
 export const createTestCaseSlice = (set: Setter, get: () => EvalStore, _api?: unknown) =>
   new TestCaseActionImpl(set, get, _api);
 
 export class TestCaseActionImpl {
   readonly #get: () => EvalStore;
-  readonly #set: Setter;
   readonly #detail;
   readonly #list;
 
   constructor(set: Setter, get: () => EvalStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
 
     // Two local-first resources over the test-case entity, each owning ONE store
     // location (selectors keep reading those maps):
-    // - `#list`: the visited case pages → `testCaseListMap[pageKey]`
+    // - `#list`: the visited case pages → `testCaseListMap[pageKey]`, with the
+    //   dataset counts derived into `testCaseTotalMap`
     // - `#detail`: a case addressed by id → `testCaseDetailMap[id]`
     this.#list = createReplicaSlice(testCaseListResource, {
       actionPrefix: n('testCaseList'),
@@ -54,7 +86,7 @@ export class TestCaseActionImpl {
       merge: (response) => ({ items: response.data, total: response.total }),
       set,
       stateKey: 'testCaseListReplica',
-      view: recordLens<EvalStore, TestCaseListValue>('testCaseListMap'),
+      view: testCasePageLens,
     });
     this.#detail = createReplicaSlice(testCaseDetailResource, {
       actionPrefix: n('testCaseDetail'),
@@ -121,22 +153,10 @@ export class TestCaseActionImpl {
    * `null` disables the sync — the collapsed dataset card asks for no cases.
    */
   useFetchTestCases = (query: TestCaseListQuery | null): ReplicaSyncResult => {
-    const datasetId = query?.datasetId;
     // Subscribe so a replica commit re-renders the consumer; the rows themselves
     // are read through the selectors.
     useEvalStore((s) => (query ? s.testCaseListMap[testCaseListQueryKey(query)] : undefined));
-    return this.#list.useSync(query?.datasetId ? query : null, {
-      // The case count is dataset-wide, so it is kept beside the per-page entries
-      // (see `testCaseTotalMap`): switching pages must not blink it to 0.
-      onSuccess: (response) => {
-        if (!datasetId) return;
-        this.#set(
-          { testCaseTotalMap: { ...this.#get().testCaseTotalMap, [datasetId]: response.total } },
-          false,
-          n('testCases/total'),
-        );
-      },
-    });
+    return this.#list.useSync(query?.datasetId ? query : null);
   };
 }
 
