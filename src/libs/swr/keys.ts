@@ -398,13 +398,15 @@ export const agentConfigKeys = {
 };
 
 // ---- aiModel ------------------------------------------------------------
+// The provider model list and the provider list live in `@lobechat/replica`
+// resources now (see `src/store/aiInfra/slices/*/projection.ts`); only the
+// paged disabled-models fetch and the per-model reasoning config are SWR keys.
 export const aiModelKeys = {
   disabledModelsPage: def('aiModel:disabledModelsPage', (providerId: string, offset: number) => [
     'aiModel:disabledModelsPage',
     providerId,
     offset,
   ]),
-  list: def('aiModel:list', (provider: string | undefined) => ['aiModel:list', provider]),
   reasoningConfig: def('aiModel:reasoningConfig', (provider: string, model: string) => [
     'aiModel:reasoningConfig',
     provider,

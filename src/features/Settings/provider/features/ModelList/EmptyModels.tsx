@@ -6,7 +6,7 @@ import { memo, use, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { usePermission } from '@/hooks/usePermission';
-import { useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
 
 import { createCreateNewModelModal } from './CreateNewModelModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
@@ -75,9 +75,9 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
             onClick={() => {
               if (!canManageProvider) return;
               createCreateNewModelModal({
-                existingModelIds: useAiInfraStore
-                  .getState()
-                  .aiProviderModelList.map((model) => model.id),
+                existingModelIds: aiModelSelectors
+                  .getAiProviderModelList(provider)(useAiInfraStore.getState())
+                  .map((model) => model.id),
                 showDeployName,
               });
             }}

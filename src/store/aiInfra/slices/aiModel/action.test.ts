@@ -1,16 +1,24 @@
+import { randomUUID } from 'node:crypto';
+
 import { toast } from '@lobehub/ui/base-ui';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type * as I18nextModule from 'i18next';
 import { t } from 'i18next';
 import type { AiProviderModelListItem } from 'model-bank';
+import type { PropsWithChildren } from 'react';
+import { createElement } from 'react';
+import { SWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { cacheScope } from '@/libs/replica';
 import type * as SwrModule from '@/libs/swr';
 import { mutate } from '@/libs/swr';
 import { aiModelService } from '@/services/aiModel';
 import { withSWR } from '~test-utils';
 
 import { useAiInfraStore as useStore } from '../../store';
+import { initialAIModelState } from './initialState';
+import { aiModelListResource } from './projection';
 import { aiModelSelectors } from './selectors';
 
 vi.mock('i18next', async (importOriginal) => {
@@ -34,28 +42,65 @@ vi.mock('@/libs/swr', async (importOriginal) => {
   };
 });
 
-beforeEach(() => {
-  vi.clearAllMocks();
+/**
+ * The provider model list is a replica (`aiModelListMap[providerId]`): it paints
+ * from the persisted copy on the first frame, the network only confirms, and a
+ * write revalidates the loaded entries. Read the rows through the selectors;
+ * the fetch hook only orchestrates fetching.
+ */
+const wrapper = ({ children }: PropsWithChildren) =>
+  createElement(SWRConfig, { value: { dedupingInterval: 0, provider: () => new Map() } }, children);
 
-  // Reset store to initial state
-  act(() => {
-    useStore.setState({
-      activeAiProvider: 'test-provider',
-      aiModelLoadingIds: [],
-      aiProviderModelList: [],
-      isAiModelListInit: false,
-      modelReasoningConfigMap: {},
-      modelReasoningConfigUpdatingKeys: [],
-      refreshAiProviderRuntimeState: vi.fn(),
-    });
-  });
-});
+const model = (id: string, displayName = id): AiProviderModelListItem =>
+  ({
+    abilities: {},
+    displayName,
+    enabled: true,
+    id,
+    source: 'builtin',
+    type: 'chat',
+  }) as AiProviderModelListItem;
 
-afterEach(() => {
-  vi.restoreAllMocks();
-});
+/** Never-resolving fetch: the first frame can only come from storage. */
+const pending = () => new Promise<never>(() => {});
+
+const LIST_STORAGE_KEY = aiModelListResource.storageKey('test-provider');
 
 describe('AiModelAction', () => {
+  const scopes = new Set<string>();
+  let scope = '';
+  const useScope = (next: string) => {
+    scope = next;
+    scopes.add(next);
+    vi.spyOn(cacheScope, 'get').mockImplementation(() => scope);
+    vi.spyOn(cacheScope, 'use').mockImplementation(() => scope);
+    vi.spyOn(cacheScope, 'canPersist').mockReturnValue(true);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useScope(`ai-model-user-${randomUUID()}:personal`);
+
+    // Reset store to initial state
+    act(() => {
+      useStore.setState({
+        ...initialAIModelState,
+        activeAiProvider: 'test-provider',
+        refreshAiProviderRuntimeState: vi.fn(),
+      });
+    });
+  });
+
+  afterEach(async () => {
+    await Promise.all(
+      [...scopes].map((value) =>
+        aiModelListResource.storage!.remove({ queryKey: LIST_STORAGE_KEY, scope: value }),
+      ),
+    );
+    scopes.clear();
+    vi.restoreAllMocks();
+  });
+
   describe('batchToggleAiModels', () => {
     it('should toggle multiple models and refresh list', async () => {
       const { result } = renderHook(() => useStore());
@@ -395,18 +440,12 @@ describe('AiModelAction', () => {
 
       act(() => {
         useStore.setState({
-          aiProviderModelList: [
-            {
-              id: 'remote-1',
-              enabled: false,
-              type: 'chat',
-            },
-            {
-              id: 'remote-2',
-              enabled: true,
-              type: 'chat',
-            },
-          ],
+          aiModelListMap: {
+            'test-provider': [
+              { id: 'remote-1', enabled: false, type: 'chat' },
+              { id: 'remote-2', enabled: true, type: 'chat' },
+            ] as AiProviderModelListItem[],
+          },
         });
       });
 
@@ -529,7 +568,7 @@ describe('AiModelAction', () => {
   });
 
   describe('refreshAiModelList', () => {
-    it('should call mutate with correct key and trigger runtime state refresh', async () => {
+    it('revalidates the aiModelList replica and triggers runtime state refresh', async () => {
       const { result } = renderHook(() => useStore());
       const refreshRuntimeSpy = vi
         .spyOn(result.current, 'refreshAiProviderRuntimeState')
@@ -539,7 +578,28 @@ describe('AiModelAction', () => {
         await result.current.refreshAiModelList();
       });
 
-      expect(mutate).toHaveBeenCalledWith(['aiModel:list', 'test-provider']);
+      // `revalidate()` goes through the app's scoped `mutate` with a predicate
+      // that matches this replica's sync keys (all entries of the active scope).
+      expect(mutate).toHaveBeenCalled();
+      const match = vi.mocked(mutate).mock.calls.at(-1)![0] as (key: unknown) => boolean;
+      expect(typeof match).toBe('function');
+
+      const activeScope = aiModelListResource.scope.get();
+      expect(
+        match([
+          'replica:sync',
+          aiModelListResource.name,
+          aiModelListResource.version,
+          activeScope,
+          'test-provider',
+          'test-provider',
+        ]),
+      ).toBe(true);
+      // A key from another resource / scope is not swept in.
+      expect(match(['replica:sync', 'aiProviderList', 1, activeScope, 'openai', 'openai'])).toBe(
+        false,
+      );
+
       expect(refreshRuntimeSpy).toHaveBeenCalled();
     });
   });
@@ -864,6 +924,77 @@ describe('AiModelAction', () => {
     });
   });
 
+  describe('useFetchAiProviderModels', () => {
+    it('paints the persisted list before the network answers', async () => {
+      await aiModelListResource.storage!.set(
+        { queryKey: LIST_STORAGE_KEY, scope },
+        { data: [model('db-1', 'Cached')], updatedAt: 1 },
+      );
+      vi.spyOn(aiModelService, 'getAiProviderModelList').mockImplementation(pending);
+
+      const sync = renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
+        wrapper,
+      });
+
+      await waitFor(() =>
+        expect(useStore.getState().aiModelListMap['test-provider']?.[0]?.displayName).toBe(
+          'Cached',
+        ),
+      );
+
+      expect(sync.result.current.isHydrated).toBe(true);
+      expect(sync.result.current.isValidating).toBe(true);
+    });
+
+    it('replaces the replica with the server response and persists it', async () => {
+      const serverModels = [model('srv-1', 'Server')];
+      vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(serverModels);
+
+      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), { wrapper });
+
+      await waitFor(() =>
+        expect(useStore.getState().aiModelListMap['test-provider']?.[0]?.displayName).toBe(
+          'Server',
+        ),
+      );
+      expect(aiModelService.getAiProviderModelList).toHaveBeenCalledWith('test-provider');
+
+      // The confirmed value is persisted, so a later visit hydrates it.
+      await waitFor(async () =>
+        expect(
+          (await aiModelListResource.storage!.get({ queryKey: LIST_STORAGE_KEY, scope }))?.data,
+        ).toEqual(serverModels),
+      );
+    });
+
+    it('reports isLoading until the provider list lands, then exposes data', async () => {
+      vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue([
+        model('srv-1', 'Server'),
+      ]);
+
+      const sync = renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
+        wrapper,
+      });
+
+      await waitFor(() => expect(sync.result.current.data?.[0]?.id).toBe('srv-1'));
+      expect(sync.result.current.isLoading).toBe(false);
+    });
+
+    it('keeps each provider in its own replica entry', async () => {
+      vi.spyOn(aiModelService, 'getAiProviderModelList').mockImplementation(async (id: string) => [
+        model(`${id}-model`, id),
+      ]);
+
+      renderHook(() => useStore.getState().useFetchAiProviderModels('provider-a'), { wrapper });
+      renderHook(() => useStore.getState().useFetchAiProviderModels('provider-b'), { wrapper });
+
+      await waitFor(() =>
+        expect(useStore.getState().aiModelListMap['provider-b']?.[0]?.id).toBe('provider-b-model'),
+      );
+      expect(useStore.getState().aiModelListMap['provider-a']?.[0]?.id).toBe('provider-a-model');
+    });
+  });
+
   describe('useFetchAiModelReasoningConfig', () => {
     it('should fetch the reasoning config and write it to the store map', async () => {
       vi.spyOn(aiModelService, 'getAiModelReasoningConfig').mockResolvedValue({
@@ -919,139 +1050,7 @@ describe('AiModelAction', () => {
         gpt5_2ReasoningEffort: 'high',
       });
     });
-  });
 
-  describe('useFetchAiProviderModels', () => {
-    it('should fetch provider models and update state', async () => {
-      const mockModels: AiProviderModelListItem[] = [
-        {
-          abilities: {},
-          displayName: 'Model 1',
-          enabled: true,
-          id: 'model-1',
-          source: 'builtin',
-          type: 'chat',
-        } as AiProviderModelListItem,
-      ];
-
-      vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(mockModels);
-
-      const { result } = renderHook(
-        () => useStore.getState().useFetchAiProviderModels('test-provider'),
-        { wrapper: withSWR },
-      );
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockModels);
-      });
-
-      expect(aiModelService.getAiProviderModelList).toHaveBeenCalledWith('test-provider');
-    });
-
-    it('should update store state on successful fetch', async () => {
-      const mockModels: AiProviderModelListItem[] = [
-        {
-          abilities: {},
-          displayName: 'Model 1',
-          enabled: true,
-          id: 'model-1',
-          source: 'builtin',
-          type: 'chat',
-        } as AiProviderModelListItem,
-      ];
-
-      vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(mockModels);
-
-      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
-        wrapper: withSWR,
-      });
-
-      await waitFor(() => {
-        const state = useStore.getState();
-        expect(state.aiProviderModelList).toEqual(mockModels);
-        expect(state.isAiModelListInit).toBe(true);
-      });
-    });
-
-    it('should not update state if data is same and list is already initialized', async () => {
-      const mockModels: AiProviderModelListItem[] = [
-        {
-          abilities: {},
-          displayName: 'Model 1',
-          enabled: true,
-          id: 'model-1',
-          source: 'builtin',
-          type: 'chat',
-        } as AiProviderModelListItem,
-      ];
-
-      act(() => {
-        useStore.setState({
-          aiProviderModelList: mockModels,
-          isAiModelListInit: true,
-        });
-      });
-
-      vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(mockModels);
-
-      const setStateSpy = vi.spyOn(useStore, 'setState');
-
-      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
-        wrapper: withSWR,
-      });
-
-      await waitFor(() => {
-        expect(aiModelService.getAiProviderModelList).toHaveBeenCalled();
-      });
-
-      // State should not be updated if data is the same
-      expect(setStateSpy).not.toHaveBeenCalled();
-    });
-
-    it('should update state if data is different even when initialized', async () => {
-      const initialModels: AiProviderModelListItem[] = [
-        {
-          abilities: {},
-          displayName: 'Model 1',
-          enabled: true,
-          id: 'model-1',
-          source: 'builtin',
-          type: 'chat',
-        } as AiProviderModelListItem,
-      ];
-
-      const newModels: AiProviderModelListItem[] = [
-        {
-          abilities: {},
-          displayName: 'Model 2',
-          enabled: false,
-          id: 'model-2',
-          source: 'builtin',
-          type: 'chat',
-        } as AiProviderModelListItem,
-      ];
-
-      act(() => {
-        useStore.setState({
-          aiProviderModelList: initialModels,
-          isAiModelListInit: true,
-        });
-      });
-
-      vi.spyOn(aiModelService, 'getAiProviderModelList').mockResolvedValue(newModels);
-
-      renderHook(() => useStore.getState().useFetchAiProviderModels('test-provider'), {
-        wrapper: withSWR,
-      });
-
-      await waitFor(() => {
-        const state = useStore.getState();
-        expect(state.aiProviderModelList).toEqual(newModels);
-      });
-    });
-  });
-
-  describe('useFetchAiModelReasoningConfig', () => {
     it('resolves a missing config as null so SWR data is never undefined', async () => {
       // The server legitimately returns nothing when the user never customized
       // this model's reasoning params; `null` keeps that distinguishable from a

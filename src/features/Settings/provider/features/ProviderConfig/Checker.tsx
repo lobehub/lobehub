@@ -15,7 +15,7 @@ import { ModelIcon } from '@/components/LobeIcons';
 import { usePermission } from '@/hooks/usePermission';
 import { useProviderName } from '@/hooks/useProviderName';
 import { chatService } from '@/services/chat';
-import { aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { aiModelSelectors, aiProviderSelectors, useAiInfraStore } from '@/store/aiInfra';
 import { getRuntimeErrorMessage } from '@/utils/locale/runtimeErrorMessage';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -78,7 +78,9 @@ const Checker = memo<ConnectionCheckerProps>(
       aiProviderSelectors.isProviderConfigUpdating(provider)(s),
       s.updateAiProviderConfig,
     ]);
-    const aiProviderModelList = useAiInfraStore((s) => s.aiProviderModelList);
+    const aiProviderModelList = useAiInfraStore((s) =>
+      aiModelSelectors.getAiProviderModelList(provider)(s),
+    );
 
     // Sort models for better UX:
     // 1. checkModel first (provider's recommended test model)
