@@ -131,7 +131,7 @@ const DatasetDetail = memo(() => {
   useFetchTestCases(caseQuery);
 
   const testCases = useEvalStore(testCaseSelectors.testCases(caseQuery));
-  const total = useEvalStore(testCaseSelectors.testCaseTotal(datasetId));
+  const total = useEvalStore(testCaseSelectors.testCaseTotal(caseQuery));
 
   const filteredCases = testCases.filter((c: any) => {
     if (diffFilter !== 'all' && c.metadata?.difficulty !== diffFilter) return false;
@@ -159,7 +159,7 @@ const DatasetDetail = memo(() => {
 
   const handleRefresh = useCallback(async () => {
     if (datasetId) {
-      await refreshTestCases(datasetId);
+      await refreshTestCases();
       await refreshDatasetDetail(datasetId);
     }
   }, [datasetId, refreshTestCases, refreshDatasetDetail]);

@@ -7,7 +7,8 @@ import { setNamespace } from '@/utils/storeDebug';
 import {
   type TestCaseDetail,
   testCaseDetailResource,
-  type TestCaseListItem,
+  type TestCaseListQuery,
+  testCaseListQueryKey,
   testCaseListResource,
   type TestCaseListValue,
 } from './projection';
@@ -15,13 +16,6 @@ import {
 const n = setNamespace('evalTestCase');
 
 type Setter = StoreSetter<EvalStore>;
-
-/** Params of a dataset's case page; `null` (or a blank datasetId) disables the sync. */
-export interface TestCaseListParams {
-  datasetId: string;
-  limit?: number;
-  offset?: number;
-}
 
 /** Pre-migration `useFetchTestCase` return shape, backed by the detail replica. */
 export interface TestCaseDetailSyncResult {
@@ -39,16 +33,18 @@ export const createTestCaseSlice = (set: Setter, get: () => EvalStore, _api?: un
 
 export class TestCaseActionImpl {
   readonly #get: () => EvalStore;
+  readonly #set: Setter;
   readonly #detail;
   readonly #list;
 
   constructor(set: Setter, get: () => EvalStore, _api?: unknown) {
     void _api;
+    this.#set = set;
     this.#get = get;
 
     // Two local-first resources over the test-case entity, each owning ONE store
     // location (selectors keep reading those maps):
-    // - `#list`: a dataset's case page → `testCaseListMap[datasetId]`
+    // - `#list`: the visited case pages → `testCaseListMap[pageKey]`
     // - `#detail`: a case addressed by id → `testCaseDetailMap[id]`
     this.#list = createReplicaSlice(testCaseListResource, {
       actionPrefix: n('testCaseList'),
@@ -70,23 +66,17 @@ export class TestCaseActionImpl {
     });
   }
 
-  getTestCaseById = (id: string): TestCaseDetail | undefined => this.#get().testCaseDetailMap[id];
-
-  getTestCasesByDatasetId = (datasetId: string): TestCaseListItem[] =>
-    this.#get().testCaseListMap[datasetId]?.items ?? [];
-
-  getTestCasesTotalByDatasetId = (datasetId: string): number =>
-    this.#get().testCaseListMap[datasetId]?.total ?? 0;
-
-  isLoadingTestCases = (datasetId: string): boolean =>
-    this.#get().testCaseListMap[datasetId] === undefined;
-
   refreshTestCaseDetail = async (id: string): Promise<void> => {
     await this.#detail.revalidate(id);
   };
 
-  refreshTestCases = async (datasetId?: string): Promise<void> => {
-    await this.#list.revalidate(datasetId);
+  /**
+   * Revalidate the loaded case pages. Pages are separate entries and a case
+   * write can move rows across page boundaries, so every loaded page is
+   * revalidated rather than only the one the caller happens to be looking at.
+   */
+  refreshTestCases = async (): Promise<void> => {
+    await this.#list.revalidate();
   };
 
   /**
@@ -96,14 +86,13 @@ export class TestCaseActionImpl {
    */
   updateTestCase = async (
     id: string,
-    datasetId: string,
     data: {
       content?: { expected?: string; input?: string };
       evalConfig?: { criteria?: string };
     },
   ): Promise<void> => {
     await agentEvalService.updateTestCase({ id, ...data });
-    await Promise.all([this.refreshTestCaseDetail(id), this.refreshTestCases(datasetId)]);
+    await Promise.all([this.refreshTestCaseDetail(id), this.refreshTestCases()]);
   };
 
   /**
@@ -128,15 +117,26 @@ export class TestCaseActionImpl {
   };
 
   /**
-   * Fetch orchestration only; read the rows with `testCaseSelectors`. `null`
-   * disables the sync — the collapsed dataset card asks for no cases.
+   * Fetch orchestration only; read the rows with `testCaseSelectors.testCases(query)`.
+   * `null` disables the sync — the collapsed dataset card asks for no cases.
    */
-  useFetchTestCases = (params: TestCaseListParams | null): ReplicaSyncResult => {
-    const datasetId = params?.datasetId;
-    // Subscribe so a replica commit re-renders the consumer; the value itself is
-    // read through the store below.
-    useEvalStore((s) => (datasetId ? s.testCaseListMap[datasetId] : undefined));
-    return this.#list.useSync(datasetId ? params : null);
+  useFetchTestCases = (query: TestCaseListQuery | null): ReplicaSyncResult => {
+    const datasetId = query?.datasetId;
+    // Subscribe so a replica commit re-renders the consumer; the rows themselves
+    // are read through the selectors.
+    useEvalStore((s) => (query ? s.testCaseListMap[testCaseListQueryKey(query)] : undefined));
+    return this.#list.useSync(query?.datasetId ? query : null, {
+      // The case count is dataset-wide, so it is kept beside the per-page entries
+      // (see `testCaseTotalMap`): switching pages must not blink it to 0.
+      onSuccess: (response) => {
+        if (!datasetId) return;
+        this.#set(
+          { testCaseTotalMap: { ...this.#get().testCaseTotalMap, [datasetId]: response.total } },
+          false,
+          n('testCases/total'),
+        );
+      },
+    });
   };
 }
 

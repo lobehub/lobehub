@@ -1,20 +1,15 @@
-import { defineReplica } from '@/libs/replica';
+import { defineReplica, stableQueryKey } from '@/libs/replica';
 import type { agentEvalService } from '@/services/agentEval';
 
 type ListTestCasesResponse = Awaited<ReturnType<typeof agentEvalService.listTestCases>>;
 type GetTestCaseResponse = Awaited<ReturnType<typeof agentEvalService.getTestCase>>;
 
-/** A test case row as the dataset's case list returns it. */
+/** A test case row as the case list returns it. */
 export type TestCaseListItem = ListTestCasesResponse['data'][number];
 /** The single case the detail route renders; `getTestCase` returns the row itself. */
 export type TestCaseDetail = GetTestCaseResponse;
 
-/**
- * Which page of a dataset's cases a view holds. `datasetId` is the entry key —
- * a dataset view shows one page at a time — while `limit` / `offset` are the
- * entry's query, so each page is persisted under its own row and switching
- * pages never paints a superseded one.
- */
+/** Everything that decides which case rows a page holds. */
 export interface TestCaseListQuery {
   datasetId: string;
   limit?: number;
@@ -27,18 +22,20 @@ export interface TestCaseListValue {
 }
 
 /**
- * One dataset's case page (`testCaseListMap[datasetId]`). The same endpoint
- * serves the dataset detail page and the benchmark's dataset cards, but each
- * dataset is its own entry, so the two never share — or reset — one page.
+ * Entry key of one page: the whole query, not just the dataset. A dataset view
+ * shows a single page at a time, but every visited page keeps its own entry —
+ * and its own persisted row — so returning to a page paints its cached rows
+ * again instead of leaving the table empty until the network answers.
  */
+export const testCaseListQueryKey = (query: TestCaseListQuery) => stableQueryKey(query);
+
 export const testCaseListResource = defineReplica<
   TestCaseListQuery,
   TestCaseListValue,
   ListTestCasesResponse
 >({
-  key: ({ datasetId }) => datasetId,
+  key: testCaseListQueryKey,
   name: 'evalTestCaseList',
-  query: ({ limit, offset }) => ({ limit: limit ?? 0, offset: offset ?? 0 }),
   storage: 'indexedDB',
   version: 1,
 });

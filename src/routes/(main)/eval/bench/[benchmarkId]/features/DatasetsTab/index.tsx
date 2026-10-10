@@ -71,12 +71,12 @@ const DatasetsTab = memo<DatasetsTabProps>(
     useFetchTestCases(caseQuery);
 
     const testCases = useEvalStore(testCaseSelectors.testCases(caseQuery));
-    const total = useEvalStore(testCaseSelectors.testCaseTotal(expandedDs ?? undefined));
+    const total = useEvalStore(testCaseSelectors.testCaseTotal(caseQuery));
     const loading = useEvalStore(testCaseSelectors.isLoadingTestCases(caseQuery));
 
     const handleRefreshTestCases = useCallback(
-      async (datasetId: string) => {
-        await refreshTestCases(datasetId);
+      async () => {
+        await refreshTestCases();
         onRefresh();
       },
       [refreshTestCases, onRefresh],
@@ -159,7 +159,7 @@ const DatasetsTab = memo<DatasetsTabProps>(
             try {
               await agentEvalService.deleteTestCase(testCase.id);
               toast.success(t('testCase.delete.success'));
-              if (expandedDs) await refreshTestCases(expandedDs);
+              if (expandedDs) await refreshTestCases();
               onRefresh();
             } catch {
               toast.error(t('testCase.delete.error'));

@@ -1,47 +1,34 @@
 import type { EvalStore } from '@/store/eval/store';
 
-import {
-  type TestCaseListItem,
-  type TestCaseListQuery,
-  testCaseListResource,
-  type TestCaseListValue,
-} from './projection';
+import { type TestCaseListItem, type TestCaseListQuery, testCaseListQueryKey } from './projection';
 
 /** Stable empty array so a selector never returns a fresh reference on every read. */
 const EMPTY_TEST_CASES: TestCaseListItem[] = [];
 
 /**
- * The dataset's case page for exactly this query. The entry is keyed by
- * `datasetId` only, so while a new page is in flight (or after it failed) the
- * entry still holds the previous page; it is not this query's page and must
- * not be shown with the new pagination.
- */
-const pageOf = (s: EvalStore, query?: TestCaseListQuery | null): TestCaseListValue | undefined => {
-  if (!query?.datasetId) return undefined;
-  const entry = s.testCaseListReplica.entries[query.datasetId];
-  // A view seeded without bookkeeping has no query to compare against.
-  if (entry && entry.query !== testCaseListResource.query(query)) return undefined;
-  return s.testCaseListMap[query.datasetId];
-};
-
-/**
- * The requested case page has no local copy yet (`undefined` is the loading
- * signal) — the table / collapsible card keeps its skeleton until first paint.
+ * The requested page has no local copy yet (`undefined` is the loading signal) —
+ * the table / collapsible card keeps its skeleton until first paint. Every page
+ * is its own entry, so a page whose request is still in flight (or failed) is
+ * loading even while another page of the same dataset is cached.
  */
 const isLoadingTestCases = (query?: TestCaseListQuery | null) => (s: EvalStore) =>
-  !!query?.datasetId && pageOf(s, query) === undefined;
+  !!query && s.testCaseListMap[testCaseListQueryKey(query)] === undefined;
 
-/** The rows of the requested case page. */
+/** The rows of the requested page. */
 const testCases = (query?: TestCaseListQuery | null) => (s: EvalStore) =>
-  pageOf(s, query)?.items ?? EMPTY_TEST_CASES;
+  (query ? s.testCaseListMap[testCaseListQueryKey(query)]?.items : undefined) ?? EMPTY_TEST_CASES;
 
 /**
- * The dataset's live case count, as the latest page's response reported it.
- * The count is dataset-wide, so a previous page's total is still valid while
- * the next page loads (and keeps the pager from collapsing).
+ * The dataset-wide case count. Every page response counts the whole dataset, so
+ * the requested page's own value paints it first (a hydrated page included,
+ * without waiting for the network); a page that has not loaded yet falls back to
+ * the last count a response reported, which keeps the pager from collapsing.
  */
-const testCaseTotal = (datasetId?: string) => (s: EvalStore) =>
-  (datasetId ? s.testCaseListMap[datasetId]?.total : 0) ?? 0;
+const testCaseTotal = (query?: TestCaseListQuery | null) => (s: EvalStore) => {
+  if (!query) return 0;
+  const page = s.testCaseListMap[testCaseListQueryKey(query)];
+  return page?.total ?? s.testCaseTotalMap[query.datasetId] ?? 0;
+};
 
 export const testCaseSelectors = {
   isLoadingTestCases,

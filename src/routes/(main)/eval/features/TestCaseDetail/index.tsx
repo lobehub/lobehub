@@ -118,7 +118,7 @@ const TestCaseDetail = memo<TestCaseDetailProps>(({ datasetName, testCase }) => 
     if (!patch) return stop();
     setSaving(true);
     try {
-      await updateTestCase(testCase.id, testCase.datasetId, patch);
+      await updateTestCase(testCase.id, patch);
       stop();
     } catch (error) {
       toast.error((error as Error)?.message ?? t('testCaseDetail.saveFailed'));
