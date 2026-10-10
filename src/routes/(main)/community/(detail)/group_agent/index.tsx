@@ -8,6 +8,7 @@ import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { groupAgentSelectors } from '@/store/discover/selectors';
 
 import NotFound from '../components/NotFound';
 import { TocProvider } from '../features/Toc/useToc';
@@ -26,8 +27,10 @@ const GroupAgentDetailPage = memo<GroupAgentDetailPageProps>(({ mobile }) => {
   const { version } = useQuery() as { version?: string };
 
   // Fetch group agent detail
-  const useGroupAgentDetail = useDiscoverStore((s) => s.useGroupAgentDetail);
-  const { data, error, isLoading, mutate } = useGroupAgentDetail({ identifier, version });
+  const useGroupAgentDetail = useDiscoverStore((s) => s.useFetchGroupAgentDetail);
+  const { error, isLoading, mutate, queryKey } = useGroupAgentDetail({ identifier, version });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(groupAgentSelectors.groupAgentDetail(queryKey));
 
   if (data === undefined) {
     if (isLoading) return <RouteLoading />;
