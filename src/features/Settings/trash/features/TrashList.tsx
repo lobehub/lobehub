@@ -134,6 +134,7 @@ const TrashList = () => {
 
   // The live project list of this scope is the only source of project options.
   const projectSync = useProjectStore((s) => s.useFetchProjectList)(projectsEnabled);
+  const refreshProjectList = useProjectStore((s) => s.refreshProjectList);
   const projects = useLoadedProjectList();
   const listedAvailability = resolveProjectAvailability({ projectId, projects });
   // A project the live list no longer holds is not asked for at all.
@@ -143,9 +144,8 @@ const TrashList = () => {
   const list = useTrashStore(trashSelectors.currentList(filter));
   const isEmpty = useTrashStore(trashSelectors.isEmpty(filter));
   const counts = useTrashStore(trashSelectors.countByType(projectId));
-  const filterCount = useTrashStore(trashSelectors.filterCount(filter));
-  const countByType = counts ?? EMPTY_COUNTS;
-  const total = useTrashStore(trashSelectors.totalCount(projectId));
+  const storedFilterCount = useTrashStore(trashSelectors.filterCount(filter));
+  const storedTotal = useTrashStore(trashSelectors.totalCount(projectId));
 
   const { error, isValidating, revalidate } = useFetchTrash(canFetch, filter);
   const countSync = useFetchTrashCount(canFetch, projectId);
@@ -153,14 +153,18 @@ const TrashList = () => {
   // The server refuses a project that was deleted or whose access was revoked;
   // re-read the project list so the picker drops it as well.
   const refused = isProjectRefusedError(error) || isProjectRefusedError(countSync.error);
-  const revalidateProjects = projectSync.revalidate;
   useEffect(() => {
-    if (refused) void revalidateProjects();
-  }, [refused, revalidateProjects]);
+    if (refused) void refreshProjectList();
+  }, [refused, refreshProjectList]);
 
   const availability = resolveProjectAvailability({ projectId, projects, refused });
   const projectUnavailable = availability === 'unavailable';
   const listError = refused ? undefined : error;
+
+  // Counts cached for a project that is gone describe nothing the user can act on.
+  const countByType = (!projectUnavailable && counts) || EMPTY_COUNTS;
+  const filterCount = projectUnavailable ? undefined : storedFilterCount;
+  const total = projectUnavailable ? 0 : storedTotal;
 
   // An unavailable project keeps the view restricted to it, showing nothing.
   const items = (!projectUnavailable && list?.items) || EMPTY_ITEMS;
@@ -267,7 +271,7 @@ const TrashList = () => {
             toast.error(t('trash.emptyStopped.scopeChanged'));
           } else if (isProjectRefusedError(error)) {
             toast.error(t('trash.projectUnavailable.title'));
-            void revalidateProjects();
+            void refreshProjectList();
           } else {
             reportFailure();
           }
@@ -428,8 +432,8 @@ const TrashList = () => {
               unavailable={projectUnavailable}
               value={projectId}
               onChange={(next) => changeFilter({ projectId: next, resourceType: activeType })}
-              onOpen={() => void revalidateProjects()}
-              onRetry={() => void revalidateProjects()}
+              onOpen={() => void refreshProjectList()}
+              onRetry={() => void refreshProjectList()}
             />
           )}
         </Flexbox>
