@@ -291,16 +291,14 @@ describe('Server callSubAgent suspend/resume', () => {
           m.role === 'tool' &&
           !!m.content &&
           stripSubAgentReference(m.content) ===
-            (decision === 'deny'
-              ? 'Tool result withheld by afterToolCall hook.'
-              : SUB_AGENT_ANSWER),
+            (decision === 'deny' ? 'Blocked by afterToolCall hook.' : SUB_AGENT_ANSWER),
       );
       expect(subAgentToolMessage).toBeDefined();
       if (decision !== 'deny')
         expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
       const parentInput = JSON.stringify(mockResponsesCreate.mock.calls[2][0]);
       expect(parentInput).toContain(
-        decision === 'deny' ? 'Tool result withheld by afterToolCall hook.' : SUB_AGENT_ANSWER,
+        decision === 'deny' ? 'Blocked by afterToolCall hook.' : SUB_AGENT_ANSWER,
       );
       if (decision === 'deny') expect(parentInput).not.toContain(SUB_AGENT_ANSWER);
     },

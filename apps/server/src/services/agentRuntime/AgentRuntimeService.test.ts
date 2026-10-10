@@ -3831,6 +3831,7 @@ describe('AgentRuntimeService', () => {
 
     it('gates deferred output before backfill and parent resume, including callback replay', async () => {
       const privateContent = 'synthetic-private-child-answer';
+      const denialReason = 'The child result is restricted by policy.';
       const stored = {
         id: 'tool-msg-1',
         identifier: 'lobe-agent',
@@ -3846,7 +3847,7 @@ describe('AgentRuntimeService', () => {
       const fetchHook = vi
         .spyOn(globalThis, 'fetch')
         .mockImplementation(
-          async () => new Response(JSON.stringify({ decision: 'deny', reason: privateContent })),
+          async () => new Response(JSON.stringify({ decision: 'deny', reason: denialReason })),
         );
       const hooks = [
         {
@@ -3888,7 +3889,13 @@ describe('AgentRuntimeService', () => {
         expect(updateToolMessage).toHaveBeenCalledWith(
           'tool-msg-1',
           expect.objectContaining({
-            content: 'Tool result withheld by afterToolCall hook.',
+            content: denialReason,
+            pluginError: 'hook_denied',
+            pluginState: expect.objectContaining({
+              phase: 'afterToolCall',
+              reason: denialReason,
+              type: 'blocked',
+            }),
             replacePluginState: true,
             onlyIfEmpty: true,
           }),
@@ -3904,7 +3911,9 @@ describe('AgentRuntimeService', () => {
           } as any,
         });
         expect(fetchHook).toHaveBeenCalledTimes(1);
-        expect((stored as any).content).toBe('Tool result withheld by afterToolCall hook.');
+        expect((stored as any).content).toBe(denialReason);
+        expect(stored.state).toMatchObject({ reason: denialReason, type: 'blocked' });
+        expect(JSON.stringify(stored.state)).not.toContain(privateContent);
       } finally {
         fetchHook.mockRestore();
       }
