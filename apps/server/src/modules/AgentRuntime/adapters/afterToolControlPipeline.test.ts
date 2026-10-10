@@ -172,6 +172,7 @@ afterEach(() => {
 
 describe('afterToolCall control pipeline', () => {
   const secret = 'synthetic-sensitive-result';
+  const denialReason = '禁止将敏感工具结果交给模型';
   const raw = () => ({
     content: secret.repeat(1000),
     error: { message: secret, type: 'tool_error' },
@@ -195,7 +196,7 @@ describe('afterToolCall control pipeline', () => {
     'withholds the full result before persistence and LLM continuation, queue=%s',
     async (queue) => {
       queueMode.mockReturnValue(queue);
-      fetchHook.mockImplementation(async () => response('deny', secret));
+      fetchHook.mockImplementation(async () => response('deny', denialReason));
       const fixture = setup([control()], undefined, true);
       fixture.execute.mockResolvedValue(raw());
       const result = await fixture.step();
@@ -209,22 +210,26 @@ describe('afterToolCall control pipeline', () => {
       });
       expect(fixture.rows).toEqual([
         expect.objectContaining({
-          content: BLOCKED_TOOL_RESULT_CONTENT,
+          content: denialReason,
           pluginError: 'hook_denied',
           pluginState: {
             type: 'blocked',
             phase: 'afterToolCall',
-            reason: BLOCKED_TOOL_RESULT_CONTENT,
+            reason: denialReason,
           },
           tool_call_id: 'native-1',
         }),
       ]);
       expect(JSON.stringify(result)).not.toContain(secret);
+      expect(JSON.stringify(result)).toContain(denialReason);
       expect(JSON.stringify(result)).not.toContain('123456789');
       expect(JSON.stringify(await fixture.host.transports.messages.query())).not.toContain(secret);
       expect(
         JSON.stringify(vi.mocked(fixture.host.transports.stream.publishEvent).mock.calls),
       ).not.toContain(secret);
+      expect(
+        JSON.stringify(vi.mocked(fixture.host.transports.stream.publishEvent).mock.calls),
+      ).toContain(denialReason);
       expect(archive).not.toHaveBeenCalled();
       expect(result.newState.cost?.tools.total).toBe(5);
       expect(fixture.host.transports.stream.publishEvent).toHaveBeenCalledWith(
@@ -367,7 +372,7 @@ describe('afterToolCall control pipeline', () => {
     },
   );
 
-  it('applies ordered controls once, preserves a tool stop, and does not forward a receiver reason', async () => {
+  it('applies ordered controls once, preserves a tool stop, and forwards the denying hook reason', async () => {
     const fixture = setup([
       control('allow'),
       { ...control('skip'), matcher: '^other/' },
@@ -376,7 +381,7 @@ describe('afterToolCall control pipeline', () => {
     ]);
     fixture.execute.mockResolvedValue({ ...raw(), stop: true });
     fetchHook.mockImplementation(async (url) =>
-      response(String(url).endsWith('/deny') ? 'deny' : 'allow', secret),
+      response(String(url).endsWith('/deny') ? 'deny' : 'allow', denialReason),
     );
     const result = await fixture.step();
     expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
@@ -384,8 +389,32 @@ describe('afterToolCall control pipeline', () => {
       'https://hooks.example/deny',
     ]);
     expect(result.newState.status).toBe('done');
+    expect(fixture.rows[0]).toMatchObject({
+      content: denialReason,
+      pluginState: { reason: denialReason },
+    });
     expect(JSON.stringify(result)).not.toContain(secret);
   });
+
+  it.each(['', ' \n自定义 "reason"\n ', secret])(
+    'preserves an explicitly provided denial reason verbatim: %j',
+    async (reason) => {
+      const fixture = setup([control()]);
+      fixture.execute.mockResolvedValue(raw());
+      fetchHook.mockImplementation(async () => response('deny', reason));
+
+      await fixture.step();
+
+      expect(fixture.rows[0]).toMatchObject({
+        content: reason,
+        pluginError: 'hook_denied',
+        pluginState: { reason, type: 'blocked', phase: 'afterToolCall' },
+      });
+      expect(fixture.rows[0].pluginState).not.toHaveProperty('nested');
+      expect(fixture.rows[0].pluginState).not.toHaveProperty('images');
+      expect(archive).not.toHaveBeenCalled();
+    },
+  );
 
   it('evaluates a failed result after the last tool retry only', async () => {
     const fixture = setup([control()]);

@@ -35,7 +35,7 @@ To control the call or result, reply with HTTP 2xx and either:
 { "decision": "deny", "reason": "Result is not suitable for the model" }
 ```
 
-Only `decision` and an optional string denial `reason` are parsed. Extra fields are ignored; controls cannot replace results, rewrite arguments, or append model context. Controls require fetch, cannot also have a local handler, and cannot filter or override their request with `eventFields` or `body`.
+Only `decision` and an optional string denial `reason` are parsed. Extra fields are ignored; controls cannot supply an allowed result, rewrite arguments, or append model context. Controls require fetch, cannot also have a local handler, and cannot filter or override their request with `eventFields` or `body`.
 
 HTTP 204, empty bodies, invalid JSON, and valid JSON without a top-level `decision` are notification responses. This includes arrays, scalars, `null`, and the old nested `hookSpecificOutput` format. They continue even with `onError: 'block'`. An explicit but invalid decision (including an invalid denial reason) is a protocol error and follows `onError`. Each hook is still awaited; notification responses do not bypass later matching controls.
 
@@ -44,8 +44,8 @@ Matching controls run in registration order. A deny stops the remaining controls
 ## Denial and failure behavior
 
 - Allow continues the existing archival, persistence, streaming, and model-context flow
-- Deny replaces the complete result with `Tool result withheld by afterToolCall hook.`, `error: 'hook_denied'`, and a neutral blocked state tagged `phase: 'afterToolCall'`. The original content, error, images/state, archive references, and Work-registration intent are not passed onward
-- The receiver's denial reason is deliberately not echoed into model context or tool state, because it could quote the denied output
+- Deny replaces the complete result with the receiver's optional `reason`, `error: 'hook_denied'`, and a blocked state tagged `phase: 'afterToolCall'` whose `reason` matches the replacement content. Without a reason, the replacement is `Tool result withheld by afterToolCall hook.`. The original content, error, images/state, archive references, and Work-registration intent are not passed onward
+- As with `beforeToolCall`, the denial reason enters the tool result, model context, and tool card. The receiver controls this text; an explicitly provided empty string is preserved
 - The native call/result pairing remains intact. A deny does not retry the tool or charge it as an unexecuted call; actual attempt count, execution time, and existing tool charges remain. Deferred child usage counters are retained without child output
 - Result controls run after the tool's existing internal retry loop and also inspect failed/timeout results. Exceptions that do not produce a result retain the existing `onToolCallError` behavior
 - Non-2xx responses, explicit invalid decisions, oversized responses, invalid UTF-8, network failures, and timeouts use the existing `onError` policy: `continue` by default, or `block`. Successful notification responses do not invoke `onError`. Cancellation never becomes permission to release a result
