@@ -163,7 +163,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     if (!writeQueue) return;
     const known = indexed.get(scope) ?? new Set<string>();
     indexed.set(scope, known);
-    if (known.has(queryKey) === present) return;
+    // Only a positive hit is authoritative: on a fresh engine (a reload) a key
+    // missing from memory may still be listed in the persisted index, so a
+    // removal must run the read-modify-write to clear it. The update callback
+    // skips the actual write when the index already agrees.
+    if (present && known.has(queryKey)) return;
     if (present) known.add(queryKey);
     else known.delete(queryKey);
     writeQueue.update(indexKey(scope), (current) => {

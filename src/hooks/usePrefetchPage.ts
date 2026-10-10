@@ -1,24 +1,21 @@
 import { useCallback } from 'react';
 
-import { mutate } from '@/libs/swr';
-import { documentService } from '@/services/document';
-import { documentSWRKeys } from '@/services/document/swrKeys';
+import { useDocumentStore } from '@/store/document';
 
 /**
- * Returns a callback to prefetch page/document data into the SWR cache.
- * Call the returned function on mouseEnter to warm the cache before navigation.
+ * Returns a callback to prefetch the document detail before navigation.
+ * Call the returned function on mouseEnter to warm the replica so the editor
+ * paints from the projection instead of a skeleton.
  *
  * The Pages sidebar list is no longer an SWR cache entry — it is a
  * `@lobechat/replica` resource that hydrates from IndexedDB on mount — so only
- * the editor's document content is warmed here.
+ * the document detail is warmed here.
  */
 export const usePrefetchPage = () => {
   return useCallback((documentId: string) => {
     if (!documentId) return;
 
-    // Prefetch individual document content (for the editor)
-    mutate(documentSWRKeys.editor(documentId), documentService.getDocumentById(documentId), {
-      revalidate: false,
-    });
+    // Prefetch the document detail into its replica (for the editor)
+    void useDocumentStore.getState().prefetchDocument(documentId);
   }, []);
 };
