@@ -1,9 +1,12 @@
 import { type RetrieveMemoryParams, type RetrieveMemoryResult } from '@lobechat/types';
 
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+
 import { type ActivitySliceState } from './slices/activity';
 import { activityInitialState } from './slices/activity';
 import { type AgentMemorySliceState } from './slices/agent';
 import { agentMemoryInitialState } from './slices/agent';
+import { type MemoryDetailDisplay } from './slices/base/projection';
 import { type ContextSliceState } from './slices/context';
 import { contextInitialState } from './slices/context';
 import { type ExperienceSliceState } from './slices/experience';
@@ -31,8 +34,17 @@ export interface UserMemoryStoreState
   editingMemoryContent?: string;
   editingMemoryId?: string;
   editingMemoryLayer?: 'activity' | 'context' | 'experience' | 'identity' | 'preference';
+  /**
+   * Canonical replica view of one memory detail, keyed `${layer}:${id}`. The
+   * engine owns every write; readers go through `useFetchMemoryDetail`.
+   */
+  memoryDetailMap: Record<string, MemoryDetailDisplay>;
+  /** Local-first bookkeeping for `memoryDetailMap`. */
+  memoryDetailReplica: ReplicaState<MemoryDetailDisplay>;
   memoryFetchedAtMap: Record<string, number>;
   memoryMap: Record<string, RetrieveMemoryResult>;
+  /** Local-first bookkeeping for the retrieve result map (`memoryMap`). */
+  memoryRetrieveReplica: ReplicaState<RetrieveMemoryResult>;
   persona?: PersonaData;
   personaInit: boolean;
   roles: { count: number; tag: string }[];
@@ -52,8 +64,11 @@ export const initialState: UserMemoryStoreState = {
   editingMemoryContent: undefined,
   editingMemoryId: undefined,
   editingMemoryLayer: undefined,
+  memoryDetailMap: {},
+  memoryDetailReplica: createReplicaState<MemoryDetailDisplay>(),
   memoryFetchedAtMap: {},
   memoryMap: {},
+  memoryRetrieveReplica: createReplicaState<RetrieveMemoryResult>(),
   persona: undefined,
   personaInit: false,
   roles: [],
