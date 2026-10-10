@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { controlDeferredToolResult } from '../deferredToolResultControl';
 import { HookDispatcher } from '../HookDispatcher';
-import { BLOCKED_TOOL_RESULT_CONTENT } from '../toolResultControl';
 
 const { fetchHook, queueMode } = vi.hoisted(() => ({ fetchHook: vi.fn(), queueMode: vi.fn() }));
 vi.mock('@/database/models/user', () => ({ UserModel: { getEmailsByIds: async () => [] } }));
@@ -324,7 +323,7 @@ describe('out-of-band tool result control', () => {
         ),
     );
     expect((await controlDeferredToolResult(deps, input)).result.content).toBe(
-      BLOCKED_TOOL_RESULT_CONTENT,
+      'Blocked by afterToolCall hook.',
     );
     expect(fetchHook.mock.calls.map(([url]) => url)).toEqual([
       'https://hooks.example/after',

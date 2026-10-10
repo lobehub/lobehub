@@ -9,7 +9,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentHook } from '@/server/services/agentRuntime/hooks';
 import { HookDispatcher } from '@/server/services/agentRuntime/hooks';
-import { BLOCKED_TOOL_RESULT_CONTENT } from '@/server/services/agentRuntime/hooks/toolResultControl';
 
 import type { RuntimeExecutorContext } from '../context';
 import { ServerToolTransport } from './ServerToolTransport';
@@ -173,6 +172,7 @@ afterEach(() => {
 describe('afterToolCall control pipeline', () => {
   const secret = 'synthetic-sensitive-result';
   const denialReason = '禁止将敏感工具结果交给模型';
+  const defaultReason = 'Blocked by afterToolCall hook.';
   const raw = () => ({
     content: secret.repeat(1000),
     error: { message: secret, type: 'tool_error' },
@@ -294,7 +294,8 @@ describe('afterToolCall control pipeline', () => {
     );
     resolve(response('deny'));
     await running;
-    expect(fixture.rows[0].content).toBe(BLOCKED_TOOL_RESULT_CONTENT);
+    expect(fixture.rows[0].content).toBe(defaultReason);
+    expect(fixture.rows[0].pluginState).toMatchObject({ reason: defaultReason });
   });
 
   it.each(['server', 'client', 'mock'] as const)(
@@ -448,7 +449,7 @@ describe('afterToolCall control pipeline', () => {
       expect.arrayContaining([
         expect.objectContaining({
           tool_call_id: 'constructor',
-          content: BLOCKED_TOOL_RESULT_CONTENT,
+          content: defaultReason,
         }),
         expect.objectContaining({ tool_call_id: '__proto__', content: 'allowed sibling' }),
       ]),
@@ -498,7 +499,7 @@ describe('afterToolCall control pipeline', () => {
       expect(fixture.rows).toHaveLength(1);
       expect(fixture.host.transports.messages.updateToolMessage).toHaveBeenCalledWith(
         'existing-row',
-        expect.objectContaining({ replacePluginState: true, content: BLOCKED_TOOL_RESULT_CONTENT }),
+        expect.objectContaining({ replacePluginState: true, content: defaultReason }),
       );
       expect(JSON.stringify(await fixture.host.transports.messages.query())).not.toContain(secret);
       expect(JSON.stringify(result)).not.toContain(secret);
@@ -743,11 +744,7 @@ describe('afterToolCall control pipeline', () => {
       'run:three',
       'control:three',
     ]);
-    expect(fixture.rows.map((row) => row.content)).toEqual([
-      'one',
-      BLOCKED_TOOL_RESULT_CONTENT,
-      'three',
-    ]);
+    expect(fixture.rows.map((row) => row.content)).toEqual(['one', defaultReason, 'three']);
   });
 
   it.each(['beforeToolCall', 'afterToolCall', 'beforeToolCall,afterToolCall'])(
@@ -765,7 +762,7 @@ describe('afterToolCall control pipeline', () => {
       await fixture.step();
       expect(fixture.execute).toHaveBeenCalledTimes(1);
       expect(fixture.rows[0].content).toBe(
-        events.includes('afterToolCall') ? BLOCKED_TOOL_RESULT_CONTENT : 'executed',
+        events.includes('afterToolCall') ? defaultReason : 'executed',
       );
       expect(fetchHook.mock.calls.map(([, init]) => JSON.parse(init.body).hookType)).toEqual(
         events.split(','),

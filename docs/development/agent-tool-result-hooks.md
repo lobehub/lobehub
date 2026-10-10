@@ -44,7 +44,7 @@ Matching controls run in registration order. A deny stops the remaining controls
 ## Denial and failure behavior
 
 - Allow continues the existing archival, persistence, streaming, and model-context flow
-- Deny replaces the complete result with the receiver's optional `reason`, `error: 'hook_denied'`, and a blocked state tagged `phase: 'afterToolCall'` whose `reason` matches the replacement content. Without a reason, the replacement is `Tool result withheld by afterToolCall hook.`. The original content, error, images/state, archive references, and Work-registration intent are not passed onward
+- Deny replaces the complete result with the receiver's optional `reason`, `error: 'hook_denied'`, and a blocked state tagged `phase: 'afterToolCall'` whose `reason` matches the replacement content. Without a reason, the replacement is `Blocked by afterToolCall hook.`, following the same `Blocked by ${type} hook.` rule as `beforeToolCall`. The original content, error, images/state, archive references, and Work-registration intent are not passed onward
 - As with `beforeToolCall`, the denial reason enters the tool result, model context, and tool card. The receiver controls this text; an explicitly provided empty string is preserved
 - The native call/result pairing remains intact. A deny does not retry the tool or charge it as an unexecuted call; actual attempt count, execution time, and existing tool charges remain. Deferred child usage counters are retained without child output
 - Result controls run after the tool's existing internal retry loop and also inspect failed/timeout results. Exceptions that do not produce a result retain the existing `onToolCallError` behavior

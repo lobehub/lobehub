@@ -6,7 +6,6 @@ import {
   resolveToolCallHookErrorPolicy,
   serializedAgentHookSchema,
 } from '@lobechat/types';
-import { BLOCKED_TOOL_RESULT_CONTENT } from '@lobechat/utils/toolResultControl';
 import debug from 'debug';
 
 import { isQueueAgentRuntimeEnabled } from '@/server/services/queue/impls';
@@ -221,11 +220,7 @@ export class HookDispatcher {
       if (response.status === 'success' && response.decision.decision === 'deny') {
         return {
           status: 'blocked',
-          reason:
-            response.decision.reason ??
-            (type === 'afterToolCall'
-              ? BLOCKED_TOOL_RESULT_CONTENT
-              : 'Blocked by beforeToolCall hook.'),
+          reason: response.decision.reason ?? `Blocked by ${type} hook.`,
         };
       }
       if (response.status === 'error') {
