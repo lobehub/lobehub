@@ -14,6 +14,10 @@ describe('reservedImageProps', () => {
     expect(reservedImageProps({ height: 1620, width: 720 }, 600).width).toBe(267);
   });
 
+  it('never reserves a zero width for an extremely narrow image', () => {
+    expect(reservedImageProps({ height: 1201, width: 1 }, 600).width).toBe(1);
+  });
+
   it('reserves nothing for older messages without a recorded size', () => {
     expect(reservedImageProps({}, 600)).toEqual({});
     expect(reservedImageProps({ height: 0, width: 800 }, 600)).toEqual({});

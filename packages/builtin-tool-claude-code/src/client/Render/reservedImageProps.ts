@@ -24,6 +24,7 @@ export const reservedImageProps = (
 
   return {
     styles: { image: { aspectRatio: `${width} / ${height}` } },
-    width: Math.round(width * Math.min(1, maxHeight / height)),
+    // Floor at 1px: a sliver-thin capture would otherwise round to 0 and never show
+    width: Math.max(1, Math.round(width * Math.min(1, maxHeight / height))),
   };
 };
