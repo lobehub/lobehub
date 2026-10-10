@@ -95,7 +95,7 @@ export interface EvalRunResponse {
   config: Record<string, unknown>;
   createdAt: Date;
   datasetId: string;
-  executionMode: 'internal' | 'external';
+  executionMode: 'external' | 'internal' | 'replay';
   experimentId: string | null;
   id: string;
   metrics: EvalRunMetrics | null;

@@ -43,7 +43,7 @@ const run = z
     id,
     ...dates,
     config: json,
-    executionMode: z.enum(['internal', 'external']),
+    executionMode: z.enum(['internal', 'external', 'replay']),
     datasetId: id,
     experimentId: nullable,
     parentRunId: nullable,

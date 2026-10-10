@@ -382,6 +382,36 @@ table agent_eval_experiments {
   }
 }
 
+table agent_eval_replay_results {
+  id text [pk, not null]
+  user_id text [not null]
+  workspace_id text
+  run_id text [not null]
+  test_case_id text [not null]
+  provider text [not null]
+  model text [not null]
+  status text [not null, default: 'pending']
+  content text
+  tool_calls jsonb
+  usage jsonb
+  duration_ms integer
+  score real
+  passed boolean
+  judge_reason text
+  error jsonb
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (run_id, test_case_id, provider, model) [name: 'agent_eval_replay_results_cell_unique', unique]
+    run_id [name: 'agent_eval_replay_results_run_id_idx']
+    test_case_id [name: 'agent_eval_replay_results_test_case_id_idx']
+    user_id [name: 'agent_eval_replay_results_user_id_idx']
+    workspace_id [name: 'agent_eval_replay_results_workspace_id_idx']
+  }
+}
+
 table agent_eval_run_topics {
   user_id text [not null]
   workspace_id text
@@ -442,6 +472,11 @@ table agent_eval_test_cases {
   eval_config jsonb
   metadata jsonb
   sort_order integer
+  source_topic_id text
+  source_message_id text
+  source_operation_id text
+  frozen_step_index integer
+  frozen_call jsonb
   accessed_at "timestamp with time zone" [not null, default: `now()`]
   created_at "timestamp with time zone" [not null, default: `now()`]
   updated_at "timestamp with time zone" [not null, default: `now()`]
@@ -451,6 +486,7 @@ table agent_eval_test_cases {
     dataset_id [name: 'agent_eval_test_cases_dataset_id_idx']
     sort_order [name: 'agent_eval_test_cases_sort_order_idx']
     workspace_id [name: 'agent_eval_test_cases_workspace_id_idx']
+    source_message_id [name: 'agent_eval_test_cases_source_message_id_idx']
   }
 }
 

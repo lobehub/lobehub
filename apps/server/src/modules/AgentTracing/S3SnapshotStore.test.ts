@@ -209,3 +209,32 @@ describe('S3SnapshotStore query stubs', () => {
     expect(await store.listPartials()).toEqual([]);
   });
 });
+
+describe('S3SnapshotStore.loadByKey', () => {
+  const key = 'agent-traces/agt_abc/tpc_xyz/op_1.json.zst';
+
+  it('decodes a zstd snapshot read from the given key', async () => {
+    const snap = sampleSnapshot();
+    getFileByteArray.mockResolvedValue(
+      new Uint8Array(await compressZstd(Buffer.from(JSON.stringify(snap)))),
+    );
+
+    const loaded = await new S3SnapshotStore().loadByKey(key);
+
+    expect(getFileByteArray).toHaveBeenCalledWith(key);
+    expect(loaded).toEqual(snap);
+  });
+
+  it('reads a legacy plain-JSON snapshot', async () => {
+    const snap = sampleSnapshot();
+    getFileByteArray.mockResolvedValue(new Uint8Array(Buffer.from(JSON.stringify(snap))));
+
+    expect(await new S3SnapshotStore().loadByKey(key)).toEqual(snap);
+  });
+
+  it('returns null when the object cannot be read', async () => {
+    getFileByteArray.mockRejectedValue(new Error('NoSuchKey'));
+
+    expect(await new S3SnapshotStore().loadByKey(key)).toBeNull();
+  });
+});

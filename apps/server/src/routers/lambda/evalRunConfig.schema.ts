@@ -59,14 +59,28 @@ export const evalCaseSelectionSchema = z
  * User-facing config for creating an eval run. Shared by the internal
  * (agentEval) and external (agentEvalExternal) routers.
  */
-export const evalRunInputConfigSchema = z.object({
-  caseSelection: evalCaseSelectionSchema.optional(),
-  k: z.number().min(1).max(10).optional(),
-  maxConcurrency: z.number().min(1).max(20).optional(),
-  maxSteps: z.number().min(1).max(1000).optional(),
-  timeout: z
-    .number()
-    .min(60_000)
-    .max(6 * 3_600_000)
-    .optional(),
+export const evalRunInputConfigSchema = z
+  .object({
+    caseSelection: evalCaseSelectionSchema.optional(),
+    k: z.number().min(1).max(10).optional(),
+    maxConcurrency: z.number().min(1).max(20).optional(),
+    maxSteps: z.number().min(1).max(1000).optional(),
+    /** Model the target agent runs on for this run; set together with `subjectProvider`. */
+    subjectModel: z.string().trim().min(1).optional(),
+    subjectProvider: z.string().trim().min(1).optional(),
+    timeout: z
+      .number()
+      .min(60_000)
+      .max(6 * 3_600_000)
+      .optional(),
+  })
+  .refine((val) => Boolean(val.subjectModel) === Boolean(val.subjectProvider), {
+    message: 'subjectModel and subjectProvider must be set together',
+    path: ['subjectProvider'],
+  });
+
+/** One model an eval run evaluates the target agent on. */
+export const evalRunSubjectSchema = z.object({
+  model: z.string().trim().min(1),
+  provider: z.string().trim().min(1),
 });

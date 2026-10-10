@@ -1,6 +1,11 @@
 import type {
   EvalBenchmarkRubric,
   EvalConfig,
+  EvalFrozenCall,
+  EvalReplayError,
+  EvalReplayResultStatus,
+  EvalReplayToolCall,
+  EvalReplayUsage,
   EvalRunConfig,
   EvalRunMetrics,
   EvalRunTopicResult,
@@ -24,6 +29,7 @@ import {
 import { idGenerator } from '../utils/idGenerator';
 import { createdAt, timestamps, timestamptz } from './_helpers';
 import { agents } from './agent';
+import { messages } from './message';
 import { topics } from './topic';
 import { users } from './user';
 import { workspaces } from './workspace';
@@ -240,6 +246,24 @@ export const agentEvalTestCases = pgTable(
 
     sortOrder: integer('sort_order'),
 
+    // Provenance of a case frozen out of a real conversation. The topic,
+    // message and trace can all be deleted later; the frozen call stored inline
+    // below keeps the case replayable after they are gone.
+    sourceTopicId: text('source_topic_id').references(() => topics.id, { onDelete: 'set null' }),
+    sourceMessageId: text('source_message_id').references(() => messages.id, {
+      onDelete: 'set null',
+    }),
+    // No FK: operation rows are pruned independently of the cases built on them.
+    sourceOperationId: text('source_operation_id'),
+    /** Snapshot step index of the frozen `call_llm` (`FrozenCall.stepIndex`). */
+    frozenStepIndex: integer('frozen_step_index'),
+    /**
+     * The LLM call replay runs re-issue: the context-engine messages, the tools
+     * visible at that step and the original model/provider. Stored on the row
+     * rather than referenced in S3 so it outlives the trace it was copied from.
+     */
+    frozenCall: jsonb('frozen_call').$type<EvalFrozenCall>(),
+
     ...timestamps,
   },
   (t) => [
@@ -247,6 +271,7 @@ export const agentEvalTestCases = pgTable(
     index('agent_eval_test_cases_dataset_id_idx').on(t.datasetId),
     index('agent_eval_test_cases_sort_order_idx').on(t.sortOrder),
     index('agent_eval_test_cases_workspace_id_idx').on(t.workspaceId),
+    index('agent_eval_test_cases_source_message_id_idx').on(t.sourceMessageId),
   ],
 );
 
@@ -357,3 +382,66 @@ export const agentEvalRunTopics = pgTable(
 
 export type NewAgentEvalRunTopic = typeof agentEvalRunTopics.$inferInsert;
 export type AgentEvalRunTopicItem = typeof agentEvalRunTopics.$inferSelect;
+
+// ============================================
+// 6. agent_eval_replay_results (Frozen-call replay results)
+// ============================================
+/**
+ * One cell of a cross-model comparison: a test case's frozen LLM call
+ * re-issued against one `provider/model`, plus its judge verdict. Unlike
+ * `agent_eval_run_topics`, a cell owns no topic — a replay is a single call,
+ * not a conversation.
+ */
+export const agentEvalReplayResults = pgTable(
+  'agent_eval_replay_results',
+  {
+    id: text('id')
+      .$defaultFn(() => idGenerator('evalReplayResults'))
+      .primaryKey(),
+
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+
+    runId: text('run_id')
+      .references(() => agentEvalRuns.id, { onDelete: 'cascade' })
+      .notNull(),
+    testCaseId: text('test_case_id')
+      .references(() => agentEvalTestCases.id, { onDelete: 'cascade' })
+      .notNull(),
+
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+
+    status: text('status').$type<EvalReplayResultStatus>().default('pending').notNull(),
+
+    content: text('content'),
+    toolCalls: jsonb('tool_calls').$type<EvalReplayToolCall[]>(),
+    usage: jsonb('usage').$type<EvalReplayUsage>(),
+    durationMs: integer('duration_ms'),
+
+    score: real('score'),
+    passed: boolean('passed'),
+    judgeReason: text('judge_reason'),
+
+    error: jsonb('error').$type<EvalReplayError>(),
+
+    ...timestamps,
+  },
+  (t) => [
+    uniqueIndex('agent_eval_replay_results_cell_unique').on(
+      t.runId,
+      t.testCaseId,
+      t.provider,
+      t.model,
+    ),
+    index('agent_eval_replay_results_run_id_idx').on(t.runId),
+    index('agent_eval_replay_results_test_case_id_idx').on(t.testCaseId),
+    index('agent_eval_replay_results_user_id_idx').on(t.userId),
+    index('agent_eval_replay_results_workspace_id_idx').on(t.workspaceId),
+  ],
+);
+
+export type NewAgentEvalReplayResult = typeof agentEvalReplayResults.$inferInsert;
+export type AgentEvalReplayResultItem = typeof agentEvalReplayResults.$inferSelect;

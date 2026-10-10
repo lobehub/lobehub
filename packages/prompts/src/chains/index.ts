@@ -3,6 +3,7 @@ export * from './agentSignal/analyzeIntent';
 export * from './answerWithContext';
 export * from './builderSuggestion';
 export * from './compressContext';
+export * from './evalCriteriaDraft';
 export * from './expertise';
 export * from './followUpAction';
 export * from './generateBrief';

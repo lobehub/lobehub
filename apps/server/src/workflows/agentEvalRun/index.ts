@@ -14,6 +14,7 @@ export const WORKFLOW_PATHS = {
   onThreadComplete: '/api/workflows/agent-eval-run/on-thread-complete',
   onTrajectoryComplete: '/api/workflows/agent-eval-run/on-trajectory-complete',
   paginateTestCases: '/api/workflows/agent-eval-run/paginate-test-cases',
+  replayCell: '/api/workflows/agent-eval-run/replay-cell',
   resumeAgentTrajectory: '/api/workflows/agent-eval-run/resume-agent-trajectory',
   resumeThreadTrajectory: '/api/workflows/agent-eval-run/resume-thread-trajectory',
   runAgentTrajectory: '/api/workflows/agent-eval-run/run-agent-trajectory',
@@ -59,6 +60,13 @@ export interface ResumeAgentTrajectoryPayload {
   targetAgentId?: string;
   testCaseId: string;
   topicId: string;
+  userId: string;
+}
+
+/** One (test case × target) cell of a cross-model replay run. */
+export interface ReplayCellPayload {
+  cellId: string;
+  runId: string;
   userId: string;
 }
 
@@ -222,6 +230,15 @@ export class AgentEvalRunWorkflow {
       payload.testCaseId,
       payload.threadId,
     );
+    return workflowClient.trigger({ body: payload, url });
+  }
+
+  /**
+   * Trigger workflow to replay one frozen call against one model
+   */
+  static triggerReplayCell(payload: ReplayCellPayload) {
+    const url = getWorkflowUrl(WORKFLOW_PATHS.replayCell);
+    log('Triggering replay-cell workflow: run=%s, cell=%s', payload.runId, payload.cellId);
     return workflowClient.trigger({ body: payload, url });
   }
 

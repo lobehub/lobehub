@@ -1,5 +1,5 @@
 import type { EvalTestCaseContent } from '@lobechat/types';
-import { and, count, eq, sql } from 'drizzle-orm';
+import { and, count, eq, inArray, sql } from 'drizzle-orm';
 
 import { agentEvalTestCases, type NewAgentEvalTestCase } from '../../schemas';
 import { type LobeChatDatabase } from '../../type';
@@ -112,6 +112,37 @@ export class AgentEvalTestCaseModel {
       )
       .limit(1);
     return result;
+  };
+
+  /**
+   * The case already frozen from a given assistant message in a dataset, if
+   * any — freezing the same message twice returns this instead of a copy.
+   */
+  findByDatasetIdAndSourceMessageId = async (datasetId: string, sourceMessageId: string) => {
+    const [result] = await this.db
+      .select()
+      .from(agentEvalTestCases)
+      .where(
+        and(
+          eq(agentEvalTestCases.datasetId, datasetId),
+          eq(agentEvalTestCases.sourceMessageId, sourceMessageId),
+          this.ownership(),
+        ),
+      )
+      .limit(1);
+    return result;
+  };
+
+  /**
+   * Find test cases by ids, scoped to the caller
+   */
+  findByIds = async (ids: string[]) => {
+    if (ids.length === 0) return [];
+    return this.db
+      .select()
+      .from(agentEvalTestCases)
+      .where(and(inArray(agentEvalTestCases.id, ids), this.ownership()))
+      .orderBy(agentEvalTestCases.sortOrder);
   };
 
   /**

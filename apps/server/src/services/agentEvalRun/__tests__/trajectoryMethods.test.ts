@@ -14,7 +14,7 @@ import {
   topics,
   users,
 } from '@/database/schemas';
-import { AgentEvalRunService } from '@/server/services/agentEvalRun';
+import { AgentEvalRunService, subjectOverride } from '@/server/services/agentEvalRun';
 
 // Mock AiAgentService — created inside executeTrajectory
 const mockExecAgent = vi.fn();
@@ -199,6 +199,60 @@ describe('AgentEvalRunService', () => {
       const data = await service.loadTrajectoryData(run.id, 'non-existent-test-case-id');
 
       expect(data).toEqual({ error: 'Test case not found' });
+    });
+  });
+
+  // ─── subject model ──────────────────────────────────────────────────
+  describe('subject model', () => {
+    it('maps a run config to an execAgent model override only when both halves are set', () => {
+      expect(subjectOverride({ subjectModel: 'gpt-6-luna', subjectProvider: 'openai' })).toEqual({
+        model: 'gpt-6-luna',
+        provider: 'openai',
+      });
+      expect(subjectOverride({ subjectModel: 'gpt-6-luna' })).toEqual({});
+      expect(subjectOverride(undefined)).toEqual({});
+    });
+
+    it('runs the same agent on the subject model instead of its own', async () => {
+      const { dataset, testCase } = await setupTrajectoryChain({ input: 'Hello world' });
+      const service = new AgentEvalRunService(serverDB, userId);
+      const run = await service.createRun({
+        config: { subjectModel: 'claude-sonnet-5-5', subjectProvider: 'anthropic' },
+        datasetId: dataset.id,
+        name: 'Subject run',
+      });
+      expect(run.config).toMatchObject({
+        subjectModel: 'claude-sonnet-5-5',
+        subjectProvider: 'anthropic',
+      });
+
+      mockExecAgent.mockResolvedValue({ operationId: 'op-subject' });
+      await service.executeTrajectory({
+        run: { config: run.config, datasetId: run.datasetId, targetAgentId: null },
+        runId: run.id,
+        testCase: { content: { input: 'Hello world' }, sortOrder: testCase.sortOrder },
+        testCaseId: testCase.id,
+      });
+
+      expect(mockExecAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ model: 'claude-sonnet-5-5', provider: 'anthropic' }),
+      );
+    });
+
+    it('leaves the agent on its own model when the run names no subject', async () => {
+      const { run, testCase } = await setupTrajectoryChain({ input: 'Hello world' });
+      mockExecAgent.mockResolvedValue({ operationId: 'op-own' });
+
+      await new AgentEvalRunService(serverDB, userId).executeTrajectory({
+        run: { config: run.config, datasetId: run.datasetId, targetAgentId: null },
+        runId: run.id,
+        testCase: { content: { input: 'Hello world' }, sortOrder: testCase.sortOrder },
+        testCaseId: testCase.id,
+      });
+
+      const params = mockExecAgent.mock.calls[0][0];
+      expect(params).not.toHaveProperty('model');
+      expect(params).not.toHaveProperty('provider');
     });
   });
 

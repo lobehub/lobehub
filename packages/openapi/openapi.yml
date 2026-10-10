@@ -3701,6 +3701,7 @@ paths:
                         enum:
                           - internal
                           - external
+                          - replay
                       datasetId:
                         type: string
                       experimentId:
@@ -3950,6 +3951,7 @@ paths:
                               enum:
                                 - internal
                                 - external
+                                - replay
                             datasetId:
                               type: string
                             experimentId:
@@ -4348,6 +4350,7 @@ paths:
                         enum:
                           - internal
                           - external
+                          - replay
                       datasetId:
                         type: string
                       experimentId:
@@ -9716,6 +9719,7 @@ paths:
                         enum:
                           - internal
                           - external
+                          - replay
                       datasetId:
                         type: string
                       experimentId:
@@ -9890,6 +9894,7 @@ paths:
                         enum:
                           - internal
                           - external
+                          - replay
                       datasetId:
                         type: string
                       experimentId:
