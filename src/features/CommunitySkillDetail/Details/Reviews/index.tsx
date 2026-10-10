@@ -9,6 +9,7 @@ import RatingOverview from '@/components/RatingOverview';
 import { ArticleSkeleton } from '@/components/Skeleton';
 import { discoverService } from '@/services/discover';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 
 import { FIRST_COMMENTS_PAGE_QUERY } from '../../const';
 import { useDetailContext } from '../../DetailProvider';
@@ -21,17 +22,19 @@ const Reviews = memo(() => {
   );
   const useFetchSkillComments = useDiscoverStore((s) => s.useFetchSkillComments);
 
-  const { data: distribution } = useFetchSkillRatingDistribution(identifier);
+  const { queryKey: distributionKey } = useFetchSkillRatingDistribution(identifier);
+  const distribution = useDiscoverStore(skillSelectors.skillRatingDistribution(distributionKey));
   const {
-    data: firstPage,
     error,
     isLoading,
     isValidating,
     mutate,
+    queryKey: commentsKey,
   } = useFetchSkillComments({
     identifier,
     ...FIRST_COMMENTS_PAGE_QUERY,
   });
+  const firstPage = useDiscoverStore(skillSelectors.skillComments(commentsKey));
 
   const fetchMore: CommentListProps['fetchMore'] = useCallback(
     (params) => discoverService.getSkillComments({ identifier: identifier!, ...params }),
