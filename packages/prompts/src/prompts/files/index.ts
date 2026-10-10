@@ -23,6 +23,7 @@ export const filesPrompts = ({
   addUrl = true,
   canReadAttachment = false,
   messageId,
+  previewFileIds,
 }: {
   addUrl?: boolean;
   /** Whether `readAttachment` is in the request's tool set; see `PreviewLongFileContentOptions`. */
@@ -31,6 +32,8 @@ export const filesPrompts = ({
   fileList?: ChatFileItem[];
   imageList?: ChatImageItem[];
   messageId?: string;
+  /** Files sent as a preview regardless of size because the attachment budget is spent. */
+  previewFileIds?: ReadonlySet<string>;
   videoList?: ChatVideoItem[];
 }) => {
   const hasImages = (imageList || []).length > 0;
@@ -42,7 +45,7 @@ export const filesPrompts = ({
 
   const contentParts = [
     hasImages ? imagesPrompts(imageList!, addUrl, messageId) : '',
-    hasFiles ? filePrompts(fileList!, addUrl, canReadAttachment) : '',
+    hasFiles ? filePrompts(fileList!, addUrl, canReadAttachment, previewFileIds) : '',
     hasVideos ? videosPrompts(videoList!, addUrl, messageId) : '',
     hasAudios ? audiosPrompts(audioList!, addUrl, messageId) : '',
   ].filter(Boolean);

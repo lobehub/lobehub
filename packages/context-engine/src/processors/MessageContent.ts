@@ -80,6 +80,11 @@ export interface FileContextConfig {
   enabled?: boolean;
   /** Whether to include file URLs in file context prompts */
   includeFileUrl?: boolean;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (see `planAttachmentPreviews`).
+   */
+  previewFileIds?: string[];
 }
 
 export interface MessageContentConfig {
@@ -127,11 +132,15 @@ export interface UserMessageContentPart {
 export class MessageContentProcessor extends BaseProcessor {
   readonly name = 'MessageContentProcessor';
 
+  private readonly previewFileIds?: ReadonlySet<string>;
+
   constructor(
     private config: MessageContentConfig,
     options: ProcessorOptions = {},
   ) {
     super(options);
+    const previewFileIds = config.fileContext?.previewFileIds;
+    if (previewFileIds?.length) this.previewFileIds = new Set(previewFileIds);
   }
 
   protected async doProcess(context: PipelineContext): Promise<PipelineContext> {
@@ -271,6 +280,7 @@ export class MessageContentProcessor extends BaseProcessor {
         fileList: message.fileList,
         imageList: message.imageList || [],
         messageId: message.id,
+        previewFileIds: this.previewFileIds,
         videoList: message.videoList || [],
       });
 

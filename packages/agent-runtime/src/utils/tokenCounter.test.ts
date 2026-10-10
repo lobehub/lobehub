@@ -54,6 +54,26 @@ describe('tokenCounter', () => {
   });
 
   describe('shouldCompress', () => {
+    // Regression: LOBE-14165. Attachments are previewed instead of triggering
+    // compression, which would drop their content from older messages.
+    it('previews older attachments instead of compressing for attachment text', () => {
+      const paper = 'Salt gland development in Limonium bicolor. '.repeat(2000);
+      const fileItem = { fileType: 'application/pdf', name: 'paper.pdf', size: paper.length };
+      const messages = ['old', 'mid', 'new'].map((id) =>
+        mkMsg({
+          content: `summarize ${id}`,
+          fileList: [{ ...fileItem, content: paper, id: `file-${id}`, url: '' }],
+          id,
+          role: 'user',
+        }),
+      );
+
+      const result = shouldCompress(messages, { maxWindowToken: 64_000 });
+
+      expect(result.needsCompression).toBe(false);
+      expect(result.attachmentPreviewFileIds.sort()).toEqual(['file-mid', 'file-old']);
+    });
+
     it('should return needsCompression=false when under threshold', () => {
       const result = shouldCompress([mkMsg({ role: 'user', content: 'Hi' })]);
 

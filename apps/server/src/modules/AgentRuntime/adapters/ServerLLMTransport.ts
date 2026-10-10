@@ -39,7 +39,7 @@ import {
   chatSpanName,
   tracer as agentRuntimeTracer,
 } from '@lobechat/observability-otel/modules/agent-runtime';
-import { toAgentShareVisitorIds } from '@lobechat/types';
+import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
@@ -360,7 +360,10 @@ export class ServerLLMTransport implements LLMTransport {
           handlers?.onText?.(text);
         },
       },
-      metadata: { topicId: this.ctx.topicId },
+      // `stream()` only serves context compression. Without a trigger, RouterRuntime
+      // rejects the call in development (skipping compression) and bills it as
+      // trigger=null in production.
+      metadata: { topicId: this.ctx.topicId, trigger: RequestTrigger.ContextCompression },
       user: this.ctx.userId,
     });
 

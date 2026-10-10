@@ -1,3 +1,4 @@
+import { AttachmentsManifest } from '@lobechat/builtin-tool-attachments';
 import { AuvManifest } from '@lobechat/builtin-tool-auv';
 import type * as ConstModule from '@lobechat/const';
 import { type ToolManifest } from '@lobechat/types';
@@ -22,6 +23,11 @@ vi.mock('@/store/tool', () => ({
     connectors: [],
     builtinTools: [
       { identifier: AuvManifest.identifier, manifest: AuvManifest, type: 'builtin' as const },
+      {
+        identifier: AttachmentsManifest.identifier,
+        manifest: AttachmentsManifest,
+        type: 'builtin' as const,
+      },
       {
         identifier: 'search',
         manifest: {
@@ -515,6 +521,23 @@ describe('toolEngineering', () => {
       });
 
       expect(result.enabledToolIds).toContain('lobe-agent');
+    });
+
+    it.each([true, false])('enables lobe-attachments only with oversized files (%s)', (flag) => {
+      const toolsEngine = createAgentToolsEngine(
+        { model: 'deepseek-chat', provider: 'deepseek' },
+        undefined,
+        undefined,
+        { hasOversizedFiles: flag },
+      );
+
+      const result = toolsEngine.generateToolsDetailed({
+        model: 'deepseek-chat',
+        provider: 'deepseek',
+        toolIds: [],
+      });
+
+      expect(result.enabledToolIds.includes('lobe-attachments')).toBe(flag);
     });
 
     it('should enable lobe-agent by default since it is always-on', () => {

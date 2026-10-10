@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { ModelRuntime } from '@lobechat/model-runtime';
 import { tracer as agentRuntimeTracer } from '@lobechat/observability-otel/modules/agent-runtime';
+import { RequestTrigger } from '@lobechat/types';
 import { describe, expect, it, vi } from 'vitest';
 
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
@@ -36,6 +37,20 @@ describe('ServerLLMTransport.stream · conversation affinity', () => {
       'topic-1',
       'topic-2',
     ]);
+  });
+
+  it('tags compression requests with the context compression trigger', async () => {
+    const chat = vi.fn().mockImplementation(async () => new Response(''));
+    vi.mocked(initModelRuntimeFromDB).mockImplementation(async () => new ModelRuntime({ chat }));
+
+    const ctx = { topicId: 'topic-1', userId: 'user-1' } as RuntimeExecutorContext;
+    await new ServerLLMTransport(ctx).stream({
+      messages: [],
+      model: 'glm-5',
+      provider: 'opencodecodingplan',
+    });
+
+    expect(chat.mock.calls[0][1].metadata.trigger).toBe(RequestTrigger.ContextCompression);
   });
 });
 

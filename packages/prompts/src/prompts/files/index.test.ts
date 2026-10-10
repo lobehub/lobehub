@@ -394,6 +394,20 @@ describe('filesPrompts', () => {
       expect(result).not.toContain('truncated="true"');
     });
 
+    it('previews a file under the inline limit when its id is in previewFileIds', () => {
+      const content = 'row,value\n'.repeat(1000);
+      const result = filesPrompts({
+        addUrl: false,
+        canReadAttachment: true,
+        fileList: [{ ...mockFile, content }],
+        previewFileIds: new Set([mockFile.id]),
+      });
+
+      expect(result).toContain('truncated="true"');
+      expect(result).toContain(`call readAttachment with fileId="${mockFile.id}"`);
+      expect(result.length).toBeLessThan(content.length);
+    });
+
     it('replaces oversized content with a marked preview', () => {
       const content = `${'a'.repeat(FILE_PREVIEW_CHARS)}${'b'.repeat(FILE_INLINE_MAX_CHARS)}`;
       const result = filesPrompts({ addUrl: true, fileList: [{ ...mockFile, content }] });

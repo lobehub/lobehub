@@ -60,6 +60,11 @@ interface ContextEngineeringContext {
   /** The agent ID that will respond (for group context injection) */
   agentId?: string;
   /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
+  /**
    * Identifiers the agent has explicitly disabled (`agents.plugins` tri-state).
    * Excluded from the client skill candidate pool entirely — not just left
    * out of `plugins` (pinned) — so a disabled skill is neither listed in
@@ -113,6 +118,7 @@ interface ContextEngineeringContext {
 // REVIEW: Maybe we can constrain identity, preference, exp to reorder or trim the context instead of passing everything in
 export const contextEngineering = async ({
   additionalContexts,
+  attachmentPreviewFileIds,
   messages = [],
   manifests,
   tools,
@@ -320,7 +326,11 @@ export const contextEngineering = async ({
       systemRole,
     },
     // Desktop local/static URLs are not fetchable by remote providers or cloud tools.
-    fileContext: { enabled: true, includeFileUrl: !isDesktop },
+    fileContext: {
+      enabled: true,
+      includeFileUrl: !isDesktop,
+      previewFileIds: attachmentPreviewFileIds,
+    },
     model: {
       capabilities: { isCanUseAudio, isCanUseFC, isCanUseVideo, isCanUseVision },
       displayName: getRuntimeModelDisplayName(model, provider),

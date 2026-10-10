@@ -1,4 +1,5 @@
-import type { UIChatMessage } from '@lobechat/types';
+import { FILE_INLINE_MAX_CHARS, filesPrompts } from '@lobechat/prompts';
+import type { ChatFileItem, UIChatMessage } from '@lobechat/types';
 import { estimateTokenCount } from 'tokenx';
 import { describe, expect, it } from 'vitest';
 
@@ -28,6 +29,7 @@ describe('countContextTokens', () => {
       expect(result.tools).toEqual([]);
       expect(result.bySource).toEqual({
         content: 0,
+        fileContext: 0,
         reasoning: 0,
         thoughtSignature: 0,
         toolCallId: 0,
@@ -413,6 +415,81 @@ describe('countContextTokens', () => {
       for (const k of Object.keys(r.messages[0].bySource)) {
         expect(expectedSources.has(k)).toBe(true);
       }
+    });
+  });
+
+  describe('user attachments (fileList / imageList)', () => {
+    const mkFile = (id: string, content: string): ChatFileItem => ({
+      content,
+      fileType: 'application/pdf',
+      id,
+      name: `${id}.pdf`,
+      size: 1000,
+      url: `https://example.com/${id}.pdf`,
+    });
+
+    // Regression: LOBE-14165. Parsed attachment text is re-sent on every turn
+    // but was ignored, so a topic with ~2M chars of history attachments never
+    // reached the compression threshold and failed the context preflight.
+    it('counts the <files_info> block shipped for history attachments', () => {
+      const paper = 'Salt gland development in Limonium bicolor. '.repeat(1500);
+      const fileList = [mkFile('file-a', paper), mkFile('file-b', paper)];
+      const msg = mkMsg({ fileList, id: 'msg-1', role: 'user', content: 'summarize' });
+
+      const r = countContextTokens({ messages: [msg] });
+
+      const expected = estimateTokenCount(
+        filesPrompts({ addUrl: false, fileList, messageId: 'msg-1' }),
+      );
+      expect(r.messages[0].bySource.fileContext).toBe(expected);
+      expect(r.bySource.fileContext).toBe(expected);
+      expect(r.rawTotal).toBe(estimateTokenCount('summarize') + expected);
+      // Sanity: both papers are in the budget, not just the user's text.
+      expect(expected).toBeGreaterThan(estimateTokenCount(paper) * 2 - 100);
+    });
+
+    it('counts an oversized attachment as its shipped preview, not the full text', () => {
+      const huge = 'x '.repeat(FILE_INLINE_MAX_CHARS);
+      const msg = mkMsg({ fileList: [mkFile('file-big', huge)], role: 'user' });
+
+      const r = countContextTokens({ messages: [msg] });
+
+      expect(r.bySource.fileContext).toBeGreaterThan(0);
+      expect(r.bySource.fileContext).toBeLessThan(estimateTokenCount(huge) / 10);
+    });
+
+    it('counts image metadata in the files block', () => {
+      const msg = mkMsg({
+        imageList: [{ alt: 'chart.png', id: 'img-1', url: 'https://example.com/chart.png' }],
+        role: 'user',
+      });
+
+      expect(countContextTokens({ messages: [msg] }).bySource.fileContext).toBeGreaterThan(0);
+    });
+
+    // Desktop sends the block without URLs, so a base64 image URL must not
+    // inflate the estimate past the compression threshold.
+    it('does not count attachment URLs', () => {
+      const dataUrl = `data:image/png;base64,${'A'.repeat(200_000)}`;
+      const withDataUrl = mkMsg({
+        imageList: [{ alt: 'chart.png', id: 'img-1', url: dataUrl }],
+        role: 'user',
+      });
+      const withShortUrl = mkMsg({
+        imageList: [{ alt: 'chart.png', id: 'img-1', url: 'https://example.com/chart.png' }],
+        role: 'user',
+      });
+
+      expect(countContextTokens({ messages: [withDataUrl] }).bySource.fileContext).toBe(
+        countContextTokens({ messages: [withShortUrl] }).bySource.fileContext,
+      );
+    });
+
+    it('adds nothing for user messages without attachments', () => {
+      const r = countContextTokens({ messages: [mkMsg({ role: 'user', content: 'hi' })] });
+
+      expect(r.bySource.fileContext).toBe(0);
+      expect(r.messages[0].bySource.fileContext).toBeUndefined();
     });
   });
 

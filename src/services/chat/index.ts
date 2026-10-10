@@ -62,6 +62,11 @@ const providersWithDeploymentName = new Set<string>([
 export interface GetChatCompletionPayload extends Partial<Omit<ChatStreamPayload, 'messages'>> {
   additionalContexts?: readonly RuntimeAdditionalContextFragment[];
   agentId?: string;
+  /**
+   * Attachments sent as a preview plus file id because the request's attachment
+   * budget is spent (planned by `shouldCompress`).
+   */
+  attachmentPreviewFileIds?: string[];
   groupId?: string;
   messages: UIChatMessage[];
   /**
@@ -124,6 +129,7 @@ class ChatService {
       agentId,
       groupId,
       additionalContexts,
+      attachmentPreviewFileIds,
       topicId,
       resolvedAgentConfig,
       ...params
@@ -211,6 +217,7 @@ class ChatService {
       enableUserMemories,
       groupId,
       additionalContexts,
+      attachmentPreviewFileIds,
       // History messages + the current turn; unset means no truncation.
       historyCount: modelParams.historyCount,
       // Page editor context from agent runtime

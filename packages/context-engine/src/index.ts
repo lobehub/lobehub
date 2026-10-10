@@ -35,6 +35,11 @@ export {
   estimateSentMessageAttachmentTokenBuckets,
   isTextLikeUploadFile,
 } from './tokenAccounting';
+export type {
+  AttachmentPreviewPlan,
+  PlanAttachmentPreviewsParams,
+} from './tokenAccounting/attachmentBudget';
+export { planAttachmentPreviews } from './tokenAccounting/attachmentBudget';
 // Processors
 export type { PlaceholderValue, PlaceholderValueMap } from './processors';
 export {

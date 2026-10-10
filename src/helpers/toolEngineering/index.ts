@@ -143,6 +143,13 @@ export const createAgentToolsEngine = (
   pluginIds?: string[],
   /** Conversation context for context-aware builtin manifests (scope, isSubAgent). */
   manifestContext?: BuiltinToolResolveContext,
+  options: {
+    /**
+     * Whether the conversation has an attachment that can be sent as a preview. Enables
+     * `readAttachment` so the preview can be paged, as the server's tool discovery does.
+     */
+    hasOversizedFiles?: boolean;
+  } = {},
 ) => {
   const searchConfig = getSearchConfig(workingModel.model, workingModel.provider);
   const agentState = getAgentStoreState();
@@ -162,6 +169,7 @@ export const createAgentToolsEngine = (
     disabledPluginIds: agentSelectors.currentAgentDisabledPlugins(agentState),
     executionTarget: chatConfigByIdSelectors.getExecutionTargetById(activeAgentId)(agentState),
     hasEnabledKnowledgeBases: agentSelectors.hasEnabledKnowledgeBases(agentState),
+    hasOversizedFiles: options.hasOversizedFiles,
     // A `local` target only resolves on the desktop, where the host itself is
     // the machine: local tools are always reachable there.
     localExecutionReady: true,

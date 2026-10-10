@@ -33,6 +33,11 @@ export interface PreviewLongFileContentOptions {
   canReadAttachment?: boolean;
   /** File id the model passes to `readAttachment` to page through the rest. */
   fileId: string;
+  /**
+   * Send a preview even when the text is under `FILE_INLINE_MAX_CHARS`: the request's attachment
+   * budget had no room left for it (see `planAttachmentPreviews` in `@lobechat/context-engine`).
+   */
+  forcePreview?: boolean;
   /** Original character count when the stored text was cut at parse time. */
   originalChars?: number;
 }
@@ -54,9 +59,14 @@ export const isOversizedFileContent = (contentLength: number, originalChars?: nu
  */
 export const previewLongFileContent = (
   content: string,
-  { canReadAttachment = false, fileId, originalChars }: PreviewLongFileContentOptions,
+  {
+    canReadAttachment = false,
+    fileId,
+    forcePreview = false,
+    originalChars,
+  }: PreviewLongFileContentOptions,
 ) => {
-  if (!isOversizedFileContent(content.length, originalChars)) {
+  if (!forcePreview && !isOversizedFileContent(content.length, originalChars)) {
     return { attributes: '', body: content };
   }
 
@@ -79,10 +89,16 @@ export const previewLongFileContent = (
   };
 };
 
-const filePrompt = (item: ChatFileItem, addUrl: boolean, canReadAttachment: boolean) => {
+const filePrompt = (
+  item: ChatFileItem,
+  addUrl: boolean,
+  canReadAttachment: boolean,
+  previewFileIds?: ReadonlySet<string>,
+) => {
   const { attributes, body } = previewLongFileContent(item.content || '', {
     canReadAttachment,
     fileId: item.id,
+    forcePreview: previewFileIds?.has(item.id),
     originalChars: item.originalCharCount,
   });
   return addUrl
@@ -94,12 +110,13 @@ export const filePrompts = (
   fileList: ChatFileItem[],
   addUrl: boolean,
   canReadAttachment = false,
+  previewFileIds?: ReadonlySet<string>,
 ) => {
   if (fileList.length === 0) return '';
 
   const prompt = `<files>
 <files_docstring>here are user upload files you can refer to</files_docstring>
-${fileList.map((item) => filePrompt(item, addUrl, canReadAttachment)).join('\n')}
+${fileList.map((item) => filePrompt(item, addUrl, canReadAttachment, previewFileIds)).join('\n')}
 </files>`;
 
   return prompt.trim();

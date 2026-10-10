@@ -2488,6 +2488,75 @@ describe('GeneralChatAgent', () => {
     });
   });
 
+  describe('attachment budget', () => {
+    const paper = 'Salt gland development in Limonium bicolor. '.repeat(2000);
+    const attachmentMessages = () =>
+      ['old', 'mid', 'new'].map((id) => ({
+        content: `summarize ${id}`,
+        fileList: [
+          {
+            content: paper,
+            fileType: 'application/pdf',
+            id: `file-${id}`,
+            name: `${id}.pdf`,
+            size: paper.length,
+            url: '',
+          },
+        ],
+        id,
+        role: 'user',
+      })) as any;
+
+    it.each([true, false])(
+      'calls the LLM with older attachments previewed (compression enabled: %s)',
+      async (enabled) => {
+        const agent = new GeneralChatAgent({
+          agentConfig: { maxSteps: 100 },
+          compressionConfig: { enabled, maxWindowToken: 64_000 },
+          modelRuntimeConfig: mockModelRuntimeConfig,
+          operationId: 'test-session',
+        });
+        const state = createMockState({ messages: attachmentMessages() });
+
+        const result = (await agent.runner(
+          createMockContext('init', { model: 'gpt-4o-mini', provider: 'openai' }),
+          state,
+        )) as any;
+
+        expect(result.type).toBe('call_llm');
+        expect(result.payload.attachmentPreviewFileIds.sort()).toEqual(['file-mid', 'file-old']);
+      },
+    );
+
+    it('plans previews for the call after compression', async () => {
+      const agent = new GeneralChatAgent({
+        agentConfig: { maxSteps: 100 },
+        // Each paper is ~20k tokens; after compression the 0.65 recompression
+        // ratio leaves ~31k raw tokens, room for one of the two new papers.
+        compressionConfig: { enabled: true, maxWindowToken: 60_000 },
+        modelRuntimeConfig: mockModelRuntimeConfig,
+        operationId: 'test-session',
+      });
+      const latest = attachmentMessages()[2];
+      const compressedMessages = [
+        { content: 'Compressed summary', id: 'group-1', role: 'compressedGroup' },
+        { ...latest, fileList: [latest.fileList[0], { ...latest.fileList[0], id: 'file-new-2' }] },
+      ];
+
+      const result = (await agent.runner(
+        createMockContext('compression_result', {
+          compressedMessages,
+          parentMessageId: 'assistant-msg-after-compression',
+          skipped: false,
+        }),
+        createMockState(),
+      )) as any;
+
+      expect(result.type).toBe('call_llm');
+      expect(result.payload.attachmentPreviewFileIds).toEqual(['file-new-2']);
+    });
+  });
+
   describe('compression_result phase', () => {
     it('should return call_llm with compressed messages and force a new assistant message', async () => {
       const agent = new GeneralChatAgent({

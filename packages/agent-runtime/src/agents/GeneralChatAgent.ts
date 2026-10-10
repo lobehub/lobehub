@@ -612,6 +612,31 @@ export class GeneralChatAgent implements Agent {
   }
 
   /**
+   * Fit the upcoming request under the compression threshold. Runs whether or
+   * not compression is enabled: the attachment preview plan keeps attachment
+   * text within the room the conversation leaves even when the conversation
+   * itself is never compressed.
+   */
+  private checkContextBudget(messages: any[], tools: any[] | undefined, state: AgentState) {
+    // Mirror RuntimeExecutors.callLlm: when state.forceFinish is set, the
+    // executor strips all tools via buildStepToolDelta (deactivatedToolIds: ['*']),
+    // so they must not count against the compression budget either — otherwise
+    // we'd burn an extra summarization pass on tool tokens that won't be sent.
+    return shouldCompress(messages, {
+      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
+      thresholdRatio: this.getCompressionThresholdRatio(messages),
+      tools: state.forceFinish ? undefined : tools,
+    });
+  }
+
+  private withAttachmentPreviews<T extends object>(
+    payload: T,
+    attachmentPreviewFileIds: string[],
+  ): T {
+    return attachmentPreviewFileIds.length > 0 ? { ...payload, attachmentPreviewFileIds } : payload;
+  }
+
+  /**
    * Proceed to the next LLM call, inserting compression first when needed.
    */
   private toLLMCall(
@@ -627,34 +652,29 @@ export class GeneralChatAgent implements Agent {
       ...this.getAllowedToolNamesPayload(),
     };
     const compressionEnabled = this.config.compressionConfig?.enabled ?? true;
-    // Mirror RuntimeExecutors.callLlm: when state.forceFinish is set, the
-    // executor strips all tools via buildStepToolDelta (deactivatedToolIds: ['*']),
-    // so they must not count against the compression budget either — otherwise
-    // we'd burn an extra summarization pass on tool tokens that won't be sent.
-    const compressionOptions = {
-      maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-      thresholdRatio: this.getCompressionThresholdRatio(payloadWithAllowedToolNames.messages),
-      tools: state.forceFinish ? undefined : payloadWithAllowedToolNames.tools,
-    };
+    const messages = payloadWithAllowedToolNames.messages;
+    const compressionCheck = this.checkContextBudget(
+      messages,
+      payloadWithAllowedToolNames.tools,
+      state,
+    );
 
-    if (compressionEnabled) {
-      const messages = payloadWithAllowedToolNames.messages;
-      const compressionCheck = shouldCompress(messages, compressionOptions);
-
-      if (compressionCheck.needsCompression) {
-        return {
-          payload: {
-            currentTokenCount: compressionCheck.currentTokenCount,
-            existingSummary: this.findExistingSummary(messages),
-            messages,
-          },
-          type: 'compress_context',
-        };
-      }
+    if (compressionEnabled && compressionCheck.needsCompression) {
+      return {
+        payload: {
+          currentTokenCount: compressionCheck.currentTokenCount,
+          existingSummary: this.findExistingSummary(messages),
+          messages,
+        },
+        type: 'compress_context',
+      };
     }
 
     return {
-      payload: payloadWithAllowedToolNames,
+      payload: this.withAttachmentPreviews(
+        payloadWithAllowedToolNames,
+        compressionCheck.attachmentPreviewFileIds,
+      ),
       type: 'call_llm',
     };
   }
@@ -700,28 +720,22 @@ export class GeneralChatAgent implements Agent {
       case 'user_input': {
         // Check if context compression is enabled and needed before calling LLM
         const compressionEnabled = this.config.compressionConfig?.enabled ?? true; // Default to enabled
-        // Mirror RuntimeExecutors.callLlm: force-finish steps ship without tools,
-        // so they must not count against the compression budget here either.
-        const compressionOptions = {
-          maxWindowToken: this.config.compressionConfig?.maxWindowToken,
-          thresholdRatio: this.getCompressionThresholdRatio(state.messages),
-          tools: state.forceFinish ? undefined : this.getTools(state),
-        };
+        const compressionCheck = this.checkContextBudget(
+          state.messages,
+          this.getTools(state),
+          state,
+        );
 
-        if (compressionEnabled) {
-          const compressionCheck = shouldCompress(state.messages, compressionOptions);
-
-          if (compressionCheck.needsCompression) {
-            // Context exceeds threshold, compress ALL messages into a single summary
-            return {
-              payload: {
-                currentTokenCount: compressionCheck.currentTokenCount,
-                existingSummary: this.findExistingSummary(state.messages),
-                messages: state.messages,
-              },
-              type: 'compress_context',
-            } as AgentInstructionCompressContext;
-          }
+        if (compressionEnabled && compressionCheck.needsCompression) {
+          // Context exceeds threshold, compress ALL messages into a single summary
+          return {
+            payload: {
+              currentTokenCount: compressionCheck.currentTokenCount,
+              existingSummary: this.findExistingSummary(state.messages),
+              messages: state.messages,
+            },
+            type: 'compress_context',
+          } as AgentInstructionCompressContext;
         }
 
         // User input received, call LLM to generate response
@@ -729,12 +743,15 @@ export class GeneralChatAgent implements Agent {
         const basePayload = context.payload as any;
         const tools = this.getTools(state, basePayload?.tools);
         return {
-          payload: {
-            ...basePayload,
-            ...this.getAllowedToolNamesPayload(),
-            messages: state.messages,
-            tools,
-          } as GeneralAgentCallLLMInstructionPayload,
+          payload: this.withAttachmentPreviews(
+            {
+              ...basePayload,
+              ...this.getAllowedToolNamesPayload(),
+              messages: state.messages,
+              tools,
+            } as GeneralAgentCallLLMInstructionPayload,
+            compressionCheck.attachmentPreviewFileIds,
+          ),
           type: 'call_llm',
         };
       }
@@ -1071,20 +1088,27 @@ export class GeneralChatAgent implements Agent {
         // Otherwise, messages have been updated with compressed content, and a
         // normal turn forces a fresh assistant message.
         const seededAssistantMessageId = state.pendingAssistantMessageId;
+        const messages = compressionPayload.compressedMessages ?? state.messages;
+        // The kept latest user message can still carry more attachment text than
+        // the compressed context has room for.
+        const { attachmentPreviewFileIds } = this.checkContextBudget(messages, tools, state);
 
         return {
-          payload: {
-            ...(seededAssistantMessageId
-              ? { assistantMessageId: seededAssistantMessageId }
-              : // Force create new assistant message after compression
-                { createAssistantMessage: true }),
-            messages: compressionPayload.compressedMessages ?? state.messages,
-            model: this.config.modelRuntimeConfig?.model,
-            parentMessageId: compressionPayload.parentMessageId,
-            provider: this.config.modelRuntimeConfig?.provider,
-            tools,
-            ...this.getAllowedToolNamesPayload(),
-          } as GeneralAgentCallLLMInstructionPayload,
+          payload: this.withAttachmentPreviews(
+            {
+              ...(seededAssistantMessageId
+                ? { assistantMessageId: seededAssistantMessageId }
+                : // Force create new assistant message after compression
+                  { createAssistantMessage: true }),
+              messages,
+              model: this.config.modelRuntimeConfig?.model,
+              parentMessageId: compressionPayload.parentMessageId,
+              provider: this.config.modelRuntimeConfig?.provider,
+              tools,
+              ...this.getAllowedToolNamesPayload(),
+            } as GeneralAgentCallLLMInstructionPayload,
+            attachmentPreviewFileIds,
+          ),
           type: 'call_llm',
         };
       }
