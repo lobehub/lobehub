@@ -144,7 +144,13 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
   // read active, but the batch is waiting on a person because of it.
   const held = state?.phase === 'pattern_break' ? state.gateLog?.at(-1) : undefined;
   if (held?.trigger === 'unit' && held.nodeId) waitingOn.add(held.nodeId);
-  const cellOf = (id?: string) => batchCellState(id ? graph.byId[id] : undefined, waitingOn);
+  // A unit a later round re-opened (`derived_from` it) is superseded, whatever
+  // state it ended in — a rejected trial must not read "needs you" forever.
+  const superseded = new Set(
+    graph.edges.filter((edge) => edge.kind === 'derived_from').map((edge) => edge.targetNodeId),
+  );
+  const cellOf = (id?: string): BatchCellState =>
+    id && superseded.has(id) ? 'stale' : batchCellState(id ? graph.byId[id] : undefined, waitingOn);
 
   const templates = members.filter(
     (view) => view.node.kind === 'finding' && view.node.title === GOAL_BATCH_TEMPLATE_TITLE,

@@ -306,6 +306,28 @@ describe('unit states', () => {
   });
 });
 
+describe('superseded trials', () => {
+  it('reads a rejected trial a later round re-opened as superseded, not waiting on a person', () => {
+    const snapshot = batchSnapshot({
+      decisions: [humanAnswer('a1')],
+      extraEdges: [
+        edge('t2', 't1', 'revises'),
+        edge('a2', 'p2b', 'depends_on'),
+        edge('p2b', 'p2', 'derived_from'),
+      ],
+      extraNodes: [
+        node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
+        node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
+        node('p2b', 'task', 42, { title: 'U2' }),
+      ],
+      state: { assayNodeId: 'a2', probeNodeIds: ['p2b'], templateNodeId: 't2' },
+    });
+    snapshot.nodes = snapshot.nodes.map((n) => (n.id === 'p2' ? { ...n, status: 'rejected' } : n));
+    const model = buildBatchModel(buildGoalGraphView(snapshot, NOW), 'batch');
+    expect(model.rounds[0].probes.find((probe) => probe.nodeId === 'p2')?.state).toBe('stale');
+  });
+});
+
 describe('gate verdicts', () => {
   it('keeps the wave the coordinator wrote, even once older verdicts were trimmed', () => {
     const graph = buildGoalGraphView(

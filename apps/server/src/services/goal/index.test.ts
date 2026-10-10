@@ -2048,6 +2048,45 @@ describe('GoalService', () => {
     expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
   });
 
+  it('numbers a release after the waves a batch released before the counter existed', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+    await service.tick(graph.goal.id);
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const state = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
+    for (const id of state.probeNodeIds)
+      await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
+    // A rollout from before this change: two waves out, no counter, no log.
+    await goalModel.updateRolloutState(graph.goal.id, {
+      ...state,
+      gateLog: undefined,
+      phase: 'mass',
+      waveIndex: 2,
+      wavesReleased: undefined,
+    });
+
+    await service.tick(graph.goal.id);
+    const next = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
+    expect(next.gateLog?.at(-1)).toMatchObject({ outcome: 'released', wave: 3 });
+    expect(next.wavesReleased).toBe(3);
+  });
+
   it('records each gate verdict — the release and the hold — with what it checked', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       problemStatement: '把 50 个同构的 store 迁移到 replica',
