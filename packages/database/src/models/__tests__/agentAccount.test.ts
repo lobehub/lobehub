@@ -388,6 +388,27 @@ describe('AgentAccountModel scope and writes', () => {
     expect(live.map((account) => account.id)).toEqual([active.id]);
   });
 
+  it('leaves a retired-kind account out of a live-only query but keeps it revocable', async () => {
+    const model = new AgentAccountModel(serverDB, userId);
+    const mail = await model.create({ ...mailAccount('kept@lobe.id'), status: 'active' });
+    // A row written before the agent-owned phone was retired: still `active`,
+    // but its provider (linq) is no longer registered.
+    const legacy = await model.create({
+      ...mailAccount('+15550002222'),
+      kind: 'phone' as any,
+      provider: 'linq',
+      status: 'active',
+    });
+
+    const live = await model.query({ agentId, liveOnly: true });
+    expect(live.map((account) => account.id)).toEqual([mail.id]);
+
+    const all = await model.query({ agentId });
+    expect(all.map((account) => account.id)).toContain(legacy.id);
+    await model.revoke(legacy.id);
+    expect((await model.findById(legacy.id))?.status).toBe('revoked');
+  });
+
   it('keeps one account per (agent, kind, provider, identifier)', async () => {
     const model = new AgentAccountModel(serverDB, userId);
     await model.create(mailAccount('dupe@lobe.id'));

@@ -4,6 +4,7 @@ import type {
   AgentAccountKind,
   AgentAccountStatus,
 } from '@lobechat/types';
+import { AGENT_ACCOUNT_KINDS } from '@lobechat/types';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
@@ -268,7 +269,14 @@ export class AgentAccountModel {
   }): Promise<AgentAccountView[]> => {
     const conditions = [this.ownership()];
 
-    if (params?.liveOnly) conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
+    if (params?.liveOnly) {
+      conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
+      // `kind` is a plain text column, so a kind the product retired (the
+      // agent-owned `phone`, now a messenger channel) can outlive its
+      // provider. Such a row must not reach the runtime as a usable address;
+      // it stays visible to the unfiltered query so it can still be revoked.
+      conditions.push(inArray(agentAccounts.kind, [...AGENT_ACCOUNT_KINDS]));
+    }
 
     if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
     if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
