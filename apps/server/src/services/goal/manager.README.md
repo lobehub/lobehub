@@ -152,7 +152,7 @@ uses:
 - Anything else backs off exponentially from one minute up to 30 minutes and is
   charged. Five such turns in a row pause the Goal on the last error.
 
-A pause clears these streaks, so resuming starts a fresh schedule. Before this, a
+A pause clears these streaks, so resuming starts a fresh schedule, and resuming a Goal paused mid-backoff drops the wait so the next turn goes out at once. A wait longer than the queue's one-day delay cap is re-armed from `managerState.retryArmedUntil` when the capped wake fires. Before this, a
 failing Agent was re-dispatched on every tick and spent the whole turn budget in
 minutes. An unconfirmed running/missing
 operation times out after 20 minutes and pauses without launching a replacement;

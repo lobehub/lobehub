@@ -1834,6 +1834,9 @@ export class GoalService {
       }
       await model.updatePauseReason(goalId, undefined);
       if (current.status === status) return current;
+      // Resuming is the person saying the cause is fixed: the next main Agent
+      // turn goes out now instead of sitting out the failed turn's backoff.
+      await model.clearManagerRetryWait(goalId);
       const updated = await model.updateStatus(goalId, status);
       await new GoalGraphModel(tx, this.userId, this.workspaceId)
         .recordGoalStatus(goalId, current.status, status, 'resumed by user')

@@ -695,6 +695,39 @@ export class GoalManagerService {
     return { goalId, outcome: 'waiting_external', message };
   };
 
+  /**
+   * Queue the next wake toward `retryAfter` once the armed one has fired.
+   *
+   * Settlement queues the first wake, but the queue caps a delay at a day: a
+   * quota reset or offline retry further out than that would otherwise lose its
+   * wake when the capped one fires, and wait on the newest-first sweep. Claimed
+   * under the Goal lock against the same turn and deadline, so overlapping ticks
+   * queue one wake between them.
+   */
+  private rearmRetry = async (goalId: string, state: GoalManagerState) => {
+    const delay = await this.db.transaction(async (db) => {
+      const goal = await new GoalModel(db, this.userId, this.workspaceId).lockById(goalId);
+      const current = goal?.config?.managerState;
+      if (
+        !current?.retryAfter ||
+        current.token !== state.token ||
+        current.retryAfter !== state.retryAfter ||
+        (current.retryArmedUntil && Date.parse(current.retryArmedUntil) > Date.now())
+      )
+        return;
+      const armed = GoalWaitService.arm(current.retryAfter);
+      await this.save(db, goalId, { ...current, retryArmedUntil: armed.armedUntil });
+      return armed.delay;
+    });
+    if (delay)
+      await scheduleGoalAdvance({
+        goalId,
+        userId: this.userId,
+        workspaceId: this.workspaceId,
+        delay,
+      });
+  };
+
   /** Whether the device the last turn could not reach is connected again. */
   private offlineDeviceIsBack = async (state: GoalManagerState) => {
     const route = state.offlineDevice;
@@ -900,6 +933,7 @@ export class GoalManagerService {
           offlineDevice: undefined,
           offlineTurns: undefined,
           retryAfter: undefined,
+          retryArmedUntil: undefined,
         };
         // A committed plan is progress whatever the run's ending; only an errored
         // turn that committed nothing gates the next dispatch.
@@ -921,6 +955,7 @@ export class GoalManagerService {
           }
           return { ...decision, reason: message };
         }
+        const armed = GoalWaitService.arm(decision.retryAfter);
         await this.save(db, goal.id, {
           ...settled,
           failedTurns: decision.failedTurns || undefined,
@@ -930,9 +965,10 @@ export class GoalManagerService {
               : undefined,
           offlineTurns: decision.offlineTurns || undefined,
           retryAfter: decision.retryAfter,
+          retryArmedUntil: armed.armedUntil,
           turns: decision.charged ? current.turns : Math.max(0, current.turns - 1),
         });
-        return decision;
+        return { ...decision, delay: armed.delay };
       });
       if (failed?.action === 'pause')
         return { goalId: goal.id, outcome: 'no_progress', message: failed.reason };
@@ -941,7 +977,7 @@ export class GoalManagerService {
           goalId: goal.id,
           userId: this.userId,
           workspaceId: this.workspaceId,
-          delay: GoalWaitService.arm(failed.retryAfter).delay,
+          delay: failed.delay,
         });
         return {
           goalId: goal.id,
@@ -1038,12 +1074,14 @@ export class GoalManagerService {
       state?.retryAfter &&
       Date.parse(state.retryAfter) > Date.now() &&
       !(await this.offlineDeviceIsBack(state))
-    )
+    ) {
+      await this.rearmRetry(goal.id, state);
       return {
         goalId: goal.id,
         outcome: 'waiting_external',
         message: `Main Agent turn deferred until ${state.retryAfter} after a failed turn`,
       };
+    }
     const claimed = await this.db.transaction(async (db) => {
       const model = new GoalModel(db, this.userId, this.workspaceId);
       const fresh = await model.lockById(goal.id);
