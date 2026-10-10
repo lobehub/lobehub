@@ -127,6 +127,7 @@ const Tool = memo<InspectorProps>(
               <Inspectors
                 apiName={apiName}
                 identifier={identifier}
+                messageId={messageId}
                 result={result}
                 toolCallId={toolCallId}
               />

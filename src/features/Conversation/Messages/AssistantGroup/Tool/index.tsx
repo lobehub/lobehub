@@ -189,6 +189,7 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
               isArgumentsStreaming={isArgumentsStreaming}
               isExpanded={isToolDetailExpand}
               isToolCalling={isToolCalling}
+              messageId={assistantMessageId}
               result={result}
               toolCallId={id}
               toolCallStartTime={toolCallStartTime}
