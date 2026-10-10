@@ -3,6 +3,12 @@ import { ModelProvider } from 'model-bank';
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
+import {
+  isAdaptiveThinkingDefaultOnModel,
+  isAlwaysThinkingClaudeModel,
+  parseClaudeModelId,
+  rejectsDisabledThinkingAtEffort,
+} from '../anthropic/modelId';
 import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
 
 const formatPrice = (price?: string) => {
@@ -15,6 +21,7 @@ export const params = {
   chatCompletion: {
     handlePayload: (payload) => {
       const {
+        effort,
         reasoning_effort,
         thinking,
         reasoning: _reasoning,
@@ -25,25 +32,35 @@ export const params = {
         ...rest
       } = payload;
 
+      // Claude effort (`opus47Effort`) has no top-level field on OpenRouter; it travels as
+      // `reasoning.effort`, which OpenRouter maps to Anthropic's `output_config.effort`.
+      const resolvedEffort = effort || reasoning_effort;
+
       let reasoning: OpenRouterReasoning | undefined;
 
-      if (
-        thinking?.type ||
-        thinking?.budget_tokens !== undefined ||
-        reasoning_effort ||
-        thinkingLevel
-      ) {
-        if (thinking?.type === 'disabled') {
-          reasoning = { enabled: false };
-        } else if (thinking?.budget_tokens !== undefined) {
-          reasoning = {
-            max_tokens: thinking?.budget_tokens,
-          };
-        } else if (reasoning_effort) {
-          reasoning = { effort: reasoning_effort };
-        } else if (thinkingLevel) {
-          reasoning = { effort: thinkingLevel };
+      if (thinking?.type === 'disabled') {
+        if (isAlwaysThinkingClaudeModel(model)) {
+          // OpenRouter registers these as mandatory-reasoning and rejects any disable request with
+          // a 400 before routing, so only the effort is kept.
+          if (resolvedEffort) reasoning = { effort: resolvedEffort };
+        } else {
+          // Anthropic applies effort to the whole response, so it still shapes non-thinking output;
+          // Claude 5 only rejects disabled thinking at `xhigh` / `max`.
+          const keepsEffort =
+            !!resolvedEffort &&
+            !!parseClaudeModelId(model) &&
+            !rejectsDisabledThinkingAtEffort(model, resolvedEffort);
+
+          reasoning = keepsEffort ? { effort: resolvedEffort, enabled: false } : { enabled: false };
         }
+      } else if (thinking?.budget_tokens !== undefined) {
+        reasoning = { max_tokens: thinking.budget_tokens };
+      } else if (resolvedEffort) {
+        reasoning = { effort: resolvedEffort };
+      } else if (thinkingLevel) {
+        reasoning = { effort: thinkingLevel };
+      } else if (thinking?.type === 'adaptive') {
+        reasoning = { enabled: true };
       }
 
       // Add modalities and image_config for image generation models
@@ -135,6 +152,9 @@ export const params = {
       }
 
       const hasReasoning = supported_parameters.includes('reasoning');
+      // Claude 5 thinks adaptively only: OpenRouter drops `reasoning.max_tokens` and effort is the
+      // depth control, so these models get an effort selector instead of a budget slider.
+      const isAdaptiveOnlyClaude = isAdaptiveThinkingDefaultOnModel(model.id);
 
       return {
         contextWindowTokens: top_provider.context_length || model.context_length,
@@ -160,7 +180,11 @@ export const params = {
         // Merge all applicable extendParams for settings
         ...(() => {
           const extendParams: string[] = [];
-          if (model.description && model.description.includes('`reasoning` `enabled`')) {
+          if (
+            !isAdaptiveOnlyClaude &&
+            model.description &&
+            model.description.includes('`reasoning` `enabled`')
+          ) {
             extendParams.push('enableReasoning');
           }
           if (
@@ -177,7 +201,11 @@ export const params = {
           } else if (hasReasoning && model.id.includes('openai')) {
             extendParams.push('reasoningEffort', 'textVerbosity');
           }
-          if (hasReasoning && model.id.includes('claude')) {
+          if (hasReasoning && isAdaptiveOnlyClaude) {
+            // Always-thinking models are mandatory-reasoning on OpenRouter, so no off switch.
+            if (!isAlwaysThinkingClaudeModel(model.id)) extendParams.push('enableAdaptiveThinking');
+            extendParams.push('opus47Effort');
+          } else if (hasReasoning && model.id.includes('claude')) {
             extendParams.push('enableReasoning', 'reasoningBudgetToken');
           }
           if (model.id.includes('claude') && writeCacheInputPrice && writeCacheInputPrice !== 0) {
