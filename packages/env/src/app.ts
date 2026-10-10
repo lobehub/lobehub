@@ -104,6 +104,14 @@ export const getAppConfig = () => {
        * @default false
        */
       enableQueueAgentRuntime: z.boolean().optional(),
+      /**
+       * Inject the memories relevant to the run's own prompt into every
+       * server-side agent run, on top of the user persona that memory-enabled
+       * runs already get. Off by default: each run costs one embedding request
+       * plus one hybrid memory search.
+       * @default false
+       */
+      ENABLE_RELEVANT_MEMORY_INJECTION: z.boolean().optional(),
       TELEMETRY_DISABLED: z.boolean().optional(),
     },
     runtimeEnv: {
@@ -148,6 +156,7 @@ export const getAppConfig = () => {
       AGENT_GATEWAY_PROTOCOL: process.env.AGENT_GATEWAY_PROTOCOL || undefined,
       AGENT_GATEWAY_INTERNAL_URL: process.env.AGENT_GATEWAY_INTERNAL_URL || undefined,
       enableQueueAgentRuntime: process.env.AGENT_RUNTIME_MODE === 'queue',
+      ENABLE_RELEVANT_MEMORY_INJECTION: process.env.ENABLE_RELEVANT_MEMORY_INJECTION === '1',
       TELEMETRY_DISABLED: process.env.TELEMETRY_DISABLED === '1',
     },
   });
