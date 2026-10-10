@@ -117,6 +117,15 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
   const headQuery = new Map<string, string>();
 
   /**
+   * Identity each request was raised under, keyed by the error object. A driver
+   * may report a failure after the entry has already moved to another scope;
+   * acting on it (e.g. evicting the entry) would hit the identity the entry now
+   * belongs to. Attributed in the fetcher so the tag is the request's own scope,
+   * not the one current when the failure surfaces.
+   */
+  const errorScopes = new WeakMap<object, string>();
+
+  /**
    * Hydrates the persisted row once per scope/key/query, then lets the driver
    * fetch and revalidate the head. Read the data from the store.
    */
@@ -156,10 +165,20 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
         ? (resource.syncKey?.(params!) ??
             replicaKeys.sync(resource.name, resource.version, scope, key!, params))
         : null,
-      () => fetcher!(params!, undefined),
+      () =>
+        fetcher!(params!, undefined).catch((error: unknown) => {
+          if (error !== null && typeof error === 'object') errorScopes.set(error, scope);
+          throw error;
+        }),
       {
         ...schedule,
-        onError,
+        // Attribute the failure before reporting it: one raised under an
+        // identity the entry has already left must not reach the consumer.
+        onError: (error) => {
+          const raisedUnder = errorScopes.get(error as object);
+          if (raisedUnder !== undefined && raisedUnder !== resource.scope.get()) return;
+          onError?.(error);
+        },
         onSuccess: (data) => {
           // Discard a head response the entry has moved past: the newer query
           // owns the view (see `headQuery`).

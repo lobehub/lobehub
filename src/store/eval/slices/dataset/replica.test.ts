@@ -234,6 +234,53 @@ describe('dataset replica', () => {
     );
   });
 
+  it('keeps a deleted dataset gone when its hydrate lands after NOT_FOUND', async () => {
+    const getDataset = vi
+      .spyOn(agentEvalService, 'getDataset')
+      .mockRejectedValue({ data: { code: 'NOT_FOUND' } });
+
+    // Cold revisit: a stale row is still in storage, but its read only finishes
+    // after the 404 has already evicted the entry.
+    await datasetDetailResource.storage!.set(
+      { queryKey: DETAIL_STORAGE_KEY, scope },
+      { data: { id: DETAIL_ID, name: 'Cached' } as any, updatedAt: 1 },
+    );
+    const storage = datasetDetailResource.storage!;
+    const originalGet = storage.get.bind(storage);
+    // The snapshot the in-flight hydrate is holding while the 404 lands.
+    const staleRow = await originalGet({ queryKey: DETAIL_STORAGE_KEY, scope });
+    let detailReads = 0;
+    let releaseRead!: () => void;
+    const held = new Promise<void>((resolve) => (releaseRead = resolve));
+    storage.get = (key) => {
+      if (key.queryKey !== DETAIL_STORAGE_KEY) return originalGet(key);
+      detailReads += 1;
+      return held.then(() => staleRow);
+    };
+
+    const { result } = renderHook(() => useEvalStore.getState().useFetchDatasetDetail(DETAIL_ID), {
+      wrapper,
+    });
+
+    // The definitive NOT_FOUND settles first…
+    await waitFor(() => expect(getDataset).toHaveBeenCalled());
+    await waitFor(() => expect(result.current.error).toBeTruthy());
+
+    // …then the stale snapshot the hydrate already read lands.
+    await act(async () => {
+      releaseRead();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    // The hydration did read a row, but the late stale value must not repaint it.
+    expect(detailReads).toBeGreaterThan(0);
+    expect(useEvalStore.getState().datasetDetailMap[DETAIL_ID]).toBeUndefined();
+    await waitFor(async () =>
+      expect(await originalGet({ queryKey: DETAIL_STORAGE_KEY, scope })).toBeUndefined(),
+    );
+  });
+
   it('repaints the refreshed benchmark list after a mutation', async () => {
     const listDatasets = vi
       .spyOn(agentEvalService, 'listDatasets')

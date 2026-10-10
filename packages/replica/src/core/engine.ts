@@ -140,6 +140,15 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   /** Keys with a `loadMore` request in flight (the only valid `isLoadingMore`). */
   const loadingMore = new Set<string>();
 
+  /**
+   * Entries definitively removed — not merely absent — keyed by scope + entry.
+   * A removal must not be undone by a hydrate that was already reading storage
+   * when it happened: that stale read would repaint the entry just dropped.
+   * A server-confirmed value clears it, and an identity change starts clean.
+   */
+  const definitiveRemovals = new Set<string>();
+  const removalKey = (scope: string, key: string) => `${scope}\u0000${key}`;
+
   const getSlot = port.getState;
   const storageKey = (key: string, query?: string) => ({
     queryKey: replicaStorageKey(key, query),
@@ -226,6 +235,9 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     const writes: ReplicaViewWrite<TData>[] = [];
     const read = (key: string) => readThrough(writes, key);
     if (slot.scope !== undefined && slot.scope !== activeScope) {
+      // A new identity starts clean: removals from the previous one no longer
+      // describe what is on screen.
+      definitiveRemovals.clear();
       const reset = replicaReducer(slot, { scope: activeScope, type: 'resetScope' }, read);
       writes.push(...reset.writes);
       slot = reset.state;
@@ -263,6 +275,8 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     const query = resource.query(params);
     const cached = await resource.storage.get({ ...storageKey(key, query), scope });
     if (!cached) return false;
+    // A definitive removal wins over a read that started before it landed.
+    if (definitiveRemovals.has(removalKey(scope, key))) return false;
     if (options.isHydratable && !options.isHydratable(cached.data, params)) return false;
     return dispatch({
       data: cached.data,
@@ -306,6 +320,8 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
 
   const replace = (params: TParams, fetched: TFetched, scope = resource.scope.get()) => {
     const key = resource.key(params);
+    // The server confirmed this entry: any prior removal no longer applies.
+    definitiveRemovals.delete(removalKey(scope, key));
     const incoming = options.prepareHead
       ? options.prepareHead(fetched, port.read(key), params)
       : fetched;
@@ -339,7 +355,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     { persist = true }: { persist?: boolean } = {},
   ) => dispatch({ apply, key, persist, scope: resource.scope.get(), type: 'update' });
 
-  const remove = (key: string) => dispatch({ key, scope: resource.scope.get(), type: 'remove' });
+  const remove = (key: string) => {
+    const scope = resource.scope.get();
+    definitiveRemovals.add(removalKey(scope, key));
+    return dispatch({ key, scope, type: 'remove' });
+  };
 
   /**
    * Persist the confirmed value of an entry as it is now — the flush after a
