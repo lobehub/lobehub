@@ -411,6 +411,37 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   ) => dispatch({ apply, key, persist, scope: resource.scope.get(), type: 'update' });
 
   /**
+   * Purge a removal that belongs to a scope which is no longer active.
+   *
+   * The in-memory view is not ours to touch — the active scope owns it — but the
+   * guard and the persisted row both belong to THAT scope. Arming the one and
+   * deleting the other keeps a switch back from hydrating a value the server
+   * just deleted or denied. `dispatch` would reject the off-scope action
+   * outright (see `replace`'s stale-scope guard), so the row would otherwise
+   * survive untouched.
+   *
+   * Like `remove`, the delete only counts as done once it was actually queued:
+   * an untrusted scope refuses writes, so the guard stays armed as `unpurged`
+   * and a later removal retries instead of reporting a no-op that never deletes.
+   */
+  const purge = (key: string, scope: string): boolean => {
+    if (isRemoved(scope, key) && isPurged(scope, key)) return false;
+    markRemoved(scope, key);
+    // Nothing persisted (no storage, or a key this resource never persists) is
+    // already "cleared": the guard alone is the whole purge.
+    if (!writeQueue || !resource.persistKey(key)) {
+      markPurged(scope, key);
+      return false;
+    }
+    if (!resource.scope.canPersist()) return false;
+    const target = { ...storageKey(key), scope };
+    writeQueue.remove(target);
+    markPurged(scope, key);
+    trackStorageKey(scope, target.queryKey, false);
+    return true;
+  };
+
+  /**
    * Drop an entry and its persisted row.
    *
    * A removal is a no-op only once there is genuinely nothing left to do: the
@@ -420,8 +451,13 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
    * delete on every tick would only churn storage. But a removal whose delete
    * was skipped — an untrusted scope refuses writes — keeps retrying, so the row
    * cannot survive to hydrate again once the scope is trusted.
+   *
+   * A removal captured under another identity (a late NOT_FOUND arriving after a
+   * workspace switch) is routed to {@link purge}: it must not touch the scope on
+   * screen, yet its own scope's row still has to go.
    */
   const remove = (key: string, scope: string = resource.scope.get()): boolean => {
+    if (scope !== resource.scope.get()) return purge(key, scope);
     // Nothing persisted (no storage, or a key this resource never persists) is
     // already "cleared"; otherwise the row delete must have been queued.
     const rowCleared = !writeQueue || !resource.persistKey(key) || isPurged(scope, key);

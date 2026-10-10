@@ -1,9 +1,12 @@
 /** @vitest-environment happy-dom */
 import { act, renderHook } from '@testing-library/react';
+import type { PropsWithChildren } from 'react';
+import { createElement } from 'react';
 import { beforeEach, expect, it, vi } from 'vitest';
 
 import { createReplicaState } from '@/libs/replica';
 
+import { AcceptanceInitialBundle } from './AcceptanceInitialBundle';
 import { useAcceptanceBundle } from './useAcceptanceBundle';
 
 const swr = vi.hoisted(() => {
@@ -83,6 +86,53 @@ it('registers no sync query without an acceptance id', async () => {
   renderHook(() => useAcceptanceBundle(null));
 
   expect(await bundleSyncConfig()).toBeUndefined();
+});
+
+it('never reports loading without an acceptance id', () => {
+  const { result } = renderHook(() => useAcceptanceBundle(null));
+
+  expect(result.current.isLoading).toBe(false);
+});
+
+/** Wraps a hook in the request-local initial bundle the Workbench loader provides. */
+const initialBundleWrapper = (acceptanceId: string, bundle: unknown) =>
+  function Wrapper({ children }: PropsWithChildren) {
+    return createElement(
+      AcceptanceInitialBundle,
+      { acceptanceId, bundle: bundle as never },
+      children,
+    );
+  };
+
+it('paints the loader-provided initial bundle on the first render', () => {
+  const bundle = { acceptance: { status: 'verifying' } };
+  const { result } = renderHook(() => useAcceptanceBundle('acceptance-1'), {
+    wrapper: initialBundleWrapper('acceptance-1', bundle),
+  });
+
+  // The gate must paint the authorized bundle instead of a spinner: the
+  // Workbench runtime never hydrates the persisted replica, so without this the
+  // server and the first client render would have no data at all.
+  expect(result.current.data).toBe(bundle);
+  expect(result.current.isLoading).toBe(false);
+});
+
+it('ignores an initial bundle that belongs to another acceptance id', () => {
+  const { result } = renderHook(() => useAcceptanceBundle('acceptance-2'), {
+    wrapper: initialBundleWrapper('acceptance-1', { acceptance: { status: 'verifying' } }),
+  });
+
+  expect(result.current.data).toBeUndefined();
+});
+
+it('prefers the live replica over the initial bundle', () => {
+  seedBundle('acceptance-1', { acceptance: { status: 'accepted' } });
+
+  const { result } = renderHook(() => useAcceptanceBundle('acceptance-1'), {
+    wrapper: initialBundleWrapper('acceptance-1', { acceptance: { status: 'verifying' } }),
+  });
+
+  expect(result.current.data).toMatchObject({ acceptance: { status: 'accepted' } });
 });
 
 it('mutate revalidates this acceptance and resolves the freshly read value', async () => {

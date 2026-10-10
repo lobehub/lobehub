@@ -100,17 +100,6 @@ export class ActionImpl {
   };
 
   /**
-   * Seed a bundle an authorized server fetch already returned — the Workbench SSR
-   * loader. That runtime disables the persisted replica (its cache scope is not
-   * this session's), so without a seed the first render has nothing to paint and
-   * the gate shows a spinner until client revalidation lands. A server-sourced
-   * seed supersedes any local projection and is not re-fetched by first paint.
-   */
-  seedAcceptanceBundle = (acceptanceId: string, bundle: AcceptanceBundle): void => {
-    this.#bundle.replace(acceptanceId, bundle);
-  };
-
-  /**
    * Fetch orchestration only; the caller reads the bundle through
    * `acceptanceBundleMap` (`verifySelectors.acceptanceBundle`). `refreshInterval`
    * drives the live 5s poll of an in-flight round.

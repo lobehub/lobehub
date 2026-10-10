@@ -1,6 +1,7 @@
 import type { AcceptanceBundle } from '@/services/verify';
 import { useVerifyStore } from '@/store/verify';
 
+import { useAcceptanceInitialBundle } from './AcceptanceInitialBundle';
 import { LIVE_ACCEPTANCE_STATUSES } from './verdict';
 
 /** Poll cadence of a still-moving acceptance round. */
@@ -39,9 +40,15 @@ export const useAcceptanceBundle = (
 ): AcceptanceBundleSync => {
   const poll = options?.poll ?? true;
   const useFetchAcceptanceBundle = useVerifyStore((s) => s.useFetchAcceptanceBundle);
-  const data = useVerifyStore((s) =>
+  const replicaData = useVerifyStore((s) =>
     acceptanceId ? s.acceptanceBundleMap[acceptanceId] : undefined,
   );
+  // The Workbench SSR loader hands its authorized bundle down as request-local
+  // context data; it fills the first paint (server + hydration) until the live
+  // replica holds a value of its own.
+  const initial = useAcceptanceInitialBundle();
+  const data =
+    replicaData ?? (initial && initial.acceptanceId === acceptanceId ? initial.bundle : undefined);
 
   const status = data?.acceptance.status;
   const polling = poll && !!status && LIVE_ACCEPTANCE_STATUSES.has(status);
@@ -53,7 +60,8 @@ export const useAcceptanceBundle = (
   return {
     data,
     error: sync.error,
-    isLoading: !data && !sync.error && (sync.isValidating || !sync.isHydrated),
+    // A read with no id has nothing to load — never report it as loading.
+    isLoading: !!acceptanceId && !data && !sync.error && (sync.isValidating || !sync.isHydrated),
     isValidating: sync.isValidating,
     mutate: async () => {
       await sync.revalidate();

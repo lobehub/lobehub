@@ -104,7 +104,8 @@ export const useAcceptanceBySubject = (
   return {
     data,
     error: sync.error,
-    isLoading: !data && !sync.error && (sync.isValidating || !sync.isHydrated),
+    // A read with no subject has nothing to load — never report it as loading.
+    isLoading: !!subjectId && !data && !sync.error && (sync.isValidating || !sync.isHydrated),
     isValidating: sync.isValidating,
     mutate: async () => {
       await sync.revalidate();

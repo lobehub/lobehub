@@ -449,19 +449,43 @@ describe('createReplicaSlice', () => {
       expect(store.getState().lists.a).toBeUndefined();
     });
 
-    it('does not drop the active scope entry for a removal captured under another scope', () => {
-      const { slice, store } = setup();
+    it('purges the captured scope row for a removal that lands after a scope switch', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const { slice, store } = setup({ storage });
 
-      // The active scope has the entry loaded.
+      // The active scope has its own entry loaded.
       scopeState.current = 'user-2:personal';
       act(() => slice.replace({ id: 'a' }, ['b-value']));
       expect(store.getState().lists.a).toEqual(['b-value']);
 
       // A late NOT_FOUND from a request captured under the previous scope must
-      // not delete the entry that is on screen now.
+      // not delete the entry that is on screen now…
       act(() => slice.remove('a', 'user-1:personal'));
-
       expect(store.getState().lists.a).toEqual(['b-value']);
+
+      // …but that scope's own persisted row still has to go, or switching back
+      // to it would hydrate the value the server just denied.
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+
+    it('retries an off-scope purge once the captured scope may persist again', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['revoked'], updatedAt: 1 });
+      const { slice } = setup({ storage });
+
+      // The terminal answer lands while writes are still refused.
+      scopeState.current = 'user-2:personal';
+      scopeState.trusted = false;
+      act(() => slice.remove('a', 'user-1:personal'));
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(storage.rows.get('user-1:personal|a')).toBeDefined();
+
+      // Identity resolves: the next terminal answer must clear the row, not
+      // report a no-op that never deletes it.
+      scopeState.trusted = true;
+      act(() => slice.remove('a', 'user-1:personal'));
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
     });
 
     it('binds the captured key and scope to the error callback', async () => {

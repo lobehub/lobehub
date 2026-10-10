@@ -1,9 +1,10 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import { lazy, Suspense, useRef } from 'react';
+import { lazy, Suspense } from 'react';
 import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
 import { useLoaderData, useRouteLoaderData } from 'react-router';
 
-import { useVerifyStore } from '@/store/verify';
+import { extractUuid } from '@/features/Acceptance/utils';
+import { AcceptanceInitialBundle } from '@/features/Acceptance/Viewer/AcceptanceInitialBundle';
 
 import WorkbenchLoading from '../../src/shell/WorkbenchLoading';
 import { cloudflareContext } from '../lib/cloudflareContext';
@@ -16,7 +17,9 @@ const AcceptanceDetail = lazy(() => import('../../src/features/acceptance/Accept
 const AcceptanceEmbed = lazy(() => import('../../src/features/acceptance/AcceptanceEmbed'));
 
 export const loader = async ({ context, params, request }: LoaderFunctionArgs) => {
-  const acceptanceId = params.acceptanceId!;
+  // Normalize the same way the rendered viewer does, so the id the loader
+  // fetches for is the id the render tree reads its bundle under.
+  const acceptanceId = extractUuid(params.acceptanceId)!;
   const apiBase = context.get(cloudflareContext).env.WORKBENCH_API_BASE as string | undefined;
 
   // SSR data is best-effort: on any backend failure fall back to CSR, where
@@ -48,24 +51,17 @@ export default function AcceptanceDetailRoute() {
   const { acceptanceId, bundle } = useLoaderData<typeof loader>();
 
   // The loader already fetched an authorized bundle. The Workbench runtime never
-  // hydrates the persisted replica, so seed the store from the loader result
-  // before the gate below reads it — otherwise the first render has no data and
-  // shows a spinner until client revalidation lands. Seeded once per acceptance
-  // id (the route component is reused across param changes); later renders keep
-  // whatever the live replica holds.
-  // Client only: the store is a module singleton reused across requests, so a
-  // server render must not write one request's authorized bundle into it — a
-  // later (or concurrent) request whose loader returned null would then paint
-  // the retained entry into its own response.
-  const seededId = useRef<string | null>(null);
-  if (typeof window !== 'undefined' && bundle && seededId.current !== acceptanceId) {
-    seededId.current = acceptanceId;
-    useVerifyStore.getState().seedAcceptanceBundle(acceptanceId, bundle);
-  }
-
+  // hydrates the persisted replica, so hand the bundle to the tree as
+  // request-local context data — the gate paints it on the first frame instead
+  // of a spinner. It must NOT go into the replica store: that store is a module
+  // singleton shared by every request the server handles, so a render-time write
+  // would leak one request's authorized entry into a later (or concurrent)
+  // request whose loader returned null.
   return (
-    <Suspense fallback={<WorkbenchLoading />}>
-      {root?.embedConfig.embed ? <AcceptanceEmbed /> : <AcceptanceDetail />}
-    </Suspense>
+    <AcceptanceInitialBundle acceptanceId={acceptanceId} bundle={bundle}>
+      <Suspense fallback={<WorkbenchLoading />}>
+        {root?.embedConfig.embed ? <AcceptanceEmbed /> : <AcceptanceDetail />}
+      </Suspense>
+    </AcceptanceInitialBundle>
   );
 }
