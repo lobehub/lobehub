@@ -6064,10 +6064,17 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
                 }),
               );
             }
+            // Under `toolCall`, afterToolCall gates a completed result: a call the
+            // before control denied never runs, so it has no result to gate.
             expect(
               fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).hookType),
-            ).toEqual(['beforeToolCall', 'afterToolCall']);
-            expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+            ).toEqual(
+              permissionDecision === 'allow'
+                ? ['beforeToolCall', 'afterToolCall']
+                : ['beforeToolCall'],
+            );
+            if (permissionDecision === 'allow')
+              expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
           } finally {
             fetchSpy.mockRestore();
             vi.unstubAllEnvs();
