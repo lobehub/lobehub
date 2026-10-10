@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { getTestDB } from '../../../core/getTestDB';
@@ -518,7 +518,7 @@ describe('TopicModel - Create', () => {
         ]);
       });
 
-      const { topic: duplicatedTopic, messages: duplicatedMessages } = await topicModel.duplicate(
+      const { messages: duplicatedMessages } = await topicModel.duplicate(
         topicId,
         'Duplicated Topic',
       );
@@ -579,7 +579,7 @@ describe('TopicModel - Create', () => {
         });
       });
 
-      const { topic: duplicatedTopic, messages: duplicatedMessages } = await topicModel.duplicate(
+      const { messages: duplicatedMessages } = await topicModel.duplicate(
         topicId,
         'Duplicated Topic',
       );
@@ -605,6 +605,142 @@ describe('TopicModel - Create', () => {
       expect(newPlugin).toBeDefined();
       expect(newPlugin!.toolCallId).toBe(newTools[0].id);
       expect(newPlugin!.toolCallId).not.toBe(originalToolId);
+    });
+
+    it('should duplicate a reverse chronological parent chain with tools', async () => {
+      const topicId = 'reverse-parent-chain';
+      const toolCallId = 'toolu_reverse_parent';
+      // Deliberately make every child older than its parent: createdAt order
+      // must not determine whether a valid parent graph can be copied.
+      const sourceMessages = [
+        { id: 'reverse-root', role: 'user', parentId: null },
+        {
+          id: 'reverse-assistant',
+          role: 'assistant',
+          parentId: 'reverse-root',
+          tools: [{ id: toolCallId, type: 'builtin', apiName: 'broadcast' }],
+        },
+        { id: 'reverse-tool', role: 'tool', parentId: 'reverse-assistant' },
+        { id: 'reverse-final', role: 'assistant', parentId: 'reverse-tool' },
+      ].map((message, index) => ({
+        ...message,
+        content: message.id,
+        createdAt: new Date(Date.UTC(2024, 0, 4 - index)),
+        updatedAt: new Date('2024-02-01T00:00:00Z'),
+        topicId,
+        userId,
+      }));
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(topics).values({ id: topicId, userId });
+        await tx.insert(messages).values(sourceMessages);
+        await tx.insert(messagePlugins).values({
+          id: 'reverse-tool',
+          userId,
+          toolCallId,
+          apiName: 'broadcast',
+        });
+      });
+
+      const result = await topicModel.duplicate(topicId);
+      // Preserve the existing chronological return order, independently of
+      // the order in which foreign-key dependencies are established.
+      expect(result.messages.map((message) => message.content)).toEqual(
+        sourceMessages.map((message) => message.id).toReversed(),
+      );
+      const copies = new Map(result.messages.map((message) => [message.content, message]));
+      for (const source of sourceMessages) {
+        const copy = copies.get(source.id)!;
+        expect(copy.id).not.toBe(source.id);
+        expect(copy.parentId).toBe(source.parentId ? copies.get(source.parentId)!.id : null);
+        expect(copy.createdAt).toEqual(source.createdAt);
+        expect(copy.updatedAt).toEqual(source.updatedAt);
+      }
+      const persisted = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.topicId, result.topic.id))
+        .orderBy(messages.createdAt);
+      expect(persisted).toEqual(result.messages);
+      const [plugin] = await serverDB
+        .select()
+        .from(messagePlugins)
+        .where(eq(messagePlugins.id, copies.get('reverse-tool')!.id));
+      const tools = copies.get('reverse-assistant')!.tools!;
+      expect(tools[0].id).not.toBe(toolCallId);
+      expect(plugin.toolCallId).toBe(tools[0].id);
+      expect(await serverDB.select().from(messages).where(eq(messages.topicId, topicId))).toEqual(
+        expect.arrayContaining(sourceMessages.map((message) => expect.objectContaining(message))),
+      );
+    });
+
+    it('should clear parent references outside the copied message set', async () => {
+      const topicId = 'external-parent-topic';
+      await serverDB.insert(topics).values({ id: topicId, userId });
+      await serverDB.insert(messages).values([
+        { id: 'external-parent', role: 'user', userId },
+        { id: 'external-child', role: 'assistant', userId, topicId, parentId: 'external-parent' },
+        { id: 'excluded-parent', role: 'user', userId: userId2, topicId },
+        { id: 'excluded-child', role: 'assistant', userId, topicId, parentId: 'excluded-parent' },
+      ]);
+
+      const result = await topicModel.duplicate(topicId);
+      expect(result.messages).toHaveLength(2);
+      expect(result.messages.every((message) => message.parentId === null)).toBe(true);
+      expect(result.messages.every((message) => message.userId === userId)).toBe(true);
+      const [source] = await serverDB
+        .select()
+        .from(messages)
+        .where(eq(messages.id, 'external-child'));
+      expect(source.parentId).toBe('external-parent');
+      await expect(new TopicModel(serverDB, userId2).duplicate(topicId)).rejects.toThrow(
+        `Topic with id ${topicId} not found`,
+      );
+    });
+
+    it('should roll back the topic, messages and plugins when restoring a parent fails', async () => {
+      const topicId = 'rollback-parent-topic';
+      await serverDB.insert(topics).values({ id: topicId, userId });
+      await serverDB.insert(messages).values([
+        { id: 'rollback-root', role: 'assistant', userId, topicId },
+        { id: 'rollback-child', role: 'tool', userId, topicId, parentId: 'rollback-root' },
+      ]);
+      await serverDB
+        .insert(messagePlugins)
+        .values({ id: 'rollback-child', userId, apiName: 'broadcast' });
+      const before = {
+        topics: await serverDB.select().from(topics),
+        messages: await serverDB.select().from(messages).orderBy(messages.id),
+        plugins: await serverDB.select().from(messagePlugins),
+      };
+      // Inject a real database failure for a copied parent reference, after
+      // its topic has been inserted. Works for both one- and two-phase copies.
+      await serverDB.execute(sql`
+        CREATE FUNCTION reject_duplicate_parent() RETURNS trigger LANGUAGE plpgsql AS $$
+        BEGIN
+          IF NEW.parent_id IS NOT NULL AND NEW.topic_id <> 'rollback-parent-topic' THEN
+            RAISE EXCEPTION 'injected duplicate parent failure';
+          END IF;
+          RETURN NEW;
+        END;
+        $$
+      `);
+      try {
+        await serverDB.execute(sql`
+          CREATE TRIGGER reject_duplicate_parent BEFORE INSERT OR UPDATE ON messages
+          FOR EACH ROW EXECUTE FUNCTION reject_duplicate_parent()
+        `);
+        await expect(topicModel.duplicate(topicId)).rejects.toMatchObject({
+          cause: expect.objectContaining({ message: 'injected duplicate parent failure' }),
+        });
+        expect(await serverDB.select().from(topics)).toEqual(before.topics);
+        expect(await serverDB.select().from(messages).orderBy(messages.id)).toEqual(
+          before.messages,
+        );
+        expect(await serverDB.select().from(messagePlugins)).toEqual(before.plugins);
+      } finally {
+        await serverDB.execute(sql`DROP TRIGGER IF EXISTS reject_duplicate_parent ON messages`);
+        await serverDB.execute(sql`DROP FUNCTION reject_duplicate_parent()`);
+      }
     });
 
     it('should throw an error if the topic to duplicate does not exist', async () => {
