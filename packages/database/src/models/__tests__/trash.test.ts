@@ -273,6 +273,107 @@ describe('TrashModel', () => {
     });
   });
 
+  describe('project filter', () => {
+    const wsModel = new TrashModel(serverDB, userId, workspaceId);
+    const wsMember = new TrashModel(serverDB, otherUserId, workspaceId);
+
+    /** Roots across projects, newest first: p1 ×5, p2, null, a deleted project, and an agent cascade. */
+    const seedProjects = async (registry: TrashModel, prefix: string) => {
+      const day = (i: number) => at(`2026-08-${String(i + 1).padStart(2, '0')}T00:00:00Z`);
+      for (let i = 0; i < 5; i++) {
+        await registry.register({
+          deletedAt: day(i),
+          root: { projectId: 'p1', resourceId: `${prefix}p1_${i}`, resourceType: 'topic' },
+        });
+      }
+      await registry.register({
+        deletedAt: day(5),
+        root: { projectId: 'p2', resourceId: `${prefix}p2_0`, resourceType: 'topic' },
+      });
+      await registry.register({
+        deletedAt: day(6),
+        root: { projectId: null, resourceId: `${prefix}legacy`, resourceType: 'message' },
+      });
+      await registry.register({
+        deletedAt: day(7),
+        root: { projectId: 'gone', resourceId: `${prefix}orphan`, resourceType: 'topic' },
+      });
+      // An agent is never in a project, even when its cascade carries project topics.
+      await registry.register({
+        children: [
+          { projectId: 'p1', resourceId: `${prefix}agent_child_p1`, resourceType: 'topic' },
+          { projectId: 'p2', resourceId: `${prefix}agent_child_p2`, resourceType: 'topic' },
+        ],
+        deletedAt: day(8),
+        root: { projectId: null, resourceId: `${prefix}agent`, resourceType: 'agent' },
+      });
+    };
+
+    const listAll = async (
+      registry: TrashModel,
+      filter: Parameters<TrashModel['list']>[0] = {},
+    ) => {
+      const ids: string[] = [];
+      let cursor: string | null = null;
+      do {
+        const page: Awaited<ReturnType<TrashModel['list']>> = await registry.list({
+          ...filter,
+          cursor,
+          limit: 2,
+        });
+        ids.push(...page.items.map((item) => item.resourceId));
+        cursor = page.nextCursor;
+      } while (cursor);
+      return ids;
+    };
+
+    it('separates every project, no project and all with matching counts across pages', async () => {
+      await seedProjects(model, '');
+
+      const p1 = await listAll(model, { projectId: 'p1' });
+      expect(p1).toEqual(['p1_4', 'p1_3', 'p1_2', 'p1_1', 'p1_0']);
+      expect(await model.countByType({ projectId: 'p1' })).toEqual({ topic: 5 });
+
+      // `null` is "recorded without a project": legacy rows and agents, never their children.
+      expect(await listAll(model, { projectId: null })).toEqual(['agent', 'legacy']);
+      expect(await model.countByType({ projectId: null })).toEqual({ agent: 1, message: 1 });
+
+      // "All" keeps rows of deleted projects and lists each root once.
+      const all = await listAll(model);
+      expect(all).toEqual(['agent', 'orphan', 'legacy', 'p2_0', ...p1]);
+      expect(new Set(all).size).toBe(all.length);
+      expect(await model.countByType()).toEqual({ agent: 1, message: 1, topic: 7 });
+
+      expect(await listAll(model, { projectId: 'p2', resourceType: 'agent' })).toEqual([]);
+      expect(await model.listAllRootIds({ projectId: 'p2' })).toHaveLength(1);
+    });
+
+    it('keeps project filters inside the personal or workspace scope and the actor filter', async () => {
+      await seedProjects(model, 'personal_');
+      await seedProjects(wsModel, 'owner_');
+      await wsMember.register({
+        deletedAt: at('2026-08-20T00:00:00Z'),
+        root: { projectId: 'p1', resourceId: 'member_p1', resourceType: 'topic' },
+      });
+
+      // Same project id in another scope never leaks across.
+      expect(await listAll(model, { projectId: 'p1' })).not.toContain('owner_p1_0');
+      expect((await listAll(wsModel, { projectId: 'p1' })).sort()).toEqual(
+        ['member_p1', ...Array.from({ length: 5 }, (_, i) => `owner_p1_${i}`)].sort(),
+      );
+
+      // A member restricted to their own roots sees only those inside the project.
+      const own = { deletedByUserId: otherUserId, projectId: 'p1' } as const;
+      expect(await listAll(wsMember, own)).toEqual(['member_p1']);
+      expect(await wsMember.countByType(own)).toEqual({ topic: 1 });
+      expect(await wsMember.listAllRootIds({ ...own, resourceType: 'topic' })).toHaveLength(1);
+      expect(await wsMember.listAllRootIds({ ...own, resourceType: 'message' })).toEqual([]);
+      expect(await wsMember.countByType({ deletedByUserId: otherUserId, projectId: null })).toEqual(
+        {},
+      );
+    });
+  });
+
   describe('removeByIds', () => {
     it('drops the root and cascades its children', async () => {
       const root = await model.register({

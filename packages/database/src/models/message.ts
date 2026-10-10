@@ -4747,7 +4747,7 @@ export class MessageModel {
           const messageUpdateData: Record<string, any> = {};
 
           if (content !== undefined) {
-            messageUpdateData.content = content;
+            messageUpdateData.content = sanitizeNullBytes(content);
           }
 
           if (metadata !== undefined || heterogeneousToolState !== undefined) {
@@ -4776,17 +4776,18 @@ export class MessageModel {
           const pluginUpdateData: Record<string, any> = {};
 
           if (pluginState !== undefined) {
+            const sanitizedState = sanitizeNullBytes(pluginState);
             // Snapshot writes replace the whole runtime state. Ordinary patches
             // own complete top-level keys and merge inside the UPDATE so an
             // answer write cannot race away an intervention-terminal write.
             pluginUpdateData.state =
               heterogeneousToolState || replacePluginState
-                ? pluginState
-                : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(pluginState)}::jsonb`;
+                ? sanitizedState
+                : sql`coalesce(${messagePlugins.state}, '{}'::jsonb) || ${JSON.stringify(sanitizedState)}::jsonb`;
           }
 
           if (pluginError !== undefined) {
-            pluginUpdateData.error = pluginError;
+            pluginUpdateData.error = sanitizeNullBytes(pluginError);
           }
 
           const [updatedPlugin] = await trx
