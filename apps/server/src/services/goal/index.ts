@@ -40,6 +40,7 @@ import type {
 import { isAgentOperationInFlight } from '@lobechat/types';
 import { experimentOwner, provenanceParentId } from '@lobechat/utils/goalGraph';
 import { TRPCError } from '@trpc/server';
+import debug from 'debug';
 import { sql } from 'drizzle-orm';
 
 import { AgentModel } from '@/database/models/agent';
@@ -138,6 +139,8 @@ const TASK_DESCRIPTION_MAX_LENGTH = 255;
 const GOAL_ENDED_STATUSES = new Set<string>(['achieved', 'canceled']);
 /** Advisory-lock namespace for goal dispatch. `0x676f_6469` is ASCII `godi`. */
 const GOAL_DISPATCH_LOCK_NAMESPACE = 0x67_6f_64_69;
+/** Why a decomposition did or did not become a batch: DEBUG=lobe-server:goal-rollout. */
+const log = debug('lobe-server:goal-rollout');
 /** Upper bound on a batch roster; a planner that over-lists cannot swamp the config. */
 const MAX_ROLLOUT_ROSTER = 60;
 /**
@@ -2518,6 +2521,19 @@ export class GoalService {
           }
 
           case 'failure_decision': {
+            // R6: a batch member that did not pass its own check IS the same
+            // intervention as a blocked gate. Route it through the batch gate so
+            // the class rolls back to canary, instead of parking on a standalone
+            // task decision that never touches the recipe.
+            if (this.isBatchMember(graph, acting!.id)) {
+              return observe(
+                await this.openPatternBreakGate(
+                  graph,
+                  `${acting!.title}: ${move.message}`,
+                  effects,
+                ),
+              );
+            }
             const waiting =
               (await this.waitForDevice(graph, acting!.id, task, effects)) ??
               (await this.waitForQuotaReset(graph, acting!.id, task, effects));
@@ -2540,6 +2556,17 @@ export class GoalService {
           }
 
           case 'task_paused': {
+            // R6: a paused batch member (e.g. its delivery did not pass
+            // verification) is an intervention on the class, not on one task.
+            if (this.isBatchMember(graph, acting!.id)) {
+              return observe(
+                await this.openPatternBreakGate(
+                  graph,
+                  `${acting!.title}: ${move.message}`,
+                  effects,
+                ),
+              );
+            }
             return observe({
               goalId,
               message: move.message,
@@ -3703,6 +3730,14 @@ export class GoalService {
               )
             : { batch: false, reasons: [] as string[] };
 
+        log(
+          'decomposition rollout: trigger=%s claim=%o tasks=%d verdict=%o',
+          rolloutTrigger,
+          rolloutClaim,
+          draftTasks.length,
+          verdict,
+        );
+
         if (rolloutClaim && rolloutEnabled && verdict.batch && currentProblem) {
           const roster = normalizeRolloutRoster(rolloutClaim.units, draftTasks, draftTasks.length);
           const canarySize =
@@ -3927,6 +3962,13 @@ export class GoalService {
     if (materialized.some((node) => !TERMINAL_NODE_STATUSES.has(node.status))) return undefined;
     if (released >= roster.length) return undefined;
     return evaluateRolloutGate({ graph, policy, state });
+  };
+
+  /** Whether a node is one of the current batch's released members (R6 routing). */
+  private isBatchMember = (graph: GoalGraphSnapshot, nodeId: string): boolean => {
+    const state = graph.goal.config?.rolloutState;
+    if (!state) return false;
+    return state.probeNodeIds.includes(nodeId) || (state.massNodeIds ?? []).includes(nodeId);
   };
 
   /** Release the next wave of a repeated batch once its gate passed. */
