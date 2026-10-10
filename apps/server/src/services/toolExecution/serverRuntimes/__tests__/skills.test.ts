@@ -456,6 +456,31 @@ describe('skillsRuntime', () => {
     );
   });
 
+  it('reuses the factory-resolved personal scope instead of looking it up per command', async () => {
+    mocks.preprocessLhCommand.mockImplementation(async (command: string) => ({
+      command,
+      isLhCommand: false,
+      skipSkillLookup: false,
+    }));
+    mocks.resolveContentWorkspaceId.mockResolvedValue(undefined);
+
+    const { skillsRuntime } = await import('../skills');
+    const runtime = await skillsRuntime.factory({
+      agentId: 'agent-1',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      topicId: 'topic-1',
+      userId: 'user-1',
+    });
+    const lookupsAtConstruction = mocks.resolveContentWorkspaceId.mock.calls.length;
+
+    await runtime.runCommand({ command: 'python3 sync.py' });
+    await runtime.runCommand({ command: 'ls' });
+
+    expect(mocks.resolveContentWorkspaceId).toHaveBeenCalledTimes(lookupsAtConstruction);
+    expect(mocks.preprocessLhCommand).toHaveBeenCalledWith('ls', 'user-1', undefined, false);
+  });
+
   // The client-side executor (routers/tools/market.ts) has always preprocessed
   // execScript too; on Cloud, where gateway mode routes through this runtime
   // instead, `lh` inside execScript reached the sandbox raw — no CLI, no
