@@ -14,7 +14,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheScope } from '@/libs/replica';
+import { cacheScope, replicaSWRDriver } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { documentService } from '@/services/document';
 import { initialEditorState } from '@/store/document/slices/editor';
@@ -428,5 +428,79 @@ describe('document detail replica', () => {
     expect(useDocumentStore.getState().documentDetailMap['doc-1']).toBeUndefined();
     expect(useDocumentStore.getState().documents['doc-1']).toBeUndefined();
     expect(editor.setDocument).not.toHaveBeenCalled();
+  });
+
+  it('revalidates on focus with a ~20s throttle', async () => {
+    const spy = vi.spyOn(replicaSWRDriver, 'useQuery');
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    renderDocument('doc-1', createEditor());
+
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+
+    // The app-wide default focus throttle is five minutes; without the explicit
+    // option another writer's edit would stay stale for minutes on a personal /
+    // notebook document (no workspace-page SSE stream to close the gap).
+    const syncCall = spy.mock.calls.find(
+      ([, , options]) => (options as { revalidateOnFocus?: boolean })?.revalidateOnFocus,
+    );
+    expect(syncCall?.[2]).toMatchObject({
+      focusThrottleInterval: 20_000,
+      revalidateOnFocus: true,
+    });
+  });
+
+  it('refreshes the persisted detail after a successful save', async () => {
+    vi.mocked(documentService.getDocumentById).mockResolvedValue(documentRow() as any);
+    vi.mocked(documentService.updateDocument).mockResolvedValue({
+      historyAppended: false,
+      id: 'doc-1',
+      updatedAt: '2026-01-08T00:00:00.000Z',
+    } as any);
+
+    renderDocument('doc-1', createEditor());
+    await waitFor(() => expect(useDocumentStore.getState().documents['doc-1']).toBeDefined());
+    // Only the body the server returned on load is persisted so far.
+    expect((await storedRow('doc-1', scope))?.data).toEqual({ document: documentRow() });
+
+    act(() => useDocumentStore.getState().handleContentChange());
+    await act(async () => {
+      await useDocumentStore.getState().performSave('doc-1');
+    });
+
+    // The save is server-confirmed: the replica — and its IndexedDB row — now
+    // hold the edited body, so a reload cannot paint the pre-edit one.
+    const persisted = await storedRow('doc-1', scope);
+    expect(persisted?.data).toEqual({
+      document: expect.objectContaining({
+        content: '# Draft',
+        editorData: baseEditorData,
+        updatedAt: new Date('2026-01-08T00:00:00.000Z'),
+      }),
+    });
+  });
+
+  it('does not let a late prefetch overwrite the entry a sync already settled', async () => {
+    const stale = documentRow({ id: 'doc-2', content: '# Stale prefetch' });
+    let resolvePrefetch!: (value: unknown) => void;
+    vi.mocked(documentService.getDocumentById)
+      .mockImplementationOnce(() => new Promise((resolve) => (resolvePrefetch = resolve)) as any)
+      .mockResolvedValue(undefined as any);
+
+    const inflight = useDocumentStore.getState().prefetchDocument('doc-2');
+
+    // Navigation starts the real sync, which settles the document as not-found.
+    renderDocument('doc-2', createEditor());
+    await waitFor(() =>
+      expect(useDocumentStore.getState().documentDetailMap['doc-2']).toEqual({ document: null }),
+    );
+
+    // The prefetch resolves late and must not resurrect the dropped document.
+    resolvePrefetch(stale);
+    await act(async () => {
+      await inflight;
+    });
+
+    expect(useDocumentStore.getState().documentDetailMap['doc-2']).toEqual({ document: null });
+    expect(await storedRow('doc-2', scope)).toBeUndefined();
   });
 });

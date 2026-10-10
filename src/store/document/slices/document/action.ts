@@ -347,7 +347,12 @@ export class DocumentActionImpl {
     const document = entry?.document;
 
     const sync = this.#detail.useSync(enabled ? documentId : undefined, {
-      // Keep a long-open editor in step with other writers.
+      // Keep a long-open editor in step with other writers. Personal and
+      // notebook documents have no workspace-page SSE stream, so the app-wide
+      // five-minute focus throttle would leave another writer's edit stale for
+      // minutes after returning to the tab — ~20s is the window this was tuned
+      // to before the migration.
+      focusThrottleInterval: 20_000,
       revalidateOnFocus: true,
     });
 
@@ -408,6 +413,12 @@ export class DocumentActionImpl {
     const scope = documentDetailResource.scope.get();
     try {
       const document = await documentService.getDocumentById(documentId);
+      // A sync that started while this was in flight owns the entry now: it may
+      // hold a newer revision, or a confirmed absence. Never let a late
+      // prefetch regress it — e.g. resurrect the body of a document the sync has
+      // just settled as not-found. The entry is warmed on hover, so skipping
+      // when one already exists only drops a redundant write.
+      if (this.#get().documentDetailMap[documentId] !== undefined) return;
       this.#detail.replace(documentId, { document: document ?? null }, scope);
     } catch (error) {
       console.error('[DocumentStore] Failed to prefetch document:', error);

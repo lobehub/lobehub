@@ -332,6 +332,9 @@ export class EditorActionImpl {
     metadata?: SaveMetadata,
     options?: SaveExecutionOptions,
   ): Promise<void> => {
+    // Capture the identity before the request: the detail replica must not be
+    // refreshed under a new account / workspace if one switches mid-save.
+    const scope = documentDetailResource.scope.get();
     const { documents, internal_dispatchDocument } = this.#get();
     const doc = documents[id];
     if (!doc) return;
@@ -400,6 +403,24 @@ export class EditorActionImpl {
           saveStatus: 'saved',
         },
       });
+
+      // The server now holds this body. Mirror it into the detail replica: its
+      // IndexedDB row is what a reload paints before the network answers, so
+      // leaving the pre-edit body there would render stale content — and keep
+      // rendering it when the confirming read is slow or fails.
+      const cachedDetail = this.#get().documentDetailMap[id]?.document;
+      if (cachedDetail) {
+        this.#get().internal_adoptDocumentDetail(
+          id,
+          {
+            ...cachedDetail,
+            content: currentContent,
+            editorData: currentEditorData,
+            updatedAt: savedAt ?? cachedDetail.updatedAt,
+          },
+          scope,
+        );
+      }
 
       if (this.#get().documents[id]?.isDirty && doc.autoSave !== false) {
         this.#get().triggerDebouncedSave(id);

@@ -5,6 +5,8 @@
 export interface ReplicaSyncSchedule {
   /** Collapse identical requests within this window (ms). */
   dedupingInterval?: number;
+  /** Skip focus revalidation while the last one is younger than this (ms). */
+  focusThrottleInterval?: number;
   /** Poll every N ms while mounted (0 = off); a function decides per tick from the latest data. */
   refreshInterval?: number | ((latest: any) => number);
   /** Keep polling while the page is hidden. */
