@@ -390,6 +390,25 @@ describe('createReplicaSlice', () => {
     });
   });
 
+  describe('remove', () => {
+    it('does not let an in-flight response resurrect a removed entry', async () => {
+      let resolveFetch!: (value: string[]) => void;
+      const fetcher = vi.fn(() => new Promise<string[]>((resolve) => (resolveFetch = resolve)));
+      const { slice, store } = setup({ fetcher });
+
+      renderHook(() => slice.useSync({ id: 'a' }), { wrapper });
+      await waitFor(() => expect(fetcher).toHaveBeenCalled());
+
+      // The entry is invalidated while its own request is still in flight.
+      act(() => {
+        slice.remove('a');
+      });
+      await act(async () => resolveFetch(['late']));
+
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+  });
+
   describe('persisted index', () => {
     it('removes a key this instance never wrote from the stored index', async () => {
       const storage = createMemoryStorage();

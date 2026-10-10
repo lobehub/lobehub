@@ -181,7 +181,20 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
     };
   };
 
-  return { ...engine, useSync };
+  return {
+    ...engine,
+    /**
+     * Forget the key's head query as well as the entry. A request already in
+     * flight for it would otherwise pass the `onSuccess` guard below (the marker
+     * still matches), `replace` the entry and persist pre-mutation rows back over
+     * an invalidation that has already completed.
+     */
+    remove: (key: string) => {
+      headQuery.delete(key);
+      return engine.remove(key);
+    },
+    useSync,
+  };
 };
 
 export type ReplicaSlice<TStore, TParams, TData, TFetched = TData> = ReturnType<
