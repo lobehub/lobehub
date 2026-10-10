@@ -357,4 +357,20 @@ describe('I18nManager', () => {
       expect(result).toBe(false);
     });
   });
+
+  describe('loadLocale', () => {
+    beforeEach(async () => {
+      await manager.init();
+      vi.clearAllMocks();
+    });
+
+    it('should load English fallback resources for non-English locales', async () => {
+      await manager['loadLocale']('ru-RU');
+
+      for (const namespace of ['menu', 'dialog', 'common']) {
+        expect(mockLoadResources).toHaveBeenCalledWith('ru-RU', namespace);
+        expect(mockLoadResources).toHaveBeenCalledWith('en', namespace);
+      }
+    });
+  });
 });
