@@ -561,17 +561,6 @@ export const discoverKeys = {
     locale,
     params,
   ]),
-  providerDetail: def('discover:providerDetail', (locale: string, identifier: string) => [
-    'discover:providerDetail',
-    locale,
-    identifier,
-  ]),
-  providerIdentifiers: def('discover:providerIdentifiers', () => ['discover:providerIdentifiers']),
-  providerList: def('discover:providerList', (locale: string, params: unknown) => [
-    'discover:providerList',
-    locale,
-    params,
-  ]),
   skillCategories: def('discover:skillCategories', (locale: string, params: unknown) => [
     'discover:skillCategories',
     locale,

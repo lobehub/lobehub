@@ -7,6 +7,7 @@ import AsyncBoundary from '@/components/AsyncBoundary';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { providerSelectors } from '@/store/discover/selectors';
 import { type ProviderQueryParams } from '@/types/discover';
 import { DiscoverTab } from '@/types/discover';
 
@@ -16,14 +17,16 @@ import List from './features/List';
 
 const ProviderPage = memo(() => {
   const { q, page, sort, order } = useQuery() as ProviderQueryParams;
-  const useProviderList = useDiscoverStore((s) => s.useProviderList);
-  const { data, error, isLoading, mutate } = useProviderList({
+  const useProviderList = useDiscoverStore((s) => s.useFetchProviderList);
+  const { error, isLoading, mutate, queryKey } = useProviderList({
     order,
     page,
     pageSize: 21,
     q,
     sort,
   });
+  // The replica view of this query; the sync hook only reports the fetch flags.
+  const data = useDiscoverStore(providerSelectors.providerList(queryKey));
 
   const items = data?.items ?? [];
 

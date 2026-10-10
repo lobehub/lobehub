@@ -1,277 +1,215 @@
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { discoverService } from '@/services/discover';
+import { createReplicaState } from '@/libs/replica';
 import { globalHelpers } from '@/store/global/helpers';
+import type { ProviderListResponse } from '@/types/discover';
 
+import { providerSelectors } from '../../selectors';
 import { useDiscoverStore as useStore } from '../../store';
+import {
+  providerDetailQueryKey,
+  providerIdentifiersQueryKey,
+  providerListQueryKey,
+} from './projection';
+
+vi.mock('@/services/discover', () => ({
+  discoverService: {
+    getProviderDetail: vi.fn(),
+    getProviderIdentifiers: vi.fn(),
+    getProviderList: vi.fn(),
+  },
+}));
+
+// The replica schedules its fetches through the app's SWR driver; the engine
+// itself is what these tests exercise, so the driver is a bare recorder.
+vi.mock('@/libs/swr', () => ({
+  mutate: vi.fn(),
+  useClientDataSWR: vi.fn(() => ({ isValidating: false, mutate: vi.fn() })),
+}));
+
+const makeList = (identifier = 'openai'): ProviderListResponse => ({
+  currentPage: 1,
+  items: [{ identifier } as any],
+  pageSize: 21,
+  totalCount: 1,
+  totalPages: 1,
+});
+
+const emptyProviderState = () => ({
+  providerDetailMap: {},
+  providerDetailReplica: createReplicaState(),
+  providerIdentifiersMap: {},
+  providerIdentifiersReplica: createReplicaState(),
+  providerListMap: {},
+  providerListReplica: createReplicaState(),
+});
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+  useStore.setState(emptyProviderState());
 });
 
-describe('ProviderAction', () => {
-  describe('useProviderDetail', () => {
-    it('should fetch provider detail when identifier is provided', async () => {
-      const mockDetail = {
-        description: 'OpenAI provider',
-        identifier: 'openai',
-        modelCount: 10,
-        models: [
-          { displayName: 'GPT-4', id: 'gpt-4' },
-          { displayName: 'GPT-3.5 Turbo', id: 'gpt-3.5-turbo' },
-        ],
-        name: 'OpenAI',
-        related: [],
-      };
+/** The replica network syncs registered with the SWR driver, per resource name. */
+const syncCalls = async (name: 'providerDetail' | 'providerIdentifiers' | 'providerList') => {
+  const { useClientDataSWR } = await import('@/libs/swr');
+  return vi
+    .mocked(useClientDataSWR)
+    .mock.calls.filter(
+      ([key]) => Array.isArray(key) && key[0] === 'replica:sync' && key[1] === name,
+    )
+    .map(([key, fetcher, config]) => ({
+      config: config as { onSuccess?: (data: unknown) => void },
+      fetcher: fetcher as () => Promise<any>,
+      key: key as unknown[],
+    }));
+};
 
-      vi.spyOn(discoverService, 'getProviderDetail').mockResolvedValue(mockDetail as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+describe('ProviderSlice (replica)', () => {
+  describe('useFetchProviderList', () => {
+    it('requests the list with normalized page / pageSize and the locale', async () => {
+      const { discoverService } = await import('@/services/discover');
 
-      const params = { identifier: 'openai' };
-      const { result } = renderHook(() => useStore.getState().useProviderDetail(params));
+      renderHook(() => useStore.getState().useFetchProviderList({ q: 'openai' }));
 
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockDetail);
+      const [call] = await syncCalls('providerList');
+      await call.fetcher();
+
+      expect(discoverService.getProviderList).toHaveBeenCalledWith({
+        locale: 'en-US',
+        page: 1,
+        pageSize: 21,
+        q: 'openai',
       });
-
-      expect(discoverService.getProviderDetail).toHaveBeenCalledWith(params);
     });
 
-    it('should fetch provider detail with readme when withReadme is true', async () => {
-      const mockDetail = {
-        description: 'Anthropic provider',
-        identifier: 'anthropic',
-        modelCount: 5,
-        models: [],
-        name: 'Anthropic',
-        readme: '# Anthropic Provider\n\nThis is the Anthropic provider.',
-        related: [],
-      };
+    it('keys each page and filter set as its own replica entry', () => {
+      const { result } = renderHook(() => [
+        useStore.getState().useFetchProviderList({ page: 1 }),
+        useStore.getState().useFetchProviderList({ page: 2 }),
+        useStore.getState().useFetchProviderList({ sort: 'identifier' as any }),
+      ]);
 
-      vi.spyOn(discoverService, 'getProviderDetail').mockResolvedValue(mockDetail as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const params = { identifier: 'anthropic', withReadme: true };
-      const { result } = renderHook(() => useStore.getState().useProviderDetail(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockDetail);
-      });
-
-      expect(discoverService.getProviderDetail).toHaveBeenCalledWith(params);
+      const [first, second, third] = result.current;
+      expect(new Set([first.queryKey, second.queryKey, third.queryKey]).size).toBe(3);
     });
 
-    it('should use current language in the request', async () => {
-      const mockDetail = {
-        identifier: 'google',
-        modelCount: 8,
-        models: [],
-        name: 'Google',
-        related: [],
-      };
+    it('does not register a sync — and reports no loading — when disabled', async () => {
+      const { result } = renderHook(() =>
+        useStore.getState().useFetchProviderList({ page: 1 }, { enabled: false }),
+      );
 
-      vi.spyOn(discoverService, 'getProviderDetail').mockResolvedValue(mockDetail as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
-
-      const params = { identifier: 'google' };
-      const { result } = renderHook(() => useStore.getState().useProviderDetail(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockDetail);
-      });
-
-      expect(globalHelpers.getCurrentLanguage).toHaveBeenCalled();
-      expect(discoverService.getProviderDetail).toHaveBeenCalledWith(params);
+      expect(result.current.queryKey).toBeUndefined();
+      expect(result.current.isLoading).toBe(false);
+      expect(await syncCalls('providerList')).toHaveLength(0);
     });
 
-    it('should return undefined when provider is not found', async () => {
-      vi.spyOn(discoverService, 'getProviderDetail').mockResolvedValue(undefined);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
+    it('reports loading until the entry has a value to show', () => {
+      const { result } = renderHook(() => useStore.getState().useFetchProviderList({ page: 1 }));
 
-      const params = { identifier: 'non-existent' };
-      const { result } = renderHook(() => useStore.getState().useProviderDetail(params));
+      expect(result.current.isLoading).toBe(true);
+    });
 
-      await waitFor(() => {
-        expect(result.current.data).toBeUndefined();
-      });
+    it('does not report loading when the entry already has a (hydrated) value', () => {
+      const key = providerListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 });
+      useStore.setState({ providerListMap: { [key]: makeList() } });
+
+      const { result } = renderHook(() => useStore.getState().useFetchProviderList({ page: 1 }));
+
+      expect(result.current.queryKey).toBe(key);
+      expect(result.current.isLoading).toBe(false);
+    });
+
+    it('folds the response into the replica view the selectors read', async () => {
+      const response = makeList();
+
+      renderHook(() => useStore.getState().useFetchProviderList({ page: 1 }));
+      const [call] = await syncCalls('providerList');
+      act(() => call.config.onSuccess!(response));
+
+      const key = providerListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 });
+      expect(providerSelectors.providerList(key)(useStore.getState())).toEqual(response);
     });
   });
 
-  describe('useProviderIdentifiers', () => {
-    it('should fetch provider identifiers', async () => {
-      const mockIdentifiers = [
-        { identifier: 'openai', lastModified: '2024-01-01' },
-        { identifier: 'anthropic', lastModified: '2024-01-02' },
-        { identifier: 'google', lastModified: '2024-01-03' },
-      ];
+  describe('useFetchProviderDetail', () => {
+    it('requests the detail with identifier, readme flag and locale', async () => {
+      const { discoverService } = await import('@/services/discover');
 
-      vi.spyOn(discoverService, 'getProviderIdentifiers').mockResolvedValue(mockIdentifiers);
+      renderHook(() =>
+        useStore.getState().useFetchProviderDetail({ identifier: 'openai', withReadme: true }),
+      );
 
-      const { result } = renderHook(() => useStore.getState().useProviderIdentifiers());
+      const [call] = await syncCalls('providerDetail');
+      await call.fetcher();
 
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockIdentifiers);
+      expect(discoverService.getProviderDetail).toHaveBeenCalledWith({
+        identifier: 'openai',
+        locale: 'en-US',
+        withReadme: true,
       });
+    });
+
+    it('keys the detail by identifier, so a different identifier is a different entry', () => {
+      const { result } = renderHook(() => [
+        useStore.getState().useFetchProviderDetail({ identifier: 'openai' }),
+        useStore.getState().useFetchProviderDetail({ identifier: 'anthropic' }),
+      ]);
+
+      expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(2);
+    });
+
+    it('keys the detail by the readme flag, so the readme variant is its own entry', () => {
+      const { result } = renderHook(() => [
+        useStore.getState().useFetchProviderDetail({ identifier: 'openai' }),
+        useStore.getState().useFetchProviderDetail({ identifier: 'openai', withReadme: true }),
+      ]);
+
+      expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(2);
+    });
+
+    it('keys the detail by the locale, so a language switch refetches', () => {
+      const { result, rerender } = renderHook(() =>
+        useStore.getState().useFetchProviderDetail({ identifier: 'openai' }),
+      );
+      const first = result.current.queryKey;
+
+      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
+      rerender();
+
+      expect(result.current.queryKey).not.toBe(first);
+    });
+  });
+
+  describe('useFetchProviderIdentifiers', () => {
+    it('requests the identifier index', async () => {
+      const { discoverService } = await import('@/services/discover');
+
+      renderHook(() => useStore.getState().useFetchProviderIdentifiers());
+
+      const [call] = await syncCalls('providerIdentifiers');
+      await call.fetcher();
 
       expect(discoverService.getProviderIdentifiers).toHaveBeenCalled();
     });
+
+    it('falls back to undefined when no entry is loaded', () => {
+      expect(providerSelectors.providerList(undefined)(useStore.getState())).toBeUndefined();
+      expect(providerSelectors.providerDetail(undefined)(useStore.getState())).toBeUndefined();
+      expect(providerSelectors.providerIdentifiers(undefined)(useStore.getState())).toBeUndefined();
+    });
   });
 
-  describe('useProviderList', () => {
-    it('should fetch provider list with default parameters', async () => {
-      const mockList = {
-        currentPage: 1,
-        items: [
-          { identifier: 'openai', modelCount: 10, name: 'OpenAI' },
-          { identifier: 'anthropic', modelCount: 5, name: 'Anthropic' },
-        ],
-        pageSize: 21,
-        totalCount: 2,
-        totalPages: 1,
-      };
-
-      vi.spyOn(discoverService, 'getProviderList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const { result } = renderHook(() => useStore.getState().useProviderList());
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(discoverService.getProviderList).toHaveBeenCalledWith({
-        page: 1,
-        pageSize: 21,
-      });
-    });
-
-    it('should fetch provider list with custom parameters', async () => {
-      const mockList = {
-        currentPage: 2,
-        items: [{ identifier: 'openai', modelCount: 10, name: 'OpenAI' }],
-        pageSize: 10,
-        totalCount: 15,
-        totalPages: 2,
-      };
-
-      vi.spyOn(discoverService, 'getProviderList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
-
-      const params = { page: 2, pageSize: 10, q: 'openai' } as any;
-      const { result } = renderHook(() => useStore.getState().useProviderList(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(discoverService.getProviderList).toHaveBeenCalledWith({
-        page: 2,
-        pageSize: 10,
-        q: 'openai',
-      });
-    });
-
-    it('should convert page and pageSize to numbers', async () => {
-      const mockList = {
-        currentPage: 3,
-        items: [],
-        pageSize: 15,
-        totalCount: 0,
-        totalPages: 0,
-      };
-
-      vi.spyOn(discoverService, 'getProviderList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const params = { page: 3, pageSize: 15 } as any;
-      const { result } = renderHook(() => useStore.getState().useProviderList(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(discoverService.getProviderList).toHaveBeenCalledWith({
-        page: 3,
-        pageSize: 15,
-      });
-    });
-
-    it('should use current language in the request', async () => {
-      const mockList = {
-        currentPage: 1,
-        items: [],
-        pageSize: 21,
-        totalCount: 0,
-        totalPages: 0,
-      };
-
-      vi.spyOn(discoverService, 'getProviderList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('zh-CN');
-
-      const { result } = renderHook(() => useStore.getState().useProviderList());
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(globalHelpers.getCurrentLanguage).toHaveBeenCalled();
-    });
-
-    it('should handle sort parameter', async () => {
-      const mockList = {
-        currentPage: 1,
-        items: [
-          { identifier: 'anthropic', modelCount: 5, name: 'Anthropic' },
-          { identifier: 'openai', modelCount: 10, name: 'OpenAI' },
-        ],
-        pageSize: 21,
-        totalCount: 2,
-        totalPages: 1,
-      };
-
-      vi.spyOn(discoverService, 'getProviderList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const params = { order: 'asc', sort: 'identifier' } as any;
-      const { result } = renderHook(() => useStore.getState().useProviderList(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(discoverService.getProviderList).toHaveBeenCalledWith({
-        order: 'asc',
-        page: 1,
-        pageSize: 21,
-        sort: 'identifier',
-      });
-    });
-
-    it('should handle search query parameter', async () => {
-      const mockList = {
-        currentPage: 1,
-        items: [{ identifier: 'openai', modelCount: 10, name: 'OpenAI' }],
-        pageSize: 21,
-        totalCount: 1,
-        totalPages: 1,
-      };
-
-      vi.spyOn(discoverService, 'getProviderList').mockResolvedValue(mockList as any);
-      vi.spyOn(globalHelpers, 'getCurrentLanguage').mockReturnValue('en-US');
-
-      const params = { q: 'openai' } as any;
-      const { result } = renderHook(() => useStore.getState().useProviderList(params));
-
-      await waitFor(() => {
-        expect(result.current.data).toEqual(mockList);
-      });
-
-      expect(discoverService.getProviderList).toHaveBeenCalledWith({
-        page: 1,
-        pageSize: 21,
-        q: 'openai',
-      });
+  describe('replica key helpers', () => {
+    it('produces stable, distinct keys per query dimension', () => {
+      expect(providerListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 })).toBe(
+        providerListQueryKey({ locale: 'en-US', page: 1, pageSize: 21 }),
+      );
+      expect(providerDetailQueryKey({ identifier: 'a' })).not.toBe(
+        providerDetailQueryKey({ identifier: 'b' }),
+      );
+      expect(providerIdentifiersQueryKey()).toBe(providerIdentifiersQueryKey({}));
     });
   });
 });
