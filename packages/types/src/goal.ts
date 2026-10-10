@@ -511,6 +511,28 @@ export type GoalRolloutPhase = 'probe' | 'assay' | 'mass' | 'pattern_break' | 'd
  * coordinator's own gate moves, never by a policy edit — the same rule that
  * keeps `managerState` server-owned.
  */
+/**
+ * What one break taught the batch: a rule in the batch's expertise domain,
+ * compiled into a verify criterion every later unit is judged against.
+ */
+export interface GoalRolloutLearning {
+  /** The criterion the rule compiled into; later units' acceptances carry it. */
+  criterionId?: string;
+  lessonCode?: string;
+  lessonId: string;
+  /** The round whose gate broke and taught it. */
+  revision: number;
+  title: string;
+}
+
+/** The batch's execution plan, kept as a skill in the user's own skill library. */
+export interface GoalRolloutPlanSkill {
+  /** The skill bundle's document id. */
+  id: string;
+  /** The skill's name: units load it as `user-skills:<name>`. */
+  name: string;
+}
+
 export interface GoalRolloutState {
   /** The gate (Assay) decision node, once decomposition created it. */
   assayNodeId?: string;
@@ -521,6 +543,10 @@ export interface GoalRolloutState {
    * round that was judged never loses its latest verdict to later rounds.
    */
   gateLog?: GoalRolloutGateEvaluation[];
+  /** The expertise domain the batch's breaks teach, once one has. */
+  learningDomainId?: string;
+  /** Every rule a break taught, oldest first. */
+  learnings?: GoalRolloutLearning[];
   /**
    * Node ids of the mass tasks the current round released, oldest wave first.
    * A restarted canary starts a new round and clears it.
@@ -528,6 +554,8 @@ export interface GoalRolloutState {
   massNodeIds?: string[];
   /** Phase the rollout is in; the coordinator reads this to pick its move. */
   phase: GoalRolloutPhase;
+  /** The execution plan as a user skill; each Template revision is one of its versions. */
+  planSkill?: GoalRolloutPlanSkill;
   /** Node ids of the probe tasks that must run before the gate passes. */
   probeNodeIds: string[];
   /** How many roster entries have been materialized (probes + released waves). */

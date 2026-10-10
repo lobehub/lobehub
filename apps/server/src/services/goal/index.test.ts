@@ -13,6 +13,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getTestDB } from '@/database/core/getTestDB';
 import { AcceptanceModel } from '@/database/models/acceptance';
 import { AgentOperationModel } from '@/database/models/agentOperation';
+import { ExpertiseModel } from '@/database/models/expertise';
 import { GoalModel } from '@/database/models/goal';
 import { GoalGraphModel } from '@/database/models/goalGraph';
 import { MetricModel } from '@/database/models/metric';
@@ -44,6 +45,7 @@ import { AiAgentService } from '@/server/services/aiAgent';
 import { deviceGateway } from '../deviceGateway';
 import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
+import { UserSkillService } from '../userSkill';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
 import { GoalCriteriaGeneratorService } from './criteriaGenerator';
 import {
@@ -2276,6 +2278,89 @@ describe('GoalService', () => {
     // The new canary is a fresh round: the old wave's retired member no longer
     // counts against its gate (it would re-open the same break at once).
     expect(next.massNodeIds).toBeUndefined();
+
+    // The plan lives as a skill in the user's library: v1 at decomposition,
+    // v2 when the break revised it — each version kept whole.
+    const planSkill = next.planSkill!;
+    expect(planSkill.name).toMatch(/^goal-plan-/);
+    const skill = await new UserSkillService(serverDB, userId).getSkill(planSkill.id);
+    expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);
+    expect(skill?.content).toContain('### v2\n补上冷启动这一步');
+    expect(skill?.versions[0].content).not.toContain('### v2');
+    // A re-opened unit names the skill instead of copying a plan that would go stale.
+    expect(reopened.description).toContain(`user-skills:${planSkill.name}`);
+    expect(reopened.description).not.toContain('把 store 换成 replica 支撑的实现');
+
+    // The break taught the batch: a rule for the executor, compiled into a
+    // criterion for the verifier.
+    expect(next.learnings).toMatchObject([{ revision: 1, title: '补上冷启动这一步' }]);
+    const [learning] = next.learnings!;
+    const lesson = await new ExpertiseModel(serverDB, userId).findLesson(learning.lessonId);
+    expect(lesson).toMatchObject({
+      compilability: 'compiled',
+      compiledCriterionId: learning.criterionId,
+      enforcement: 'block',
+    });
+
+    // A unit dispatched after the break loads the skill on every run and is
+    // judged by what the batch learned.
+    vi.spyOn(TaskRunnerService.prototype, 'runTask').mockResolvedValue({} as never);
+    await service.tick(graph.goal.id);
+    const dispatched = (await service.graph(graph.goal.id)).nodes.find(
+      (node) => next.probeNodeIds.includes(node.id) && node.taskId,
+    )!;
+    const task = await new TaskModel(serverDB, userId).findById(dispatched.taskId!);
+    expect(task?.config).toMatchObject({ skills: [`user-skills:${planSkill.name}`] });
+    const acceptance = await new AcceptanceModel(serverDB, userId).findBySubject(
+      'task',
+      dispatched.taskId!,
+    );
+    expect(acceptance?.config).toMatchObject({ verifyCriteriaIds: [learning.criterionId] });
+  });
+
+  it('moves a batch from before plan skills into one at its next revision', async () => {
+    vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
+      problemStatement: '把 50 个同构的 store 迁移到 replica',
+      rollout: {
+        recipeOutline: '把 store 换成 replica 支撑的实现',
+        repeatable: true,
+        unitCount: 50,
+        units: Array.from({ length: 50 }, (_, i) => `Unit ${i + 1}`),
+        variants: [],
+      },
+      tasks: Array.from({ length: 5 }, (_, i) => ({
+        dependsOn: [],
+        instruction: `把 src/store/store${i + 1}.ts 换成 replica 实现`,
+        title: `Unit ${i + 1}`,
+      })),
+    });
+    const service = new GoalService(serverDB, userId);
+    const graph = await service.create({ title: 'Migrate stores' });
+    await service.tick(graph.goal.id);
+
+    const graphModel = new GoalGraphModel(serverDB, userId);
+    const goalModel = new GoalModel(serverDB, userId);
+    const { planSkill: _written, ...legacy } = (await service.graph(graph.goal.id)).goal.config!
+      .rolloutState!;
+    const decision = await graphModel.createDecision(graph.goal.id, legacy.assayNodeId!, {
+      authority: 'user',
+      options: [{ description: '修订配方', id: 'revise', label: '修订配方并重探' }],
+      question: 'Batch gate blocked',
+      requestedUserId: userId,
+    });
+    await graphModel.updateNodeStatus(graph.goal.id, legacy.assayNodeId!, 'waiting');
+    await goalModel.updateRolloutState(graph.goal.id, { ...legacy, phase: 'pattern_break' });
+    await serverDB.update(goals).set({ status: 'paused' }).where(eq(goals.id, graph.goal.id));
+
+    await service.decide(graph.goal.id, decision!.id, 'revise', '补上 SSR 播种这一步');
+
+    const next = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
+    const skill = await new UserSkillService(serverDB, userId).getSkill(next.planSkill!.id);
+    // The plan's earlier version becomes v1 and the revision v2, so version N
+    // still reads as round N.
+    expect(skill?.versions.map((version) => version.version)).toEqual([1, 2]);
+    expect(skill?.versions[0].content).toContain('把 store 换成 replica 支撑的实现');
+    expect(skill?.versions[1].content).toContain('### v2\n补上 SSR 播种这一步');
   });
 
   it('persists the planned recipe when the caller already chose a canary rollout', async () => {

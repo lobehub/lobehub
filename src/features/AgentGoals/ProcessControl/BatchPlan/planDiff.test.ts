@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { planDiff } from './planDiff';
+import { planDiff, skillBody } from './planDiff';
 
 describe('planDiff', () => {
   it('reads a revision as the previous plan unchanged plus its own section', () => {
@@ -18,5 +18,14 @@ describe('planDiff', () => {
       { kind: 'same', text: 'Keep' },
       { kind: 'removed', text: 'Drop' },
     ]);
+  });
+});
+
+describe('skillBody', () => {
+  it('reads a plan skill version without its frontmatter', () => {
+    expect(skillBody('---\nname: goal-plan-x\ndescription: How\n---\nDo it.\n\n### v2\nMore')).toBe(
+      'Do it.\n\n### v2\nMore',
+    );
+    expect(skillBody('Plain plan')).toBe('Plain plan');
   });
 });

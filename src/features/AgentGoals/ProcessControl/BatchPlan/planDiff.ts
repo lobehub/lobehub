@@ -26,3 +26,7 @@ export const planDiff = (before = '', after = ''): PlanDiffLine[] =>
         text,
       })),
   );
+
+/** A skill's `SKILL.md` without its frontmatter: the plan as a person reads it. */
+export const skillBody = (content: string) =>
+  content.replace(/^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/, '').trim();

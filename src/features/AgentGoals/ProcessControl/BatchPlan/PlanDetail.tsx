@@ -1,17 +1,25 @@
-import { Flexbox, Markdown } from '@lobehub/ui';
+import { Flexbox, Icon, Markdown } from '@lobehub/ui';
 import { Segmented, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
+import { BookMarked } from 'lucide-react';
 import { memo, type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useClientDataSWR } from '@/libs/swr';
+import { userSkillService } from '@/services/userSkill';
+
 import type { GoalGraphView } from '../goalGraphViewModel';
 import type { BatchModel, BatchRound } from '../Graph/batchModel';
-import { planDiff } from './planDiff';
+import { planDiff, skillBody } from './planDiff';
 
 /**
  * Every version of a batch's plan, for the panel that opens on one of them:
  * pick a version, pick what to compare it with (the previous one by default),
  * read the line diff, then the version in full.
+ *
+ * The plan is a skill in the user's library — round N is its version N, and
+ * every unit loads it — so the panel reads the versions the skill kept. A batch
+ * from before the plan became a skill falls back to its plan nodes' text.
  */
 
 const styles = createStaticStyles(({ css }) => ({
@@ -46,6 +54,21 @@ const styles = createStaticStyles(({ css }) => ({
     font-weight: 600;
     color: ${cssVar.colorTextSecondary};
   `,
+  skill: css`
+    padding-block: 8px;
+    padding-inline: 10px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+  `,
+  mono: css`
+    overflow: hidden;
+
+    font-family: ${cssVar.fontFamilyCode};
+    font-size: 12px;
+    color: ${cssVar.colorTextTertiary};
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  `,
 }));
 
 const Section = memo<{ children: ReactNode; title: string }>(({ children, title }) => (
@@ -75,14 +98,43 @@ const PlanDetail = memo<PlanDetailProps>(({ graph, model, round }) => {
   const earlier = versions.filter((item) => item.revision < current.revision);
   // Compare with the previous version unless the reader picked another.
   const against = earlier.find((item) => item.revision === base) ?? earlier.at(-1);
-  const textOf = (item?: BatchRound) =>
-    (item?.templateId && graph.byId[item.templateId]?.node.description) || '';
+  const planSkill = model.planSkill;
+  // Keyed by the round count, so a revision the panel is open on loads its version.
+  const { data: skill } = useClientDataSWR(
+    planSkill ? ['goal-plan-skill', planSkill.id, model.rounds.length] : null,
+    () => userSkillService.get(planSkill!.id),
+  );
+  const textOf = (item?: BatchRound) => {
+    const kept = item && skill?.versions.find((version) => version.version === item.revision);
+    if (kept) return skillBody(kept.content);
+    return (item?.templateId && graph.byId[item.templateId]?.node.description) || '';
+  };
 
   const lines = against ? planDiff(textOf(against), textOf(current)) : [];
   const changed = lines.some((line) => line.kind !== 'same');
 
   return (
     <Flexbox data-plan-detail gap={16}>
+      {planSkill && (
+        <Flexbox data-plan-skill horizontal align={'flex-start'} className={styles.skill} gap={8}>
+          <Icon
+            color={cssVar.colorTextSecondary}
+            icon={BookMarked}
+            size={14}
+            style={{ marginBlockStart: 3 }}
+          />
+          <Flexbox gap={2} style={{ flex: 1, minWidth: 0 }}>
+            <Text fontSize={13} weight={500}>
+              {skill?.title ?? planSkill.name}
+            </Text>
+            <Text fontSize={12} type={'secondary'}>
+              {t('goalBatch.planPanel.skill', { version: skill?.version ?? model.rounds.length })}
+            </Text>
+            <span className={styles.mono}>{`user-skills:${planSkill.name}`}</span>
+          </Flexbox>
+        </Flexbox>
+      )}
+
       {versions.length > 1 && (
         <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
           <span className={styles.label}>{t('goalBatch.planPanel.version')}</span>

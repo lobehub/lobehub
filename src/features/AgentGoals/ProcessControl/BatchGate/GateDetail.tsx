@@ -2,7 +2,7 @@ import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
-import { CircleCheck, CircleDashed, CircleX } from 'lucide-react';
+import { CircleCheck, CircleDashed, CircleX, GraduationCap } from 'lucide-react';
 import { memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -192,6 +192,8 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
     );
   };
 
+  const learned = model.learnings.filter((learning) => learning.revision === round.revision);
+
   // The gate is waiting on a person: answer it here, beside what it found.
   const pending = round.assayId ? graph.byId[round.assayId]?.decision : undefined;
 
@@ -219,6 +221,31 @@ const GateDetail = memo<GateDetailProps>(({ decide, graph, model, onOpenNode, ro
               {next}
             </Text>
           )}
+        </Section>
+      )}
+
+      {/* What this gate's break taught the batch: a rule the executor reads,
+          compiled into an acceptance check later units are verified against. */}
+      {learned.length > 0 && (
+        <Section title={t('goalBatch.gatePanel.learned')}>
+          <Flexbox data-gate-learned gap={6}>
+            {learned.map((learning) => (
+              <Flexbox horizontal align={'baseline'} gap={8} key={learning.lessonId}>
+                <Icon color={cssVar.colorTextSecondary} icon={GraduationCap} size={13} />
+                <Text fontSize={13} style={{ flex: 1, minWidth: 0 }}>
+                  {learning.title}
+                </Text>
+                {learning.lessonCode && (
+                  <Text className={styles.mono} fontSize={12} type={'secondary'}>
+                    {learning.lessonCode}
+                  </Text>
+                )}
+              </Flexbox>
+            ))}
+            <Text fontSize={12} type={'secondary'}>
+              {t('goalBatch.gatePanel.learnedHint')}
+            </Text>
+          </Flexbox>
         </Section>
       )}
 

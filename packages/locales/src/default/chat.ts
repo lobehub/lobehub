@@ -48,6 +48,7 @@ export default {
     'A forked plan: it starts again from the batch’s original outline instead of revising the previous version',
   'goalBatch.planPanel.full': 'v{{revision}} in full',
   'goalBatch.planPanel.same': 'Same as v{{base}}',
+  'goalBatch.planPanel.skill': 'A skill in your library · v{{version}} · every unit loads it',
   'goalBatch.planPanel.version': 'Version',
   'goalBatch.probes.cell.backlog': 'Not started',
   'goalBatch.probes.cell.done': 'Done',
@@ -63,6 +64,9 @@ export default {
   'goalBatch.gateCheck.units_settled': 'Every unit this round finished',
   'goalBatch.gateCheck.units_succeeded':
     'Every unit this round ran through on its own — none failed or was sent back',
+  'goalBatch.gatePanel.learned': 'What this gate taught',
+  'goalBatch.gatePanel.learnedHint':
+    'Kept as a rule the executor reads, and compiled into an acceptance check every later unit is verified against.',
   'goalBatch.gatePanel.checks': 'Checks',
   'goalBatch.gatePanel.checksAt': 'Verdict {{index}} · {{time}}',
   'goalBatch.gatePanel.checksPlanned': 'Not judged yet — these will be checked',
