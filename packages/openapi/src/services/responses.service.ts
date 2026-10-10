@@ -30,6 +30,8 @@ import type {
  * with executeSync used when synchronous results are needed.
  */
 export class ResponsesService extends BaseService {
+  protected readonly serviceName = 'ResponsesService';
+
   /**
    * Extract hosted builtin tool identifiers from tools array
    */
