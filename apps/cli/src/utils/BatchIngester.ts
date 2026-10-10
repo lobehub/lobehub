@@ -10,6 +10,7 @@ export interface IngestAck {
   reason?: string;
 }
 
+/** Receives persisted event batches and the producer's final process outcome. */
 export interface IngestSink {
   finish: (params: {
     error?: {
@@ -23,6 +24,8 @@ export interface IngestSink {
       message: string;
       type: string;
     };
+    /** True after the producer has exited; no later finish callback will follow. @default false */
+    finalCancellation?: boolean;
     result: 'cancelled' | 'error' | 'success';
     sessionId?: string;
   }) => Promise<void>;

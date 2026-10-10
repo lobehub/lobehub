@@ -4,6 +4,8 @@ import { isHeterogeneousAgentModelId, MESSAGE_CANCEL_FLAT } from '@lobechat/cons
 import {
   type ChatTopicStatus,
   type ConversationContext,
+  getCodexApprovalDecisions,
+  isCodexDenyDecision,
   type MessageMetadata,
   resolveAgentAgencyConfig,
   type ToolIntervention,
@@ -1795,6 +1797,10 @@ export class ConversationControlActionImpl {
       console.warn('[submitHeteroIntervention] tool message has no tool_call_id', toolMessageId);
       return;
     }
+    const interventionId = toolMessage.pluginIntervention?.interventionId;
+    const isCodexApproval = toolMessage.plugin?.identifier === 'codex';
+    const codexDecision = isCodexApproval ? payload?.decision : undefined;
+    const isCodexRejected = isCodexApproval && isCodexDenyDecision(codexDecision);
 
     const effectiveContext: ConversationContext = context ?? {
       agentId: this.#get().activeAgentId,
@@ -1807,10 +1813,36 @@ export class ConversationControlActionImpl {
       toolMessage.pluginState as
         { heterogeneousIntervention?: { interactionKind?: unknown } } | undefined
     )?.heterogeneousIntervention;
+    let sourcePayload = payload ?? {};
+    if (
+      isCodexApproval &&
+      actionType === 'submit' &&
+      codexDecision === 'cancel' &&
+      originalIntervention?.reviewDecisionIds?.includes('cancel_turn')
+    ) {
+      // The producer can seal an explicit Stop when no native grant is reviewable.
+      sourcePayload = { decision: 'cancel_turn' };
+    } else if (isCodexApproval && actionType === 'submit') {
+      const args: unknown = originalIntervention?.arguments;
+      const parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
+      const choices = getCodexApprovalDecisions(
+        toolMessage.plugin?.apiName,
+        parsedArgs && typeof parsedArgs === 'object' && !Array.isArray(parsedArgs)
+          ? parsedArgs
+          : {},
+      );
+      const choiceIndex = choices.findIndex(
+        (choice) =>
+          JSON.stringify(canonicalizeResolutionPayload(choice)) ===
+          JSON.stringify(canonicalizeResolutionPayload(codexDecision)),
+      );
+      if (choiceIndex < 0) return;
+      sourcePayload = { decision: `decision_${choiceIndex}` };
+    }
     const sourceAction = toHeterogeneousSourceAction(
       actionType,
       interventionState?.interactionKind,
-      payload ?? {},
+      sourcePayload,
     );
 
     // A persisted v2 card carries everything the server needs to locate and
@@ -1827,6 +1859,19 @@ export class ConversationControlActionImpl {
       if (this.#discardAlreadyResolvedSource(sourceResolution)) return;
 
       if (sourceResolution.handled) {
+        if (isCodexApproval) {
+          const current = dbMessageSelectors.getDbMessageById(toolMessageId)(
+            this.#get(),
+          )?.pluginIntervention;
+          // Native ACKs and a subsequent callback can arrive before this HTTP response.
+          // Never overwrite a terminal receipt or attach A's answer to callback B.
+          if (
+            current?.interventionId !== interventionId ||
+            current?.batchId !== originalIntervention.batchId ||
+            current?.status !== 'pending'
+          )
+            return;
+        }
         const sourceOptimisticContext: OptimisticUpdateContext = { context: effectiveContext };
         this.#dispatchInterventionState(
           toolMessageId,
@@ -1836,7 +1881,13 @@ export class ConversationControlActionImpl {
         if (actionType === 'submit') {
           await this.setInterventionAnswers(toolMessageId, payload ?? {}, sourceOptimisticContext);
         }
-        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, sourceOptimisticContext);
+        // Native permissions settle only on the exact producer receipt or native deadline.
+        if (!isCodexApproval)
+          this.#scheduleHeteroInterventionSettle(
+            toolMessageId,
+            actionType,
+            sourceOptimisticContext,
+          );
         return;
       }
     }
@@ -1895,24 +1946,36 @@ export class ConversationControlActionImpl {
     } else if (actionType === 'submit') {
       await this.#get().optimisticUpdateMessagePlugin(
         toolMessageId,
-        { intervention: { status: 'approved' } },
+        {
+          intervention: isCodexRejected
+            ? {
+                rejectedReason:
+                  codexDecision === 'cancel' ? 'User cancelled' : 'User denied permission',
+                status: 'rejected',
+              }
+            : { status: 'approved' },
+        },
         optimisticContext,
       );
       // Persist the structured `{ [questionText]: selectedLabel(s) }` answers
       // to `pluginState.askUserAnswers` so the Render component can show
       // Q&A pairs instead of parsing the bridge's prose `User answers:`
       // dump out of `content`. Best-effort — never block the IPC submit.
-      await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      if (!isCodexApproval) {
+        await this.setInterventionAnswers(toolMessageId, payload ?? {}, optimisticContext);
+      }
       // Bridge formats its own "User answers:" string for CC, so the eventual
       // tool_result re-rewrites this content. The optimistic write is just
       // for the brief gap between Submit and CC echoing the result back.
-      const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
-      await this.#get().optimisticUpdateMessageContent(
-        toolMessageId,
-        summary,
-        undefined,
-        optimisticContext,
-      );
+      if (!isCodexApproval) {
+        const summary = `User submitted: ${JSON.stringify(payload ?? {})}`;
+        await this.#get().optimisticUpdateMessageContent(
+          toolMessageId,
+          summary,
+          undefined,
+          optimisticContext,
+        );
+      }
     } else {
       const reason = actionType === 'skip' ? 'User skipped' : 'User cancelled';
       await this.#get().optimisticUpdateMessagePlugin(
@@ -1955,32 +2018,58 @@ export class ConversationControlActionImpl {
           await import('@/services/electron/heterogeneousAgent');
         await heterogeneousAgentService.submitIntervention(
           actionType === 'submit'
-            ? { operationId, result: payload ?? {}, toolCallId }
-            : { cancelReason: 'user_cancelled', cancelled: true, operationId, toolCallId },
+            ? { interventionId, operationId, result: payload ?? {}, toolCallId }
+            : {
+                cancelReason: 'user_cancelled',
+                cancelled: true,
+                interventionId,
+                operationId,
+                toolCallId,
+              },
         );
       } else {
         const resolutionIntent = JSON.stringify(
           canonicalizeResolutionPayload({ actionType, payload: payload ?? {} }),
         );
-        const resolutionKey = `${operationId}:${toolCallId}:${resolutionIntent}`;
+        const resolutionKey = `${operationId}:${toolCallId}:${interventionId ?? ''}:${resolutionIntent}`;
         const resolutionRequestId =
           this.#heteroResolutionRequestIds.get(resolutionKey) ?? globalThis.crypto.randomUUID();
         this.#heteroResolutionRequestIds.set(resolutionKey, resolutionRequestId);
         await lambdaClient.aiAgent.submitHeteroIntervention.mutate(
           actionType === 'submit'
-            ? { operationId, resolutionRequestId, result: payload ?? {}, toolCallId }
+            ? {
+                interventionId,
+                operationId,
+                resolutionRequestId,
+                result: payload ?? {},
+                toolCallId,
+              }
             : {
                 cancelReason: 'user_cancelled',
                 cancelled: true,
+                interventionId,
                 operationId,
                 resolutionRequestId,
                 toolCallId,
               },
         );
-        this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
+        if (!isCodexApproval)
+          this.#scheduleHeteroInterventionSettle(toolMessageId, actionType, optimisticContext);
       }
     } catch (err) {
       console.error('[submitHeteroIntervention] submitIntervention failed:', err);
+      // NOTICE:
+      // A native request may expire while its optimistic write is awaiting persistence.
+      // The bridge then displays another callback for the same tool message.
+      // Restore only this callback; remove once approval writes become callback-scoped.
+      if (
+        isCodexApproval &&
+        interventionId &&
+        dbMessageSelectors.getDbMessageById(toolMessageId)(this.#get())?.pluginIntervention
+          ?.interventionId !== interventionId
+      ) {
+        throw err;
+      }
       // Drop the in-flight hint first: the rollback below only reaches
       // `pluginIntervention` once the server echoes, and a failed publish must
       // never leave the card disabled waiting on an ACK that was never asked for.
@@ -2014,7 +2103,14 @@ export class ConversationControlActionImpl {
     // the intervention was raised; once the user submits/skips/cancels the
     // CC stream resumes so flip it back to `running`. The natural completion
     // (`runtime_end` → `writeTopicStatus('active')`) takes over from there.
-    if (isLocalDesktopHetero && effectiveContext.topicId) {
+    const currentIntervention = dbMessageSelectors.getDbMessageById(toolMessageId)(
+      this.#get(),
+    )?.pluginIntervention;
+    const nextCodexApprovalPending =
+      isCodexApproval &&
+      currentIntervention?.status === 'pending' &&
+      currentIntervention.interventionId !== interventionId;
+    if (isLocalDesktopHetero && effectiveContext.topicId && !nextCodexApprovalPending) {
       void this.#get().updateTopicStatus?.({
         agentId: effectiveContext.agentId,
         groupId: effectiveContext.groupId,

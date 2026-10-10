@@ -1,11 +1,13 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { CodexApprovalDecision } from './CodexApprovalBridge';
 import {
   CodexAppServerConnectionError,
   CodexAppServerRpcError,
   isCodexAppServerCompatibilityError,
 } from './CodexAppServerClient';
 import { CodexThreadSession } from './CodexThreadSession';
+import type { ApprovalsReviewer } from './protocol';
 
 const turn = (id: string, status: 'completed' | 'inProgress' | 'interrupted') => ({
   completedAt: status === 'inProgress' ? null : 2,
@@ -24,6 +26,7 @@ interface ClientHarness {
   notify: (method: string, params: unknown) => Promise<void> | void;
   registeredResumeParams: () => unknown;
   releaseConsumer: ReturnType<typeof vi.fn>;
+  requestApproval: (method: string, params: unknown) => Promise<unknown> | undefined;
   requests: Array<{ method: string; params: unknown }>;
   resolveThreadStart: () => void;
   resolveTurnStart: () => void;
@@ -32,6 +35,7 @@ interface ClientHarness {
 
 const createClientHarness = (
   options: {
+    approvalsReviewer?: ApprovalsReviewer;
     autoComplete?: boolean;
     delayThreadStart?: boolean;
     delayTurnStart?: boolean;
@@ -41,11 +45,14 @@ const createClientHarness = (
     initialThreadId?: string;
     interruptError?: Error;
     malformedThreadStart?: boolean;
+    permissionMismatch?: boolean;
+    expandedSandbox?: boolean;
     threadNameError?: Error;
   } = {},
 ): ClientHarness => {
   let disconnectHandler: (() => void) | undefined;
   let notificationHandler: ((method: string, params: unknown) => Promise<void>) | undefined;
+  let serverRequestHandler: ((method: string, params: unknown) => Promise<unknown>) | undefined;
   let registration:
     | {
         onResume: (response: unknown) => Promise<void> | void;
@@ -91,12 +98,39 @@ const createClientHarness = (
       if (method === 'thread/start') {
         await threadStartGate;
         if (options.malformedThreadStart) return { thread: {} };
-        return { model: 'gpt-5.5-codex', thread: { id: 'thread-1' } };
+        return {
+          approvalPolicy: options.expandedSandbox ? 'on-request' : 'never',
+          approvalsReviewer: options.approvalsReviewer ?? 'user',
+          model: 'gpt-5.5-codex',
+          cwd: '/workspace',
+          sandbox: options.expandedSandbox
+            ? {
+                type: 'workspaceWrite',
+                networkAccess: true,
+                writableRoots: ['/outside'],
+                excludeTmpdirEnvVar: false,
+                excludeSlashTmp: false,
+              }
+            : { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+          thread: { id: 'thread-1' },
+        };
       }
       if (method === 'thread/resume') {
         if (options.failResume) throw new Error('Thread not found');
         return {
+          approvalPolicy: options.expandedSandbox ? 'on-request' : 'never',
+          approvalsReviewer: options.approvalsReviewer ?? 'user',
           model: 'gpt-5.5-codex',
+          cwd: '/workspace',
+          sandbox: options.expandedSandbox
+            ? {
+                type: 'workspaceWrite',
+                networkAccess: true,
+                writableRoots: ['/outside'],
+                excludeTmpdirEnvVar: false,
+                excludeSlashTmp: false,
+              }
+            : { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
           thread: { id: options.initialThreadId ?? 'thread-1' },
         };
       }
@@ -144,31 +178,48 @@ const createClientHarness = (
       notificationHandler = handler;
       return vi.fn();
     }),
-    subscribeServerRequests: vi.fn(() => vi.fn()),
+    subscribeServerRequests: vi.fn((_threadId: string, handler: typeof serverRequestHandler) => {
+      serverRequestHandler = handler;
+      return vi.fn();
+    }),
   };
 
   return {
     client,
     disconnect: () => disconnectHandler?.(),
     notify,
+    requestApproval: (method, params) => serverRequestHandler?.(method, params),
     registeredResumeParams: () => resumeParams,
     releaseConsumer,
     requests,
     resolveThreadStart,
     resolveTurnStart,
     resume: (model = 'gpt-5.5-codex') =>
-      registration?.onResume({ model, thread: { id: options.initialThreadId ?? 'thread-1' } }),
+      registration?.onResume({
+        approvalPolicy: 'never',
+        approvalsReviewer: options.approvalsReviewer ?? 'user',
+        model,
+        sandbox: { type: options.permissionMismatch ? 'readOnly' : 'dangerFullAccess' },
+        thread: { id: options.initialThreadId ?? 'thread-1' },
+      }),
   };
 };
 
 const createSession = (
   harness: ClientHarness,
-  options: { initialThreadId?: string; onEventsError?: Error; threadName?: string } = {},
+  options: {
+    allowExecFallback?: boolean;
+    approvalsReviewer?: ApprovalsReviewer;
+    initialThreadId?: string;
+    onEventsError?: Error;
+    threadName?: string;
+  } = {},
 ) => {
   const events: any[] = [];
   const statuses: string[] = [];
   const onSessionId = vi.fn();
   const session = new CodexThreadSession({
+    allowExecFallback: options.allowExecFallback,
     client: harness.client,
     initialThreadId: options.initialThreadId,
     threadName: options.threadName,
@@ -181,6 +232,7 @@ const createSession = (
     sessionId: 'session-1',
     threadParams: {
       approvalPolicy: 'never',
+      approvalsReviewer: options.approvalsReviewer ?? 'user',
       cwd: '/workspace',
       sandbox: 'danger-full-access',
     },
@@ -207,6 +259,7 @@ describe('CodexThreadSession', () => {
         method: 'thread/start',
         params: {
           approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           cwd: '/workspace',
           sandbox: 'danger-full-access',
         },
@@ -292,6 +345,7 @@ describe('CodexThreadSession', () => {
         method: 'thread/resume',
         params: {
           approvalPolicy: 'never',
+          approvalsReviewer: 'user',
           cwd: '/workspace',
           sandbox: 'danger-full-access',
           threadId: 'thread-existing',
@@ -308,6 +362,7 @@ describe('CodexThreadSession', () => {
     expect(onSessionId).not.toHaveBeenCalled();
     expect(harness.registeredResumeParams()).toEqual({
       approvalPolicy: 'never',
+      approvalsReviewer: 'user',
       cwd: '/workspace',
       sandbox: 'danger-full-access',
       threadId: 'thread-existing',
@@ -354,6 +409,249 @@ describe('CodexThreadSession', () => {
     expect(session.canFallbackToExec).toBe(true);
     session.close();
   });
+
+  /**
+   * @example Ask cannot accept a native response that widens network or filesystem scope.
+   */
+  it('rejects expanded native sandbox scope before starting a turn', async () => {
+    // ROOT CAUSE:
+    //
+    // Comparing only the sandbox variant allowed inherited writable roots/network access.
+    // The requested Ask preset now constrains those settings and validates the echoed scope.
+    const harness = createClientHarness({ expandedSandbox: true });
+    const session = new CodexThreadSession({
+      allowExecFallback: false,
+      client: harness.client,
+      onEvents: vi.fn(),
+      onRuntimeStatus: vi.fn(),
+      onSessionId: vi.fn(),
+      sessionId: 'scope-test',
+      threadParams: {
+        approvalPolicy: 'on-request',
+        approvalsReviewer: 'user',
+        config: { 'sandbox_workspace_write.network_access': false },
+        cwd: '/workspace',
+        sandbox: 'workspace-write',
+      },
+    });
+    await expect(
+      session.run({
+        input: [{ type: 'text', text: 'start', text_elements: [] }],
+        onRawMessage: vi.fn(),
+        operationId: 'scope-operation',
+      }),
+    ).rejects.toThrow('Codex app-server did not apply the requested permission profile');
+    expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+    expect(session.canFallbackToExec).toBe(false);
+    session.close();
+  });
+
+  // ROOT CAUSE:
+  //
+  // Codex accepts guardian_subagent but serializes the same reviewer as auto_review.
+  // Literal equality rejected this unchanged permission before any turn could start.
+  // Compare only these protocol aliases as equivalent; user remains a distinct reviewer.
+  /** @example Native start and resume accept either spelling of the same automatic reviewer. */
+  it.each([
+    ['guardian_subagent', 'auto_review', undefined],
+    ['auto_review', 'guardian_subagent', undefined],
+    ['guardian_subagent', 'auto_review', 'thread-existing'],
+    ['auto_review', 'guardian_subagent', 'thread-existing'],
+  ] as const)(
+    'accepts reviewer %s echoed as %s for %s',
+    async (expected, actual, initialThreadId) => {
+      const harness = createClientHarness({ approvalsReviewer: actual, initialThreadId });
+      const { run, session } = createSession(harness, {
+        allowExecFallback: false,
+        approvalsReviewer: expected,
+        initialThreadId,
+      });
+      try {
+        /** @example The unchanged automatic reviewer permits the native turn. */
+        await expect(run('alias-start', 'start')).resolves.toBeUndefined();
+        /** @example Outgoing RPC still preserves the user's exact reviewer spelling. */
+        expect(harness.requests[0]).toMatchObject({ params: { approvalsReviewer: expected } });
+        /** @example Reconnection applies the same alias-aware permission check. */
+        await expect(Promise.resolve(harness.resume())).resolves.toBeUndefined();
+        /** @example The reattached native session can run its next turn. */
+        await expect(run('alias-next', 'continue')).resolves.toBeUndefined();
+      } finally {
+        session.close();
+      }
+    },
+  );
+
+  /** @example Human and automatic review are never interchangeable. */
+  it.each([
+    ['guardian_subagent', 'user', undefined],
+    ['user', 'guardian_subagent', undefined],
+    ['guardian_subagent', 'user', 'thread-existing'],
+    ['user', 'guardian_subagent', 'thread-existing'],
+  ] as const)(
+    'rejects reviewer %s changed to %s for %s',
+    async (expected, actual, initialThreadId) => {
+      const harness = createClientHarness({ approvalsReviewer: actual, initialThreadId });
+      const { run, session } = createSession(harness, {
+        allowExecFallback: false,
+        approvalsReviewer: expected,
+        initialThreadId,
+      });
+      try {
+        /** @example A reviewer change still fails before native execution. */
+        await expect(run('reviewer-mismatch', 'start')).rejects.toThrow(
+          'Codex app-server did not apply the requested permission profile',
+        );
+        /** @example No turn starts under a different approval reviewer. */
+        expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(false);
+        /** @example A reviewer mismatch cannot downgrade the run to exec. */
+        expect(session.canFallbackToExec).toBe(false);
+      } finally {
+        session.close();
+      }
+    },
+  );
+
+  it('logs a reconnect that echoes a different permission profile', async () => {
+    const harness = createClientHarness();
+    const { run, session } = createSession(harness, { allowExecFallback: false });
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      await run('operation-1', 'start');
+      const { onResume } = harness.client.registerThread.mock.calls[0][2];
+
+      await expect(
+        Promise.resolve(
+          onResume({
+            approvalPolicy: 'never',
+            approvalsReviewer: 'auto_review',
+            sandbox: { type: 'dangerFullAccess' },
+            thread: { id: 'thread-1' },
+          }),
+        ),
+      ).rejects.toThrow('did not apply the requested permission profile');
+      expect(consoleError).toHaveBeenCalledWith(
+        'Codex app-server reconnected with a different permission profile:',
+        expect.any(Error),
+      );
+    } finally {
+      consoleError.mockRestore();
+      session.close();
+    }
+  });
+
+  it('fails closed when app-server echoes a different permission profile', async () => {
+    const harness = createClientHarness({ permissionMismatch: true });
+    const { run, session } = createSession(harness, { allowExecFallback: false });
+
+    await expect(run('operation-1', 'start')).rejects.toThrow(
+      'Codex app-server did not apply the requested permission profile',
+    );
+    expect(session.canFallbackToExec).toBe(false);
+    session.close();
+  });
+
+  it.each([
+    [
+      'item/commandExecution/requestApproval',
+      {
+        approvalId: 'approval-1',
+        command: '/usr/bin/curl -I https://github.com',
+        cwd: '/workspace',
+        availableDecisions: [
+          'accept',
+          {
+            acceptWithExecpolicyAmendment: {
+              execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+            },
+          },
+          'cancel',
+        ],
+        itemId: 'item-1',
+      },
+      'approval-1',
+      'command_execution',
+      {
+        acceptWithExecpolicyAmendment: {
+          execpolicy_amendment: ['/usr/bin/curl', '-I', 'https://github.com'],
+        },
+      } satisfies CodexApprovalDecision,
+    ],
+    [
+      'item/fileChange/requestApproval',
+      { itemId: 'item-1' },
+      'item-1',
+      'file_change',
+      'acceptForSession' as const satisfies CodexApprovalDecision,
+    ],
+  ])(
+    'bridges %s requests to an intervention decision',
+    async (method, params, _nativeId, apiName, decision) => {
+      const harness = createClientHarness({ autoComplete: false });
+      const { events, run, session } = createSession(harness);
+      const running = run('operation-1', 'start');
+      await vi.waitFor(() =>
+        expect(harness.requests.some(({ method }) => method === 'turn/start')).toBe(true),
+      );
+
+      if (apiName === 'file_change') {
+        // The native request references the previously streamed file proposal;
+        // reproducing that protocol order verifies the durable Review's scope.
+        await harness.notify('item/started', {
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          item: {
+            type: 'fileChange',
+            id: 'item-1',
+            status: 'inProgress',
+            changes: [{ path: '/task/a.txt', kind: { type: 'add' }, diff: '+initial' }],
+          },
+        });
+        await harness.notify('item/fileChange/patchUpdated', {
+          threadId: 'thread-1',
+          turnId: 'turn-1',
+          itemId: 'item-1',
+          changes: [{ path: '/task/a.txt', kind: { type: 'add' }, diff: '+updated' }],
+        });
+      }
+      const approval = harness.requestApproval(method, {
+        ...params,
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+      });
+      await vi.waitFor(() =>
+        expect(events).toContainEqual(
+          expect.objectContaining({
+            data: expect.objectContaining({
+              apiName,
+              interventionId: expect.any(String),
+              toolCallId: 'item-1',
+            }),
+            operationId: 'operation-1',
+            type: 'agent_intervention_request',
+          }),
+        ),
+      );
+      const intervention = events.find((event) => event.type === 'agent_intervention_request');
+      expect(JSON.parse(intervention!.data.arguments)).toMatchObject(params);
+      if (apiName === 'file_change') {
+        /** @example Approval sees the latest streamed proposal, rather than the original diff. */
+        expect(JSON.parse(intervention!.data.reviewArguments).questions[0].question).toContain(
+          '+updated',
+        );
+      }
+      expect(
+        session.resolveApproval('operation-1', intervention!.data.interventionId, decision),
+      ).toBe(true);
+      await expect(approval).resolves.toEqual({ decision });
+
+      await harness.notify('turn/completed', {
+        threadId: 'thread-1',
+        turn: turn('turn-1', 'completed'),
+      });
+      await running;
+      session.close();
+    },
+  );
 
   it('does not register a thread if the host closes while thread/start is pending', async () => {
     const harness = createClientHarness({ delayThreadStart: true });
@@ -500,7 +798,7 @@ describe('CodexThreadSession', () => {
     expect(settled).toBe(true);
     expect(events).toContainEqual(
       expect.objectContaining({
-        data: { reason: 'interrupted' },
+        data: { reason: 'interrupted', interruptionCause: 'transport' },
         operationId: 'operation-1',
         type: 'agent_runtime_end',
       }),

@@ -39,6 +39,8 @@ export interface DeviceSystemInfo {
   downloadsPath?: string;
   homePath: string;
   musicPath?: string;
+  /** This connector can run native Codex policies and relay one-shot approvals. Absent on old clients. */
+  nativeCodexPermissions?: boolean;
   picturesPath?: string;
   /** Opt-in tool identifiers supported by this client; absent on older clients. */
   supportedTools?: string[];

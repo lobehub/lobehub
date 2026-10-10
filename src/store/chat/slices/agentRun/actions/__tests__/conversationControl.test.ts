@@ -3604,6 +3604,91 @@ describe('ConversationControl actions', () => {
       });
     });
 
+    /**
+     * @example A expires during persistence; B must remain pending after A's IPC response.
+     */
+    it.each(['failed', 'accepted'] as const)(
+      'keeps the next Codex callback visible when a previous submit is %s',
+      async (outcome) => {
+        // ROOT CAUSE:
+        //
+        // A's optimistic write can finish after its deadline and after B is published.
+        // Unconditional rollback or a running topic status then overwrote B's waiting state.
+        // Callback identity must still match before applying either follow-up write.
+        const { result } = renderHook(() => useChatStore());
+        const agentId = 'codex-race-agent';
+        const topicId = 'codex-race-topic';
+        const chatKey = messageMapKey({ agentId, topicId });
+        const assistant = createMockMessage({ id: 'codex-assistant', role: 'assistant' });
+        const tool = createMockMessage({
+          id: 'codex-tool',
+          parentId: assistant.id,
+          plugin: {
+            apiName: 'command_execution',
+            arguments: '{}',
+            identifier: 'codex',
+            type: 'default',
+          },
+          pluginIntervention: { interventionId: 'callback-a', status: 'pending' },
+          role: 'tool',
+          tool_call_id: 'native-item',
+        });
+        act(() => {
+          useChatStore.setState({
+            activeAgentId: agentId,
+            activeTopicId: topicId,
+            dbMessagesMap: { [chatKey]: [assistant, tool] },
+            messagesMap: { [chatKey]: [assistant, tool] },
+          });
+          const { operationId } = result.current.startOperation({
+            context: { agentId, topicId, threadId: null },
+            type: 'execHeterogeneousAgent',
+          });
+          useChatStore.setState({ messageOperationMap: { [assistant.id]: operationId } });
+        });
+        let releaseWrite!: () => void;
+        const write = new Promise<void>((resolve) => {
+          releaseWrite = resolve;
+        });
+        const plugin = vi
+          .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+          .mockResolvedValue(undefined)
+          .mockImplementationOnce(() => write);
+        const content = vi
+          .spyOn(result.current, 'optimisticUpdateMessageContent')
+          .mockResolvedValue(undefined);
+        const topic = vi.spyOn(result.current, 'updateTopicStatus').mockResolvedValue(undefined);
+        const expired = new Error('Codex approval is expired');
+        vi.spyOn(heterogeneousAgentService, 'submitIntervention').mockImplementation(async () => {
+          if (outcome === 'failed') throw expired;
+        });
+        const error = await captureActError(async () => {
+          const submitting = result.current.submitHeteroIntervention(tool.id, 'submit', {
+            decision: 'accept',
+          });
+          await vi.waitFor(() => expect(plugin).toHaveBeenCalledOnce());
+          const next = {
+            ...tool,
+            pluginIntervention: { interventionId: 'callback-b', status: 'pending' as const },
+          };
+          useChatStore.setState({
+            dbMessagesMap: { [chatKey]: [assistant, next] },
+            messagesMap: { [chatKey]: [assistant, next] },
+          });
+          releaseWrite();
+          await submitting;
+        });
+        expect(error).toBe(outcome === 'failed' ? expired : undefined);
+        expect(plugin).toHaveBeenCalledOnce();
+        expect(content).not.toHaveBeenCalled();
+        expect(topic).not.toHaveBeenCalled();
+        expect(result.current.dbMessagesMap[chatKey][1].pluginIntervention).toMatchObject({
+          interventionId: 'callback-b',
+          status: 'pending',
+        });
+      },
+    );
+
     it('submits via IPC, persists optimistic intervention, and flips topic status to running (submit)', async () => {
       const { result } = renderHook(() => useChatStore());
 
@@ -3895,6 +3980,231 @@ describe('ConversationControl actions', () => {
         { intervention: { resolving: false, status: 'pending' } },
         {},
       );
+    });
+
+    // ROOT CAUSE:
+    // Native Deny is a submit action. The generic question timer marked it
+    // approved after 30 seconds without any producer receipt. Native permissions
+    // must keep the callback pending until its actual ACK or deadline arrives.
+    /** @example A disconnected device never turns an unacknowledged Deny into approval. */
+    it('keeps a durable native Deny pending until its producer acknowledges it', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'native-ack-agent';
+      const topicId = 'native-ack-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const tool = createMockMessage({
+        id: 'native-ack-tool',
+        role: 'tool',
+        tool_call_id: 'native-item',
+        plugin: {
+          apiName: 'command_execution',
+          arguments: '{}',
+          identifier: 'codex',
+          type: 'default',
+        },
+        pluginIntervention: {
+          batchId: 'batch-native-a',
+          interventionId: 'callback-a',
+          operationId: 'operation-native',
+          status: 'pending',
+          arguments: JSON.stringify({ availableDecisions: ['accept', 'decline'] }),
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'permission' } },
+      });
+      act(() =>
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [tool] },
+          messagesMap: { [chatKey]: [tool] },
+          messageOperationMap: {},
+          operations: {},
+        }),
+      );
+      vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).mockResolvedValueOnce(
+        {
+          contractVersion: 2,
+          state: 'claimed',
+          status: 'approved',
+          success: true,
+        },
+      );
+      const persist = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+        messages: [],
+        success: true,
+      });
+      await act(async () =>
+        result.current.submitHeteroIntervention(tool.id, 'submit', { decision: 'decline' }),
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+      });
+      /** @example Transport acceptance alone cannot settle a native permission. */
+      expect(
+        dbMessageSelectors.getDbMessageById(tool.id)(useChatStore.getState())?.pluginIntervention,
+      ).toMatchObject({ interventionId: 'callback-a', status: 'pending', resolving: true });
+      /** @example No client timer writes a fabricated terminal state. */
+      expect(persist).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    /** @example A read-only request with no displayable scope remains stoppable. */
+    it('submits the sealed cancel_turn provider choice from a native Stop button', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'native-ack-agent';
+      const topicId = 'native-ack-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const tool = createMockMessage({
+        id: 'native-ack-tool',
+        role: 'tool',
+        tool_call_id: 'native-item',
+        plugin: {
+          apiName: 'command_execution',
+          arguments: '{}',
+          identifier: 'codex',
+          type: 'default',
+        },
+        pluginIntervention: {
+          batchId: 'batch-native-a',
+          interventionId: 'callback-a',
+          operationId: 'operation-native',
+          status: 'pending',
+          arguments: JSON.stringify({ availableDecisions: ['accept'] }),
+          reviewDecisionIds: ['cancel_turn'],
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'permission' } },
+      });
+      act(() =>
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [tool] },
+          messagesMap: { [chatKey]: [tool] },
+          messageOperationMap: {},
+          operations: {},
+        }),
+      );
+      vi.mocked(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).mockResolvedValueOnce(
+        {
+          contractVersion: 2,
+          state: 'claimed',
+          status: 'approved',
+          success: true,
+        },
+      );
+      const persist = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+        messages: [],
+        success: true,
+      });
+      await act(async () =>
+        result.current.submitHeteroIntervention(tool.id, 'submit', { decision: 'cancel' }),
+      );
+      /** @example Stop remains a sealed provider option supported by the durable row. */
+      expect(lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: { type: 'select_provider_option', optionId: 'cancel_turn' },
+        }),
+      );
+      /** @example Transport acceptance alone cannot settle a native permission. */
+      expect(
+        dbMessageSelectors.getDbMessageById(tool.id)(useChatStore.getState())?.pluginIntervention,
+      ).toMatchObject({ interventionId: 'callback-a', status: 'pending', resolving: true });
+      /** @example No client timer writes a fabricated terminal state. */
+      expect(persist).not.toHaveBeenCalled();
+      vi.useRealTimers();
+    });
+
+    // ROOT CAUSE:
+    // Callback B can arrive before the HTTP response for A. Updating by message
+    // id alone attaches A's answers/resolving state to B. Recheck callback and
+    // batch identity after awaiting the durable resolution request.
+    /** @example A delayed HTTP response for A leaves the next native callback B actionable. */
+    it('ignores a previous durable response after the next native callback arrives', async () => {
+      vi.useFakeTimers();
+      const { result } = renderHook(() => useChatStore());
+      const agentId = 'native-ack-agent';
+      const topicId = 'native-ack-topic';
+      const chatKey = messageMapKey({ agentId, topicId });
+      const tool = createMockMessage({
+        id: 'native-ack-tool',
+        role: 'tool',
+        tool_call_id: 'native-item',
+        plugin: {
+          apiName: 'command_execution',
+          arguments: '{}',
+          identifier: 'codex',
+          type: 'default',
+        },
+        pluginIntervention: {
+          batchId: 'batch-native-a',
+          interventionId: 'callback-a',
+          operationId: 'operation-native',
+          status: 'pending',
+          arguments: JSON.stringify({ availableDecisions: ['accept', 'decline'] }),
+        },
+        pluginState: { heterogeneousIntervention: { interactionKind: 'permission' } },
+      });
+      act(() =>
+        useChatStore.setState({
+          activeAgentId: agentId,
+          activeTopicId: topicId,
+          dbMessagesMap: { [chatKey]: [tool] },
+          messagesMap: { [chatKey]: [tool] },
+          messageOperationMap: {},
+          operations: {},
+        }),
+      );
+      vi.mocked(
+        lambdaClient.aiAgent.resolveAgentInterventionBySource.mutate,
+      ).mockImplementationOnce(async () => {
+        const next = {
+          ...tool,
+          pluginIntervention: {
+            ...tool.pluginIntervention,
+            batchId: 'batch-native-b',
+            interventionId: 'callback-b',
+            status: 'pending' as const,
+          },
+        };
+        useChatStore.setState({
+          dbMessagesMap: { [chatKey]: [next] },
+          messagesMap: { [chatKey]: [next] },
+        });
+        return { contractVersion: 2, state: 'claimed', status: 'approved', success: true };
+      });
+      const persist = vi
+        .spyOn(result.current, 'optimisticUpdateMessagePlugin')
+        .mockResolvedValue(undefined);
+      vi.spyOn(messageService, 'updateMessagePluginState').mockResolvedValue({
+        messages: [],
+        success: true,
+      });
+      await act(async () =>
+        result.current.submitHeteroIntervention(tool.id, 'submit', { decision: 'decline' }),
+      );
+      await act(async () => {
+        vi.advanceTimersByTime(30_000);
+      });
+      /** @example Transport acceptance alone cannot settle a native permission. */
+      expect(
+        dbMessageSelectors.getDbMessageById(tool.id)(useChatStore.getState())?.pluginIntervention,
+      ).toMatchObject({ interventionId: 'callback-b', status: 'pending' });
+      /** @example A's response cannot disable B's permission buttons. */
+      expect(
+        dbMessageSelectors.getDbMessageById(tool.id)(useChatStore.getState())?.pluginIntervention
+          ?.resolving,
+      ).toBeUndefined();
+      /** @example No client timer writes a fabricated terminal state. */
+      expect(persist).not.toHaveBeenCalled();
+      vi.useRealTimers();
     });
 
     it('settles a remote card that the producer never acknowledges', async () => {

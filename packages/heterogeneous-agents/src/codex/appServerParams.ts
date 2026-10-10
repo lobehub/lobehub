@@ -1,18 +1,28 @@
 import path from 'node:path';
 
-import type { AgentInputPlan } from '../spawn/input';
-import type { JsonValue, SandboxMode, ThreadStartParams, UserInput } from './protocol';
+import type { CodexPermissionMode } from '@lobechat/types';
+import {
+  CODEX_APPROVAL_FLAGS,
+  CODEX_CONFIG_FLAGS,
+  CODEX_DANGEROUS_BYPASS_FLAG,
+  CODEX_FULL_AUTO_FLAG,
+  CODEX_SANDBOX_FLAGS,
+  getCodexPermissionProfile,
+  isCodexApprovalsReviewer,
+  isCodexAppServerApprovalPolicy,
+  isCodexSandboxMode,
+  parseCodexPermissionArgs,
+  stripCodexPermissionArgs,
+} from '@lobechat/types';
 
-const CODEX_DANGEROUS_BYPASS_FLAG = '--dangerously-bypass-approvals-and-sandbox';
-const CODEX_FULL_AUTO_FLAG = '--full-auto';
-const CODEX_APPROVAL_FLAGS = ['-a', '--ask-for-approval'] as const;
-const CODEX_CONFIG_FLAGS = ['-c', '--config'] as const;
+import type { AgentInputPlan } from '../spawn/input';
+import type { JsonValue, ThreadStartParams, UserInput } from './protocol';
+
 const CODEX_CWD_FLAGS = ['-C', '--cd'] as const;
 const CODEX_EPHEMERAL_FLAG = '--ephemeral';
 const CODEX_IGNORE_USER_CONFIG_FLAG = '--ignore-user-config';
 const CODEX_MODEL_FLAGS = ['-m', '--model'] as const;
 const CODEX_PROFILE_FLAGS = ['-p', '--profile'] as const;
-const CODEX_SANDBOX_FLAGS = ['-s', '--sandbox'] as const;
 
 const getFlagValue = (arg: string, flags: readonly string[]) => {
   const flag = flags.find((candidate) => arg.startsWith(`${candidate}=`));
@@ -52,26 +62,24 @@ const parseConfigOverride = (raw: string) => {
   return { key, value: parseConfigValue(raw.slice(separator + 1)) };
 };
 
-const isSandboxMode = (value: string): value is SandboxMode =>
-  value === 'danger-full-access' || value === 'read-only' || value === 'workspace-write';
-
 /** Thread-scoped configuration is sent over RPC; the shared process needs only its subcommand. */
 export const buildCodexAppServerArgs = (_args: string[] = []): string[] => ['app-server'];
 
 /** Keep CLI semantics on exec when they cannot be represented by the app-server thread contract. */
 export const getCodexAppServerUnsupportedArgs = (
   args: string[],
-  options: { resume?: boolean } = {},
+  options: { permissionMode?: CodexPermissionMode; resume?: boolean } = {},
 ): string[] => {
+  const effectiveArgs = options.permissionMode ? (stripCodexPermissionArgs(args) ?? []) : args;
   const unsupported: string[] = [];
-  const hasSandboxFlag = args.some(
+  const hasSandboxFlag = effectiveArgs.some(
     (arg) =>
       CODEX_SANDBOX_FLAGS.includes(arg as (typeof CODEX_SANDBOX_FLAGS)[number]) ||
       getFlagValue(arg, CODEX_SANDBOX_FLAGS) !== undefined,
   );
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
+  for (let index = 0; index < effectiveArgs.length; index += 1) {
+    const arg = effectiveArgs[index];
     if (arg === CODEX_DANGEROUS_BYPASS_FLAG) {
       if (hasSandboxFlag) unsupported.push(arg);
       continue;
@@ -80,7 +88,8 @@ export const getCodexAppServerUnsupportedArgs = (
       if (options.resume) unsupported.push(arg);
       continue;
     }
-    if (arg === CODEX_FULL_AUTO_FLAG || arg === CODEX_IGNORE_USER_CONFIG_FLAG) {
+    if (arg === CODEX_FULL_AUTO_FLAG) continue;
+    if (arg === CODEX_IGNORE_USER_CONFIG_FLAG) {
       unsupported.push(arg);
       continue;
     }
@@ -95,7 +104,7 @@ export const getCodexAppServerUnsupportedArgs = (
     const exactFlag = valueFlags.find((flag) => arg === flag);
     const inlineFlag = valueFlags.find((flag) => arg.startsWith(`${flag}=`));
     if (exactFlag || inlineFlag) {
-      const value = inlineFlag ? arg.slice(inlineFlag.length + 1) : args[index + 1];
+      const value = inlineFlag ? arg.slice(inlineFlag.length + 1) : effectiveArgs[index + 1];
       if (!value || (!inlineFlag && value.startsWith('-'))) {
         unsupported.push(arg);
         continue;
@@ -106,7 +115,7 @@ export const getCodexAppServerUnsupportedArgs = (
         CODEX_APPROVAL_FLAGS.includes(
           (exactFlag ?? inlineFlag) as (typeof CODEX_APPROVAL_FLAGS)[number],
         ) &&
-        value !== 'never'
+        !isCodexAppServerApprovalPolicy(value)
       ) {
         unsupported.push(arg);
       }
@@ -114,7 +123,7 @@ export const getCodexAppServerUnsupportedArgs = (
         CODEX_SANDBOX_FLAGS.includes(
           (exactFlag ?? inlineFlag) as (typeof CODEX_SANDBOX_FLAGS)[number],
         ) &&
-        !isSandboxMode(value)
+        !isCodexSandboxMode(value)
       ) {
         unsupported.push(arg);
       }
@@ -124,9 +133,12 @@ export const getCodexAppServerUnsupportedArgs = (
         )
       ) {
         const override = parseConfigOverride(value);
-        if (override?.key === 'approval_policy' && override.value !== 'never') {
+        if (override?.key === 'approval_policy' && !isCodexAppServerApprovalPolicy(override.value))
           unsupported.push(arg);
-        }
+        if (override?.key === 'sandbox_mode' && !isCodexSandboxMode(override.value))
+          unsupported.push(arg);
+        if (override?.key === 'approvals_reviewer' && !isCodexApprovalsReviewer(override.value))
+          unsupported.push(arg);
       }
       continue;
     }
@@ -146,35 +158,41 @@ export const getCodexAppServerUnsupportedArgs = (
   return unsupported;
 };
 
+/**
+ * Builds the native policy used for both new and resumed Codex threads.
+ *
+ * Use when:
+ * - Starting or resuming an app-server session after unsupported-argument validation.
+ *
+ * Expects:
+ * - Ordered CLI arguments and the selected working directory.
+ * - An optional saved preset that owns the complete permission scope.
+ *
+ * Returns:
+ * - Native thread parameters with matching approval, reviewer, and sandbox fields.
+ */
 export const buildCodexAppServerThreadParams = (
   args: string[],
   cwd: string,
   initialModel?: string,
+  permissionMode?: CodexPermissionMode,
 ): ThreadStartParams => {
+  const effectiveArgs = permissionMode ? (stripCodexPermissionArgs(args) ?? []) : args;
   const config: Record<string, JsonValue> = {};
   let effectiveCwd = cwd;
   let ephemeral = false;
   let model = initialModel;
   let modelProvider: string | undefined;
-  let sandbox: SandboxMode = 'danger-full-access';
   let serviceTier: string | undefined;
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === CODEX_DANGEROUS_BYPASS_FLAG) {
-      sandbox = 'danger-full-access';
-      continue;
-    }
-    if (arg === CODEX_FULL_AUTO_FLAG) {
-      sandbox = 'workspace-write';
-      continue;
-    }
+  for (let index = 0; index < effectiveArgs.length; index += 1) {
+    const arg = effectiveArgs[index];
     if (arg === CODEX_EPHEMERAL_FLAG) {
       ephemeral = true;
       continue;
     }
 
-    const next = args[index + 1];
+    const next = effectiveArgs[index + 1];
     const modelValue = getFlagValue(arg, CODEX_MODEL_FLAGS);
     if (modelValue !== undefined) {
       if (modelValue) model = modelValue;
@@ -186,20 +204,10 @@ export const buildCodexAppServerThreadParams = (
       continue;
     }
 
-    const approvalValue = getFlagValue(arg, CODEX_APPROVAL_FLAGS);
-    if (approvalValue !== undefined) continue;
-    if (CODEX_APPROVAL_FLAGS.includes(arg as (typeof CODEX_APPROVAL_FLAGS)[number]) && next) {
-      index += 1;
-      continue;
-    }
-
-    const sandboxValue = getFlagValue(arg, CODEX_SANDBOX_FLAGS);
-    if (sandboxValue !== undefined) {
-      if (isSandboxMode(sandboxValue)) sandbox = sandboxValue;
-      continue;
-    }
-    if (CODEX_SANDBOX_FLAGS.includes(arg as (typeof CODEX_SANDBOX_FLAGS)[number]) && next) {
-      if (isSandboxMode(next)) sandbox = next;
+    // Permission flags are read by parseCodexPermissionArgs below; skip their values here.
+    const permissionFlags = [...CODEX_APPROVAL_FLAGS, ...CODEX_SANDBOX_FLAGS];
+    if (getFlagValue(arg, permissionFlags) !== undefined) continue;
+    if (permissionFlags.includes(arg as (typeof permissionFlags)[number]) && next) {
       index += 1;
       continue;
     }
@@ -228,26 +236,44 @@ export const buildCodexAppServerThreadParams = (
     if (configOverride.key === 'model_provider' && typeof configOverride.value === 'string') {
       modelProvider = configOverride.value;
     }
-    if (
-      configOverride.key === 'sandbox_mode' &&
-      typeof configOverride.value === 'string' &&
-      isSandboxMode(configOverride.value)
-    ) {
-      sandbox = configOverride.value;
-    }
     if (configOverride.key === 'service_tier' && typeof configOverride.value === 'string') {
       serviceTier = configOverride.value;
     }
   }
 
+  const permissionProfile = permissionMode ? getCodexPermissionProfile(permissionMode) : undefined;
+  // Presets own their complete scope, including inherited user-config expansions.
+  if (permissionProfile && permissionProfile.sandbox !== 'danger-full-access') {
+    for (const key of Object.keys(config)) {
+      if (key === 'sandbox_workspace_write' || key.startsWith('sandbox_workspace_write.'))
+        delete config[key];
+    }
+    config['sandbox_workspace_write.network_access'] = false;
+    config['sandbox_workspace_write.writable_roots'] = [];
+    config['sandbox_workspace_write.exclude_tmpdir_env_var'] = true;
+    config['sandbox_workspace_write.exclude_slash_tmp'] = true;
+  }
+
+  const requested = parseCodexPermissionArgs(effectiveArgs);
   return {
-    approvalPolicy: 'never',
+    approvalPolicy:
+      permissionProfile?.approvalPolicy ??
+      (isCodexAppServerApprovalPolicy(requested.approvalPolicy)
+        ? requested.approvalPolicy
+        : 'never'),
+    approvalsReviewer:
+      permissionProfile?.approvalsReviewer ??
+      (isCodexApprovalsReviewer(requested.approvalsReviewer)
+        ? requested.approvalsReviewer
+        : 'user'),
     ...(Object.keys(config).length > 0 ? { config } : {}),
     cwd: effectiveCwd,
     ...(ephemeral ? { ephemeral } : {}),
     ...(model ? { model } : {}),
     ...(modelProvider ? { modelProvider } : {}),
-    sandbox,
+    sandbox:
+      permissionProfile?.sandbox ??
+      (isCodexSandboxMode(requested.sandbox) ? requested.sandbox : 'danger-full-access'),
     ...(serviceTier ? { serviceTier } : {}),
   };
 };

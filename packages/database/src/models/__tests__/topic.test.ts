@@ -1348,6 +1348,108 @@ describe('TopicModel', () => {
       expect(row?.status).toBe('active');
     });
 
+    // A device Codex run writes `waitingForHuman` when its approval card opens.
+    // Stop this turn, an approval timeout, or a run that finishes right after
+    // Allow once ends that run with the topic still in `waitingForHuman`.
+    it.each([
+      ['Stop this turn (interruptTask)', 'op-codex-stop', 'interrupted', 'active', 'active'],
+      ['approval timeout (heteroFinish)', 'op-codex-timeout', 'running', undefined, 'unread'],
+      [
+        'Allow once then an immediate finish (heteroFinish)',
+        'op-codex-allow',
+        'running',
+        undefined,
+        'unread',
+      ],
+    ] as const)(
+      'settles waitingForHuman when its own run ends: %s',
+      async (_, operationId, operationStatus, requested, expected) => {
+        const topic = await topicModel.create({
+          metadata: { runningOperation: { assistantMessageId: 'msg-codex', operationId } },
+          title: 'codex approval',
+        });
+        await topicModel.update(topic.id, { status: 'waitingForHuman' });
+        await serverDB.insert(agentOperations).values({
+          id: operationId,
+          startedAt: new Date(),
+          status: operationStatus,
+          topicId: topic.id,
+          userId,
+        });
+
+        const result = await topicModel.settleRunningOperation(topic.id, operationId, requested);
+
+        expect(result.status).toBe('settled');
+        const row = await topicModel.findById(topic.id);
+        expect(row?.metadata?.runningOperation).toBeNull();
+        expect(row?.status).toBe(expected);
+      },
+    );
+
+    it('lets the watching client correct a settled waitingForHuman run to active', async () => {
+      const topic = await topicModel.create({
+        metadata: { runningOperation: { assistantMessageId: 'msg-codex', operationId: 'op-w' } },
+        title: 'codex approval watched',
+      });
+      await topicModel.update(topic.id, { status: 'waitingForHuman' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-w');
+      const corrected = await topicModel.settleRunningOperation(topic.id, 'op-w', 'active', {
+        rejectInFlightOperation: true,
+      });
+
+      expect(corrected.status).toBe('corrected');
+      expect((await topicModel.findById(topic.id))?.status).toBe('active');
+    });
+
+    // Server runtime: a builtin intervention parks the run. Its stream ends, so
+    // the client settles the marker, but the approval is still pending.
+    it('keeps waitingForHuman while the settled operation is parked for a human', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: { assistantMessageId: 'msg-park', operationId: 'op-parked' },
+        },
+        title: 'builtin approval parked',
+      });
+      await topicModel.update(topic.id, { status: 'waitingForHuman' });
+      await serverDB.insert(agentOperations).values({
+        id: 'op-parked',
+        startedAt: new Date(),
+        status: 'waiting_for_human',
+        topicId: topic.id,
+        userId,
+      });
+
+      const result = await topicModel.settleRunningOperation(topic.id, 'op-parked', 'active', {
+        rejectInFlightOperation: true,
+      });
+
+      expect(result.status).toBe('settled');
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation).toBeNull();
+      expect(row?.status).toBe('waitingForHuman');
+    });
+
+    it('keeps waitingForHuman when only a child operation settles', async () => {
+      const topic = await topicModel.create({
+        metadata: {
+          runningOperation: {
+            assistantMessageId: 'msg-root',
+            childOperations: [{ assistantMessageId: 'msg-child', operationId: 'op-child-w' }],
+            operationId: 'op-root-w',
+          },
+        },
+        title: 'root still waiting',
+      });
+      await topicModel.update(topic.id, { status: 'waitingForHuman' });
+
+      await topicModel.settleRunningOperation(topic.id, 'op-child-w', 'active');
+
+      const row = await topicModel.findById(topic.id);
+      expect(row?.metadata?.runningOperation?.operationId).toBe('op-root-w');
+      expect(row?.status).toBe('waitingForHuman');
+    });
+
     it('atomically removes only a matching child operation', async () => {
       const childHooks = [
         {

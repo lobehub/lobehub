@@ -12,6 +12,7 @@ const INTERACTION_KINDS = new Set<AgentInterventionInteractionKind>([
   'question',
 ]);
 const PROVIDERS = new Set<AgentInterventionProvider>([
+  'codex',
   'claude-code',
   'cursor',
   'devin',
@@ -36,9 +37,15 @@ const boundedString = (value: unknown, maxLength: number): string | undefined =>
 export const sanitizeAgentInterventionRequestForReview = (
   request: AgentInterventionRequestData | undefined,
 ): AgentInterventionRequestData | undefined => {
+  const nativeCodex =
+    request?.provider === 'codex' &&
+    request.identifier === 'codex' &&
+    request.interactionKind === 'permission' &&
+    (request.apiName === 'command_execution' || request.apiName === 'file_change') &&
+    !!boundedString(request.interventionId, 200);
   if (
     !request ||
-    request.apiName !== 'askUserQuestion' ||
+    (request.apiName !== 'askUserQuestion' && !nativeCodex) ||
     !request.interactionKind ||
     !INTERACTION_KINDS.has(request.interactionKind) ||
     !request.provider ||
@@ -50,7 +57,7 @@ export const sanitizeAgentInterventionRequestForReview = (
 
   let parsed: unknown;
   try {
-    parsed = JSON.parse(request.arguments);
+    parsed = JSON.parse(nativeCodex ? (request.reviewArguments ?? '') : request.arguments);
   } catch {
     return;
   }
@@ -120,7 +127,31 @@ export const sanitizeAgentInterventionRequestForReview = (
     deadline: request.deadline,
     identifier: request.identifier,
     interactionKind: request.interactionKind,
+    interventionId: request.interventionId,
     provider: request.provider,
     toolCallId: request.toolCallId,
   };
+};
+
+/**
+ * Projects the producer's sealed permission choices onto a chat intervention.
+ *
+ * Use when:
+ * - Applying a native callback to either a Desktop or device message.
+ *
+ * Expects:
+ * - The original callback, including its canonical reviewArguments when present.
+ *
+ * Returns:
+ * - The original option IDs; an invalid declared review fails closed to no grants.
+ * - Undefined for legacy requests that do not declare canonical review arguments.
+ */
+export const getAgentInterventionReviewDecisionIds = (
+  request: AgentInterventionRequestData,
+): string[] | undefined => {
+  if (request.reviewArguments === undefined) return;
+  const reviewed = sanitizeAgentInterventionRequestForReview(request);
+  if (!reviewed) return [];
+  const arguments_: AgentInterventionRenderArguments = JSON.parse(reviewed.arguments);
+  return arguments_.questions[0].options.flatMap((option) => (option.id ? [option.id] : []));
 };

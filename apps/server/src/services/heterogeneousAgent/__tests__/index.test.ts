@@ -652,6 +652,72 @@ describe('HeterogeneousAgentService', () => {
       });
     });
 
+    /** @example Device Stop settles the topic and operation without running success verification. */
+    it('finalizes an explicitly terminal cancellation as interrupted', async () => {
+      // ROOT CAUSE:
+      // Device Stop and approval timeout send one final cancelled receipt after native exit.
+      // Treating it as the legacy intermediate signal left runningOperation forever.
+      // The explicit finalCancellation flag now settles it without changing legacy callers.
+      const { service, topicModel, published } = createService();
+      const complete = vi
+        .spyOn(CompletionLifecycle.prototype, 'completeOperation')
+        .mockResolvedValue();
+      const finalize = vi.spyOn(HeteroTraceRecorder.prototype, 'finalize').mockResolvedValue(null);
+      const verify = vi.spyOn(verifyService, 'instantiateVerifyPlanOnStart').mockResolvedValue();
+      try {
+        await service.heteroFinish({
+          agentType: 'codex',
+          finalCancellation: true,
+          operationId: 'op-device-stop',
+          result: 'cancelled',
+          topicId: 'topic-device-stop',
+        });
+        /** @example The exact operation loses its running marker. */
+        expect(topicModel.settleRunningOperation).toHaveBeenCalledWith(
+          'topic-device-stop',
+          'op-device-stop',
+        );
+        /** @example Durable lifecycle receives interrupted, never done or error. */
+        expect(complete).toHaveBeenCalledWith(
+          expect.objectContaining({ operationId: 'op-device-stop' }),
+          'interrupted',
+        );
+        /** @example Trace and UI retain the cancelled outcome. */
+        expect(finalize).toHaveBeenCalledWith(
+          'op-device-stop',
+          expect.objectContaining({ completionReason: 'interrupted' }),
+        );
+        /** @example The subscriber can finish without another producer callback. */
+        expect(published[0].event.data.reason).toBe('cancelled');
+        /** @example Cancellation cannot launch delivery verification. */
+        expect(verify).not.toHaveBeenCalled();
+      } finally {
+        complete.mockRestore();
+        finalize.mockRestore();
+        verify.mockRestore();
+      }
+    });
+
+    /** @example A delayed final cancellation cannot settle a replacement run. */
+    it('settles only the old operation on a stale final cancellation', async () => {
+      const { service, topicModel, agentOperationModel } = createService();
+      topicModel.settleRunningOperation.mockResolvedValueOnce({
+        activeOperationId: 'op-new',
+        status: 'conflict',
+      });
+      await service.heteroFinish({
+        agentType: 'codex',
+        finalCancellation: true,
+        operationId: 'op-old',
+        result: 'cancelled',
+        topicId: 'topic-1',
+      });
+      /** @example The old row is interrupted without changing the newer session binding. */
+      expect(agentOperationModel.settleRunning).toHaveBeenCalledWith('op-old', 'interrupted');
+      /** @example The replacement topic metadata stays untouched. */
+      expect(topicModel.updateMetadata).not.toHaveBeenCalled();
+    });
+
     it('handles cancelled runs and runs without sessionId', async () => {
       const { published, service } = createService();
 

@@ -19,6 +19,7 @@ import {
   applyTopicModelToHeterogeneousProvider,
   buildHeteroExecArgs,
   ChatErrorType,
+  codexPermissionModeRequiresAppServer,
   getWorkingDirEffectivePath,
 } from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
@@ -532,16 +533,6 @@ export const dispatchHeteroAgent = async (
     runAttachments.imageList && runAttachments.imageList.length > 0
       ? runAttachments.imageList.map((image) => ({ id: image.id, url: image.url }))
       : undefined;
-  const heteroExecArgs = isLocalHeterogeneousType(heteroType)
-    ? buildHeteroExecArgs(
-        heterogeneousProvider?.type === heteroType
-          ? applyTopicModelToHeterogeneousProvider(
-              heterogeneousProvider,
-              pinnedHeterogeneousTopicModel,
-            )
-          : { type: heteroType },
-      )
-    : undefined;
 
   const heteroParams = {
     agentType: heteroType,
@@ -967,6 +958,53 @@ export const dispatchHeteroAgent = async (
       log('execAgent: failed to init stream for local hetero: %O', err);
     }
 
+    // Explicit approval presets require a native bidirectional runtime. Connected
+    // devices provide it through the CLI; the cloud sandbox still uses exec.
+    // Legacy raw CLI arguments keep their original transport unchanged.
+    if (
+      deviceHeteroPlan?.kind === 'sandbox' &&
+      heteroType === 'codex' &&
+      codexPermissionModeRequiresAppServer(
+        agentConfig.agencyConfig?.heterogeneousProvider?.permissionMode,
+      )
+    ) {
+      const detail =
+        'This Codex permission mode requires the local desktop app or a compatible connected device; cloud sandbox execution is unavailable.';
+      const terminalReported = await finalizeHeteroDispatchError(deps, {
+        agentId: resolvedAgentId,
+        assistantMessageId,
+        detail,
+        message: 'Codex permission mode is unavailable on this execution target',
+        operationId,
+        topicId,
+      });
+      return {
+        agentId: resolvedAgentId,
+        assistantMessageId,
+        autoStarted: false,
+        createdAt: new Date().toISOString(),
+        error: detail,
+        message: detail,
+        operationId,
+        status: 'error',
+        success: false,
+        terminalReported,
+        timestamp: new Date().toISOString(),
+        topicId,
+        userMessageId: userMessageId ?? parentMessageId ?? '',
+      };
+    }
+    const heteroExecArgs = isLocalHeterogeneousType(heteroType)
+      ? buildHeteroExecArgs(
+          heterogeneousProvider?.type === heteroType
+            ? applyTopicModelToHeterogeneousProvider(
+                heterogeneousProvider,
+                pinnedHeterogeneousTopicModel,
+              )
+            : { type: heteroType },
+        )
+      : undefined;
+
     const heteroPlan = deviceHeteroPlan!;
 
     if (heteroPlan.kind !== 'sandbox') {
@@ -1061,24 +1099,45 @@ export const dispatchHeteroAgent = async (
         dispatchDeviceId,
         dispatchWorkspaceId,
       );
+      const needsNativeCodex =
+        heteroType === 'codex' &&
+        codexPermissionModeRequiresAppServer(heterogeneousProvider?.permissionMode);
+      // Probe after device authorization, before the old wrapper could ACK an unknown option.
+      const nativePermissionsAvailable =
+        !needsNativeCodex ||
+        (!authorizationError &&
+          (
+            await deviceGateway.queryDeviceSystemInfo(
+              deps.userId,
+              dispatchDeviceId,
+              dispatchWorkspaceId,
+            )
+          )?.nativeCodexPermissions === true);
       const result = authorizationError
         ? { error: 'DEVICE_NOT_FOUND', errorData: authorizationError, success: false }
-        : await deviceGateway.dispatchAgentRun({
-            ...heteroParams,
-            agentId: resolvedAgentId,
-            args: heteroExecArgs,
-            cwd: deviceCwd,
-            deviceId: dispatchDeviceId,
-            resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
-            systemContext: deviceSystemContext,
-            // Route to the workspace pool when this is a workspace device; the
-            // operation JWT stays member-scoped (the run belongs to the member).
-            workspaceId: dispatchWorkspaceId,
-            // Topic scope for device-side heteroIngest/heteroFinish. Distinct
-            // from the routing workspace above: a workspace topic on a personal
-            // device still has to write back under `deps.workspaceId`.
-            ingestWorkspaceId: deps.workspaceId,
-          });
+        : !nativePermissionsAvailable
+          ? {
+              error:
+                'This device does not support native Codex permissions. Update LobeHub CLI and reconnect the device.',
+              errorData: undefined,
+              success: false,
+            }
+          : await deviceGateway.dispatchAgentRun({
+              ...heteroParams,
+              agentId: resolvedAgentId,
+              args: heteroExecArgs,
+              cwd: deviceCwd,
+              deviceId: dispatchDeviceId,
+              resumeFallbackSystemContext: deviceResumeFallbackSystemContext,
+              systemContext: deviceSystemContext,
+              // Route to the workspace pool when this is a workspace device; the
+              // operation JWT stays member-scoped (the run belongs to the member).
+              workspaceId: dispatchWorkspaceId,
+              // Topic scope for device-side heteroIngest/heteroFinish. Distinct
+              // from the routing workspace above: a workspace topic on a personal
+              // device still has to write back under `deps.workspaceId`.
+              ingestWorkspaceId: deps.workspaceId,
+            });
       if (!result.success) {
         log('execAgent: hetero device dispatch failed: %s', result.error);
         const terminalReported = await finalizeHeteroDispatchError(deps, {

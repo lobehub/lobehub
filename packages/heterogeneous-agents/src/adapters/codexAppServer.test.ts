@@ -95,6 +95,11 @@ describe('CodexAppServerAdapter', () => {
 
     const terminalEvents = adapter.interruptForTransportFailure();
 
+    /** @example The CLI distinguishes a lost transport from an explicit native Cancel. */
+    expect(terminalEvents.find(({ type }) => type === 'agent_runtime_end')).toMatchObject({
+      data: { reason: 'interrupted', interruptionCause: 'transport' },
+    });
+
     expect(
       planEvents.find(({ data }) => data.chunkType === 'tool_state')?.data.pluginState.todos.items,
     ).toEqual([
@@ -157,6 +162,40 @@ describe('CodexAppServerAdapter', () => {
     expect(result.content).toHaveLength(25_078);
     expect(result.pluginState.output).toBe(result.content);
     expect(result.pluginState.stdout).toBe(result.content);
+  });
+
+  // ROOT CAUSE:
+  // The first native file item carries changes[].diff, while the approval renderer needs diffText.
+  // Normalization previously happened only after patch updates or completion, too late for approval.
+  /** @example A first file approval already exposes a complete, inspectable patch. */
+  it('normalizes the initial file proposal before approval', () => {
+    const adapter = new CodexAppServerAdapter();
+    const events = adapter.adapt('item/started', {
+      item: {
+        changes: [
+          {
+            diff: 'T649 live file approval evidence.\n',
+            kind: { type: 'add' },
+            path: 'evidence.txt',
+          },
+        ],
+        id: 'pending-file',
+        status: 'inProgress',
+        type: 'fileChange',
+      },
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+    });
+    const args: { changes: Array<{ diffText: string; kind: string; path: string }> } = JSON.parse(
+      events.find(({ data }) => data.chunkType === 'tools_calling')?.data.toolsCalling[0]
+        .arguments ?? '{}',
+    );
+    /** @example File kind and path are compatible with the approval diff renderer immediately. */
+    expect(args.changes[0]).toMatchObject({ kind: 'add', path: 'evidence.txt' });
+    /** @example The exact pending content is available before permission is granted. */
+    expect(args.changes[0].diffText).toContain('+T649 live file approval evidence.');
+    /** @example The preview receives a valid single-file patch rather than raw file content. */
+    expect(parsePatch(args.changes[0].diffText)).toHaveLength(1);
   });
 
   it('normalizes native file changes into complete single-file patches', () => {

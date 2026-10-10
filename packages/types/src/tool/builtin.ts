@@ -546,7 +546,17 @@ export interface BuiltinServerRuntimeOutput {
   success: boolean;
 }
 
-export interface BuiltinInterventionProps<Arguments = any> {
+/**
+ * Inputs and actions for a builtin approval or custom interaction.
+ * @param Arguments - Native intervention context displayed by the form.
+ * @param ToolArguments - Original tool input, retained separately from approval context.
+ * @param State - Live tool state, including proposals updated after the original input.
+ */
+export interface BuiltinInterventionProps<
+  Arguments = any,
+  ToolArguments = Arguments,
+  State = Record<string, unknown>,
+> {
   /**
    * When present, a custom intervention should portal its action footer
    * (submit / skip + status) into this node so it stays pinned below the
@@ -582,6 +592,8 @@ export interface BuiltinInterventionProps<Arguments = any> {
       | { type: 'skip'; payload?: Record<string, unknown>; reason?: string }
       | { type: 'cancel'; payload?: Record<string, unknown> },
   ) => Promise<void>;
+  /** Current tool state from the message; refreshed when streamed proposals change. */
+  pluginState?: State;
   /**
    * Register a callback to be called before approval
    * Used by intervention components that need to flush pending saves (e.g., debounced saves)
@@ -591,6 +603,10 @@ export interface BuiltinInterventionProps<Arguments = any> {
    * @returns Cleanup function to unregister the callback
    */
   registerBeforeApprove?: (id: string, callback: () => void | Promise<void>) => () => void;
+  /** Sealed choices available for this exact native callback; undefined preserves legacy behavior. */
+  reviewDecisionIds?: string[];
+  /** Original tool input used to show the proposed action or file changes. */
+  toolArgs?: ToolArguments;
 }
 
 export type BuiltinIntervention = (props: BuiltinInterventionProps) => ReactNode;

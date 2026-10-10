@@ -116,7 +116,9 @@ const toToolPayload = (item: ToolItem): ToolCallPayload => ({
       ? { command: item.command }
       : item.type === 'mcpToolCall'
         ? { arguments: item.arguments, server: item.server, tool: item.tool }
-        : item,
+        : item.type === 'fileChange'
+          ? { ...item, ...toFileChangeState(item.changes) }
+          : item,
   ),
   id: item.id,
   identifier: CODEX_IDENTIFIER,
@@ -395,6 +397,18 @@ export class CodexAppServerAdapter {
     this.lastCumulativeUsage = options.initialCumulativeUsage;
   }
 
+  /**
+   * Reads the latest pending file proposal for an approval callback.
+   *
+   * Use when: constructing a durable Review before answering a native RPC.
+   * Expects: the notification queue has drained through the current callback.
+   * Returns: the complete current file snapshot, or undefined when unavailable.
+   */
+  getApprovalToolContext(itemId: string): unknown {
+    const tool = this.pendingTools.get(itemId);
+    return tool?.apiName === 'file_change' ? JSON.parse(tool.arguments) : undefined;
+  }
+
   get cumulativeUsage(): UsageData | undefined {
     return this.latestCumulativeUsage ?? this.lastCumulativeUsage;
   }
@@ -463,7 +477,11 @@ export class CodexAppServerAdapter {
 
   /** A crashed transport cannot recover its in-flight turn, but the thread remains resumable. */
   interruptForTransportFailure(): HeterogeneousAgentEvent[] {
-    return this.completeTurn('interrupted');
+    return this.completeTurn('interrupted').map((event) =>
+      event.type === 'agent_runtime_end'
+        ? { ...event, data: { ...event.data, interruptionCause: 'transport' } }
+        : event,
+    );
   }
 
   private handleTurnStarted(_params: TurnStartedNotification): HeterogeneousAgentEvent[] {
@@ -581,9 +599,11 @@ export class CodexAppServerAdapter {
   private handleFileChangeUpdate(
     params: FileChangePatchUpdatedNotification,
   ): HeterogeneousAgentEvent[] {
-    return this.pendingTools.has(params.itemId)
-      ? [this.toolState(params.itemId, toFileChangeState(params.changes))]
-      : [];
+    const tool = this.pendingTools.get(params.itemId);
+    if (!tool) return [];
+    const state = toFileChangeState(params.changes);
+    this.pendingTools.set(params.itemId, { ...tool, arguments: JSON.stringify(state) });
+    return [this.toolState(params.itemId, state)];
   }
 
   private handleMcpProgress(params: McpToolCallProgressNotification): HeterogeneousAgentEvent[] {

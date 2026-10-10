@@ -1156,6 +1156,7 @@ function collectSystemInfo(): DeviceSystemInfo {
     downloadsPath: path.join(home, 'Downloads'),
     homePath: home,
     musicPath: path.join(home, 'Music'),
+    nativeCodexPermissions: true,
     picturesPath: path.join(home, 'Pictures'),
     userDataPath: path.join(home, CLI_CONFIG_DIR_NAME),
     videosPath: path.join(home, videosDir),

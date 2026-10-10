@@ -203,9 +203,11 @@ export interface HeterogeneousPersistenceHandlerDeps {
 interface StoredHeterogeneousIntervention {
   deadline?: number;
   interactionKind?: AgentInterventionInteractionKind;
+  interventionId?: string;
   notificationTransition?: MainAgentInterventionTransition;
   provider?: AgentInterventionProvider;
   resolutionRequestId?: string;
+  reviewArguments?: string;
   summary?: string;
   transition?: MainAgentInterventionTransition;
 }
@@ -327,6 +329,7 @@ const errorEchoText = (error: { body?: Record<string, unknown>; message?: string
 };
 
 const INTERVENTION_PROVIDERS = new Set<AgentInterventionProvider>([
+  'codex',
   'claude-code',
   'cursor',
   'devin',
@@ -771,10 +774,21 @@ export class HeterogeneousPersistenceHandler {
               typeof metadata.deadline === 'number'
                 ? {
                     apiName: plugin.apiName,
-                    arguments: plugin.arguments,
+                    arguments:
+                      typeof plugin.intervention?.arguments === 'string'
+                        ? plugin.intervention.arguments
+                        : plugin.arguments,
                     deadline: metadata.deadline,
                     identifier: plugin.identifier,
                     interactionKind,
+                    interventionId:
+                      typeof metadata.interventionId === 'string'
+                        ? metadata.interventionId
+                        : undefined,
+                    reviewArguments:
+                      typeof metadata.reviewArguments === 'string'
+                        ? metadata.reviewArguments
+                        : undefined,
                     provider,
                     toolCallId: plugin.toolCallId,
                   }
@@ -797,7 +811,7 @@ export class HeterogeneousPersistenceHandler {
 
             if (metadata.notificationTransition === transition) {
               state.notifiedInterventionTransitions.add(
-                `${state.operationId}:${plugin.toolCallId}:${transition}`,
+                `${state.operationId}:${plugin.toolCallId}${request?.interventionId ? `:${request.interventionId}` : ''}:${transition}`,
               );
             }
           }
@@ -1384,8 +1398,10 @@ export class HeterogeneousPersistenceHandler {
     const reviewRequest = sanitizeAgentInterventionRequestForReview(intent.request);
     const reviewDetail = reviewRequest ? buildHeterogeneousReviewDetail(reviewRequest) : undefined;
     const summary = interventionSummary(intent.request, reviewDetail);
-    const transitionKey = `${state.operationId}:${intent.toolCallId}:${intent.transition}`;
-    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}:pending`;
+    // Native items can ask again after a first decision; a callback owns its own claim.
+    const callbackKey = intent.request?.interventionId ? `:${intent.request.interventionId}` : '';
+    const transitionKey = `${state.operationId}:${intent.toolCallId}${callbackKey}:${intent.transition}`;
+    const pendingTransitionKey = `${state.operationId}:${intent.toolCallId}${callbackKey}:pending`;
     const requiresPendingReviewNotification =
       !!this.deps.userId &&
       !state.notifiedInterventionTransitions.has(transitionKey) &&
@@ -1400,6 +1416,8 @@ export class HeterogeneousPersistenceHandler {
     }
     const durableState: StoredHeterogeneousIntervention = {
       deadline: intent.request?.deadline,
+      interventionId: intent.request?.interventionId,
+      reviewArguments: reviewRequest?.arguments,
       interactionKind: intent.request?.interactionKind,
       provider: intent.request?.provider,
       resolutionRequestId: intent.resolutionRequestId,
@@ -1433,7 +1451,7 @@ export class HeterogeneousPersistenceHandler {
       // Heterogeneous callbacks are individually sealed. Include the tool call
       // so two concurrent interventions emitted by one assistant step never
       // claim the same batch identity with conflicting item-0 contents.
-      const batchId = `${state.operationId}:${stepIndex}:${assistantMessageId}:${intent.toolCallId}`;
+      const batchId = `${state.operationId}:${stepIndex}:${assistantMessageId}:${intent.toolCallId}${callbackKey}`;
       // The generic Web source bridge reads the same authoritative correlation
       // from the tool row. Stamp it before notify so a card can never appear
       // actionable while its operation/batch locator is still absent.
@@ -1482,6 +1500,7 @@ export class HeterogeneousPersistenceHandler {
               version: 1,
             },
             sourceRef: {
+              interventionId: reviewRequest.interventionId,
               operationId: state.operationId,
               toolCallId: intent.toolCallId,
               type: 'heterogeneous',
@@ -1501,6 +1520,7 @@ export class HeterogeneousPersistenceHandler {
 
     if (intent.transition !== 'pending') {
       await acknowledgeAgentInterventionProducerResolution({
+        interventionId: intent.request?.interventionId,
         operationId: state.operationId,
         ownerUserId: this.deps.userId,
         resolutionRequestId: intent.resolutionRequestId,

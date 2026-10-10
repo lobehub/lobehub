@@ -64,6 +64,14 @@ By default the CLI connects to `https://app.lobehub.com`. To point it at a diffe
 
 Priority: `LOBEHUB_SERVER` env var > `settings.json` > default official URL.
 
+## Connected-device Codex permissions
+
+Select a device connected with a CLI that advertises native Codex permissions in the product's execution-device selector. Ask, Approve for me, and Read only use Codex app-server on that device. The server checks connector support before dispatch; older connectors must be updated and reconnected. Unsupported native arguments or a returned permission mismatch fail the run without replaying it through `codex exec`.
+
+Native command and file approvals use the conversation card. A decision applies only to its displayed callback; expired or previously answered callbacks cannot authorize another request. Unanswered requests expire after five minutes. Stop cancels pending approvals and waits for the native process tree to exit.
+
+Read only starts with Codex's read-only sandbox and `on-request` approvals. An explicit approval can authorize the displayed action outside that sandbox. Approve for me uses Codex's native automatic reviewer; accepting its configuration does not imply every action will be approved. Full access keeps its existing confirmation and default behavior. Legacy raw arguments keep their existing CLI transport. Cloud sandbox execution does not support the interactive presets.
+
 ## Shell Completion
 
 ### Install completion for a linked CLI

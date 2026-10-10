@@ -6,7 +6,11 @@ import {
   isRemoteHeterogeneousType,
   isServerDefaultHeterogeneousAgentType,
 } from '@lobechat/heterogeneous-agents';
-import type { HeterogeneousApiConfig, HeterogeneousAuthMode } from '@lobechat/types';
+import type {
+  CodexPermissionMode,
+  HeterogeneousApiConfig,
+  HeterogeneousAuthMode,
+} from '@lobechat/types';
 import { Flexbox } from '@lobehub/ui';
 import type { TabsItem } from '@lobehub/ui/base-ui';
 import { Alert, Button, Tabs } from '@lobehub/ui/base-ui';
@@ -30,6 +34,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentByIdSelectors, agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+import { useDeviceCapabilities } from '@/store/device/capabilityHooks';
 
 import EditorCanvas from '../EditorCanvas';
 import AgentHeader from './AgentHeader';
@@ -84,6 +89,23 @@ const ProfileEditor = memo(() => {
     agentId,
     { topicId: null },
   );
+  const heterogeneousExecutionTarget = resolveExecutionTarget(effectiveAgencyConfig, {
+    clientExecutionAvailable: isDesktop,
+    isHetero: isHeterogeneous,
+    workspaceScoped,
+  });
+  const isLocalHeterogeneousExecution =
+    heterogeneousExecutionTarget === 'local' && heterogeneousProvider?.authMode !== 'api';
+  const { data: deviceCapabilities } = useDeviceCapabilities(
+    heterogeneousProvider?.type === 'codex' && heterogeneousExecutionTarget === 'device'
+      ? effectiveAgencyConfig?.boundDeviceId
+      : undefined,
+  );
+  const supportsCodexPermissions =
+    (isLocalHeterogeneousExecution ||
+      (heterogeneousExecutionTarget === 'device' &&
+        deviceCapabilities?.nativeCodexPermissions === true)) &&
+    heterogeneousProvider?.authMode !== 'api';
 
   const updateHeterogeneousCommand = async (command: string) => {
     if (!canEdit) return;
@@ -122,6 +144,20 @@ const ProfileEditor = memo(() => {
     await updateAgentConfigById(agentId, {
       agencyConfig: {
         heterogeneousProvider: { ...heterogeneousProvider, apiConfig },
+      },
+    });
+  };
+
+  const updateCodexPermissionMode = async (permissionMode: CodexPermissionMode) => {
+    if (
+      !canEdit ||
+      heterogeneousProvider?.type !== 'codex' ||
+      (!supportsCodexPermissions && permissionMode !== 'full-access')
+    )
+      return;
+    await updateAgentConfigById(agentId, {
+      agencyConfig: {
+        heterogeneousProvider: { ...heterogeneousProvider, permissionMode },
       },
     });
   };
@@ -206,14 +242,17 @@ const ProfileEditor = memo(() => {
             <HeterogeneousAgentStatusCard
               apiModeAvailable={apiModeAvailable}
               apiModeWorkspaceBlocked={isWorkspaceAgent}
+              isLocalExecution={isLocalHeterogeneousExecution}
               provider={heterogeneousProvider}
               serverDefaultAvailable={serverDefaultAvailable}
               serverDefaultLoading={serverCapabilityEnabled && serverCapability.isLoading}
               serverDefaultModels={serverDefaultModels}
               serverDefaultUnavailableReason={serverDefaultUnavailableReason}
+              supportsCodexPermissions={supportsCodexPermissions}
               onApiConfigChange={updateHeterogeneousApiConfig}
               onAuthModeChange={updateHeterogeneousAuthMode}
               onCommandChange={updateHeterogeneousCommand}
+              onPermissionModeChange={updateCodexPermissionMode}
               onServerDefaultRetry={() => {
                 void serverCapability.mutate();
               }}

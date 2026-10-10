@@ -219,3 +219,31 @@ describe('sanitizeAgentInterventionRequestForReview', () => {
     expect(sanitized).toMatchObject({ identifier: 'devin', provider: 'devin' });
   });
 });
+
+/** @example Codex review stores only canonical choices and its live callback identity. */
+describe('native Codex review boundary', () => {
+  /** @example Original shell arguments never become unbounded review metadata. */
+  it('retains a native callback while validating its separate review form', () => {
+    const native = request({
+      apiName: 'command_execution',
+      identifier: 'codex',
+      provider: 'codex',
+      interventionId: 'callback-1',
+      arguments: '{"command":"private shell context"}',
+      reviewArguments: request().arguments,
+    });
+    const sanitized = sanitizeAgentInterventionRequestForReview(native);
+    /** @example A refresh can still address the unique native callback. */
+    expect(sanitized).toMatchObject({ interventionId: 'callback-1', provider: 'codex' });
+    /** @example Only the canonical review form crosses the durable boundary. */
+    expect(sanitized?.arguments).not.toContain('private shell context');
+    /** @example Missing callback identity fails closed. */
+    expect(
+      sanitizeAgentInterventionRequestForReview({ ...native, interventionId: undefined }),
+    ).toBeUndefined();
+    /** @example Unknown raw schema is never silently treated as a permission form. */
+    expect(
+      sanitizeAgentInterventionRequestForReview({ ...native, reviewArguments: '{}' }),
+    ).toBeUndefined();
+  });
+});

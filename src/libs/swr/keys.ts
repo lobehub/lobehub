@@ -768,6 +768,11 @@ export const deviceKeys = {
     path,
   ]),
   listDevices: def('device:listDevices', () => ['device:listDevices']),
+  systemInfo: def('device:systemInfo', (workspaceId: string | null, deviceId: string) => [
+    'device:systemInfo',
+    workspaceId,
+    deviceId,
+  ]),
   repoType: def('device:repoType', (path: string) => ['device:repoType', path]),
 };
 

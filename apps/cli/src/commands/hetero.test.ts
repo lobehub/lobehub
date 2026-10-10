@@ -12,13 +12,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { registerHeteroCommand, SUPPORTED_AGENT_TYPES } from './hetero';
 
-const { mockCreatePiRpcAgentHandle, mockResolveHeteroSpawnCommand, mockSpawnAgent } = vi.hoisted(
-  () => ({
-    mockCreatePiRpcAgentHandle: vi.fn(),
-    mockResolveHeteroSpawnCommand: vi.fn(),
-    mockSpawnAgent: vi.fn(),
-  }),
-);
+const {
+  mockCreateCodexAgentHandle,
+  mockCreatePiRpcAgentHandle,
+  mockResolveHeteroSpawnCommand,
+  mockSpawnAgent,
+} = vi.hoisted(() => ({
+  mockCreateCodexAgentHandle: vi.fn(),
+  mockCreatePiRpcAgentHandle: vi.fn(),
+  mockResolveHeteroSpawnCommand: vi.fn(),
+  mockSpawnAgent: vi.fn(),
+}));
 const { mockGetTrpcClient, mockHeteroFinishMutate, mockHeteroIngestMutate } = vi.hoisted(() => ({
   mockGetTrpcClient: vi.fn(),
   mockHeteroFinishMutate: vi.fn(),
@@ -34,6 +38,10 @@ vi.mock('@lobechat/heterogeneous-agents/spawn', async (importOriginal) => ({
 
 vi.mock('@lobechat/heterogeneous-agents/resolveCliCommand', () => ({
   resolveHeteroSpawnCommand: mockResolveHeteroSpawnCommand,
+}));
+
+vi.mock('@lobechat/heterogeneous-agents/codex', () => ({
+  createCodexAgentHandle: mockCreateCodexAgentHandle,
 }));
 
 vi.mock('@lobechat/heterogeneous-agents/rpc', () => ({
@@ -127,6 +135,7 @@ describe('hetero exec command', () => {
         return { command: command ?? defaultCommand };
       },
     );
+    mockCreateCodexAgentHandle.mockReset();
     mockCreatePiRpcAgentHandle.mockReset();
     mockSpawnAgent.mockReset();
     mockHeteroIngestMutate.mockReset();
@@ -171,6 +180,112 @@ describe('hetero exec command', () => {
       throw err;
     }
   };
+
+  // ROOT CAUSE:
+  // Device dispatch only knew codex exec, which cannot receive native approval
+  // responses. Explicit presets must route to the bidirectional native handle;
+  // neither native startup nor resume failure may replay through exec-never.
+  /** @example Ask uses app-server, and a handshake failure is terminal. */
+  it('routes an explicit Codex permission mode to native without unsafe fallback', async () => {
+    mockCreateCodexAgentHandle.mockReturnValueOnce(createFakeHandle());
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--codex-permission-mode',
+      'ask',
+    ]);
+    /** @example The saved preset reaches the native factory. */
+    expect(mockCreateCodexAgentHandle).toHaveBeenCalledWith(
+      expect.objectContaining({ codexPermissionMode: 'ask' }),
+    );
+    /** @example Native execution never also launches exec. */
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+    mockCreateCodexAgentHandle.mockRejectedValueOnce(new Error('permission mismatch'));
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--codex-permission-mode',
+      'read-only',
+      '--resume',
+      'thread-existing',
+    ]);
+    /** @example Failed native resume is not replayed with weaker permissions. */
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+  });
+
+  // ROOT CAUSE:
+  // Native cancel and transport loss can end the event stream with code 0.
+  // The finish result must consume the native terminal outcome as well.
+  /** @example Both native interruption paths are reported without replay or success. */
+  it.each([
+    { interruptionCause: undefined, result: 'cancelled' },
+    { interruptionCause: 'transport', result: 'error' },
+  ])('reports native interruption as $result', async ({ interruptionCause, result }) => {
+    mockCreateCodexAgentHandle.mockReturnValueOnce(
+      createFakeHandle({
+        events: [
+          {
+            type: 'agent_runtime_end',
+            operationId: 'op-1',
+            stepIndex: 0,
+            timestamp: 1,
+            data: { reason: 'interrupted', interruptionCause },
+          },
+        ],
+      }),
+    );
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'guarded write',
+      '--codex-permission-mode',
+      'ask',
+      '--topic',
+      'topic-1',
+      '--operation-id',
+      'op-1',
+    ]);
+    /** @example The normal server finish path retains the actual native outcome. */
+    expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ...(result === 'cancelled' ? { finalCancellation: true } : {}),
+        result,
+      }),
+    );
+    /** @example Interrupted native history is never replayed through exec. */
+    expect(mockSpawnAgent).not.toHaveBeenCalled();
+  });
+
+  /** @example Legacy raw Codex arguments retain their original exec transport. */
+  it('keeps a legacy Codex run on the existing CLI adapter', async () => {
+    mockSpawnAgent.mockReturnValueOnce(createFakeHandle());
+    await runCmd([
+      'hetero',
+      'exec',
+      '--type',
+      'codex',
+      '--prompt',
+      'hi',
+      '--agent-arg=--full-auto',
+    ]);
+    /** @example No typed preset means no new transport contract. */
+    expect(mockCreateCodexAgentHandle).not.toHaveBeenCalled();
+    /** @example The user's raw argument survives unchanged. */
+    expect(mockSpawnAgent).toHaveBeenCalledWith(
+      expect.objectContaining({ extraArgs: expect.arrayContaining(['--full-auto']) }),
+    );
+  });
 
   it('reports a failed CLI exit when terminal delivery is rejected', async () => {
     mockSpawnAgent.mockReturnValue(createFakeHandle({ exitCode: 0 }));
@@ -1182,9 +1297,12 @@ describe('hetero exec command', () => {
     sigintHandler?.();
     // The signal can land before the async spawn binds `handle`; the remembered
     // cancellation is then replayed through `handle.kill` once it binds.
-    await vi.waitFor(() => {
-      expect(kill).toHaveBeenCalledWith('SIGINT');
-    });
+    // NOTICE:
+    // Await signal delivery instead of counting promise turns in async startup.
+    // The native-capable Codex dispatch adds a promise boundary before handle assignment.
+    // Source: spawnAgentOrRuntime in ./hetero.ts.
+    // Remove when this test can await an explicit handle-ready lifecycle event.
+    await vi.waitFor(() => expect(kill).toHaveBeenCalledWith('SIGINT'));
     expect(mockHeteroFinishMutate).not.toHaveBeenCalled();
 
     resolveFirstEvent?.({
@@ -1208,6 +1326,8 @@ describe('hetero exec command', () => {
     expect(mockHeteroFinishMutate).toHaveBeenCalledWith(
       expect.objectContaining({ error: undefined, result: 'cancelled' }),
     );
+    /** @example A legacy (non-native-permission) cancellation keeps intermediate semantics. */
+    expect(mockHeteroFinishMutate.mock.calls[0][0]).not.toHaveProperty('finalCancellation', true);
   });
 
   it('combines --prompt + --image into mixed content blocks', async () => {

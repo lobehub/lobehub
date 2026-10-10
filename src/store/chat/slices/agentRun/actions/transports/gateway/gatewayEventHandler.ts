@@ -370,7 +370,7 @@ export const createGatewayEventHandler = (
   const toolStateBootstrapPromiseByCallId = new Map<string, Promise<void>>();
   const lastAppliedToolStateSeqByCallId = new Map<string, number>();
   const completedToolStateCallIds = new Set<string>();
-  const pendingInterventionToolCallIds = new Set<string>();
+  const pendingInterventionToolCallIds = new Map<string, string | undefined>();
 
   // Tracks whether any server-confirmed state has actually arrived
   // (server-assigned assistant id, streamed text/reasoning/tools, or a SoT
@@ -973,7 +973,7 @@ export const createGatewayEventHandler = (
         const data = event.data as AgentInterventionRequestData | undefined;
         if (!data?.toolCallId) break;
 
-        pendingInterventionToolCallIds.add(data.toolCallId);
+        pendingInterventionToolCallIds.set(data.toolCallId, data.interventionId);
         writeTopicStatus('waitingForHuman');
         void notifyDesktopHumanApprovalRequired(get, context);
 
@@ -991,15 +991,41 @@ export const createGatewayEventHandler = (
         const data = event.data as AgentInterventionResponseData | undefined;
         if (!data?.toolCallId) break;
 
+        /** Rejects a delayed response after the native item has opened another callback. */
+        const isCurrentCallback = () => {
+          const pendingId = pendingInterventionToolCallIds.get(data.toolCallId);
+          const storedId = getToolMessageByCallId(data.toolCallId)?.pluginIntervention
+            ?.interventionId;
+          return (
+            (!pendingId || pendingId === data.interventionId) &&
+            (!storedId || storedId === data.interventionId)
+          );
+        };
+        if (!isCurrentCallback()) break;
+
         // A modern submit response is a producer-delivery leg, not completion.
         // Keep the topic/card waiting until the producer echoes producerAck.
         // Older responses had no request id and remain terminal-compatible.
+        // Only native callbacks (Codex) carry interventionId and can reuse one
+        // tool item. Responses without it keep the original synchronous order.
+        const callbackScoped = !!data.interventionId;
         if (data.resolutionRequestId && data.producerAck !== true) {
-          pendingInterventionToolCallIds.add(data.toolCallId);
-          writeTopicStatus('waitingForHuman');
+          if (!callbackScoped) {
+            pendingInterventionToolCallIds.set(data.toolCallId, undefined);
+            writeTopicStatus('waitingForHuman');
+          }
           enqueue(async () => {
+            if (!isCurrentCallback()) return;
             const toolMessage = getToolMessageByCallId(data.toolCallId);
             if (!toolMessage) return;
+            if (callbackScoped) {
+              if (toolMessage.pluginIntervention?.status !== 'pending') return;
+              pendingInterventionToolCallIds.set(data.toolCallId, data.interventionId);
+              // Queued behind earlier refreshes: the run may already have ended
+              // and been settled, and nothing would clear a late hand icon.
+              if (terminalState) return;
+              writeTopicStatus('waitingForHuman');
+            }
             const intervention = {
               ...toolMessage.pluginIntervention,
               resolving: true,
@@ -1035,12 +1061,22 @@ export const createGatewayEventHandler = (
           break;
         }
 
-        pendingInterventionToolCallIds.delete(data.toolCallId);
+        if (!callbackScoped) pendingInterventionToolCallIds.delete(data.toolCallId);
         enqueue(async () => {
+          if (callbackScoped && !isCurrentCallback()) return;
           // Successful Web submits, explicit cancellation, producer timeout,
           // and session teardown all converge on the durable tool row before
           // this refresh. Do not infer the terminal state from identifier.
           await refreshMessagesFromDb({ skipWorks: true }).catch(console.error);
+          if (callbackScoped) {
+            if (!isCurrentCallback()) return;
+            pendingInterventionToolCallIds.delete(data.toolCallId);
+          }
+          // A native cancellation (Stop this turn, approval timeout) ends the run
+          // right after its receipt. The terminal event and the session settle are
+          // not queued behind this refresh, so writing `running` now would
+          // overwrite the settled topic status and leave it running forever.
+          if (terminalState) return;
           if (pendingInterventionToolCallIds.size === 0) writeTopicStatus('running');
         });
         break;

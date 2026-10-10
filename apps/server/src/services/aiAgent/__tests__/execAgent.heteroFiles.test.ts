@@ -1,3 +1,4 @@
+import type { LobeAgentAgencyConfig } from '@lobechat/types';
 import { afterEach, beforeEach, describe, expect, it, type MockInstance, vi } from 'vitest';
 
 import { AgentOperationModel } from '@/database/models/agentOperation';
@@ -11,6 +12,7 @@ const {
   mockBuildRemoteDeviceHeteroContext,
   mockCreateOperationMetadata,
   mockDispatchAgentRun,
+  mockQueryDeviceSystemInfo,
   mockExecuteToolCall,
   mockInterruptOperation,
   mockGetHeterogeneousResumeSessionId,
@@ -28,6 +30,7 @@ const {
   mockDeviceFindByDeviceId: vi.fn(),
   mockDeviceFindWorkspaceDeviceById: vi.fn(),
   mockDispatchAgentRun: vi.fn().mockResolvedValue({ success: true }),
+  mockQueryDeviceSystemInfo: vi.fn().mockResolvedValue(undefined),
   mockExecuteToolCall: vi.fn().mockResolvedValue({ success: true }),
   mockInterruptOperation: vi.fn().mockResolvedValue(true),
   mockGetHeterogeneousResumeSessionId: vi.fn().mockResolvedValue(undefined),
@@ -102,7 +105,7 @@ vi.mock('@/database/models/message', () => ({
 }));
 
 const heteroAgentConfig = {
-  agencyConfig: { heterogeneousProvider: { type: 'claude-code' } },
+  agencyConfig: { heterogeneousProvider: { type: 'claude-code' } } as LobeAgentAgencyConfig,
   chatConfig: {},
   files: [],
   id: 'agent-1',
@@ -236,6 +239,7 @@ vi.mock('@/server/modules/Mecha', () => ({
 vi.mock('@/server/services/deviceGateway', () => ({
   deviceGateway: {
     dispatchAgentRun: mockDispatchAgentRun,
+    queryDeviceSystemInfo: mockQueryDeviceSystemInfo,
     executeToolCall: mockExecuteToolCall,
     isConfigured: false,
     queryDeviceList: vi.fn().mockResolvedValue([]),
@@ -273,6 +277,7 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
     mockResolveAttachmentsByFileIds.mockResolvedValue({ ...emptyResolvedAttachments });
     mockSpawnHeteroSandbox.mockResolvedValue(undefined);
     mockDispatchAgentRun.mockResolvedValue({ success: true });
+    mockQueryDeviceSystemInfo.mockReset().mockResolvedValue(undefined);
     mockExecuteToolCall.mockResolvedValue({ success: true });
     mockGetHeterogeneousResumeSessionId.mockResolvedValue(undefined);
     mockMessageQuery.mockResolvedValue([]);
@@ -1013,6 +1018,99 @@ describe('AiAgentService.execAgent - hetero early-exit file attachments', () => 
         { content: 'The pod is electron-gpu-shell', role: 'assistant' },
       ],
     });
+  });
+
+  // ROOT CAUSE:
+  // The dispatcher rejected Full access along with interactive presets even
+  // though both remote exec transports can preserve its explicit CLI flag.
+  /** @example An agent can recover from a local-only preset on device and sandbox targets. */
+  it.each(['device', 'sandbox'] as const)(
+    'dispatches remote-compatible Full access to %s',
+    async (executionTarget) => {
+      heteroAgentConfig.model = 'codex';
+      heteroAgentConfig.provider = 'codex';
+      heteroAgentConfig.agencyConfig = {
+        boundDeviceId: 'device-1',
+        executionTarget,
+        heterogeneousProvider: {
+          permissionMode: 'full-access',
+          type: 'codex',
+          args: ['-s', 'read-only', '-a', 'on-request'],
+        },
+      };
+      await service.execAgent({ agentId: 'agent-1', prompt: 'Run with confirmed Full access' });
+      const dispatch = executionTarget === 'device' ? mockDispatchAgentRun : mockSpawnHeteroSandbox;
+      /** @example The selected transport receives the selected policy without stale sandbox args. */
+      expect(dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({
+          args: ['--agent-arg=--dangerously-bypass-approvals-and-sandbox'],
+        }),
+      );
+    },
+  );
+
+  it('fails closed instead of dispatching a configured Codex mode through exec', async () => {
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { permissionMode: 'ask', type: 'codex' },
+    };
+
+    const result = await service.execAgent({
+      agentId: 'agent-1',
+      prompt: 'Do not drop the approval policy',
+    });
+
+    expect(result).toMatchObject({
+      error: expect.stringContaining('Update LobeHub CLI'),
+      status: 'error',
+      success: false,
+    });
+    expect(mockDispatchAgentRun).not.toHaveBeenCalled();
+    expect(mockSpawnHeteroSandbox).not.toHaveBeenCalled();
+  });
+
+  /** @example A live compatible device receives Ask through the native wrapper selector. */
+  it('dispatches native Codex permissions only after the device capability probe', async () => {
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget: 'device',
+      heterogeneousProvider: { permissionMode: 'ask', type: 'codex' },
+    };
+    mockQueryDeviceSystemInfo.mockResolvedValueOnce({ nativeCodexPermissions: true });
+    const result = await service.execAgent({ agentId: 'agent-1', prompt: 'Use native approval' });
+    /** @example No exec-never fallback is substituted for Ask. */
+    expect(result).not.toMatchObject({ status: 'error' });
+    /** @example The dispatch carries the explicit app-server transport selector. */
+    expect(mockDispatchAgentRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        args: ['--codex-permission-mode', 'ask'],
+      }),
+    );
+  });
+
+  // Agents saved before permission presets keep their raw CLI arguments on remote targets.
+  it.each([
+    ['device', ['--full-auto']],
+    ['sandbox', ['--full-auto']],
+    ['device', ['-s', 'read-only', '-a', 'on-request']],
+    ['sandbox', ['-s', 'read-only', '-a', 'on-request']],
+  ] as const)('dispatches legacy Codex args to %s unchanged: %j', async (executionTarget, args) => {
+    heteroAgentConfig.model = 'codex';
+    heteroAgentConfig.provider = 'codex';
+    heteroAgentConfig.agencyConfig = {
+      boundDeviceId: 'device-1',
+      executionTarget,
+      heterogeneousProvider: { args: [...args], type: 'codex' },
+    };
+
+    const result = await service.execAgent({ agentId: 'agent-1', prompt: 'Keep my legacy args' });
+
+    expect(result).not.toMatchObject({ status: 'error' });
+    const dispatch = executionTarget === 'device' ? mockDispatchAgentRun : mockSpawnHeteroSandbox;
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ args: args.map((arg) => `--agent-arg=${arg}`) }),
+    );
   });
 
   it('dispatches OpenCode to a bound device with its model args', async () => {
