@@ -1,5 +1,5 @@
 import { type Context as OtContext } from '@lobechat/observability-otel/api';
-import { type ClientSecretPayload, type SpendOrigin } from '@lobechat/types';
+import { type ClientSecretPayload, type FileAccessScope, type SpendOrigin } from '@lobechat/types';
 import type { ClientMetadata } from '@lobechat/utils/server';
 import { parseClientMetadata } from '@lobechat/utils/server';
 import { parse } from 'cookie';
@@ -95,6 +95,20 @@ export interface AuthContext {
   apiKeyScopes?: string[] | null;
   clientIp?: string | null;
   clientMetadata?: ClientMetadata;
+  /**
+   * File access boundary for this call, intersected into file lookups
+   * (`FileModel.findByIds`, ownership-verified re-signing, …) the same way
+   * `ordinaryFileAccessScope` / `agentShareFileAccessScope` are applied in the
+   * turn pipeline.
+   *
+   * SECURITY: same contract as {@link AuthContext.spendOrigin} — never derived
+   * from request input, because it decides which file rows a caller may
+   * resolve. Populated ONLY by a server-side `createCaller` from an
+   * already-authorized run context (the tool-execution server runtimes); a
+   * client-supplied value must never widen access. Absent = ordinary scope
+   * (`notAgentShareFile`), the pre-existing default for every router.
+   */
+  fileAccessScope?: FileAccessScope;
   jwtPayload?: ClientSecretPayload | null;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
@@ -128,6 +142,8 @@ export const createContextInner = async (params?: {
   authFailure?: string;
   clientMetadata?: ClientMetadata;
   clientIp?: string | null;
+  /** See {@link AuthContext.fileAccessScope} — server-side callers only. */
+  fileAccessScope?: FileAccessScope;
   marketAccessToken?: string;
   oidcAuth?: OIDCAuth | null;
   oidcClientId?: string;
@@ -149,6 +165,7 @@ export const createContextInner = async (params?: {
     apiKeyScopes: params?.apiKeyScopes,
     clientMetadata: params?.clientMetadata || { type: 'unknown' },
     clientIp: params?.clientIp,
+    fileAccessScope: params?.fileAccessScope,
     marketAccessToken: params?.marketAccessToken,
     oidcAuth: params?.oidcAuth,
     oidcClientId: params?.oidcClientId,

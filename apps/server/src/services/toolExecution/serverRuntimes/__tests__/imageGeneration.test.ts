@@ -6,6 +6,7 @@ import { imageGenerationRuntime } from '../imageGeneration';
 // `*Router.createCaller`, just enough to type-check the spend-attribution
 // assertions below without pulling in the full tRPC caller context type.
 interface ImageCallerContext {
+  fileAccessScope?: { shareId: string; type: string; visitorUserId: string };
   spendOrigin?: {
     agentShare: { agentId: string; shareId: string; visitorUserId: string };
     trigger: string;
@@ -104,6 +105,34 @@ describe('imageGenerationRuntime', () => {
 
     const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
     expect(callerContext.spendOrigin).toBeUndefined();
+  });
+
+  it('scopes the image caller to share-uploaded files so a visitor cannot re-sign creator files', () => {
+    imageGenerationRuntime.factory({
+      agentShareVisitor: {
+        agentId: 'agent-1',
+        shareId: 'share-1',
+        visitorUserId: 'visitor-1',
+      },
+      toolManifestMap: {},
+      // A share-visitor run executes under the shared agent's CREATOR — the
+      // file boundary must come from the share scope, not from this userId.
+      userId: 'creator-1',
+    });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.fileAccessScope).toEqual({
+      shareId: 'share-1',
+      type: 'agentShare',
+      visitorUserId: 'visitor-1',
+    });
+  });
+
+  it('omits the file access scope for a non-share run', () => {
+    imageGenerationRuntime.factory({ toolManifestMap: {}, userId: 'user-1' });
+
+    const [callerContext] = callerMocks.image.mock.calls.at(-1)!;
+    expect(callerContext.fileAccessScope).toBeUndefined();
   });
 
   it('preserves public agent visibility for generated image topics', async () => {

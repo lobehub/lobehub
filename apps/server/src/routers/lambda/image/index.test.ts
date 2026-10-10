@@ -331,7 +331,10 @@ describe('imageRouter', () => {
       const caller = imageRouter.createCaller(ctx);
       await caller.createImage(input);
 
-      expect(mockGetKeyFromFullUrl).toHaveBeenCalledTimes(2);
+      // Called twice per URL: once for database key conversion and once for
+      // reference-URL re-signing (which re-extracts the key to verify
+      // ownership before signing a fresh presigned URL).
+      expect(mockGetKeyFromFullUrl).toHaveBeenCalledTimes(4);
       expect(mockGetKeyFromFullUrl).toHaveBeenCalledWith(
         'https://s3.amazonaws.com/bucket/files/image1.jpg',
       );

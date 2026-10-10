@@ -1,7 +1,7 @@
 import type { ImageGenerationModelSummary } from '@lobechat/builtin-tool-image-generation';
 import { ImageGenerationIdentifier } from '@lobechat/builtin-tool-image-generation';
 import { ImageGenerationExecutionRuntime } from '@lobechat/builtin-tool-image-generation/executionRuntime';
-import { RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
+import { agentShareFileAccessScope, RequestTrigger, toAgentShareVisitorIds } from '@lobechat/types';
 import type { AiProviderModelListItem } from 'model-bank';
 
 import { aiModelRouter } from '@/server/routers/lambda/aiModel';
@@ -45,6 +45,21 @@ export const imageGenerationRuntime: ServerRuntimeRegistration = {
         : undefined,
       userId: context.userId,
       workspaceId: context.workspaceId,
+      /**
+       * File boundary for ownership-verified reference-URL re-signing: a
+       * visitor run executes under the shared agent's CREATOR, so without
+       * this a visitor-controlled `/f/{id}` reference URL could resolve one
+       * of the creator's private files and get a fresh valid storage
+       * signature. Scoped to exactly the files the visitor uploaded through
+       * this share — the same boundary `assertShareVisitorFiles` enforces at
+       * attachment resolution.
+       */
+      fileAccessScope: context.agentShareVisitor
+        ? agentShareFileAccessScope({
+            shareId: context.agentShareVisitor.shareId,
+            visitorUserId: context.agentShareVisitor.visitorUserId,
+          })
+        : undefined,
     };
     const aiModelCaller = aiModelRouter.createCaller(callerContext);
     const aiProviderCaller = aiProviderRouter.createCaller(callerContext);

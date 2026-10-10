@@ -29,6 +29,7 @@ import {
 } from '@/types/asyncTask';
 import { generateUniqueSeeds } from '@/utils/number';
 
+import { resignOwnStorageReferenceUrls } from './resignReferenceUrls';
 import { validateNoUrlsInConfig } from './utils';
 
 const log = debug('lobe-image:lambda');
@@ -161,8 +162,41 @@ export const imageRouter = router({
         }
       }
 
-      // In development, convert localhost proxy URLs to S3 URLs for async task access
+      // Re-sign own-storage reference URLs before handing them to the provider:
+      // models mistranscribe long presigned query strings copied from context
+      // (one dropped char breaks SigV4) and URLs expire mid-turn, while the
+      // object is fully addressed by its key. Ownership is verified in
+      // `resignOwnStorageReferenceUrls` before any URL is re-signed. Runs
+      // before the dev-mode conversion so dev re-signing stays last.
       let generationParams = params;
+      if (Array.isArray(params.imageUrls) && params.imageUrls.length > 0) {
+        try {
+          const resignedUrls = await resignOwnStorageReferenceUrls(params.imageUrls, {
+            db: serverDB,
+            fileAccessScope: ctx.fileAccessScope,
+            fileService,
+            userId,
+            workspaceId: wsId,
+          });
+          generationParams = { ...generationParams, imageUrls: resignedUrls };
+        } catch (error) {
+          log('Failed to re-sign imageUrls, keeping originals: %O', error);
+        }
+      }
+      if (typeof params.imageUrl === 'string' && params.imageUrl) {
+        try {
+          const [resignedUrl] = await resignOwnStorageReferenceUrls([params.imageUrl], {
+            db: serverDB,
+            fileAccessScope: ctx.fileAccessScope,
+            fileService,
+            userId,
+            workspaceId: wsId,
+          });
+          if (resignedUrl) generationParams = { ...generationParams, imageUrl: resignedUrl };
+        } catch (error) {
+          log('Failed to re-sign imageUrl, keeping original: %O', error);
+        }
+      }
       if (process.env.NODE_ENV === 'development') {
         const updates: Record<string, unknown> = {};
 
