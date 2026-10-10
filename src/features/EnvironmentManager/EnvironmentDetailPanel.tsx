@@ -7,7 +7,6 @@ import { ActionIcon, Avatar, Tabs, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
-  ContainerIcon,
   FolderIcon,
   HistoryIcon,
   KeyRoundIcon,
@@ -21,7 +20,6 @@ import { useTranslation } from 'react-i18next';
 
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
-import { repositoryPath } from './repository';
 import SessionHistorySection from './SessionHistorySection';
 import TabPane from './TabPane';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
@@ -91,7 +89,6 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
   // environment), so opening another environment lands on its instances.
   const [tab, setTab] = useState<DetailTab>('instances');
 
-  const repository = repositoryPath(environment.configuration);
   // A files environment is a folder: there is no repository, setup or runtime
   // to configure, so the panel keeps its name, description and files and
   // drops the tabs and fields that would only ever be empty.
@@ -108,11 +105,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
     <Flexbox className={styles.container} gap={20}>
       <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
         <span className={styles.iconTile}>
-          {repository ? (
-            <Github size={18} />
-          ) : (
-            <Icon icon={kind === 'files' ? FolderIcon : ContainerIcon} size={18} />
-          )}
+          {kind === 'files' ? <Icon icon={FolderIcon} size={18} /> : <Github size={18} />}
         </span>
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Text ellipsis weight={600}>

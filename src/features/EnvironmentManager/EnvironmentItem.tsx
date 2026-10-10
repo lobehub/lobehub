@@ -7,7 +7,6 @@ import { Avatar, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
-  ContainerIcon,
   EyeOffIcon,
   FolderIcon,
   GlobeIcon,
@@ -234,11 +233,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
         }}
       >
         <div className={styles.iconTile}>
-          {repository ? (
-            <Github size={20} />
-          ) : (
-            <Icon icon={kind === 'files' ? FolderIcon : ContainerIcon} size={20} />
-          )}
+          {kind === 'files' ? <Icon icon={FolderIcon} size={20} /> : <Github size={20} />}
         </div>
 
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
