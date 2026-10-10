@@ -59,6 +59,7 @@ import {
   type BatchModel,
   type BatchRound,
   buildBatchModel,
+  verdictChecks,
 } from './batchModel';
 import { edgeDirection } from './edgeRouting';
 import ExperimentGroup, { type ExperimentGroupData } from './ExperimentGroup';
@@ -399,9 +400,10 @@ const useBatchCopy = () => {
     () => ({
       gate: (round: BatchRound, model: BatchModel): GraphNodeData['presentation'] => {
         const { key, ...chip } = GATE_CHIP[round.gate];
-        // The latest verdict's checks with their results; before any, the plan.
-        const latest = round.evaluations.findLast((item) => item.checks.length > 0);
-        const checks = (latest?.checks ?? model.gateChecks).map((check) => {
+        // The latest verdict's checks with their results — a unit hold included —
+        // and before any verdict, the plan.
+        const latest = round.evaluations.at(-1);
+        const checks = (latest ? verdictChecks(latest) : model.gateChecks).map((check) => {
           const { detail, label } = checkCopy(check);
           const mark = 'passed' in check ? (check.passed ? '✓ ' : '✗ ') : '';
           return `${mark}${label}${detail ? `（${detail}）` : ''}`;

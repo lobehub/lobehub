@@ -488,6 +488,12 @@ export interface GoalRolloutGateEvaluation {
   revision: number;
   /** `gate`: the gate judged a settled wave. `unit`: one unit failed its own check. */
   trigger: 'gate' | 'unit';
+  /**
+   * The roster wave a release put out, counted across every round. Written by
+   * the coordinator because the log is capped — counting the kept entries would
+   * renumber the history once the oldest fall off.
+   */
+  wave?: number;
   /** Waves released in this round when the verdict was taken (after a release). */
   waveIndex: number;
 }
@@ -526,6 +532,8 @@ export interface GoalRolloutState {
   unitTitles?: string[];
   /** How many mass waves have been released. */
   waveIndex: number;
+  /** Roster waves released so far across every round; `waveIndex` restarts per round. */
+  wavesReleased?: number;
 }
 
 export interface GoalConfig {

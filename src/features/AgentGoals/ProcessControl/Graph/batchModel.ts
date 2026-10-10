@@ -4,6 +4,7 @@ import {
   ROLLOUT_WAVE_SIZE_DEFAULT,
 } from '@lobechat/const/goal';
 import type {
+  GoalRolloutGateCheck,
   GoalRolloutGateCheckKey,
   GoalRolloutGateEvaluation,
   GoalRolloutPhase,
@@ -230,10 +231,14 @@ export const buildBatchModel = (graph: GoalGraphView, batchId: string): BatchMod
     return slot ? { ...slot, kind: 'wave' } : undefined;
   };
 
+  // The coordinator writes each release's roster wave; a verdict from before it
+  // did falls back to counting the releases kept in the log.
   let releases = 0;
-  const verdicts: BatchGateVerdict[] = (state?.gateLog ?? []).map((entry) =>
-    entry.outcome === 'released' ? { ...entry, wave: ++releases } : entry,
-  );
+  const verdicts: BatchGateVerdict[] = (state?.gateLog ?? []).map((entry) => {
+    if (entry.outcome !== 'released') return entry;
+    releases = entry.wave ?? releases + 1;
+    return { ...entry, wave: releases };
+  });
 
   const rounds: BatchRound[] = probeIdsByRound.map((ids, r) => {
     const probes = ids
@@ -346,3 +351,19 @@ export const findBatchGate = (
   const round = model.rounds.find((item) => item.assayId === nodeId);
   return round ? { model, round } : undefined;
 };
+
+/**
+ * The checks a verdict stands on. A unit that failed its own check (R6) held
+ * the batch without the gate running, so it records none — it reads as the one
+ * check it broke, naming the unit.
+ */
+export const verdictChecks = (evaluation: GoalRolloutGateEvaluation): GoalRolloutGateCheck[] =>
+  evaluation.trigger === 'unit'
+    ? [
+        {
+          key: 'units_succeeded',
+          nodeIds: evaluation.nodeId ? [evaluation.nodeId] : undefined,
+          passed: false,
+        },
+      ]
+    : evaluation.checks;

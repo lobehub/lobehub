@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 
 import { buildGoalGraphView } from '../goalGraphViewModel';
 import { batchGroupId, layoutBatch } from './batchLayout';
-import { buildBatchModel, findBatchGate } from './batchModel';
+import { buildBatchModel, findBatchGate, verdictChecks } from './batchModel';
 
 const T0 = new Date('2026-10-01T00:00:00Z');
 const at = (minutes: number) => new Date(T0.getTime() + minutes * 60_000);
@@ -307,6 +307,43 @@ describe('unit states', () => {
 });
 
 describe('gate verdicts', () => {
+  it('keeps the wave the coordinator wrote, even once older verdicts were trimmed', () => {
+    const graph = buildGoalGraphView(
+      batchSnapshot({
+        state: {
+          gateLog: [
+            {
+              at: '2026-10-01T00:20:00.000Z',
+              checks: [],
+              outcome: 'released',
+              releasedCount: 1,
+              revision: 1,
+              trigger: 'gate',
+              wave: 31,
+              waveIndex: 31,
+            },
+          ],
+        },
+      }),
+      NOW,
+    );
+    expect(findBatchGate(graph, 'a1')?.round.evaluations[0].wave).toBe(31);
+  });
+
+  it('reads a unit hold as the one check it broke, naming the unit', () => {
+    expect(
+      verdictChecks({
+        at: '2026-10-01T00:30:00.000Z',
+        checks: [],
+        nodeId: 'm4',
+        outcome: 'blocked',
+        revision: 1,
+        trigger: 'unit',
+        waveIndex: 1,
+      }),
+    ).toEqual([{ key: 'units_succeeded', nodeIds: ['m4'], passed: false }]);
+  });
+
   it('gives each round its own verdicts and finds the round from its gate', () => {
     const released = {
       at: '2026-10-01T00:20:00.000Z',

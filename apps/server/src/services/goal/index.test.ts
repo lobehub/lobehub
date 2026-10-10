@@ -2080,8 +2080,10 @@ describe('GoalService', () => {
       releasedCount: 5,
       revision: 1,
       trigger: 'gate',
+      wave: 1,
       waveIndex: 1,
     });
+    expect(state.wavesReleased).toBe(1);
     expect(state.gateLog![0].checks).toContainEqual(
       expect.objectContaining({ count: 5, key: 'units_succeeded', passed: true, total: 5 }),
     );

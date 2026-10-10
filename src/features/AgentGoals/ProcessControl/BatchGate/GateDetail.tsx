@@ -1,4 +1,3 @@
-import type { GoalRolloutGateCheck, GoalRolloutGateEvaluation } from '@lobechat/types';
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
@@ -9,7 +8,12 @@ import { useTranslation } from 'react-i18next';
 
 import type { GoalGraphView } from '../goalGraphViewModel';
 import { CELL_VISUAL } from '../Graph/BatchGroups';
-import type { BatchGateState, BatchModel, BatchRound } from '../Graph/batchModel';
+import {
+  type BatchGateState,
+  type BatchModel,
+  type BatchRound,
+  verdictChecks,
+} from '../Graph/batchModel';
 import { KindDot } from '../shared';
 import { type GateCheckLike, useGateCheckCopy } from './useGateCheckCopy';
 
@@ -73,18 +77,6 @@ const Section = memo<{ children: ReactNode; extra?: ReactNode; title: string }>(
 
 Section.displayName = 'GoalGateDetailSection';
 
-/** A unit hold (R6) records no gate checks; it reads as the one check it broke. */
-const checksOf = (evaluation: GoalRolloutGateEvaluation): GoalRolloutGateCheck[] =>
-  evaluation.trigger === 'unit'
-    ? [
-        {
-          key: 'units_succeeded',
-          nodeIds: evaluation.nodeId ? [evaluation.nodeId] : undefined,
-          passed: false,
-        },
-      ]
-    : evaluation.checks;
-
 interface GateDetailProps {
   graph: GoalGraphView;
   model: BatchModel;
@@ -128,7 +120,7 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
   })();
 
   // The latest verdict's checks, or — before any — the ones it will run.
-  const checks: GateCheckLike[] = latest ? checksOf(latest) : model.gateChecks;
+  const checks: GateCheckLike[] = latest ? verdictChecks(latest) : model.gateChecks;
 
   const nodeLink = (nodeId: string) => {
     const view = graph.byId[nodeId];
@@ -228,7 +220,7 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
         ) : (
           <Flexbox gap={6}>
             {[...evaluations].reverse().map((evaluation) => {
-              const failed = checksOf(evaluation)
+              const failed = verdictChecks(evaluation)
                 .filter((check) => !check.passed)
                 .map((check) => copy(check).label);
               const text =
