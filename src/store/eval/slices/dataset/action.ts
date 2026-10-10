@@ -1,100 +1,126 @@
-import isEqual from 'fast-deep-equal';
-import { type SWRResponse } from 'swr';
+import type { AgentEvalDataset, AgentEvalDatasetListItem } from '@lobechat/types';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
-import { evalKeys } from '@/libs/swr/keys';
+import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/replica';
 import { agentEvalService } from '@/services/agentEval';
-import { type EvalStore } from '@/store/eval/store';
+import { type EvalStore, useEvalStore } from '@/store/eval/store';
 import { type StoreSetter } from '@/store/types';
 
-import { type DatasetDetailDispatch, datasetDetailReducer } from './reducer';
+import { ALL_DATASETS_KEY, datasetDetailResource, datasetListResource } from './projection';
 
 type Setter = StoreSetter<EvalStore>;
+
+/** The scope-wide list takes no params; the literal keeps `useSync` active. */
+const ALL_DATASETS_PARAMS = {} as Record<string, never>;
+
+/** Pre-migration `useFetchAllDatasets` return shape, backed by the scope-wide entry. */
+export interface DatasetListSyncResult extends ReplicaSyncResult {
+  /** The list once it has settled (hydrated or fetched), else `undefined`. */
+  data: AgentEvalDatasetListItem[] | undefined;
+  /** First load in flight with nothing settled yet. */
+  isLoading: boolean;
+  /** Alias of `revalidate`, kept for the pre-migration call sites. */
+  mutate: () => Promise<unknown>;
+}
+
+/** Pre-migration `useFetchDatasetDetail` return shape, backed by the detail replica. */
+export interface DatasetDetailSyncResult {
+  /** The dataset once it has settled (hydrated or fetched), else `undefined`. */
+  data: AgentEvalDataset | undefined;
+  error: unknown;
+  /** First load in flight with nothing settled yet. */
+  isLoading: boolean;
+  /** Alias of `revalidate`, kept for the pre-migration call sites. */
+  mutate: () => Promise<unknown>;
+}
 
 export const createDatasetSlice = (set: Setter, get: () => EvalStore, _api?: unknown) =>
   new DatasetActionImpl(set, get, _api);
 
 export class DatasetActionImpl {
+  readonly #detail;
   readonly #get: () => EvalStore;
-  readonly #set: Setter;
+  readonly #list;
 
   constructor(set: Setter, get: () => EvalStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
+
+    // Two local-first resources over the dataset entity, each owning ONE store
+    // location (the selectors keep reading those maps):
+    // - `#list`: benchmark-scoped lists + the scope-wide list → `datasetListMap`
+    // - `#detail`: by-id dataset page → `datasetDetailMap`
+    this.#list = createReplicaSlice(datasetListResource, {
+      actionPrefix: 'datasetList',
+      fetcher: ({ benchmarkId }) =>
+        benchmarkId
+          ? agentEvalService.listDatasets(benchmarkId)
+          : agentEvalService.listAllDatasets(),
+      get,
+      set,
+      stateKey: 'datasetListReplica',
+      view: recordLens<EvalStore, AgentEvalDatasetListItem[]>('datasetListMap'),
+    });
+    this.#detail = createReplicaSlice(datasetDetailResource, {
+      actionPrefix: 'datasetDetail',
+      fetcher: (id) => agentEvalService.getDataset(id),
+      get,
+      set,
+      stateKey: 'datasetDetailReplica',
+      view: recordLens<EvalStore, AgentEvalDataset>('datasetDetailMap'),
+    });
   }
 
   refreshDatasetDetail = async (id: string): Promise<void> => {
-    await mutate(evalKeys.datasetDetail(id));
+    await this.#detail.revalidate(id);
   };
 
   refreshDatasets = async (benchmarkId: string): Promise<void> => {
-    await mutate(evalKeys.datasets(benchmarkId));
+    await this.#list.revalidate(benchmarkId);
   };
 
-  useFetchDatasetDetail = (id?: string): SWRResponse =>
-    useClientDataSWR(
-      id ? evalKeys.datasetDetail(id) : null,
-      () => agentEvalService.getDataset(id!),
-      {
-        onSuccess: (data: any) => {
-          this.#get().internal_dispatchDatasetDetail({
-            id: id!,
-            type: 'setDatasetDetail',
-            value: data,
-          });
-          this.#get().internal_updateDatasetDetailLoading(id!, false);
-        },
-      },
-    );
+  /**
+   * Fetch orchestration only (the dataset is read from `datasetDetailMap`).
+   * Keeps the pre-migration `{ data, error, isLoading, mutate }` shape.
+   */
+  useFetchDatasetDetail = (id?: string): DatasetDetailSyncResult => {
+    const sync = this.#detail.useSync(id ?? null);
+    // Subscribe so a replica commit (hydrate or server replace) re-renders the
+    // consumer; the value itself is read through the store below.
+    useEvalStore((s) => (id ? s.datasetDetailMap[id] : undefined));
+    const data = id ? this.#get().datasetDetailMap[id] : undefined;
+    return {
+      data,
+      error: sync.error,
+      // A failed first load is neither loading nor settled: gate on the error
+      // so the page falls through to its error state instead of a skeleton.
+      isLoading: data === undefined && !sync.error,
+      mutate: sync.revalidate,
+    };
+  };
 
-  useFetchDatasets = (benchmarkId?: string): SWRResponse =>
-    useClientDataSWR(
-      benchmarkId ? evalKeys.datasets(benchmarkId) : null,
-      () => agentEvalService.listDatasets(benchmarkId!),
-      {
-        onSuccess: (data: any) => {
-          this.#set(
-            {
-              datasetList: data,
-              isLoadingDatasets: false,
-            },
-            false,
-            'useFetchDatasets/success',
-          );
-        },
-      },
-    );
+  /**
+   * Fetch orchestration only; read the rows with `datasetSelectors.datasetList`.
+   */
+  useFetchDatasets = (benchmarkId?: string): ReplicaSyncResult =>
+    this.#list.useSync(benchmarkId ? { benchmarkId } : null);
 
   /**
    * Every dataset. Without this a dataset is only reachable through its
    * benchmark, so one belonging to none could be created but never found.
+   * Keeps the pre-migration `{ data, isLoading }` shape.
    */
-  useFetchAllDatasets = (): SWRResponse =>
-    useClientDataSWR(evalKeys.datasetsAll(), () => agentEvalService.listAllDatasets());
-
-  internal_dispatchDatasetDetail = (payload: DatasetDetailDispatch): void => {
-    const currentMap = this.#get().datasetDetailMap;
-    const nextMap = datasetDetailReducer(currentMap, payload);
-
-    if (isEqual(nextMap, currentMap)) return;
-
-    this.#set({ datasetDetailMap: nextMap }, false, `dispatchDatasetDetail/${payload.type}`);
-  };
-
-  internal_updateDatasetDetailLoading = (id: string, loading: boolean): void => {
-    this.#set(
-      (state) => {
-        if (loading) {
-          return { loadingDatasetDetailIds: [...state.loadingDatasetDetailIds, id] };
-        }
-        return {
-          loadingDatasetDetailIds: state.loadingDatasetDetailIds.filter((i) => i !== id),
-        };
-      },
-      false,
-      'updateDatasetDetailLoading',
-    );
+  useFetchAllDatasets = (): DatasetListSyncResult => {
+    // Subscribe so a replica commit re-renders the consumer (sidebar / overview);
+    // the value itself is read through the store below.
+    useEvalStore((s) => s.datasetListMap[ALL_DATASETS_KEY]);
+    const sync = this.#list.useSync(ALL_DATASETS_PARAMS);
+    const data = this.#get().datasetListMap[ALL_DATASETS_KEY];
+    return {
+      ...sync,
+      data,
+      isLoading: data === undefined && !sync.error,
+      mutate: sync.revalidate,
+    };
   };
 }
 

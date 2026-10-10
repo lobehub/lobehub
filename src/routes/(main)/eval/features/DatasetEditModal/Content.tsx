@@ -91,10 +91,10 @@ const styles = createStaticStyles(({ css }) => ({
 
 export interface DatasetEditContentProps {
   dataset: {
-    description?: string;
+    description?: string | null;
     evalMode?: string | null;
     id: string;
-    metadata?: Record<string, unknown>;
+    metadata?: Record<string, unknown> | null;
     name: string;
   };
   formId: string;
