@@ -292,6 +292,12 @@ export interface SubAgentBridgeParams {
   errorMessage?: string;
   /** Child op's final state — passed in local mode; loaded from the coordinator otherwise. */
   finalState?: AgentState;
+  /**
+   * How to resolve the parent once the anchor is backfilled. `resume` (default)
+   * parks + resumes the parent op; `settle` writes the result and stops — the
+   * parent turn already finished (default async dispatch).
+   */
+  mode?: 'resume' | 'settle';
   /** Child (sub-agent) operation ID. */
   operationId: string;
   parentOperationId: string;

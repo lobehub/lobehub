@@ -289,6 +289,11 @@ export interface CallAgentParams {
    * Only relevant when used within agent groups. Default: false
    */
   skipCallSupervisor?: boolean;
+  /**
+   * When true, block the parent turn until the called agent finishes (park +
+   * resume). Default false: dispatch and return with the thread id.
+   */
+  wait?: boolean;
 }
 
 // ==================== Get Agent Detail ====================

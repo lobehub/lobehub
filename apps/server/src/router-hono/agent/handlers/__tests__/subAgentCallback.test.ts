@@ -133,6 +133,7 @@ describe('subAgentCallback handler', () => {
       success: true,
     });
     expect(mockCompleteSubAgentBridge).toHaveBeenCalledWith({
+      mode: 'resume',
       operationId: 'op-child-1',
       parentOperationId: 'op-parent-1',
       reason: 'done',

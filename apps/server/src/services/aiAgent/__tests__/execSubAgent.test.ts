@@ -632,7 +632,9 @@ describe('AiAgentService.execSubAgent', () => {
         expect.objectContaining({
           appContext: expect.objectContaining({
             isSubAgent: true,
-            subAgentProgress: { parentOperationId: 'parent-op-2', toolMessageId: 'tool-msg-2' },
+            // A non-blocking continuation (`settle`) has no parked parent to push
+            // live progress to, so `subAgentProgress` is not injected.
+            subAgentProgress: undefined,
             threadId: 'thread-old',
           }),
           hooks: expect.arrayContaining([
@@ -640,6 +642,7 @@ describe('AiAgentService.execSubAgent', () => {
               id: 'sub-agent-bridge',
               webhook: expect.objectContaining({
                 body: {
+                  mode: 'settle',
                   parentOperationId: 'parent-op-2',
                   threadId: 'thread-old',
                   toolMessageId: 'tool-msg-2',
@@ -656,6 +659,32 @@ describe('AiAgentService.execSubAgent', () => {
         success: true,
         threadId: 'thread-old',
       });
+    });
+
+    it('injects live progress and resumes when the continuation blocks (wait:true)', async () => {
+      const execAgentSpy = vi.spyOn(service, 'execAgent').mockResolvedValue(execAgentResult);
+
+      await service.execVirtualSubAgent({ ...followUp, wait: true });
+
+      expect(execAgentSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          appContext: expect.objectContaining({
+            isSubAgent: true,
+            // `resume` keeps the parent parked, so live progress rides its
+            // gateway channel (see `appContext.subAgentProgress`).
+            subAgentProgress: { parentOperationId: 'parent-op-2', toolMessageId: 'tool-msg-2' },
+            threadId: 'thread-old',
+          }),
+          hooks: expect.arrayContaining([
+            expect.objectContaining({
+              id: 'sub-agent-bridge',
+              webhook: expect.objectContaining({
+                body: expect.objectContaining({ mode: 'resume' }),
+              }),
+            }),
+          ]),
+        }),
+      );
     });
 
     it('allows a stale processing thread whose run was abandoned', async () => {

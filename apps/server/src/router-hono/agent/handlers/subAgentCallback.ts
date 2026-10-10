@@ -37,6 +37,7 @@ export async function subAgentCallback(c: Context): Promise<Response> {
 
   const {
     errorMessage,
+    mode,
     operationId,
     parentOperationId,
     reason,
@@ -113,6 +114,7 @@ export async function subAgentCallback(c: Context): Promise<Response> {
 
     const resumed = await aiAgentService.completeSubAgentBridge({
       errorMessage: typeof errorMessage === 'string' ? errorMessage : undefined,
+      mode: mode === 'settle' ? 'settle' : 'resume',
       operationId,
       parentOperationId,
       reason: reason ?? 'done',

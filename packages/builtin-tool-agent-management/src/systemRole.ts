@@ -152,12 +152,11 @@ const executionGuideSection = `
 <execution_guide>
 ## Calling Agents
 
-### Synchronous Call
-For quick responses in the conversation context:
-\`\`\`
-callAgent(agentId, instruction)
-\`\`\`
-The agent will respond directly in the current conversation.
+### Asynchronous by default
+\`callAgent(agentId, instruction)\` returns immediately with a thread id — the called agent runs in the background and its result is written back to the call agent card when it completes. Check progress with \`lh thread view <threadId>\`.
+
+### Blocking escape hatch
+\`callAgent(agentId, instruction, wait: true)\` blocks the whole turn and returns the result inline — use only when the very next step strictly needs it.
 </execution_guide>`;
 
 const subAgentContextSection = `
@@ -194,7 +193,7 @@ export const buildSystemPrompt = (
     ? `
 
 **Execution:**
-- **callAgent**: Invoke an agent to handle a task`
+- **callAgent**: Dispatch an agent to handle a task. It returns immediately with a thread id — the called agent runs in the background and its result is written back to the call agent card when it completes. Check progress with \`lh thread view <threadId>\`; do not wait for a result in the same turn. Set \`wait: true\` only when the very next step strictly needs the result inline — it blocks this whole turn.`
     : ''
 }
 </core_capabilities>

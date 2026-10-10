@@ -150,6 +150,11 @@ export interface CallSubAgentParams {
    */
   subAgentId?: string;
   timeout?: number;
+  /**
+   * When true, block the parent turn until the sub-agent finishes (park +
+   * resume). Default false: dispatch and return with the thread id.
+   */
+  wait?: boolean;
 }
 
 /** Execution stats reported back by a finished sub-agent run. */

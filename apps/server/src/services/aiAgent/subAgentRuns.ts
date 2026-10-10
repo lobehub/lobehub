@@ -60,6 +60,14 @@ export interface ExecAgentThreadRunOptions {
    */
   chatConfig?: Partial<LobeAgentChatConfig> | null;
   /**
+   * How the completion bridge resolves the parent when it fires:
+   * - `resume` (default): park + resume the same parent op (the `wait:true`
+   *   legacy behavior).
+   * - `settle`: backfill the anchor tool message with the child's result but do
+   *   NOT resume — the parent turn already finished (default async dispatch).
+   */
+  completionMode?: 'resume' | 'settle';
+  /**
    * Device the spawned run inherits from its parent, forwarded to execAgent as
    * `deviceId` / `localDeviceId`. Only set by the callSubAgent path; see
    * {@link ExecVirtualSubAgentParams.deviceId}.
@@ -284,6 +292,7 @@ export const execAgentThreadRun = async (
                 parentOperationId,
                 parentMessageId,
                 thread.id,
+                options.completionMode ?? 'resume',
               ),
         ]
       : threadHooks;
@@ -306,7 +315,10 @@ export const execAgentThreadRun = async (
   // members are excluded — their whole stream is already mirrored onto the
   // supervisor's channel via `mirrorToOperationId`.
   const subAgentProgress =
-    options.resumeParentOnComplete && parentOperationId && options.orchestrationRole !== 'member'
+    options.resumeParentOnComplete &&
+    parentOperationId &&
+    options.orchestrationRole !== 'member' &&
+    options.completionMode !== 'settle'
       ? { parentOperationId, toolMessageId: parentMessageId }
       : undefined;
 

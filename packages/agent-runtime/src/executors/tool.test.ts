@@ -611,6 +611,38 @@ describe('tool executors', () => {
     );
   });
 
+  // Default async dispatch: a non-deferred result that carries
+  // `state.toolMessageId` (a `callSubAgent` dispatch that pre-created its anchor
+  // card) must REUSE that row WITHOUT writing to it. The dispatch owns the
+  // anchor content and persists it before forking the child; an update here
+  // would race the completion bridge and could clobber a finished result.
+  it('reuses a pre-created anchor row for a non-deferred result without rewriting it', async () => {
+    runTool.mockResolvedValue({
+      attempts: 1,
+      result: {
+        content: 'Sub-agent dispatched (threadId: thread-9)',
+        state: { status: 'dispatched', threadId: 'thread-9', toolMessageId: 'tool-msg-anchor' },
+        success: true,
+      },
+    });
+
+    const result = await callTool(host)(
+      {
+        payload: {
+          parentMessageId: 'assistant-msg-1',
+          toolCalling: createToolCall('sub-agent-call', 'lobe-agent'),
+        },
+        type: 'call_tool',
+      },
+      createState(),
+    );
+
+    expect(createToolMessage).not.toHaveBeenCalled();
+    expect(updateToolMessage).not.toHaveBeenCalled();
+    // Non-deferred: the parent turn does NOT park.
+    expect(result.newState.status).not.toBe('waiting_for_async_tool');
+  });
+
   // An approved async tool (group member task / sub-agent) resumes with the
   // approve op's seeded "…" placeholder still on state. Parking keeps nothing in
   // it: the server-side resume writes its own reply, and the empty seed left

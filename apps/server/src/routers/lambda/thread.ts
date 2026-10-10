@@ -104,6 +104,37 @@ export const threadRouter = router({
       return ctx.threadModel.queryByTopicId(input.topicId);
     }),
 
+  getThreadTranscript: threadProcedure
+    .input(
+      z.object({
+        includeMessages: z.boolean().default(true),
+        limit: z.number().int().min(1).max(500).default(50),
+        offset: z.number().int().min(0).default(0),
+        threadId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const thread = await ctx.threadModel.findById(input.threadId);
+      if (!thread) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Thread not found: ${input.threadId}`,
+        });
+      }
+
+      if (!input.includeMessages) {
+        return { items: [], thread, total: null };
+      }
+
+      const transcript = await ctx.messageModel.queryThreadTranscript({
+        limit: input.limit,
+        offset: input.offset,
+        threadId: input.threadId,
+      });
+
+      return { ...transcript, thread };
+    }),
+
   removeAllThreads: threadProcedure
     .use(withScopedPermission('topic:delete'))
     .mutation(async ({ ctx }) => {

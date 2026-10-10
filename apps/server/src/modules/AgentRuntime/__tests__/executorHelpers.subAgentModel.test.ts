@@ -111,7 +111,7 @@ describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () 
     });
 
     expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({ pluginState: { status: 'pending', threadId: 'thread-1' } }),
+      expect.objectContaining({ pluginState: { status: 'dispatched', threadId: 'thread-1' } }),
     );
     expect(execVirtualSubAgent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -126,6 +126,43 @@ describe('buildServerVirtualSubAgentRunner continuing an earlier sub-agent', () 
       threadId: 'thread-1',
       toolMessageId: 'placeholder-2',
     });
+  });
+
+  it('keeps the legacy pending placeholder when the continuation blocks (wait:true)', async () => {
+    const execVirtualSubAgent = vi
+      .fn()
+      .mockResolvedValue({ operationId: 'child-op-2', success: true, threadId: 'thread-1' });
+    const create = vi.fn().mockResolvedValue({ id: 'placeholder-2' });
+    const runner = buildServerVirtualSubAgentRunner(
+      {
+        execVirtualSubAgent,
+        messageModel: { create },
+        operationId: 'parent-op',
+        topicId: 'topic-1',
+      } as unknown as RuntimeExecutorContext,
+      {
+        operationId: 'parent-op',
+        origin: { agentId: 'agent-1', topicId: 'topic-1' },
+      } as AgentState,
+      { id: 'tool-call-2' } as ChatToolPayload,
+      'parent-message-2',
+    );
+
+    await runner!.run({
+      description: 'Hand over',
+      instruction: 'Summarize your findings',
+      subAgentId: 'thread-1',
+      wait: true,
+    });
+
+    // `wait:true` keeps the legacy empty park: the placeholder stays `pending`
+    // so the bridge resumes this same parent op when the child lands.
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: '',
+        pluginState: { status: 'pending', threadId: 'thread-1' },
+      }),
+    );
   });
 });
 

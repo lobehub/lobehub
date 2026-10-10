@@ -678,6 +678,10 @@ export const callTool =
       });
 
       let toolMessageId: string;
+      // An async tool that already created its own anchor row (e.g. a
+      // non-blocking `callSubAgent` dispatch that returns `state.toolMessageId`)
+      // reuses it here instead of writing a duplicate tool message.
+      const preCreatedId = deferredToolMessageId(execution.result);
       if (execution.toolMessageId) {
         toolMessageId = execution.toolMessageId;
         if (!execution.resultPersisted) {
@@ -686,6 +690,13 @@ export const callTool =
       } else if (payload.skipCreateToolMessage) {
         toolMessageId = payload.parentMessageId;
         await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+      } else if (preCreatedId) {
+        // The tool already persisted this row (an async sub-agent dispatch owns
+        // its anchor content and writes it before forking the child). Updating it
+        // here would RACE the completion bridge: a child that finishes before this
+        // write would have its result overwritten by the dispatch notice. Reuse
+        // the id and write nothing.
+        toolMessageId = preCreatedId;
       } else {
         const toolMessage = await createToolMessage({
           host,
@@ -995,6 +1006,8 @@ export const callToolsBatch =
         });
 
         let toolMessageId: string;
+        // Same pre-created-anchor reuse as the single-tool path.
+        const preCreatedId = deferredToolMessageId(execution.result);
         if (execution.toolMessageId) {
           toolMessageId = execution.toolMessageId;
           if (!execution.resultPersisted) {
@@ -1006,6 +1019,9 @@ export const callToolsBatch =
           // original stranded under the same assistant.
           toolMessageId = existingMessageId;
           await updateExistingToolMessage({ host, result: executionResult, toolMessageId });
+        } else if (preCreatedId) {
+          // Same as the single-tool path: the tool owns this anchor's content.
+          toolMessageId = preCreatedId;
         } else {
           const toolMessage = await createToolMessage({
             host,

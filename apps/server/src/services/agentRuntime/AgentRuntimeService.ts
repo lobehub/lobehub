@@ -4390,6 +4390,13 @@ export class AgentRuntimeService {
     // 2. Barrier + CAS + resume the parent op (infra errors propagate too).
     // Pass the just-backfilled message id so the barrier trusts this write
     // instead of re-reading a possibly-stale replica.
+    //
+    // Default async dispatch (`settle`): the parent turn already finished, so
+    // there is nothing to resume and no verify to arm — the backfilled anchor
+    // carries the child's result. Resuming here would only run the barrier
+    // against a non-parked op and arm a pointless watchdog.
+    if (params.mode === 'settle') return false;
+
     return this.tryResumeParentFromAsyncTool(
       { parentOperationId },
       { knownFulfilledMessageId: toolMessageId, scheduleVerifyOnHold: true },

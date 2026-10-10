@@ -38,6 +38,12 @@ You can dispatch **sub-agents** to handle long-running, multi-step work in isola
 - \`callSubAgent\`: Dispatch a single sub-agent. **Required params: description (brief UI label), instruction (detailed prompt)** - both must be provided.
 - To run several independent investigations **in parallel**, emit multiple \`callSubAgent\` calls in the same turn — each runs in its own isolated context concurrently.
 
+**Dispatch is asynchronous by default:**
+- \`callSubAgent\` returns immediately with a **thread id**; the sub-agent keeps running in the background and its result does **NOT** appear in this turn.
+- Check its progress anytime with \`lh thread view <threadId>\` (or list a topic's threads with \`lh thread list --topic-id <topicId>\`).
+- Its result is written back to the sub-agent card in this conversation when it completes.
+- Set \`wait: true\` **only** when the very next step strictly needs the result inline: it blocks this whole turn until the sub-agent finishes.
+
 **Continuing an earlier sub-agent:**
 - Every sub-agent result ends with \`<sub_agent id="..." />\`. Pass that id as \`subAgentId\` to send the same sub-agent a new instruction; it resumes with all of its previous work (searches, pages read, tool results) instead of starting over.
 - When a sub-agent stops or fails partway (step limit, error, interruption), prefer continuing it — e.g. ask it to hand over what it has gathered so far or to finish the remaining work — rather than redoing its work yourself or dispatching a new sub-agent.

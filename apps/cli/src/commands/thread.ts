@@ -3,6 +3,7 @@ import pc from 'picocolors';
 
 import { getTrpcClient } from '../api/client';
 import { confirm, outputJson, printTable, timeAgo, truncate } from '../utils/format';
+import { registerThreadViewCommand } from './thread/view';
 
 export function registerThreadCommand(program: Command) {
   const thread = program.command('thread').description('Manage message threads');
@@ -96,4 +97,6 @@ export function registerThreadCommand(program: Command) {
       });
       console.log(`${pc.green('✓')} Deleted thread ${pc.bold(id)}`);
     });
+
+  registerThreadViewCommand(thread);
 }

@@ -50,7 +50,7 @@ describe('buildServerVirtualSubAgentRunner after tool approval', () => {
 
     expect(messageModel.create).not.toHaveBeenCalled();
     expect(messageModel.updatePluginState).toHaveBeenCalledWith('approved-tool-row', {
-      status: 'pending',
+      status: 'dispatched',
     });
     expect(execVirtualSubAgent).toHaveBeenCalledWith(
       expect.objectContaining({ parentMessageId: 'approved-tool-row' }),
@@ -76,8 +76,20 @@ describe('buildServerVirtualSubAgentRunner after tool approval', () => {
     const result = await runner.run({ description: 'research', instruction: 'go' });
 
     expect(messageModel.create).toHaveBeenCalledWith(
-      expect.objectContaining({ parentId: 'assistant-1', pluginState: { status: 'pending' } }),
+      expect.objectContaining({ parentId: 'assistant-1', pluginState: { status: 'dispatched' } }),
     );
     expect(result).toMatchObject({ started: true, toolMessageId: 'new-placeholder' });
+  });
+
+  it('keeps the legacy pending approved row when the call blocks (wait:true)', async () => {
+    const { messageModel, runner } = buildRunner('approved-tool-row');
+
+    await runner.run({ description: 'research', instruction: 'go', wait: true });
+
+    // `wait:true` parks instead of dispatching: the approved row stays `pending`
+    // and is backfilled when the parent op resumes with the child's result.
+    expect(messageModel.updatePluginState).toHaveBeenCalledWith('approved-tool-row', {
+      status: 'pending',
+    });
   });
 });

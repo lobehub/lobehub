@@ -5,8 +5,8 @@ import { getTrpcClient } from '../../api/client';
 import { timeAgo } from '../../utils/format';
 import { log } from '../../utils/logger';
 
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 500;
+export const DEFAULT_LIMIT = 50;
+export const MAX_LIMIT = 500;
 const MAX_CONTENT_LENGTH = 20_000;
 const MAX_TOOL_ARGUMENTS_LENGTH = 8_000;
 const MAX_DATA_URL_PREFIX_LENGTH = 256;
@@ -27,7 +27,7 @@ interface PersistedToolPayload {
   identifier?: string;
 }
 
-interface TranscriptMessage {
+export interface TranscriptMessage {
   content: string | null;
   createdAt: Date;
   id: string;
@@ -48,13 +48,13 @@ interface TopicDetail {
   updatedAt?: Date | string | null;
 }
 
-interface Pagination {
+export interface Pagination {
   from: number;
   limit: number;
   offset: number;
 }
 
-const fail = (message: string): never => {
+export const fail = (message: string): never => {
   log.error(message);
   process.exit(1);
 };
@@ -72,7 +72,11 @@ const parsePositiveInteger = (value: string, option: string): number => {
   return parsed;
 };
 
-const resolvePagination = (options: TopicViewOptions): Pagination => {
+export const resolvePagination = (options: {
+  from?: string;
+  limit?: string;
+  to?: string;
+}): Pagination => {
   const from = parsePositiveInteger(options.from ?? '1', '--from');
 
   if (options.to !== undefined && options.limit !== undefined) {
@@ -169,7 +173,7 @@ const formatTerminalText = (value: string, maxLength: number, label: string): st
   return truncated ? `${normalized}\n[${label} truncated; use --json for full output]` : normalized;
 };
 
-const formatSingleLine = (value: unknown, maxLength = 200): string => {
+export const formatSingleLine = (value: unknown, maxLength = 200): string => {
   const stringValue = String(value ?? '');
   const truncated = stringValue.length > maxLength;
   const normalized = normalizeTerminalText(
@@ -222,7 +226,7 @@ const renderTopicHeader = (topic: TopicDetail) => {
   console.log('');
 };
 
-const renderMessage = (message: TranscriptMessage) => {
+export const renderMessage = (message: TranscriptMessage) => {
   const role = formatSingleLine(message.role || 'unknown', 32) || 'unknown';
   const thread = message.threadId
     ? pc.dim(`↳ [thread ${formatSingleLine(message.threadId, 80)}] `)

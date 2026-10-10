@@ -1723,6 +1723,9 @@ export class AiAgentService {
       model: params.model,
       provider: params.provider,
       resumeParentOnComplete: true,
+      // Default async: the completion bridge backfills the anchor but does NOT
+      // resume the (already finished) parent. `wait:true` keeps park + resume.
+      completionMode: params.wait === true ? 'resume' : 'settle',
     });
 
   /**
