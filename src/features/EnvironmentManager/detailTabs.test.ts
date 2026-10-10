@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { copyTabs, isCopyTab } from './detailTabs';
+import { copyTabs, isCopyTab, resolveDetailTab } from './detailTabs';
 
 describe('copyTabs', () => {
   it('folds a single copy into an Overview, with no Copies tab', () => {
@@ -21,5 +21,26 @@ describe('isCopyTab', () => {
     expect(isCopyTab('overview')).toBe(true);
     expect(isCopyTab('instances')).toBe(true);
     expect(isCopyTab('settings')).toBe(false);
+  });
+});
+
+describe('resolveDetailTab', () => {
+  it('opens on Overview for a single copy, and on the Copies list for several', () => {
+    expect(resolveDetailTab(undefined, 1)).toBe('overview');
+    expect(resolveDetailTab(undefined, 2)).toBe('instances');
+  });
+
+  it('moves Overview to the Copies list once a second copy exists', () => {
+    expect(resolveDetailTab('overview', 2)).toBe('instances');
+  });
+
+  it('moves the Copies list and its history back to Overview at one copy', () => {
+    expect(resolveDetailTab('instances', 1)).toBe('overview');
+    expect(resolveDetailTab('sessions', 1)).toBe('overview');
+  });
+
+  it('keeps a form tab whatever the copy count', () => {
+    expect(resolveDetailTab('settings', 1)).toBe('settings');
+    expect(resolveDetailTab('variables', 3)).toBe('variables');
   });
 });

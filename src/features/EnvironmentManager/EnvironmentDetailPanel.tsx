@@ -20,7 +20,7 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { type CopyTab, copyTabs, isCopyTab } from './detailTabs';
+import { type CopyTab, copyTabs, resolveDetailTab } from './detailTabs';
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
 import { repositoryPath } from './repository';
@@ -106,11 +106,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
     (instance) => instance.environmentId === environment.id,
   ).length;
   const copies = copyTabs(instanceCount);
-  // A tab that no longer exists falls back to the first one — a second copy
-  // made while Overview is open turns Overview into the copies list, and the
-  // last extra copy deleted turns the list back into Overview.
-  const tab: DetailTab =
-    picked && (!isCopyTab(picked) || copies.includes(picked)) ? picked : copies[0];
+  const tab: DetailTab = resolveDetailTab(picked, instanceCount);
 
   return (
     <Flexbox className={styles.container} gap={20}>

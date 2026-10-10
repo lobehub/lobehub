@@ -20,13 +20,19 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { copyBlockReason } from './copyAvailability';
 import {
   openCopyInstanceModal,
   openCreateInstanceModal,
   openEditInstanceModal,
 } from './CreateInstanceModal';
 import { describeError } from './errorMessage';
+import {
+  canCopyInstance,
+  canRemoveInstance,
+  copyBlockReason,
+  copyEntryTitle,
+  recheckCopySource,
+} from './instanceActions';
 import { openInstanceFileBrowser } from './InstanceFileBrowser';
 import type { SandboxInstance } from './useEnvironmentData';
 import { useBuildStarting, useInstanceBuild, useInstances } from './useEnvironmentData';
@@ -256,23 +262,16 @@ const InstanceRow = memo<InstanceRowProps>(
     const stoppable = editable && instance.inUse && instance.status !== 'pending';
 
     const copyBlocked = copyBlockReason(instance, occupancyUnavailable);
-    // Occupancy changes without the page being told — a conversation picks
-    // this copy up in another tab — so it is read again on the click rather
-    // than trusted from whenever the list was fetched.
     const [checkingCopy, setCheckingCopy] = useState(false);
+    // Read again on the click rather than trusted from whenever the list was
+    // fetched; see `recheckCopySource`.
     const startCopy = async () => {
       setCheckingCopy(true);
-      try {
-        const fresh = await refreshRows();
-        const latest = fresh?.instances.find((row) => row.id === instance.id);
-        if (latest && copyBlockReason(latest, fresh?.occupancyUnavailable ?? false)) {
-          toast.error(t('environments.instances.copyInUse'));
-          return;
-        }
-      } catch {
-        // The check is a courtesy; the server checks again and says why.
-      } finally {
-        setCheckingCopy(false);
+      const blocked = await recheckCopySource(instance.id, refreshRows);
+      setCheckingCopy(false);
+      if (blocked) {
+        toast.error(t(copyEntryTitle(blocked)));
+        return;
       }
       openCopyInstanceModal(instance);
     };
@@ -459,21 +458,13 @@ const InstanceRow = memo<InstanceRowProps>(
             Greyed out rather than hidden while the source is held, with the
             reason as its tooltip, so the entry does not vanish and come back
             as runs start and end. */}
-          {editable && (
+          {canCopyInstance(editable) && (
             <ActionIcon
               disabled={Boolean(copyBlocked) || checkingCopy}
               icon={CopyIcon}
               loading={checkingCopy}
               size={'small'}
-              title={t(
-                copyBlocked === 'inUse'
-                  ? 'environments.instances.copyInUse'
-                  : copyBlocked === 'occupancyUnknown'
-                    ? 'environments.instances.copyOccupancyUnknown'
-                    : copyBlocked === 'building'
-                      ? 'environments.instances.copyBuilding'
-                      : 'environments.instances.copy',
-              )}
+              title={t(copyEntryTitle(copyBlocked))}
               onClick={() => void startCopy()}
             />
           )}
@@ -485,10 +476,8 @@ const InstanceRow = memo<InstanceRowProps>(
               onClick={() => openEditInstanceModal(instance)}
             />
           )}
-          {/* Never on the default copy: it is what the environment is, and the
-            server refuses to delete it on its own. A broken one is rebuilt;
-            with no other copy left, deleting the environment is how it goes. */}
-          {editable && !instance.isDefault && (
+          {/* Never on the default copy; see `canRemoveInstance`. */}
+          {canRemoveInstance(instance, editable) && (
             <ActionIcon
               disabled={removing}
               icon={Trash2Icon}

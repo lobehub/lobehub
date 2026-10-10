@@ -13,6 +13,7 @@ import ListSkeleton from '@/components/ListSkeleton';
 
 import { openCreateEnvironmentModal } from './CreateEnvironmentModal';
 import { openCreateInstanceModal } from './CreateInstanceModal';
+import { openCreatedEnvironment } from './environmentCreated';
 import EnvironmentDetailPanel from './EnvironmentDetailPanel';
 import EnvironmentItem from './EnvironmentItem';
 import {
@@ -132,22 +133,9 @@ const EnvironmentManager = memo<EnvironmentManagerProps>(({ tabs, visibility }) 
     openCreateInstanceModal({ environmentId: id });
   };
 
-  /**
-   * Straight after creating an environment: open it, and start its default
-   * copy, which the server made in the same call. Nothing is asked — the person
-   * has not started any work yet, so a name and a folder would be answers made
-   * up on the spot; both are derived, and renaming is on the copy's row.
-   *
-   * A code environment clones and installs, so this is where that build
-   * starts, after the dialog has closed. A files environment has nothing to
-   * build: the same call settles it as ready on the server without starting a
-   * sandbox, so it never sits in a "pending" state waiting on a build that
-   * will not come.
-   */
-  const onEnvironmentCreated = (created: CreatedEnvironment) => {
-    setSelectedId(created.id);
-    void buildInstance(created.defaultInstance.id);
-  };
+  // No instance dialog after creating one: see `openCreatedEnvironment`.
+  const onEnvironmentCreated = (created: CreatedEnvironment) =>
+    openCreatedEnvironment(created, { buildInstance, select: setSelectedId });
 
   /**
    * Both lists, because the two halves of what this page shows are fetched

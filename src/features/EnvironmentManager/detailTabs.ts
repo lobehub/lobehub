@@ -16,3 +16,18 @@ export const isCopyTab = (tab: string): tab is CopyTab =>
  */
 export const copyTabs = (instanceCount: number): CopyTab[] =>
   instanceCount > 1 ? ['instances', 'sessions'] : ['overview'];
+
+/**
+ * The tab to show: the one picked, unless the copy count has since taken it
+ * away. A second copy made while Overview is open turns Overview into the
+ * Copies list; the last extra copy deleted turns the list back into Overview.
+ * Nothing picked yet lands on the first copy tab.
+ */
+export const resolveDetailTab = <T extends string>(
+  picked: T | undefined,
+  instanceCount: number,
+): T | CopyTab => {
+  const copies = copyTabs(instanceCount);
+
+  return picked && (!isCopyTab(picked) || copies.includes(picked)) ? picked : copies[0];
+};
