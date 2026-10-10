@@ -1,9 +1,11 @@
+import { DEFAULT_SETTINGS } from '@lobechat/config';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DEFAULT_PREFERENCE } from '@/const/user';
+import { cacheScope } from '@/libs/replica';
 import type * as SWRLib from '@/libs/swr';
-import { taskTemplateKeys, userKeys } from '@/libs/swr/keys';
+import { taskTemplateKeys } from '@/libs/swr/keys';
 import { userService } from '@/services/user';
 import { useUserStore } from '@/store/user';
 import { readUserDisplaySnapshot, writeUserDisplaySnapshot } from '@/store/user/displaySnapshot';
@@ -13,6 +15,7 @@ import { type UserInitializationState, type UserPreference } from '@/types/user'
 import { withSWR } from '~test-utils';
 
 import { isTaskTemplateRecommendationKey } from './action';
+import { initialCommonState } from './initialState';
 
 const swrMocks = vi.hoisted(() => ({
   mutate: vi.fn(),
@@ -35,10 +38,26 @@ vi.mock('swr', async (importOriginal) => {
   };
 });
 
+/**
+ * Pin the identity scope: the projection sets `user.id` from the payload, and
+ * an unmocked `useCacheScope` would recompute from that id mid-test.
+ */
+const SCOPE = 'user-common-test:personal';
+
 beforeEach(() => {
   localStorage.clear();
   swrMocks.mutate.mockReset();
   swrMocks.mutate.mockResolvedValue(undefined);
+  vi.spyOn(cacheScope, 'get').mockReturnValue(SCOPE);
+  vi.spyOn(cacheScope, 'use').mockReturnValue(SCOPE);
+  useUserStore.setState({
+    ...initialCommonState,
+    defaultSettings: DEFAULT_SETTINGS,
+    onboarding: undefined,
+    preference: DEFAULT_PREFERENCE,
+    settings: {},
+    user: undefined,
+  });
 });
 
 afterEach(() => {
@@ -54,7 +73,7 @@ describe('createCommonSlice', () => {
       expect(
         isTaskTemplateRecommendationKey(['taskTemplate:listDailyRecommend', 'seed', 3, 'zh-CN']),
       ).toBe(false);
-      expect(isTaskTemplateRecommendationKey(userKeys.initState())).toBe(false);
+      expect(isTaskTemplateRecommendationKey(['topic:list'])).toBe(false);
     });
   });
 
@@ -154,8 +173,9 @@ describe('createCommonSlice', () => {
       expect(userService.getUserState).not.toHaveBeenCalled();
       // 也不会触发 onSuccess 回调
       expect(successCallback).not.toHaveBeenCalled();
-      // 确保状态未改变
-      expect(result.current.data).toBeUndefined();
+      // 确保状态未被错误更新
+      expect(useUserStore.getState().isUserStateInit).toBe(false);
+      expect(result.current.isValidating).toBe(false);
     });
 
     it('should fetch user state correctly when user is login', async () => {
@@ -175,7 +195,7 @@ describe('createCommonSlice', () => {
       vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
       const successCallback = vi.fn();
 
-      const { result } = renderHook(
+      renderHook(
         () =>
           useUserStore().useInitUserState(true, mockServerConfig, {
             onSuccess: successCallback,
@@ -185,19 +205,20 @@ describe('createCommonSlice', () => {
         },
       );
 
-      // 等待 SWR 完成数据获取
-      await waitFor(() => expect(result.current.data).toEqual(mockUserState));
+      // 等待 replica 的 bootstrap 同步落库
+      await waitFor(() => expect(useUserStore.getState().isUserStateInit).toBe(true));
 
       // 验证状态是否正确更新
-      expect(useUserStore.getState().user?.avatar).toBe(mockUserState.avatar);
-      expect(userGeneralSettingsSelectors.config(useUserStore.getState() as any)).toEqual(
+      const state = useUserStore.getState();
+      expect(state.user?.avatar).toBe(mockUserState.avatar);
+      expect(userGeneralSettingsSelectors.config(state)).toEqual(
         expect.objectContaining({
           fontSize: 14,
           responseLanguage: expect.any(String),
           timezone: 'America/New_York',
         }),
       );
-      expect(useUserStore.getState().user?.email).toEqual(mockUserState.email);
+      expect(state.user?.email).toEqual(mockUserState.email);
       expect(successCallback).toHaveBeenCalledWith(mockUserState);
     });
 
@@ -213,12 +234,11 @@ describe('createCommonSlice', () => {
 
       vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
 
-      const { result } = renderHook(() => useUserStore().useInitUserState(true, mockServerConfig), {
+      renderHook(() => useUserStore().useInitUserState(true, mockServerConfig), {
         wrapper: withSWR,
       });
 
-      // 等待 SWR 完成数据获取
-      await waitFor(() => expect(result.current.data).toEqual(mockUserState));
+      await waitFor(() => expect(useUserStore.getState().isUserStateInit).toBe(true));
     });
 
     it('should fetch use server config correctly', async () => {
@@ -232,9 +252,9 @@ describe('createCommonSlice', () => {
       };
       vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
 
-      const { result } = renderHook(() => useUserStore().useInitUserState(true, mockServerConfig));
+      renderHook(() => useUserStore().useInitUserState(true, mockServerConfig));
 
-      await waitFor(() => expect(result.current.data).toEqual(mockUserState));
+      await waitFor(() => expect(useUserStore.getState().isUserStateInit).toBe(true));
     });
 
     it('should return saved preference when local storage has data', async () => {
@@ -256,15 +276,13 @@ describe('createCommonSlice', () => {
       };
       vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
 
-      const { result: preference } = renderHook(
-        () => result.current.useInitUserState(true, mockServerConfig),
-        { wrapper: withSWR },
-      );
+      renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
+        wrapper: withSWR,
+      });
 
       await waitFor(() => {
-        expect(preference.current.data?.preference).toEqual(savedPreference);
-        expect(result.current.isUserStateInit).toBeTruthy();
-        expect(result.current.preference).toEqual(savedPreference);
+        expect(useUserStore.getState().isUserStateInit).toBeTruthy();
+        expect(useUserStore.getState().preference).toEqual(savedPreference);
       });
     });
 
@@ -329,13 +347,13 @@ describe('createCommonSlice', () => {
         wrapper: withSWR,
       });
 
-      //   等待 SWR 完成数据获取
       await waitFor(() => {
-        expect(result.current.isUserStateInit).toBeTruthy();
+        const state = useUserStore.getState();
+        expect(state.isUserStateInit).toBeTruthy();
         // 验证状态未被错误更新
-        expect(result.current.user?.avatar).toEqual('abc');
+        expect(state.user?.avatar).toEqual('abc');
         // When settings is null, auto-detect general settings will set them
-        expect(result.current.settings).toEqual({
+        expect(state.settings).toEqual({
           general: { responseLanguage: expect.any(String), timezone: expect.any(String) },
         });
       });
@@ -358,8 +376,8 @@ describe('createCommonSlice', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isUserStateInit).toBeTruthy();
-        expect(result.current.settings.general?.responseLanguage).toBeUndefined();
+        expect(useUserStore.getState().isUserStateInit).toBeTruthy();
+        expect(useUserStore.getState().settings.general?.responseLanguage).toBeUndefined();
       });
     });
 
@@ -374,7 +392,6 @@ describe('createCommonSlice', () => {
           general: { fontSize: 12 },
         },
       };
-
       vi.spyOn(userService, 'getUserState').mockResolvedValueOnce(mockUserState);
 
       renderHook(() => result.current.useInitUserState(true, mockServerConfig), {
@@ -382,8 +399,8 @@ describe('createCommonSlice', () => {
       });
 
       await waitFor(() => {
-        expect(result.current.isUserStateInit).toBeTruthy();
-        expect(result.current.preference).toEqual(DEFAULT_PREFERENCE);
+        expect(useUserStore.getState().isUserStateInit).toBeTruthy();
+        expect(useUserStore.getState().preference).toEqual(DEFAULT_PREFERENCE);
       });
     });
   });

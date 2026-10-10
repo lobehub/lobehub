@@ -1311,7 +1311,6 @@ export const gatewayKeys = {
 };
 export const userKeys = {
   checkTrace: def('user:checkTrace', () => ['user:checkTrace']),
-  initState: def('user:initState', () => ['user:initState']),
 };
 export const imessageKeys = {
   bridgeStatus: def('imessage:bridgeStatus', () => ['imessage:bridgeStatus']),
