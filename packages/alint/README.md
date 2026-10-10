@@ -27,6 +27,8 @@ This is Phase 0: the rule set is a private workspace package (`@lobechat/alint`)
 | `no-unvalidated-redirect`          | warn     | server and web                                                | unvalidated return/callback targets                                     |
 | `no-prototype-pollution`           | warn     | server, desktop main, shared utilities                        | untrusted keys/paths reaching prototype setters                         |
 | `no-privileged-untrusted-electron` | warn     | Electron main/preload                                         | remote content with Node privileges or unrestricted IPC bridges         |
+| `no-removal-only-tests`            | warn     | app/package/client test and spec files                        | tests should prove behavior, not merely that a retired option is absent |
+| `no-redundant-api-copy`            | warn     | usage guides, builtin skills, CLI commands, public schemas    | keep ordinary instructions focused on supported actions                 |
 
 Package-level rules, kept next to the package they describe:
 
@@ -53,6 +55,59 @@ Rules come in two layers, and each layer is registered as its own plugin in `ali
 A per-file rule cannot see an import graph. When a package's boundary matters, pair its package-level rule with a deterministic test of the graph: `heterogeneous-agents` lists its browser entries in `browser-entries.json`; `src/runtimeBoundary.test.ts` walks everything those entries reach and fails on Node built-ins, Node globals such as `Buffer`, or files owned by a Node-only entry, and the root ESLint config reads the same list to reject value imports of any other entry from `src/`.
 
 To add a package-level rule: register the directory as a plugin in the rule's `[[config.group]]`, add a fixture group for it, and add its fixtures directory with the plugin prefix to `FIXTURE_ROOTS` in `fixtures.test.ts`. CI runs calibration when `packages/*/alint/**` changes.
+
+## Removal review rules
+
+The copy rule comes from the owner's review of task-prefix removal in
+[#20687](https://github.com/lobehub/lobehub/pull/20687). Its original review quotes
+are preserved in the rule, including
+“没必要去新增这种「默认行为就该这样，只是移除了自定义」的东西”.
+
+The test-value rules already added by
+[#20672](https://github.com/lobehub/lobehub/pull/20672) are reused unchanged:
+`no-removal-only-tests` covers dedicated absence checks for deleted implementation;
+`no-constant-stub-tests` covers dedicated checks of inert endpoint constants.
+They preserve runtime business, safety and compatibility behavior. Negative
+assertions, default behavior and integration tests are not inherently violations.
+
+`no-redundant-api-copy` reports removal announcements in ordinary product
+instructions, tautological request-schema descriptions, and command summaries
+that repeat default-policy text already visible in the same file. It preserves
+useful field semantics, operational limits, migration guidance and internal
+compatibility comments. A useful description of default behavior is allowed;
+the model cannot tell from one file whether it was needlessly added in a removal PR.
+
+The remaining requirements need a **diff-aware human review**, not a per-file
+lint finding:
+
+- Keep unrelated CLI descriptions unchanged; “这个 description 不要去改”.
+- Delete tests for the removed customization rather than rewriting them into
+  already-covered default cases. Existing coverage in other files is not visible
+  to alint.
+- Do not add an integration suite just to prove removal; “—— 没事不要新增集成测试”.
+  A new filename alone does not establish that its coverage is unnecessary.
+- Avoid changing usage guides, command references or builtin skill instructions
+  merely to restate unchanged defaults. The task review explicitly reverted
+  `commands.md`, both getting-started task guides and the task `SKILL.md`.
+- Preserve original markup, including `\<task\_skill\_guides>`; the owner's quote is
+  `保持之前用的 \<task\_skill\_guides> 吧（虽然我不清楚为啥要转义，但自有它的用意）`.
+
+Do not turn these comments into a global prohibition on documentation, schema
+descriptions, default-behavior tests or integration tests. Only locally established
+patterns are automated. The new copy rule starts at `warn`; fixture calibration is separate
+from the real-PR evidence required for promotion. This change is lint tooling and
+does not change product behavior, so product acceptance is not required.
+
+Local calibration (2026-10-10, Codex ACP / `gpt-5.5`): all 11 new fixtures passed
+in a cold run of the full 185-fixture suite. All 28 sampled real files completed
+without findings; one ACP timeout was retried successfully. The sample had no
+positive findings, so precision is not measurable. The full suite passed 181/185:
+four unchanged legacy-rule fixtures were initially missed; a cold retry recovered
+three, while `hetero/agent-layering` still missed `bad-adapter-reads-log.ts`.
+These legacy rules and fixtures were left unchanged. This calibration does not
+establish equivalent accuracy on the CI provider or justify promotion to `error`.
+ACP reported zero token usage, which means accounting was unavailable, not that
+the model run was free. Local provider setup and raw runs remain gitignored.
 
 ## Security rules
 

@@ -1,0 +1,29 @@
+name = "no-redundant-api-copy"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one ordinary usage guide, builtin skill/reference, CLI command definition, or public request schema. Review prose/help/schema descriptions; do not review runtime enforcement.
+
+Owner's review quotes, verbatim:
+"这个 description 不要去改"
+"文档中不要留下这种「CLI 不接受 `--prefix`。」—— 还是原来的规则，不要描述什么「不存在」「已删除」"
+"你为什么要去给 CreateTaskRequestSchema 加个 describe，删了"
+"这个完全没必要改"
+"这俩完全没必要非得强调新的 project id 规则，修改回滚掉"
+"算了我直接把这个文件的修改给 discard 了，新加的那一行也是一样的 —— 没必要去新增这种「默认行为就该这样，只是移除了自定义」的东西"
+
+Do not report; return no finding for:
+- Release notes, changelogs, migration/deprecation guides, or explicitly versioned legacy-client compatibility instructions. Their job can require explaining removal and the action a user must take.
+- Operational limits that matter to an actual decision: supported platforms, permission requirements, quotas, unavailable workspace features, invalid input, safety restrictions, or troubleshooting a concrete error. Negative wording alone is not a violation.
+- Default values/units/accepted values that help a caller choose an input or predict an observable result; automatic assignment can be useful information. Do not demand removal of an existing explanation just because it describes a default.
+- Useful schema descriptions: constraints, units, field semantics, authorization, examples, or documented input/output contracts. `.describe()` itself is not forbidden.
+- Concise ordinary command descriptions (for example, `Create a new task`) and skill markup, including escaped guide tags. Do not suggest rewriting a description or normalizing markup.
+- Internal code comments explaining a compatibility, security or ownership decision. They are not user-facing copy.
+- Quoted review evidence and developer-facing rule/review instructions, or tests. These are not operative product instructions.
+- Suspected unnecessary changes that require a previous revision or another file to establish. You cannot know whether a paragraph was newly added, whether another guide covers it, or why a tag is escaped.
+
+Report ONLY these locally visible patterns:
+1. An ordinary usage/help/reference sentence whose purpose is announcing an absent/removed product command, option or customizable field (`--prefix was removed`, `CLI 不接受 --prefix`, `custom prefixes are no longer supported`), with no concrete migration action, troubleshooting scenario, safety boundary or operational decision. Anchor on that sentence/string.
+2. A command description or request-schema `.describe()` that merely repeats its command/schema name, or expands that summary with default-policy prose already stated in the SAME file's field/option descriptions or guide. It adds no constraint, choice, unit, example or observable contract. Anchor on the redundant `.description()`/`.describe()` call. Do not flag an informative default-policy description when duplication is not visible in this file.
+
+The message must quote the redundant text and name which pattern it matches. Suggest removing that sentence/description; for a verbose command summary suggest a concise action description. Do not introduce replacement prose about what no longer exists, expand default-policy explanations, or change skill tags. Report at most once per redundant sentence/call. If evidence depends on a diff or external requirements, return no finding.
+"""
