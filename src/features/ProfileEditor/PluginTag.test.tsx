@@ -77,7 +77,7 @@ vi.mock('@/store/serverConfig', () => ({
 }));
 vi.mock('@/store/discover', () => ({
   useDiscoverStore: (sel: (s: unknown) => unknown) =>
-    sel({ usePluginDetail: () => ({ data: undefined, isLoading: false }) }),
+    sel({ useFetchPluginDetail: () => ({ isLoading: false, queryKey: undefined }) }),
 }));
 
 describe('PluginTag author attribution', () => {
