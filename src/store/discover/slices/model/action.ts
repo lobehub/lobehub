@@ -4,12 +4,7 @@ import { createReplicaSlice, recordLens, type ReplicaSyncResult } from '@/libs/r
 import type { DiscoverStore } from '@/store/discover';
 import { globalHelpers } from '@/store/global/helpers';
 import type { StoreSetter } from '@/store/types';
-import type {
-  DiscoverModelDetail,
-  IdentifiersResponse,
-  ModelListResponse,
-  ModelQueryParams,
-} from '@/types/discover';
+import type { IdentifiersResponse, ModelListResponse, ModelQueryParams } from '@/types/discover';
 import { setNamespace } from '@/utils/storeDebug';
 
 import {
@@ -19,6 +14,7 @@ import {
   type ModelDetailParams,
   modelDetailQueryKey,
   modelDetailResource,
+  type ModelDetailValue,
   type ModelIdentifiersParams,
   modelIdentifiersQueryKey,
   modelIdentifiersResource,
@@ -70,7 +66,7 @@ export class ModelActionImpl {
       get,
       set,
       stateKey: 'modelDetailReplica',
-      view: recordLens<DiscoverStore, DiscoverModelDetail>('modelDetailMap'),
+      view: recordLens<DiscoverStore, ModelDetailValue>('modelDetailMap'),
     });
     this.#categories = createReplicaSlice(modelCategoriesResource, {
       actionPrefix: n('categories'),
@@ -125,7 +121,8 @@ export class ModelActionImpl {
   /**
    * One model detail by identifier. Read it with
    * `modelSelectors.modelDetail(queryKey)`; `undefined` after the sync settles
-   * means the market has no such identifier.
+   * means the market has no such identifier (a `{ model: null }` entry, which
+   * also replaces a stale cached copy).
    */
   useFetchModelDetail = (
     params: ModelDetailParams,

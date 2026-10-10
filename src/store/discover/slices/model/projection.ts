@@ -72,21 +72,28 @@ export const modelListResource = defineReplica<ModelListParams, ModelListRespons
 });
 
 /**
- * One model detail by identifier (`modelDetailMap[key]`). The fetcher answers
- * `undefined` for an identifier the market no longer has; the default merge
- * keeps whatever is already cached in that case, and an empty slot stays empty
- * so the page can render "not found" once the sync settles.
+ * One model detail by identifier (`modelDetailMap[key]`).
+ *
+ * Wrapped in an object on purpose: the engine drops an `undefined` fetch result
+ * (and reads `null` as "keep the current value"), so a bare detail could never
+ * clear a cached copy of a model the market has since removed. `{ model: null }`
+ * is a real value that replaces it, and the page tells "the market answered not
+ * found" apart from "nothing loaded yet" (no entry at all).
  */
-export const modelDetailResource = defineReplica<
-  ModelDetailParams,
-  DiscoverModelDetail,
-  DiscoverModelDetail | undefined
->({
-  fetcher: (params) => discoverService.getModelDetail(params),
+export interface ModelDetailValue {
+  /** The detail, or `null` when the market has no such identifier. */
+  model: DiscoverModelDetail | null;
+}
+
+export const modelDetailResource = defineReplica<ModelDetailParams, ModelDetailValue>({
+  fetcher: async (params) => ({
+    model: (await discoverService.getModelDetail(params)) ?? null,
+  }),
   key: modelDetailQueryKey,
   name: 'modelDetail',
   storage: 'indexedDB',
-  version: 1,
+  // v2: the value is wrapped in `ModelDetailValue`; v1 stored the bare detail.
+  version: 2,
 });
 
 /**

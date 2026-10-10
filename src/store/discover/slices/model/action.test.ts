@@ -163,6 +163,29 @@ describe('ModelSlice (replica)', () => {
       expect(new Set(result.current.map((sync) => sync.queryKey)).size).toBe(2);
     });
 
+    it('clears a cached detail once the market answers the identifier no longer exists', async () => {
+      const { discoverService } = await import('@/services/discover');
+      const key = modelDetailQueryKey({ identifier: 'gone', locale: 'en-US' });
+      useStore.setState({
+        modelDetailMap: { [key]: { model: { identifier: 'gone' } as any } },
+      });
+      vi.mocked(discoverService.getModelDetail).mockResolvedValue(undefined as any);
+
+      const { result } = renderHook(() =>
+        useStore.getState().useFetchModelDetail({ identifier: 'gone' }),
+      );
+      expect(modelSelectors.modelDetail(key)(useStore.getState())).toBeDefined();
+
+      const [call] = await syncCalls('modelDetail');
+      const fetched = await call.fetcher();
+      act(() => call.config.onSuccess!(fetched));
+
+      // The stale copy is gone and the entry is settled, so the page renders NotFound.
+      expect(modelSelectors.modelDetail(key)(useStore.getState())).toBeUndefined();
+      expect(useStore.getState().modelDetailMap[key]).toEqual({ model: null });
+      expect(result.current.isLoading).toBe(false);
+    });
+
     it('keys the detail by the locale, so a language switch refetches', () => {
       const { result, rerender } = renderHook(() =>
         useStore.getState().useFetchModelDetail({ identifier: 'gpt-4' }),

@@ -1,7 +1,9 @@
 import type { CategoryItem } from '@lobehub/market-sdk';
 
 import { createReplicaState, type ReplicaState } from '@/libs/replica';
-import type { DiscoverModelDetail, IdentifiersResponse, ModelListResponse } from '@/types/discover';
+import type { IdentifiersResponse, ModelListResponse } from '@/types/discover';
+
+import type { ModelDetailValue } from './projection';
 
 /**
  * Replica views of the model market reads, each beside its bookkeeping slot.
@@ -14,10 +16,10 @@ export interface ModelSliceState {
   modelCategoriesMap: Record<string, CategoryItem[]>;
   /** Replica bookkeeping of `modelCategoriesMap`. */
   modelCategoriesReplica: ReplicaState<CategoryItem[]>;
-  /** Model detail per identifier (`modelDetailQueryKey`). */
-  modelDetailMap: Record<string, DiscoverModelDetail>;
+  /** Model detail per identifier (`modelDetailQueryKey`); `model: null` = not found. */
+  modelDetailMap: Record<string, ModelDetailValue>;
   /** Replica bookkeeping of `modelDetailMap`. */
-  modelDetailReplica: ReplicaState<DiscoverModelDetail>;
+  modelDetailReplica: ReplicaState<ModelDetailValue>;
   /** Identifier index (`modelIdentifiersQueryKey`). */
   modelIdentifiersMap: Record<string, IdentifiersResponse>;
   /** Replica bookkeeping of `modelIdentifiersMap`. */
