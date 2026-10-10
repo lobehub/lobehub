@@ -8,6 +8,7 @@ import {
   recordLens,
   type ReplicaPageResult,
   type ReplicaSyncResult,
+  revalidateReplica,
 } from '@/libs/replica';
 import { useFileStore } from '@/store/file';
 import type { StoreSetter } from '@/store/types';
@@ -113,6 +114,12 @@ const hierarchySearchLens = recordLens<Store, HierarchySearchValue>('hierarchySe
  */
 type SearchReplicaResource = typeof explorerSearchResource | typeof hierarchySearchResource;
 
+/** The invalidation surface both search slices expose. */
+type SearchReplicaSlice = {
+  collapse: (key: string) => unknown;
+  remove: (key: string) => unknown;
+};
+
 export class ResourceManagerStoreActionImpl {
   readonly #get: () => Store;
   readonly #set: Setter;
@@ -126,10 +133,11 @@ export class ResourceManagerStoreActionImpl {
   /** Recency lists whose persisted keys are already folded in. */
   readonly #seededRecentSearches = new WeakSet<string[]>();
   /**
-   * The sidebar search entry on screen, if any. The sync driver revalidates
-   * only mounted queries, so this is the one entry whose head a refresh can
-   * repair (see `collapseHierarchySearch`).
+   * The search entry on screen per surface, if any. The sync driver revalidates
+   * only mounted queries, so these are the entries whose head a refresh can
+   * repair (see `#invalidateSearchSurface`).
    */
+  #activeExplorerSearchKey?: string;
   #activeHierarchySearchKey?: string;
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
@@ -226,13 +234,13 @@ export class ResourceManagerStoreActionImpl {
   };
 
   /**
-   * Invalidate every cached sidebar search.
+   * Invalidate one search surface.
    *
-   * A rename / move / delete in the tree can touch a row the sidebar search
-   * loaded beyond its head page. Revalidating only re-runs the head request and
-   * the replica keeps the rows the user already scrolled to, so a stale hit
-   * would linger in that tail; dropping the loaded pages first means the head
-   * that comes back is the only thing left to show.
+   * A rename / move / delete can touch a row a search had loaded beyond its head
+   * page. Revalidating only re-runs the head request and the replica keeps the
+   * rows the user already scrolled to, so a stale hit would linger in that tail;
+   * dropping the loaded pages first means the head that comes back is the only
+   * thing left to show.
    *
    * Only the entry on screen gets that treatment. The driver revalidates just
    * mounted queries, so every other entry — a search left behind in memory, or
@@ -240,22 +248,49 @@ export class ResourceManagerStoreActionImpl {
    * forever (and offline, indefinitely). Those are dropped outright: a revisit
    * then has nothing stale to hydrate.
    */
-  collapseHierarchySearch = async (): Promise<void> => {
-    const loaded = new Set(Object.keys(this.#get().hierarchySearchEntries));
-    const active = this.#activeHierarchySearchKey;
+  #invalidateSearchSurface = async (
+    resource: SearchReplicaResource,
+    entries: Record<string, unknown>,
+    activeKey: string | undefined,
+    slice: SearchReplicaSlice,
+  ): Promise<void> => {
+    const loaded = new Set(Object.keys(entries));
     for (const key of loaded) {
-      if (key === active) this.#hierarchySearch.collapse(key);
-      else this.#hierarchySearch.remove(key);
+      if (key === activeKey) slice.collapse(key);
+      else slice.remove(key);
     }
 
-    const scope = hierarchySearchResource.scope.get();
-    const persisted = await readReplicaStoredKeys(hierarchySearchResource);
+    const scope = resource.scope.get();
+    const persisted = await readReplicaStoredKeys(resource);
     // The identity can change while the index is read; those rows are not ours
     // to touch, and `remove` resolves against the *current* scope.
-    if (hierarchySearchResource.scope.get() !== scope) return;
+    if (resource.scope.get() !== scope) return;
     for (const key of persisted) {
-      if (!loaded.has(key)) this.#hierarchySearch.remove(key);
+      if (!loaded.has(key)) slice.remove(key);
     }
+  };
+
+  /** Invalidate the sidebar's cached searches (see `#invalidateSearchSurface`). */
+  collapseHierarchySearch = async (): Promise<void> =>
+    this.#invalidateSearchSurface(
+      hierarchySearchResource,
+      this.#get().hierarchySearchEntries,
+      this.#activeHierarchySearchKey,
+      this.#hierarchySearch,
+    );
+
+  /**
+   * Invalidate the explorer's search overlay after a mutation it cannot patch
+   * by id, then refresh the query on screen.
+   */
+  #invalidateExplorerSearch = async (): Promise<void> => {
+    await this.#invalidateSearchSurface(
+      explorerSearchResource,
+      this.#get().explorerSearchEntries,
+      this.#activeExplorerSearchKey,
+      this.#explorerSearch,
+    );
+    await revalidateReplica(explorerSearchResource);
   };
 
   clearSelectAllState = (): void => {
@@ -290,6 +325,10 @@ export class ResourceManagerStoreActionImpl {
             fileStore.queryParams as any,
             selectedFileIds,
           );
+          // The deleted set is only known to the server, so the cached searches
+          // cannot drop those rows by id: invalidate the surfaces instead and
+          // let the refetch paint whatever survived.
+          void this.#invalidateExplorerSearch();
           fileStore.clearCurrentQueryResources();
           // The server applies the caller's workspace role: members delete
           // only their own rows, while owners may delete the full query scope.
@@ -309,6 +348,12 @@ export class ResourceManagerStoreActionImpl {
 
         await fileStore.deleteResources(resourceIds);
         void useTreeStore.getState().dropNodes(resourceIds, currentFolderKey);
+        // The explorer's own list drops the rows optimistically; the overlay
+        // mirrors cached replica pages, so drop them there too — from memory and
+        // from every stored page, loaded here or not — or a deleted hit would be
+        // painted again, on screen and on the next reload.
+        for (const id of resourceIds) this.#explorerSearch.updateEntity(id, () => undefined);
+        void revalidateReplica(explorerSearchResource);
 
         this.clearSelectAllState();
         return;
@@ -545,6 +590,16 @@ export class ResourceManagerStoreActionImpl {
           explorerSearchResource,
         );
       }
+    }, [key]);
+    // The driver revalidates only mounted queries, so remember which entry the
+    // overlay is showing: the invalidation below collapses that one's head (the
+    // refetch repairs it) and drops the heads of the rest.
+    useLayoutEffect(() => {
+      if (!key) return;
+      this.#activeExplorerSearchKey = key;
+      return () => {
+        if (this.#activeExplorerSearchKey === key) this.#activeExplorerSearchKey = undefined;
+      };
     }, [key]);
     return this.#explorerSearch.useSync(params);
   };
