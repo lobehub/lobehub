@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -14,6 +16,11 @@ const { mockClient } = vi.hoisted(() => ({
       bindOperationTopic: { mutate: vi.fn() },
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
+      events: { query: vi.fn() },
+      eventsOperation: { query: vi.fn() },
+      graphOperation: { query: vi.fn() },
+      planContext: { query: vi.fn() },
+      planContextOperation: { query: vi.fn() },
       submitPlan: { mutate: vi.fn() },
       submitOperationPlan: { mutate: vi.fn() },
       submitOperationReport: { mutate: vi.fn() },
@@ -29,7 +36,12 @@ const { mockClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('node:fs/promises', () => ({
-  readFile: async () => JSON.stringify({ action: 'verify', reason: 'Ready' }),
+  readFile: async (path: string) => {
+    // A sentinel local failure so a test can prove the plan command keeps file
+    // errors out of the server-refusal diagnostic.
+    if (path === 'missing.json') throw new Error('ENOENT: no such file or directory');
+    return JSON.stringify({ action: 'verify', reason: 'Ready' });
+  },
 }));
 
 vi.mock('../utils/format', async (importOriginal) => ({
@@ -873,5 +885,309 @@ describe('goal event delivery', () => {
       }),
     );
     expect(output).toHaveBeenCalledWith(expect.stringContaining(`"accepted": ${accepted}`));
+  });
+});
+
+const eventRow = {
+  actorType: 'system',
+  createdAt: new Date('2026-10-10T07:26:39.811Z'),
+  entityId: 'node-1',
+  entityType: 'node',
+  eventType: 'activated',
+  goalId: 'goal-1',
+  id: 'e1',
+  reason: 'Recovered an abandoned Task operation and started the next attempt',
+};
+
+/** A JWT-shaped string whose payload marks the caller as a device / gateway run. */
+const operationJwt = () =>
+  `x.${Buffer.from(JSON.stringify({ purpose: 'hetero-operation' })).toString('base64url')}.y`;
+
+const goalStateGraph = {
+  decisions: [],
+  edges: [],
+  events: [],
+  goal: {
+    agentId: 'agt-1',
+    config: {},
+    id: 'goal-1',
+    requirement: 'Migrate every client data resource to replica',
+    status: 'running',
+    subjectId: 'tpc-1',
+    subjectType: 'topic',
+    title: 'Replica migration',
+  },
+  nodes: [],
+  workVersions: [],
+};
+
+const goalStateContext = {
+  admission: { code: 'stale_input', message: 'Stale planning input; no plan applied', ok: false },
+  budget: {
+    blocked: false,
+    deadline: null,
+    maxRounds: 50,
+    maxTotalCost: 12,
+    runs: 12,
+    totalCost: 3.5,
+  },
+  goal: { agentId: 'agt-1', pausedBy: null, status: 'running' },
+  queue: { pendingDecisions: 0, unfinishedTasks: 4 },
+  review: { current: 'bbbbbbbbbbbb', recorded: 'bbbbbbbbbbbb' },
+  snapshot: { current: 'cccccccccccc', recorded: 'aaaaaaaaaaaa' },
+  turn: {
+    adopted: false,
+    consumed: false,
+    dispatchNeverStarted: false,
+    failedTurns: 0,
+    operationId: 'op-1',
+    opStatus: 'running',
+    problem: 'Automatic recovery could not start the next attempt',
+    problemTaskId: 'task-1',
+    retryAfter: null,
+    startedAt: '2026-10-09T17:47:59.776Z',
+    submitted: null,
+    token: 'goal-1_tok',
+    turns: 13,
+  },
+};
+
+describe('goal state command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockClient.goal.graph.query.mockResolvedValue({ data: goalStateGraph });
+    mockClient.goal.planContext.query.mockResolvedValue({ data: goalStateContext });
+    mockClient.goal.events.query.mockResolvedValue({ data: { events: [], nextCursor: null } });
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('takes the verdict from the server instead of re-deriving it from the graph', async () => {
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+
+    expect(mockClient.goal.planContext.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(mockClient.goal.graph.query).toHaveBeenCalledWith({ id: 'goal-1' });
+  });
+
+  it('renders the planning turn, the moved snapshot and the admission code', async () => {
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+    const text = output();
+
+    expect(text).toContain('Planning turn #13');
+    expect(text).toContain('stale_input');
+    expect(text).toContain('the graph moved after this turn started');
+    expect(text).toContain('moved');
+    expect(text).toContain('4 unfinished task(s)');
+    // The requirement language is not the CLI's place to invent: the hint must
+    // come from the code, and the server's message must survive verbatim.
+    expect(text).toContain('Stale planning input; no plan applied');
+  });
+
+  it('renders recent events and lets --events 0 turn them off', async () => {
+    mockClient.goal.events.query.mockResolvedValue({
+      data: { events: [eventRow], nextCursor: null },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1', '--events', '5']);
+    expect(mockClient.goal.events.query).toHaveBeenCalledWith({ id: 'goal-1', limit: 5 });
+    expect(output()).toContain('Recovered an abandoned Task operation');
+
+    vi.mocked(console.log).mockClear();
+    mockClient.goal.events.query.mockClear();
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1', '--events', '0']);
+    expect(mockClient.goal.events.query).not.toHaveBeenCalled();
+    expect(output()).not.toContain('Recent events');
+  });
+
+  it('reads through the operation endpoints when this is a planning run', async () => {
+    vi.stubEnv('LOBEHUB_JWT', operationJwt());
+    mockClient.goal.graphOperation.query.mockResolvedValue({ data: goalStateGraph });
+    mockClient.goal.planContextOperation.query.mockResolvedValue({ data: goalStateContext });
+    mockClient.goal.eventsOperation.query.mockResolvedValue({
+      data: { events: [], nextCursor: null },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+
+    expect(mockClient.goal.graphOperation.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(mockClient.goal.planContextOperation.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    // The ordinary routes refuse a hetero-operation token by design, so falling
+    // back to them would 401 exactly the run whose refusal this explains.
+    expect(mockClient.goal.graph.query).not.toHaveBeenCalled();
+    expect(mockClient.goal.planContext.query).not.toHaveBeenCalled();
+  });
+
+  it('renders an already-recorded plan as settled, not accepted', async () => {
+    mockClient.goal.planContext.query.mockResolvedValue({
+      data: { ...goalStateContext, admission: { code: 'duplicate', ok: true } },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+    const text = output();
+
+    expect(text).toContain('a plan is already recorded for this turn');
+    expect(text).not.toContain('would be accepted');
+  });
+});
+
+describe('goal plan refusal', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  const planArgs = ['node', 'test', 'goal', 'plan', 'goal-1', '--token', 'tok', '--file', 'p.json'];
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('explains the refusal from the server admission before the error propagates', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-env');
+    mockClient.goal.submitPlan.mutate.mockRejectedValue(
+      new Error('Stale planning input; no plan applied'),
+    );
+    mockClient.goal.planContext.query.mockResolvedValue({ data: goalStateContext });
+
+    await expect(createProgram().parseAsync(planArgs)).rejects.toThrow('Stale planning input');
+
+    expect(mockClient.goal.planContext.query).toHaveBeenCalledWith({
+      id: 'goal-1',
+      operationId: 'op-env',
+      // The submitted plan travels too: four guards (`existing_work`,
+      // `acceptance_escalate_only`, `wait_unsettled`, `wait_until_past`) only
+      // fire with a plan, so without it the read would report `ok` and explain
+      // nothing for exactly those refusals.
+      plan: { action: 'verify', reason: 'Ready' },
+      // The submitted token travels too: without it the verdict would name the
+      // next failing precondition instead of the token mismatch the server threw.
+      token: 'tok',
+    });
+    const text = output();
+    expect(text).toContain('Refused (stale_input)');
+    expect(text).toContain('snapshot');
+    expect(text).toContain('lh goal state goal-1');
+  });
+
+  it('never lets a failing diagnostic replace the original error', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-env');
+    mockClient.goal.submitPlan.mutate.mockRejectedValue(
+      new Error('Stale planning input; no plan applied'),
+    );
+    mockClient.goal.planContext.query.mockRejectedValue(new Error('network down'));
+
+    await expect(createProgram().parseAsync(planArgs)).rejects.toThrow('Stale planning input');
+    expect(output()).not.toContain('Refused');
+  });
+
+  it('keeps a local plan-file error out of the refusal diagnostic', async () => {
+    vi.stubEnv('LOBEHUB_OPERATION_ID', 'op-env');
+    // The Goal's admission is a non-OK refusal DTO — standing in for "the CLI is
+    // ready to explain one" — and must still stay unprinted: a missing or
+    // malformed file never reached the server, so it is not a server refusal.
+    mockClient.goal.planContext.query.mockResolvedValue({
+      data: { ...goalStateContext, admission: { code: 'existing_work', ok: false } },
+    });
+
+    await expect(
+      createProgram().parseAsync([
+        'node',
+        'test',
+        'goal',
+        'plan',
+        'goal-1',
+        '--token',
+        'tok',
+        '--file',
+        'missing.json',
+      ]),
+    ).rejects.toThrow('ENOENT');
+
+    // The read happens before the mutation, so a local failure never submits and
+    // never asks for a diagnostic that would otherwise print "Refused (...)".
+    expect(mockClient.goal.submitPlan.mutate).not.toHaveBeenCalled();
+    expect(mockClient.goal.planContext.query).not.toHaveBeenCalled();
+    expect(output()).not.toContain('Refused');
+  });
+});
+
+describe('goal events command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('pages the audit trail by cursor and passes every filter through', async () => {
+    const cursor = '2026-10-10T08:00:00.000Z|e9';
+    mockClient.goal.events.query.mockResolvedValue({
+      data: { events: [eventRow], nextCursor: cursor },
+    });
+
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'events',
+      'goal-1',
+      '--limit',
+      '5',
+      '--cursor',
+      cursor,
+      '--entity',
+      'node',
+      '--type',
+      'activated',
+      '--json',
+    ]);
+
+    expect(mockClient.goal.events.query).toHaveBeenCalledWith({
+      id: 'goal-1',
+      cursor,
+      entityType: 'node',
+      eventType: 'activated',
+      limit: 5,
+    });
+    const printed = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]));
+    expect(printed.events).toHaveLength(1);
+    expect(printed.events[0].id).toBe('e1');
+    expect(printed.nextCursor).toBe(cursor);
+  });
+
+  it('prints the continuation cursor so the next page is a copy-paste', async () => {
+    const cursor = '2026-10-10T08:00:00.000Z|e9';
+    mockClient.goal.events.query.mockResolvedValue({
+      data: { events: [eventRow], nextCursor: cursor },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'events', 'goal-1', '--limit', '1']);
+
+    expect(output()).toContain(`--cursor "${cursor}"`);
   });
 });

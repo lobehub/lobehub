@@ -4,7 +4,7 @@ import {
   GOAL_COORDINATOR_ACTOR_ID,
   GOAL_MANAGER_QUESTION_TITLE,
 } from '@lobechat/const/goal';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { getTestDB } from '@/database/core/getTestDB';
@@ -724,6 +724,179 @@ describe('CLI main Agent planning', () => {
     });
     await expect(manager().submit(id, state.token, op.id, taskPlan)).rejects.toThrow('Stale');
     expect((await service().graph(id)).nodes.filter((n) => n.kind === 'task')).toHaveLength(0);
+  });
+
+  it('names on the read path the refusal submit folds into one message', async () => {
+    const { id, state, op } = await start();
+
+    // A live, unchanged turn: both paths agree a plan would apply.
+    expect((await manager().admission(id)).admission).toMatchObject({ code: 'ok', ok: true });
+
+    // The same changed graph `submit` refuses — but admission says WHICH
+    // precondition failed, where the shared message says only "Stale planning
+    // input". This is the answer `lh goal state` renders.
+    await new GoalGraphModel(db, userId).createNode(id, {
+      title: 'Changed input',
+      kind: 'finding',
+    });
+    expect((await manager().admission(id)).admission).toMatchObject({
+      code: 'stale_input',
+      ok: false,
+    });
+    await expect(manager().submit(id, state.token, op.id, taskPlan)).rejects.toThrow('Stale');
+
+    // A pause is its own code, not the same "the graph moved" answer.
+    await service().pause(id);
+    expect((await manager().admission(id)).admission).toMatchObject({
+      code: 'inactive',
+      ok: false,
+    });
+
+    // A token that is not this turn's is named as such, rather than reported as
+    // whatever precondition happens to fail next.
+    expect((await manager().admission(id, { token: 'not-the-token' })).admission).toMatchObject({
+      code: 'turn_owner',
+      ok: false,
+    });
+  });
+
+  it('re-derives the plan-specific refusals the read path would otherwise call ok', async () => {
+    const { id, state, op } = await start();
+
+    // `existing_work` and `wait_until_past` only fire when a plan is present. A
+    // read that does not see the plan therefore reports `ok`, and `lh goal plan`
+    // prints no explanation for exactly the refusals that need one. Feed the plan
+    // and the read matches what `submit` refuses on.
+    const verifyPlan = { action: 'verify' as const, reason: 'Compare results' };
+    expect((await manager().admission(id, { plan: verifyPlan })).admission).toMatchObject({
+      code: 'existing_work',
+      ok: false,
+    });
+    await expect(manager().submit(id, state.token, op.id, verifyPlan)).rejects.toThrow(
+      'Existing work',
+    );
+
+    const pastWait = {
+      action: 'wait' as const,
+      reason: 'Let tasks settle',
+      until: new Date(Date.now() - 1000).toISOString(),
+    };
+    expect((await manager().admission(id, { plan: pastWait })).admission).toMatchObject({
+      code: 'wait_until_past',
+      ok: false,
+    });
+    await expect(manager().submit(id, state.token, op.id, pastWait)).rejects.toThrow(
+      'Wait until must be in the future',
+    );
+
+    // With no plan the read still answers the non-plan question.
+    expect((await manager().admission(id)).admission).toMatchObject({ code: 'ok', ok: true });
+  });
+
+  it('authorizes a read from the turn’s own operation before its id reaches the receipt', async () => {
+    const { id, op } = await start();
+
+    // `advance` saves `managerState.operationId` only after the dispatched run's
+    // `execAgent` resolves, so a fast run is live and holding a token while the
+    // field is still absent (and if that save fails it never arrives, yet the turn
+    // is live and `submit` still succeeds). Ownership must therefore come from the
+    // topic/source-message lookup `submit` uses, not the receipt field.
+    const goal = (await model().findById(id))!;
+    const { operationId: _unpersisted, ...managerState } = goal.config!.managerState!;
+    await db
+      .update(goals)
+      .set({ config: { ...goal.config, managerState } })
+      .where(eq(goals.id, id));
+    expect((await model().findById(id))!.config!.managerState!.operationId).toBeUndefined();
+
+    await expect(manager().assertOperationOwnsTurn(id, op.id)).resolves.toBeUndefined();
+    await expect(manager().assertOperationOwnsTurn(id, 'op-someone-else')).rejects.toThrow(
+      'does not own',
+    );
+    await expect(manager().assertOperationOwnsTurn('goal-missing', op.id)).rejects.toThrow(
+      'Goal not found',
+    );
+  });
+
+  it('pages the goal audit trail by cursor and refuses another owner', async () => {
+    const { id } = await start();
+    const graph = new GoalGraphModel(db, userId);
+    // A second event, so paging has something to page over.
+    await graph.createNode(id, { title: 'Extra finding', kind: 'finding' });
+    const first = await graph.listEvents(id, { limit: 50 });
+    const all = first!.events;
+
+    expect(all.length).toBeGreaterThan(1);
+    expect(all[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(all.at(-1)!.createdAt.getTime());
+
+    const page = await graph.listEvents(id, { limit: 1 });
+    expect(page!.events).toHaveLength(1);
+    expect(page!.nextCursor).toBeDefined();
+    // The cursor continues on the second-newest row...
+    const next = await graph.listEvents(id, { cursor: page!.nextCursor!, limit: 1 });
+    expect(next!.events[0]!.id).toBe(all[1]!.id);
+
+    // ...and still does after a live insert. This is why the page is keyed by
+    // `(createdAt, id)` and not an offset: events are PREPENDED while a goal
+    // runs, so `offset=2` would re-serve a row a new event pushed down.
+    await graph.createNode(id, { title: 'Inserted between pages', kind: 'finding' });
+    const afterInsert = await graph.listEvents(id, { cursor: page!.nextCursor!, limit: 1 });
+    expect(afterInsert!.events[0]!.id).toBe(all[1]!.id);
+
+    // The last page reports no continuation, so a caller can stop paging.
+    const last = await graph.listEvents(id, { limit: 200 });
+    expect(last!.nextCursor).toBeUndefined();
+
+    // A missing goal and someone else's goal are both invisible.
+    expect(await graph.listEvents('goal-missing', { limit: 5 })).toBeUndefined();
+    expect(await new GoalGraphModel(db, 'other-user').listEvents(id, { limit: 5 })).toBeUndefined();
+  });
+
+  it('pages across microsecond-apart events that share one millisecond', async () => {
+    const { id } = await start();
+    // Four events 100–400µs into 2026-01-01T00:00:00.000Z — all inside ONE
+    // millisecond. The column keeps microseconds, but a cursor round-trips
+    // through a JS Date and so carries only milliseconds: an untruncated keyset
+    // compares the microsecond column against a millisecond bound and drops the
+    // rows it cannot place (they match neither `<` nor the id tie-break).
+    const seeds = [
+      { entityId: 'micro-1', id: '00000000-0000-4000-8000-000000000001', micros: '000100' },
+      { entityId: 'micro-2', id: '00000000-0000-4000-8000-000000000002', micros: '000200' },
+      { entityId: 'micro-3', id: '00000000-0000-4000-8000-000000000003', micros: '000300' },
+      { entityId: 'micro-4', id: '00000000-0000-4000-8000-000000000004', micros: '000400' },
+    ];
+    for (const seed of seeds) {
+      await db.insert(goalEvents).values({
+        actorType: 'system',
+        createdAt: sql`${`2026-01-01T00:00:00.${seed.micros}Z`}::timestamptz`,
+        entityId: seed.entityId,
+        entityType: 'node',
+        eventType: 'created',
+        goalId: id,
+        id: seed.id,
+      });
+    }
+
+    // Walk the whole trail one row at a time, the way `lh goal events --limit 1` does.
+    const graph = new GoalGraphModel(db, userId);
+    const seen: string[] = [];
+    let cursor: { createdAt: Date; id: string } | undefined;
+    for (let i = 0; i < 50; i += 1) {
+      const page = await graph.listEvents(id, { cursor, limit: 1 });
+      if (!page) throw new Error('goal vanished mid-page');
+      seen.push(...page.events.map((event) => event.entityId));
+      if (!page.nextCursor) break;
+      cursor = page.nextCursor;
+    }
+
+    // None of the four is lost to the millisecond boundary. Within the shared
+    // millisecond the order falls back to id, which here runs with time.
+    expect(seen.filter((entityId) => entityId.startsWith('micro-'))).toEqual([
+      'micro-4',
+      'micro-3',
+      'micro-2',
+      'micro-1',
+    ]);
   });
 
   it('adopts a dispatch with a lost response rather than launching another Agent', async () => {

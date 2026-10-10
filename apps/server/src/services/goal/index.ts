@@ -13,6 +13,8 @@ import type {
   GoalCreateConfig,
   GoalDecisionOption,
   GoalEdgeKind,
+  GoalEventEntityType,
+  GoalEventType,
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalItem,
@@ -882,6 +884,26 @@ export class GoalService {
       new GoalReportStore(this.db, this.userId, this.workspaceId).state(graph),
     ]);
     return { ...graph, acceptances, assignees, deliveredAt, report, runHeartbeats, spend };
+  };
+
+  /**
+   * The goal's audit trail, newest first, paged past the capped copy `graph()`
+   * carries. `graph()` stays the shape the page reads; this is for a reader
+   * chasing one transition — the pause that explains why a plan was refused
+   * hours into a run, say. Returns the cursor that continues the page.
+   */
+  listEvents = async (
+    goalId: string,
+    options: {
+      cursor?: { createdAt: Date; id: string };
+      entityType?: GoalEventEntityType;
+      eventType?: GoalEventType;
+      limit: number;
+    },
+  ) => {
+    const page = await this.graphModel.listEvents(goalId, options);
+    if (!page) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    return page;
   };
 
   /**
