@@ -113,6 +113,14 @@ Calibration details and known limitations are recorded in
 analysis can miss caller authorization, vary between runs, or misread large files.
 No zero-false-positive or complete-vulnerability-coverage claim is made.
 
+## Test removal rule (pending calibration)
+
+`no-removal-only-tests` comes from the owner's review: “加一个「确认已经删了」的测试就不必了……”. It reports a dedicated test that only confirms a deleted command, export, UI entry or source fragment is absent, including a CLI framework's generic unknown-command response after removing its registration. Deciding whether the test exercises retained behavior is semantic; banning negative assertions with ESLint would discard useful coverage.
+
+Keep compatibility stubs with deliberate business errors and unchanged-data checks, security boundaries, runtime deletion of data, conditional registration, legacy-input transformations, surviving paths, custom command/documentation validation, and ordinary empty states. A negative assertion or a test title alone is insufficient evidence of a removal-only test.
+
+The rule is registered at `warn` for its 12 calibration inputs (3 bad, 9 good). Its candidate test-file PR scope is commented in `alint.config.toml` until a cold model run and a real-file scan have been reviewed. Local provider setup is currently missing: `alint:setup` exits 2 without `ALINT_API_KEY` or `DEEPSEEK_API_KEY`, and the fixture suite skips without `.alint/config.toml`. This is a calibration blocker, not a passing model run. Enable the candidate scope at `warn` after resolving it; promotion to `error` requires separate real-PR evidence.
+
 ## Setup and run
 
 ```bash

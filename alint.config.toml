@@ -187,7 +187,25 @@ lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/ui-content-width" = "warn"
 
+# Candidate test scope: enable at warn after a cold provider run over fixtures
+# and real test files. Provider setup is currently unavailable; registration
+# below allows the fixture suite to calibrate the rule without enabling it on PRs.
+# [[config.group]]
+# files = [ "src/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx}", "apps/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx}", "packages/**/*.{test,spec}.{ts,tsx,mts,cts,js,jsx}" ]
+# ignores = [ "**/fixtures/**", "**/__mocks__/**" ]
+# [config.group.plugins]
+# lobehub = "./packages/alint/rules"
+# [config.group.rules]
+# "lobehub/no-removal-only-tests" = "warn"
+
 # Calibration fixtures: one group per rule so a fixture only meets its own rule.
+[[config.group]]
+files = [ "packages/alint/fixtures/no-removal-only-tests/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/no-removal-only-tests" = "warn"
+
 [[config.group]]
 files = [ "packages/alint/fixtures/pmap-over-promise-all/**" ]
 [config.group.plugins]
