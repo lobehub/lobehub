@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import PublishedTime from '@/components/PublishedTime';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 
 import { useDetailActionContext, useDetailContext } from '../../DetailProvider';
 import RelatedSkillCard from './RelatedSkillCard';
@@ -83,7 +84,8 @@ const Overview = memo(() => {
   const navigate = useWorkspaceAwareNavigate();
 
   const useFetchRelatedSkills = useDiscoverStore((s) => s.useFetchRelatedSkills);
-  const { data: related } = useFetchRelatedSkills({ category, identifier });
+  const { queryKey } = useFetchRelatedSkills({ category, identifier });
+  const related = useDiscoverStore(skillSelectors.skillRelated(queryKey));
 
   // Honor the fetched (possibly deep-linked ?version=) version before falling
   // back to the latest entry

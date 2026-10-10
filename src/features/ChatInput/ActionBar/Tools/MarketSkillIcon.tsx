@@ -2,6 +2,7 @@ import { Avatar } from '@lobehub/ui/base-ui';
 import { memo } from 'react';
 
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 
 export const SKILL_ICON_SIZE = 20;
 
@@ -22,7 +23,8 @@ interface MarketSkillIconProps {
 const MarketSkillIcon = memo<MarketSkillIconProps>(
   ({ identifier, name, size = SKILL_ICON_SIZE }) => {
     const useFetchSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-    const { data } = useFetchSkillDetail({ identifier });
+    const { queryKey } = useFetchSkillDetail({ identifier });
+    const data = useDiscoverStore(skillSelectors.skillDetail(queryKey));
 
     return (
       <Avatar

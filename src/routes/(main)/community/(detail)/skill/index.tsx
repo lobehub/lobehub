@@ -9,6 +9,7 @@ import { RouteLoading } from '@/components/Skeleton/RouteSegment';
 import { SkillDetailView, SkillNavKey } from '@/features/CommunitySkillDetail';
 import { useQuery } from '@/hooks/useQuery';
 import { useDiscoverStore } from '@/store/discover';
+import { skillSelectors } from '@/store/discover/selectors';
 
 import NotFound from '../components/NotFound';
 
@@ -50,7 +51,8 @@ const SkillDetailPage = memo<SkillDetailPageProps>(({ mobile }) => {
   );
 
   const useSkillDetail = useDiscoverStore((s) => s.useFetchSkillDetail);
-  const { data, error, isLoading, mutate } = useSkillDetail({ identifier, version });
+  const { error, isLoading, mutate, queryKey } = useSkillDetail({ identifier, version });
+  const data = useDiscoverStore(skillSelectors.skillDetail(queryKey));
   if (data === undefined) {
     if (isLoading) return <RouteLoading />;
     if (error) return <AsyncError error={error} variant={'page'} onRetry={() => void mutate()} />;
