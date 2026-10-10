@@ -1008,6 +1008,8 @@ describe('TaskLifecycleService.onTopicComplete', () => {
       expect(notifyFailed).toHaveBeenCalledWith(
         expect.objectContaining({ consecutiveFailures: 3, paused: true, runTrigger: 'heartbeat' }),
       );
+      expect(updateStatus).toHaveBeenCalledWith('task-1', 'paused', { error: 'boom' });
+      expect(updateStatus).not.toHaveBeenCalledWith('task-1', 'scheduled', expect.anything());
     });
   });
 });

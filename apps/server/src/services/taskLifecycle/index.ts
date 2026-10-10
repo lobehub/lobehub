@@ -488,7 +488,9 @@ export class TaskLifecycleService {
         scheduleConsecutiveFailures = (ctx.scheduler?.consecutiveFailures ?? 0) + 1;
         pausedByFuse = scheduleConsecutiveFailures >= AUTOMATION_FAILURE_FUSE;
         await this.recordAutomationError(currentTask, errorText, runTrigger);
-        await this.taskModel.updateStatus(taskId, 'scheduled', { error: errorText });
+        await this.taskModel.updateStatus(taskId, pausedByFuse ? 'paused' : 'scheduled', {
+          error: errorText,
+        });
       }
 
       // Tell the user their automation failed: fire-and-forget through the
