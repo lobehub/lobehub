@@ -1,4 +1,10 @@
-import type { HeterogeneousProviderConfig, LobeAgentConfig, MetaData } from '@lobechat/types';
+import type {
+  AssistantMarketSource,
+  DiscoverAssistantDetail,
+  HeterogeneousProviderConfig,
+  LobeAgentConfig,
+  MetaData,
+} from '@lobechat/types';
 import type { PartialDeep } from 'type-fest';
 
 // ==================== Service Interfaces ====================
@@ -45,6 +51,12 @@ export interface IDiscoverService {
     }>;
     totalCount: number;
   }>;
+  getAssistantDetail?: (params: {
+    identifier: string;
+    locale?: string;
+    source?: AssistantMarketSource;
+    version?: string;
+  }) => Promise<DiscoverAssistantDetail | undefined>;
   getMcpList: (params: { category?: string; pageSize?: number; q?: string }) => Promise<{
     items: Array<{
       author?: string;
