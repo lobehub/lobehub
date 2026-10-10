@@ -4,10 +4,12 @@ import { TRASH_RETENTION_DAYS } from '@lobechat/const';
 import type { TrashCountByType, TrashItem, TrashResourceType } from '@lobechat/types';
 import { Center, Empty, Flexbox, Icon } from '@lobehub/ui';
 import { Avatar, Button, confirmModal, Segmented, Tag, Text, toast } from '@lobehub/ui/base-ui';
+import { useSize } from 'ahooks';
 import { createStaticStyles } from 'antd-style';
 import dayjs from 'dayjs';
 import relativeTime from 'dayjs/plugin/relativeTime';
 import { Trash2Icon } from 'lucide-react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import LiteTable, { type LiteTableColumn } from '@/components/LiteTable';
@@ -19,6 +21,7 @@ import { TRASH_TYPE_ICON, TRASH_TYPE_ORDER } from './typeMeta';
 dayjs.extend(relativeTime);
 
 /** Stable empties so the replicated views never trip the store's shallow equality. */
+const TRASH_LIST_BREAKPOINT = 800;
 const EMPTY_ITEMS: TrashItem[] = [];
 const EMPTY_COUNTS: TrashCountByType = {};
 
@@ -42,11 +45,35 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
   muted: css`
     color: ${cssVar.colorTextSecondary};
   `,
+  name: css`
+    width: 100%;
+    min-width: 0;
+  `,
+  table: css`
+    @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
+      tbody tr {
+        grid-template-columns: minmax(0, 1fr) auto;
+      }
+
+      td[data-list-slot='title'] {
+        min-width: 0;
+      }
+    }
+  `,
   title: css`
     overflow: hidden;
     font-weight: 500;
     text-overflow: ellipsis;
     white-space: nowrap;
+
+    @container (max-width: ${TRASH_LIST_BREAKPOINT}px) {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
   `,
 }));
 
@@ -54,6 +81,9 @@ const TrashList = () => {
   const { t } = useTranslation('setting');
   const { t: tc } = useTranslation('common');
   const mobile = useIsMobile();
+  const containerRef = useRef<HTMLDivElement>(null);
+  const containerSize = useSize(containerRef);
+  const cardLayout = !!containerSize && containerSize.width <= TRASH_LIST_BREAKPOINT;
 
   const [
     activeType,
@@ -167,13 +197,15 @@ const TrashList = () => {
       render: (item) => {
         const TypeIcon = TRASH_TYPE_ICON[item.resourceType];
         const avatar = item.meta?.avatar;
+        const title = item.title || t('trash.untitled');
         return (
-          <Flexbox horizontal align={'center'} gap={10} style={{ minWidth: 0 }}>
+          <Flexbox horizontal align={'center'} className={styles.name} gap={10}>
             {avatar ? (
               <Avatar
                 avatar={avatar}
                 background={item.meta?.backgroundColor ?? undefined}
                 size={28}
+                style={{ flexShrink: 0 }}
               />
             ) : (
               <Center
@@ -184,8 +216,27 @@ const TrashList = () => {
                 <Icon icon={TypeIcon} size={18} />
               </Center>
             )}
-            <Flexbox style={{ minWidth: 0 }}>
-              <span className={styles.title}>{item.title || t('trash.untitled')}</span>
+            <Flexbox flex={1} style={{ minWidth: 0 }}>
+              <Text
+                as={'span'}
+                className={styles.title}
+                tabIndex={0}
+                ellipsis={{
+                  rows: cardLayout ? 2 : undefined,
+                  tooltip: {
+                    placement: 'topLeft',
+                    standalone: true,
+                    styles: {
+                      content: { overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' },
+                      root: { maxWidth: 'min(420px, calc(100vw - 32px))' },
+                    },
+                    title,
+                  },
+                  tooltipWhenOverflow: true,
+                }}
+              >
+                {title}
+              </Text>
               {!!item.meta?.childCount && (
                 <Text fontSize={12} type={'secondary'}>
                   {t('trash.meta.children', { count: item.meta.childCount })}
@@ -196,12 +247,12 @@ const TrashList = () => {
         );
       },
       title: t('trash.columns.name'),
+      width: 'clamp(320px, 36cqw, 420px)',
     },
     {
       key: 'type',
       render: (item) => <Tag>{typeLabel(item.resourceType)}</Tag>,
       title: t('trash.columns.type'),
-      width: 130,
     },
     {
       key: 'deletedAt',
@@ -211,13 +262,11 @@ const TrashList = () => {
         </span>
       ),
       title: t('trash.columns.deletedAt'),
-      width: 150,
     },
     {
       key: 'expiresAt',
       render: (item) => <span className={styles.muted}>{expiresLabel(item.expiresAt)}</span>,
       title: t('trash.columns.expiresIn'),
-      width: 140,
     },
     {
       key: 'actions',
@@ -255,11 +304,12 @@ const TrashList = () => {
   ];
 
   return (
-    <div className={styles.container}>
+    <div className={styles.container} ref={containerRef}>
       <div className={styles.header}>
         <Segmented
           options={typeOptions}
           size={'small'}
+          style={{ flexWrap: 'wrap', maxWidth: '100%' }}
           value={activeType ?? 'all'}
           onChange={(value) =>
             setActiveType(value === 'all' ? undefined : (value as TrashResourceType))
@@ -278,10 +328,13 @@ const TrashList = () => {
         </Button>
       </div>
       <LiteTable
+        className={styles.table}
         columns={columns}
         dataSource={items}
+        listBreakpoint={TRASH_LIST_BREAKPOINT}
         loading={isLoading}
         rowKey={(item) => item.id}
+        tableLayout={'fixed'}
         emptyText={
           <Center height={240} width={'100%'}>
             {error ? (
