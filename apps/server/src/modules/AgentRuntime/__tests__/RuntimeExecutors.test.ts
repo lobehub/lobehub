@@ -6064,10 +6064,21 @@ describe('RuntimeExecutors', { timeout: 60_000 }, () => {
                 }),
               );
             }
+            // Under the unified `toolCall` protocol (see
+            // docs/development/agent-tool-result-hooks.md) `afterToolCall` is a
+            // *result* control, gated on a completed tool result. A before-deny
+            // prevents execution, so only the before control runs and there is
+            // nothing for the after control to gate.
+            const expectedHookTypes =
+              permissionDecision === 'allow'
+                ? ['beforeToolCall', 'afterToolCall']
+                : ['beforeToolCall'];
             expect(
               fetchSpy.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).hookType),
-            ).toEqual(['beforeToolCall', 'afterToolCall']);
-            expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+            ).toEqual(expectedHookTypes);
+            if (permissionDecision === 'allow') {
+              expect(JSON.parse(String(fetchSpy.mock.calls[1][1]?.body)).mocked).toBe(false);
+            }
           } finally {
             fetchSpy.mockRestore();
             vi.unstubAllEnvs();
