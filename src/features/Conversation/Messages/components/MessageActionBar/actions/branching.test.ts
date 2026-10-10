@@ -12,6 +12,7 @@ const state = {
   dbMessages: [] as UIChatMessage[],
   forkCodexMessage,
   isInputLoading: false,
+  openThreadCreator,
 };
 const agentState = { isCodex: true };
 
@@ -29,12 +30,8 @@ vi.mock('@/store/agent/selectors', () => ({
   },
 }));
 vi.mock('@/store/chat', () => ({
-  useChatStore: (
-    selector: (s: {
-      activeTopicId: string;
-      openThreadCreator: typeof openThreadCreator;
-    }) => unknown,
-  ) => selector({ activeTopicId: 'topic', openThreadCreator }),
+  useChatStore: (selector: (s: { activeTopicId: string }) => unknown) =>
+    selector({ activeTopicId: 'topic' }),
 }));
 
 const nativeMetadata = { codexTurnId: 'turn', heteroSessionId: 'thread' };
@@ -140,7 +137,7 @@ describe('branchingAction native provenance', () => {
     /** @example Ordinary branching remains available. */
     expect(action.disabled).toBe(false);
     await action.handleClick?.();
-    /** @example The existing thread creator receives the original message. */
+    /** @example The Conversation store's thread creator receives the original message. */
     expect(openThreadCreator).toHaveBeenCalledWith('source');
   });
 
