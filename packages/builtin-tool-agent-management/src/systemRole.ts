@@ -194,7 +194,7 @@ export const buildSystemPrompt = (
     ? `
 
 **Execution:**
-- **callAgent**: Dispatch an agent to handle a task. It returns immediately with a thread id — the called agent runs in the background and its result is written back to the call agent card when it completes. Check progress with \`lh thread view <threadId>\`; do not wait for a result in the same turn.`
+- **callAgent**: Dispatch an agent to handle a task. It returns immediately with a thread id — the called agent runs in the background and its result is written back to the call agent card when it completes. Check progress with \`lh thread view <threadId>\`; do not wait for a result in the same turn. Set \`wait: true\` only when the very next step strictly needs the result inline — it blocks this whole turn.`
     : ''
 }
 </core_capabilities>

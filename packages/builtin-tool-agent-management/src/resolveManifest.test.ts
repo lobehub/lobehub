@@ -26,14 +26,17 @@ describe('resolveAgentManagementManifest', () => {
       (api) => api.name === AgentManagementApiName.callAgent,
     )!;
 
-    // The manifest is shared with the client runtime, whose inline `callAgent`
-    // path has no thread title or per-call timeout to honor. Advertising
-    // `taskTitle` / `timeout` would promise behavior only the server deferred
-    // path keeps, so they must not appear in the shared schema.
+    // The client runtime's inline `callAgent` path has no thread title or
+    // per-call timeout to honor, so `taskTitle` / `timeout` must not appear in
+    // the shared schema. `wait` is a different case: it selects between the
+    // async dispatch default and the blocking park+resume, both owned by the
+    // agent runtime; the client runtime is being retired, so `wait` is
+    // advertised for the server path.
     expect(Object.keys(callAgent.parameters.properties ?? {}).sort()).toEqual([
       'agentId',
       'instruction',
       'skipCallSupervisor',
+      'wait',
     ]);
   });
 
