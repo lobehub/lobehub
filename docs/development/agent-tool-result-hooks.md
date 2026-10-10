@@ -48,7 +48,7 @@ Matching controls run in registration order. A deny stops the remaining controls
 - As with `beforeToolCall`, the denial reason enters the tool result, model context, and tool card. The receiver controls this text; an explicitly provided empty string is preserved
 - The native call/result pairing remains intact. A deny does not retry the tool or charge it as an unexecuted call; actual attempt count, execution time, and existing tool charges remain. Deferred child usage counters are retained without child output
 - Result controls run after the tool's existing internal retry loop and also inspect failed/timeout results. Exceptions that do not produce a result retain the existing `onToolCallError` behavior
-- Non-2xx responses, explicit invalid decisions, oversized responses, invalid UTF-8, network failures, and timeouts use the existing `onError` policy: `continue` by default, or `block`. Successful notification responses do not invoke `onError`. Cancellation never becomes permission to release a result
+- Non-2xx responses, explicit invalid decisions, oversized responses, invalid UTF-8, network failures, and timeouts use the existing `onError` policy: `continue` by default, or `block`. Blocking on a control error uses `hook_control_error` as both content and blocked-state reason, for before and after hooks. Successful notification responses do not invoke `onError`. Cancellation never becomes permission to release a result
 - Denied results are persisted in sanitized form, so later history rehydration cannot recover their original content or state. Deferred completion replays cannot overwrite an already withheld result, even if the hook is later removed
 
 ## Server environment configuration

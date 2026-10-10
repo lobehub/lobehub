@@ -232,7 +232,7 @@ export class HookDispatcher {
         if (resolveToolCallHookErrorPolicy(hook.webhook.onError).action === 'block') {
           return {
             status: 'blocked',
-            reason: type === 'afterToolCall' ? BLOCKED_TOOL_RESULT_CONTENT : 'hook_control_error',
+            reason: 'hook_control_error',
           };
         }
         continue;

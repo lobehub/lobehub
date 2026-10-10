@@ -334,9 +334,10 @@ describe('afterToolCall control pipeline', () => {
       fetchHook.mockResolvedValue(new Response(JSON.stringify({ decision: secret })));
       const result = await fixture.step();
       expect(fixture.execute).toHaveBeenCalledTimes(1);
-      expect(fixture.rows[0].content).toBe(
-        onError === 'block' ? BLOCKED_TOOL_RESULT_CONTENT : 'executed',
-      );
+      expect(fixture.rows[0].content).toBe(onError === 'block' ? 'hook_control_error' : 'executed');
+      if (onError === 'block') {
+        expect(fixture.rows[0].pluginState).toMatchObject({ reason: 'hook_control_error' });
+      }
       expect(JSON.stringify(result)).not.toContain(secret);
     },
   );
@@ -364,9 +365,10 @@ describe('afterToolCall control pipeline', () => {
           }),
       );
       const result = await fixture.step();
-      expect(fixture.rows[0].content).toBe(
-        onError === 'block' ? BLOCKED_TOOL_RESULT_CONTENT : 'executed',
-      );
+      expect(fixture.rows[0].content).toBe(onError === 'block' ? 'hook_control_error' : 'executed');
+      if (onError === 'block') {
+        expect(fixture.rows[0].pluginState).toMatchObject({ reason: 'hook_control_error' });
+      }
       expect(fixture.execute).toHaveBeenCalledTimes(1);
       expect(JSON.stringify(result)).not.toContain(secret);
     },
