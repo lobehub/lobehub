@@ -86,6 +86,19 @@ describe('workbench stub surface', () => {
     expect(stubUsageGaps(surface, usage!)).toEqual(['fileChatSelectors.chatUploadFileList']);
   });
 
+  it('covers the file-store surface the tree store reaches through the ResourceManager store', () => {
+    // The tree store imports the ResourceManager store barrel to refresh the
+    // sidebar search, which pulls these modules into the workbench SSR graph.
+    const stub = readFileSync(path.join(stubDir, 'fileStore.ts'), 'utf8');
+    const storeDir = path.resolve(stubDir, '../../../../src/features/ResourceManager/store');
+    const files = ['action.ts', 'index.ts', 'selectors.ts'].map((name) => ({
+      rel: `src/features/ResourceManager/store/${name}`,
+      source: readFileSync(path.join(storeDir, name), 'utf8'),
+    }));
+
+    expect(reportStubSurfaceGaps(files, [{ source: stub, specifier: '@/store/file' }])).toEqual([]);
+  });
+
   it('formats graph gaps with the importer path', () => {
     expect(
       reportStubSurfaceGaps(
