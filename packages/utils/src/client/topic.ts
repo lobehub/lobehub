@@ -195,6 +195,9 @@ export const getTopicWorkingDirectoryEffectivePath = (topic: ChatTopic): string 
  * - `project-id:{projectId}` groups that merge every directory of one project
  *   into a single group, `project-directory:{id}` / path-based IDs for topics
  *   without a project, and `no-project` last.
+ * - Groups ordered with explicit-project groups first (the binding is
+ *   deliberate, not inferred from a directory), then directory-derived groups,
+ *   then `no-project`; each tier keeps most-recent-activity order.
  * - Basenames for unique projects and distinguishing path suffixes for collisions.
  */
 export const groupTopicsByProject = (
@@ -270,10 +273,17 @@ export const groupTopicsByProject = (
     },
   );
 
-  // Most-recently-active project first; "no project" always last
+  // Explicit-project groups first (the `projectId` binding is deliberate, not
+  // inferred), then directory-derived groups, then "no project" last. Within a
+  // tier the most recently active group leads.
+  const groupRank = (id: string): number => {
+    if (id === NO_PROJECT_GROUP_ID) return 2;
+    return id.startsWith(PROJECT_ID_GROUP_PREFIX) ? 0 : 1;
+  };
+
   return groups.sort((a, b) => {
-    if (a.id === NO_PROJECT_GROUP_ID) return 1;
-    if (b.id === NO_PROJECT_GROUP_ID) return -1;
+    const rankDiff = groupRank(a.id) - groupRank(b.id);
+    if (rankDiff !== 0) return rankDiff;
     const aTime = a.children[0] ? getTopicSortTime(a.children[0], field) : 0;
     const bTime = b.children[0] ? getTopicSortTime(b.children[0], field) : 0;
     return bTime - aTime;
