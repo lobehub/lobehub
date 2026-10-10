@@ -120,6 +120,51 @@ const interruptGatewayTaskOrThrow = async (
 };
 
 /**
+ * Waits for a server start request while honoring a caller abort locally.
+ *
+ * Use when:
+ * - The ChatInput Stop can fire while `execAgentTask` is still in flight.
+ *
+ * Expects:
+ * - `request` was issued WITHOUT the abort signal. Aborting the fetch only
+ *   drops the response: the server still persists the turn and dispatches the
+ *   run (for a connected device, it spawns the native CLI), and the client
+ *   would never learn the operation id needed to stop it.
+ *
+ * Returns:
+ * - The server result, or rejects with an AbortError as soon as the caller
+ *   aborts. After such an abort, `onAbandoned` receives the result the server
+ *   eventually returns so the caller can interrupt that orphaned run.
+ */
+const awaitStartRequest = <T>(
+  request: Promise<T>,
+  signal: AbortSignal | undefined,
+  onAbandoned: (result: T) => Promise<unknown>,
+): Promise<T> => {
+  if (!signal) return request;
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => {
+      reject(new DOMException('Message send was cancelled', 'AbortError'));
+      request
+        .then(onAbandoned)
+        .catch((error) => console.error('[Gateway] interrupt after aborted start failed:', error));
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+    request.then(
+      (result) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(result);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+};
+
+/**
  * When the agent runs against the local machine, resolve this desktop's
  * own gateway deviceId so it can be passed as the run's routing `deviceId` and
  * `localDeviceId` capability hint. The server then presets `activeDeviceId`,
@@ -1168,7 +1213,9 @@ export class GatewayActionImpl {
     // Honour user-initiated cancel during phase-1 init: while we await the
     // execAgentTask round-trip the caller's loading state (e.g. `sendMessage`)
     // is still running, so the ChatInput stop button is active. Forward the
-    // signal into the request so the fetch aborts in-flight. If the server has
+    // abort into the round-trip wait (never into the fetch itself, see
+    // `awaitStartRequest`): the send rejects at once and the run the server
+    // still creates is interrupted when its result arrives. If the server has
     // already persisted the turn, interrupt generation but still reconcile the
     // message locally before returning.
     const abortSignal = parentOperationId
@@ -1201,8 +1248,8 @@ export class GatewayActionImpl {
     const serverResult =
       precreatedResult ??
       (agentShareId
-        ? await shareChatService.execAgentTask(
-            {
+        ? await awaitStartRequest(
+            shareChatService.execAgentTask({
               clientIds,
               fileIds,
               parentMessageId,
@@ -1214,11 +1261,17 @@ export class GatewayActionImpl {
               steer: metadata?.steer,
               topicId: executionContext.topicId,
               userInterventionConfig,
-            },
-            { signal: abortSignal },
+            }),
+            abortSignal,
+            (abandoned) =>
+              shareChatService.interruptTask(
+                agentShareId,
+                abandoned.topicId,
+                abandoned.operationId,
+              ),
           )
-        : await aiAgentService.execAgentTask(
-            {
+        : await awaitStartRequest(
+            aiAgentService.execAgentTask({
               agentId: executionContext.agentId,
               // Fresh sends only — resume flows never pass this, and the server drops
               // it defensively on resume-like params anyway.
@@ -1284,8 +1337,13 @@ export class GatewayActionImpl {
               steer: metadata?.steer,
               trigger: metadata?.trigger,
               userInterventionConfig,
-            },
-            { signal: abortSignal },
+            }),
+            abortSignal,
+            (abandoned) =>
+              interruptGatewayTaskOrThrow({
+                operationId: abandoned.operationId,
+                topicId: abandoned.topicId,
+              }),
           ));
     // A member continuation names the supervisor's run as `operationId` (safe
     // for older clients); this run is the member's continuation.
