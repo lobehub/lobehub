@@ -572,7 +572,8 @@ export class AiAgentService {
             this.messageModel,
             thread.id,
             thread.metadata?.startedAt ?? new Date().toISOString(),
-            thread.sourceMessageId,
+            // The recovered group-member bridge owns result publication.
+            undefined,
             'execVirtualSubAgent',
             pickThreadUsageBaseline(thread.metadata),
           );

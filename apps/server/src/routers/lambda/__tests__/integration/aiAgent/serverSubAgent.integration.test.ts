@@ -205,57 +205,104 @@ afterEach(async () => {
   await cleanupTestUser(serverDB, userId);
   vi.clearAllMocks();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   inMemoryAgentStateManager.clear();
   inMemoryStreamEventManager.clear();
 });
 
 describe('Server callSubAgent suspend/resume', () => {
-  it('parks the parent, runs the sub-op, backfills the tool message and resumes', async () => {
-    // 1: parent emits callSubAgent  2: sub-op final answer  3: parent resume final
-    let callCount = 0;
-    mockResponsesCreate.mockImplementation(function () {
-      callCount++;
-      if (callCount === 1) return Promise.resolve(createCallSubAgentResponse() as any);
-      if (callCount === 2) return Promise.resolve(createFinalTextResponse(SUB_AGENT_ANSWER) as any);
-      return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
-    });
+  it.each([undefined, 'allow', 'deny'] as const)(
+    'publishes the child result after %s control and resumes the parent',
+    async (decision) => {
+      const pendingContents: (string | null)[] = [];
+      const reviewedResults: string[] = [];
+      const fetchHook = vi.fn(async (_url: string, init: RequestInit) => {
+        const payload = JSON.parse(init.body as string);
+        const [placeholder] = await serverDB
+          .select()
+          .from(messages)
+          .where(eq(messages.id, payload.toolMessageId));
+        pendingContents.push(placeholder.content);
+        reviewedResults.push(payload.result.content);
+        return new Response(JSON.stringify({ decision }));
+      });
+      if (decision) {
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_URL', 'https://hooks.example/subagent-result');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_TOKEN', 'synthetic-test-token');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_EVENTS', 'afterToolCall');
+        vi.stubEnv('AGENT_HOOK_WEBHOOK_RESPONSE_HANDLING', 'toolResult');
+        const originalFetch = globalThis.fetch;
+        vi.stubGlobal('fetch', (url: string, init: RequestInit) =>
+          String(url) === 'https://hooks.example/subagent-result'
+            ? fetchHook(url, init)
+            : originalFetch(url, init),
+        );
+      }
+      // 1: parent emits callSubAgent  2: sub-op final answer  3: parent resume final
+      let callCount = 0;
+      mockResponsesCreate.mockImplementation(function () {
+        callCount++;
+        if (callCount === 1) return Promise.resolve(createCallSubAgentResponse() as any);
+        if (callCount === 2)
+          return Promise.resolve(createFinalTextResponse(SUB_AGENT_ANSWER) as any);
+        return Promise.resolve(createFinalTextResponse(PARENT_FINAL) as any);
+      });
 
-    const caller = aiAgentRouter.createCaller(createTestContext());
+      const caller = aiAgentRouter.createCaller(createTestContext());
 
-    const createResult = await caller.execAgent({
-      agentId: testAgentId,
-      prompt: 'Please research the ultimate question and report back.',
-    });
-    expect(createResult.success).toBe(true);
+      const createResult = await caller.execAgent({
+        agentId: testAgentId,
+        prompt: 'Please research the ultimate question and report back.',
+      });
+      expect(createResult.success).toBe(true);
 
-    const finalState = await waitForOperationComplete(
-      inMemoryAgentStateManager,
-      createResult.operationId,
-      { maxWaitTime: 20_000 },
-    );
+      const finalState = await waitForOperationComplete(
+        inMemoryAgentStateManager,
+        createResult.operationId,
+        { maxWaitTime: 20_000 },
+      );
 
-    // Parent resumed and completed
-    expect(finalState.status).toBe('done');
-    expect(finalState.pendingToolsCalling ?? []).toHaveLength(0);
+      // Parent resumed and completed
+      expect(finalState.status).toBe('done');
+      expect(finalState.pendingToolsCalling ?? []).toHaveLength(0);
 
-    // Three LLM calls: parent-initial, sub-op, parent-resume
-    expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
+      // Three LLM calls: parent-initial, sub-op, parent-resume
+      expect(mockResponsesCreate).toHaveBeenCalledTimes(3);
 
-    // A child op was spawned and reconciled to the parent
-    const childOps = await serverDB
-      .select()
-      .from(agentOperations)
-      .where(eq(agentOperations.parentOperationId, createResult.operationId));
-    expect(childOps.length).toBeGreaterThanOrEqual(1);
+      // A child op was spawned and reconciled to the parent
+      const childOps = await serverDB
+        .select()
+        .from(agentOperations)
+        .where(eq(agentOperations.parentOperationId, createResult.operationId));
+      expect(childOps.length).toBeGreaterThanOrEqual(1);
+      if (decision) {
+        expect(fetchHook).toHaveBeenCalledTimes(1);
+        expect(pendingContents).toEqual(['']);
+        expect(reviewedResults[0]).toContain(SUB_AGENT_ANSWER);
+        expect(reviewedResults[0]).toMatch(/<sub_agent id="[^"]+" \/>$/);
+      }
 
-    // The placeholder tool message was backfilled with the sub-agent's answer,
-    // followed by the hidden reference the parent uses to continue that sub-agent
-    const allMessages = await serverDB.select().from(messages).where(eq(messages.userId, userId));
-    const subAgentToolMessage = allMessages.find(
-      (m) =>
-        m.role === 'tool' && !!m.content && stripSubAgentReference(m.content) === SUB_AGENT_ANSWER,
-    );
-    expect(subAgentToolMessage).toBeDefined();
-    expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
-  });
+      // The placeholder tool message was backfilled with the sub-agent's answer,
+      // followed by the hidden reference the parent uses to continue that sub-agent
+      const allMessages = await serverDB.select().from(messages).where(eq(messages.userId, userId));
+      const subAgentToolMessage = allMessages.find(
+        (m) =>
+          m.role === 'tool' &&
+          !!m.content &&
+          stripSubAgentReference(m.content) ===
+            (decision === 'deny'
+              ? 'Tool result withheld by afterToolCall hook.'
+              : SUB_AGENT_ANSWER),
+      );
+      expect(subAgentToolMessage).toBeDefined();
+      if (decision !== 'deny')
+        expect(subAgentToolMessage!.content).toMatch(/<sub_agent id="[^"]+" \/>$/);
+      const parentInput = JSON.stringify(mockResponsesCreate.mock.calls[2][0]);
+      expect(parentInput).toContain(
+        decision === 'deny' ? 'Tool result withheld by afterToolCall hook.' : SUB_AGENT_ANSWER,
+      );
+      if (decision === 'deny') expect(parentInput).not.toContain(SUB_AGENT_ANSWER);
+    },
+  );
 });

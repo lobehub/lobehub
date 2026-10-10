@@ -123,6 +123,7 @@ const hook: AgentHook = {
 - Human approval sources claim the decision and retain the answer in their private resolution/outbox. `MessageModel.resolveHumanApproval` defaults to claim-only; only the runtime calls it with `publishResult: true` after result control. Stop/rejection receipts can publish directly because they contain no executed tool output.
 - Recover original caller hooks through the existing intervention operation identity or deferred callback's parent operation. Keep the in-memory hook verdict separate from tool-owned state; a tool returning `type: 'blocked'` is not a hook verdict.
 - Every deferred backfill, including a member that fails to start, follows the same hook-before-write order. Use the existing empty placeholder to arbitrate duplicate final writes; do not introduce a replacement review state machine.
+- When a thread has a sub-agent or group-member completion bridge, that bridge exclusively publishes its tool result. Thread lifecycle hooks update thread metadata only; never prefill the tool message with an ungated summary, including after approval recovery.
 - Cover an answer held while a hook runs, atomic publication and rollback, duplicate callbacks after policy removal, and partial member startup failure. History readers should need no result-review logic.
 
 ## Events
