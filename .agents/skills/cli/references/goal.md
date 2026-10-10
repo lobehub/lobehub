@@ -46,12 +46,16 @@ The one call that answers "why can this Goal not move?". It renders:
 
 ### `lh goal events <id>`
 
-`[-L, --limit <n>] [--offset <n>] [--entity <type>] [--type <type>] [--json]`
+`[-L, --limit <n>] [--cursor <token>] [--entity <type>] [--type <type>] [--json]`
 
 The audit trail, newest first. `--entity` filters
 `goal | node | edge | decision | task`; `--type` filters
 `created | updated | activated | resolved | rejected | retired | linked | unlinked`.
 `show`/`graph` embed only the newest 200 events; this command pages the whole log.
+
+Paging is by cursor, not offset: events are prepended while a goal runs, so an
+offset would re-serve a row a later insert pushed down. When a page is full the
+command prints the cursor to continue with (`--cursor "<iso>|<id>"`).
 
 ### `lh goal show <id>` / `lh goal graph <id>`
 

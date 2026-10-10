@@ -199,6 +199,8 @@ const admissionHint: Record<string, string> = {
     'a failed Goal acceptance can only be escalated — it cannot be superseded by new work',
   budget_exhausted: 'a budget bound is reached (rounds, cost or deadline)',
   consumed: 'this turn was already settled; its plan cannot be submitted again',
+  duplicate:
+    'a plan is already recorded for this turn; submitting again returns that receipt unchanged',
   existing_work: 'unfinished work must be delivered before planning or verifying',
   inactive: 'the Goal is not in an active state (planning or running)',
   operation_mismatch: 'the token does not speak for the operation bound to this Goal',
@@ -299,11 +301,17 @@ function printGoalState(
   }
 
   const { admission } = context;
+  // `duplicate` is `ok` (nothing is refused) but is NOT an invitation to plan:
+  // the turn already holds a submitted plan, and `submit` returns that receipt
+  // instead of applying a new one, so it must not read as "accepted".
+  const alreadyRecorded = admission.code === 'duplicate';
   console.log(
     `\n  ${pc.bold('Admission')} ${
-      admission.ok
-        ? pc.green('✓ a plan for the current turn would be accepted')
-        : pc.red(`✗ refused — ${admission.code}`)
+      alreadyRecorded
+        ? pc.yellow('◆ a plan is already recorded for this turn — a new one will not replace it')
+        : admission.ok
+          ? pc.green('✓ a plan for the current turn would be accepted')
+          : pc.red(`✗ refused — ${admission.code}`)
     }`,
   );
   if (!admission.ok) {
@@ -339,9 +347,8 @@ async function explainPlanRefusal(
   options: { operation?: string; token?: string },
 ): Promise<string | undefined> {
   try {
-    const { data } = await (
-      await getTrpcClient()
-    ).goal.planContext.query({
+    const reads = await goalReads();
+    const { data } = await reads.planContext.query({
       id,
       operationId: options.operation ?? process.env.LOBEHUB_OPERATION_ID,
       token: options.token,
@@ -382,6 +389,30 @@ const hasOperationToken = () => {
   } catch {
     return false;
   }
+};
+
+/**
+ * The Goal reads `lh goal show` / `state` / `events` use, picked by credential.
+ *
+ * A device or gateway planning run holds a `hetero-operation` JWT, and the
+ * server's ordinary authed routes refuse that by design — so the same reads have
+ * an operation-authenticated twin. Runs holding one are exactly the runs whose
+ * refusal these commands exist to explain, so they must not be the ones that
+ * cannot read.
+ */
+const goalReads = async () => {
+  const client = await getTrpcClient();
+  return hasOperationToken()
+    ? {
+        events: client.goal.eventsOperation,
+        graph: client.goal.graphOperation,
+        planContext: client.goal.planContextOperation,
+      }
+    : {
+        events: client.goal.events,
+        graph: client.goal.graph,
+        planContext: client.goal.planContext,
+      };
 };
 
 export function registerGoalCommand(program: Command) {
@@ -686,7 +717,8 @@ export function registerGoalCommand(program: Command) {
     });
 
   const show = async (id: string, options: { json?: boolean | string }) => {
-    const result = await (await getTrpcClient()).goal.graph.query({ id });
+    const reads = await goalReads();
+    const result = await reads.graph.query({ id });
     if (options.json !== undefined) return outputJson(result.data, options.json);
     printGraph(result.data);
   };
@@ -712,13 +744,13 @@ export function registerGoalCommand(program: Command) {
     )
     .option('--json [fields]', 'Output JSON')
     .action(async (id: string, options: { events: string; json?: boolean | string }) => {
-      const client = await getTrpcClient();
+      const reads = await goalReads();
       const tail = Math.max(0, Number.parseInt(options.events, 10) || 0);
       const [graph, context] = await Promise.all([
-        client.goal.graph.query({ id }),
-        client.goal.planContext.query({ id }),
+        reads.graph.query({ id }),
+        reads.planContext.query({ id }),
       ]);
-      const events = tail > 0 ? (await client.goal.events.query({ id, limit: tail })).data : [];
+      const events = tail > 0 ? (await reads.events.query({ id, limit: tail })).data.events : [];
       if (options.json !== undefined) return outputJson({ ...context.data, events }, options.json);
       printGoalState(graph.data, context.data, events);
     });
@@ -727,7 +759,7 @@ export function registerGoalCommand(program: Command) {
     .command('events <id>')
     .description("List this Goal's audit trail, newest first")
     .option('-L, --limit <n>', 'Events to fetch', '50')
-    .option('--offset <n>', 'Events to skip', '0')
+    .option('--cursor <token>', 'Continue from the previous page (the token it printed)')
     .option('--entity <type>', 'Filter by entity: goal | node | edge | decision | task')
     .option(
       '--type <type>',
@@ -738,28 +770,25 @@ export function registerGoalCommand(program: Command) {
       async (
         id: string,
         options: {
+          cursor?: string;
           entity?: GoalEventEntityType;
           json?: boolean | string;
           limit: string;
-          offset: string;
           type?: GoalEventType;
         },
       ) => {
-        const limit = Number.parseInt(options.limit, 10);
-        const offset = Number.parseInt(options.offset, 10);
-        const result = await (
-          await getTrpcClient()
-        ).goal.events.query({
+        const reads = await goalReads();
+        const result = await reads.events.query({
           id,
+          cursor: options.cursor,
           entityType: options.entity,
           eventType: options.type,
-          limit,
-          offset,
+          limit: Number.parseInt(options.limit, 10),
         });
         if (options.json !== undefined) return outputJson(result.data, options.json);
-        if (result.data.length === 0) return log.info('No events.');
+        if (result.data.events.length === 0) return log.info('No events.');
         printTable(
-          result.data.map((event) => [
+          result.data.events.map((event) => [
             toIso(event.createdAt),
             `${event.entityType} ${event.eventType}`,
             event.actorType,
@@ -768,9 +797,9 @@ export function registerGoalCommand(program: Command) {
           ]),
           ['TIME', 'EVENT', 'ACTOR', 'REASON', 'EVENT ID'],
         );
-        if (result.data.length === limit)
+        if (result.data.nextCursor)
           console.log(
-            pc.dim(`\nMore may follow — continue with --offset ${offset + result.data.length}`),
+            pc.dim(`\nMore may follow — continue with --cursor "${result.data.nextCursor}"`),
           );
       },
     );

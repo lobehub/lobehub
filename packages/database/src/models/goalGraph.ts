@@ -199,23 +199,30 @@ export class GoalGraphModel {
   };
 
   /**
-   * The goal's audit trail, newest first.
+   * The goal's audit trail, newest first, with the cursor that continues it.
    *
    * `getGraph` bundles only the newest {@link GRAPH_EVENT_LIMIT} events, which a
    * long-running goal exhausts — the transition that explains a stall can sit
    * just past the cap. This pages the same table so a reader can reach it.
    * Ownership is the predicate `getGraph` uses, so "no such goal" and "not
    * yours" stay indistinguishable and neither leaks another user's goal.
+   *
+   * A cursor, not an offset: this feed is live and events are PREPENDED while the
+   * goal runs, so an offset taken on page one re-serves a row that a later insert
+   * pushed down. `(createdAt, id)` is the sort key, so it is also the
+   * continuation key.
    */
   listEvents = async (
     goalId: string,
     options: {
+      cursor?: { createdAt: Date; id: string };
       entityType?: GoalEventEntityType;
       eventType?: GoalEventType;
       limit: number;
-      offset?: number;
     },
-  ): Promise<GoalGraphEvent[] | undefined> => {
+  ): Promise<
+    { events: GoalGraphEvent[]; nextCursor?: { createdAt: Date; id: string } } | undefined
+  > => {
     const [goal] = await this.db
       .select({ id: goals.id })
       .from(goals)
@@ -226,18 +233,35 @@ export class GoalGraphModel {
     const filters = [eq(goalEvents.goalId, goalId)];
     if (options.entityType) filters.push(eq(goalEvents.entityType, options.entityType));
     if (options.eventType) filters.push(eq(goalEvents.eventType, options.eventType));
+    // Strictly older than the cursor, ties broken by id — the same pair the rows
+    // are ordered by, so a page can neither repeat nor skip.
+    const afterCursor = options.cursor
+      ? or(
+          lt(goalEvents.createdAt, options.cursor.createdAt),
+          and(
+            eq(goalEvents.createdAt, options.cursor.createdAt),
+            lt(goalEvents.id, options.cursor.id),
+          ),
+        )
+      : undefined;
 
-    return (
-      this.db
-        .select()
-        .from(goalEvents)
-        .where(and(...filters))
-        // `id` breaks ties so paging never repeats or skips an event written in
-        // the same millisecond as its neighbour.
-        .orderBy(desc(goalEvents.createdAt), desc(goalEvents.id))
-        .limit(options.limit)
-        .offset(options.offset ?? 0)
-    );
+    // One row past the page answers "is there more?" without a second count query.
+    const rows = await this.db
+      .select()
+      .from(goalEvents)
+      .where(and(...filters, afterCursor))
+      .orderBy(desc(goalEvents.createdAt), desc(goalEvents.id))
+      .limit(options.limit + 1);
+
+    const events = rows.slice(0, options.limit);
+    const last = events.at(-1);
+    return {
+      events,
+      nextCursor:
+        rows.length > options.limit && last
+          ? { createdAt: last.createdAt, id: last.id }
+          : undefined,
+    };
   };
 
   /**

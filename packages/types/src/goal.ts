@@ -353,6 +353,12 @@ export interface GoalManagerState {
  * its own — the graph it holds has no manager or review receipt.
  */
 export interface GoalPlanContext {
+  /**
+   * `ok` means nothing refuses this turn — NOT that a new plan would be applied.
+   * `code: 'duplicate'` is `ok` because a plan is already recorded and
+   * re-submitting returns its receipt unchanged; it must not be rendered as
+   * "accepted".
+   */
   admission: { code: string; message?: string; ok: boolean };
   budget?: {
     blocked: boolean;

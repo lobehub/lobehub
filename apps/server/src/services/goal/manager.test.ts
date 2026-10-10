@@ -760,19 +760,34 @@ describe('CLI main Agent planning', () => {
     });
   });
 
-  it('pages the goal audit trail newest first and refuses another owner', async () => {
+  it('pages the goal audit trail by cursor and refuses another owner', async () => {
     const { id } = await start();
     const graph = new GoalGraphModel(db, userId);
     // A second event, so paging has something to page over.
     await graph.createNode(id, { title: 'Extra finding', kind: 'finding' });
-    const all = await graph.listEvents(id, { limit: 50 });
+    const first = await graph.listEvents(id, { limit: 50 });
+    const all = first!.events;
 
-    expect(all!.length).toBeGreaterThan(1);
-    expect(all![0]!.createdAt.getTime()).toBeGreaterThanOrEqual(all!.at(-1)!.createdAt.getTime());
+    expect(all.length).toBeGreaterThan(1);
+    expect(all[0]!.createdAt.getTime()).toBeGreaterThanOrEqual(all.at(-1)!.createdAt.getTime());
 
-    // Paging must not repeat or skip: offset 1 starts on the second-newest row.
-    const page = await graph.listEvents(id, { limit: 1, offset: 1 });
-    expect(page![0]!.id).toBe(all![1]!.id);
+    const page = await graph.listEvents(id, { limit: 1 });
+    expect(page!.events).toHaveLength(1);
+    expect(page!.nextCursor).toBeDefined();
+    // The cursor continues on the second-newest row...
+    const next = await graph.listEvents(id, { cursor: page!.nextCursor!, limit: 1 });
+    expect(next!.events[0]!.id).toBe(all[1]!.id);
+
+    // ...and still does after a live insert. This is why the page is keyed by
+    // `(createdAt, id)` and not an offset: events are PREPENDED while a goal
+    // runs, so `offset=2` would re-serve a row a new event pushed down.
+    await graph.createNode(id, { title: 'Inserted between pages', kind: 'finding' });
+    const afterInsert = await graph.listEvents(id, { cursor: page!.nextCursor!, limit: 1 });
+    expect(afterInsert!.events[0]!.id).toBe(all[1]!.id);
+
+    // The last page reports no continuation, so a caller can stop paging.
+    const last = await graph.listEvents(id, { limit: 200 });
+    expect(last!.nextCursor).toBeUndefined();
 
     // A missing goal and someone else's goal are both invisible.
     expect(await graph.listEvents('goal-missing', { limit: 5 })).toBeUndefined();

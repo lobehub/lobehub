@@ -1,3 +1,5 @@
+import { Buffer } from 'node:buffer';
+
 import { Command } from 'commander';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -15,7 +17,10 @@ const { mockClient } = vi.hoisted(() => ({
       create: { mutate: vi.fn() },
       delete: { mutate: vi.fn() },
       events: { query: vi.fn() },
+      eventsOperation: { query: vi.fn() },
+      graphOperation: { query: vi.fn() },
       planContext: { query: vi.fn() },
+      planContextOperation: { query: vi.fn() },
       submitPlan: { mutate: vi.fn() },
       submitOperationPlan: { mutate: vi.fn() },
       submitOperationReport: { mutate: vi.fn() },
@@ -889,6 +894,10 @@ const eventRow = {
   reason: 'Recovered an abandoned Task operation and started the next attempt',
 };
 
+/** A JWT-shaped string whose payload marks the caller as a device / gateway run. */
+const operationJwt = () =>
+  `x.${Buffer.from(JSON.stringify({ purpose: 'hetero-operation' })).toString('base64url')}.y`;
+
 const goalStateGraph = {
   decisions: [],
   edges: [],
@@ -944,7 +953,7 @@ describe('goal state command', () => {
     vi.spyOn(console, 'log').mockImplementation(() => {});
     mockClient.goal.graph.query.mockResolvedValue({ data: goalStateGraph });
     mockClient.goal.planContext.query.mockResolvedValue({ data: goalStateContext });
-    mockClient.goal.events.query.mockResolvedValue({ data: [] });
+    mockClient.goal.events.query.mockResolvedValue({ data: { events: [], nextCursor: null } });
   });
 
   afterEach(() => {
@@ -980,7 +989,9 @@ describe('goal state command', () => {
   });
 
   it('renders recent events and lets --events 0 turn them off', async () => {
-    mockClient.goal.events.query.mockResolvedValue({ data: [eventRow] });
+    mockClient.goal.events.query.mockResolvedValue({
+      data: { events: [eventRow], nextCursor: null },
+    });
 
     await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1', '--events', '5']);
     expect(mockClient.goal.events.query).toHaveBeenCalledWith({ id: 'goal-1', limit: 5 });
@@ -992,6 +1003,36 @@ describe('goal state command', () => {
     await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1', '--events', '0']);
     expect(mockClient.goal.events.query).not.toHaveBeenCalled();
     expect(output()).not.toContain('Recent events');
+  });
+
+  it('reads through the operation endpoints when this is a planning run', async () => {
+    vi.stubEnv('LOBEHUB_JWT', operationJwt());
+    mockClient.goal.graphOperation.query.mockResolvedValue({ data: goalStateGraph });
+    mockClient.goal.planContextOperation.query.mockResolvedValue({ data: goalStateContext });
+    mockClient.goal.eventsOperation.query.mockResolvedValue({
+      data: { events: [], nextCursor: null },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+
+    expect(mockClient.goal.graphOperation.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    expect(mockClient.goal.planContextOperation.query).toHaveBeenCalledWith({ id: 'goal-1' });
+    // The ordinary routes refuse a hetero-operation token by design, so falling
+    // back to them would 401 exactly the run whose refusal this explains.
+    expect(mockClient.goal.graph.query).not.toHaveBeenCalled();
+    expect(mockClient.goal.planContext.query).not.toHaveBeenCalled();
+  });
+
+  it('renders an already-recorded plan as settled, not accepted', async () => {
+    mockClient.goal.planContext.query.mockResolvedValue({
+      data: { ...goalStateContext, admission: { code: 'duplicate', ok: true } },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'state', 'goal-1']);
+    const text = output();
+
+    expect(text).toContain('a plan is already recorded for this turn');
+    expect(text).not.toContain('would be accepted');
   });
 });
 
@@ -1057,8 +1098,17 @@ describe('goal events command', () => {
     vi.restoreAllMocks();
   });
 
-  it('pages the audit trail and passes every filter through', async () => {
-    mockClient.goal.events.query.mockResolvedValue({ data: [eventRow] });
+  const output = () =>
+    vi
+      .mocked(console.log)
+      .mock.calls.map(([value]) => String(value))
+      .join('\n');
+
+  it('pages the audit trail by cursor and passes every filter through', async () => {
+    const cursor = '2026-10-10T08:00:00.000Z|e9';
+    mockClient.goal.events.query.mockResolvedValue({
+      data: { events: [eventRow], nextCursor: cursor },
+    });
 
     await createProgram().parseAsync([
       'node',
@@ -1068,8 +1118,8 @@ describe('goal events command', () => {
       'goal-1',
       '--limit',
       '5',
-      '--offset',
-      '10',
+      '--cursor',
+      cursor,
       '--entity',
       'node',
       '--type',
@@ -1079,13 +1129,25 @@ describe('goal events command', () => {
 
     expect(mockClient.goal.events.query).toHaveBeenCalledWith({
       id: 'goal-1',
+      cursor,
       entityType: 'node',
       eventType: 'activated',
       limit: 5,
-      offset: 10,
     });
     const printed = JSON.parse(String(vi.mocked(console.log).mock.calls.at(-1)?.[0]));
-    expect(printed).toHaveLength(1);
-    expect(printed[0].id).toBe('e1');
+    expect(printed.events).toHaveLength(1);
+    expect(printed.events[0].id).toBe('e1');
+    expect(printed.nextCursor).toBe(cursor);
+  });
+
+  it('prints the continuation cursor so the next page is a copy-paste', async () => {
+    const cursor = '2026-10-10T08:00:00.000Z|e9';
+    mockClient.goal.events.query.mockResolvedValue({
+      data: { events: [eventRow], nextCursor: cursor },
+    });
+
+    await createProgram().parseAsync(['node', 'test', 'goal', 'events', 'goal-1', '--limit', '1']);
+
+    expect(output()).toContain(`--cursor "${cursor}"`);
   });
 });
