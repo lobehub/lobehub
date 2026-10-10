@@ -76,7 +76,7 @@ const findLastBlockId = (block: AssistantContentBlock | undefined): string | und
  * Recursively finds the last message ID in a message tree
  * Priority: children > tools > self
  */
-const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
+export const findLastMessageIdRecursive = (node: UIChatMessage | undefined): string | undefined => {
   if (!node) return undefined;
 
   // Priority 1: Dive into children recursively

@@ -4,7 +4,11 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useChatStore } from '@/store/chat';
+import { useSessionStore } from '@/store/session';
+import { sessionSelectors } from '@/store/session/selectors';
 
+import { messageStateSelectors, useConversationStore } from '../../../../store';
+import { findLastMessageIdRecursive } from '../../../../store/slices/data/selectors';
 import { defineAction } from '../defineAction';
 
 /**
@@ -23,11 +27,23 @@ export const forkAction = defineAction({
     const { t } = useTranslation('common');
 
     const [topic, forkTopic] = useChatStore((s) => [s.activeTopicId, s.forkTopic]);
+    // A thread portal has nowhere standalone to copy into: the copied rows keep
+    // their `threadId`, while switching topic clears `activeThreadId`, so the new
+    // topic would open with the exchange hidden. The context menu already keeps
+    // Fork out of thread and group sessions — the action bar has to agree.
+    const inThread = useConversationStore(messageStateSelectors.isThreadMode);
+    const isGroupSession = useSessionStore(sessionSelectors.isCurrentSessionGroupSession);
     const isAssistant = ctx.role === 'assistant' || ctx.role === 'group';
+    // A `group` context id is the aggregated turn's FIRST row, but the reply the
+    // user picked runs on past it (tool results, final text). Anchor the fork on
+    // the turn's real tail so the copy carries the whole reply; for a plain
+    // assistant message the message itself is already the tail.
+    const anchorId =
+      ctx.role === 'group' ? (findLastMessageIdRecursive(ctx.data) ?? ctx.id) : ctx.id;
 
     return useMemo(
       () =>
-        isAssistant
+        isAssistant && !inThread && !isGroupSession
           ? {
               handleClick: async () => {
                 if (!topic) {
@@ -35,14 +51,14 @@ export const forkAction = defineAction({
                   return;
                 }
 
-                await forkTopic(ctx.id);
+                await forkTopic(anchorId);
               },
               icon: GitFork,
               key: 'fork',
               label: t('forkTopic'),
             }
           : null,
-      [isAssistant, t, ctx.id, topic, forkTopic],
+      [isAssistant, inThread, isGroupSession, t, anchorId, topic, forkTopic],
     );
   },
 });
