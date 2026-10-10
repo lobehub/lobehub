@@ -7,7 +7,7 @@
  */
 import { randomUUID } from 'node:crypto';
 
-import type { TrashItem, TrashListParams } from '@lobechat/types';
+import type { TrashItem, TrashListParams, TrashProjectFilter } from '@lobechat/types';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { PropsWithChildren } from 'react';
 import { createElement, useEffect } from 'react';
@@ -20,7 +20,7 @@ import { trashService } from '@/services/trash';
 
 import type { TrashListData } from './initialState';
 import { initialState } from './initialState';
-import { trashCountResource, trashListKey, trashListResource } from './projection';
+import { trashCountKey, trashCountResource, trashListKey, trashListResource } from './projection';
 import { trashSelectors } from './selectors';
 import { useTrashStore } from './store';
 
@@ -82,17 +82,32 @@ const pending = () => new Promise<never>(() => {});
 
 /** Route `trashService.list` by the requested filter. */
 const listFor = (
-  byType: (resourceType: TrashItem['resourceType'] | undefined) => {
+  byType: (
+    resourceType: TrashItem['resourceType'] | undefined,
+    projectId: TrashProjectFilter,
+  ) => {
     items: TrashItem[];
     nextCursor: string | null;
   },
 ) =>
   vi
     .mocked(trashService.list)
-    .mockImplementation(async (params?: TrashListParams) => byType(params?.resourceType));
+    .mockImplementation(async (params?: Omit<TrashListParams, 'deletedByUserId'>) =>
+      byType(params?.resourceType, params?.projectId),
+    );
 
-const itemIds = (resourceType?: TrashItem['resourceType']) =>
-  useTrashStore.getState().trashListMap[trashListKey(resourceType)]?.items.map((i) => i.id);
+const itemIds = (resourceType?: TrashItem['resourceType'], projectId?: TrashProjectFilter) =>
+  useTrashStore
+    .getState()
+    .trashListMap[trashListKey({ projectId, resourceType })]?.items.map((i) => i.id);
+
+const deferred = <T>() => {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((r) => {
+    resolve = r;
+  });
+  return { promise, resolve };
+};
 
 describe('trash replicas', () => {
   const scopes = new Set<string>();
@@ -107,6 +122,7 @@ describe('trash replicas', () => {
 
   const storageKeyOf = (resourceType?: TrashItem['resourceType']) =>
     trashListResource.storageKey({ resourceType });
+  const projectKeys: TrashProjectFilter[] = [undefined, null, 'proj_a', 'proj_b'];
 
   beforeEach(() => {
     useScope(`trash-user-${randomUUID()}:personal`);
@@ -117,11 +133,19 @@ describe('trash replicas', () => {
 
   afterEach(async () => {
     await Promise.all(
-      [...scopes].flatMap((value) => [
-        trashListResource.storage!.remove({ queryKey: trashListKey(), scope: value }),
-        trashListResource.storage!.remove({ queryKey: trashListKey('topic'), scope: value }),
-        trashCountResource.storage!.remove({ queryKey: trashListKey(), scope: value }),
-      ]),
+      [...scopes].flatMap((value) =>
+        projectKeys.flatMap((projectId) => [
+          trashListResource.storage!.remove({
+            queryKey: trashListKey({ projectId }),
+            scope: value,
+          }),
+          trashListResource.storage!.remove({
+            queryKey: trashListKey({ projectId, resourceType: 'topic' }),
+            scope: value,
+          }),
+          trashCountResource.storage!.remove({ queryKey: trashCountKey(projectId), scope: value }),
+        ]),
+      ),
     );
     scopes.clear();
     vi.restoreAllMocks();
@@ -135,8 +159,8 @@ describe('trash replicas', () => {
     );
     vi.mocked(trashService.list).mockImplementation(pending);
 
-    const sync = renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
-    const list = renderHook(() => useTrashStore(trashSelectors.currentList(undefined)));
+    const sync = renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
+    const list = renderHook(() => useTrashStore(trashSelectors.currentList({})));
 
     await waitFor(() => expect(list.result.current?.items.map((i) => i.title)).toEqual(['Cached']));
     expect(sync.result.current.isHydrated).toBe(true);
@@ -149,7 +173,7 @@ describe('trash replicas', () => {
       nextCursor: null,
     });
 
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
 
     await waitFor(() => expect(itemIds()).toEqual(['t1']));
     await waitFor(async () =>
@@ -167,8 +191,10 @@ describe('trash replicas', () => {
         : { items: [item('agent_1', 'An agent', 'agent')], nextCursor: null },
     );
 
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, 'topic'), { wrapper });
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, { resourceType: 'topic' }), {
+      wrapper,
+    });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
 
     await waitFor(() => expect(itemIds('topic')).toEqual(['topic_1']));
     await waitFor(() => expect(itemIds()).toEqual(['agent_1']));
@@ -179,19 +205,20 @@ describe('trash replicas', () => {
       .mockResolvedValueOnce({ items: [item('t1'), item('t2')], nextCursor: 'cursor-1' })
       .mockResolvedValueOnce({ items: [item('t3')], nextCursor: null });
 
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
     await waitFor(() =>
-      expect(useTrashStore.getState().trashListMap.all?.nextCursor).toBe('cursor-1'),
+      expect(useTrashStore.getState().trashListMap[trashListKey()]?.nextCursor).toBe('cursor-1'),
     );
 
-    await act(() => useTrashStore.getState().loadMore());
+    await act(() => useTrashStore.getState().loadMore({}));
 
     expect(trashService.list).toHaveBeenLastCalledWith({
       cursor: 'cursor-1',
+      projectId: undefined,
       resourceType: undefined,
     });
     expect(itemIds()).toEqual(['t1', 't2', 't3']);
-    expect(useTrashStore.getState().trashListMap.all?.nextCursor).toBeNull();
+    expect(useTrashStore.getState().trashListMap[trashListKey()]?.nextCursor).toBeNull();
   });
 
   it('drops a restored row from the loaded view', async () => {
@@ -199,7 +226,7 @@ describe('trash replicas', () => {
       items: [item('t1'), item('t2')],
       nextCursor: null,
     });
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
     await waitFor(() => expect(itemIds()).toEqual(['t1', 't2']));
 
     vi.mocked(trashService.restore).mockResolvedValue({ failed: [], restored: [item('t1')] });
@@ -224,8 +251,8 @@ describe('trash replicas', () => {
 
     renderHook(
       () => {
-        useTrashStore((s) => s.useFetchTrash)(true, 'topic');
-        useTrashStore((s) => s.useFetchTrash)(true);
+        useTrashStore((s) => s.useFetchTrash)(true, { resourceType: 'topic' });
+        useTrashStore((s) => s.useFetchTrash)(true, {});
       },
       { wrapper },
     );
@@ -254,15 +281,17 @@ describe('trash replicas', () => {
       nextCursor: null,
     });
     act(() => useTrashStore.setState({ activeType: 'topic' }));
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, 'topic'), { wrapper });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, { resourceType: 'topic' }), {
+      wrapper,
+    });
     await waitFor(() => expect(itemIds('topic')).toEqual(['t1']));
 
     vi.mocked(trashService.emptyTrash).mockResolvedValue({ hasMore: false, purged: 1 });
     vi.mocked(trashService.list).mockResolvedValue({ items: [], nextCursor: null });
 
-    await act(() => useTrashStore.getState().emptyTrash());
+    await act(() => useTrashStore.getState().emptyTrash({ resourceType: 'topic' }));
 
-    expect(trashService.emptyTrash).toHaveBeenCalledWith('topic');
+    expect(trashService.emptyTrash).toHaveBeenCalledWith({ resourceType: 'topic' }, null);
     expect(itemIds('topic')).toEqual([]);
   });
 
@@ -275,13 +304,13 @@ describe('trash replicas', () => {
     );
     vi.mocked(trashService.list).mockImplementation(pending);
 
-    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
+    renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
 
     // Give hydration a chance to (wrongly) land, then assert the view is empty.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
-    expect(useTrashStore.getState().trashListMap.all).toBeUndefined();
+    expect(useTrashStore.getState().trashListMap[trashListKey()]).toBeUndefined();
   });
 
   it('drops the previous identity’s list before the next one paints', async () => {
@@ -289,26 +318,98 @@ describe('trash replicas', () => {
       items: [item('t1', 'Mine')],
       nextCursor: null,
     });
-    const sync = renderHook(() => useTrashStore((s) => s.useFetchTrash)(true), { wrapper });
+    const sync = renderHook(() => useTrashStore((s) => s.useFetchTrash)(true, {}), { wrapper });
     await waitFor(() => expect(itemIds()).toEqual(['t1']));
 
     vi.mocked(trashService.list).mockImplementation(pending);
     useScope(`trash-user-${randomUUID()}:personal`);
     sync.rerender();
 
-    await waitFor(() => expect(useTrashStore.getState().trashListMap.all).toBeUndefined());
+    await waitFor(() =>
+      expect(useTrashStore.getState().trashListMap[trashListKey()]).toBeUndefined(),
+    );
+  });
+
+  it('keys every project filter as its own view and asks the server for it', async () => {
+    listFor((_, projectId) => ({
+      items: [item(projectId === undefined ? 'all' : projectId === null ? 'none' : projectId)],
+      nextCursor: null,
+    }));
+
+    renderHook(
+      () => {
+        useTrashStore((s) => s.useFetchTrash)(true, {});
+        useTrashStore((s) => s.useFetchTrash)(true, { projectId: null });
+        useTrashStore((s) => s.useFetchTrash)(true, { projectId: 'proj_a' });
+      },
+      { wrapper },
+    );
+
+    await waitFor(() => expect(itemIds(undefined, 'proj_a')).toEqual(['proj_a']));
+    expect(itemIds(undefined, null)).toEqual(['none']);
+    expect(itemIds()).toEqual(['all']);
+    expect(vi.mocked(trashService.list).mock.calls.map(([params]) => params?.projectId)).toEqual(
+      expect.arrayContaining([undefined, null, 'proj_a']),
+    );
+  });
+
+  it('a late response for the previous project never repaints the current one', async () => {
+    const slow = deferred<{ items: TrashItem[]; nextCursor: string | null }>();
+    listFor((_, projectId) =>
+      projectId === 'proj_a' ? (slow.promise as never) : { items: [item('b1')], nextCursor: null },
+    );
+
+    const { rerender } = renderHook(
+      ({ projectId }: { projectId: TrashProjectFilter }) =>
+        useTrashStore((s) => s.useFetchTrash)(true, { projectId }),
+      { initialProps: { projectId: 'proj_a' as TrashProjectFilter }, wrapper },
+    );
+    rerender({ projectId: 'proj_b' });
+    await waitFor(() => expect(itemIds(undefined, 'proj_b')).toEqual(['b1']));
+
+    await act(async () => {
+      slow.resolve({ items: [item('a1')], nextCursor: null });
+      await slow.promise;
+    });
+
+    // The late page belongs to project A's own entry; B's view is untouched.
+    expect(itemIds(undefined, 'proj_b')).toEqual(['b1']);
+    expect(itemIds(undefined, 'proj_a') ?? []).not.toContain('b1');
   });
 
   describe('selectors', () => {
-    it('totalCount sums the per-type counts', async () => {
-      vi.mocked(trashService.countByType).mockResolvedValue({ agent: 1, topic: 2 });
-      renderHook(() => useTrashStore((s) => s.useFetchTrashCount)(true), { wrapper });
+    it('totalCount sums the per-type counts of one project filter', async () => {
+      vi.mocked(trashService.countByType).mockImplementation(async (projectId) =>
+        projectId === 'proj_a' ? { topic: 4 } : { agent: 1, topic: 2 },
+      );
+      renderHook(
+        () => {
+          useTrashStore((s) => s.useFetchTrashCount)(true);
+          useTrashStore((s) => s.useFetchTrashCount)(true, 'proj_a');
+        },
+        { wrapper },
+      );
 
       await waitFor(() =>
-        expect(useTrashStore.getState().trashCountMap.all).toEqual({ agent: 1, topic: 2 }),
+        expect(useTrashStore.getState().trashCountMap[trashCountKey()]).toEqual({
+          agent: 1,
+          topic: 2,
+        }),
       );
-      expect(trashSelectors.totalCount(useTrashStore.getState())).toBe(3);
-      expect(trashSelectors.countByType(useTrashStore.getState())).toEqual({ agent: 1, topic: 2 });
+      await waitFor(() =>
+        expect(useTrashStore.getState().trashCountMap[trashCountKey('proj_a')]).toEqual({
+          topic: 4,
+        }),
+      );
+      const state = useTrashStore.getState();
+      expect(trashSelectors.totalCount()(state)).toBe(3);
+      expect(trashSelectors.countByType()(state)).toEqual({ agent: 1, topic: 2 });
+      expect(trashSelectors.filterCount({ projectId: 'proj_a' })(state)).toBe(4);
+      expect(
+        trashSelectors.filterCount({ projectId: 'proj_a', resourceType: 'agent' })(state),
+      ).toBe(0);
+      // Not loaded yet: unknown, never a confident zero.
+      expect(trashSelectors.filterCount({ projectId: null })(state)).toBeUndefined();
     });
   });
 });
