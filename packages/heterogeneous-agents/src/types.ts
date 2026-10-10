@@ -248,10 +248,14 @@ export interface HeterogeneousToolResultImage {
   data?: string;
   /** File record id after upload to the file store. */
   fileId?: string;
+  /** Intrinsic height in pixels, read from the image header at upload time. */
+  height?: number;
   /** IANA media type, e.g. `image/png`. */
   mediaType: string;
   /** Remote URL after upload. */
   url?: string;
+  /** Intrinsic width in pixels, read from the image header at upload time. */
+  width?: number;
 }
 
 /** Data shape for tool_result events (ACP-specific) */

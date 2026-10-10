@@ -11,6 +11,7 @@ import type {
 } from '../types';
 import { CodexFileChangeTracker } from './codexFileChangeTracker';
 import { createCodexImageOutputReader } from './codexImageOutputs';
+import { readImageDimensions } from './imageDimensions';
 import { JsonlStreamProcessor } from './jsonlProcessor';
 import { readPostRunUsage } from './postRunUsage';
 import { toStreamEvent } from './streamEvent';
@@ -25,7 +26,9 @@ import { toStreamEvent } from './streamEvent';
  */
 export type UploadHeterogeneousImage = (image: {
   data: string;
+  height?: number;
   mediaType: string;
+  width?: number;
 }) => Promise<{ fileId: string; url: string } | undefined>;
 
 export interface AgentStreamPipelineOptions {
@@ -242,10 +245,21 @@ export class AgentStreamPipeline {
           continue;
         }
         try {
-          const ref = await this.uploadImage({ data: image.data, mediaType: image.mediaType });
+          // Best-effort: lets renders reserve the image box before it loads.
+          const dims = readImageDimensions(image.data);
+          const ref = await this.uploadImage({
+            data: image.data,
+            mediaType: image.mediaType,
+            ...dims,
+          });
           // `undefined` → uploader declined; drop the entry rather than persist base64.
           if (ref) {
-            uploaded.push({ fileId: ref.fileId, mediaType: image.mediaType, url: ref.url });
+            uploaded.push({
+              fileId: ref.fileId,
+              mediaType: image.mediaType,
+              url: ref.url,
+              ...dims,
+            });
             outcomes.push({ mediaType: image.mediaType, url: ref.url });
           } else {
             outcomes.push({ mediaType: image.mediaType });

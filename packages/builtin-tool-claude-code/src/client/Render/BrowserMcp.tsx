@@ -13,6 +13,7 @@ import {
   isBrowserMcpApiName,
   parseBrowserMcpApi,
 } from '../Inspector/browserMcpLabels';
+import { type IntrinsicImageSize, reservedImageProps } from './reservedImageProps';
 
 const styles = createStaticStyles(({ css, cssVar }) => ({
   row: css`
@@ -30,7 +31,7 @@ const styles = createStaticStyles(({ css, cssVar }) => ({
  * gone and only the uploaded reference remains. Same lifecycle as `Read` on an
  * image file; see `HeterogeneousToolResultImage`.
  */
-interface BrowserMcpImage {
+interface BrowserMcpImage extends IntrinsicImageSize {
   fileId?: string;
   mediaType?: string;
   url?: string;
@@ -39,6 +40,8 @@ interface BrowserMcpImage {
 interface BrowserMcpPluginState {
   images?: BrowserMcpImage[];
 }
+
+const SCREENSHOT_MAX_HEIGHT = 600;
 
 type BrowserMcpRenderProps = BuiltinRenderProps<unknown, BrowserMcpPluginState, string>;
 
@@ -101,9 +104,10 @@ const Screenshot = memo<BrowserMcpRenderProps>(({ content, pluginState }) => {
                 width either: upscaling a narrow capture just makes it blurry. */}
             <Image
               alt={'Browser screenshot'}
-              maxHeight={600}
+              maxHeight={SCREENSHOT_MAX_HEIGHT}
               src={image.url}
               style={{ maxWidth: '100%' }}
+              {...reservedImageProps(image, SCREENSHOT_MAX_HEIGHT)}
             />
           </Block>
         ))}
