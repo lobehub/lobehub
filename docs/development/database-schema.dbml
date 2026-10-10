@@ -2132,6 +2132,37 @@ table goal_nodes {
   }
 }
 
+table goal_subscriptions {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  goal_id text [not null]
+  widget_id uuid [not null]
+  metric_id text
+  user_id text [not null]
+  workspace_id text
+  enabled boolean [not null, default: false]
+  confirmed_version_id uuid [not null]
+  binding_revision integer [not null, default: 1]
+  binding jsonb [not null]
+  wake_condition jsonb [not null]
+  freshness_policy jsonb [not null]
+  cursor jsonb [not null, default: `{}`]
+  accessed_at "timestamp with time zone" [not null, default: `now()`]
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (goal_id, widget_id, metric_id) [name: 'goal_subscriptions_goal_widget_metric_unique', unique]
+    (goal_id, widget_id) [name: 'goal_subscriptions_goal_widget_result_unique', unique]
+    (widget_id, workspace_id, user_id) [name: 'goal_subscriptions_widget_enabled_idx']
+    (user_id, goal_id) [name: 'goal_subscriptions_personal_idx']
+    (workspace_id, goal_id) [name: 'goal_subscriptions_workspace_idx']
+    metric_id [name: 'goal_subscriptions_metric_id_idx']
+    confirmed_version_id [name: 'goal_subscriptions_confirmed_version_id_idx']
+    (updated_at, id) [name: 'goal_subscriptions_reconcile_idx']
+    
+  }
+}
+
 table goal_traces {
   goal_id text [pk, not null]
   trace_s3_key text
