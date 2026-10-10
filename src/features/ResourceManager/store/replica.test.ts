@@ -402,6 +402,23 @@ describe('ResourceManager search replicas', () => {
     expect(list.hasMore).toBe(true);
   });
 
+  it('stops at a full page the server called complete (hasMore false, no total)', async () => {
+    fetchSpy.mockResolvedValue({ hasMore: false, items: itemsOf(DEFAULT_SEARCH_PAGE_SIZE) });
+
+    renderHook(() => useResourceManagerStore((s) => s.useFetchHierarchySearch)(HIERARCHY_PARAMS), {
+      wrapper,
+    });
+
+    await waitFor(() =>
+      expect(ids(hierarchyEntry(HIERARCHY_PARAMS))).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE),
+    );
+
+    // The endpoint omits `total` when the result set is an exact multiple of the
+    // page size, so `hasMore: false` is the only terminator it sends; dropping it
+    // would keep "load more" alive and fetch one more, empty page.
+    expect(hierarchyEntry(HIERARCHY_PARAMS)?.hasMore).toBe(false);
+  });
+
   it('bounds the window across reloads, from the searches an earlier session persisted', async () => {
     // Emulate a page that persisted MORE queries than the window before this
     // store instance existed: the rows, plus the engine's index of them. The

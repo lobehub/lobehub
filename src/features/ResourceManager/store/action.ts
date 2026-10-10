@@ -54,6 +54,26 @@ type Setter = StoreSetter<Store>;
  * One page of a search list. `cursor` is the page index (0 = head), so the
  * replica owns the offset and a query change repaints from its own head page.
  */
+/**
+ * A search page as the replica needs it.
+ *
+ * The endpoint also reports `hasMore`, which the replica cannot read: it infers
+ * "another page" from a full page when `total` is unknown. So an exact multiple
+ * of the page size — the endpoint then answers `hasMore: false` with no `total` —
+ * would keep a dead "load more" and fire one request for an empty page. Recording
+ * the terminal count the flag implies is how that signal survives.
+ */
+const toSearchPageResult = (
+  response: { hasMore: boolean; items: ResourceItem[]; total?: number },
+  cursor: number | undefined,
+  pageSize: number,
+): ReplicaPageResult<ResourceItem, number> => ({
+  items: response.items,
+  total:
+    response.total ??
+    (response.hasMore ? undefined : (cursor ?? 0) * pageSize + response.items.length),
+});
+
 const fetchExplorerSearchPage = async (
   params: ExplorerSearchParams,
   cursor?: number,
@@ -73,7 +93,7 @@ const fetchExplorerSearchPage = async (
     visibility: params.visibility,
   });
 
-  return { items: response.items, total: response.total };
+  return toSearchPageResult(response, cursor, pageSize);
 };
 
 const fetchHierarchySearchPage = async (
@@ -91,7 +111,7 @@ const fetchHierarchySearchPage = async (
     showFilesInKnowledgeBase: false,
   });
 
-  return { items: response.items, total: response.total };
+  return toSearchPageResult(response, cursor, pageSize);
 };
 
 /**
