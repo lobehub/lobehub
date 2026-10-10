@@ -200,7 +200,7 @@ lobehub = "./packages/alint/rules"
 # Ordinary API instructions: avoid removal announcements and locally redundant
 # descriptions while preserving migration guidance and useful input semantics.
 [[config.group]]
-files = [ "docs/usage/**/*.mdx", "docs/usage/**/*.md", "packages/builtin-skills/**/*.md", "apps/cli/src/commands/**/*.ts", "packages/openapi/src/types/**/*.ts" ]
+files = [ "docs/usage/**/*.mdx", "docs/usage/**/*.md", "packages/builtin-skills/**/*.md", "packages/builtin-skills/src/**/content.ts", "packages/builtin-skills/src/**/references/**/*.ts", "apps/cli/src/commands/**/*.ts", "packages/openapi/src/types/**/*.ts" ]
 ignores = [ "**/*.test.ts", "**/__tests__/**", "**/generated/**" ]
 [config.group.plugins]
 lobehub = "./packages/alint/rules"
