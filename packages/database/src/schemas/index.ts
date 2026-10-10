@@ -33,6 +33,7 @@ export * from './ftsSearchSyncOutbox';
 export * from './generation';
 export * from './goal';
 export * from './goalGraph';
+export * from './goalSubscription';
 export * from './goalTrace';
 export * from './llmGenerationTracing';
 export * from './message';
