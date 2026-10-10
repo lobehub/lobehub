@@ -24,7 +24,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 const MAX_TIMEOUT_MINUTES = 240;
 
@@ -72,7 +72,7 @@ const RunEditContent: FC<RunEditContentProps> = ({ formId, onLoadingChange, run 
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const { benchmarkId } = useParams<{ benchmarkId: string }>();
   const updateRun = useEvalStore((s) => s.updateRun);
-  const datasetList = useEvalStore((s) => s.datasetList);
+  const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
   const [agents, setAgents] = useState<AgentOption[]>([]);
   const [loadingAgents, setLoadingAgents] = useState(false);
 

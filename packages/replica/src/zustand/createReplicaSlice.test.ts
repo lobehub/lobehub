@@ -14,6 +14,7 @@ import { REPLICA_INDEX_KEY } from '../core/engine';
 import { createReplicaState } from '../core/reducer';
 import type { ReplicaRow, ReplicaScope, ReplicaState, ReplicaStorage } from '../core/types';
 import { createReplicaSlice, recordLens } from './createReplicaSlice';
+import type { ReplicaSyncDriver } from './driver';
 
 interface TestState {
   lists: Record<string, string[]>;
@@ -57,10 +58,12 @@ const setup = ({
   fetcher = vi.fn(async (_params: { id: string }) => ['server']),
   storage = createMemoryStorage(),
   version = 1,
+  syncDriver = driver,
 }: {
   fetcher?: (params: { id: string }) => Promise<string[]>;
   storage?: ReturnType<typeof createMemoryStorage>;
   version?: number;
+  syncDriver?: ReplicaSyncDriver;
 } = {}) => {
   const resource = defineReplica<{ id: string }, string[]>({
     fetcher,
@@ -75,7 +78,7 @@ const setup = ({
     listsReplica: createReplicaState(),
   }));
   const slice = createReplicaSlice<TestState, { id: string }, string[]>(resource, {
-    driver,
+    driver: syncDriver,
     get: store.getState,
     set: (partial) => store.setState(partial),
     stateKey: 'listsReplica',
@@ -139,6 +142,43 @@ describe('createReplicaSlice', () => {
       renderHook(() => failing.slice.useSync({ id: 'b' }, { onError }), { wrapper });
       await waitFor(() => expect(onError).toHaveBeenCalledWith(failure));
       expect(failing.store.getState().lists.b).toBeUndefined();
+    });
+
+    it('ignores a failure a driver reports for an identity the entry has left', async () => {
+      // A driver that keeps a superseded request's callback live: it surfaces
+      // the failure itself, after the identity has already changed.
+      const captured: { fetcher?: () => Promise<string[]>; report?: (error: unknown) => void } = {};
+      const manualDriver: ReplicaSyncDriver = {
+        revalidate: async () => undefined,
+        useQuery: (_key, fetcher, options) => {
+          captured.fetcher = fetcher;
+          captured.report = options.onError as (error: unknown) => void;
+          return { isValidating: false, mutate: async () => undefined };
+        },
+      };
+      const failure = new Error('gone');
+      const { slice } = setup({
+        fetcher: vi.fn(async () => {
+          throw failure;
+        }),
+        syncDriver: manualDriver,
+      });
+      const onError = vi.fn();
+      renderHook(() => slice.useSync({ id: 'a' }, { onError }), { wrapper });
+
+      // The request runs under the current identity and fails.
+      await act(async () => {
+        await captured.fetcher!().catch(() => {});
+      });
+
+      // The identity changes before the driver reports the failure.
+      scopeState.current = 'user-2:personal';
+      act(() => {
+        captured.report!(failure);
+      });
+
+      // Acting on that late failure would hit the entry the new identity owns.
+      expect(onError).not.toHaveBeenCalled();
     });
 
     it('drops the prior persisted projection when `toPersisted` reports a confirmed absence', async () => {
@@ -332,6 +372,89 @@ describe('createReplicaSlice', () => {
 
       await waitFor(() => expect(result.current.isHydrated).toBe(true));
       expect(store.getState().lists.a).toEqual(['server']);
+    });
+
+    it('does not let an in-flight hydrate resurrect a removed entry', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });
+      const originalGet = storage.storage.get;
+      let releaseRead!: () => void;
+      storage.storage.get = async (key) => {
+        // Hold only the entry read: it is the one a removal must beat.
+        if (key.queryKey === 'a') {
+          await new Promise<void>((resolve) => (releaseRead = resolve));
+        }
+        return originalGet(key);
+      };
+      // The sync never settles, so only the hydrate can write the view.
+      const { slice, store } = setup({
+        fetcher: vi.fn(() => new Promise<string[]>(() => {})),
+        storage,
+      });
+
+      const { result } = renderHook(() => slice.useSync({ id: 'a' }), { wrapper });
+
+      // The definitive removal lands while the persisted read is still pending.
+      act(() => {
+        slice.remove('a');
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+
+      await act(async () => {
+        releaseRead();
+      });
+
+      await waitFor(() => expect(result.current.isHydrated).toBe(true));
+      // The late read must not repaint the entry that was just dropped.
+      expect(store.getState().lists.a).toBeUndefined();
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+
+    it('keeps a removal attributed to its scope across an identity round trip', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['cached'], updatedAt: 1 });
+      const originalGet = storage.storage.get;
+      let releaseRead!: () => void;
+      storage.storage.get = async (key) => {
+        // Hold A's entry read: it is the one the removal must beat.
+        if (key.scope === 'user-1:personal' && key.queryKey === 'a') {
+          await new Promise<void>((resolve) => (releaseRead = resolve));
+        }
+        return originalGet(key);
+      };
+      const { slice, store } = setup({
+        fetcher: vi.fn(() => new Promise<string[]>(() => {})),
+        storage,
+      });
+
+      // A's persisted read is in flight when the removal lands.
+      let hydrating!: Promise<boolean>;
+      act(() => {
+        hydrating = slice.hydrate({ id: 'a' });
+      });
+      act(() => {
+        slice.remove('a');
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+
+      // Leave A for B and come back to A while A's read is still pending.
+      scopeState.current = 'user-2:personal';
+      act(() => {
+        slice.replace({ id: 'b' }, ['user-2-data']);
+      });
+      scopeState.current = 'user-1:personal';
+      act(() => {
+        slice.replace({ id: 'c' }, ['user-1-other']);
+      });
+
+      await act(async () => {
+        releaseRead();
+        await hydrating;
+      });
+
+      // The marker outlives the round trip: A's late read must not repaint it.
+      expect(store.getState().lists.a).toBeUndefined();
+      await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
     });
 
     it('a version bump ignores rows written by the previous version', async () => {

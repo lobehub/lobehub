@@ -21,7 +21,7 @@ import { useParams } from 'react-router';
 
 import AsyncError from '@/components/AsyncError';
 import { RouteLoading } from '@/components/Skeleton/RouteSegment';
-import { runSelectors, useEvalStore } from '@/store/eval';
+import { datasetSelectors, runSelectors, useEvalStore } from '@/store/eval';
 
 import BenchmarkHeader from './features/BenchmarkHeader';
 import DatasetsTab from './features/DatasetsTab';
@@ -84,8 +84,8 @@ const BenchmarkDetail = memo(() => {
     benchmarkId ? s.benchmarkDetailMap[benchmarkId] : undefined,
   );
   const useFetchDatasets = useEvalStore((s) => s.useFetchDatasets);
-  const datasets = useEvalStore((s) => s.datasetList);
-  const isLoadingDatasets = useEvalStore((s) => s.isLoadingDatasets);
+  const datasets = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoadingDatasets = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
   const refreshDatasets = useEvalStore((s) => s.refreshDatasets);
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
   const runList = useEvalStore(runSelectors.runList(benchmarkId));

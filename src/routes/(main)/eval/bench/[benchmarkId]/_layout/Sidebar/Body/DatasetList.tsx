@@ -16,7 +16,7 @@ import NavItem from '@/features/NavPanel/components/NavItem';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import WorkspaceLink from '@/features/Workspace/WorkspaceLink';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 interface DatasetListProps {
   activeKey: string;
@@ -27,8 +27,8 @@ interface DatasetListProps {
 const DatasetList = memo<DatasetListProps>(({ activeKey, benchmarkId, itemKey }) => {
   const { t } = useTranslation('eval');
   const navigate = useWorkspaceAwareNavigate();
-  const datasetList = useEvalStore((s) => s.datasetList);
-  const isLoading = useEvalStore((s) => s.isLoadingDatasets);
+  const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
+  const isLoading = useEvalStore(datasetSelectors.isLoadingDatasetList(benchmarkId));
 
   return (
     <AccordionItem value={itemKey}>

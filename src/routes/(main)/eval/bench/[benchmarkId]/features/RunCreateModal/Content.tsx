@@ -23,7 +23,7 @@ import { useActiveWorkspaceSlug } from '@/business/client/hooks/useActiveWorkspa
 import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwareNavigate';
 import { buildWorkspaceAwarePath } from '@/features/Workspace/workspaceAwarePath';
 import { agentService } from '@/services/agent';
-import { useEvalStore } from '@/store/eval';
+import { datasetSelectors, useEvalStore } from '@/store/eval';
 
 const DEFAULT_MAX_STEPS = 100;
 const DEFAULT_TIMEOUT_MINUTES = 30;
@@ -106,7 +106,7 @@ const RunCreateContent: FC<RunCreateContentProps> = ({
   const activeWorkspaceSlug = useActiveWorkspaceSlug();
   const createRun = useEvalStore((s) => s.createRun);
   const startRun = useEvalStore((s) => s.startRun);
-  const datasetList = useEvalStore((s) => s.datasetList);
+  const datasetList = useEvalStore(datasetSelectors.datasetList(benchmarkId));
   const isDatasetMode = !!datasetId && !!datasetName;
   const form = useForm<RunCreateFormValues>({
     initialValues: {
