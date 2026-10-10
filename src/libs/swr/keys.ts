@@ -805,10 +805,6 @@ export const userMemoryKeys = {
     cacheKey,
   ]),
   tags: def('userMemory:tags', () => ['userMemory:tags']),
-  topicMemories: def('userMemory:topicMemories', (topicId: string) => [
-    'userMemory:topicMemories',
-    topicId,
-  ]),
 };
 
 // ---- tool (skills / plugins / builtin / mcp / composio stores) -------------
