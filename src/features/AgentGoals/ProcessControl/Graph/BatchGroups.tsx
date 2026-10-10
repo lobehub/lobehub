@@ -9,7 +9,6 @@ import {
   CircleDashed,
   CircleDot,
   CircleSlash,
-  DoorOpen,
   HandIcon,
   Info,
   type LucideIcon,
@@ -22,8 +21,8 @@ import { useTranslation } from 'react-i18next';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
-import { GATE_COLOR, KIND_COLOR, KIND_ICON } from '../shared';
-import { BATCH_ROW_LABEL, BATCH_SQUARE, BATCH_SQUARE_GAP } from './batchLayout';
+import { KIND_COLOR, KIND_ICON } from '../shared';
+import { BATCH_FRAME_HEAD, BATCH_ROW_LABEL, BATCH_SQUARE, BATCH_SQUARE_GAP } from './batchLayout';
 import {
   type BatchCell,
   type BatchCellState,
@@ -169,30 +168,26 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
   `,
-  /* A round's plan and gate lines, above its waves. */
-  roundBody: css`
-    padding-block: 8px 0;
-    padding-inline: 10px;
+  /* A round's frame: a quiet container, the cards inside carry the weight. */
+  frame: css`
+    box-sizing: border-box;
+    width: 100%;
+    height: 100%;
+    border: 1px dashed ${cssVar.colorBorder};
+    border-radius: 16px;
+
+    background: ${cssVar.colorFillQuaternary};
   `,
-  roundLine: css`
-    cursor: pointer;
+  frameHead: css`
+    display: flex;
+    align-items: center;
 
-    padding-block: 6px;
-    padding-inline: 8px;
-    border: 1px solid ${cssVar.colorBorderSecondary};
-    border-radius: ${cssVar.borderRadiusLG};
+    height: ${BATCH_FRAME_HEAD}px;
+    padding-inline: 14px;
 
-    background: ${cssVar.colorBgContainer};
-
-    transition: border-color 0.15s;
-
-    &:hover {
-      border-color: ${cssVar.colorBorder};
-    }
-  `,
-  chipText: css`
-    font-size: 11px;
-    white-space: nowrap;
+    font-size: 13px;
+    font-weight: 600;
+    color: ${cssVar.colorTextSecondary};
   `,
   /* Waves: row gap equals square gap, so the roster reads as a grid. */
   wavesBody: css`
@@ -624,7 +619,7 @@ const WaveRows = memo<{ onSelect: (nodeId: string) => void; rows: BatchWaveRow[]
 
 WaveRows.displayName = 'GoalBatchWaveRows';
 
-// ─── A round: its plan, its gate, its waves ─────────────────────────────
+// ─── A round: its waves, and the frame its nodes sit in ─────────────────
 
 const useOriginCopy = () => {
   const { t } = useTranslation('chat');
@@ -646,20 +641,10 @@ const useOriginCopy = () => {
   };
 };
 
-export interface BatchRoundData extends Record<string, unknown> {
-  /** The round's release gate, as its card would say it. */
-  gate?: {
-    chip?: { color: string; icon?: LucideIcon | null; text: string } | null;
-    hint?: ReactNode;
-    nodeId: string;
-    tally: ReactNode;
-    title: string;
-  };
+export interface BatchWavesData extends Record<string, unknown> {
   /** Open the batch on its own, the way a person reviews one batch at a time. */
   onEnter: () => void;
   onSelect: (nodeId: string) => void;
-  /** The round's plan version. */
-  plan?: { nodeId: string; subtitle: string; title: string };
   /** The units this round re-opened — its own canary (rounds after the first). */
   probes: BatchProbe[];
   revision: number;
@@ -669,60 +654,9 @@ export interface BatchRoundData extends Record<string, unknown> {
   waveSize: number;
 }
 
-/** One clickable line in a round: its plan, or its gate. */
-const RoundLine = memo<{
-  children?: ReactNode;
-  glyph: { color: string; icon: LucideIcon; soft: string };
-  hint?: ReactNode;
-  onOpen: () => void;
-  subtitle?: ReactNode;
-  title: string;
-  trailing?: ReactNode;
-}>(({ children, glyph, hint, onOpen, subtitle, title, trailing }) => (
-  <Flexbox
-    horizontal
-    align={'center'}
-    className={cx('nodrag', styles.roundLine)}
-    gap={8}
-    role={'button'}
-    tabIndex={0}
-    onClick={(event) => {
-      event.stopPropagation();
-      onOpen();
-    }}
-    onKeyDown={(event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        onOpen();
-      }
-    }}
-  >
-    <span className={styles.glyph} style={{ background: glyph.soft, color: glyph.color }}>
-      <Icon icon={glyph.icon} size={14} />
-    </span>
-    <Flexbox style={{ flex: 1, minWidth: 0 }}>
-      <Flexbox horizontal align={'center'} gap={4}>
-        <span className={styles.cardTitle}>{title}</span>
-        {hint && (
-          <Tooltip title={hint}>
-            <span data-hint className={cx('nodrag', styles.hint)} role="img">
-              <Icon icon={Info} size={12} />
-            </span>
-          </Tooltip>
-        )}
-      </Flexbox>
-      {subtitle && <span className={cx(styles.cardTitle, styles.muted)}>{subtitle}</span>}
-      {children}
-    </Flexbox>
-    {trailing}
-  </Flexbox>
-));
-
-RoundLine.displayName = 'GoalBatchRoundLine';
-
-export const BatchRoundGroup = memo<NodeProps>(({ data }) => {
-  const { gate, onEnter, onSelect, plan, probes, revision, rows, started, waveSize } =
-    data as BatchRoundData;
+/** A round's waves: the units it re-opened, then the roster waves it owns. */
+export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
+  const { onEnter, onSelect, probes, revision, rows, started, waveSize } = data as BatchWavesData;
   const { t } = useTranslation('chat');
   const label = useCellLabel();
   const originCopy = useOriginCopy();
@@ -747,82 +681,83 @@ export const BatchRoundGroup = memo<NodeProps>(({ data }) => {
   );
   return (
     <GroupShell
-      foot={t('goalBatch.round.foot', { count: cells.length })}
       hint={<SquareLegend />}
       icon={Waves}
       iconColor={KIND_COLOR.task.line}
       status={status}
-      title={t('goalBatch.round.title', { revision })}
+      foot={
+        revision > 1
+          ? t('goalBatch.redispatch.foot', { count: cells.length, revision })
+          : t('goalBatch.waves.foot', { count: cells.length, waves: rows.length })
+      }
+      title={
+        revision > 1 ? t('goalBatch.redispatch.title', { revision }) : t('goalBatch.waves.title')
+      }
       onEnter={onEnter}
     >
-      <Flexbox className={styles.roundBody} gap={8}>
-        {plan && (
-          <RoundLine
-            subtitle={plan.subtitle}
-            title={plan.title}
-            glyph={{
-              ...KIND_COLOR.finding,
-              color: KIND_COLOR.finding.line,
-              icon: KIND_ICON.finding,
-            }}
-            onOpen={() => onSelect(plan.nodeId)}
-          />
-        )}
-        {gate && (
-          <RoundLine
-            glyph={{ color: GATE_COLOR.line, icon: DoorOpen, soft: GATE_COLOR.soft }}
-            hint={gate.hint}
-            subtitle={gate.tally}
-            title={gate.title}
-            trailing={
-              gate.chip && (
-                <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
-                  {gate.chip.icon && (
-                    <Icon color={gate.chip.color} icon={gate.chip.icon} size={13} />
-                  )}
-                  <span className={styles.chipText} style={{ color: gate.chip.color }}>
-                    {gate.chip.text}
-                  </span>
-                </Flexbox>
-              )
-            }
-            onOpen={() => onSelect(gate.nodeId)}
-          />
-        )}
-      </Flexbox>
-      {(reopened.length > 0 || rows.length > 0) && (
-        <div className={styles.wavesBody}>
-          {/* Re-opened units first — this round's own canary, named by the batch
-              they first ran in — then the roster waves the round owns. */}
-          {reopened.map((row, w) => (
-            <Flexbox
-              horizontal
-              align={'center'}
-              data-reopened-row={w}
-              gap={8}
-              key={`reopened-${w}`}
-            >
-              <span className={styles.rowLabel}>{rowLabelOf(row.from)}</span>
-              <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
-                {row.probes.map((probe) => (
-                  <Square
-                    key={probe.nodeId}
-                    nodeId={probe.nodeId}
-                    state={probe.state}
-                    tooltip={[probe.title, originCopy(probe.from), label(probe.state)]
-                      .filter(Boolean)
-                      .join(' · ')}
-                    onSelect={onSelect}
-                  />
-                ))}
-              </Flexbox>
+      <div className={styles.wavesBody}>
+        {/* Re-opened units first — this round's own canary, named by the batch
+            they first ran in — then the roster waves the round owns. */}
+        {reopened.map((row, w) => (
+          <Flexbox horizontal align={'center'} data-reopened-row={w} gap={8} key={`reopened-${w}`}>
+            <span className={styles.rowLabel}>{rowLabelOf(row.from)}</span>
+            <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
+              {row.probes.map((probe) => (
+                <Square
+                  key={probe.nodeId}
+                  nodeId={probe.nodeId}
+                  state={probe.state}
+                  tooltip={[probe.title, originCopy(probe.from), label(probe.state)]
+                    .filter(Boolean)
+                    .join(' · ')}
+                  onSelect={onSelect}
+                />
+              ))}
             </Flexbox>
-          ))}
-          <WaveRows rows={rows} onSelect={onSelect} />
-        </div>
-      )}
+          </Flexbox>
+        ))}
+        <WaveRows rows={rows} onSelect={onSelect} />
+      </div>
     </GroupShell>
   );
 });
 
-BatchRoundGroup.displayName = 'GoalBatchRoundGroup';
+BatchWavesGroup.displayName = 'GoalBatchWavesGroup';
+
+export interface BatchRoundFrameData extends Record<string, unknown> {
+  revision: number;
+}
+
+/**
+ * The frame one round's nodes sit in — its plan, its gate and its waves. It is
+ * only a container: no status and no entry of its own (the waves carry those).
+ * It sits behind the links between its nodes, and links round to round on its
+ * sides, level with its label.
+ */
+export const BatchRoundFrame = memo<NodeProps>(({ data }) => {
+  const { revision } = data as BatchRoundFrameData;
+  const { t } = useTranslation('chat');
+  return (
+    <div className={styles.frame}>
+      <Handle
+        className={styles.handle}
+        id="l"
+        isConnectable={false}
+        position={Position.Left}
+        style={{ top: BATCH_FRAME_HEAD / 2 }}
+        type="target"
+      />
+      <Handle
+        className={styles.handle}
+        id="r"
+        isConnectable={false}
+        position={Position.Right}
+        style={{ top: BATCH_FRAME_HEAD / 2 }}
+        type="source"
+      />
+      <div className={styles.frameHead}>{t('goalBatch.round.title', { revision })}</div>
+    </div>
+  );
+});
+
+BatchRoundFrame.displayName = 'GoalBatchRoundFrame';

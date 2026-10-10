@@ -6,15 +6,15 @@ import type { LayoutBox } from './layout';
  * Fixed layout of an expanded batch, left to right:
  *
  *   冷启动 (the first round's trials as task cards)
- *     → 第 1 轮 [方案 v1 · 放行闸门 · 分批执行]
- *     → 第 2 轮 [方案 v2 · 放行闸门 · 重开 + 分批执行]  → 第 3 轮 …
+ *     → ┆第 1 轮: 方案 v1 → 放行闸门 → 分批执行┆
+ *     → ┆第 2 轮: 方案 v2 → 放行闸门 → 分批执行 · v2┆ → 第 3 轮 …
  *
- * A round is one container: its plan, its gate and the waves it released (or,
- * as the latest round, still holds). A break at a round's gate feeds the next
- * round — which revises both the plan and the gate — so the rounds read as one
- * repeated unit along a line instead of columns of loose cards. Other decisions
- * inside the batch (a machine gate on one unit) sit under the group their
- * subject runs in.
+ * Plan, gate and waves stay their own nodes — the plan and gate are the real
+ * graph nodes, the waves the group a person enters the batch through — and a
+ * round is a frame around the three, top to bottom. A break at a round's gate
+ * feeds the next round, which revises both the plan and the gate, so the
+ * frames repeat along one row. Other decisions inside the batch (a machine gate
+ * on one unit) sit under the frame their subject runs in.
  *
  * An open batch draws no frame of its own: these pieces sit on the map
  * directly. Boxes are relative to the batch's slot, which the map reserves.
@@ -31,22 +31,25 @@ export const BATCH_SQUARE = 12;
 export const BATCH_SQUARE_GAP = 10;
 export const BATCH_ROW_LABEL = 44;
 
-/** A round container's plan row and gate row, between its header and its waves. */
-export const BATCH_ROUND_PLAN_ROW = 48;
-export const BATCH_ROUND_GATE_ROW = 56;
+/** A round frame's label row; its side links leave at half this height. */
+export const BATCH_FRAME_HEAD = 38;
 
 const GAP_Y = 48;
 const COLUMN_GAP = 120;
 const PROBES_WIDTH = 440;
-const ROUND_WIDTH = 300;
+const FRAME_PAD = 16;
+/** Room between a round's stacked nodes for the link and its arrow. */
+const STACK_GAP = 40;
+const CARD = { height: 88, width: 250 };
 const DECISION = { height: 88, width: 250 };
 const DECISION_GAP = 16;
 
 /**
  * `experimentProbe`: the cold start — the first round's trials, not a
- * candidate-answer `experiment`. `round`: one round's plan, gate and waves.
+ * candidate-answer `experiment`. `round`: the frame around one round's nodes.
+ * `waves`: the units one round re-opened and the roster waves it owns.
  */
-export type BatchGroupKind = 'experimentProbe' | 'round';
+export type BatchGroupKind = 'experimentProbe' | 'round' | 'waves';
 
 export interface BatchGroupSpec {
   box: LayoutBox;
@@ -62,7 +65,7 @@ export interface BatchEdgeSpec {
   /** `revise`: a round's gate sent the batch back and the next round revised it. */
   label?: 'revise';
   source: string;
-  /** `r` → `l`: one stage feeding the next along the row. */
+  /** `r` → `l`: one stage feeding the next along the row; none: down a round. */
   sourceHandle?: 'r';
   target: string;
   targetHandle?: 'l';
@@ -83,7 +86,7 @@ export interface BatchLayout {
 }
 
 export const batchGroupId = (batchId: string, kind: BatchGroupKind, revision = 1) =>
-  kind === 'round' ? `${batchId}::round-${revision}` : `${batchId}::experiment-probe`;
+  kind === 'experimentProbe' ? `${batchId}::experiment-probe` : `${batchId}::${kind}-${revision}`;
 
 const groupHeight = (body: number) => BATCH_GROUP_HEAD + 8 + body + 4 + BATCH_GROUP_FOOT;
 
@@ -92,23 +95,14 @@ const stack = (count: number, size: number, gap: number) =>
 
 export const wavesWidth = (waveSize: number) =>
   Math.max(
-    ROUND_WIDTH,
+    CARD.width,
     BATCH_GROUP_PAD * 2 + BATCH_ROW_LABEL + 8 + stack(waveSize, BATCH_SQUARE, BATCH_SQUARE_GAP) + 2,
   );
 
-/** How many square rows a round's container draws: its re-opened rows, then its waves. */
+/** How many square rows a round's waves draw: its re-opened rows, then its waves. */
 export const roundRows = (model: BatchModel, round: BatchRound) =>
   (round.revision > 1 ? reopenedRows(round.probes, model.waveSize).length : 0) +
   model.waveRounds.filter((owner) => owner === round.revision).length;
-
-export const roundHeight = (rows: number) =>
-  BATCH_GROUP_HEAD +
-  8 +
-  BATCH_ROUND_PLAN_ROW +
-  BATCH_ROUND_GATE_ROW +
-  (rows ? 8 + stack(rows, BATCH_SQUARE, BATCH_SQUARE_GAP) : 0) +
-  4 +
-  BATCH_GROUP_FOOT;
 
 export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayout => {
   const { batchId, rounds } = model;
@@ -124,7 +118,8 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
   };
 
   const [first] = rounds;
-  const roundW = Math.max(ROUND_WIDTH, wavesWidth(model.waveSize));
+  const innerW = Math.max(CARD.width, wavesWidth(model.waveSize));
+  const frameW = innerW + FRAME_PAD * 2;
   let right = 0;
   let previous: string | undefined;
 
@@ -138,46 +133,75 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
     previous = probesId;
   }
 
-  // One container per round, left to right; each break feeds the next round.
-  const roundIds = new Map<number, string>();
+  // One frame per round, left to right; inside, plan → gate → waves.
+  const wavesIds = new Map<number, string>();
+  const frameIds = new Map<number, string>();
   for (const round of rounds) {
     const x = right ? right + COLUMN_GAP : 0;
-    const id = addGroup('round', round.revision, {
-      height: roundHeight(roundRows(model, round)),
-      width: roundW,
+    const left = x + FRAME_PAD;
+    let y = BATCH_FRAME_HEAD;
+    let above: string | undefined;
+    const place = (id: string, box: LayoutBox) => {
+      boxes[id] = box;
+      if (above) edges.push({ id: `${batchId}::e-${above}->${id}`, source: above, target: id });
+      above = id;
+      y = box.y + box.height + STACK_GAP;
+    };
+    for (const id of [round.templateId, round.assayId]) {
+      if (!id) continue;
+      nodeIds.add(id);
+      place(id, { ...CARD, x: left + (innerW - CARD.width) / 2, y });
+    }
+    const rows = roundRows(model, round);
+    const wavesBox = {
+      height: groupHeight(stack(rows, BATCH_SQUARE, BATCH_SQUARE_GAP)),
+      width: innerW,
+      x: left,
+      y,
+    };
+    const wavesId = batchGroupId(batchId, 'waves', round.revision);
+    place(wavesId, wavesBox);
+    groups.push({ box: wavesBox, id: wavesId, kind: 'waves', revision: round.revision });
+    wavesIds.set(round.revision, wavesId);
+
+    const frameId = addGroup('round', round.revision, {
+      height: wavesBox.y + wavesBox.height + FRAME_PAD,
+      width: frameW,
       x,
       y: 0,
     });
-    roundIds.set(round.revision, id);
+    frameIds.set(round.revision, frameId);
     if (previous)
       edges.push({
         id: `${batchId}::e-round-${round.revision}`,
         label: round.revision > 1 ? 'revise' : undefined,
         source: previous,
         sourceHandle: 'r',
-        target: id,
+        target: frameId,
         targetHandle: 'l',
       });
-    previous = id;
-    right = x + roundW;
+    previous = frameId;
+    right = x + frameW;
   }
 
-  // Other decisions inside the batch, under the group their subject runs in.
-  const groupOfNode = new Map<string, string>();
-  for (const probe of first.probes) if (probesId) groupOfNode.set(probe.nodeId, probesId);
-  for (const round of rounds.slice(1)) {
-    const id = roundIds.get(round.revision);
-    if (id) for (const probe of round.probes) groupOfNode.set(probe.nodeId, id);
-  }
+  // Other decisions inside the batch, under the round their subject runs in.
+  // Revision 0 stands for the cold start.
+  const roundOfNode = new Map<string, number>();
+  if (probesId) for (const probe of first.probes) roundOfNode.set(probe.nodeId, 0);
+  for (const round of rounds.slice(1))
+    for (const probe of round.probes) roundOfNode.set(probe.nodeId, round.revision);
   const rowBottom = Math.max(0, ...Object.values(boxes).map((box) => box.y + box.height));
-  const stacked = new Map<string, number>();
+  const stacked = new Map<number, number>();
   for (const id of model.decisionIds) {
+    if (nodeIds.has(id)) continue;
     const subject = graph.byId[id]?.gateSubjectId;
-    const source = (subject && groupOfNode.get(subject)) ?? roundIds.get(rounds.length) ?? probesId;
-    if (!source) continue;
-    const under = boxes[source];
-    const count = stacked.get(source) ?? 0;
-    stacked.set(source, count + 1);
+    const revision = (subject ? roundOfNode.get(subject) : undefined) ?? rounds.length;
+    const under = boxes[(revision ? frameIds.get(revision) : probesId) ?? ''];
+    // The link leaves the bottom of what the subject ran in: the trials, or the waves.
+    const source = revision ? wavesIds.get(revision) : probesId;
+    if (!under || !source) continue;
+    const count = stacked.get(revision) ?? 0;
+    stacked.set(revision, count + 1);
     boxes[id] = {
       ...DECISION,
       x: under.x + (under.width - DECISION.width) / 2,
@@ -188,15 +212,19 @@ export const layoutBatch = (graph: GoalGraphView, model: BatchModel): BatchLayou
   }
 
   const bottom = Math.max(...Object.values(boxes).map((box) => box.y + box.height), 0);
-  const entry = boxes[probesId ?? roundIds.get(1) ?? ''];
+  const entry = boxes[probesId ?? frameIds.get(1) ?? ''];
   return {
     anchorX: entry ? entry.x + entry.width / 2 : 0,
     boxes,
     edges,
-    entryId: probesId ?? roundIds.get(1),
+    entryId: probesId ?? round1Entry(rounds, frameIds),
     groups,
     height: bottom,
     nodeIds,
     width: right,
   };
 };
+
+/** Without trials, links into the batch land on its first round's first node. */
+const round1Entry = (rounds: BatchRound[], frameIds: Map<number, string>) =>
+  rounds[0].templateId ?? rounds[0].assayId ?? frameIds.get(1);

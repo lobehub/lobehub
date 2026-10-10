@@ -49,8 +49,10 @@ import {
 import { GATE_COLOR, KindDot } from '../shared';
 import {
   BatchExperimentProbeGroup,
-  type BatchRoundData,
-  BatchRoundGroup,
+  BatchRoundFrame,
+  type BatchRoundFrameData,
+  type BatchWavesData,
+  BatchWavesGroup,
   CELL_VISUAL,
 } from './BatchGroups';
 import { type BatchLayout, layoutBatch } from './batchLayout';
@@ -365,7 +367,8 @@ const edgeTypes = { exploration: ExplorationEdge };
 
 const nodeTypes = {
   goalBatchExperimentProbe: BatchExperimentProbeGroup,
-  goalBatchRound: BatchRoundGroup,
+  goalBatchRound: BatchRoundFrame,
+  goalBatchWaves: BatchWavesGroup,
   goalExperiment: GraphNodeView,
   goalExperimentGroup: ExperimentGroup,
   goalGhost: GhostNodeView,
@@ -376,6 +379,7 @@ const nodeTypes = {
 const PASSIVE_NODE_TYPES = new Set([
   'goalBatchExperimentProbe',
   'goalBatchRound',
+  'goalBatchWaves',
   'goalExperimentGroup',
   'goalGhost',
 ]);
@@ -790,9 +794,9 @@ const Canvas = memo<
       ],
     );
 
-    // The synthetic groups an open batch is drawn with: its trials, its waves
-    // and one re-dispatch group per re-opened round. They are not graph nodes;
-    // their cards and squares open the real node underneath.
+    // The synthetic groups an open batch is drawn with: its trials, each
+    // round's waves and the frame each round's nodes sit in. They are not graph
+    // nodes; their cards and squares open the real node underneath.
     const batchFlowNodes: FlowNode[] = useMemo(
       () =>
         [...batches].flatMap(([batchId, { layout, model }]) => {
@@ -805,9 +809,22 @@ const Canvas = memo<
             );
           return layout.groups.map((group) => {
             const round = model.rounds[group.revision - 1];
-            const planView = round.templateId ? graph.byId[round.templateId] : undefined;
-            const plan = planView && batchCopy.template(round, planView);
-            const gate = round.assayId ? batchCopy.gate(round, model) : undefined;
+            const base = {
+              draggable: false,
+              id: group.id,
+              ...placeInMap(group.id, group.box, batchId),
+              selectable: false,
+              width: group.box.width,
+            };
+            // A round's frame sits behind its nodes and the links between them.
+            if (group.kind === 'round')
+              return {
+                ...base,
+                data: { revision: group.revision } satisfies BatchRoundFrameData,
+                style: { height: group.box.height, width: group.box.width },
+                type: 'goalBatchRound',
+                zIndex: -1,
+              } satisfies FlowNode;
             const data =
               group.kind === 'experimentProbe'
                 ? {
@@ -818,26 +835,8 @@ const Canvas = memo<
                     views: graph.byId,
                   }
                 : ({
-                    gate:
-                      gate && round.assayId
-                        ? {
-                            chip: gate.chip,
-                            hint: gate.hint,
-                            nodeId: round.assayId,
-                            tally: gate.subtitle,
-                            title: gate.title as string,
-                          }
-                        : undefined,
                     onEnter: () => onEnter(batchId),
                     onSelect,
-                    plan:
-                      plan && round.templateId
-                        ? {
-                            nodeId: round.templateId,
-                            subtitle: (plan.subtitle as string) ?? '',
-                            title: plan.title as string,
-                          }
-                        : undefined,
                     probes: round.probes,
                     revision: group.revision,
                     rows: rowsOf(group.revision),
@@ -846,22 +845,18 @@ const Canvas = memo<
                         ? !first.assayId || first.gate === 'passed' || first.gate === 'rejected'
                         : round.probes.some((probe) => probe.state !== 'backlog'),
                     waveSize: model.waveSize,
-                  } satisfies BatchRoundData);
+                  } satisfies BatchWavesData);
             return {
+              ...base,
               data,
-              draggable: false,
-              id: group.id,
-              ...placeInMap(group.id, group.box, batchId),
-              selectable: false,
               // Width is the layout's; height hugs the content, the layout only reserves it.
               style: { width: group.box.width },
               type:
-                group.kind === 'experimentProbe' ? 'goalBatchExperimentProbe' : 'goalBatchRound',
-              width: group.box.width,
+                group.kind === 'experimentProbe' ? 'goalBatchExperimentProbe' : 'goalBatchWaves',
             } satisfies FlowNode;
           });
         }),
-      [batches, visibleIds, graph.byId, onEnter, onSelect, placeInMap, batchCopy],
+      [batches, visibleIds, graph.byId, onEnter, onSelect, placeInMap],
     );
 
     const flowEdges: FlowEdge[] = useMemo(() => {

@@ -525,13 +525,41 @@ describe('layoutBatch', () => {
     expect(r2.x + r2.width).toBeLessThan(r3.x);
     // Each round feeds the next — the break at v2's gate revises into v3 —
     // and only the hand-offs after a break carry the "revise" label.
-    expect(layout.edges.map((e) => [e.source, e.target, e.label])).toEqual([
-      [batchGroupId('batch', 'experimentProbe'), batchGroupId('batch', 'round', 1), undefined],
-      [batchGroupId('batch', 'round', 1), batchGroupId('batch', 'round', 2), 'revise'],
-      [batchGroupId('batch', 'round', 2), batchGroupId('batch', 'round', 3), 'revise'],
+    const frame = (r: number) => batchGroupId('batch', 'round', r);
+    expect(
+      layout.edges.filter((e) => e.sourceHandle === 'r').map((e) => [e.source, e.target, e.label]),
+    ).toEqual([
+      [batchGroupId('batch', 'experimentProbe'), frame(1), undefined],
+      [frame(1), frame(2), 'revise'],
+      [frame(2), frame(3), 'revise'],
     ]);
-    // Plans and gates live inside their round; nothing lands as a loose card.
-    expect([...layout.nodeIds]).toEqual([]);
+    // Plan, gate and waves stay their own nodes, stacked top to bottom inside
+    // their round's frame and linked plan → gate → waves.
+    const rounds = [
+      ['t1', 'a1', 1, r1],
+      ['t2', 'a2', 2, r2],
+      ['t3', 'a3', 3, r3],
+    ] as const;
+    for (const [plan, gate, r, box] of rounds) {
+      const waves = batchGroupId('batch', 'waves', r);
+      const column = [plan, gate, waves].map((id) => layout.boxes[id]);
+      for (const inner of column) {
+        expect(inner.x).toBeGreaterThanOrEqual(box.x);
+        expect(inner.x + inner.width).toBeLessThanOrEqual(box.x + box.width);
+        expect(inner.y + inner.height).toBeLessThanOrEqual(box.y + box.height);
+      }
+      expect(column[0].y).toBeLessThan(column[1].y);
+      expect(column[1].y).toBeLessThan(column[2].y);
+      expect(
+        layout.edges
+          .filter((e) => !e.sourceHandle && [plan, gate].includes(e.source as never))
+          .map((e) => [e.source, e.target]),
+      ).toEqual([
+        [plan, gate],
+        [gate, waves],
+      ]);
+      expect(layout.nodeIds.has(plan) && layout.nodeIds.has(gate)).toBe(true);
+    }
     // Links into the batch land on the cold start, lined up under the problem.
     expect(layout.entryId).toBe(batchGroupId('batch', 'experimentProbe'));
     expect(layout.anchorX).toBe(cold.x + cold.width / 2);
