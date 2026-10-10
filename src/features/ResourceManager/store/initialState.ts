@@ -38,13 +38,19 @@ export const DEFAULT_WORKSPACE_LIST_VISIBILITY: ResourceListVisibilityFilter = '
  * persisted head page first and lets the network confirm it.
  */
 export interface ResourceSearchState {
-  /** Replica view of the explorer's search overlay (`SearchResultsOverlay`). */
-  explorerSearchEntry?: ExplorerSearchValue;
-  /** Replica bookkeeping of `explorerSearchEntry`. */
+  /**
+   * Replica views of the explorer's search overlay (`SearchResultsOverlay`),
+   * one entry per query so revisiting a keyword restores its own rows.
+   */
+  explorerSearchEntries: Record<string, ExplorerSearchValue>;
+  /** Replica bookkeeping of `explorerSearchEntries`. */
   explorerSearchReplica: ReplicaState<ExplorerSearchValue>;
-  /** Replica view of the library sidebar's flat search list. */
-  hierarchySearchEntry?: HierarchySearchValue;
-  /** Replica bookkeeping of `hierarchySearchEntry`. */
+  /**
+   * Replica views of the library sidebar's flat search list, one entry per
+   * (library, keyword).
+   */
+  hierarchySearchEntries: Record<string, HierarchySearchValue>;
+  /** Replica bookkeeping of `hierarchySearchEntries`. */
   hierarchySearchReplica: ReplicaState<HierarchySearchValue>;
 }
 
@@ -146,9 +152,9 @@ export const initialState: State = {
   currentViewItemId: undefined,
   detailPanelId: undefined,
   detailPanelIsPage: false,
-  explorerSearchEntry: undefined,
+  explorerSearchEntries: {},
   explorerSearchReplica: createReplicaState(),
-  hierarchySearchEntry: undefined,
+  hierarchySearchEntries: {},
   hierarchySearchReplica: createReplicaState(),
   libraryId: undefined,
   librarySearchQuery: '',

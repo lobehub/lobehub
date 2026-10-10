@@ -4,7 +4,6 @@ import { Center, Flexbox } from '@lobehub/ui';
 import { Checkbox, Spin } from '@lobehub/ui/base-ui';
 import { VirtuosoMasonry } from '@virtuoso.dev/masonry';
 import { cssVar } from 'antd-style';
-import { isEqual } from 'es-toolkit';
 import { SearchIcon } from 'lucide-react';
 import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +15,7 @@ import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
   DEFAULT_SEARCH_PAGE_SIZE,
   type ExplorerSearchParams,
+  explorerSearchResource,
 } from '@/features/ResourceManager/store/projection';
 import {
   getResourceQueryVisibility,
@@ -86,17 +86,13 @@ const SearchResultsOverlay = memo(() => {
   const { error, revalidate } = useResourceManagerStore((s) => s.useFetchExplorerSearch)(
     searchParams,
   );
-  const explorerSearchEntry = useResourceManagerStore((s) => s.explorerSearchEntry);
+  const explorerSearchEntries = useResourceManagerStore((s) => s.explorerSearchEntries);
 
-  const current = useMemo(
-    () =>
-      searchParams &&
-      explorerSearchEntry?.searchParams &&
-      isEqual(explorerSearchEntry.searchParams, searchParams)
-        ? explorerSearchEntry
-        : undefined,
-    [explorerSearchEntry, searchParams],
-  );
+  // One entry per query: the entry key IS the query identity, so the rows read
+  // here always answer the request on screen.
+  const current = searchParams
+    ? explorerSearchEntries[explorerSearchResource.key(searchParams)]
+    : undefined;
 
   const rawData = current?.items;
   const isLoading = !current && !error;

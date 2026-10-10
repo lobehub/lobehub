@@ -4,18 +4,19 @@ import { Center, Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { useDebounce } from 'ahooks';
 import { cssVar } from 'antd-style';
-import { isEqual } from 'es-toolkit';
 import { SearchXIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { VList, type VListHandle } from 'virtua';
 
 import AsyncBoundary from '@/components/AsyncBoundary';
+import AsyncError from '@/components/AsyncError';
 import { useFolderPath } from '@/features/ResourceManager/hooks/useFolderPath';
 import { useResourceManagerStore } from '@/features/ResourceManager/store';
 import {
   DEFAULT_SEARCH_PAGE_SIZE,
   type HierarchySearchParams,
+  hierarchySearchResource,
 } from '@/features/ResourceManager/store/projection';
 import { toTreeItem } from '@/store/tree';
 
@@ -62,17 +63,12 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
     searchParams,
   );
   const loadMore = useResourceManagerStore((s) => s.loadMoreHierarchySearch);
-  const entry = useResourceManagerStore((s) => s.hierarchySearchEntry);
+  const hierarchySearchEntries = useResourceManagerStore((s) => s.hierarchySearchEntries);
 
-  // `entry` may still hold the previous window while a new one is in flight, so
-  // only rows that echo the current query count as current.
-  const current = useMemo(
-    () =>
-      searchParams && entry?.searchParams && isEqual(entry.searchParams, searchParams)
-        ? entry
-        : undefined,
-    [entry, searchParams],
-  );
+  // One entry per (library, keyword): the entry key IS the query identity, so
+  // the rows read here always answer the request on screen.
+  const entryKey = searchParams ? hierarchySearchResource.key(searchParams) : undefined;
+  const current = entryKey ? hierarchySearchEntries[entryKey] : undefined;
 
   const rows = useMemo(
     () =>
@@ -81,17 +77,23 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
   );
   const hasMore = current?.hasMore ?? false;
   const isLoadingMore = current?.isLoadingMore ?? false;
+  // A page past the head can fail on its own; the head error never covers it.
+  const loadMoreError = current?.loadMoreError;
+
+  const retryLoadMore = useCallback(() => {
+    if (entryKey) void loadMore(entryKey);
+  }, [entryKey, loadMore]);
 
   const listRef = useRef<VListHandle>(null);
   const handleScroll = useCallback(() => {
-    if (!hasMore || isLoadingMore) return;
+    if (!entryKey || !hasMore || isLoadingMore || loadMoreError) return;
     const list = listRef.current;
     if (!list) return;
     // Within roughly one viewport of the bottom: fetch the next page early
     // enough that the user rarely hits the end of the list.
     const remaining = list.scrollSize - (list.scrollOffset + list.viewportSize);
-    if (remaining <= list.viewportSize) void loadMore();
-  }, [hasMore, isLoadingMore, loadMore]);
+    if (remaining <= list.viewportSize) void loadMore(entryKey);
+  }, [entryKey, hasMore, isLoadingMore, loadMore, loadMoreError]);
 
   // Bridge the debounce gap: the query is already non-empty but the fetch for
   // it has not been issued yet, so treat it as loading instead of "no results".
@@ -144,6 +146,16 @@ const SearchResults = memo<SearchResultsProps>(({ libraryId, query }) => {
               <TreeSkeleton count={3} />
             </div>
           )}
+          {loadMoreError ? (
+            <div key={'__load_more_error__'} style={{ paddingBottom: 2, paddingTop: 4 }}>
+              <AsyncError
+                error={loadMoreError}
+                retrying={isLoadingMore}
+                variant={'inline'}
+                onRetry={retryLoadMore}
+              />
+            </div>
+          ) : null}
         </VList>
       </Flexbox>
     </AsyncBoundary>

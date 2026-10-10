@@ -1,4 +1,4 @@
-import { definePagedReplica, type ReplicaPagedData } from '@/libs/replica';
+import { definePagedReplica, type ReplicaPagedData, stableQueryKey } from '@/libs/replica';
 import { type FilesTabs, type ResourceSourceFilter } from '@/types/files';
 import { type ResourceItem } from '@/types/resource';
 
@@ -25,14 +25,14 @@ export interface HierarchySearchParams {
 }
 
 /**
- * Each search surface keeps ONE entry: the ResourceManager shows one query at a
- * time, so a new keyword repaints from its own head page instead of leaving a
- * persisted bucket behind for every keystroke. The keyword itself is part of the
- * query identity, so a projection taken under another search never hydrates and
- * never merges with the loaded pages.
+ * Each search surface keeps ONE replica entry **per query**, exactly like the
+ * SWR cache it replaced. The ResourceManager shows one query at a time, but
+ * keying entries by the query (not by a shared constant) is what lets coming
+ * back to a keyword paint its own rows again, and keeps a projection taken
+ * under another search from ever merging with the loaded pages. The store
+ * bounds how many of these entries survive, so routine searching cannot grow
+ * memory or IndexedDB without limit (see `MAX_RECENT_SEARCHES`).
  */
-export const EXPLORER_SEARCH_KEY = 'explorer';
-export const HIERARCHY_SEARCH_KEY = 'hierarchy';
 
 /** Rows fetched per page when the caller does not name one (the legacy `limit: 50`). */
 export const DEFAULT_SEARCH_PAGE_SIZE = 50;
@@ -58,7 +58,8 @@ export const explorerSearchResource = definePagedReplica<
   number,
   ExplorerSearchValue
 >({
-  key: () => EXPLORER_SEARCH_KEY,
+  // One entry per query: the keyword and every narrowing chip the user picked.
+  key: (params) => stableQueryKey(params),
   name: 'resourceManagerSearch',
   paging: {
     direction: 'forward',
@@ -67,23 +68,6 @@ export const explorerSearchResource = definePagedReplica<
     // A reload repaints what the first network page would show, never a stale tail.
     persist: { pages: 1 },
   },
-  query: ({
-    category,
-    includeContentPreview,
-    libraryId,
-    pageSize,
-    q,
-    sourceFilter,
-    visibility,
-  }) => ({
-    category,
-    includeContentPreview,
-    libraryId,
-    pageSize,
-    q: q.trim() || undefined,
-    sourceFilter,
-    visibility,
-  }),
   storage: 'indexedDB',
   version: 1,
 });
@@ -100,7 +84,8 @@ export const hierarchySearchResource = definePagedReplica<
   number,
   HierarchySearchValue
 >({
-  key: () => HIERARCHY_SEARCH_KEY,
+  // One entry per (library, keyword) so revisiting a keyword restores its rows.
+  key: (params) => stableQueryKey(params),
   name: 'resourceManagerHierarchySearch',
   paging: {
     direction: 'forward',
@@ -108,7 +93,6 @@ export const hierarchySearchResource = definePagedReplica<
     mode: 'offset',
     persist: { pages: 1 },
   },
-  query: ({ libraryId, pageSize, q }) => ({ libraryId, pageSize, q: q.trim() || undefined }),
   storage: 'indexedDB',
   version: 1,
 });

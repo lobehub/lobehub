@@ -20,6 +20,7 @@ import { setScopedMutate } from '@/libs/swr/mutate';
 import { resourceService } from '@/services/resource';
 import type { ResourceItem } from '@/types/resource';
 
+import { MAX_RECENT_SEARCHES } from './action';
 import { useResourceManagerStore } from './index';
 import { initialState } from './initialState';
 import {
@@ -42,6 +43,17 @@ const HIERARCHY_PARAMS: HierarchySearchParams = {
   q: 'report',
 };
 const HIERARCHY_KEY = hierarchySearchResource.storageKey(HIERARCHY_PARAMS);
+
+/**
+ * Every query keeps its own replica entry, so the tests read (and assert on)
+ * the entry named by the query, exactly as the components do.
+ */
+const explorerKeyOf = (params: ExplorerSearchParams) => explorerSearchResource.key(params);
+const hierarchyKeyOf = (params: HierarchySearchParams) => hierarchySearchResource.key(params);
+const explorerEntry = (params: ExplorerSearchParams) =>
+  useResourceManagerStore.getState().explorerSearchEntries[explorerKeyOf(params)];
+const hierarchyEntry = (params: HierarchySearchParams) =>
+  useResourceManagerStore.getState().hierarchySearchEntries[hierarchyKeyOf(params)];
 
 const item = (id: string): ResourceItem => ({ fileType: 'custom/document', id, name: id });
 
@@ -130,15 +142,15 @@ describe('ResourceManager search replicas', () => {
 
     const hook = renderHook(
       () => ({
-        entry: useResourceManagerStore((s) => s.explorerSearchEntry),
+        entry: useResourceManagerStore(
+          (s) => s.explorerSearchEntries[explorerKeyOf(EXPLORER_PARAMS)],
+        ),
         sync: useResourceManagerStore((s) => s.useFetchExplorerSearch)(EXPLORER_PARAMS),
       }),
       { wrapper },
     );
 
-    await waitFor(() =>
-      expect(ids(useResourceManagerStore.getState().explorerSearchEntry)).toEqual(['cached-1']),
-    );
+    await waitFor(() => expect(ids(explorerEntry(EXPLORER_PARAMS))).toEqual(['cached-1']));
     expect(hook.result.current.sync.isHydrated).toBe(true);
     expect(hook.result.current.sync.isValidating).toBe(true);
   });
@@ -150,10 +162,8 @@ describe('ResourceManager search replicas', () => {
       wrapper,
     });
 
-    await waitFor(() =>
-      expect(ids(useResourceManagerStore.getState().explorerSearchEntry)).toEqual(['a', 'b']),
-    );
-    expect(useResourceManagerStore.getState().explorerSearchEntry).toMatchObject({
+    await waitFor(() => expect(ids(explorerEntry(EXPLORER_PARAMS))).toEqual(['a', 'b']));
+    expect(explorerEntry(EXPLORER_PARAMS)).toMatchObject({
       hasMore: true,
       searchParams: EXPLORER_PARAMS,
       total: 60,
@@ -184,22 +194,28 @@ describe('ResourceManager search replicas', () => {
     );
 
     await waitFor(() =>
-      expect(useResourceManagerStore.getState().explorerSearchEntry?.items).toHaveLength(
-        DEFAULT_SEARCH_PAGE_SIZE,
-      ),
+      expect(
+        explorerEntry({ pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'report' })?.items,
+      ).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE),
     );
 
     hook.rerender({ q: 'foo' });
 
     await waitFor(() =>
-      expect(ids(useResourceManagerStore.getState().explorerSearchEntry)).toEqual(['foo-1']),
+      expect(ids(explorerEntry({ pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'foo' }))).toEqual([
+        'foo-1',
+      ]),
     );
-    // A different keyword resets the loaded depth; rows never merge across searches.
-    expect(useResourceManagerStore.getState().explorerSearchEntry).toMatchObject({
+    // Each keyword owns its entry: the new one starts at its own head page and
+    // the rows of the previous search never merge into it.
+    expect(explorerEntry({ pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'foo' })).toMatchObject({
       currentPage: 0,
       searchParams: { pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'foo' },
       total: 1,
     });
+    expect(explorerEntry({ pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'report' })?.items).toHaveLength(
+      DEFAULT_SEARCH_PAGE_SIZE,
+    );
   });
 
   it('appends the next sidebar search page through the engine', async () => {
@@ -224,16 +240,14 @@ describe('ResourceManager search replicas', () => {
     );
 
     await waitFor(() =>
-      expect(useResourceManagerStore.getState().hierarchySearchEntry?.items).toHaveLength(
-        DEFAULT_SEARCH_PAGE_SIZE,
-      ),
+      expect(hierarchyEntry(HIERARCHY_PARAMS)?.items).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE),
     );
 
     await act(async () => {
-      await hook.result.current.loadMore();
+      await hook.result.current.loadMore(hierarchyKeyOf(HIERARCHY_PARAMS));
     });
 
-    const list = useResourceManagerStore.getState().hierarchySearchEntry!;
+    const list = hierarchyEntry(HIERARCHY_PARAMS)!;
     expect(list.items).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE * 2);
     expect(list.items[DEFAULT_SEARCH_PAGE_SIZE].id).toBe(`file-${DEFAULT_SEARCH_PAGE_SIZE}`);
     expect(list.currentPage).toBe(1);
@@ -261,12 +275,8 @@ describe('ResourceManager search replicas', () => {
       { wrapper },
     );
 
-    await waitFor(() =>
-      expect(ids(useResourceManagerStore.getState().explorerSearchEntry)).toEqual(['explorer-hit']),
-    );
-    await waitFor(() =>
-      expect(ids(useResourceManagerStore.getState().hierarchySearchEntry)).toEqual(['kb-hit']),
-    );
+    await waitFor(() => expect(ids(explorerEntry(EXPLORER_PARAMS))).toEqual(['explorer-hit']));
+    await waitFor(() => expect(ids(hierarchyEntry(HIERARCHY_PARAMS))).toEqual(['kb-hit']));
   });
 
   it('does not fetch another sidebar page when the head page is the last one', async () => {
@@ -280,15 +290,106 @@ describe('ResourceManager search replicas', () => {
       { wrapper },
     );
 
-    await waitFor(() =>
-      expect(useResourceManagerStore.getState().hierarchySearchEntry?.items).toHaveLength(1),
-    );
-    expect(useResourceManagerStore.getState().hierarchySearchEntry?.hasMore).toBe(false);
+    await waitFor(() => expect(hierarchyEntry(HIERARCHY_PARAMS)?.items).toHaveLength(1));
+    expect(hierarchyEntry(HIERARCHY_PARAMS)?.hasMore).toBe(false);
 
     await act(async () => {
-      await hook.result.current.loadMore();
+      await hook.result.current.loadMore(hierarchyKeyOf(HIERARCHY_PARAMS));
     });
 
     expect(fetchSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores a revisited keyword from its own entry (no waiting for the network)', async () => {
+    fetchSpy.mockImplementation(({ q }: { q?: string }) =>
+      Promise.resolve(page([item(`${q}-hit`)], 1)),
+    );
+
+    const hook = renderHook(
+      (props: { q: string }) =>
+        useResourceManagerStore((s) => s.useFetchExplorerSearch)({
+          pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+          q: props.q,
+        }),
+      { initialProps: { q: 'report' }, wrapper },
+    );
+
+    const reportParams = { pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'report' };
+    const fooParams = { pageSize: DEFAULT_SEARCH_PAGE_SIZE, q: 'foo' };
+
+    await waitFor(() => expect(ids(explorerEntry(reportParams))).toEqual(['report-hit']));
+
+    hook.rerender({ q: 'foo' });
+    await waitFor(() => expect(ids(explorerEntry(fooParams))).toEqual(['foo-hit']));
+
+    hook.rerender({ q: 'report' });
+
+    // The previous search kept its own entry, so its rows are back on the very
+    // next render — the component never falls back to a waiting state.
+    expect(ids(explorerEntry(reportParams))).toEqual(['report-hit']);
+    expect(ids(explorerEntry(fooParams))).toEqual(['foo-hit']);
+  });
+
+  it('bounds how many search entries (memory + storage) are kept', async () => {
+    fetchSpy.mockImplementation(({ q }: { q?: string }) =>
+      Promise.resolve(page([item(`${q}-hit`)], 1)),
+    );
+
+    const queries = Array.from({ length: MAX_RECENT_SEARCHES + 2 }, (_, i) => `q-${i}`);
+    const params = (q: string) => ({ pageSize: DEFAULT_SEARCH_PAGE_SIZE, q });
+
+    const hook = renderHook(
+      (props: { q: string }) =>
+        useResourceManagerStore((s) => s.useFetchExplorerSearch)(params(props.q)),
+      { initialProps: { q: queries[0] }, wrapper },
+    );
+
+    for (const q of queries.slice(1)) {
+      hook.rerender({ q });
+      await waitFor(() => expect(explorerEntry(params(q))).toBeDefined());
+    }
+
+    const entries = useResourceManagerStore.getState().explorerSearchEntries;
+    expect(Object.keys(entries)).toHaveLength(MAX_RECENT_SEARCHES);
+    // The first keyword fell out of the bounded recent-query window.
+    expect(explorerEntry(params(queries[0]))).toBeUndefined();
+    expect(explorerEntry(params(queries.at(-1)!))).toBeDefined();
+  });
+
+  it('collapseHierarchySearch drops the loaded depth so no stale tail can survive', async () => {
+    fetchSpy
+      .mockResolvedValueOnce({
+        hasMore: true,
+        items: itemsOf(DEFAULT_SEARCH_PAGE_SIZE),
+        total: 100,
+      })
+      .mockResolvedValueOnce({
+        hasMore: true,
+        items: itemsOf(DEFAULT_SEARCH_PAGE_SIZE, DEFAULT_SEARCH_PAGE_SIZE),
+        total: 100,
+      });
+
+    const hook = renderHook(
+      () => ({
+        loadMore: useResourceManagerStore((s) => s.loadMoreHierarchySearch),
+        sync: useResourceManagerStore((s) => s.useFetchHierarchySearch)(HIERARCHY_PARAMS),
+      }),
+      { wrapper },
+    );
+
+    await waitFor(() =>
+      expect(hierarchyEntry(HIERARCHY_PARAMS)?.items).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE),
+    );
+    await act(async () => {
+      await hook.result.current.loadMore(hierarchyKeyOf(HIERARCHY_PARAMS));
+    });
+    expect(hierarchyEntry(HIERARCHY_PARAMS)?.currentPage).toBe(1);
+
+    act(() => useResourceManagerStore.getState().collapseHierarchySearch());
+
+    const list = hierarchyEntry(HIERARCHY_PARAMS)!;
+    expect(list.currentPage).toBe(0);
+    expect(list.items).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE);
+    expect(list.hasMore).toBe(true);
   });
 });

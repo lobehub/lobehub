@@ -1,9 +1,10 @@
+import { useLayoutEffect } from 'react';
 import type { StateCreator } from 'zustand/vanilla';
 
 import type { ResourceManagerMode } from '@/features/ResourceManager';
 import {
   createReplicaSlice,
-  type ReplicaLens,
+  recordLens,
   type ReplicaPageResult,
   type ReplicaSyncResult,
 } from '@/libs/replica';
@@ -19,11 +20,9 @@ import { DEFAULT_WORKSPACE_LIST_VISIBILITY, initialState } from './initialState'
 import { readPersistedResourceMode, writePersistedResourceMode } from './modePersistence';
 import {
   DEFAULT_SEARCH_PAGE_SIZE,
-  EXPLORER_SEARCH_KEY,
   type ExplorerSearchParams,
   explorerSearchResource,
   type ExplorerSearchValue,
-  HIERARCHY_SEARCH_KEY,
   type HierarchySearchParams,
   hierarchySearchResource,
   type HierarchySearchValue,
@@ -93,25 +92,28 @@ const fetchHierarchySearchPage = async (
   return { items: response.items, total: response.total };
 };
 
-/** Where the explorer search view lives in the store. */
-const explorerSearchLens: ReplicaLens<Store, ExplorerSearchValue> = {
-  clear: () => ({ explorerSearchEntry: undefined }),
-  get: (state) => state.explorerSearchEntry,
-  set: (_state, _key, data) => ({ explorerSearchEntry: data }),
-};
+/**
+ * How many distinct queries per search surface keep a replica entry. The one
+ * the user is on is always the most recent, so bounding the list bounds memory
+ * and IndexedDB together: searching all day cannot grow either without limit,
+ * and the queries just used still paint from their own rows when revisited.
+ */
+export const MAX_RECENT_SEARCHES = 8;
 
-/** Where the library sidebar search view lives in the store. */
-const hierarchySearchLens: ReplicaLens<Store, HierarchySearchValue> = {
-  clear: () => ({ hierarchySearchEntry: undefined }),
-  get: (state) => state.hierarchySearchEntry,
-  set: (_state, _key, data) => ({ hierarchySearchEntry: data }),
-};
+/** Where the explorer search views live in the store — one entry per query. */
+const explorerSearchLens = recordLens<Store, ExplorerSearchValue>('explorerSearchEntries');
+
+/** Where the library sidebar search views live — one entry per (library, keyword). */
+const hierarchySearchLens = recordLens<Store, HierarchySearchValue>('hierarchySearchEntries');
 
 export class ResourceManagerStoreActionImpl {
   readonly #get: () => Store;
   readonly #set: Setter;
   readonly #explorerSearch;
   readonly #hierarchySearch;
+  /** Query entry keys each surface has used, oldest first (see `#trackRecentSearch`). */
+  readonly #recentExplorerSearches: string[] = [];
+  readonly #recentHierarchySearches: string[] = [];
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
     void _api;
@@ -125,7 +127,7 @@ export class ResourceManagerStoreActionImpl {
       set,
       stateKey: 'explorerSearchReplica',
       view: explorerSearchLens,
-      // The keyword is part of the query identity, so the mounted surface can
+      // The keyword is part of the entry identity, so the mounted surface can
       // tell whether the painted rows still answer the request on screen.
       viewFields: (params) => ({ searchParams: params }),
     });
@@ -140,6 +142,37 @@ export class ResourceManagerStoreActionImpl {
       viewFields: (params) => ({ searchParams: params }),
     });
   }
+
+  /**
+   * Remember a query the user is looking at, and drop the oldest ones past
+   * {@link MAX_RECENT_SEARCHES}. Dropping removes the replica entry (memory)
+   * *and* its persisted projection, so both stay bounded no matter how many
+   * keywords are tried. Called from a layout effect, never during render.
+   */
+  #trackRecentSearch = (recents: string[], key: string, drop: (key: string) => void) => {
+    const existing = recents.indexOf(key);
+    if (existing !== -1) recents.splice(existing, 1);
+    recents.push(key);
+    while (recents.length > MAX_RECENT_SEARCHES) {
+      const oldest = recents.shift();
+      if (oldest) drop(oldest);
+    }
+  };
+
+  /**
+   * Invalidate the loaded depth of every cached sidebar search.
+   *
+   * A rename / move / delete in the tree can touch a row the sidebar search
+   * loaded beyond its head page. Revalidating only re-runs the head request and
+   * the replica keeps the rows the user already scrolled to, so a stale hit
+   * would linger in that tail; dropping the loaded pages first means the head
+   * that comes back is the only thing left to show.
+   */
+  collapseHierarchySearch = (): void => {
+    for (const key of Object.keys(this.#get().hierarchySearchEntries)) {
+      this.#hierarchySearch.collapse(key);
+    }
+  };
 
   clearSelectAllState = (): void => {
     this.#set({ selectAllState: 'none', selectedFileIds: [], selectionTotal: undefined });
@@ -415,25 +448,43 @@ export class ResourceManagerStoreActionImpl {
 
   /**
    * Fetch orchestration for the explorer's search overlay. It only schedules the
-   * sync; read the rows from `explorerSearchEntry`.
+   * sync; read the rows from `explorerSearchEntries[explorerSearchResource.key(params)]`.
    */
-  useFetchExplorerSearch = (params: ExplorerSearchParams | null): ReplicaSyncResult =>
-    this.#explorerSearch.useSync(params);
+  useFetchExplorerSearch = (params: ExplorerSearchParams | null): ReplicaSyncResult => {
+    const key = params ? explorerSearchResource.key(params) : undefined;
+    useLayoutEffect(() => {
+      if (key) {
+        this.#trackRecentSearch(this.#recentExplorerSearches, key, (stale) =>
+          this.#explorerSearch.remove(stale),
+        );
+      }
+    }, [key]);
+    return this.#explorerSearch.useSync(params);
+  };
 
   /**
    * Fetch orchestration for the library sidebar's flat search list. It only
-   * schedules the sync; read the rows from `hierarchySearchEntry`.
+   * schedules the sync; read the rows from
+   * `hierarchySearchEntries[hierarchySearchResource.key(params)]`.
    */
-  useFetchHierarchySearch = (params: HierarchySearchParams | null): ReplicaSyncResult =>
-    this.#hierarchySearch.useSync(params);
+  useFetchHierarchySearch = (params: HierarchySearchParams | null): ReplicaSyncResult => {
+    const key = params ? hierarchySearchResource.key(params) : undefined;
+    useLayoutEffect(() => {
+      if (key) {
+        this.#trackRecentSearch(this.#recentHierarchySearches, key, (stale) =>
+          this.#hierarchySearch.remove(stale),
+        );
+      }
+    }, [key]);
+    return this.#hierarchySearch.useSync(params);
+  };
 
-  /** Append the next page of the explorer search (the head page's query). */
-  loadMoreExplorerSearch = async (): Promise<void> =>
-    this.#explorerSearch.loadMore(EXPLORER_SEARCH_KEY);
+  /** Append the next page of the explorer search (the entry's own query). */
+  loadMoreExplorerSearch = async (key: string): Promise<void> => this.#explorerSearch.loadMore(key);
 
-  /** Append the next page of the sidebar search (the head page's query). */
-  loadMoreHierarchySearch = async (): Promise<void> =>
-    this.#hierarchySearch.loadMore(HIERARCHY_SEARCH_KEY);
+  /** Append the next page of the sidebar search (the entry's own query). */
+  loadMoreHierarchySearch = async (key: string): Promise<void> =>
+    this.#hierarchySearch.loadMore(key);
 }
 
 export type Action = Pick<ResourceManagerStoreActionImpl, keyof ResourceManagerStoreActionImpl>;

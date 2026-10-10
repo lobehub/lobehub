@@ -9,6 +9,7 @@ import type { TreeState } from './types';
 
 const {
   mockApplyMovedResourceToCaches,
+  mockCollapseHierarchySearch,
   mockDeleteResources,
   mockGetKnowledgeItems,
   mockRefreshFileList,
@@ -18,6 +19,7 @@ const {
   mockUpdateResource,
 } = vi.hoisted(() => ({
   mockApplyMovedResourceToCaches: vi.fn(),
+  mockCollapseHierarchySearch: vi.fn(),
   mockDeleteResources: vi.fn(),
   mockGetKnowledgeItems: vi.fn(),
   mockRefreshFileList: vi.fn(),
@@ -30,6 +32,12 @@ const {
 vi.mock('@/libs/replica', async () => ({
   ...(await vi.importActual<typeof ReplicaModule>('@/libs/replica')),
   revalidateReplica: mockRevalidateReplica,
+}));
+
+vi.mock('@/features/ResourceManager/store', () => ({
+  useResourceManagerStore: {
+    getState: () => ({ collapseHierarchySearch: mockCollapseHierarchySearch }),
+  },
 }));
 
 vi.mock('@/services/file', () => ({
@@ -264,20 +272,25 @@ describe('TreeActionImpl folder key resolution', () => {
     expect(state.children['docs_unloaded']).toEqual([doc]);
   });
 
-  it('revalidate also refreshes the hierarchy search replica', async () => {
+  it('revalidate drops the sidebar search depth and refreshes the replica', async () => {
     const state = createState();
     const actions = new TreeActionImpl(
       createSetter(() => state),
       () => state,
     );
+    mockCollapseHierarchySearch.mockClear();
     mockRevalidateReplica.mockClear();
     mockGetKnowledgeItems.mockResolvedValue({ items: [] });
 
     await actions.revalidate('folder-a');
 
     // The sidebar's flat search list is a replica now; a rename/move/delete in
-    // the tree must revalidate it or the stale hit lingers next to the tree.
-    expect(mockRevalidateReplica).toHaveBeenCalledWith(hierarchySearchResource);
+    // the tree must drop the loaded search depth (so a stale tail row cannot
+    // survive) and revalidate it (so the head is fresh).
+    await vi.waitFor(() => {
+      expect(mockCollapseHierarchySearch).toHaveBeenCalled();
+      expect(mockRevalidateReplica).toHaveBeenCalledWith(hierarchySearchResource);
+    });
   });
 
   it('a revalidate requested during an in-flight root load runs once that load settles', async () => {
