@@ -292,6 +292,14 @@ export const agentBuilderRuntime: ServerRuntimeRegistration = {
         if (!agentId) return noEditingTargetResult;
 
         try {
+          // `agentModel.update` matches zero rows for a missing (deleted) agent
+          // without erroring — check first so the call can't report a write that
+          // never landed, mirroring updateConfig.
+          const agent = await agentModel.getAgentConfigById(agentId);
+          if (!agent) {
+            return { content: `Agent "${agentId}" not found.`, success: false };
+          }
+
           await agentModel.update(agentId, {
             editorData: null,
             systemRole: params.prompt,

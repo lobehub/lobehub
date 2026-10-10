@@ -18,6 +18,7 @@ const {
   mockGetMcpManifest,
   mockQueryPlugins,
   mockResolveConnectors,
+  mockUpdateAgent,
   mockUpdatePlugin,
 } = vi.hoisted(() => ({
   mockCountAgents: vi.fn(),
@@ -31,6 +32,7 @@ const {
   mockGetAssistantList: vi.fn(),
   mockQueryAgents: vi.fn(),
   mockServiceUpdateConfig: vi.fn(),
+  mockUpdateAgent: vi.fn(),
   mockUpdateConfig: vi.fn(),
 }));
 
@@ -46,6 +48,7 @@ vi.mock('@/database/models/agent', () => ({
       countAgents: mockCountAgents,
       getAgentConfigById: mockGetAgentConfigById,
       queryAgents: mockQueryAgents,
+      update: mockUpdateAgent,
       updateConfig: mockUpdateConfig,
     };
   }),
@@ -120,6 +123,30 @@ describe('agentManagementRuntime', () => {
     expect(result.success).toBe(false);
     expect(result.content).toContain('Shared agent provider is restricted');
     expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  describe('writes to an agent that no longer exists', () => {
+    beforeEach(() => mockGetAgentConfigById.mockResolvedValue(undefined));
+
+    it('updatePrompt fails instead of reporting success', async () => {
+      const result = await createRuntime().updatePrompt({
+        agentId: 'agt_deleted',
+        prompt: 'new prompt',
+      });
+
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ content: 'Agent "agt_deleted" not found.', success: false });
+    });
+
+    it('updateAgent with meta only fails instead of reporting success', async () => {
+      const result = await createRuntime().updateAgent({
+        agentId: 'agt_deleted',
+        meta: { title: 'Renamed' },
+      });
+
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ content: 'Agent "agt_deleted" not found.', success: false });
+    });
   });
 
   it('declares the agent management runtime identifier', () => {

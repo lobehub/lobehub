@@ -350,6 +350,7 @@ describe('agentBuilderRuntime', () => {
 
   describe('updatePrompt', () => {
     it('writes and returns the editing agent captured by the invocation', async () => {
+      mockGetAgentConfigById.mockResolvedValue({ id: 'target-agent' });
       const runtime = createRuntime();
       const result = await runtime.updatePrompt(
         { prompt: 'run-scoped prompt' },
@@ -372,6 +373,20 @@ describe('agentBuilderRuntime', () => {
         },
         success: true,
       });
+    });
+
+    it('fails instead of reporting success when the editing agent no longer exists', async () => {
+      // The agent being edited was deleted mid-run: the UPDATE matches zero rows.
+      mockGetAgentConfigById.mockResolvedValue(undefined);
+      const runtime = createRuntime();
+      const result = await runtime.updatePrompt(
+        { prompt: 'run-scoped prompt' },
+        { editingAgentId: 'agt_deleted', toolManifestMap: {} },
+      );
+
+      expect(mockGetAgentConfigById).toHaveBeenCalledWith('agt_deleted');
+      expect(mockUpdateAgent).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ content: 'Agent "agt_deleted" not found.', success: false });
     });
   });
 
