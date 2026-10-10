@@ -10,8 +10,7 @@ import pMap from 'p-map';
 
 import { toolsEnv } from '@/envs/tools';
 
-import { type SearchImplType, type SearchServiceImpl } from './impls';
-import { createSearchServiceImpl } from './impls';
+import { createSearchServiceImpl, SearchImplType, type SearchServiceImpl } from './impls';
 
 const DEFAULT_CRAWL_CONCURRENCY = 3;
 const DEFAULT_CRAWLER_RETRY = 1;
@@ -41,11 +40,32 @@ export const DEFAULT_CRAWLER_IMPLS = ['jina', 'naive', 'search1api', 'browserles
  */
 export const DEFAULT_SEARCH_IMPLS = ['searxng'];
 
-const parseImplEnv = (envString: string = '') => {
-  // Handle full-width commas and extra whitespace
-  const envValue = envString.replaceAll('，', ',').trim();
-  return envValue.split(',').filter(Boolean);
-};
+const KNOWN_SEARCH_IMPLS = new Set<string>(Object.values(SearchImplType));
+const warnedUnknownSearchImpls = new Set<string>();
+
+/**
+ * Drop provider ids no search impl handles. `createSearchServiceImpl` maps any
+ * unknown id to Search1API, so a typo or stray character used to silently swap
+ * the configured provider for Search1API; warn once per id instead.
+ */
+const toKnownSearchImpls = (ids: string[]): SearchImplType[] =>
+  ids.filter((id): id is SearchImplType => {
+    if (KNOWN_SEARCH_IMPLS.has(id)) return true;
+
+    if (!warnedUnknownSearchImpls.has(id)) {
+      warnedUnknownSearchImpls.add(id);
+      console.warn(
+        `[SearchService] ignoring unknown search provider ${JSON.stringify(id)} in SEARCH_PROVIDERS; expected one of: ${[...KNOWN_SEARCH_IMPLS].join(', ')}`,
+      );
+    }
+    return false;
+  });
+
+interface SearchImplEntry {
+  /** Provider id; logged instead of the class name, which is minified in production builds */
+  id: SearchImplType;
+  impl: SearchServiceImpl;
+}
 
 /**
  * Resolve the effective ordered channel list from a user's preferred order
@@ -115,11 +135,11 @@ const getMemorySnapshot = () => {
  * Uses different implementations for different search operations
  */
 export class SearchService {
-  private searchImpList: SearchServiceImpl[];
+  private searchImpList: SearchImplEntry[];
   private userChannels?: UserChannelPreferences;
 
   private get crawlerOptions(): { impls: string[]; urlRuleImpls?: string[] } {
-    const enabledFromEnv = parseImplEnv(toolsEnv.CRAWLER_IMPLS);
+    const enabledFromEnv = toolsEnv.CRAWLER_IMPLS;
 
     // No user preference → preserve current behavior exactly: forward the env
     // list as-is (possibly empty, letting `Crawler` apply its own defaults).
@@ -157,8 +177,8 @@ export class SearchService {
     const impls = this.searchImpls;
     this.searchImpList =
       impls.length > 0
-        ? impls.map((impl) => createSearchServiceImpl(impl))
-        : [createSearchServiceImpl()];
+        ? impls.map((id) => ({ id, impl: createSearchServiceImpl(id) }))
+        : [{ id: SearchImplType.SearXNG, impl: createSearchServiceImpl() }];
   }
 
   /**
@@ -173,11 +193,11 @@ export class SearchService {
     crawlerImpls: { id: string }[];
     searchProviders: { id: string }[];
   } {
-    const enabledProviders = parseImplEnv(toolsEnv.SEARCH_PROVIDERS);
+    const enabledProviders = toKnownSearchImpls(toolsEnv.SEARCH_PROVIDERS);
     // Match the runtime default (single SearXNG provider) when unconfigured, so
     // the settings page never shows "no channels available" while search still works.
     const searchProviders = enabledProviders.length > 0 ? enabledProviders : DEFAULT_SEARCH_IMPLS;
-    const enabledCrawlers = parseImplEnv(toolsEnv.CRAWLER_IMPLS);
+    const enabledCrawlers = toolsEnv.CRAWLER_IMPLS;
     const crawlerImpls = enabledCrawlers.length > 0 ? enabledCrawlers : DEFAULT_CRAWLER_IMPLS;
 
     return {
@@ -273,11 +293,11 @@ export class SearchService {
   }
 
   private get searchImpls() {
-    const enabledFromEnv = parseImplEnv(toolsEnv.SEARCH_PROVIDERS);
+    const enabledFromEnv = toKnownSearchImpls(toolsEnv.SEARCH_PROVIDERS);
 
     // No user preference → preserve current behavior exactly: forward the env
     // list as-is (possibly empty, letting the constructor apply its own default).
-    if (!this.userChannels?.searchProviders?.length) return enabledFromEnv as SearchImplType[];
+    if (!this.userChannels?.searchProviders?.length) return enabledFromEnv;
 
     // When search providers aren't configured via env, the effective enabled set
     // is the runtime's built-in default (SearXNG) — intersect against that so a
@@ -293,12 +313,16 @@ export class SearchService {
   /**
    * Query for search results using the specified impl
    */
-  private async queryWithImpl(impl: SearchServiceImpl, query: string, params?: SearchParams) {
+  private async queryWithImpl({ id, impl }: SearchImplEntry, query: string, params?: SearchParams) {
     try {
       return await impl.query(query, params);
     } catch (e) {
+      // The message can carry upstream bodies or credentials, so only the
+      // provider id and the TRPC error code (e.g. NOT_IMPLEMENTED for a missing
+      // SEARXNG_URL) are logged.
       console.error('[SearchService] query failed', {
-        provider: impl.constructor.name || 'UnknownSearchImpl',
+        code: (e as { code?: string }).code,
+        provider: id,
       });
       return {
         costTime: 0,
@@ -333,14 +357,11 @@ export class SearchService {
 
     let lastSuccessfulEmpty: UniformSearchResponse | undefined;
 
-    for (const impl of this.searchImpList) {
+    for (const entry of this.searchImpList) {
+      const { impl } = entry;
       try {
         if (log.enabled) {
-          log(
-            'webSearch:impl impl=%s mem=%s',
-            impl.constructor.name || 'UnknownSearchImpl',
-            getMemorySnapshot(),
-          );
+          log('webSearch:impl impl=%s mem=%s', entry.id, getMemorySnapshot());
         }
       } catch {}
 
@@ -350,7 +371,7 @@ export class SearchService {
         searchTimeRange,
       });
       while (true) {
-        const data = await this.queryWithImpl(impl, query, currentParams);
+        const data = await this.queryWithImpl(entry, query, currentParams);
 
         if (data.errorDetail) break;
         if (data.results.length > 0) return data;
