@@ -464,16 +464,26 @@ const InstanceRow = memo<InstanceRowProps>(
             Greyed out rather than hidden while the source is held, with the
             reason as its tooltip, so the entry does not vanish and come back
             as runs start and end. */}
-          {canCopyInstance(editable) && (
-            <ActionIcon
-              disabled={Boolean(copyBlocked) || checkingCopy}
-              icon={CopyIcon}
-              loading={checkingCopy}
-              size={'small'}
-              title={t(copyEntryTitle(copyBlocked))}
-              onClick={() => void startCopy()}
-            />
-          )}
+          {canCopyInstance(editable) &&
+            (copyBlocked ? (
+              // The reason rides on a wrapper: a disabled button takes no
+              // pointer events, so its own tooltip would never open and the
+              // entry would be grey with nothing saying why.
+              <Tooltip title={t(copyEntryTitle(copyBlocked))}>
+                <span style={{ cursor: 'not-allowed', display: 'inline-flex' }}>
+                  <ActionIcon disabled icon={CopyIcon} size={'small'} />
+                </span>
+              </Tooltip>
+            ) : (
+              <ActionIcon
+                disabled={checkingCopy}
+                icon={CopyIcon}
+                loading={checkingCopy}
+                size={'small'}
+                title={t(copyEntryTitle(undefined))}
+                onClick={() => void startCopy()}
+              />
+            ))}
           {editable && (
             <ActionIcon
               icon={PencilIcon}
