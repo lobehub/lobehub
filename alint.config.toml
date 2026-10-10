@@ -546,3 +546,29 @@ files = [ "packages/alint/fixtures/no-privileged-untrusted-electron/**" ]
 lobehub = "./packages/alint/rules"
 [config.group.rules]
 "lobehub/no-privileged-untrusted-electron" = "warn"
+
+# Single source of derivation: an entity that must be correct and unique (child
+# env, resolved path, normalized id/key, effective config) is read from the value
+# or resolver this file already has, never re-derived from its inputs (#20439).
+# Per file only; the cross-file half lives in the deep-review reuse checklist.
+[[config.group]]
+files = [
+  "apps/server/src/**/*.ts",
+  "apps/desktop/src/main/**/*.ts",
+  "packages/heterogeneous-agents/src/**/*.ts",
+  "packages/agent-runtime/src/**/*.ts",
+  "packages/local-file-shell/src/**/*.ts",
+  "packages/database/src/**/*.ts",
+]
+ignores = [ "**/*.test.ts", "**/*.test.tsx", "**/__tests__/**", "**/__mocks__/**", "**/migrations/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/single-source-derivation" = "warn"
+
+[[config.group]]
+files = [ "packages/alint/fixtures/single-source-derivation/**" ]
+[config.group.plugins]
+lobehub = "./packages/alint/rules"
+[config.group.rules]
+"lobehub/single-source-derivation" = "warn"
