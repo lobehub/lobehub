@@ -483,6 +483,7 @@
   "goalBatch.gatePanel.history.empty": "No verdict yet",
   "goalBatch.gatePanel.history.released": "Released wave {{wave}} ({{count}} units)",
   "goalBatch.gatePanel.history.unit": "“{{title}}” failed its own check — the batch was held at once",
+  "goalBatch.gatePanel.history.unrecorded": "Judged before verdicts were recorded — no detail kept",
   "goalBatch.gatePanel.next.checking": "Every unit finished — judged on the coordinator’s next step",
   "goalBatch.gatePanel.next.human": "Waiting on you: revise the plan, or fork a fresh one for the units that broke",
   "goalBatch.gatePanel.next.locked": "Judged automatically once this round’s {{count}} units finish",

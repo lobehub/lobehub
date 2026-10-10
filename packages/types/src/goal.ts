@@ -486,6 +486,11 @@ export interface GoalRolloutGateEvaluation {
   releasedCount?: number;
   /** The recipe revision (round) this verdict belongs to. */
   revision: number;
+  /**
+   * 1-based ordinal of this verdict within its round. Written by the
+   * coordinator so it keeps counting after older verdicts were dropped.
+   */
+  seq?: number;
   /** `gate`: the gate judged a settled wave. `unit`: one unit failed its own check. */
   trigger: 'gate' | 'unit';
   /**
@@ -511,7 +516,10 @@ export interface GoalRolloutState {
   assayNodeId?: string;
   /** The `batch` container node. */
   batchNodeId: string;
-  /** Every gate verdict so far, oldest first, capped to the most recent few. */
+  /**
+   * Gate verdicts, oldest first. Each round keeps its most recent few, so a
+   * round that was judged never loses its latest verdict to later rounds.
+   */
   gateLog?: GoalRolloutGateEvaluation[];
   /**
    * Node ids of the mass tasks the current round released, oldest wave first.

@@ -119,8 +119,15 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
     }
   })();
 
+  // A gate that visibly judged but left no record decided before verdicts were
+  // kept — say so, rather than presenting it as never judged.
+  const unrecorded = !latest && round.gate !== 'locked' && round.gate !== 'checking';
   // The latest verdict's checks, or — before any — the ones it will run.
-  const checks: GateCheckLike[] = latest ? verdictChecks(latest) : model.gateChecks;
+  const checks: GateCheckLike[] = latest
+    ? verdictChecks(latest)
+    : unrecorded
+      ? []
+      : model.gateChecks;
 
   const nodeLink = (nodeId: string) => {
     const view = graph.byId[nodeId];
@@ -163,14 +170,23 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
         extra={
           <Text className={styles.mono} fontSize={11} type={'secondary'}>
             {latest
-              ? t('goalBatch.gatePanel.checksAt', {
-                  index: evaluations.length,
-                  time: dayjs(latest.at).format('MM-DD HH:mm'),
-                })
-              : t('goalBatch.gatePanel.checksPlanned')}
+              ? latest.seq
+                ? t('goalBatch.gatePanel.checksAt', {
+                    index: latest.seq,
+                    time: dayjs(latest.at).format('MM-DD HH:mm'),
+                  })
+                : dayjs(latest.at).format('MM-DD HH:mm')
+              : unrecorded
+                ? undefined
+                : t('goalBatch.gatePanel.checksPlanned')}
           </Text>
         }
       >
+        {unrecorded && (
+          <Text fontSize={12} type={'secondary'}>
+            {t('goalBatch.gatePanel.history.unrecorded')}
+          </Text>
+        )}
         <Flexbox gap={0}>
           {checks.map((check, index) => {
             const { detail, label } = copy(check);
@@ -212,53 +228,56 @@ const GateDetail = memo<GateDetailProps>(({ graph, model, onOpenNode, round }) =
         </Flexbox>
       </Section>
 
-      <Section title={t('goalBatch.gatePanel.history')}>
-        {evaluations.length === 0 ? (
-          <Text fontSize={12} type={'secondary'}>
-            {t('goalBatch.gatePanel.history.empty')}
-          </Text>
-        ) : (
-          <Flexbox gap={6}>
-            {[...evaluations].reverse().map((evaluation) => {
-              const failed = verdictChecks(evaluation)
-                .filter((check) => !check.passed)
-                .map((check) => copy(check).label);
-              const text =
-                evaluation.outcome === 'released'
-                  ? t('goalBatch.gatePanel.history.released', {
-                      count: evaluation.releasedCount ?? 0,
-                      wave: evaluation.wave ?? evaluation.waveIndex,
-                    })
-                  : evaluation.trigger === 'unit'
-                    ? t('goalBatch.gatePanel.history.unit', {
-                        title: graph.byId[evaluation.nodeId ?? '']?.node.title ?? '',
+      {/* An unrecorded gate already said so under its checks. */}
+      {!unrecorded && (
+        <Section title={t('goalBatch.gatePanel.history')}>
+          {evaluations.length === 0 ? (
+            <Text fontSize={12} type={'secondary'}>
+              {t('goalBatch.gatePanel.history.empty')}
+            </Text>
+          ) : (
+            <Flexbox gap={6}>
+              {[...evaluations].reverse().map((evaluation) => {
+                const failed = verdictChecks(evaluation)
+                  .filter((check) => !check.passed)
+                  .map((check) => copy(check).label);
+                const text =
+                  evaluation.outcome === 'released'
+                    ? t('goalBatch.gatePanel.history.released', {
+                        count: evaluation.releasedCount ?? 0,
+                        wave: evaluation.wave ?? evaluation.waveIndex,
                       })
-                    : t('goalBatch.gatePanel.history.blocked', { checks: failed.join('；') });
-              const passed = evaluation.outcome === 'released';
-              return (
-                <Flexbox horizontal align={'baseline'} gap={10} key={evaluation.at}>
-                  <Text
-                    className={styles.mono}
-                    fontSize={12}
-                    style={{ flex: 'none' }}
-                    type={'secondary'}
-                  >
-                    {dayjs(evaluation.at).format('MM-DD HH:mm')}
-                  </Text>
-                  <Icon
-                    color={passed ? CELL_VISUAL.done.color : cssVar.colorError}
-                    icon={passed ? CircleCheck : CircleX}
-                    size={12}
-                  />
-                  <Text fontSize={12} style={{ flex: 1, minWidth: 0 }}>
-                    {text}
-                  </Text>
-                </Flexbox>
-              );
-            })}
-          </Flexbox>
-        )}
-      </Section>
+                    : evaluation.trigger === 'unit'
+                      ? t('goalBatch.gatePanel.history.unit', {
+                          title: graph.byId[evaluation.nodeId ?? '']?.node.title ?? '',
+                        })
+                      : t('goalBatch.gatePanel.history.blocked', { checks: failed.join('；') });
+                const passed = evaluation.outcome === 'released';
+                return (
+                  <Flexbox horizontal align={'baseline'} gap={10} key={evaluation.at}>
+                    <Text
+                      className={styles.mono}
+                      fontSize={12}
+                      style={{ flex: 'none' }}
+                      type={'secondary'}
+                    >
+                      {dayjs(evaluation.at).format('MM-DD HH:mm')}
+                    </Text>
+                    <Icon
+                      color={passed ? CELL_VISUAL.done.color : cssVar.colorError}
+                      icon={passed ? CircleCheck : CircleX}
+                      size={12}
+                    />
+                    <Text fontSize={12} style={{ flex: 1, minWidth: 0 }}>
+                      {text}
+                    </Text>
+                  </Flexbox>
+                );
+              })}
+            </Flexbox>
+          )}
+        </Section>
+      )}
     </Flexbox>
   );
 });

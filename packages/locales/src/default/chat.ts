@@ -62,6 +62,7 @@ export default {
   'goalBatch.gatePanel.history.blocked': 'Held: {{checks}}',
   'goalBatch.gatePanel.history.empty': 'No verdict yet',
   'goalBatch.gatePanel.history.released': 'Released wave {{wave}} ({{count}} units)',
+  'goalBatch.gatePanel.history.unrecorded': 'Judged before verdicts were recorded — no detail kept',
   'goalBatch.gatePanel.history.unit':
     '“{{title}}” failed its own check — the batch was held at once',
   'goalBatch.gatePanel.next.checking':

@@ -1,7 +1,7 @@
 import type { GoalGraphNode, GoalGraphSnapshot, GoalRolloutState } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { evaluateRolloutGate } from './rolloutGate';
+import { evaluateRolloutGate, GATE_LOG_PER_ROUND, withGateVerdict } from './rolloutGate';
 
 const node = (id: string, overrides: Partial<GoalGraphNode> = {}): GoalGraphNode =>
   ({
@@ -181,5 +181,29 @@ describe('evaluateRolloutGate', () => {
     });
     expect(result.met).toBe(false);
     expect(result.blockers.join(' ')).toContain('untested axes');
+  });
+});
+
+describe('withGateVerdict', () => {
+  const verdict = (revision: number) => ({
+    checks: [],
+    outcome: 'blocked' as const,
+    revision,
+    trigger: 'gate' as const,
+    waveIndex: 0,
+  });
+
+  it("keeps each round's latest verdicts, however busy a later round is", () => {
+    let next = withGateVerdict(state(), verdict(1));
+    for (let i = 0; i < GATE_LOG_PER_ROUND + 5; i++) next = withGateVerdict(next, verdict(2));
+    expect(next.gateLog!.filter((item) => item.revision === 1)).toHaveLength(1);
+    expect(next.gateLog!.filter((item) => item.revision === 2)).toHaveLength(GATE_LOG_PER_ROUND);
+  });
+
+  it('numbers verdicts within their round and keeps counting after older ones drop', () => {
+    let next = state();
+    for (let i = 0; i < GATE_LOG_PER_ROUND + 5; i++) next = withGateVerdict(next, verdict(1));
+    expect(next.gateLog!.at(-1)!.seq).toBe(GATE_LOG_PER_ROUND + 5);
+    expect(withGateVerdict(next, verdict(2)).gateLog!.at(-1)!.seq).toBe(1);
   });
 });

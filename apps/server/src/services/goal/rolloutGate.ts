@@ -2,6 +2,7 @@ import type {
   GoalGraphNode,
   GoalGraphSnapshot,
   GoalRolloutGateCheck,
+  GoalRolloutGateEvaluation,
   GoalRolloutPolicy,
   GoalRolloutState,
 } from '@lobechat/types';
@@ -161,4 +162,32 @@ export const evaluateRolloutGate = ({
     met: blockers.length === 0,
     provisional: blockers.length === 0 && state.waveIndex === 0,
   };
+};
+
+/**
+ * How many gate verdicts each round keeps. Per round, not overall: a busy later
+ * round must never push an earlier round's latest verdict out of the record.
+ */
+export const GATE_LOG_PER_ROUND = 10;
+
+/** Append one gate verdict to the batch's own record of them. */
+export const withGateVerdict = (
+  state: GoalRolloutState,
+  entry: Omit<GoalRolloutGateEvaluation, 'at' | 'seq'>,
+): GoalRolloutState => {
+  const log = state.gateLog ?? [];
+  // The round's latest verdict is always kept, so its ordinal continues from it.
+  const previous = log.findLast((item) => item.revision === entry.revision);
+  const seq = (previous?.seq ?? log.filter((item) => item.revision === entry.revision).length) + 1;
+  const appended = [...log, { ...entry, at: new Date().toISOString(), seq }];
+  const kept = new Map<number, number>();
+  const gateLog = appended
+    .toReversed()
+    .filter((item) => {
+      const count = kept.get(item.revision) ?? 0;
+      kept.set(item.revision, count + 1);
+      return count < GATE_LOG_PER_ROUND;
+    })
+    .toReversed();
+  return { ...state, gateLog };
 };

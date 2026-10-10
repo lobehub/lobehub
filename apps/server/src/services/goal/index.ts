@@ -29,7 +29,6 @@ import type {
   GoalNodeKind,
   GoalNodeStatus,
   GoalPauseReason,
-  GoalRolloutGateEvaluation,
   GoalRolloutState,
   GoalStatus,
   GoalTickResult,
@@ -100,7 +99,7 @@ import {
 import { isGoalReportNode, withoutGoalReport } from './report';
 import { GoalReportService } from './reportService';
 import { GoalReportStore } from './reportStore';
-import { evaluateRolloutGate, type RolloutGateResult } from './rolloutGate';
+import { evaluateRolloutGate, type RolloutGateResult, withGateVerdict } from './rolloutGate';
 import { scheduleGoalAdvance } from './scheduler';
 import { evaluateHomogeneity } from './spec';
 import { GoalSupervisorService } from './supervisor';
@@ -167,20 +166,6 @@ const normalizeRolloutRoster = (
   }
   return [...probeTitles, ...rest];
 };
-
-/** How many gate verdicts a batch keeps; older ones fall off the front. */
-const GATE_LOG_LIMIT = 30;
-
-/** Append one gate verdict to the batch's own record of them. */
-const withGateVerdict = (
-  state: GoalRolloutState,
-  entry: Omit<GoalRolloutGateEvaluation, 'at'>,
-): GoalRolloutState => ({
-  ...state,
-  gateLog: [...(state.gateLog ?? []), { ...entry, at: new Date().toISOString() }].slice(
-    -GATE_LOG_LIMIT,
-  ),
-});
 
 /**
  * Materialize one roster unit as a Task inside a batch. The brief is the shared
@@ -4031,13 +4016,15 @@ export class GoalService {
     }
 
     const message = `Batch gate passed; released wave ${state.waveIndex + 1} (${newIds.length} unit${newIds.length === 1 ? '' : 's'})`;
-    // A batch that predates the counter has no `gateLog` either, but its round's
-    // `waveIndex` already counts the waves it released — seed from the larger.
+    // A batch that predates the counter has no `gateLog` either, and a restart
+    // resets `waveIndex`; the roster position still says how many waves are out:
+    // everything released beyond the first canary went out a wave at a time.
     const waveNumber =
       (state.wavesReleased ??
         Math.max(
           state.waveIndex,
           (state.gateLog ?? []).filter((entry) => entry.outcome === 'released').length,
+          Math.ceil(Math.max(0, released - (policy.canarySize ?? 0)) / waveSize),
         )) + 1;
     const next: GoalRolloutState = withGateVerdict(
       {

@@ -2048,7 +2048,7 @@ describe('GoalService', () => {
     expect(after.nodes.filter((n) => n.kind === 'task')).toHaveLength(2);
   });
 
-  it('numbers a release after the waves a batch released before the counter existed', async () => {
+  it('numbers a release after the waves a batch released before the counter existed, across a restart', async () => {
     vi.spyOn(GoalCriteriaGeneratorService.prototype, 'decompose').mockResolvedValue({
       problemStatement: '把 50 个同构的 store 迁移到 replica',
       rollout: {
@@ -2072,19 +2072,22 @@ describe('GoalService', () => {
     const state = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
     for (const id of state.probeNodeIds)
       await graphModel.updateNodeStatus(graph.goal.id, id, 'resolved');
-    // A rollout from before this change: two waves out, no counter, no log.
+    // A rollout from before this change, restarted once: `waveIndex` reset to 0,
+    // no counter, no log — but 20 roster units beyond the first canary are out.
     await goalModel.updateRolloutState(graph.goal.id, {
       ...state,
       gateLog: undefined,
       phase: 'mass',
-      waveIndex: 2,
+      releasedCount: state.releasedCount! + 20,
+      waveIndex: 0,
       wavesReleased: undefined,
     });
 
     await service.tick(graph.goal.id);
     const next = (await service.graph(graph.goal.id)).goal.config!.rolloutState!;
-    expect(next.gateLog?.at(-1)).toMatchObject({ outcome: 'released', wave: 3 });
-    expect(next.wavesReleased).toBe(3);
+    // 20 units at the default wave size of 5 are four waves; this one is the fifth.
+    expect(next.gateLog?.at(-1)).toMatchObject({ outcome: 'released', wave: 5 });
+    expect(next.wavesReleased).toBe(5);
   });
 
   it('records each gate verdict — the release and the hold — with what it checked', async () => {
