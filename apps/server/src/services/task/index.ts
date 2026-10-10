@@ -44,6 +44,7 @@ import { TaskRunnerService } from '../taskRunner';
 import { createTaskSchedulerModule } from '../taskScheduler';
 import { resolveTaskAcceptance } from '../verify/taskAcceptance';
 import { collapseActivityLog } from './collapseActivityLog';
+import { resolveMissingTaskModelConfig } from './modelSnapshot';
 
 const emptyWorkspace: WorkspaceData = { nodeMap: {}, tree: [] };
 const UNTITLED_TOPIC_TITLE = 'Untitled';
@@ -182,7 +183,16 @@ export class TaskService {
     if (input.assigneeAgentId) {
       const agentInfo = await this.agentModel.getAgentSnapshotForTaskCreate(input.assigneeAgentId);
       if (agentInfo) {
-        if (agentInfo.snapshot) createData.config = { ...agentInfo.snapshot, ...createData.config };
+        if (agentInfo.snapshot) {
+          createData.config = {
+            ...createData.config,
+            ...resolveMissingTaskModelConfig(
+              createData.config,
+              agentInfo.snapshot,
+              agentInfo.modelOverrideProvider,
+            ),
+          };
+        }
         agentVisibility = agentInfo.visibility;
       }
     }

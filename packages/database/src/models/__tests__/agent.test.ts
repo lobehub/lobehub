@@ -360,6 +360,57 @@ describe('AgentModel', () => {
   });
 
   describe('getAgentSnapshotForTaskCreate', () => {
+    it('reports the native model provider without changing the Agent snapshot', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'subscription', type: 'codex' } },
+        id: 'native-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      expect(await agentModel.getAgentSnapshotForTaskCreate('native-task-snapshot')).toMatchObject({
+        modelOverrideProvider: 'codex',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    /** @example A Task snapshot exposes its personal binding without rewriting runtime identity. */
+    it('reports the API binding provider for model-only Task creation', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: {
+          heterogeneousProvider: {
+            authMode: 'api',
+            type: 'codex',
+            apiConfig: { model: 'gpt-5.4', providerId: 'personal-provider' },
+          },
+        },
+        id: 'api-bound-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      /** @example Provider inference and inherited runtime snapshots remain distinct. */
+      expect(
+        await agentModel.getAgentSnapshotForTaskCreate('api-bound-task-snapshot'),
+      ).toMatchObject({
+        modelOverrideProvider: 'personal-provider',
+        snapshot: { model: 'codex', provider: 'openai' },
+      });
+    });
+
+    it('does not substitute the native provider for API authentication', async () => {
+      await serverDB.insert(agents).values({
+        agencyConfig: { heterogeneousProvider: { authMode: 'api', type: 'codex' } },
+        id: 'api-task-snapshot',
+        model: 'codex',
+        provider: 'openai',
+        userId,
+      });
+      expect(await agentModel.getAgentSnapshotForTaskCreate('api-task-snapshot')).toMatchObject({
+        modelOverrideProvider: null,
+      });
+    });
+
     it('returns model/provider snapshot + visibility in one call', async () => {
       const agentId = 'snap-task-create-1';
       await serverDB.insert(agents).values({

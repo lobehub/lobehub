@@ -339,6 +339,65 @@ export const resolveHeterogeneousProviderTopicModel = (
   return model ? { model, provider: config.type } : undefined;
 };
 
+/**
+ * Resolves the provider for an explicit model-only Task override.
+ *
+ * Use when:
+ * - Creating a Task or filling missing fields on an older Task.
+ *
+ * Expects:
+ * - The assignee's current heterogeneous runtime configuration.
+ *
+ * Returns:
+ * - The runtime provider for subscription/local auth, or the personal API binding ID.
+ * - Null when API auth has no Topic-compatible binding; do not infer a wrapper provider.
+ * - Undefined for a regular Agent, which uses its model/provider snapshot.
+ *
+ * The previous native-only lookup deliberately omitted API auth. Task callers
+ * also need the API binding identity so model-only input cannot become codex/openai.
+ */
+export const getHeterogeneousTaskModelProvider = (
+  config: HeterogeneousProviderConfig | null | undefined,
+): string | null | undefined => {
+  if (!config) return undefined;
+  if (config.authMode !== 'api') return config.type;
+  return resolveHeterogeneousProviderTopicModel(config)?.provider || null;
+};
+
+/**
+ * Narrows a per-run model override (a Task's `model`/`provider`) to one the
+ * external runtime can execute.
+ *
+ * Use when:
+ * - Applying a Task override to a heterogeneous Agent before dispatch or display.
+ *
+ * Expects:
+ * - The Agent's heterogeneous provider and the raw override pair.
+ *
+ * Returns:
+ * - The pair to apply: the runtime's own provider under subscription/local auth,
+ *   or the Agent's current personal API binding under API auth.
+ * - Undefined for anything else. Agent rows keep a wrapper `model`/`provider`
+ *   (a runtime ID such as `codex/openai`, or an ordinary chat model from an
+ *   earlier configuration). Neither names a CLI model, so it must not become
+ *   `--model` or replace an API binding.
+ */
+export const resolveHeterogeneousModelOverride = (
+  config: HeterogeneousProviderConfig,
+  override: { model?: string | null; provider?: string | null },
+): HeterogeneousTopicModel | undefined => {
+  const model = override.model?.trim();
+  if (!model || HETEROGENEOUS_AGENT_TYPES.has(model)) return undefined;
+  const provider = override.provider || undefined;
+
+  if (config.authMode === 'api') {
+    const binding = resolveHeterogeneousProviderTopicModel(config);
+    return binding && provider === binding.provider ? { model, provider } : undefined;
+  }
+
+  return !provider || provider === config.type ? { model, provider: config.type } : undefined;
+};
+
 const applyTopicModelPin = (
   config: HeterogeneousProviderConfig,
   topicModel: HeterogeneousTopicPin | undefined,

@@ -884,6 +884,7 @@ describe('GatewayActionImpl', () => {
       const onOperationCancel = vi.fn();
       const replaceMessages = vi.fn();
       const refreshTopic = vi.fn().mockResolvedValue(undefined);
+      const refreshTopicDetail = vi.fn().mockResolvedValue(undefined);
       const startOperation = vi.fn(() => ({ operationId: 'gw-op-1' }));
       const switchTopic = vi.fn();
       const updateTopicStatus = vi.fn();
@@ -906,6 +907,7 @@ describe('GatewayActionImpl', () => {
         onOperationCancel,
         replaceMessages,
         refreshTopic,
+        refreshTopicDetail,
         startOperation,
         switchTopic,
         updateTopicStatus,
@@ -936,6 +938,7 @@ describe('GatewayActionImpl', () => {
         onOperationCancel,
         replaceMessages,
         refreshTopic,
+        refreshTopicDetail,
         set,
         startOperation,
         state,
@@ -984,6 +987,44 @@ describe('GatewayActionImpl', () => {
       expect(onTopicCreated).toHaveBeenCalledWith('target-topic');
       expect(onTopicCreated).toHaveBeenCalledTimes(1);
       expect(switchTopic).not.toHaveBeenCalled();
+      expect(connectToGateway).toHaveBeenCalled();
+    });
+
+    it('refreshes the Topic detail key after heterogeneous follow-up dispatch', async () => {
+      const { action, state, connectToGateway, refreshTopicDetail } = createExecuteTestAction();
+      state.topicDetailMap = {
+        'target-topic': {
+          id: 'target-topic',
+          metadata: {
+            heteroRuntimeConfig: { fields: [], operationId: 'old-operation' },
+          },
+        },
+      };
+      vi.mocked(aiAgentService.execAgentTask).mockResolvedValue({
+        agentId: 'target-agent',
+        assistantMessageId: 'assistant-1',
+        autoStarted: true,
+        createdAt: new Date().toISOString(),
+        heteroType: 'codex',
+        message: 'ok',
+        operationId: 'new-operation',
+        status: 'created',
+        success: true,
+        timestamp: new Date().toISOString(),
+        token: 'token',
+        topicId: 'target-topic',
+        userMessageId: 'user-1',
+      });
+      await action.executeGatewayAgent({
+        context: {
+          agentId: 'target-agent',
+          isolatedTopic: true,
+          scope: 'main',
+          topicId: 'target-topic',
+        },
+        message: 'Continue after changing Agent speed',
+      });
+      expect(refreshTopicDetail).toHaveBeenCalledWith('target-topic');
       expect(connectToGateway).toHaveBeenCalled();
     });
 
@@ -2853,6 +2894,7 @@ describe('GatewayActionImpl', () => {
           moveQueuedMessages: vi.fn(),
           moveVoiceMessages: vi.fn(),
           onOperationCancel: vi.fn(),
+          refreshTopicDetail: vi.fn().mockResolvedValue(undefined),
           startOperation,
           updateTopicStatus: vi.fn(),
         })) as any;

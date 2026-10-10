@@ -1794,6 +1794,11 @@ export class ChatTopicActionImpl {
     ]);
   };
 
+  /** Revalidate one topic's by-id detail, e.g. after a dispatch wrote a new receipt. */
+  refreshTopicDetail = async (topicId: string): Promise<void> => {
+    await this.#topicDetail.revalidate(topicId);
+  };
+
   internal_replaceTopicId = (params: {
     agentId?: string;
     groupId?: string;

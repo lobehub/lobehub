@@ -2,7 +2,12 @@ import { resolveSubAgentChatConfig } from '@lobechat/const';
 import type { LobeChatDatabase } from '@lobechat/database';
 import { type AgentConfigSnapshot, resolveAgentConfig } from '@lobechat/mecha';
 import type { AgentModelOverride, LobeAgentAgencyConfig, MessageMapScope } from '@lobechat/types';
-import { getDisabledPluginIds, resolveAgentAgencyConfig } from '@lobechat/types';
+import {
+  applyTopicModelToHeterogeneousProvider,
+  getDisabledPluginIds,
+  resolveAgentAgencyConfig,
+  resolveHeterogeneousModelOverride,
+} from '@lobechat/types';
 import debug from 'debug';
 
 import { UserModel } from '@/database/models/user';
@@ -239,6 +244,29 @@ export const resolveRunAgentConfig = async (
     chatConfig: resolved.chatConfig,
     plugins: resolved.plugins,
   });
+
+  // Task overrides must reach the external runtime before topic snapshotting.
+  // Updating only agentConfig.model leaves the CLI using the assignee's model.
+  // An Agent-row wrapper snapshot (a runtime ID such as `codex/openai`, or an
+  // ordinary chat model) is not a CLI model; applying it would force `--model`
+  // or rewrite an API binding, so only a runtime-compatible pair applies.
+  const heterogeneousProvider = agentConfig.agencyConfig?.heterogeneousProvider;
+  const heterogeneousModelOverride =
+    heterogeneousProvider && modelOverride
+      ? resolveHeterogeneousModelOverride(heterogeneousProvider, {
+          model: modelOverride,
+          provider: providerOverride,
+        })
+      : undefined;
+  if (heterogeneousProvider && heterogeneousModelOverride) {
+    agentConfig.agencyConfig = {
+      ...agentConfig.agencyConfig,
+      heterogeneousProvider: applyTopicModelToHeterogeneousProvider(
+        heterogeneousProvider,
+        heterogeneousModelOverride,
+      ),
+    };
+  }
 
   // --- per-call intents the shared rules do not know ---
   // callSubAgent thinking / reasoning-effort overrides. A virtual sub-agent

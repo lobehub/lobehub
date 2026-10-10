@@ -8,10 +8,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 
-import TopicChatDrawer from './index';
+import TopicChatDrawer, { TopicChatDrawerBody } from './index';
 
 const mocks = vi.hoisted(() => ({
   agentState: {
+    agentMap: {},
     useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
@@ -24,6 +25,10 @@ const mocks = vi.hoisted(() => ({
     portalStack: [] as { artifact?: { id: string }; taskId?: string; type: string }[],
     replaceMessages: vi.fn(),
     showPortal: false,
+    topicDataMap: {},
+    topicDetailMap: {},
+    revalidateTopicDetail: vi.fn().mockResolvedValue(undefined),
+    useFetchTopicDetail: vi.fn(),
   },
   permission: {
     allowed: true,
@@ -269,6 +274,11 @@ describe('TopicChatDrawer', () => {
   beforeEach(() => {
     mocks.agentState.useHydrateAgentConfig.mockClear();
     mocks.chatState.replaceMessages.mockClear();
+    mocks.chatState.revalidateTopicDetail.mockClear();
+    mocks.chatState.useFetchTopicDetail.mockReset();
+    mocks.chatState.useFetchTopicDetail.mockReturnValue({
+      revalidate: mocks.chatState.revalidateTopicDetail,
+    });
     mocks.chatState.portalStack = [];
     mocks.chatState.showPortal = false;
     mocks.chatState.closeArtifact.mockClear();
@@ -321,10 +331,66 @@ describe('TopicChatDrawer', () => {
     );
   });
 
+  /** @example A completed same-Topic continuation still refreshes the receipt. */
+  it('passes completed operation changes from Task activity into the run inspector', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0].operationId = 'op-first';
+    const { rerender } = render(
+      <TopicChatDrawerBody agentId={'agt_assignee'} topicId={'topic-1'} />,
+    );
+    /** @example The mount itself loads through the by-id SWR entry. */
+    expect(mocks.chatState.revalidateTopicDetail).not.toHaveBeenCalled();
+    mocks.taskState.taskDetailMap['T-1'].activities[0].operationId = 'op-completed';
+    // The memoized body re-renders when its store subscription changes; a prop
+    // change stands in for that subscription here.
+    rerender(
+      <TopicChatDrawerBody disableInputCollapse agentId={'agt_assignee'} topicId={'topic-1'} />,
+    );
+    /** @example No running marker is required to invalidate an older cached receipt. */
+    expect(mocks.chatState.revalidateTopicDetail).toHaveBeenCalledTimes(1);
+  });
+
+  /** @example Embedded Topic B never reconnects against active drawer Topic A. */
+  it('keeps embedded operation context separate from an unrelated active drawer', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0].runningOperation = {
+      assistantMessageId: 'ast-1',
+      heteroType: 'codex',
+      operationId: 'op-drawer',
+    };
+    const { rerender } = render(
+      <TopicChatDrawerBody agentId={'embedded-agent'} topicId={'topic-2'} />,
+    );
+    /** @example An unrelated active drawer supplies no fallback operation. */
+    expect(useGatewayReconnect).toHaveBeenLastCalledWith('topic-2', undefined, 'embedded-agent');
+    /** @example No unrelated operation triggers a receipt refresh for Topic B. */
+    expect(mocks.chatState.revalidateTopicDetail).not.toHaveBeenCalled();
+    const runningOperation = {
+      assistantMessageId: 'ast-2',
+      heteroType: 'codex',
+      operationId: 'op-embedded',
+    };
+    rerender(
+      <TopicChatDrawerBody
+        agentId={'embedded-agent'}
+        runningOperation={runningOperation}
+        topicId={'topic-2'}
+      />,
+    );
+    /** @example An explicit embedded run owns both streaming and receipt context. */
+    expect(useGatewayReconnect).toHaveBeenLastCalledWith(
+      'topic-2',
+      runningOperation,
+      'embedded-agent',
+    );
+    /** @example The embedded run refreshes its own Topic's receipt. */
+    expect(mocks.chatState.revalidateTopicDetail).toHaveBeenCalledTimes(1);
+    expect(mocks.chatState.useFetchTopicDetail).toHaveBeenLastCalledWith('topic-2');
+  });
+
   it('hydrates the task assignee agent config for drawer messages', () => {
     render(<TopicChatDrawer />);
 
     expect(mocks.agentState.useHydrateAgentConfig).toHaveBeenCalledWith(true, 'agt_assignee');
+    expect(mocks.chatState.useFetchTopicDetail).toHaveBeenCalledWith('topic-1');
   });
 
   it('keeps the floating drawer reply input collapsed by default', () => {
