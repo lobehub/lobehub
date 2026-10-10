@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} instances",
   "environments.instances.create": "Nouvelle instance",
   "environments.instances.createFailed": "Impossible de créer l'instance",
+  "environments.instances.defaultUndeletable": "Ceci est la copie par défaut de l'environnement et ne peut pas être supprimée seule — reconstruisez-la ou supprimez l'environnement",
   "environments.instances.desc": "Une instance est une copie de travail de cet environnement, avec son propre dossier et ses propres packages installés. Les conversations s'exécutent à l'intérieur d'une instance, et plusieurs peuvent s'exécuter côte à côte sans interférer.",
   "environments.instances.directoryHint": "Chemin du dossier. Ne peut pas être modifié une fois créé.",
   "environments.instances.directoryLabel": "Répertoire",

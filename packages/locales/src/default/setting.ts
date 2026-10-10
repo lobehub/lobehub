@@ -4136,6 +4136,10 @@ When I am ___, I need ___
     'Could not read which instances are running right now',
   'environments.instances.inUse':
     'A conversation is using this instance — try again once that run ends',
+  // The default copy is what the environment is, so it goes with the
+  // environment; a broken one is rebuilt, not deleted on its own.
+  'environments.instances.defaultUndeletable':
+    "This is the environment's default copy and can't be deleted on its own — rebuild it, or delete the environment",
   'environments.instances.runningHint':
     'A run is still using this instance — a conversation, a build, or the file browser. It is released on its own roughly 15 minutes after that run goes quiet; Run history shows which one is holding it.',
   'environments.instances.runningHintStoppable':

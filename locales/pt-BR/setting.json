@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} instâncias",
   "environments.instances.create": "Nova instância",
   "environments.instances.createFailed": "Não foi possível criar a instância",
+  "environments.instances.defaultUndeletable": "Esta é a cópia padrão do ambiente e não pode ser excluída por conta própria — reconstrua-a ou exclua o ambiente",
   "environments.instances.desc": "Uma instância é uma cópia de trabalho deste ambiente, com sua própria pasta e seus próprios pacotes instalados. Conversas são executadas dentro de uma instância, e várias podem ser executadas lado a lado sem interferir umas nas outras.",
   "environments.instances.directoryHint": "Caminho da pasta. Não pode ser alterado após a criação.",
   "environments.instances.directoryLabel": "Diretório",

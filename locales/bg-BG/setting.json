@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} инстанции",
   "environments.instances.create": "Нова инстанция",
   "environments.instances.createFailed": "Не може да се създаде инстанцията",
+  "environments.instances.defaultUndeletable": "Това е основното копие на средата и не може да бъде изтрито самостоятелно — възстановете го или изтрийте средата",
   "environments.instances.desc": "Инстанцията е работно копие на тази среда, със собствена папка и собствени инсталирани пакети. Разговорите се изпълняват вътре в инстанция, и няколко могат да се изпълняват едновременно, без да се засягат един друг.",
   "environments.instances.directoryHint": "Път на папката. Не може да бъде променен след създаването.",
   "environments.instances.directoryLabel": "Директория",

@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} 个实例",
   "environments.instances.create": "创建实例",
   "environments.instances.createFailed": "实例没能创建",
+  "environments.instances.defaultUndeletable": "这是环境的默认副本，不能单独删除。出问题时请重新构建，或直接删除环境",
   "environments.instances.desc": "实例是这个环境的一份可运行副本，有自己的目录和装好的依赖。对话在实例里运行，多个实例可以并行而互不影响。",
   "environments.instances.directoryHint": "文件夹目录，创建后不可修改",
   "environments.instances.directoryLabel": "目录",

@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} instanties",
   "environments.instances.create": "Nieuwe instantie",
   "environments.instances.createFailed": "Kon de instantie niet maken",
+  "environments.instances.defaultUndeletable": "Dit is de standaardkopie van de omgeving en kan niet zelfstandig worden verwijderd — bouw het opnieuw op of verwijder de omgeving",
   "environments.instances.desc": "Een instantie is een werkende kopie van deze omgeving, met zijn eigen map en zijn eigen geïnstalleerde pakketten. Gesprekken worden uitgevoerd binnen een instantie, en meerdere kunnen naast elkaar worden uitgevoerd zonder elkaar te beïnvloeden.",
   "environments.instances.directoryHint": "Map pad. Kan niet worden gewijzigd zodra gemaakt.",
   "environments.instances.directoryLabel": "Map",

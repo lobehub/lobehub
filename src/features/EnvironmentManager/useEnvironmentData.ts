@@ -350,6 +350,9 @@ export const useEnvironmentActions = () => {
         // nothing in it to report a size for.
         inUse: false,
         inUseByThisTopic: false,
+        // A copy added beside the default — an environment's first instance
+        // arrives with `createEnvironment`. The refreshed list is authoritative.
+        isDefault: false,
         name: created.name,
         snapshot: null,
         status: 'pending',

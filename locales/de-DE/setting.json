@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} Instanzen",
   "environments.instances.create": "Neue Instanz",
   "environments.instances.createFailed": "Die Instanz konnte nicht erstellt werden",
+  "environments.instances.defaultUndeletable": "Dies ist die Standardkopie der Umgebung und kann nicht eigenständig gelöscht werden — bauen Sie sie neu auf oder löschen Sie die Umgebung.",
   "environments.instances.desc": "Eine Instanz ist eine Arbeitskopie dieser Umgebung mit eigenem Ordner und eigenen installierten Paketen. Gespräche laufen innerhalb einer Instanz, und mehrere können nebeneinander laufen, ohne sich gegenseitig zu beeinflussen.",
   "environments.instances.directoryHint": "Ordnerpfad. Kann nach der Erstellung nicht mehr geändert werden.",
   "environments.instances.directoryLabel": "Verzeichnis",

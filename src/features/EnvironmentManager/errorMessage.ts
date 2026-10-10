@@ -12,6 +12,7 @@ import { isMachineErrorMessage } from '@/utils/machineErrorMessage';
  * sentence — falls back to the caller's generic line.
  */
 const CODE_KEYS: Record<string, string> = {
+  DEFAULT_INSTANCE: 'environments.instances.defaultUndeletable',
   ENVIRONMENT_HAS_INSTANCES: 'environments.hasInstances',
   // The execution plane calls this an instance now too. The old
   // code is kept until that rename is deployed everywhere, so a refusal from a
