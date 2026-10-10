@@ -27,7 +27,7 @@ import { TrashEmptyScopeChangedError } from '@/store/trash/action';
 import { useUserStore } from '@/store/user';
 import { labPreferSelectors } from '@/store/user/selectors';
 
-import ProjectFilter from './ProjectFilter';
+import { ProjectFilter } from './ProjectFilter';
 import {
   canEmptyTrashView,
   isProjectRefusedError,

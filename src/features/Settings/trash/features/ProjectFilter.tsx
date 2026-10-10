@@ -30,7 +30,7 @@ interface ProjectFilterProps {
   value: TrashProjectFilter;
 }
 
-const ProjectFilter = ({
+export const ProjectFilter = ({
   error,
   isValidating,
   onChange,
@@ -118,5 +118,3 @@ const ProjectFilter = ({
     </Flexbox>
   );
 };
-
-export default ProjectFilter;
