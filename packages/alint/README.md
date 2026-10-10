@@ -59,9 +59,7 @@ To add a package-level rule: register the directory as a plugin in the rule's `[
 ## Removal review rules
 
 The copy rule comes from the owner's review of task-prefix removal in
-[#20687](https://github.com/lobehub/lobehub/pull/20687). Its original review quotes
-are preserved in the rule, including
-“没必要去新增这种「默认行为就该这样，只是移除了自定义」的东西”.
+[#20687](https://github.com/lobehub/lobehub/pull/20687).
 
 The test-value rules already added by
 [#20672](https://github.com/lobehub/lobehub/pull/20672) are reused unchanged:
@@ -98,7 +96,7 @@ patterns are automated. The new copy rule starts at `warn`; fixture calibration 
 from the real-PR evidence required for promotion. This change is lint tooling and
 does not change product behavior, so product acceptance is not required.
 
-Local calibration (2026-10-10, Codex ACP / `gpt-5.5`): all 11 new fixtures passed
+Initial calibration (2026-10-10, Codex ACP / `gpt-5.5`): all 11 new fixtures passed
 in a cold run of the full 185-fixture suite. All 28 sampled real files completed
 without findings; one ACP timeout was retried successfully. The sample had no
 positive findings, so precision is not measurable. The full suite passed 181/185:
@@ -108,6 +106,9 @@ These legacy rules and fixtures were left unchanged. This calibration does not
 establish equivalent accuracy on the CI provider or justify promotion to `error`.
 ACP reported zero token usage, which means accounting was unavailable, not that
 the model run was free. Local provider setup and raw runs remain gitignored.
+
+After shortening the instruction, fresh cold runs passed all 11 fixtures and
+completed all 28 real sample files without findings, failures or cache hits.
 
 ## Security rules
 
