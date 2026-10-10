@@ -1,0 +1,27 @@
+name: T727 scratch verify
+
+on:
+  push:
+    branches:
+      - ci/t727-verify
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: root type-check and eval testCase unit test
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: e691850bdbe23dc7783e0b3b40fc67eabb74db1f
+      - name: Setup environment
+        uses: ./.github/actions/setup-env
+      - name: Install deps
+        run: pnpm i
+      - name: Type check (root, bun --check)
+        run: bun run type-check
+      - name: Unit test - eval testCase slice
+        run: bunx vitest run --project app src/store/eval/slices/testCase/action.test.ts
