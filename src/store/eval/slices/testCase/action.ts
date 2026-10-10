@@ -5,8 +5,8 @@ import { type StoreSetter } from '@/store/types';
 import { setNamespace } from '@/utils/storeDebug';
 
 import {
-  testCaseDetailResource,
   type TestCaseDetail,
+  testCaseDetailResource,
   type TestCaseListItem,
   testCaseListResource,
   type TestCaseListValue,
@@ -39,13 +39,11 @@ export const createTestCaseSlice = (set: Setter, get: () => EvalStore, _api?: un
 
 export class TestCaseActionImpl {
   readonly #get: () => EvalStore;
-  readonly #set: Setter;
   readonly #detail;
   readonly #list;
 
   constructor(set: Setter, get: () => EvalStore, _api?: unknown) {
     void _api;
-    this.#set = set;
     this.#get = get;
 
     // Two local-first resources over the test-case entity, each owning ONE store

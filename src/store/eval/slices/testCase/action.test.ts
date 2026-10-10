@@ -21,11 +21,7 @@ import { useEvalStore } from '@/store/eval';
 import { testCaseSelectors } from '@/store/eval/slices/testCase/selectors';
 
 import { testCaseInitialState } from './initialState';
-import {
-  type TestCaseListItem,
-  testCaseDetailResource,
-  testCaseListResource,
-} from './projection';
+import { testCaseDetailResource, testCaseListResource } from './projection';
 
 vi.mock('@/services/agentEval', () => ({
   agentEvalService: {
@@ -53,7 +49,7 @@ const DATASET = 'dataset-1';
 const CASE = 'case-1';
 const PAGE = { datasetId: DATASET, limit: 10, offset: 0 };
 
-const testCase = (id: string, extra: Record<string, unknown> = {}) =>
+const testCase = (id: string, extra: Record<string, unknown> = {}): any =>
   ({
     content: { input: `input-${id}` },
     datasetId: DATASET,
@@ -63,9 +59,9 @@ const testCase = (id: string, extra: Record<string, unknown> = {}) =>
     metadata: {},
     sortOrder: 1,
     ...extra,
-  }) as unknown as TestCaseListItem;
+  });
 
-const okList = (data: TestCaseListItem[]) => ({ data, total: data.length }) as any;
+const okList = (data: any[]) => ({ data, total: data.length }) as any;
 
 /** Never-resolving fetch: the first frame can only come from storage. */
 const pending = () => new Promise<never>(() => {});
