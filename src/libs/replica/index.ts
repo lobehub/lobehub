@@ -28,10 +28,21 @@ import { getCacheScope, isScopeTrusted, useCacheScope } from '@/libs/swr/useCach
  * fetch through the app's SWR hook (workspace-augmented keys, retry policy).
  */
 
+/**
+ * The scope hook, wrapped so `cacheScope` does not *read* it while this module
+ * body runs. `@/libs/swr/useCacheScope` imports `@/store/user`, and a user-store
+ * slice imports this module — so when `useCacheScope` is the entry of that
+ * cycle this module's body executes before `useCacheScope`'s exports are
+ * initialized. Referencing them here directly would bake `undefined` into the
+ * scope (a resource would then have no `scope.get`); resolving at call time is
+ * equivalent because they are stateless delegating functions.
+ */
+const useCacheScopeLazy = (): string => useCacheScope();
+
 export const cacheScope: ReplicaScope = {
-  canPersist: isScopeTrusted,
-  get: getCacheScope,
-  use: useCacheScope,
+  canPersist: () => isScopeTrusted(),
+  get: () => getCacheScope(),
+  use: useCacheScopeLazy,
 };
 
 export type ReplicaStorageKind = 'indexedDB' | 'localStorage' | 'memory';
