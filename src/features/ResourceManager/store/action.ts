@@ -4,6 +4,7 @@ import type { StateCreator } from 'zustand/vanilla';
 import type { ResourceManagerMode } from '@/features/ResourceManager';
 import {
   createReplicaSlice,
+  readReplicaStoredKeys,
   recordLens,
   type ReplicaPageResult,
   type ReplicaSyncResult,
@@ -106,6 +107,12 @@ const explorerSearchLens = recordLens<Store, ExplorerSearchValue>('explorerSearc
 /** Where the library sidebar search views live — one entry per (library, keyword). */
 const hierarchySearchLens = recordLens<Store, HierarchySearchValue>('hierarchySearchEntries');
 
+/**
+ * Either search surface. Both key their persisted rows by the entry key alone
+ * (neither sets a replica `query`), so the stored index holds entry keys.
+ */
+type SearchReplicaResource = typeof explorerSearchResource | typeof hierarchySearchResource;
+
 export class ResourceManagerStoreActionImpl {
   readonly #get: () => Store;
   readonly #set: Setter;
@@ -114,6 +121,10 @@ export class ResourceManagerStoreActionImpl {
   /** Query entry keys each surface has used, oldest first (see `#trackRecentSearch`). */
   readonly #recentExplorerSearches: string[] = [];
   readonly #recentHierarchySearches: string[] = [];
+  /** Identity each recency list currently belongs to (see `#seedRecentSearches`). */
+  readonly #recentSearchScope = new WeakMap<string[], string>();
+  /** Recency lists whose persisted keys are already folded in. */
+  readonly #seededRecentSearches = new WeakSet<string[]>();
 
   constructor(set: Setter, get: () => Store, _api?: unknown) {
     void _api;
@@ -144,15 +155,45 @@ export class ResourceManagerStoreActionImpl {
   }
 
   /**
-   * Remember a query the user is looking at, and drop the oldest ones past
-   * {@link MAX_RECENT_SEARCHES}. Dropping removes the replica entry (memory)
-   * *and* its persisted projection, so both stay bounded no matter how many
-   * keywords are tried. Called from a layout effect, never during render.
+   * Fold the keys an earlier session persisted into a surface's recency list,
+   * once per list per scope.
+   *
+   * {@link MAX_RECENT_SEARCHES} only bounds what the list knows about, and a
+   * list that starts empty on every page load bounds nothing across reloads:
+   * each session would persist up to the cap again while the rows of every
+   * session before it stayed in IndexedDB. Seeding the list from the persisted
+   * index makes the window — and with it what eviction drops — span sessions.
    */
-  #trackRecentSearch = (recents: string[], key: string, drop: (key: string) => void) => {
-    const existing = recents.indexOf(key);
-    if (existing !== -1) recents.splice(existing, 1);
-    recents.push(key);
+  #seedRecentSearches = (
+    recents: string[],
+    resource: SearchReplicaResource,
+    drop: (key: string) => void,
+  ): void => {
+    const scope = resource.scope.get();
+    if (this.#recentSearchScope.get(recents) !== scope) {
+      // Another identity owns the partition: the keys this list learned stood
+      // for the previous scope's rows, so start the window over for this one.
+      recents.length = 0;
+      this.#recentSearchScope.set(recents, scope);
+      this.#seededRecentSearches.delete(recents);
+    }
+    if (this.#seededRecentSearches.has(recents)) return;
+    this.#seededRecentSearches.add(recents);
+
+    void readReplicaStoredKeys(resource).then((persisted) => {
+      // A scope switch while the index was read voids this seed.
+      if (this.#recentSearchScope.get(recents) !== scope) return;
+      // The index is append-ordered (oldest first); prepending keeps that order,
+      // so eviction — which takes from the front — drops the least recently used
+      // persisted query first.
+      for (const persistedKey of [...persisted].reverse()) {
+        if (!recents.includes(persistedKey)) recents.unshift(persistedKey);
+      }
+      this.#evictOldestSearches(recents, drop);
+    });
+  };
+
+  #evictOldestSearches = (recents: string[], drop: (key: string) => void): void => {
     while (recents.length > MAX_RECENT_SEARCHES) {
       const oldest = recents.shift();
       if (oldest) drop(oldest);
@@ -160,17 +201,45 @@ export class ResourceManagerStoreActionImpl {
   };
 
   /**
-   * Invalidate the loaded depth of every cached sidebar search.
+   * Remember a query the user is looking at, and drop the oldest ones past
+   * {@link MAX_RECENT_SEARCHES}. Dropping removes the replica entry (memory)
+   * *and* its persisted projection, so both stay bounded no matter how many
+   * keywords are tried. Called from a layout effect, never during render.
+   */
+  #trackRecentSearch = (
+    recents: string[],
+    key: string,
+    drop: (key: string) => void,
+    resource: SearchReplicaResource,
+  ): void => {
+    this.#seedRecentSearches(recents, resource, drop);
+    const existing = recents.indexOf(key);
+    if (existing !== -1) recents.splice(existing, 1);
+    recents.push(key);
+    this.#evictOldestSearches(recents, drop);
+  };
+
+  /**
+   * Invalidate every cached sidebar search.
    *
    * A rename / move / delete in the tree can touch a row the sidebar search
    * loaded beyond its head page. Revalidating only re-runs the head request and
    * the replica keeps the rows the user already scrolled to, so a stale hit
    * would linger in that tail; dropping the loaded pages first means the head
    * that comes back is the only thing left to show.
+   *
+   * A query an earlier session persisted is in neither memory nor the SWR
+   * cache, so neither the collapse loop nor `revalidateReplica` reaches it, and
+   * a revisit would paint the pre-mutation hit until the network answered.
+   * Dropping its stored row extends the same guarantee to it: the next visit
+   * has nothing stale to hydrate.
    */
-  collapseHierarchySearch = (): void => {
-    for (const key of Object.keys(this.#get().hierarchySearchEntries)) {
-      this.#hierarchySearch.collapse(key);
+  collapseHierarchySearch = async (): Promise<void> => {
+    const loaded = new Set(Object.keys(this.#get().hierarchySearchEntries));
+    for (const key of loaded) this.#hierarchySearch.collapse(key);
+    const persisted = await readReplicaStoredKeys(hierarchySearchResource);
+    for (const key of persisted) {
+      if (!loaded.has(key)) this.#hierarchySearch.remove(key);
     }
   };
 
@@ -454,8 +523,11 @@ export class ResourceManagerStoreActionImpl {
     const key = params ? explorerSearchResource.key(params) : undefined;
     useLayoutEffect(() => {
       if (key) {
-        this.#trackRecentSearch(this.#recentExplorerSearches, key, (stale) =>
-          this.#explorerSearch.remove(stale),
+        this.#trackRecentSearch(
+          this.#recentExplorerSearches,
+          key,
+          (stale) => this.#explorerSearch.remove(stale),
+          explorerSearchResource,
         );
       }
     }, [key]);
@@ -471,8 +543,11 @@ export class ResourceManagerStoreActionImpl {
     const key = params ? hierarchySearchResource.key(params) : undefined;
     useLayoutEffect(() => {
       if (key) {
-        this.#trackRecentSearch(this.#recentHierarchySearches, key, (stale) =>
-          this.#hierarchySearch.remove(stale),
+        this.#trackRecentSearch(
+          this.#recentHierarchySearches,
+          key,
+          (stale) => this.#hierarchySearch.remove(stale),
+          hierarchySearchResource,
         );
       }
     }, [key]);

@@ -15,7 +15,7 @@ import { createElement, useEffect } from 'react';
 import { SWRConfig, useSWRConfig } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { cacheScope } from '@/libs/replica';
+import { cacheScope, REPLICA_INDEX_KEY } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
 import { resourceService } from '@/services/resource';
 import type { ResourceItem } from '@/types/resource';
@@ -117,6 +117,13 @@ describe('ResourceManager search replicas', () => {
           ),
         )
         .flat(),
+    );
+    await Promise.all(
+      [...scopes].flatMap((value) =>
+        [explorerSearchResource, hierarchySearchResource].map((resource) =>
+          resource.storage!.remove({ queryKey: REPLICA_INDEX_KEY, scope: value }),
+        ),
+      ),
     );
     scopes.clear();
     vi.restoreAllMocks();
@@ -385,11 +392,106 @@ describe('ResourceManager search replicas', () => {
     });
     expect(hierarchyEntry(HIERARCHY_PARAMS)?.currentPage).toBe(1);
 
-    act(() => useResourceManagerStore.getState().collapseHierarchySearch());
+    await act(async () => {
+      await useResourceManagerStore.getState().collapseHierarchySearch();
+    });
 
     const list = hierarchyEntry(HIERARCHY_PARAMS)!;
     expect(list.currentPage).toBe(0);
     expect(list.items).toHaveLength(DEFAULT_SEARCH_PAGE_SIZE);
     expect(list.hasMore).toBe(true);
+  });
+
+  it('bounds the window across reloads, from the searches an earlier session persisted', async () => {
+    // Emulate a page that persisted MORE queries than the window before this
+    // store instance existed: the rows, plus the engine's index of them. The
+    // in-memory recency list alone cannot see these, so without seeding it the
+    // window would start empty and persist another cap on top of them.
+    const previous = Array.from({ length: MAX_RECENT_SEARCHES + 2 }, (_, i) => `old-${i}`);
+    const paramsOf = (q: string) => ({ pageSize: DEFAULT_SEARCH_PAGE_SIZE, q });
+    for (const q of previous) {
+      await explorerSearchResource.storage!.set(
+        { queryKey: explorerSearchResource.storageKey(paramsOf(q)), scope },
+        {
+          data: {
+            currentPage: 0,
+            hasMore: false,
+            items: [item(`${q}-hit`)],
+            pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+            searchParams: paramsOf(q),
+            total: 1,
+          },
+          updatedAt: 1,
+        },
+      );
+    }
+    // The engine's index holds the storage keys it persisted (the JSON query
+    // identity), not the raw keywords.
+    await explorerSearchResource.storage!.set(
+      { queryKey: REPLICA_INDEX_KEY, scope },
+      { data: previous.map((q) => explorerSearchResource.storageKey(paramsOf(q))), updatedAt: 1 },
+    );
+
+    const remove = vi.spyOn(explorerSearchResource.storage!, 'remove');
+    fetchSpy.mockImplementation(({ q }: { q?: string }) =>
+      Promise.resolve(page([item(`${q}-hit`)], 1)),
+    );
+
+    renderHook(() => useResourceManagerStore((s) => s.useFetchExplorerSearch)(paramsOf('fresh')), {
+      wrapper,
+    });
+
+    // Seeding put the persisted queries ahead of this session's own entry, so
+    // eviction reached the oldest three of THEM — the bound now spans sessions.
+    const evicted = (q: string) => explorerSearchResource.storageKey(paramsOf(q));
+    await waitFor(() =>
+      expect(remove.mock.calls.map(([key]) => key.queryKey)).toEqual(
+        previous.slice(0, previous.length - MAX_RECENT_SEARCHES + 1).map(evicted),
+      ),
+    );
+    expect(remove).not.toHaveBeenCalledWith(
+      expect.objectContaining({ queryKey: evicted('fresh') }),
+    );
+  });
+
+  it('drops a sidebar search an earlier session persisted when the tree changes', async () => {
+    const staleParams: HierarchySearchParams = {
+      libraryId: 'kb-1',
+      pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+      q: 'stale',
+    };
+    const staleKey = hierarchySearchResource.storageKey(staleParams);
+    await hierarchySearchResource.storage!.set(
+      { queryKey: staleKey, scope },
+      {
+        data: {
+          currentPage: 0,
+          hasMore: false,
+          items: [item('stale-hit')],
+          pageSize: DEFAULT_SEARCH_PAGE_SIZE,
+          searchParams: staleParams,
+          total: 1,
+        },
+        updatedAt: 1,
+      },
+    );
+    await hierarchySearchResource.storage!.set(
+      { queryKey: REPLICA_INDEX_KEY, scope },
+      { data: [staleKey], updatedAt: 1 },
+    );
+
+    // Not loaded this session: memory and the SWR cache are both empty for it,
+    // which is exactly the case the in-memory collapse loop cannot reach.
+    expect(hierarchyEntry(staleParams)).toBeUndefined();
+
+    await act(async () => {
+      await useResourceManagerStore.getState().collapseHierarchySearch();
+    });
+
+    await waitFor(async () => {
+      expect(
+        await hierarchySearchResource.storage!.get({ queryKey: staleKey, scope }),
+      ).toBeUndefined();
+    });
   });
 });

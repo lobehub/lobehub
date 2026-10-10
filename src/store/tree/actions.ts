@@ -18,11 +18,13 @@ import type { TreeDataState, TreeItem, TreeState, TreeStoreHandle } from './type
  * A revalidation only re-runs the *head* request, and the replica deliberately
  * keeps the rows the user already scrolled to. So dropping the loaded depth is
  * part of the refresh: without it a rename / move / deletion of a row past the
- * first page would leave the stale hit in the loaded tail.
+ * first page would leave the stale hit in the loaded tail. The same call drops
+ * the searches only a previous session had persisted (never loaded here), which
+ * no revalidation could otherwise reach.
  */
 export const revalidateHierarchySearch = async (): Promise<void> => {
   const { useResourceManagerStore } = await import('@/features/ResourceManager/store');
-  useResourceManagerStore.getState().collapseHierarchySearch();
+  await useResourceManagerStore.getState().collapseHierarchySearch();
   await revalidateReplica(hierarchySearchResource);
 };
 
