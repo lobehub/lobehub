@@ -921,5 +921,69 @@ describe('displayMessageSelectors', () => {
       const result = displayMessageSelectors.findLastMessageId('mg_123456')(state as ChatStore);
       expect(result).toBe('msg-999');
     });
+
+    it('should return parentMessageId for agentCouncil when members are empty', () => {
+      const agentCouncilMessage = {
+        id: 'agentCouncil-parent-123',
+        role: 'agentCouncil',
+        members: [],
+        extra: {
+          parentMessageId: 'parent-msg-id',
+        },
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [agentCouncilMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId('agentCouncil-parent-123')(
+        state as ChatStore,
+      );
+      expect(result).toBe('parent-msg-id');
+    });
+
+    it('should recursively find the last message ID from members for agentCouncil', () => {
+      const agentCouncilMessage = {
+        id: 'agentCouncil-parent-123',
+        role: 'agentCouncil',
+        members: [
+          {
+            id: 'member-1',
+            role: 'assistant',
+            content: 'Agent 1 response',
+          },
+          {
+            id: 'member-2',
+            role: 'assistant',
+            content: 'Agent 2 response with tools',
+            tools: [
+              {
+                id: 'tool-call-1',
+                identifier: 'tool-id',
+                apiName: 'tool-name',
+                arguments: '{}',
+                type: 'default',
+                result_msg_id: 'tool-result-id',
+              },
+            ],
+          },
+        ],
+      } as unknown as UIChatMessage;
+
+      const state: Partial<ChatStore> = {
+        activeAgentId: 'test-id',
+        messagesMap: {
+          [messageMapKey({ agentId: 'test-id' })]: [agentCouncilMessage],
+        },
+      };
+
+      const result = displayMessageSelectors.findLastMessageId('agentCouncil-parent-123')(
+        state as ChatStore,
+      );
+      expect(result).toBe('tool-result-id');
+    });
   });
 });
