@@ -271,6 +271,24 @@ describe('GoalGraphModel', () => {
     expect(await graphModel.getNodeStatus(goal.id, node!.id)).toBe('retired');
   });
 
+  it('treats a same-status write as a no-op instead of churning the graph', async () => {
+    // Re-activating an already-active node must not bump `updatedAt` or append
+    // an event: a coordinator retry loop does this on every tick, and the
+    // planning manager hashes these rows — churn made every in-flight
+    // planning turn submit into a stale snapshot.
+    const goal = await goalModel.create({ subjectType: 'standalone', title: 'No churn' });
+    const node = await graphModel.createNode(goal.id, { kind: 'task', title: 'Looped' });
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'active', 'first start');
+    const [before] = (await graphModel.getGraph(goal.id))!.nodes;
+    const eventsBefore = (await graphModel.getGraph(goal.id))!.events.length;
+
+    await graphModel.updateNodeStatus(goal.id, node!.id, 'active', 'retry loop tick');
+
+    const [after] = (await graphModel.getGraph(goal.id))!.nodes;
+    expect(after.updatedAt.getTime()).toBe(before.updatedAt.getTime());
+    expect((await graphModel.getGraph(goal.id))!.events.length).toBe(eventsBefore);
+  });
+
   it('refuses to bind a task to a node that is not a task node', async () => {
     // This used to be a CHECK constraint. It lives in `bindTask`'s WHERE now,
     // so the rule needs a test on the write path or nothing enforces it.

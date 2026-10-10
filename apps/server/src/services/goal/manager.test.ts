@@ -726,6 +726,19 @@ describe('CLI main Agent planning', () => {
     expect((await service().graph(id)).nodes.filter((n) => n.kind === 'task')).toHaveLength(0);
   });
 
+  it('keeps accepting submits when a background loop rewrites node rows without planning changes', async () => {
+    // A retry loop re-activating an already-active task node used to bump
+    // `goal_nodes.updated_at` between dispatch and submit; the manager hashed
+    // whole node rows, so every in-flight planning turn was rejected with
+    // "Stale planning input" no matter what the agent did.
+    const { id, state, op } = await start();
+    // No-op writes to the very rows the snapshot covers, mid-turn.
+    for (const node of (await service().graph(id)).nodes) {
+      await new GoalGraphModel(db, userId).updateNodeStatus(id, node.id, node.status, 'retry churn');
+    }
+    await expect(manager().submit(id, state.token, op.id, taskPlan)).resolves.toBeTruthy();
+  });
+
   it('adopts a dispatch with a lost response rather than launching another Agent', async () => {
     const original = vi.mocked(AiAgentService.prototype.execAgent).getMockImplementation()!;
     vi.mocked(AiAgentService.prototype.execAgent).mockImplementation(async (params) => {
