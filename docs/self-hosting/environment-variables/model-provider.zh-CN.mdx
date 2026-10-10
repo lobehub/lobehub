@@ -910,4 +910,29 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：未设置，使用内置示例模型列表，示例默认不启用；不保证这些模型已在本地安装，也不会改变已有的模型选择。
 - 示例：`-all,+your-local-model-id=Local Model`
 
+## Melious
+
+在欧洲基础设施（符合 GDPR/TTDSG）上提供开放权重模型。详见[在 LobeHub 中使用 Melious](/zh/docs/usage/providers/melious)。
+
+### `MELIOUS_API_KEY`
+
+- 类型：部署时可选；填写后可为本实例的所有用户启用 Melious。用户也可以在服务商设置中自行配置密钥。
+- 描述：在 Melious 控制台创建的 API 密钥。非空值会在服务端配置中启用此服务商；`ENABLED_MELIOUS` 由该密钥派生，不是独立的环境变量开关。
+- 默认值：-
+- 示例：`sk-mel-xxxxxx...xxxxxx`
+
+### `MELIOUS_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 OpenAI 兼容 API 的基础地址。仅在通过代理或网关转发时才需要设置，结尾不要带斜杠。
+- 默认值：`https://api.melious.ai/v1`
+- 示例：`https://your-proxy.example.com/v1`
+
+### `MELIOUS_MODEL_LIST`
+
+- 类型：可选
+- 描述：使用共享的[模型列表语法][model-list]配置模型列表：`+` 增加模型，`-` 隐藏模型，`模型ID=显示名称` 重命名模型，多个条目用英文逗号分隔。
+- 默认值：-
+- 示例：`-all,+glm-5.3,+qwen3.5-122b-a10b=Qwen 3.5`
+
 [model-list]: /zh/docs/self-hosting/advanced/model-list

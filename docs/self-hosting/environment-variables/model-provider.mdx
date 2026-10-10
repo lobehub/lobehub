@@ -909,4 +909,29 @@ Connect to your own Unsloth Studio instance. See [Using Unsloth in LobeHub](/doc
 - Default: Unset; uses the built-in example model list with the examples disabled. This does not guarantee local availability or change existing saved model selections.
 - Example: `-all,+your-local-model-id=Local Model`
 
+## Melious
+
+Open-weight models served on European infrastructure (GDPR/TTDSG). See [Using Melious in LobeHub](/docs/usage/providers/melious).
+
+### `MELIOUS_API_KEY`
+
+- Type: Optional for the deployment; set it to enable Melious for everyone on this instance. Users can instead configure their own key in provider settings.
+- Description: The API key created in the Melious console. A non-empty value enables the provider in server configuration; `ENABLED_MELIOUS` is derived from this key and is not an independent environment switch.
+- Default: -
+- Example: `sk-mel-xxxxxx...xxxxxx`
+
+### `MELIOUS_PROXY_URL`
+
+- Type: Optional
+- Description: Overrides the OpenAI-compatible API base URL. Set it only when routing through a proxy or gateway; omit the trailing slash.
+- Default: `https://api.melious.ai/v1`
+- Example: `https://your-proxy.example.com/v1`
+
+### `MELIOUS_MODEL_LIST`
+
+- Type: Optional
+- Description: Customizes the model list using the shared [model-list syntax][model-list]: `+` adds a model, `-` hides a model, and `model_id=display_name` renames a model. Separate entries with commas.
+- Default: -
+- Example: `-all,+glm-5.3,+qwen3.5-122b-a10b=Qwen 3.5`
+
 [model-list]: /docs/self-hosting/advanced/model-list
