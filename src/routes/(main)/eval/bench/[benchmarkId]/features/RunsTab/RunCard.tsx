@@ -215,8 +215,8 @@ const RunCard = memo<RunCardProps>(({ benchmarkId, run, onRefresh, onEdit }) => 
         try {
           await startRun(run.id, run.status !== 'idle');
           await onRefresh?.();
-        } catch (error: any) {
-          toast.error(error?.message || 'Failed to start run');
+        } catch (error) {
+          toast.error((error as Error)?.message || 'Failed to start run');
         }
       },
       title: t('run.actions.start'),
