@@ -486,7 +486,7 @@ describe('plans and re-opened rows', () => {
 });
 
 describe('layoutBatch', () => {
-  it('feeds a later round from the group whose wave it re-opened', () => {
+  it('lays the cold start and each round left to right, each break feeding the next round', () => {
     const graph = buildGoalGraphView(
       batchSnapshot({
         decisions: [humanAnswer('a1'), humanAnswer('a2')],
@@ -513,59 +513,29 @@ describe('layoutBatch', () => {
       }),
       NOW,
     );
-    const layout = layoutBatch(graph, buildBatchModel(graph, 'batch'));
-    // Not from v1's waves: the wave lives under v2, which released it.
-    expect(layout.edges).toContainEqual(
-      expect.objectContaining({ source: batchGroupId('batch', 'redispatch', 2), target: 't3' }),
-    );
-    // And the re-opened unit is named by the batch it first ran in.
     const model = buildBatchModel(graph, 'batch');
-    expect(model.rounds[2].probes[0].from).toEqual({ index: 0, kind: 'wave', wave: 1 });
-  });
+    const layout = layoutBatch(graph, model);
+    const cold = layout.boxes[batchGroupId('batch', 'experimentProbe')];
+    const [r1, r2, r3] = [1, 2, 3].map((r) => layout.boxes[batchGroupId('batch', 'round', r)]);
 
-  it('stacks trials → plan → gate → waves and puts v2 beside v1', () => {
-    const graph = buildGoalGraphView(
-      batchSnapshot({
-        decisions: [humanAnswer('a1')],
-        extraEdges: [edge('t2', 't1', 'revises'), edge('a2', 'p2b', 'depends_on')],
-        extraNodes: [
-          node('t2', 'finding', 40, { title: GOAL_BATCH_TEMPLATE_TITLE }),
-          node('a2', 'decision', 41, { title: GOAL_BATCH_ASSAY_TITLE }),
-          node('p2b', 'task', 42, { title: 'U2' }),
-        ],
-        state: { assayNodeId: 'a2', probeNodeIds: ['p2b'], templateNodeId: 't2' },
-      }),
-      NOW,
-    );
-    const layout = layoutBatch(graph, buildBatchModel(graph, 'batch'));
-    const probes = layout.boxes[batchGroupId('batch', 'experimentProbe')];
-    const waves = layout.boxes[batchGroupId('batch', 'waves')];
-    const redispatch = layout.boxes[batchGroupId('batch', 'redispatch', 2)];
-    const { a1, a2, t1, t2 } = layout.boxes;
-
-    // Round 1 reads top to bottom.
-    expect(probes.y + probes.height).toBeLessThan(t1.y);
-    expect(t1.y + t1.height).toBeLessThan(a1.y);
-    // v2 opened before any wave went out: the whole roster moved under v2, so
-    // v1 has no waves group and v2's group sits where it would have been.
-    expect(waves).toBeUndefined();
-    expect(a1.y + a1.height).toBeLessThan(redispatch.y);
-    // v2 is a column of its own, level with v1 and to its right.
-    expect(t2.y).toBe(t1.y);
-    expect(a2.y).toBe(a1.y);
-    expect(t2.x).toBeGreaterThan(Math.max(probes.x + probes.width, t1.x + t1.width));
-    // Task-produced findings and unit tasks never land as loose cards.
-    expect([...layout.nodeIds].sort()).toEqual(['a1', 'a2', 't1', 't2']);
-    // v2 is fed by the group the break surfaced in, as an ordinary link.
-    expect(layout.edges).toContainEqual(
-      expect.objectContaining({ source: batchGroupId('batch', 'experimentProbe'), target: 't2' }),
-    );
-    // Links into the batch land on its experiment probe — there is no frame to land on.
+    // One row, left to right, top-aligned: cold start, then round 1, 2, 3.
+    expect([cold, r1, r2, r3].map((box) => box.y)).toEqual([0, 0, 0, 0]);
+    expect(cold.x + cold.width).toBeLessThan(r1.x);
+    expect(r1.x + r1.width).toBeLessThan(r2.x);
+    expect(r2.x + r2.width).toBeLessThan(r3.x);
+    // Each round feeds the next — the break at v2's gate revises into v3 —
+    // and only the hand-offs after a break carry the "revise" label.
+    expect(layout.edges.map((e) => [e.source, e.target, e.label])).toEqual([
+      [batchGroupId('batch', 'experimentProbe'), batchGroupId('batch', 'round', 1), undefined],
+      [batchGroupId('batch', 'round', 1), batchGroupId('batch', 'round', 2), 'revise'],
+      [batchGroupId('batch', 'round', 2), batchGroupId('batch', 'round', 3), 'revise'],
+    ]);
+    // Plans and gates live inside their round; nothing lands as a loose card.
+    expect([...layout.nodeIds]).toEqual([]);
+    // Links into the batch land on the cold start, lined up under the problem.
     expect(layout.entryId).toBe(batchGroupId('batch', 'experimentProbe'));
-    // The slot the map reserves holds everything placed.
-    for (const box of Object.values(layout.boxes)) {
-      expect(box.x + box.width).toBeLessThanOrEqual(layout.width);
-      expect(box.y + box.height).toBeLessThanOrEqual(layout.height);
-    }
+    expect(layout.anchorX).toBe(cold.x + cold.width / 2);
+    // The re-opened unit is named by the batch it first ran in.
+    expect(model.rounds[2].probes[0].from).toEqual({ index: 0, kind: 'wave', wave: 1 });
   });
 });

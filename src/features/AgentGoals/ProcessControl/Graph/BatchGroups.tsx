@@ -9,6 +9,7 @@ import {
   CircleDashed,
   CircleDot,
   CircleSlash,
+  DoorOpen,
   HandIcon,
   Info,
   type LucideIcon,
@@ -21,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { TASK_STATUS_VISUALS } from '@/components/ExecutionStatus';
 
 import type { GoalNodeView } from '../goalGraphViewModel';
-import { KIND_COLOR, KIND_ICON } from '../shared';
+import { GATE_COLOR, KIND_COLOR, KIND_ICON } from '../shared';
 import { BATCH_ROW_LABEL, BATCH_SQUARE, BATCH_SQUARE_GAP } from './batchLayout';
 import {
   type BatchCell,
@@ -168,6 +169,31 @@ const styles = createStaticStyles(({ css }) => ({
 
     min-width: 0;
   `,
+  /* A round's plan and gate lines, above its waves. */
+  roundBody: css`
+    padding-block: 8px 0;
+    padding-inline: 10px;
+  `,
+  roundLine: css`
+    cursor: pointer;
+
+    padding-block: 6px;
+    padding-inline: 8px;
+    border: 1px solid ${cssVar.colorBorderSecondary};
+    border-radius: ${cssVar.borderRadiusLG};
+
+    background: ${cssVar.colorBgContainer};
+
+    transition: border-color 0.15s;
+
+    &:hover {
+      border-color: ${cssVar.colorBorder};
+    }
+  `,
+  chipText: css`
+    font-size: 11px;
+    white-space: nowrap;
+  `,
   /* Waves: row gap equals square gap, so the roster reads as a grid. */
   wavesBody: css`
     display: flex;
@@ -257,12 +283,27 @@ const squareStyle = (state: BatchCellState) => {
 };
 
 /**
+ * Stages sit top-aligned in one row but differ in height, so their side
+ * handles share one height from the top — the hand-off lines stay straight.
+ */
+const STAGE_HANDLE_TOP = 19;
+
+/**
  * Groups link like any card on the map — in at the top, out at the bottom — and
  * a waves group can also hand a re-opened round off to the side (`r`).
  */
 const GroupHandles = () => (
   <>
     <Handle className={styles.handle} isConnectable={false} position={Position.Top} type="target" />
+    {/* Stages hand off left to right: in on the left, out on the right. */}
+    <Handle
+      className={styles.handle}
+      id="l"
+      isConnectable={false}
+      position={Position.Left}
+      style={{ top: STAGE_HANDLE_TOP }}
+      type="target"
+    />
     {/* Bottom first: a link that names no handle takes the first source. */}
     <Handle
       className={styles.handle}
@@ -275,6 +316,7 @@ const GroupHandles = () => (
       id="r"
       isConnectable={false}
       position={Position.Right}
+      style={{ top: STAGE_HANDLE_TOP }}
       type="source"
     />
   </>
@@ -582,63 +624,8 @@ const WaveRows = memo<{ onSelect: (nodeId: string) => void; rows: BatchWaveRow[]
 
 WaveRows.displayName = 'GoalBatchWaveRows';
 
-export interface BatchWavesData extends Record<string, unknown> {
-  /** Open the batch on its own, the way a person reviews one batch at a time. */
-  onEnter: () => void;
-  onSelect: (nodeId: string) => void;
-  /** The waves the first round released, or still holds. */
-  rows: BatchWaveRow[];
-  started: boolean;
-}
+// ─── A round: its plan, its gate, its waves ─────────────────────────────
 
-export const BatchWavesGroup = memo<NodeProps>(({ data }) => {
-  const { onEnter, onSelect, rows, started } = data as BatchWavesData;
-  const { t } = useTranslation('chat');
-  const cells = rows.flatMap((row) => row.cells);
-  const status = useUnitsStatus()(
-    cells,
-    {
-      done: t('goalBatch.status.done'),
-      pending: t('goalBatch.status.pending'),
-      running: t('goalBatch.status.running'),
-    },
-    started,
-  );
-  return (
-    <GroupShell
-      foot={t('goalBatch.waves.foot', { count: cells.length, waves: rows.length })}
-      hint={<SquareLegend />}
-      icon={Waves}
-      iconColor={KIND_COLOR.task.line}
-      status={status}
-      title={t('goalBatch.waves.title')}
-      onEnter={onEnter}
-    >
-      <div className={styles.wavesBody}>
-        <WaveRows rows={rows} onSelect={onSelect} />
-      </div>
-    </GroupShell>
-  );
-});
-
-BatchWavesGroup.displayName = 'GoalBatchWavesGroup';
-
-// ─── A later round's waves ────────────────────────────────────────────────
-
-export interface BatchRedispatchData extends Record<string, unknown> {
-  /** Open the batch on its own, the way a person reviews one batch at a time. */
-  onEnter: () => void;
-  onSelect: (nodeId: string) => void;
-  /** The units this round re-opened — its own canary. */
-  probes: BatchProbe[];
-  revision: number;
-  /** The roster waves this round released, or still holds as the latest round. */
-  rows: BatchWaveRow[];
-  started: boolean;
-  waveSize: number;
-}
-
-/** Where a re-opened unit ran before, for its square's tooltip. */
 const useOriginCopy = () => {
   const { t } = useTranslation('chat');
   return (from?: BatchUnitOrigin): string => {
@@ -659,9 +646,83 @@ const useOriginCopy = () => {
   };
 };
 
-export const BatchRedispatchGroup = memo<NodeProps>(({ data }) => {
-  const { onEnter, onSelect, probes, revision, rows, started, waveSize } =
-    data as BatchRedispatchData;
+export interface BatchRoundData extends Record<string, unknown> {
+  /** The round's release gate, as its card would say it. */
+  gate?: {
+    chip?: { color: string; icon?: LucideIcon | null; text: string } | null;
+    hint?: ReactNode;
+    nodeId: string;
+    tally: ReactNode;
+    title: string;
+  };
+  /** Open the batch on its own, the way a person reviews one batch at a time. */
+  onEnter: () => void;
+  onSelect: (nodeId: string) => void;
+  /** The round's plan version. */
+  plan?: { nodeId: string; subtitle: string; title: string };
+  /** The units this round re-opened — its own canary (rounds after the first). */
+  probes: BatchProbe[];
+  revision: number;
+  /** The roster waves this round released, or still holds as the latest round. */
+  rows: BatchWaveRow[];
+  started: boolean;
+  waveSize: number;
+}
+
+/** One clickable line in a round: its plan, or its gate. */
+const RoundLine = memo<{
+  children?: ReactNode;
+  glyph: { color: string; icon: LucideIcon; soft: string };
+  hint?: ReactNode;
+  onOpen: () => void;
+  subtitle?: ReactNode;
+  title: string;
+  trailing?: ReactNode;
+}>(({ children, glyph, hint, onOpen, subtitle, title, trailing }) => (
+  <Flexbox
+    horizontal
+    align={'center'}
+    className={cx('nodrag', styles.roundLine)}
+    gap={8}
+    role={'button'}
+    tabIndex={0}
+    onClick={(event) => {
+      event.stopPropagation();
+      onOpen();
+    }}
+    onKeyDown={(event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onOpen();
+      }
+    }}
+  >
+    <span className={styles.glyph} style={{ background: glyph.soft, color: glyph.color }}>
+      <Icon icon={glyph.icon} size={14} />
+    </span>
+    <Flexbox style={{ flex: 1, minWidth: 0 }}>
+      <Flexbox horizontal align={'center'} gap={4}>
+        <span className={styles.cardTitle}>{title}</span>
+        {hint && (
+          <Tooltip title={hint}>
+            <span data-hint className={cx('nodrag', styles.hint)} role="img">
+              <Icon icon={Info} size={12} />
+            </span>
+          </Tooltip>
+        )}
+      </Flexbox>
+      {subtitle && <span className={cx(styles.cardTitle, styles.muted)}>{subtitle}</span>}
+      {children}
+    </Flexbox>
+    {trailing}
+  </Flexbox>
+));
+
+RoundLine.displayName = 'GoalBatchRoundLine';
+
+export const BatchRoundGroup = memo<NodeProps>(({ data }) => {
+  const { gate, onEnter, onSelect, plan, probes, revision, rows, started, waveSize } =
+    data as BatchRoundData;
   const { t } = useTranslation('chat');
   const label = useCellLabel();
   const originCopy = useOriginCopy();
@@ -669,11 +730,12 @@ export const BatchRedispatchGroup = memo<NodeProps>(({ data }) => {
     from?.kind === 'wave'
       ? t('goalBatch.waves.row', { number: from.wave + 1 })
       : from?.kind === 'probe'
-        ? t('goalBatch.probes.title')
+        ? t('goalBatch.probes.rowLabel')
         : from?.kind === 'round'
           ? t('goalBatch.redispatch.labelRound', { revision: from.revision })
           : t('goalBatch.redispatch.reopenedRow');
-  const cells = [...probes, ...rows.flatMap((row) => row.cells)];
+  const reopened = revision > 1 ? reopenedRows(probes, waveSize) : [];
+  const cells = [...(revision > 1 ? probes : []), ...rows.flatMap((row) => row.cells)];
   const status = useUnitsStatus()(
     cells,
     {
@@ -685,41 +747,82 @@ export const BatchRedispatchGroup = memo<NodeProps>(({ data }) => {
   );
   return (
     <GroupShell
-      foot={t('goalBatch.redispatch.foot', { count: cells.length, revision })}
+      foot={t('goalBatch.round.foot', { count: cells.length })}
       hint={<SquareLegend />}
       icon={Waves}
       iconColor={KIND_COLOR.task.line}
       status={status}
-      title={t('goalBatch.redispatch.title', { revision })}
+      title={t('goalBatch.round.title', { revision })}
       onEnter={onEnter}
     >
-      {/* The re-opened units first — this round's own canary, capped at the
-          wave size; where each came from is on hover. Then the roster waves the
-          round released, or still holds as the latest plan. */}
-      <div className={styles.wavesBody}>
-        {reopenedRows(probes, waveSize).map((row, w) => (
-          <Flexbox horizontal align={'center'} data-reopened-row={w} gap={8} key={`reopened-${w}`}>
-            {/* Which batch these came from, the way the roster rows read. */}
-            <span className={styles.rowLabel}>{rowLabelOf(row.from)}</span>
-            <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
-              {row.probes.map((probe) => (
-                <Square
-                  key={probe.nodeId}
-                  nodeId={probe.nodeId}
-                  state={probe.state}
-                  tooltip={[probe.title, originCopy(probe.from), label(probe.state)]
-                    .filter(Boolean)
-                    .join(' · ')}
-                  onSelect={onSelect}
-                />
-              ))}
+      <Flexbox className={styles.roundBody} gap={8}>
+        {plan && (
+          <RoundLine
+            subtitle={plan.subtitle}
+            title={plan.title}
+            glyph={{
+              ...KIND_COLOR.finding,
+              color: KIND_COLOR.finding.line,
+              icon: KIND_ICON.finding,
+            }}
+            onOpen={() => onSelect(plan.nodeId)}
+          />
+        )}
+        {gate && (
+          <RoundLine
+            glyph={{ color: GATE_COLOR.line, icon: DoorOpen, soft: GATE_COLOR.soft }}
+            hint={gate.hint}
+            subtitle={gate.tally}
+            title={gate.title}
+            trailing={
+              gate.chip && (
+                <Flexbox horizontal align={'center'} gap={4} style={{ flex: 'none' }}>
+                  {gate.chip.icon && (
+                    <Icon color={gate.chip.color} icon={gate.chip.icon} size={13} />
+                  )}
+                  <span className={styles.chipText} style={{ color: gate.chip.color }}>
+                    {gate.chip.text}
+                  </span>
+                </Flexbox>
+              )
+            }
+            onOpen={() => onSelect(gate.nodeId)}
+          />
+        )}
+      </Flexbox>
+      {(reopened.length > 0 || rows.length > 0) && (
+        <div className={styles.wavesBody}>
+          {/* Re-opened units first — this round's own canary, named by the batch
+              they first ran in — then the roster waves the round owns. */}
+          {reopened.map((row, w) => (
+            <Flexbox
+              horizontal
+              align={'center'}
+              data-reopened-row={w}
+              gap={8}
+              key={`reopened-${w}`}
+            >
+              <span className={styles.rowLabel}>{rowLabelOf(row.from)}</span>
+              <Flexbox horizontal gap={BATCH_SQUARE_GAP}>
+                {row.probes.map((probe) => (
+                  <Square
+                    key={probe.nodeId}
+                    nodeId={probe.nodeId}
+                    state={probe.state}
+                    tooltip={[probe.title, originCopy(probe.from), label(probe.state)]
+                      .filter(Boolean)
+                      .join(' · ')}
+                    onSelect={onSelect}
+                  />
+                ))}
+              </Flexbox>
             </Flexbox>
-          </Flexbox>
-        ))}
-        <WaveRows rows={rows} onSelect={onSelect} />
-      </div>
+          ))}
+          <WaveRows rows={rows} onSelect={onSelect} />
+        </div>
+      )}
     </GroupShell>
   );
 });
 
-BatchRedispatchGroup.displayName = 'GoalBatchRedispatchGroup';
+BatchRoundGroup.displayName = 'GoalBatchRoundGroup';
