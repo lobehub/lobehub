@@ -78,7 +78,7 @@ const RunDetail = memo(() => {
 
   const pollingConfig = { refreshInterval: isActive ? POLLING_INTERVAL : 0 };
 
-  const { error, isLoading, mutate } = useFetchRunDetail(runId!, pollingConfig);
+  const { error, isHydrated, isValidating, revalidate } = useFetchRunDetail(runId!, pollingConfig);
   useFetchRunResults(runId!, pollingConfig);
 
   const hasResults = !!runResults?.results?.length;
@@ -109,9 +109,9 @@ const RunDetail = memo(() => {
       error={error}
       errorVariant={'page'}
       isEmpty={!runDetail}
-      isLoading={isLoading}
+      isLoading={!isHydrated || isValidating}
       loading={<RouteLoading />}
-      onRetry={() => mutate()}
+      onRetry={() => void revalidate()}
     >
       {runDetail && (
         <Flexbox gap={24} padding={24} style={{ margin: '0 auto', maxWidth: 1440, width: '100%' }}>

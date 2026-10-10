@@ -47,7 +47,7 @@ const RunsTab = memo<RunsTabProps>(({ benchmarkId }) => {
   const { t } = useTranslation('eval');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const useFetchRuns = useEvalStore((s) => s.useFetchRuns);
-  const runList = useEvalStore(runSelectors.runList);
+  const runList = useEvalStore(runSelectors.runList(benchmarkId));
   const refreshRuns = useEvalStore((s) => s.refreshRuns);
   useFetchRuns(benchmarkId);
 
