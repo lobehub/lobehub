@@ -212,11 +212,16 @@ export const buildSelectorView = ({
       current: speed,
       key: 'speed',
       label: t('heteroAgent.modelSelector.speed'),
-      source: getSource(topicPin?.speed !== undefined),
+      // Only Fast emits a flag. Without it the CLI's own config (Codex
+      // `service_tier`) picks the tier, so neither the Agent nor the topic is
+      // the source, and the value must not be presented as Standard.
+      source: isFastSpeed
+        ? getSource(topicPin?.speed !== undefined)
+        : t('heteroAgent.modelSelector.source.cli'),
       options: [
         {
-          desc: t('heteroAgent.modelSelector.speed.standardDesc'),
-          label: t('heteroAgent.modelSelector.speed.standard'),
+          desc: t('heteroAgent.modelSelector.speed.defaultDesc'),
+          label: defaultLabel,
           value: HETEROGENEOUS_AGENT_DEFAULT_SELECTION,
         },
         {
@@ -225,11 +230,7 @@ export const buildSelectorView = ({
           value: 'fast',
         },
       ],
-      valueLabel: t(
-        isFastSpeed
-          ? 'heteroAgent.modelSelector.speed.fast'
-          : 'heteroAgent.modelSelector.speed.standard',
-      ),
+      valueLabel: isFastSpeed ? t('heteroAgent.modelSelector.speed.fast') : defaultLabel,
     });
   }
 

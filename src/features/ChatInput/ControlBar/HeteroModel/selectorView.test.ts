@@ -258,6 +258,28 @@ describe('value source on each dimension', () => {
     ).toBe('heteroAgent.modelSelector.source.inherited');
   });
 
+  it('leaves an unset speed to the CLI config instead of claiming Standard', () => {
+    // The Agent sets no speed and the topic pins none, so no tier flag is sent
+    // and `service_tier` in the Codex CLI config decides (it may well be fast).
+    const speed = buildSelectorView({
+      capability: selectorCapabilityOf('codex'),
+      provider: { model: 'gpt-5.6-sol', type: 'codex' },
+      t,
+      topicPin: { model: 'gpt-5.6-sol', provider: 'codex' },
+      topicScoped: true,
+    }).dimensions.find((dimension) => dimension.key === 'speed');
+
+    expect(speed).toMatchObject({
+      current: 'default',
+      source: 'heteroAgent.modelSelector.source.cli',
+      valueLabel: 'heteroAgent.modelSelector.default',
+    });
+    expect(speed?.options[0]).toMatchObject({
+      label: 'heteroAgent.modelSelector.default',
+      value: 'default',
+    });
+  });
+
   it('labels every value as the Agent default before a topic exists', () => {
     expect(
       new Set(Object.values(sourcesOf({ capability: selectorCapabilityOf('codex'), provider, t }))),
