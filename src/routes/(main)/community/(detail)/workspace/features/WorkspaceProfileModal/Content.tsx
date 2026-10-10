@@ -29,6 +29,8 @@ import AvatarUpload from '@/components/AvatarUpload';
 import { useFileStore } from '@/store/file';
 import type { DiscoverUserInfo } from '@/types/discover';
 
+import { getNamespaceError, isNamespaceFormatValid, isWebsiteUrlValid } from './validation';
+
 interface FormValues {
   description?: string;
   displayName: string;
@@ -57,14 +59,6 @@ const normalizeNamespace = (value: string) =>
     .replaceAll(/-+/g, '-')
     .replaceAll(/^-|-$/g, '')
     .slice(0, 32);
-
-// Mirrors the namespace Form rules below — only run the live availability check
-// once the handle is well-formed, so we don't probe Market for invalid input.
-const NAMESPACE_PATTERN = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
-const isNamespaceFormatValid = (value: string) =>
-  value.length >= 3 && value.length <= 32 && NAMESPACE_PATTERN.test(value);
-
-const URL_PATTERN = /^(?:(?:[a-z]+:)?\/\/|www\.)\S+$/i;
 
 type NamespaceAvailability = 'available' | 'checking' | 'idle' | 'taken';
 
@@ -249,7 +243,7 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
           label={t('user.workspaceProfile.fields.websiteUrl')}
           name="websiteUrl"
           validate={(value?: string) =>
-            value && !URL_PATTERN.test(value) ? t('user.workspaceProfile.errors.url') : undefined
+            value && !isWebsiteUrlValid(value) ? t('user.workspaceProfile.errors.url') : undefined
           }
         >
           <Input
@@ -392,10 +386,8 @@ export const Content = memo<ContentProps>(({ user, onSuccess }) => {
             required={t('user.workspaceProfile.errors.namespace.required')}
             validate={(value?: string) => {
               if (!value) return;
-              if (value.length < 3 || value.length > 32)
-                return t('user.workspaceProfile.errors.namespace.length');
-              if (!NAMESPACE_PATTERN.test(value))
-                return t('user.workspaceProfile.errors.namespace.pattern');
+              const error = getNamespaceError(value);
+              if (error) return t(`user.workspaceProfile.errors.namespace.${error}`);
             }}
           >
             <Input
