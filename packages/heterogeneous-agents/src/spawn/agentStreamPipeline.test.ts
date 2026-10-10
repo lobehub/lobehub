@@ -27,7 +27,7 @@ const ccText = (msgId: string, text: string) =>
     type: 'assistant',
   })}\n`;
 
-const ccReadImage = (toolCallId = 'r1') =>
+const ccReadImage = (toolCallId = 'r1', data = 'AAAA') =>
   `${JSON.stringify({
     message: {
       content: [{ id: toolCallId, input: { file_path: 'x.png' }, name: 'Read', type: 'tool_use' }],
@@ -40,9 +40,7 @@ const ccReadImage = (toolCallId = 'r1') =>
     message: {
       content: [
         {
-          content: [
-            { source: { data: 'AAAA', media_type: 'image/png', type: 'base64' }, type: 'image' },
-          ],
+          content: [{ source: { data, media_type: 'image/png', type: 'base64' }, type: 'image' }],
           tool_use_id: toolCallId,
           type: 'tool_result',
         },
@@ -337,6 +335,41 @@ describe('AgentStreamPipeline', () => {
       // The `[Image: …]` placeholder is rewritten to a markdown image so a
       // downstream model knows an image is here (and where).
       expect(contentOf(events)).toBe('![image/png](https://cdn/x.png)');
+    });
+
+    it('records the intrinsic size so renders can reserve the image box before it loads', async () => {
+      // Minimal PNG header: signature + IHDR declaring 1280×800.
+      const png = Buffer.alloc(24);
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).copy(png, 0);
+      png.write('IHDR', 12, 'ascii');
+      png.writeUInt32BE(1280, 16);
+      png.writeUInt32BE(800, 20);
+      const data = png.toString('base64');
+
+      const uploadImage = vi.fn().mockResolvedValue({ fileId: 'file_1', url: 'https://cdn/x.png' });
+      const pipeline = new AgentStreamPipeline({
+        agentType: 'claude-code',
+        operationId: 'op-1',
+        uploadImage,
+      });
+
+      const events = await pipeline.push(init() + ccReadImage('r1', data));
+
+      expect(uploadImage).toHaveBeenCalledWith({
+        data,
+        height: 800,
+        mediaType: 'image/png',
+        width: 1280,
+      });
+      expect(imagesOf(events)).toEqual([
+        {
+          fileId: 'file_1',
+          height: 800,
+          mediaType: 'image/png',
+          url: 'https://cdn/x.png',
+          width: 1280,
+        },
+      ]);
     });
 
     it('drops the image when no uploader is injected (base64 never persisted)', async () => {
