@@ -11,6 +11,7 @@ const {
   mockQueryPlugins,
   mockResolveConnectors,
   mockUpdatePlugin,
+  mockExistsById,
   mockGetAgentConfigById,
   mockGetAiProviderList,
   mockGetAiProviderModelList,
@@ -25,6 +26,7 @@ const {
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
   mockUpdatePlugin: vi.fn(),
+  mockExistsById: vi.fn(),
   mockGetAgentConfigById: vi.fn(),
   mockGetAiProviderList: vi.fn(),
   mockGetAiProviderModelList: vi.fn(),
@@ -48,6 +50,7 @@ vi.mock('@/server/services/agent', () => ({
 vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
     return {
+      existsById: mockExistsById,
       getAgentConfigById: mockGetAgentConfigById,
       update: mockUpdateAgent,
       updateConfig: mockUpdateConfig,
@@ -107,6 +110,7 @@ const createWorkspaceRuntime = () =>
 describe('agentBuilderRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExistsById.mockResolvedValue(true);
     mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockGetHiddenBuiltinModelsForUser.mockResolvedValue(undefined);
     mockResolveConnectors.mockResolvedValue([]);
@@ -377,7 +381,7 @@ describe('agentBuilderRuntime', () => {
 
   describe('existence guard (0-row silent no-op)', () => {
     it('updatePrompt fails loudly when the editing agent no longer exists', async () => {
-      mockGetAgentConfigById.mockResolvedValue(undefined);
+      mockExistsById.mockResolvedValue(false);
 
       const result = await createRuntime().updatePrompt(
         { prompt: 'orphan prompt' },
@@ -389,6 +393,9 @@ describe('agentBuilderRuntime', () => {
       expect(mockUpdateAgent).not.toHaveBeenCalled();
     });
 
+    // updateConfig's own entry guard (pre-existing) resolves via
+    // getAgentConfigById — that read stays functionally needed for
+    // togglePlugin, so this test exercises that path, not existsById.
     it('updateConfig meta-only writes fail loudly when the editing agent no longer exists', async () => {
       mockGetAgentConfigById.mockResolvedValue(undefined);
 

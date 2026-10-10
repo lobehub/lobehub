@@ -10,6 +10,7 @@ const {
   mockCountAgents,
   mockGetAssistantList,
   mockQueryAgents,
+  mockExistsById,
   mockGetAgentConfigById,
   mockServiceUpdateConfig,
   mockUpdateAgent,
@@ -28,6 +29,7 @@ const {
   mockQueryPlugins: vi.fn(),
   mockResolveConnectors: vi.fn(),
   mockUpdatePlugin: vi.fn(),
+  mockExistsById: vi.fn(),
   mockGetAgentConfigById: vi.fn(),
   mockGetAssistantList: vi.fn(),
   mockQueryAgents: vi.fn(),
@@ -46,6 +48,7 @@ vi.mock('@/database/models/agent', () => ({
   AgentModel: vi.fn(function () {
     return {
       countAgents: mockCountAgents,
+      existsById: mockExistsById,
       getAgentConfigById: mockGetAgentConfigById,
       queryAgents: mockQueryAgents,
       update: mockUpdateAgent,
@@ -107,6 +110,7 @@ const makeAgents = (count: number, startIndex = 0) =>
 describe('agentManagementRuntime', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockExistsById.mockResolvedValue(true);
     mockServiceUpdateConfig.mockImplementation((...args) => mockUpdateConfig(...args));
     mockResolveConnectors.mockResolvedValue([]);
     mockQueryPlugins.mockResolvedValue([]);
@@ -144,7 +148,7 @@ describe('agentManagementRuntime', () => {
 
   describe('existence guard (0-row silent no-op)', () => {
     it('updateAgent fails loudly for an agent that does not exist', async () => {
-      mockGetAgentConfigById.mockResolvedValue(undefined);
+      mockExistsById.mockResolvedValue(false);
 
       const result = await createRuntime().updateAgent({
         agentId: 'agent-missing',
@@ -170,7 +174,7 @@ describe('agentManagementRuntime', () => {
     });
 
     it('updatePrompt fails loudly for an agent that does not exist', async () => {
-      mockGetAgentConfigById.mockResolvedValue(undefined);
+      mockExistsById.mockResolvedValue(false);
 
       const result = await createRuntime().updatePrompt({
         agentId: 'agent-missing',

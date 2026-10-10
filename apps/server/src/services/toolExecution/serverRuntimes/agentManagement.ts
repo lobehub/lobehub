@@ -395,9 +395,12 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
 
           // Existence guard: a Drizzle UPDATE on a missing/foreign agent row is a
           // silent 0-row no-op, so writes would "succeed" without persisting
-          // anything. Fail loudly like the config path already does.
-          const agent = await agentModel.getAgentConfigById(agentId);
-          if (!agent) {
+          // anything. Fail loudly like the config path already does. Uses the
+          // lightweight existsById probe instead of getAgentConfigById, which
+          // needlessly enriches the row with knowledge associations just to
+          // test existence.
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
@@ -448,8 +451,9 @@ export const agentManagementRuntime: ServerRuntimeRegistration = {
           const { agentId, prompt } = params;
 
           // Existence guard: same 0-row silent no-op hazard as updateAgent.
-          const agent = await agentModel.getAgentConfigById(agentId);
-          if (!agent) {
+          // Lightweight existsById probe (see updateAgent note).
+          const exists = await agentModel.existsById(agentId);
+          if (!exists) {
             return { content: `Agent "${agentId}" not found.`, success: false };
           }
 
