@@ -1,4 +1,5 @@
 // @vitest-environment node
+import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@/database/core/db-adaptor', () => ({
@@ -32,18 +33,11 @@ vi.mock('@/server/services/goal', () => ({
 }));
 
 const mockAdmission = vi.fn();
+const mockAssertOwnsTurn = vi.fn();
 vi.mock('@/server/services/goal/manager', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   GoalManagerService: vi.fn(function () {
-    return { admission: mockAdmission };
-  }),
-}));
-
-const mockGoalFindById = vi.fn();
-vi.mock('@/database/models/goal', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
-  GoalModel: vi.fn(function () {
-    return { findById: mockGoalFindById };
+    return { admission: mockAdmission, assertOperationOwnsTurn: mockAssertOwnsTurn };
   }),
 }));
 
@@ -64,10 +58,8 @@ describe('goalRouter operation reads', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolve.mockResolvedValue({ operationId: 'op_1', userId: 'user-1', workspaceId: 'ws-1' });
-    mockGoalFindById.mockResolvedValue({
-      config: { managerState: { operationId: 'op_1' } },
-      id: 'goal_1',
-    });
+    // The guard resolves the Goal's current turn itself; mocks only its wiring.
+    mockAssertOwnsTurn.mockResolvedValue(undefined);
     mockGraph.mockResolvedValue({ goal: { id: 'goal_1' } });
     mockAdmission.mockResolvedValue({ admission: { code: 'ok', ok: true } });
   });
@@ -107,10 +99,11 @@ describe('goalRouter operation reads', () => {
     // A `hetero:ingest` token is held by runs that never plan, so holding one must
     // not let a run read a Goal it does not own — least of all the manager state
     // and planning token `planContext` returns.
-    mockGoalFindById.mockResolvedValue({
-      config: { managerState: { operationId: 'op_other' } },
-      id: 'goal_2',
+    const refusal = new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This run does not own the current planning turn of this goal',
     });
+    mockAssertOwnsTurn.mockRejectedValue(refusal);
 
     await expect(caller('operation').graphOperation({ id: 'goal_2' })).rejects.toThrow(
       'does not own',
@@ -125,10 +118,18 @@ describe('goalRouter operation reads', () => {
     // Refused before touching the Goal's graph, manager state or audit trail.
     expect(mockGraph).not.toHaveBeenCalled();
     expect(mockAdmission).not.toHaveBeenCalled();
+    // Every read asked the same question, of the Goal it was handed.
+    expect(mockAssertOwnsTurn.mock.calls).toEqual([
+      ['goal_2', 'op_1'],
+      ['goal_2', 'op_1'],
+      ['goal_2', 'op_1'],
+    ]);
   });
 
   it('refuses an operation read of a Goal it cannot see', async () => {
-    mockGoalFindById.mockResolvedValue(undefined);
+    mockAssertOwnsTurn.mockRejectedValue(
+      new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' }),
+    );
 
     await expect(caller('operation').graphOperation({ id: 'goal-missing' })).rejects.toThrow(
       'Goal not found',

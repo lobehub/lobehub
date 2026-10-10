@@ -793,6 +793,31 @@ describe('CLI main Agent planning', () => {
     expect((await manager().admission(id)).admission).toMatchObject({ code: 'ok', ok: true });
   });
 
+  it('authorizes a read from the turn’s own operation before its id reaches the receipt', async () => {
+    const { id, op } = await start();
+
+    // `advance` saves `managerState.operationId` only after the dispatched run's
+    // `execAgent` resolves, so a fast run is live and holding a token while the
+    // field is still absent (and if that save fails it never arrives, yet the turn
+    // is live and `submit` still succeeds). Ownership must therefore come from the
+    // topic/source-message lookup `submit` uses, not the receipt field.
+    const goal = (await model().findById(id))!;
+    const { operationId: _unpersisted, ...managerState } = goal.config!.managerState!;
+    await db
+      .update(goals)
+      .set({ config: { ...goal.config, managerState } })
+      .where(eq(goals.id, id));
+    expect((await model().findById(id))!.config!.managerState!.operationId).toBeUndefined();
+
+    await expect(manager().assertOperationOwnsTurn(id, op.id)).resolves.toBeUndefined();
+    await expect(manager().assertOperationOwnsTurn(id, 'op-someone-else')).rejects.toThrow(
+      'does not own',
+    );
+    await expect(manager().assertOperationOwnsTurn('goal-missing', op.id)).rejects.toThrow(
+      'Goal not found',
+    );
+  });
+
   it('pages the goal audit trail by cursor and refuses another owner', async () => {
     const { id } = await start();
     const graph = new GoalGraphModel(db, userId);

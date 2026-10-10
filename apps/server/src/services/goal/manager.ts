@@ -1510,6 +1510,34 @@ export class GoalManagerService {
     };
   };
 
+  /**
+   * Authorize a heterogeneous planning read: the caller's operation must be the
+   * one the Goal's *current* turn belongs to.
+   *
+   * The turn is resolved through `turnOperation` — the lookup `submit` uses — not
+   * through the `managerState.operationId` receipt. That receipt is written only
+   * once the dispatched run's `execAgent` resolves, so a fast run can be live and
+   * holding a token before the field exists; and if that save fails the field never
+   * arrives, yet the turn is live and `submit` still succeeds. Reading ownership
+   * off the same recoverable lookup keeps reads and writes in step.
+   */
+  assertOperationOwnsTurn = async (goalId: string, operationId: string): Promise<void> => {
+    const goal = await new GoalModel(this.db, this.userId, this.workspaceId).findById(goalId);
+    if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
+    const state = goal.config?.managerState;
+    const operation = state
+      ? await this.turnOperation(
+          new AgentOperationModel(this.db, this.userId, this.workspaceId),
+          state,
+        )
+      : undefined;
+    if (operation?.id !== operationId)
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        message: 'This run does not own the current planning turn of this goal',
+      });
+  };
+
   submit = async (goalId: string, token: string, operationId: string, input: GoalPlan) => {
     const plan = goalPlanSchema.parse(input);
     const armed = plan.action === 'wait' ? GoalWaitService.arm(plan.until) : undefined;
