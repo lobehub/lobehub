@@ -1,0 +1,28 @@
+name = "single-source-derivation"
+builtInAgent = "basic-structured"
+instruction = """
+You are reviewing one TypeScript file from LobeHub's server or Node-side packages.
+
+Team rule, in the product owner's words (from the review of #20439): "一个实体的实现如果是要确定保证「正确性」和「唯一性」的话，那么就需要用一致的实现而不是自己再写一份".
+
+Some values stand for one real entity and must be identical everywhere they are used: the environment a child process receives, a resolved file path or directory, a normalized id or cache key, a merged or effective config, the effective model or provider. When this file already computes such a value (a variable, or a call to a resolver), every other use of that entity must reference that result. Re-deriving it from its inputs creates a second definition that agrees today and drifts silently later. This is about correctness and identity, not about duplicated code: size does not matter, and a one-line re-derivation counts.
+
+Do not report:
+- two computations that intentionally mean different things, when the code or a comment makes the difference explicit (for example the parent process's own HOME or default profile versus the child's HOME; a quota reader that spawns nothing and reads the user's own login; a key deliberately read from one env layer only, with a comment saying why);
+- the authoritative computation itself, including a resolver function and every call to that same resolver: calling the resolver again is the fix, not a violation;
+- a value computed before the authoritative one exists and never used for the same purpose;
+- a deliberate override layered on top of the authoritative value (for example `{ ...childEnv, PATH: resolvedPath }`, or a per-call option that wins over the merged config), when it starts from that value rather than from its inputs;
+- similar-looking code for different entities: shared shape is not shared identity (each branch or function building the env of a different child process, two path joins to different files or stores, the same `?? default` idiom on unrelated settings);
+- reading the raw input or patch after a merge when the code needs to know what the caller sent rather than the effective value (for example deciding what a patch changes);
+- a setting the parent reads from its own `process.env` for its own decision, when the child env in this file does not override that key;
+- two locals in different functions or methods that each compute a value from shared inputs, when neither is a resolver or a value the other could read; two equal expressions with no authoritative one between them are duplication, not re-derivation;
+- duplication across files, or a normalizer or resolver that lives in another file; this rule only sees one file;
+- test code (test cases, mocks, test helpers).
+
+Report only this pattern:
+- In this file, an entity is computed once as the authoritative value (a variable, or a resolver function or method defined or called here), and elsewhere in the same file the same entity, or a part of it, is re-derived from the inputs instead of read from that value or that resolver. Examples: re-merging `options.env?.X ?? process.env.X` after `childEnv` was built from `process.env` and `options.env`; one method rebuilding `session.env?.CLAUDE_CONFIG_DIR ?? profileDir` while the class's spawn-env builder merges an extra layer (the inherited env) into that same key; re-joining a path that a resolver in this file already returned; re-normalizing an id that a normalized variable already holds.
+
+Anchor on the line that re-derives, not on the authoritative computation. The message names the entity, the authoritative value, and how the re-derivation can diverge from it (an input it skips, an override it misses, a different fallback order). The suggestion reads from the authoritative value or passes it through (for example `childEnv.CLAUDE_CONFIG_DIR`); never suggest extracting a new shared helper.
+
+If an exclusion applies, return no finding. If you cannot tell whether two values stand for the same entity, use low confidence.
+"""
