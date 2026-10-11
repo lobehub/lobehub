@@ -4684,6 +4684,41 @@ table workspace_members {
   }
 }
 
+table workspace_team_members {
+  id uuid [pk, not null, default: `gen_random_uuid()`]
+  team_id text [not null]
+  workspace_id text [not null]
+  user_id text [not null]
+  role text [not null, default: 'member']
+  created_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    
+    (team_id, user_id) [name: 'workspace_team_members_team_user_unique', unique]
+    (workspace_id, user_id) [name: 'workspace_team_members_workspace_user_idx']
+    user_id [name: 'workspace_team_members_user_id_idx']
+  }
+}
+
+table workspace_teams {
+  id text [pk, not null]
+  workspace_id text [not null]
+  name varchar(255) [not null]
+  identifier varchar(16) [not null]
+  description varchar(1000)
+  avatar text
+  created_by text
+  created_at "timestamp with time zone" [not null, default: `now()`]
+  updated_at "timestamp with time zone" [not null, default: `now()`]
+
+  indexes {
+    (workspace_id, identifier) [name: 'workspace_teams_workspace_identifier_unique', unique]
+    workspace_id [name: 'workspace_teams_workspace_id_idx']
+    created_by [name: 'workspace_teams_created_by_idx']
+    (id, workspace_id) [name: 'workspace_teams_id_workspace_unique', unique]
+  }
+}
+
 table workspace_user_settings {
   id uuid [pk, not null, default: `gen_random_uuid()`]
   workspace_id text [not null]
