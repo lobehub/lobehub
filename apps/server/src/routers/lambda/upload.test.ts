@@ -1,5 +1,4 @@
 import { MAX_UPLOAD_FILE_SIZE, UPLOAD_FILE_SIZE_LIMIT_ERROR_MESSAGE } from '@lobechat/const';
-import { TRPCError } from '@trpc/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { uploadRouter } from '@/server/routers/lambda/upload';
@@ -22,7 +21,6 @@ const routerMocks = vi.hoisted(() => {
     createPreSignedUploadPartUrl: vi.fn(),
     createPreSignedUrl: vi.fn(),
     fileUploadService: {
-      assertActiveOrLegacy: vi.fn(),
       findLatest: vi.fn(),
       hasAnyLiveSession: vi.fn(),
       model,
@@ -109,7 +107,6 @@ describe('uploadRouter', () => {
     );
     routerMocks.fileUploadService.findLatest.mockResolvedValue(undefined);
     routerMocks.fileUploadService.hasAnyLiveSession.mockResolvedValue(false);
-    routerMocks.fileUploadService.assertActiveOrLegacy.mockResolvedValue(undefined);
     routerMocks.fileUploadService.touchActive.mockResolvedValue(undefined);
   });
 
@@ -165,14 +162,18 @@ describe('uploadRouter', () => {
     expect(routerMocks.createPreSignedUrl).not.toHaveBeenCalled();
   });
 
-  it('keeps missing-size requests on the legacy path', async () => {
-    await expect(caller.createS3PreSignedUrl({ pathname: 'files/legacy.bin' })).resolves.toBe(
-      'https://example.com/upload',
-    );
+  it('rejects missing-size requests before issuing upload credentials', async () => {
+    await expect(
+      caller.createS3PreSignedUrl({ pathname: 'files/legacy.bin' } as any),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    await expect(
+      caller.createS3MultipartUpload({ pathname: 'files/legacy.bin' } as any),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
 
     expect(routerMocks.businessFileUploadCheck).not.toHaveBeenCalled();
     expect(routerMocks.model.create).not.toHaveBeenCalled();
-    expect(routerMocks.createPreSignedUrl).toHaveBeenCalledWith('files/legacy.bin');
+    expect(routerMocks.createPreSignedUrl).not.toHaveBeenCalled();
+    expect(routerMocks.createMultipartUpload).not.toHaveBeenCalled();
   });
 
   it('stores the server-selected multipart size and signs the exact final part length', async () => {
@@ -188,7 +189,7 @@ describe('uploadRouter', () => {
       multipartUploadId: 'multipart-1',
       size,
     });
-    routerMocks.fileUploadService.assertActiveOrLegacy.mockResolvedValue(upload);
+    routerMocks.fileUploadService.touchActive.mockResolvedValue(upload);
     routerMocks.createPreSignedUploadPartUrl.mockResolvedValue('https://example.com/part');
 
     await caller.createS3MultipartUploadPartUrl({
@@ -212,7 +213,7 @@ describe('uploadRouter', () => {
       multipartUploadId: 'multipart-1',
       size: partSize + 5,
     });
-    routerMocks.fileUploadService.assertActiveOrLegacy.mockResolvedValue(upload);
+    routerMocks.fileUploadService.touchActive.mockResolvedValue(upload);
 
     await caller.completeS3MultipartUpload({
       partCount: 2,
@@ -231,7 +232,7 @@ describe('uploadRouter', () => {
   });
 
   it('rejects multipart operations for a different upload id', async () => {
-    routerMocks.fileUploadService.assertActiveOrLegacy.mockResolvedValue(
+    routerMocks.fileUploadService.touchActive.mockResolvedValue(
       createUpload({ multipartPartSize: 32 * 1024 * 1024, multipartUploadId: 'multipart-1' }),
     );
 
@@ -246,10 +247,29 @@ describe('uploadRouter', () => {
     expect(routerMocks.createPreSignedUploadPartUrl).not.toHaveBeenCalled();
   });
 
-  it('does not fall back to legacy multipart access for another owned session', async () => {
-    routerMocks.fileUploadService.assertActiveOrLegacy.mockRejectedValue(
-      new TRPCError({ code: 'CONFLICT', message: 'Upload pathname belongs to another session' }),
-    );
+  it('rejects multipart operations without an owned active reservation', async () => {
+    await expect(
+      caller.createS3MultipartUploadPartUrl({
+        partNumber: 1,
+        pathname: 'files/legacy.bin',
+        uploadId: 'multipart-legacy',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    await expect(
+      caller.completeS3MultipartUpload({
+        partCount: 1,
+        pathname: 'files/legacy.bin',
+        uploadId: 'multipart-legacy',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    expect(routerMocks.createPreSignedUploadPartUrl).not.toHaveBeenCalled();
+    expect(routerMocks.completeMultipartUpload).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to multipart access for another live session', async () => {
+    routerMocks.fileUploadService.hasAnyLiveSession.mockResolvedValue(true);
 
     await expect(
       caller.createS3MultipartUploadPartUrl({
@@ -260,5 +280,29 @@ describe('uploadRouter', () => {
     ).rejects.toMatchObject({ code: 'CONFLICT' });
 
     expect(routerMocks.createPreSignedUploadPartUrl).not.toHaveBeenCalled();
+  });
+
+  it('does not abort raw multipart uploads without an owned active reservation', async () => {
+    await expect(
+      caller.abortS3MultipartUpload({
+        pathname: 'files/legacy.bin',
+        uploadId: 'multipart-legacy',
+      }),
+    ).resolves.toEqual({ success: true });
+
+    expect(routerMocks.abortMultipartUpload).not.toHaveBeenCalled();
+  });
+
+  it('rejects aborting a multipart upload that belongs to another live session', async () => {
+    routerMocks.fileUploadService.hasAnyLiveSession.mockResolvedValue(true);
+
+    await expect(
+      caller.abortS3MultipartUpload({
+        pathname: 'files/other-user.bin',
+        uploadId: 'multipart-other',
+      }),
+    ).rejects.toMatchObject({ code: 'CONFLICT' });
+
+    expect(routerMocks.abortMultipartUpload).not.toHaveBeenCalled();
   });
 });
