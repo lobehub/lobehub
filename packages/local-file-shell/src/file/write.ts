@@ -1,6 +1,8 @@
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
+import { detectTextFileFormat } from '@lobechat/file-loaders/utils/decodeTextFile';
+
 import type { WriteFileParams, WriteFileResult } from '../types';
 import { verifyWrittenContent, withFileLock, writeFileAtomic } from './atomicWrite';
 import { resolveAgainstCwd } from './expandTilde';
@@ -21,7 +23,13 @@ export async function writeLocalFile({
     try {
       const dirname = path.dirname(filePath);
       await mkdir(dirname, { recursive: true });
-      await writeFileAtomic(filePath, content);
+      // Overwriting an existing file keeps its encoding and BOM, so a UTF-16
+      // file updated via writeFile does not silently become UTF-8; new files
+      // default to UTF-8 without a BOM.
+      const format = await detectTextFileFormat(filePath).catch(
+        () => ({ bom: null, encoding: 'utf8' }) as const,
+      );
+      await writeFileAtomic(filePath, content, format);
 
       const writeError = await verifyWrittenContent(filePath, content);
       if (writeError) return { error: writeError, success: false };
