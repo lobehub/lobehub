@@ -10,6 +10,7 @@ import { useWorkspaceAwareNavigate } from '@/features/Workspace/useWorkspaceAwar
 import { ScrollSignalProvider } from './ScrollSignalContext';
 import SkillActivateMode from './SkillActivateMode';
 import ToolsList from './ToolsList';
+import ToolsViewModeSwitch from './ToolsViewModeSwitch';
 
 const styles = createStaticStyles(({ css }) => ({
   footer: css`
@@ -149,6 +150,7 @@ const PopoverContent = memo<PopoverContentProps>(
             onChange={(e) => setSearchKeyword(e.target.value)}
             onKeyDown={stopPropagation}
           />
+          <ToolsViewModeSwitch />
           <SkillActivateMode />
         </Flexbox>
         <ScrollSignalProvider

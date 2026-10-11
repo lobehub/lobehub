@@ -3950,6 +3950,10 @@ When I am ___, I need ___
   'tools.tabs.all': 'All',
   'tools.tabs.installed': 'Enabled',
   'tools.title': 'Skills',
+  'tools.view.flat': 'Flat View',
+  'tools.view.grouped': 'Grouped View',
+  'tools.view.toggleToFlat': 'Switch to flat view',
+  'tools.view.toggleToGrouped': 'Switch to grouped view',
   'tab.environments': 'Environments',
   'environments.desc':
     'What a sandbox run needs around it: a repository, its setup, its variables. Each instance built from one keeps its own files between sessions.',

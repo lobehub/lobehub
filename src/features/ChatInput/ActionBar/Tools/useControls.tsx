@@ -3,7 +3,7 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { getConnectorCatalog, RECOMMENDED_SKILLS, RecommendedSkillType } from '@lobechat/const';
 import { type AgentPluginMode, getDisabledPluginIds } from '@lobechat/types';
 import type { ItemType } from '@lobehub/ui';
-import { Icon, Popover, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
+import { Flexbox, Icon, Popover, SearchBar, stopPropagation, Tooltip } from '@lobehub/ui';
 import { Avatar, confirmModal, Switch, Tag } from '@lobehub/ui/base-ui';
 import { McpIcon, SkillsIcon } from '@lobehub/ui/icons';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
@@ -72,6 +72,9 @@ import MarketSkillIcon from './MarketSkillIcon';
 import SkillRow from './SkillRow';
 import ToolItem from './ToolItem';
 import ToolItemDetailPopover from './ToolItemDetailPopover';
+import { buildFlatToolsOrder, FLAT_ROW_STATE_LABEL_KEY } from './toolsViewLayout';
+import ToolsViewModeSwitch from './ToolsViewModeSwitch';
+import { useToolsViewMode } from './useToolsViewMode';
 
 const officialTag = (
   <Tooltip placement={'top'} title={'LobeHub'}>
@@ -227,6 +230,15 @@ const styles = createStaticStyles(({ css }) => ({
   `,
   iconPinned: css`
     color: ${cssVar.colorInfo};
+  `,
+  rowState: css`
+    flex: none;
+    font-size: 12px;
+    line-height: 1;
+    color: ${cssVar.colorTextTertiary};
+  `,
+  rowStateOff: css`
+    color: ${cssVar.colorTextQuaternary};
   `,
   policyButton: css`
     cursor: pointer;
@@ -490,6 +502,8 @@ const styles = createStaticStyles(({ css }) => ({
 }));
 
 export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = {}) => {
+  // Shared with the chat input's Tools popover — both hosts render the same list.
+  const { viewMode } = useToolsViewMode();
   const { t } = useTranslation('setting');
   const agentId = useAgentId();
   const navigate = useWorkspaceAwareNavigate();
@@ -806,6 +820,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       icon?: ReactNode,
       extraTag?: ReactNode,
       detailContent?: ReactNode,
+      stateLabel?: ReactNode,
     ) => (
       <SkillRow
         className={cx(styles.toolRow)}
@@ -817,6 +832,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
             {icon}
             <span className={cx(styles.toolLabelBody)}>
               <span className={cx(styles.toolLabelText)}>{label}</span>
+              {stateLabel}
               {extraTag}
             </span>
           </>
@@ -866,8 +882,16 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       searchText?: string;
       supportedModes?: SkillPolicyMode[];
       title: ReactNode;
-    }): SkillMenuItem =>
-      ({
+    }): SkillMenuItem => {
+      const state: SkillPolicyMode =
+        modeOverride ??
+        (checkedSet.has(id)
+          ? 'pinned'
+          : disabledIdSet.has(id)
+            ? 'disabled'
+            : (defaultMode ?? 'auto'));
+
+      return {
         closeOnClick: false,
         key: id,
         label: renderToolLabel(
@@ -885,10 +909,18 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
           icon,
           extraTag,
           popoverContent,
+          // Grouped view shows the state through the group a row sits in; the flat
+          // view has no buckets, so each row states its own.
+          viewMode === 'flat' ? (
+            <span className={cx(styles.rowState, state === 'disabled' && styles.rowStateOff)}>
+              {t(FLAT_ROW_STATE_LABEL_KEY[state])}
+            </span>
+          ) : undefined,
         ),
         searchText: searchText || String(title || id),
-      }) as SkillMenuItem,
-    [renderPolicyMenu, renderToolLabel],
+      } as SkillMenuItem;
+    },
+    [checkedSet, disabledIdSet, renderPolicyMenu, renderToolLabel, t, viewMode],
   );
 
   // Composio-related state
@@ -1810,18 +1842,21 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
   );
 
   const marketHeader = (
-    <SearchBar
-      allowClear
-      className="lobe-skill-submenu-search"
-      placeholder={t('tools.search')}
-      size="small"
-      style={{ width: '100%' }}
-      value={searchKeyword}
-      variant="borderless"
-      onChange={(event) => setSearchKeyword(event.target.value)}
-      onClick={stopPropagation}
-      onKeyDown={stopPropagation}
-    />
+    <Flexbox horizontal align={'center'} gap={4}>
+      <SearchBar
+        allowClear
+        className="lobe-skill-submenu-search"
+        placeholder={t('tools.search')}
+        size="small"
+        style={{ flex: 1 }}
+        value={searchKeyword}
+        variant="borderless"
+        onChange={(event) => setSearchKeyword(event.target.value)}
+        onClick={stopPropagation}
+        onKeyDown={stopPropagation}
+      />
+      <ToolsViewModeSwitch />
+    </Flexbox>
   );
 
   const marketFooter =
@@ -1856,7 +1891,7 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
       </>
     ) : undefined;
 
-  const marketItems: ItemType[] = [
+  const groupedItems: ItemType[] = [
     ...(pinnedItems.length > 0
       ? [
           {
@@ -1923,6 +1958,19 @@ export const useControls = ({ closeDropdown }: { closeDropdown?: () => void } = 
         ]
       : []),
   ];
+
+  // Flat view: one list, no state buckets. See `buildFlatToolsOrder` for why the order
+  // can only depend on what a row is, never on its activation state.
+  const flatItems: ItemType[] = buildFlatToolsOrder<SkillMenuItem>({
+    capabilityItems,
+    fixedItems,
+    isAgentSkillItem,
+    // `allSkillItems` is typed by the menu's `ItemType`; every entry is a row built by
+    // `createManagedSkillItem`, which is what the flat view needs to interleave.
+    skillItems: allSkillItems as unknown as SkillMenuItem[],
+  });
+
+  const marketItems: ItemType[] = viewMode === 'flat' ? flatItems : groupedItems;
 
   // Items for the installed tab - only show installed plugins
   const installedPluginItems: ItemType[] = useMemo(() => {
