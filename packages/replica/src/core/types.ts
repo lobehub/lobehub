@@ -71,8 +71,20 @@ export interface ReplicaEntryMeta<T> {
   pending: ReplicaPendingMutation<T>[];
   /** Stable query identity beyond the key (filters, page size). */
   query?: string;
+  /**
+   * Confirmed (non-seed) writes made while the entry is still a `seed`. The seed
+   * stays provisional (persisting it would clobber the stored detail), so a
+   * hydrate that replaces it replays these onto the stored value — a confirmed
+   * edit made before storage answered is not lost, and then persists.
+   */
+  seedPatches?: ReplicaSeedPatch<T>[];
   source: ReplicaSource;
   updatedAt: number;
+}
+
+export interface ReplicaSeedPatch<T> {
+  apply: (data: T | undefined) => T | undefined;
+  persist: boolean;
 }
 
 /** Bookkeeping slot a replica keeps inside its domain store. */

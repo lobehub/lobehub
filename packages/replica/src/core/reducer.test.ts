@@ -116,6 +116,60 @@ describe('replicaReducer', () => {
       expect(h.view.k).toEqual(['local']);
     });
 
+    // A confirmed write made over a seed (e.g. a rename while the detail is still
+    // reading storage) must survive the late hydrate that replaces the seed:
+    // it is replayed onto the hydrated value, which then persists.
+    it('replays a confirmed write made over a seed onto the late hydrate', () => {
+      const h = createHarness();
+      h.run({
+        apply: () => ['seed'],
+        key: 'k',
+        persist: false,
+        scope: S,
+        source: 'seed',
+        type: 'update',
+      });
+      h.run({ apply: append('confirmed'), key: 'k', persist: true, scope: S, type: 'update' });
+      // Still provisional: persisting the seed would clobber the stored detail.
+      expect(h.effects).toEqual([]);
+
+      h.run({ data: ['persisted'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['persisted', 'confirmed']);
+      expect(h.state.entries.k.source).toBe('local');
+      expect(h.effects).toEqual([
+        { data: ['persisted', 'confirmed'], key: 'k', scope: S, type: 'persist' },
+      ]);
+
+      // Now authoritative: another late hydrate cannot clobber it either.
+      h.run({ data: ['stale'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['persisted', 'confirmed']);
+    });
+
+    it('does not replay further seed writes, nor persist in-memory-only writes', () => {
+      const h = createHarness();
+      h.run({
+        apply: () => ['seed'],
+        key: 'k',
+        persist: false,
+        scope: S,
+        source: 'seed',
+        type: 'update',
+      });
+      h.run({
+        apply: append('reseeded'),
+        key: 'k',
+        persist: false,
+        scope: S,
+        source: 'seed',
+        type: 'update',
+      });
+      h.run({ apply: append('memory'), key: 'k', persist: false, scope: S, type: 'update' });
+
+      h.run({ data: ['persisted'], key: 'k', scope: S, type: 'hydrate' });
+      expect(h.view.k).toEqual(['persisted', 'memory']);
+      expect(h.effects).toEqual([]);
+    });
+
     it('does not hydrate over a seed that carries an in-flight overlay', () => {
       const h = createHarness();
       h.run({

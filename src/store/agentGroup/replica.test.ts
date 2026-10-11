@@ -702,6 +702,92 @@ describe('agentGroup store replica', () => {
     session.unmount();
   });
 
+  // P1: g1 → g2 → g1 offline. g1's hydration already ran and is not re-run, so
+  // its side effects must be replayed off the cached detail when g1 is active
+  // again — otherwise the agent / chat stores stay on g2's supervisor.
+  it('re-adopts a cached group when navigating back to it with no network', async () => {
+    const scope = createScope();
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      { data: groupDetail('g1', 'One'), updatedAt: 1 },
+    );
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g2'), scope },
+      { data: groupDetail('g2', 'Two'), updatedAt: 1 },
+    );
+    getGroupDetail.mockImplementation(pending);
+
+    const session = renderHook(
+      ({ id }: { id: string }) => useAgentGroupStore.getState().useFetchGroupDetail(true, id),
+      { initialProps: { id: 'g1' } },
+    );
+    await vi.waitFor(() =>
+      expect(agentStoreMock.setActiveAgentId).toHaveBeenLastCalledWith('g1-supervisor'),
+    );
+
+    session.rerender({ id: 'g2' });
+    await vi.waitFor(() =>
+      expect(agentStoreMock.setActiveAgentId).toHaveBeenLastCalledWith('g2-supervisor'),
+    );
+
+    session.rerender({ id: 'g1' });
+    await vi.waitFor(() =>
+      expect(agentStoreMock.setActiveAgentId).toHaveBeenLastCalledWith('g1-supervisor'),
+    );
+    session.unmount();
+  });
+
+  // P2: a rename confirmed by the API while the detail is still a list seed
+  // (its storage read not landed yet) must survive the late hydrate, and the
+  // hydrated detail must persist with the rename and keep its stored roster.
+  it('keeps a confirmed rename made over a seed when the detail hydrates late', async () => {
+    const scope = createScope();
+    const roster = [{ id: 'a1', isSupervisor: false, title: 'Member' }];
+    await agentGroupDetailResource.storage!.set(
+      { queryKey: detailStorageKey('g1'), scope },
+      { data: { ...groupDetail('g1', 'Persisted detail'), agents: roster } as any, updatedAt: 1 },
+    );
+
+    const storage = agentGroupDetailResource.storage!;
+    const realGet = storage.get.bind(storage);
+    let releaseRead!: () => void;
+    const readGate = new Promise<void>((resolve) => (releaseRead = resolve));
+    let readStarted = false;
+    vi.spyOn(storage, 'get').mockImplementation(async (key) => {
+      if (key.queryKey === detailStorageKey('g1') && key.scope === scope) {
+        const snapshot = await realGet(key);
+        readStarted = true;
+        await readGate;
+        return snapshot;
+      }
+      return realGet(key);
+    });
+
+    useAgentGroupStore
+      .getState()
+      .internal_updateGroupMaps([{ ...groupRow('g1', 'List row'), config: null } as any]);
+    getGroupDetail.mockImplementation(pending);
+    const session = renderHook(() => useAgentGroupStore.getState().useFetchGroupDetail(true, 'g1'));
+    await vi.waitFor(() => expect(readStarted).toBe(true));
+
+    // The API confirmed the rename; the detail is still the list seed.
+    useAgentGroupStore.getState().internal_updateGroupRow('g1', { title: 'Renamed' });
+    expect(useAgentGroupStore.getState().groupMap.g1?.title).toBe('Renamed');
+
+    releaseRead();
+    await vi.waitFor(() =>
+      expect(useAgentGroupStore.getState().groupMap.g1?.agents).toEqual(roster),
+    );
+    expect(useAgentGroupStore.getState().groupMap.g1?.title).toBe('Renamed');
+    await vi.waitFor(async () =>
+      expect((await realGet({ queryKey: detailStorageKey('g1'), scope }))?.data).toMatchObject({
+        agents: roster,
+        title: 'Renamed',
+      }),
+    );
+    session.unmount();
+  });
+
   // P1: after a workspace switch the store stays mounted with `groupsInit` still
   // true. `loadGroups` must reset the view to the new scope and read its persisted
   // list rather than leaving the previous workspace's groups on screen until the

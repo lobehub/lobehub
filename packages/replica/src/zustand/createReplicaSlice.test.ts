@@ -575,6 +575,40 @@ describe('createReplicaSlice', () => {
       session.unmount();
     });
 
+    // a → b → a: a's hydration query already settled and is not re-run, so its
+    // side effects must be replayed off the cached value when `a` is active again
+    // — or they stay pointed at `b` until (or, offline, without) a response.
+    it('replays onHydrated when a hydrated key becomes active again', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['cached-a'], updatedAt: 1 });
+      storage.rows.set('user-1:personal|b', { data: ['cached-b'], updatedAt: 1 });
+      // Offline: the network never answers, so only hydration can run effects.
+      const { slice, store } = setup({ fetcher: () => new Promise<string[]>(() => {}), storage });
+      const seen: string[][] = [];
+
+      const session = renderHook(
+        ({ id }: { id: string }) =>
+          slice.useSync({ id }, { onHydrated: (data) => seen.push(data) }),
+        { initialProps: { id: 'a' }, wrapper },
+      );
+      await waitFor(() => expect(session.result.current.isHydrated).toBe(true));
+      // The first activation runs it once, from the hydrate itself.
+      expect(seen).toEqual([['cached-a']]);
+
+      session.rerender({ id: 'b' });
+      await waitFor(() => expect(seen).toEqual([['cached-a'], ['cached-b']]));
+
+      session.rerender({ id: 'a' });
+      await waitFor(() => expect(seen).toEqual([['cached-a'], ['cached-b'], ['cached-a']]));
+      expect(store.getState().lists.a).toEqual(['cached-a']);
+
+      // A plain re-render of the same key does not replay again.
+      session.rerender({ id: 'a' });
+      await act(async () => {});
+      expect(seen).toHaveLength(3);
+      session.unmount();
+    });
+
     it('a version bump ignores rows written by the previous version', async () => {
       // One backing map shared by every version, keyed by the namespace the
       // factory receives — like IndexedDB rows of two app releases.

@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 import { createReplicaEngine, type ReplicaEngineOptions } from '../core/engine';
 import { isReplicaSyncKey, replicaKeys } from '../core/keys';
@@ -225,8 +225,13 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
     // while g1's storage read is slow, then g1's hydrate resets the active group
     // back to g1's supervisor).
     const activeKey = useRef<string | undefined>(undefined);
+    // The key whose hydration side effects already ran in its current
+    // activation. Reset on every key change, so a key that comes back (g1 → g2
+    // → g1) gets them replayed even though its `once` hydration is not re-run.
+    const hydratedKey = useRef<string | undefined>(undefined);
     useLayoutEffect(() => {
       activeKey.current = active ? key : undefined;
+      hydratedKey.current = undefined;
     }, [active, key]);
 
     const hydration = driver.useQuery<boolean>(
@@ -235,17 +240,32 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
         : null,
       async () => {
         const didHydrate = await hydrate(params!, scope);
+        // A superseded key (the hook moved on) runs no side effects at all.
+        if (activeKey.current !== key) return true;
+        hydratedKey.current = key;
         // A persisted row is a successful value with no network response: replay
         // the success side effects off it, so an offline / slow first paint still
         // adopts the roster and settles the flags the response path would.
         if (didHydrate) {
           const hydrated = view.get(get(), key!);
-          if (hydrated !== undefined && activeKey.current === key) onHydrated?.(hydrated);
+          if (hydrated !== undefined) onHydrated?.(hydrated);
         }
         return true;
       },
       { once: true },
     );
+
+    // Reactivating a key whose hydration already settled: the driver reuses the
+    // `once` result and the fetcher above does not run, so replay the side
+    // effects off the value in memory. Without it, returning to g1 offline
+    // leaves them acting on g2 until a response lands (or forever, offline).
+    useEffect(() => {
+      if (!active || key === undefined || hydration.data !== true) return;
+      if (hydratedKey.current === key) return;
+      hydratedKey.current = key;
+      const current = view.get(get(), key);
+      if (current !== undefined) onHydrated?.(current);
+    }, [active, key, hydration.data]);
 
     const sync = driver.useQuery<TFetched>(
       active && fetcher

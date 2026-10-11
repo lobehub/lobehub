@@ -129,16 +129,22 @@ export const replicaReducer = <T>(
       // it. Otherwise a seeded entry would block the persisted detail forever.
       const provisionalSeed = !!entry && entry.source === 'seed' && entry.pending.length === 0;
       if (!provisionalSeed && (entry || view !== undefined)) return noop(state);
+      // Confirmed writes made over the seed are replayed onto the stored value,
+      // so storage cannot clobber them. The result is a confirmed local value.
+      const patches = (provisionalSeed && entry.seedPatches) || [];
+      const data = patches.reduce((value, patch) => patch.apply(value) ?? value, action.data);
       return {
-        effects: [],
+        effects: patches.some((patch) => patch.persist)
+          ? [{ data, key: action.key, query: action.query, scope, type: 'persist' }]
+          : [],
         state: withEntry({
           params: action.params,
           pending: [],
           query: action.query,
-          source: 'storage',
-          updatedAt: action.updatedAt ?? now,
+          source: patches.length ? 'local' : 'storage',
+          updatedAt: patches.length ? now : (action.updatedAt ?? now),
         }),
-        writes: [{ data: action.data, key: action.key }],
+        writes: [{ data, key: action.key }],
       };
     }
 
@@ -178,6 +184,12 @@ export const replicaReducer = <T>(
       const source: ReplicaSource =
         entry?.source ?? (view === undefined ? (action.source ?? 'local') : 'local');
       const persist = action.persist && source !== 'seed';
+      // A confirmed write over a seed keeps the seed provisional, but is
+      // remembered so a hydrate replacing the seed replays it (see `hydrate`).
+      const seedPatches =
+        source === 'seed' && action.source !== 'seed'
+          ? [...(entry?.seedPatches ?? []), { apply: action.apply, persist: action.persist }]
+          : entry?.seedPatches;
       return {
         effects:
           persist && nextBase !== undefined
@@ -188,6 +200,7 @@ export const replicaReducer = <T>(
             ...entry,
             base: pending.length ? nextBase : undefined,
             pending,
+            seedPatches,
             source,
             updatedAt: now,
           }),
