@@ -103,6 +103,48 @@ const getCreditErrorType = (error: unknown): string | undefined => {
   return typeof errorType === 'string' && CREDIT_ERROR_TYPES.has(errorType) ? errorType : undefined;
 };
 
+/**
+ * Structured rejection from the model gateway (e.g. `{ errorType: 403,
+ * message: "Request blocked.", _responseBody: { provider, reason:
+ * "not_onboarded" } }`). The raw message alone gives the agent nothing to act
+ * on — the gateway's `reason` is the only actionable signal, and rethrowing
+ * collapses the whole payload into that bare string before the tool result is
+ * built. Surface it instead of letting the failure degrade to "Request
+ * blocked." with no code, no cause, and no recovery path.
+ */
+const getGatewayRejection = (error: unknown): { content: string; code: string } | undefined => {
+  if (!error || typeof error !== 'object') return;
+
+  const raw = error as {
+    _responseBody?: { provider?: unknown; reason?: unknown };
+    errorType?: unknown;
+    message?: unknown;
+  };
+
+  const errorType = typeof raw.errorType === 'number' ? raw.errorType : undefined;
+  const provider =
+    typeof raw._responseBody?.provider === 'string' ? raw._responseBody.provider : undefined;
+  const reason =
+    typeof raw._responseBody?.reason === 'string' ? raw._responseBody.reason : undefined;
+  const message = typeof raw.message === 'string' ? raw.message : undefined;
+
+  if (errorType === undefined || (!reason && !message)) return;
+
+  const parts = [
+    `Media analysis was rejected by the platform model gateway (HTTP ${errorType}${provider ? `, provider: ${provider}` : ''}).`,
+    reason ? `Gateway reason: ${reason}.` : undefined,
+    message && message !== 'error' ? `Upstream message: ${message}.` : undefined,
+    'This is an account/gateway-level refusal, not a content-policy verdict on the media. Do not retry blindly or treat the media as blocked content.',
+  ].filter(Boolean);
+
+  return {
+    code: reason
+      ? `GATEWAY_${reason.toUpperCase().replaceAll(/[^A-Z0-9]+/g, '_')}`
+      : 'GATEWAY_REJECTED',
+    content: parts.join(' '),
+  };
+};
+
 const BASE64_CONTENT_PATTERN = /^[A-Z\d+/]+={0,2}$/i;
 const MAX_INLINE_IMAGE_PIXELS = 25_000_000;
 /**
@@ -570,7 +612,12 @@ class LobeAgentExecutionRuntime {
       await consumeStreamUntilDone(response);
     } catch (error) {
       const creditErrorType = getCreditErrorType(error);
-      if (!creditErrorType) throw error;
+      if (!creditErrorType) {
+        const rejection = getGatewayRejection(error);
+        if (!rejection) throw error;
+
+        return buildError(rejection.content, rejection.code);
+      }
 
       return buildError(
         `Media analysis could not run: it uses the platform model "${provider}/${model}", which is billed to the user's LobeHub credits, and those credits are exhausted (${creditErrorType}). ` +

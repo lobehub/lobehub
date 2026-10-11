@@ -239,6 +239,41 @@ describe('lobeAgentRuntime', () => {
     expect(result.content).toMatch(/own API key/i);
   });
 
+  it('should surface the gateway rejection reason instead of a bare blocked message', async () => {
+    mockChat.mockRejectedValueOnce({
+      _responseBody: { provider: 'lobehub', reason: 'not_onboarded' },
+      error: { message: 403 },
+      errorType: 403,
+      message: 'Request blocked.',
+    });
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    const result = await runtime.analyzeMedia({
+      question: 'what is this?',
+      urls: ['https://example.com/image.png'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toMatchObject({ code: 'GATEWAY_NOT_ONBOARDED' });
+    expect(result.content).toContain('platform model gateway');
+    expect(result.content).toContain('HTTP 403');
+    expect(result.content).toContain('provider: lobehub');
+    expect(result.content).toContain('not_onboarded');
+    expect(result.content).toMatch(/not a content-policy verdict/i);
+  });
+
+  it('should still rethrow unexpected non-gateway chat failures', async () => {
+    mockChat.mockRejectedValueOnce(new Error('socket hang up'));
+    const runtime = lobeAgentRuntime.factory(baseContext);
+
+    await expect(
+      runtime.analyzeMedia({
+        question: 'what is this?',
+        urls: ['https://example.com/image.png'],
+      }),
+    ).rejects.toThrow('socket hang up');
+  });
+
   it('should reject loopback media urls before calling the multimodal model', async () => {
     const runtime = lobeAgentRuntime.factory(baseContext);
 
