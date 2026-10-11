@@ -519,7 +519,7 @@ This project is [LobeHub Community License](./LICENSE) licensed.
 [docs-docker]: https://lobehub.com/zh/docs/self-hosting/server-database/docker-compose
 [docs-env-var]: https://lobehub.com/docs/self-hosting/environment-variables
 [docs-function-call]: https://lobehub.com/zh/blog/openai-function-call
-[docs-plugin-dev]: https://lobehub.com/docs/usage/plugins/development
+[docs-plugin-dev]: https://github.com/lobehub/chat-plugin-sdk
 [docs-self-hosting]: https://lobehub.com/docs/self-hosting/start
 [docs-upstream-sync]: https://lobehub.com/docs/self-hosting/advanced/upstream-sync
 [fossa-license-link]: https://app.fossa.com/projects/git%2Bgithub.com%2Flobehub%2Flobehub
