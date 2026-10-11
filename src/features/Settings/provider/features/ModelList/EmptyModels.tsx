@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { usePermission } from '@/hooks/usePermission';
 import { useAiInfraStore } from '@/store/aiInfra';
 
+import { createComfyUIWorkflowModal } from './ComfyUIWorkflowModal';
 import { createCreateNewModelModal } from './CreateNewModelModal';
 import { ProviderSettingsContext } from './ProviderSettingsContext';
 
@@ -63,8 +64,18 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
         <Icon className={styles.sparklesIcon} icon={BrainIcon} />
       </Center>
       <Flexbox align={'center'} gap={8}>
-        <div className={styles.title}>{t('providerModels.list.empty.title')}</div>
-        <div className={styles.description}>{t('providerModels.list.empty.desc')}</div>
+        <div className={styles.title}>
+          {t(
+            provider === 'comfyui' ? 'comfyui.workflow.import' : 'providerModels.list.empty.title',
+          )}
+        </div>
+        <div className={styles.description}>
+          {t(
+            provider === 'comfyui'
+              ? 'comfyui.workflow.description'
+              : 'providerModels.list.empty.desc',
+          )}
+        </div>
       </Flexbox>
 
       <Flexbox horizontal gap={8}>
@@ -74,6 +85,10 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
             icon={PlusIcon}
             onClick={() => {
               if (!canManageProvider) return;
+              if (provider === 'comfyui') {
+                createComfyUIWorkflowModal();
+                return;
+              }
               createCreateNewModelModal({
                 existingModelIds: useAiInfraStore
                   .getState()
@@ -82,43 +97,45 @@ const EmptyState = memo<{ provider: string }>(({ provider }) => {
               });
             }}
           >
-            {t('providerModels.list.addNew')}
+            {t(provider === 'comfyui' ? 'comfyui.workflow.import' : 'providerModels.list.addNew')}
           </Button>
         </Tooltip>
-        <Tooltip title={canManageProvider ? undefined : reason}>
-          <Button
-            disabled={!canManageProvider}
-            icon={<Icon icon={LucideRefreshCcwDot} />}
-            loading={fetchRemoteModelsLoading}
-            type={'primary'}
-            onClick={async () => {
-              if (!canManageProvider) return;
-              setFetchRemoteModelsLoading(true);
-              try {
-                await fetchRemoteModelList(provider);
-              } catch (error) {
-                console.error(error);
+        {provider !== 'comfyui' && (
+          <Tooltip title={canManageProvider ? undefined : reason}>
+            <Button
+              disabled={!canManageProvider}
+              icon={<Icon icon={LucideRefreshCcwDot} />}
+              loading={fetchRemoteModelsLoading}
+              type={'primary'}
+              onClick={async () => {
+                if (!canManageProvider) return;
+                setFetchRemoteModelsLoading(true);
+                try {
+                  await fetchRemoteModelList(provider);
+                } catch (error) {
+                  console.error(error);
 
-                const errorMessage =
-                  error instanceof Error
-                    ? error.message
-                    : t('providerModels.list.fetcher.errorFallback');
+                  const errorMessage =
+                    error instanceof Error
+                      ? error.message
+                      : t('providerModels.list.fetcher.errorFallback');
 
-                toast.error(
-                  t('providerModels.list.fetcher.error', {
-                    message: errorMessage,
-                  }),
-                );
-              } finally {
-                setFetchRemoteModelsLoading(false);
-              }
-            }}
-          >
-            {fetchRemoteModelsLoading
-              ? t('providerModels.list.fetcher.fetching')
-              : t('providerModels.list.fetcher.fetch')}
-          </Button>
-        </Tooltip>
+                  toast.error(
+                    t('providerModels.list.fetcher.error', {
+                      message: errorMessage,
+                    }),
+                  );
+                } finally {
+                  setFetchRemoteModelsLoading(false);
+                }
+              }}
+            >
+              {fetchRemoteModelsLoading
+                ? t('providerModels.list.fetcher.fetching')
+                : t('providerModels.list.fetcher.fetch')}
+            </Button>
+          </Tooltip>
+        )}
       </Flexbox>
     </Center>
   );

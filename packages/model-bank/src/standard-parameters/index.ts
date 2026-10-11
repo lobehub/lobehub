@@ -82,6 +82,14 @@ export const ModelParamsMetaSchema = z.object({
     type: z.literal('string').optional(),
   }),
 
+  negativePrompt: z
+    .object({
+      default: z.string().optional().default(''),
+      description: z.string().optional(),
+      type: z.literal('string').optional(),
+    })
+    .optional(),
+
   imageUrl: z
     .object({
       default: z.string().nullish(),

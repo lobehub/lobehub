@@ -1,3 +1,4 @@
+import type { ComfyUIWorkflow, CreateAiModelParams, UpdateAiModelParams } from 'model-bank';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AiModelModel } from '@/database/models/aiModel';
@@ -27,6 +28,13 @@ vi.mock('@/server/modules/KeyVaultsEncrypt', () => ({
     }),
   },
 }));
+
+const importedWorkflow: ComfyUIWorkflow = {
+  bindings: { prompt: [{ input: 'prompt', nodeId: 'save' }] },
+  graph: { save: { class_type: 'CustomImageEmitter', inputs: { prompt: 'saved', steps: 31 } } },
+  output: { imageIndex: 0, nodeId: 'save' },
+  version: 1,
+};
 
 describe('aiModelRouter', () => {
   const mockCtx = {
@@ -199,6 +207,82 @@ describe('aiModelRouter', () => {
     expect(mockUpdate).toHaveBeenCalledWith('model-1', 'provider-1', {
       displayName: 'Updated Model',
     });
+  });
+
+  it('creates imported image models with controls derived only from graph bindings', async () => {
+    const persisted: { value?: CreateAiModelParams } = {};
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        create: async (value: CreateAiModelParams) => {
+          persisted.value = value;
+          return { id: value.id };
+        },
+        findByIdAndProvider: async () => undefined,
+      } as unknown as AiModelModel;
+    });
+    const caller = aiModelRouter.createCaller(mockCtx);
+    expect(
+      await caller.createAiModel({
+        config: { comfyuiWorkflow: importedWorkflow },
+        id: 'comfyui/workflow-test',
+        parameters: {
+          prompt: { default: 'client default' },
+          width: { default: 999, max: 999, min: 1 },
+        },
+        providerId: 'comfyui',
+        type: 'image',
+      }),
+    ).toBe('comfyui/workflow-test');
+    expect(persisted.value?.config?.comfyuiWorkflow).toEqual(importedWorkflow);
+    expect(persisted.value?.parameters).toEqual({ prompt: { default: 'saved' } });
+  });
+
+  it('keeps saved imported controls authoritative when a generic update supplies parameters without a graph', async () => {
+    const persisted: { value?: UpdateAiModelParams } = {};
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        findByIdAndProvider: async () => ({
+          config: { comfyuiWorkflow: importedWorkflow },
+          source: 'custom',
+          type: 'image',
+        }),
+        update: async (_id: string, _provider: string, value: UpdateAiModelParams) => {
+          persisted.value = value;
+        },
+      } as unknown as AiModelModel;
+    });
+    const caller = aiModelRouter.createCaller(mockCtx);
+    await caller.updateAiModel({
+      id: 'comfyui/workflow-test',
+      providerId: 'comfyui',
+      value: {
+        parameters: {
+          prompt: { default: 'client default' },
+          width: { default: 999, max: 999, min: 1 },
+        },
+      },
+    });
+    expect(persisted.value?.parameters).toEqual({ prompt: { default: 'saved' } });
+    expect(persisted.value?.config).toBeUndefined();
+  });
+
+  it('does not overwrite a bundled ComfyUI model with an imported graph', async () => {
+    const update = vi.fn();
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        findByIdAndProvider: async () => ({ source: 'builtin', type: 'image' }),
+        update,
+      } as unknown as AiModelModel;
+    });
+    const caller = aiModelRouter.createCaller(mockCtx);
+    await expect(
+      caller.updateAiModel({
+        id: 'comfyui/stable-diffusion-xl',
+        providerId: 'comfyui',
+        value: { config: { comfyuiWorkflow: importedWorkflow } },
+      }),
+    ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it('should toggle model enabled status', async () => {

@@ -1,6 +1,9 @@
 import { z } from 'zod';
 
-import { type ModelParamsSchema, type VideoModelParamsSchema } from '../standard-parameters';
+import type { ComfyUIWorkflow } from '../comfyui-workflow';
+import { ComfyUIWorkflowSchema } from '../comfyui-workflow';
+import type { ModelParamsSchema, VideoModelParamsSchema } from '../standard-parameters';
+import { ModelParamsMetaSchema } from '../standard-parameters';
 
 export type ModelPriceCurrency = 'CNY' | 'USD';
 
@@ -498,6 +501,8 @@ export interface AiModelConfig {
    */
   chatConfig?: AiModelReasoningConfig;
 
+  comfyuiWorkflow?: ComfyUIWorkflow;
+
   /**
    * used in azure and volcengine
    */
@@ -726,10 +731,17 @@ export interface LobeDefaultAiModelListItem extends AiFullModelCard {
 // create
 export const CreateAiModelSchema = z.object({
   abilities: AiModelAbilitiesSchema.optional(),
+  config: z
+    .object({
+      comfyuiWorkflow: ComfyUIWorkflowSchema.optional(),
+      deploymentName: z.string().optional(),
+    })
+    .optional(),
   contextWindowTokens: z.number().optional(),
   displayName: z.string().optional(),
   id: z.string(),
   providerId: z.string(),
+  parameters: ModelParamsMetaSchema.optional(),
   releasedAt: z.string().optional(),
   settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
@@ -739,7 +751,7 @@ export const CreateAiModelSchema = z.object({
   // modelsUrl: z.string().optional(),
 });
 
-export type CreateAiModelParams = z.infer<typeof CreateAiModelSchema>;
+export type CreateAiModelParams = z.input<typeof CreateAiModelSchema>;
 
 // List Query
 
@@ -772,16 +784,18 @@ export const UpdateAiModelSchema = z.object({
   // generic update path can never carry (and thus never stomp) that namespace.
   config: z
     .object({
+      comfyuiWorkflow: ComfyUIWorkflowSchema.optional(),
       deploymentName: z.string().optional(),
     })
     .optional(),
   contextWindowTokens: z.number().nullish(),
   displayName: z.string().nullish(),
+  parameters: ModelParamsMetaSchema.optional(),
   settings: AiModelSettingsSchema.optional(),
   type: AiModelTypeSchema.optional(),
 });
 
-export type UpdateAiModelParams = z.infer<typeof UpdateAiModelSchema>;
+export type UpdateAiModelParams = z.input<typeof UpdateAiModelSchema>;
 
 export interface AiModelSortMap {
   id: string;

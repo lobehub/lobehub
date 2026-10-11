@@ -28,10 +28,30 @@ ComfyUI is a powerful GUI for Stable Diffusion and Flow Diffusion, offering a no
 - **Extensive Model Support**: Supports 223 models, including 130 FLUX and 93 SD models
 - **Config-Driven Architecture**: Registry system enables intelligent model selection
 - **Multi-Format Support**: Compatible with .safetensors and .gguf formats, with various quantization levels
-- **Dynamic Precision Options**: Supports default, fp8\_e4m3fn, fp8\_e5m2, and fp8\_e4m3fn\_fast
+- **Dynamic Precision Options**: Supports default, fp8_e4m3fn, fp8_e5m2, and fp8_e4m3fn_fast
 - **Multiple Authentication Methods**: Supports None, Basic Auth, Bearer Token, and Custom Headers
 - **Smart Component Selection**: Automatically selects optimal T5, CLIP, and VAE encoders
 - **Enterprise-Grade Optimizations**: Includes NF4, SVDQuant, TorchAO, MFLUX variants
+
+## Import your own workflow
+
+Use this path when you already have a working setup in ComfyUI and want to keep its checkpoint, VAE, encoders, LoRAs, and sampler configuration.
+
+1. Run the workflow in ComfyUI first, then export it in **API JSON** format. The visual editor's workflow JSON is not executable API JSON.
+2. Open **App Settings → AI Providers → ComfyUI**, enable the provider, and set a server URL that the LobeHub backend can reach. `localhost` refers to the backend's machine or container, not your browser.
+3. Click **Import workflow**, paste or upload the API JSON, and enter a name.
+4. Add bindings only for inputs LobeHub should change. Choose the control, node, and literal input. Add multiple bindings to send the same prompt or seed to several nodes. Reference-image indexes start at `0`; different indexes bind different uploaded images.
+5. Select the node that saves or previews the image and its image index, starting at `0`. Each generation returns one selected image; it does not fall back to another output.
+6. Click **Validate with ComfyUI** and resolve missing nodes, files, or incompatible inputs. If the server is unavailable, you can save without successful validation and validate later.
+7. Save the workflow, select its name on the **Image** page, and generate. Edit, disable, or delete it from the provider's model list.
+
+Only bound inputs are replaced. Unbound prompts and generation settings stay as exported; imported workflows do not use checkpoint-family guessing, automatic VAE substitution, or automatic reference-image resizing. Only controls with bindings are exposed, and the workflow remains responsible for resizing references.
+
+Validation uses the connected server's node definitions and available file choices. It cannot guarantee that a custom output node emits an image or that a chosen image index exists; execution reports those errors. Install required custom nodes and model files in ComfyUI yourself. Importing a workflow does not install dependencies or add audio/video generation support.
+
+Dynamic switch ports (`COMFY_MATCHTYPE_V3`) follow ComfyUI's connection rules and can carry concrete values such as models, integers, or floats. They do not need to be removed or replaced before import.
+
+Existing bundled models remain available through their original predefined workflows.
 
 ## Quick Start
 

@@ -22,6 +22,8 @@ const extractUrlAndDimensions = (
  */
 export const useAutoDimensions = () => {
   const paramsSchema = useImageStore(imageGenerationConfigSelectors.parametersSchema);
+  const provider = useImageStore(imageGenerationConfigSelectors.provider);
+  const model = useImageStore(imageGenerationConfigSelectors.model);
   const isSupportWidth = useImageStore(imageGenerationConfigSelectors.isSupportedParam('width'));
   const isSupportHeight = useImageStore(imageGenerationConfigSelectors.isSupportedParam('height'));
   const setWidth = useImageStore((s) => s.setWidth);
@@ -31,6 +33,7 @@ export const useAutoDimensions = () => {
    * Auto-set dimensions with model constraints if parameters are supported
    */
   const autoSetDimensions = (dimensions: { height: number; width: number }) => {
+    if (provider === 'comfyui' && model.startsWith('comfyui/workflow-')) return;
     if (!isSupportWidth || !isSupportHeight) return;
 
     const constraints = {

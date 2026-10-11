@@ -10,6 +10,7 @@ import debug from 'debug';
 
 import { type ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
 import { ErrorHandlerService } from '@/server/services/comfyui/core/errorHandlerService';
+import { ImportedWorkflowService } from '@/server/services/comfyui/core/importedWorkflowService';
 import { type ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
 import { type WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
 import { ServicesError } from '@/server/services/comfyui/errors';
@@ -46,6 +47,13 @@ export class ImageService {
     try {
       // First validate connection - this will throw auth errors if credentials are wrong
       await this.clientService.validateConnection();
+
+      if (payload.comfyuiWorkflow) {
+        return await new ImportedWorkflowService(this.clientService).createImage(
+          payload.comfyuiWorkflow,
+          params,
+        );
+      }
 
       // Then validate model - only after we know connection is good
       // ModelResolverService will throw ModelResolverError if model not found

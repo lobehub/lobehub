@@ -1,13 +1,20 @@
 import { type ComfyUIKeyVault } from '@lobechat/types';
+import { ComfyUIWorkflowSchema } from 'model-bank';
 import { z } from 'zod';
 
 import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { wsCompatProcedure } from '@/business/server/trpc-middlewares/workspaceAuth';
+import { AiProviderModel } from '@/database/models/aiProvider';
 import { authedProcedure, router } from '@/libs/trpc/lambda';
+import { serverDatabase } from '@/libs/trpc/lambda/middleware';
+import { KeyVaultsGateKeeper } from '@/server/modules/KeyVaultsEncrypt';
 // Import Framework layer services
 import { ComfyUIClientService } from '@/server/services/comfyui/core/comfyUIClientService';
+import { resolveComfyUIOptions } from '@/server/services/comfyui/core/comfyUIOptions';
 import { ImageService } from '@/server/services/comfyui/core/imageService';
 import { ModelResolverService } from '@/server/services/comfyui/core/modelResolverService';
 import { WorkflowBuilderService } from '@/server/services/comfyui/core/workflowBuilderService';
+import { validateComfyUIWorkflow } from '@/server/services/comfyui/core/workflowValidationService';
 import { type WorkflowContext } from '@/server/services/comfyui/types';
 
 // ComfyUI params validation - only validate required fields
@@ -17,6 +24,18 @@ const ComfyUIParamsSchema = z
     prompt: z.string(), // Only validate required fields
   })
   .passthrough();
+
+const workflowProcedure = wsCompatProcedure.use(serverDatabase).use(async (opts) =>
+  opts.next({
+    ctx: {
+      aiProviderModel: new AiProviderModel(
+        opts.ctx.serverDB,
+        opts.ctx.userId,
+        opts.ctx.workspaceId ?? undefined,
+      ),
+    },
+  }),
+);
 
 /**
  * ComfyUI tRPC Router
@@ -30,6 +49,7 @@ export const comfyuiRouter = router({
     .use(withScopedPermission('file:upload'))
     .input(
       z.object({
+        comfyuiWorkflow: ComfyUIWorkflowSchema.optional(),
         model: z.string(),
         options: z.custom<ComfyUIKeyVault>().optional(),
         params: ComfyUIParamsSchema,
@@ -58,10 +78,15 @@ export const comfyuiRouter = router({
       );
 
       // Execute image creation
-      return imageService.createImage({
-        model,
-        params,
-      });
+      try {
+        return await imageService.createImage({
+          comfyuiWorkflow: input.comfyuiWorkflow,
+          model,
+          params,
+        });
+      } finally {
+        clientService.dispose();
+      }
     }),
 
   /**
@@ -92,6 +117,32 @@ export const comfyuiRouter = router({
       const modelResolverService = new ModelResolverService(clientService);
 
       return modelResolverService.getAvailableModelFiles();
+    }),
+
+  validateWorkflow: workflowProcedure
+    .use(withScopedPermission('ai_model:create'))
+    .input(z.object({ workflow: ComfyUIWorkflowSchema }).strict())
+    .mutation(async ({ ctx, input }) => {
+      let client: ComfyUIClientService | undefined;
+      try {
+        const provider = await ctx.aiProviderModel.getAiProviderById(
+          'comfyui',
+          KeyVaultsGateKeeper.getUserKeyVaults,
+        );
+        client = new ComfyUIClientService(
+          resolveComfyUIOptions((provider?.keyVaults ?? {}) as ComfyUIKeyVault),
+        );
+        await client.validateConnection();
+        return validateComfyUIWorkflow(input.workflow, await client.getNodeDefs());
+      } catch (error) {
+        console.error('[comfyui:validateWorkflow]', error);
+        return {
+          errors: [error instanceof Error ? error.message : 'Unable to validate against ComfyUI'],
+          valid: false,
+        };
+      } finally {
+        client?.dispose();
+      }
     }),
 });
 

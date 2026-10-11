@@ -8,13 +8,14 @@ import { type CreateImageMethodOptions } from '@lobechat/model-runtime';
 import { AsyncTaskError, AsyncTaskStatus, RequestTrigger, type SpendOrigin } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
-import { type RuntimeImageGenParams } from 'model-bank';
+import { type AiModelConfig, ComfyUIWorkflowSchema, type RuntimeImageGenParams } from 'model-bank';
 import { z } from 'zod';
 
 import { getProviderContentPolicyErrorMessage } from '@/business/server/getProviderContentPolicyErrorMessage';
 import { chargeAfterGenerate } from '@/business/server/image-generation/chargeAfterGenerate';
 import { notifyImageCompleted } from '@/business/server/image-generation/notifyImageCompleted';
 import { createImageBusinessMiddleware } from '@/business/server/trpc-middlewares/async';
+import { AiModelModel } from '@/database/models/aiModel';
 import { AsyncTaskModel } from '@/database/models/asyncTask';
 import { FileModel } from '@/database/models/file';
 import { GenerationModel } from '@/database/models/generation';
@@ -179,8 +180,26 @@ export const imageRouter = router({
               trigger: RequestTrigger.Image,
             },
           };
+          const savedModel =
+            provider === 'comfyui'
+              ? await new AiModelModel(ctx.serverDB, ctx.userId, workspaceId).findByIdAndProvider(
+                  model,
+                  provider,
+                )
+              : undefined;
+          const savedWorkflow = (savedModel?.config as AiModelConfig | null)?.comfyuiWorkflow;
+          if (provider === 'comfyui' && model.startsWith('comfyui/workflow-') && !savedWorkflow) {
+            throw new TRPCError({
+              code: 'NOT_FOUND',
+              message: 'The selected ComfyUI workflow is unavailable',
+            });
+          }
+          const comfyuiWorkflow = savedWorkflow
+            ? ComfyUIWorkflowSchema.parse(savedWorkflow)
+            : undefined;
           const response = await modelRuntime.createImage!(
             {
+              comfyuiWorkflow,
               model: resolvedModelId,
               params: params as unknown as RuntimeImageGenParams,
             },

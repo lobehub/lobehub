@@ -4,6 +4,9 @@ import { createModal, type ModalInstance } from '@lobehub/ui/base-ui';
 import { type FormInstance } from '@lobehub/ui/base-ui/form';
 import { t } from 'i18next';
 
+import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
+
+import { createComfyUIWorkflowModal } from '../ComfyUIWorkflowModal';
 import ModelConfigContent from './Content';
 import ModelConfigFooter from './Footer';
 
@@ -13,6 +16,12 @@ interface ModelConfigModalOptions {
 }
 
 export const createModelConfigModal = (options: ModelConfigModalOptions): ModalInstance => {
+  const state = useAiInfraStore.getState();
+  const model = aiModelSelectors.getAiModelById(options.id)(state);
+  if (state.activeAiProvider === 'comfyui' && model?.config?.comfyuiWorkflow) {
+    return createComfyUIWorkflowModal(model);
+  }
+
   const formRef: { current?: FormInstance } = {};
 
   return createModal({
