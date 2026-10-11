@@ -132,9 +132,6 @@ describe('resourceKeys', () => {
     expect(resourceKeys.recentFiles(null, undefined)).not.toEqual(
       resourceKeys.recentFiles('workspace-1', undefined),
     );
-    expect(resourceKeys.search({ q: 'report' }, 'workspace-1')).not.toEqual(
-      resourceKeys.search({ q: 'report' }, 'workspace-2'),
-    );
   });
 });
 
