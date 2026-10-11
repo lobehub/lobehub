@@ -400,8 +400,9 @@ export class AgentStateManager {
       if (metadata.visitorRedaction)
         redisData.visitorRedaction = JSON.stringify(metadata.visitorRedaction);
 
-      await this.redis.hmset(metaKey, redisData);
-      await this.redis.expire(metaKey, this.DEFAULT_TTL);
+      // One round trip for the hash and its TTL: this runs on the send path,
+      // where every Redis round trip is time the user waits.
+      await this.redis.multi().hmset(metaKey, redisData).expire(metaKey, this.DEFAULT_TTL).exec();
 
       log('[%s] Created operation metadata', operationId);
     } catch (error) {

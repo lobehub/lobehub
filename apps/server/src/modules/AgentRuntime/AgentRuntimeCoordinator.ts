@@ -90,7 +90,15 @@ export class AgentRuntimeCoordinator {
   }
 
   /**
-   * Create a new Agent operation and send initialization event
+   * Create a new Agent operation and send initialization event.
+   *
+   * With `deferInit`, the metadata is written before this resolves but the
+   * init event (the gateway `/api/operations/init` round trip, 150–370ms) is
+   * published in the background and handed back as `initPublished`. The
+   * caller overlaps it with its own writes and awaits it before anything
+   * that needs the gateway to know the operation — the first step's events
+   * must not race the init. A rejection surfaces from that await, never as
+   * an unhandled rejection.
    */
   async createAgentOperation(
     operationId: string,
@@ -104,7 +112,8 @@ export class AgentRuntimeCoordinator {
       userId?: string;
       workspaceId?: string;
     },
-  ): Promise<void> {
+    options?: { deferInit?: boolean },
+  ): Promise<{ initPublished: Promise<void> }> {
     try {
       // Create operation metadata
       await this.stateManager.createOperationMetadata(operationId, data);
@@ -112,11 +121,26 @@ export class AgentRuntimeCoordinator {
       // Get the created metadata
       const metadata = await this.stateManager.getOperationMetadata(operationId);
 
-      if (metadata) {
+      const publishInit = async () => {
+        if (!metadata) return;
         // Send agent runtime init event
         await this.streamEventManager.publishAgentRuntimeInit(operationId, metadata);
         log('[%s] Agent operation created and initialized', operationId);
+      };
+
+      if (!options?.deferInit) {
+        await publishInit();
+        return { initPublished: Promise.resolve() };
       }
+
+      const initPublished = publishInit().catch((error) => {
+        console.error('Failed to publish agent operation init:', error);
+        throw error;
+      });
+      // Pre-register a handler: the caller awaits this later, and a failure
+      // that lands first must not trip `unhandledRejection`.
+      initPublished.catch(() => undefined);
+      return { initPublished };
     } catch (error) {
       console.error('Failed to create agent operation:', error);
       throw error;

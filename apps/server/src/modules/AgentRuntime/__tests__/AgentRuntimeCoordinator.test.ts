@@ -87,6 +87,46 @@ describe('AgentRuntimeCoordinator', () => {
       expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, data);
       expect(mockStreamManager.publishAgentRuntimeInit).not.toHaveBeenCalled();
     });
+
+    it('publishes the init event in the background with deferInit and reports it on await', async () => {
+      const operationId = 'test-operation-id';
+      const metadata = { status: 'idle', userId: 'user-123' };
+      mockStateManager.getOperationMetadata.mockResolvedValue(metadata);
+      let release!: () => void;
+      mockStreamManager.publishAgentRuntimeInit.mockReturnValue(
+        new Promise<void>((resolve) => {
+          release = resolve;
+        }),
+      );
+
+      const { initPublished } = await coordinator.createAgentOperation(
+        operationId,
+        { userId: 'user-123' },
+        { deferInit: true },
+      );
+
+      // Metadata is durable before the call resolves; the publish is in flight.
+      expect(mockStateManager.createOperationMetadata).toHaveBeenCalledWith(operationId, {
+        userId: 'user-123',
+      });
+      expect(mockStreamManager.publishAgentRuntimeInit).toHaveBeenCalledWith(operationId, metadata);
+
+      release();
+      await expect(initPublished).resolves.toBeUndefined();
+    });
+
+    it('surfaces a failed deferred publish from the awaited handle, not as an unhandled rejection', async () => {
+      mockStateManager.getOperationMetadata.mockResolvedValue({ status: 'idle' });
+      mockStreamManager.publishAgentRuntimeInit.mockRejectedValue(new Error('gateway down'));
+
+      const { initPublished } = await coordinator.createAgentOperation(
+        'op-1',
+        { userId: 'user-123' },
+        { deferInit: true },
+      );
+
+      await expect(initPublished).rejects.toThrow('gateway down');
+    });
   });
 
   describe('saveAgentState', () => {

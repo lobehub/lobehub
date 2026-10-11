@@ -5,14 +5,16 @@ import { AgentStateManager } from '../AgentStateManager';
 // Mock Redis client. Hoisted so individual tests can assert on the exact
 // payloads handed to `setex` / `lpush`.
 const { redisMock, pipelineMock } = vi.hoisted(() => {
-  const pipelineMock = {
+  // Chainable like ioredis' pipeline: `multi().hmset().expire().exec()`.
+  const pipelineMock: Record<string, ReturnType<typeof vi.fn>> = {};
+  Object.assign(pipelineMock, {
     exec: vi.fn(),
-    expire: vi.fn(),
-    hmset: vi.fn(),
-    lpush: vi.fn(),
-    ltrim: vi.fn(),
-    setex: vi.fn(),
-  };
+    expire: vi.fn(() => pipelineMock),
+    hmset: vi.fn(() => pipelineMock),
+    lpush: vi.fn(() => pipelineMock),
+    ltrim: vi.fn(() => pipelineMock),
+    setex: vi.fn(() => pipelineMock),
+  });
   const redisMock = {
     del: vi.fn(),
     eval: vi.fn(),
@@ -59,7 +61,7 @@ describe('AgentStateManager', () => {
         acceptsMemberRuntimeEnd: true,
         userId: 'user-123',
       });
-      const stored = redisMock.hmset.mock.calls.at(-1)?.[1] as Record<string, string>;
+      const stored = pipelineMock.hmset.mock.calls.at(-1)?.[1] as Record<string, string>;
       expect(stored.acceptsMemberRuntimeEnd).toBe('true');
 
       redisMock.hgetall.mockResolvedValueOnce(stored);

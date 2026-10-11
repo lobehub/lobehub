@@ -636,11 +636,15 @@ describe('AgentRuntimeService', () => {
         }),
       );
 
-      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith('test-operation-1', {
-        agentConfig: mockParams.agentConfig,
-        modelRuntimeConfig: mockParams.modelRuntimeConfig,
-        userId: mockParams.userId,
-      });
+      expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
+        'test-operation-1',
+        {
+          agentConfig: mockParams.agentConfig,
+          modelRuntimeConfig: mockParams.modelRuntimeConfig,
+          userId: mockParams.userId,
+        },
+        { deferInit: true },
+      );
 
       expect(mockQueueService.scheduleMessage).toHaveBeenCalledWith({
         operationId: 'test-operation-1',
@@ -829,6 +833,7 @@ describe('AgentRuntimeService', () => {
       expect(mockCoordinator.createAgentOperation).toHaveBeenCalledWith(
         'test-operation-1',
         expect.objectContaining({ modelRuntimeConfig: { model: 'gpt-4' } }),
+        { deferInit: true },
       );
     });
 
