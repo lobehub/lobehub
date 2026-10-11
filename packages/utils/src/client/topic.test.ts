@@ -723,6 +723,53 @@ describe('groupTopicsByProject project merging', () => {
       'no-project',
     ]);
   });
+
+  /** @example A stale explicit project still leads a freshly active directory group. */
+  it('sorts explicit-project groups ahead of directory groups regardless of activity', () => {
+    // ROOT CAUSE:
+    //
+    // Groups sorted purely by most recent activity, so a project the user
+    // deliberately bound topics to could sink below an inferred directory
+    // group. Explicit bindings are stronger signals and lead the list; only
+    // groups within the same tier compete on activity.
+    const topics: ChatTopic[] = [
+      {
+        ...base,
+        createdAt: 1,
+        updatedAt: 1,
+        id: 'bound-stale',
+        projectId: 'project-1',
+        metadata: { workingDirectory: '/home/lobehub' },
+      },
+      {
+        ...base,
+        createdAt: 3,
+        updatedAt: 3,
+        id: 'unbound-recent',
+        metadata: { workingDirectory: '/tmp/scratch' },
+      },
+      { ...base, createdAt: 2, updatedAt: 2, id: 'unbound' },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt').map((group) => group.id)).toEqual([
+      'project-id:project-1',
+      'project:/tmp/scratch',
+      'no-project',
+    ]);
+  });
+
+  /** @example Within the explicit-project tier the most recently active project still leads. */
+  it('keeps most-recent-activity order inside the explicit-project tier', () => {
+    const topics: ChatTopic[] = [
+      { ...base, createdAt: 1, updatedAt: 1, id: 'older', projectId: 'project-1' },
+      { ...base, createdAt: 2, updatedAt: 2, id: 'newer', projectId: 'project-2' },
+    ];
+
+    expect(groupTopicsByProject(topics, 'updatedAt').map((group) => group.id)).toEqual([
+      'project-id:project-2',
+      'project-id:project-1',
+    ]);
+  });
 });
 
 describe('groupTopicsByAgent', () => {
