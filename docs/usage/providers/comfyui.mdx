@@ -189,6 +189,12 @@ Custom Headers:
 
 ## Troubleshooting
 
+### Generation continues after a connection interruption
+
+LobeHub submits each generation once and tracks its ComfyUI prompt ID. A lost progress WebSocket does not fail or resubmit the job: LobeHub checks the same job's history over authenticated HTTP and recovers its output when it completes.
+
+Tracking waits up to five minutes after submission. If tracking times out, check the queue and history on your ComfyUI server before retrying—the original job may still be running. Hosting platforms can enforce a shorter request limit; recovery does not survive termination of the LobeHub backend request.
+
 ### 1. How to Install Comfy-Manager
 
 Comfy-Manager is an extension manager for ComfyUI that simplifies installing and managing nodes, models, and extensions.

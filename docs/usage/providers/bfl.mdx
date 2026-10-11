@@ -67,3 +67,11 @@ To configure this provider in LobeHub, open **App Settings → AI Providers**, s
 </Steps>
 
 And that’s it! You’re now ready to create stunning visual content in LobeHub using the advanced image generation models provided by Black Forest Labs.
+
+## Connection interruptions and timeouts
+
+After Black Forest Labs accepts a generation, LobeHub keeps checking the same job through temporary network failures and HTTP 408, 429, or 5xx responses. It does not submit another generation to recover a failed status check. Authentication errors, other permanent HTTP errors, and terminal job failures stop tracking.
+
+Submission and status requests share a four-minute timeout budget. If tracking times out, the error includes the job ID and warns that the job may still be running. Check the provider before retrying to avoid submitting duplicate work. An interrupted submission may also have been accepted, even if LobeHub did not receive its job ID.
+
+Recovery runs inside the current backend request; it does not survive a backend restart or request termination. Hosting limits and LobeHub's outer task timeout can end tracking sooner.
