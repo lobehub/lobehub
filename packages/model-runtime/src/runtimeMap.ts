@@ -58,7 +58,6 @@ import { LobeQiniuAI } from './providers/qiniu';
 import { LobeQwenAI } from './providers/qwen';
 import { LobeReplicateAI } from './providers/replicate';
 import { LobeSambaNovaAI } from './providers/sambanova';
-import { LobeSearch1API } from './providers/search1api';
 import { LobeSenseNovaAI } from './providers/sensenova';
 import { LobeSiliconCloudAI } from './providers/siliconcloud';
 import { LobeSparkAI } from './providers/spark';
@@ -146,7 +145,6 @@ export const providerRuntimeMap = {
   replicate: LobeReplicateAI,
   router: LobeNewAPIAI,
   sambanova: LobeSambaNovaAI,
-  search1api: LobeSearch1API,
   sensenova: LobeSenseNovaAI,
   siliconcloud: LobeSiliconCloudAI,
   spark: LobeSparkAI,

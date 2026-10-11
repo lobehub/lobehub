@@ -316,8 +316,8 @@ ENV \
     SAMBANOVA_API_KEY="" SAMBANOVA_MODEL_LIST="" \
     # Meta
     META_API_KEY="" META_MODEL_LIST="" META_PROXY_URL="" \
-    # Search1API
-    SEARCH1API_API_KEY="" SEARCH1API_MODEL_LIST="" \
+    # Search1API search and crawler
+    SEARCH1API_API_KEY="" \
     # SenseNova
     SENSENOVA_API_KEY="" SENSENOVA_MODEL_LIST="" \
     # SiliconCloud

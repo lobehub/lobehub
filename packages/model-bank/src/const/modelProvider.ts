@@ -59,7 +59,6 @@ export enum ModelProvider {
   Qwen = 'qwen',
   Replicate = 'replicate',
   SambaNova = 'sambanova',
-  Search1API = 'search1api',
   SenseNova = 'sensenova',
   SiliconCloud = 'siliconcloud',
   Spark = 'spark',
