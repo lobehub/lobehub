@@ -1,3 +1,4 @@
+import { LobeActivatorIdentifier } from '@lobechat/builtin-tool-activator';
 import { hasShareToolGrant, PLUGIN_SCHEMA_SEPARATOR, type ShareToolGrant } from '@lobechat/const';
 import { isDeviceOnlyMcpEndpoint } from '@lobechat/utils/mcpEndpoint';
 
@@ -137,6 +138,28 @@ export const applyShareGateToToolSet = (toolSet: ShareGateToolSet, gate: AgentSh
   stripSubAgentDispatchApis(toolSet);
   applyShareGateToDataToolAccess(toolSet, gate);
   applyShareGateToPerApiGrants(toolSet, grants);
+  dropIdleActivator(toolSet);
+};
+
+/**
+ * Drop `lobe-activator` when the gated set leaves it nothing to activate.
+ *
+ * Its grant is implied by any tool grant (`resolveEffectiveShareToolGrants`),
+ * but the activator only ever discovers what is left in `manifestMap` and not
+ * already enabled — the same difference `buildToolDiscoveryConfig` renders as
+ * `<available_tools>`. When every granted tool is already enabled, keeping it
+ * would offer the visitor's model an empty discovery tool. Runs after every
+ * other pass so a tool those passes removed never keeps it alive.
+ */
+const dropIdleActivator = (toolSet: ShareGateToolSet): void => {
+  if (!toolSet.manifestMap[LobeActivatorIdentifier]) return;
+
+  const enabled = new Set(toolSet.enabledToolIds);
+  const hasActivatableTool = Object.keys(toolSet.manifestMap).some(
+    (id) => id !== LobeActivatorIdentifier && !enabled.has(id),
+  );
+
+  if (!hasActivatableTool) dropToolFromSet(toolSet, LobeActivatorIdentifier);
 };
 
 /**

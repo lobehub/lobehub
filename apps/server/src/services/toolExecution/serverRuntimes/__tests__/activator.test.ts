@@ -158,4 +158,95 @@ describe('activatorRuntime', () => {
       expect(result.content).toContain('Not found: lobe-remote-device');
     });
   });
+
+  describe('Agent Share visitor runs', () => {
+    const userSkill = {
+      content: '# User skill',
+      id: 'user-skill-id',
+      identifier: 'user-skill-identifier',
+      name: 'user-skill',
+    };
+
+    const createVisitorRuntime = async (
+      agentShareVisitor: { skillGrants?: string[]; toolGrants?: { identifier: string }[] },
+      toolManifestMap: Record<string, unknown> = {},
+    ) => {
+      const { activatorRuntime } = await import('../activator');
+      return activatorRuntime.factory({
+        agentId: 'agent-1',
+        agentShareVisitor: agentShareVisitor as never,
+        serverDB: {} as never,
+        toolManifestMap: toolManifestMap as never,
+        userId: 'creator-1',
+      });
+    };
+
+    it('does not open a skill the share did not grant through the activateTools fallback', async () => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === userSkill.name ? userSkill : undefined,
+      );
+      mocks.findById.mockImplementation(async (id: string) =>
+        id === userSkill.id ? userSkill : undefined,
+      );
+      mocks.findAll.mockResolvedValue({ data: [userSkill], total: 1 });
+
+      const runtime = await createVisitorRuntime({
+        skillGrants: ['another-skill'],
+        toolGrants: [{ identifier: 'lobe-calculator' }],
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: [userSkill.name],
+        reason: 'test',
+      });
+
+      expect(result.content).toContain(`Not found: ${userSkill.name}`);
+      expect(result.content).not.toContain(userSkill.content);
+      expect(result.state?.activatedSkills).toEqual([]);
+    }, 20_000);
+
+    it('opens a skill the share granted', async () => {
+      mocks.findByName.mockImplementation(async (name: string) =>
+        name === userSkill.name ? userSkill : undefined,
+      );
+
+      const runtime = await createVisitorRuntime({
+        skillGrants: [userSkill.identifier],
+        toolGrants: [{ identifier: 'lobe-calculator' }],
+      });
+
+      const result = await runtime.activateTools({
+        identifiers: [userSkill.name],
+        reason: 'test',
+      });
+
+      expect(result.content).toContain(userSkill.content);
+      expect(result.content).not.toContain('Not found');
+    });
+
+    it('activates only tools present in the gated manifest map', async () => {
+      // The share gate already pruned this map; an ungranted tool is simply
+      // absent, so naming it cannot pull its manifest into the run.
+      const runtime = await createVisitorRuntime(
+        { toolGrants: [{ identifier: 'lobe-calculator' }] },
+        {
+          'lobe-calculator': {
+            api: [{ description: 'Calculate', name: 'calculate' }],
+            identifier: 'lobe-calculator',
+            meta: { title: 'Calculator' },
+          },
+        },
+      );
+
+      const result = await runtime.activateTools({
+        identifiers: ['lobe-calculator', 'lobe-agent-management'],
+        reason: 'test',
+      });
+
+      expect(result.state?.activatedTools.map((tool: any) => tool.identifier)).toEqual([
+        'lobe-calculator',
+      ]);
+      expect(result.state?.notFound).toEqual(['lobe-agent-management']);
+    });
+  });
 });
