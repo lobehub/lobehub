@@ -1,4 +1,9 @@
-import type { ReplicaEntryMeta, ReplicaPendingMutation, ReplicaState } from './types';
+import type {
+  ReplicaEntryMeta,
+  ReplicaPendingMutation,
+  ReplicaSource,
+  ReplicaState,
+} from './types';
 
 /**
  * Pure transition core of a replica. It never touches the store
@@ -33,6 +38,8 @@ export type ReplicaAction<T> =
       key: string;
       persist: boolean;
       scope: string;
+      /** Marks a provisional write (`'seed'`); defaults to the entry's own source. */
+      source?: ReplicaSource;
       type: 'update';
     }
   | { apply: (data: T) => T; id: number; key: string; scope: string; type: 'optimistic' }
@@ -69,6 +76,14 @@ const noop = <T>(state: ReplicaState<T>): ReplicaTransition<T> => ({
   writes: [],
 });
 
+/** An authoritative write claims the key again, so its removal marker goes. */
+const clearRemoved = <T>(state: ReplicaState<T>, key: string): ReplicaState<T> => {
+  if (!state.removed?.[key]) return state;
+  const removed = { ...state.removed };
+  delete removed[key];
+  return { ...state, removed };
+};
+
 export const replicaReducer = <T>(
   state: ReplicaState<T>,
   action: ReplicaAction<T>,
@@ -97,24 +112,39 @@ export const replicaReducer = <T>(
     const entries = { ...state.entries };
     if (next) entries[action.key] = next;
     else delete entries[action.key];
-    return { entries, scope };
+    return { ...state, entries, scope };
   };
 
   switch (action.type) {
     case 'hydrate': {
-      // Hydrate only fills an empty slot: a server-confirmed value, an
-      // optimistic write or any local write always wins over storage.
-      if (entry || view !== undefined) return noop(state);
+      // A removal wins over a storage read that started before it: the entry is
+      // gone, so a read that resolves afterwards is stale and must not restore
+      // it (a server-confirmed gone group, a deleted file). Cleared by the next
+      // authoritative write, so the key can come back.
+      if (state.removed?.[action.key]) return noop(state);
+      // Hydrate only fills an empty slot: a server-confirmed value, an optimistic
+      // write or any confirmed local write always wins over storage. A
+      // provisional `seed` is the one exception — it is a list row standing in
+      // for a detail, not authoritative state, so the persisted value replaces
+      // it. Otherwise a seeded entry would block the persisted detail forever.
+      const provisionalSeed = !!entry && entry.source === 'seed' && entry.pending.length === 0;
+      if (!provisionalSeed && (entry || view !== undefined)) return noop(state);
+      // Confirmed writes made over the seed are replayed onto the stored value,
+      // so storage cannot clobber them. The result is a confirmed local value.
+      const patches = (provisionalSeed && entry.seedPatches) || [];
+      const data = patches.reduce((value, patch) => patch.apply(value) ?? value, action.data);
       return {
-        effects: [],
+        effects: patches.some((patch) => patch.persist)
+          ? [{ data, key: action.key, query: action.query, scope, type: 'persist' }]
+          : [],
         state: withEntry({
           params: action.params,
           pending: [],
           query: action.query,
-          source: 'storage',
-          updatedAt: action.updatedAt ?? now,
+          source: patches.length ? 'local' : 'storage',
+          updatedAt: patches.length ? now : (action.updatedAt ?? now),
         }),
-        writes: [{ data: action.data, key: action.key }],
+        writes: [{ data, key: action.key }],
       };
     }
 
@@ -136,7 +166,7 @@ export const replicaReducer = <T>(
       const nextView = materialize(next, pending);
       return {
         effects: [{ data: next, key: action.key, query, scope, type: 'persist' }],
-        state: nextState,
+        state: clearRemoved(nextState, action.key),
         writes: nextView === view ? [] : [{ data: nextView, key: action.key }],
       };
     }
@@ -146,18 +176,36 @@ export const replicaReducer = <T>(
       const pending = entry?.pending ?? [];
       const nextBase = pending.length ? action.apply(entry!.base) : nextView;
       if (nextView === view && nextBase === confirmed) return noop(state);
+      // A provisional seed is never authoritative, so it must not persist: it
+      // only stands in for a value another source owns, and persisting it would
+      // overwrite that value's persisted row. A `seed` also only ever marks a
+      // fresh slot — a value already in memory (written outside the binding) is
+      // authoritative and is never downgraded to a seed.
+      const source: ReplicaSource =
+        entry?.source ?? (view === undefined ? (action.source ?? 'local') : 'local');
+      const persist = action.persist && source !== 'seed';
+      // A confirmed write over a seed keeps the seed provisional, but is
+      // remembered so a hydrate replacing the seed replays it (see `hydrate`).
+      const seedPatches =
+        source === 'seed' && action.source !== 'seed'
+          ? [...(entry?.seedPatches ?? []), { apply: action.apply, persist: action.persist }]
+          : entry?.seedPatches;
       return {
         effects:
-          action.persist && nextBase !== undefined
+          persist && nextBase !== undefined
             ? [{ data: nextBase, key: action.key, query: entry?.query, scope, type: 'persist' }]
             : [],
-        state: withEntry({
-          ...entry,
-          base: pending.length ? nextBase : undefined,
-          pending,
-          source: entry?.source ?? 'local',
-          updatedAt: now,
-        }),
+        state: clearRemoved(
+          withEntry({
+            ...entry,
+            base: pending.length ? nextBase : undefined,
+            pending,
+            seedPatches,
+            source,
+            updatedAt: now,
+          }),
+          action.key,
+        ),
         writes: nextView === view ? [] : [{ data: nextView, key: action.key }],
       };
     }
@@ -167,13 +215,16 @@ export const replicaReducer = <T>(
       const pending = [...(entry?.pending ?? []), { apply: action.apply, id: action.id }];
       return {
         effects: [],
-        state: withEntry({
-          ...entry,
-          base: confirmed,
-          pending,
-          source: entry?.source ?? 'local',
-          updatedAt: entry?.updatedAt ?? now,
-        }),
+        state: clearRemoved(
+          withEntry({
+            ...entry,
+            base: confirmed,
+            pending,
+            source: entry?.source ?? 'local',
+            updatedAt: entry?.updatedAt ?? now,
+          }),
+          action.key,
+        ),
         writes: [{ data: action.apply(view), key: action.key }],
       };
     }
@@ -210,7 +261,12 @@ export const replicaReducer = <T>(
     case 'remove': {
       return {
         effects: [{ key: action.key, query: entry?.query, scope, type: 'remove' }],
-        state: withEntry(undefined),
+        // Tombstone the key: a hydrate that started before this removal may
+        // still resolve, and it must not bring the removed entry back.
+        state: {
+          ...withEntry(undefined),
+          removed: { ...state.removed, [action.key]: true },
+        },
         writes: view === undefined ? [] : [{ data: undefined, key: action.key }],
       };
     }

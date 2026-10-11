@@ -232,8 +232,6 @@ export const agentBuilderKeys = {
 
 // ---- group --------------------------------------------------------------
 export const groupKeys = {
-  detail: def('group:detail', (groupId: string) => ['group:detail', groupId]),
-  list: def('group:list', (isLogin: boolean) => ['group:list', isLogin]),
   /** Agent picker for the "add member" modal. */
   queryAgents: def('group:queryAgents', () => ['group:queryAgents']),
   /** Agent picker for the "create group" modal. */

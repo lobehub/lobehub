@@ -146,7 +146,7 @@ export class GroupAgentBuilderExecutionRuntime {
         title: args.title,
       });
 
-      state.internal_dispatchChatGroup({ payload: group, type: 'addGroup' });
+      state.internal_addGroup(group);
 
       if (args.supervisor) {
         const {

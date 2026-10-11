@@ -29,8 +29,12 @@ export interface ReplicaStorage<T> {
  * - `storage`: hydrated from the persisted projection (may be stale)
  * - `server`: confirmed by a network response
  * - `local`: written locally before any hydrate/replace landed
+ * - `seed`: a provisional local row (e.g. a list row standing in for a detail so
+ *   an object stays resolvable). Unlike `local` it is *not* authoritative: a
+ *   persisted `storage` value may replace it on hydrate, and it never persists —
+ *   so it cannot overwrite the detail it is only standing in for.
  */
-export type ReplicaSource = 'local' | 'server' | 'storage';
+export type ReplicaSource = 'local' | 'seed' | 'server' | 'storage';
 
 /**
  * Identity partition of the persisted projection (user + workspace by default).
@@ -67,13 +71,34 @@ export interface ReplicaEntryMeta<T> {
   pending: ReplicaPendingMutation<T>[];
   /** Stable query identity beyond the key (filters, page size). */
   query?: string;
+  /**
+   * Confirmed (non-seed) writes made while the entry is still a `seed`. The seed
+   * stays provisional (persisting it would clobber the stored detail), so a
+   * hydrate that replaces it replays these onto the stored value — a confirmed
+   * edit made before storage answered is not lost, and then persists.
+   */
+  seedPatches?: ReplicaSeedPatch<T>[];
   source: ReplicaSource;
   updatedAt: number;
+}
+
+export interface ReplicaSeedPatch<T> {
+  apply: (data: T | undefined) => T | undefined;
+  persist: boolean;
 }
 
 /** Bookkeeping slot a replica keeps inside its domain store. */
 export interface ReplicaState<T> {
   entries: Record<string, ReplicaEntryMeta<T>>;
+  /**
+   * Keys explicitly removed while a hydrate for them might still be in flight.
+   * A removal deletes the entry and its row, but a storage read that started
+   * before it can still resolve afterwards; hydrate skips these so the stale
+   * read cannot resurrect the entry (e.g. a group the server confirmed gone).
+   * A later authoritative write (`replace` / `update` / `optimistic`) claims the
+   * key again, and a scope reset drops every marker.
+   */
+  removed?: Record<string, true>;
   /** The scope every entry in memory belongs to. */
   scope?: string;
 }
