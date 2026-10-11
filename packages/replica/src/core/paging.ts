@@ -275,9 +275,16 @@ export const applyHeadPage = <TItem, TCursor>(
   }
 
   const headNext = config.mode === 'cursor' ? page.nextCursor : current.pages?.[0]?.next;
-  const pages = current.pages?.length
-    ? [{ count: fresh.length, next: headNext }, ...current.pages.slice(1)]
-    : [{ count: fresh.length, next: headNext }];
+  // A larger head absorbs rows the older pages were counted with; shed the
+  // overlap from the pages nearest the head so later trims cut at the boundary.
+  let overlap =
+    (current.pages ?? []).slice(1).reduce((sum, info) => sum + info.count, 0) - rest.length;
+  const olderPages = (current.pages ?? []).slice(1).map((info) => {
+    const shed = Math.min(info.count, Math.max(0, overlap));
+    overlap -= shed;
+    return shed ? { ...info, count: info.count - shed } : info;
+  });
+  const pages = [{ count: fresh.length, next: headNext }, ...olderPages];
   const data = {
     anchorId: anchorId ?? current.anchorId,
     currentPage: current.currentPage,
