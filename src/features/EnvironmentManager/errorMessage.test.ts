@@ -11,6 +11,12 @@ describe('describeError', () => {
     );
   });
 
+  it('turns the default-instance refusal into its sentence rather than the code', () => {
+    expect(describeError(new Error('DEFAULT_INSTANCE'), t, 'fallback')).toBe(
+      '<environments.instances.defaultUndeletable>',
+    );
+  });
+
   it('turns a path the server confined to the instance into the same line', () => {
     expect(describeError(new Error('PATH_OUTSIDE_INSTANCE'), t, 'fallback')).toBe(
       '<environments.files.invalidPath>',

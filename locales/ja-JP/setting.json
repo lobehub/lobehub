@@ -617,6 +617,7 @@
   "environments.instances.count_other": "{{count}} インスタンス",
   "environments.instances.create": "新しいインスタンス",
   "environments.instances.createFailed": "インスタンスを作成できませんでした",
+  "environments.instances.defaultUndeletable": "これは環境のデフォルトコピーであり、単独で削除することはできません。再構築するか、環境を削除してください。",
   "environments.instances.desc": "インスタンスはこの環境の作業コピーであり、独自のフォルダとインストールされたパッケージを持っています。会話はインスタンス内で実行され、複数が並行して実行されても互いに影響を与えません。",
   "environments.instances.directoryHint": "フォルダパス。作成後は変更できません。",
   "environments.instances.directoryLabel": "ディレクトリ",
