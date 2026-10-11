@@ -752,6 +752,20 @@ export default {
   'switchToYearly.now': 'Now',
   'switchToYearly.period': 'Billing Period',
   'switchToYearly.price': 'Price',
+  'switchToYearly.preview.confirmError':
+    'The switch could not be confirmed. Refresh the preview to check the latest billing state before trying again.',
+  'switchToYearly.preview.desc':
+    'Unused monthly time is credited. A new 12-month billing period starts at confirmation. The switch takes effect only after successful payment.',
+  'switchToYearly.preview.due': 'Estimated due now',
+  'switchToYearly.preview.expired': 'This preview has expired. Refresh it before confirming.',
+  'switchToYearly.preview.loadError':
+    'Unable to preview this switch. Retry to check your current subscription and billing details.',
+  'switchToYearly.preview.note':
+    'Includes prorations, discounts, taxes and account balance. This is an estimate; billing changes require a new preview before confirmation.',
+  'switchToYearly.preview.pendingAdjustment':
+    'A billing adjustment is pending. We cannot reliably preview the amount yet. Please contact support or try again after it is invoiced.',
+  'switchToYearly.preview.period': '12 months from confirmation',
+  'switchToYearly.preview.refresh': 'Refresh preview',
   'switchToYearly.title': 'Switch to Yearly Billing',
   'switchToYearly.yearlyPlan': 'Yearly plan',
   'tab.billing': 'Billing',
