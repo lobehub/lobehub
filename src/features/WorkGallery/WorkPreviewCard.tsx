@@ -3,17 +3,14 @@
 import type { WorkSummaryItem } from '@lobechat/types';
 import { formatTokenNumber } from '@lobechat/utils/format';
 import { Flexbox } from '@lobehub/ui';
-import { ActionIcon, Avatar, Tag } from '@lobehub/ui/base-ui';
+import { Avatar, Tag } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
-import { Trash2Icon } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { formatTaskItemDate } from '@/features/AgentTasks/features/formatTaskItemDate';
 import { useAgentDisplayMeta } from '@/features/AgentTasks/shared/useAgentDisplayMeta';
 import { getWorkTypeDescriptor } from '@/features/Work/descriptors';
-import { useRemoveWork } from '@/features/Work/useRemoveWork';
-import { useResourceDeletedPrompt } from '@/features/Work/useResourceDeletedPrompt';
 import { getWorkVersionTotalTokens } from '@/utils/workCumulativeUsage';
 import { formatWorkVersionCost } from '@/utils/workVersionCost';
 
@@ -59,26 +56,6 @@ const styles = createStaticStyles(({ css }) => ({
 
     &:hover {
       border-color: ${cssVar.colorBorder};
-    }
-  `,
-  removeAction: css`
-    position: absolute;
-    z-index: 1;
-    inset-block-start: 12px;
-    inset-inline-end: 12px;
-
-    opacity: 0;
-
-    transition: opacity ${cssVar.motionDurationFast};
-
-    &:focus-visible,
-    .work-preview-card:hover & {
-      opacity: 1;
-    }
-
-    /* Touch devices have no hover to reveal it; keep the only removal control visible. */
-    @media (hover: none) {
-      opacity: 1;
     }
   `,
   footer: css`
@@ -146,8 +123,6 @@ const styles = createStaticStyles(({ css }) => ({
 interface WorkPreviewCardProps {
   item: WorkSummaryItem;
   onOpen: (item: WorkSummaryItem) => void;
-  /** Refresh the owning (infinite) list after an orphan card is removed; see `useRemoveWork`. */
-  onRemoved?: () => void | Promise<void>;
 }
 
 const workTypeKey = (item: WorkSummaryItem) => {
@@ -176,11 +151,14 @@ const workTypeKey = (item: WorkSummaryItem) => {
   }
 };
 
-const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved }) => {
+/**
+ * Gallery card for a live Work. Orphans (backing resource deleted or trashed)
+ * never reach it: `listByWorkspace` filters them out server-side, so the card
+ * has no "resource deleted" state.
+ */
+const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen }) => {
   const { t, i18n } = useTranslation(['chat', 'common', 'file']);
   const agent = useAgentDisplayMeta(item.originAgentId);
-  const removeWork = useRemoveWork({ onRemoved });
-  const promptResourceDeleted = useResourceDeletedPrompt({ onRemoved });
   const descriptor = getWorkTypeDescriptor(item);
   const title =
     descriptor.getTitle(item)?.trim() ||
@@ -192,13 +170,6 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved })
     item.resourceType.startsWith('github_') && identifier?.includes('#')
       ? `#${identifier.split('#').at(-1)}`
       : identifier;
-  // The backing resource was deleted outside the tool path: the Work lingers as
-  // an orphan rendered from its snapshot and opening it would 404. The card
-  // keeps its normal look; a click explains that the resource is gone and
-  // offers removal in the same dialog — the only way the user can clear the
-  // card, since the resource it points at is already gone. The hover trash
-  // action reaches the same confirm for users who already know.
-  const resourceDeleted = item.resourceDeleted;
   const openTarget = descriptor.getOpenTarget(item);
   const clickable = !!openTarget && (openTarget.kind !== 'filePreview' || !!openTarget.url);
   const eventDate = item.event.changeType === 'created' ? item.createdAt : item.updatedAt;
@@ -217,24 +188,8 @@ const WorkPreviewCard = memo<WorkPreviewCardProps>(({ item, onOpen, onRemoved })
   return (
     <Flexbox
       className={cx('work-preview-card', styles.card, clickable && styles.clickable)}
-      onClick={
-        clickable ? () => (resourceDeleted ? promptResourceDeleted(item) : onOpen(item)) : undefined
-      }
+      onClick={clickable ? () => onOpen(item) : undefined}
     >
-      {resourceDeleted && (
-        <ActionIcon
-          danger
-          className={styles.removeAction}
-          icon={Trash2Icon}
-          size={'small'}
-          title={t('workingPanel.works.remove', { ns: 'chat' })}
-          variant={'filled'}
-          onClick={(event) => {
-            event.stopPropagation();
-            removeWork(item);
-          }}
-        />
-      )}
       <WorkPreview item={item} title={title} />
       <div className={styles.cardInfo}>
         <Flexbox horizontal align={'center'} className={styles.metaRow} gap={6}>

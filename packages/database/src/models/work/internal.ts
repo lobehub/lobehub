@@ -15,7 +15,7 @@ import type { SQL } from 'drizzle-orm';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
-import { documents } from '../../schemas/file';
+import { documents, files } from '../../schemas/file';
 import { tasks } from '../../schemas/task';
 import { works, workVersions } from '../../schemas/work';
 import { taskOwnership, type WorkContext, workOwnership } from './context';
@@ -263,6 +263,30 @@ export const resourceNeverDeletedField = sql<boolean>`false`;
  * circuits `external` / `file` to `false` instead of misreading a NULL join.
  */
 export const resourceDeletedField = sql<boolean>`case ${works.resourceType} when 'task' then ${tasks.id} is null when 'document' then ${documents.id} is null else false end`;
+
+/**
+ * Row filter that keeps only Works whose backing resource is still live, for
+ * the resource-page galleries. Those surfaces hide orphans instead of rendering
+ * them as full-size cards that only a click reveals as gone; the Work row and
+ * its version history stay untouched (removing them would also drop project
+ * and goal references), so a restored resource brings its card back.
+ *
+ * Requires the same LEFT JOINs as {@link resourceDeletedField} plus the
+ * {@link currentVersions} join:
+ * - `task`: the owner-scoped join already misses trashed tasks.
+ * - `document`: missing or in the recycle bin.
+ * - `file`: the current version's persisted `fileId` is missing or trashed. A
+ *   version without `fileId` was never uploaded, so there is nothing to check.
+ * - `external`: remote state is unknown locally, so it is always kept.
+ */
+export const resourceLiveFilter = sql<boolean>`case ${works.resourceType}
+  when 'task' then ${tasks.id} is not null
+  when 'document' then ${documents.id} is not null and ${documents.isDeleted} is not true
+  when 'file' then ${currentVersions.metadata} ->> 'fileId' is null or exists (
+    select 1 from ${files}
+    where ${files.id} = ${currentVersions.metadata} ->> 'fileId' and ${files.isDeleted} is not true
+  )
+  else true end`;
 
 /**
  * Shared version-event query for display-backed work types; `task` keeps its
