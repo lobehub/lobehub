@@ -18,6 +18,7 @@ import { createMemorySearchParams } from '../../utils/searchParams';
 import { activityInitialState } from '../activity/initialState';
 import { contextInitialState } from '../context/initialState';
 import { experienceInitialState } from '../experience/initialState';
+import { homeInitialState } from '../home/initialState';
 import { identityInitialState } from '../identity/initialState';
 import { preferenceInitialState } from '../preference/initialState';
 
@@ -51,18 +52,13 @@ export class BaseActionImpl {
     );
   };
 
-  /** PersonaHeader confirmation deletes the persona through memoryCRUDService, then clears its cache. */
+  /** PersonaHeader confirmation deletes the persona through memoryCRUDService, then refreshes its replica. */
   deletePersona = async (): Promise<void> => {
     const { memoryCRUDService } = await import('@/services/userMemory');
-    await mutate(
-      userMemoryKeys.persona(),
-      async () => {
-        await memoryCRUDService.deletePersona();
-        this.#set({ persona: undefined, personaInit: true }, false, n('deletePersona'));
-        return null;
-      },
-      { revalidate: false },
-    );
+    await memoryCRUDService.deletePersona();
+    // The persona is a replica view now: drop it locally and re-read server
+    // truth (null) so the section disappears without waiting for the network.
+    await this.#get().refreshPersona();
   };
 
   purgeAllMemories = async (): Promise<void> => {
@@ -75,6 +71,7 @@ export class BaseActionImpl {
         Object.assign(draft, activityInitialState);
         Object.assign(draft, contextInitialState);
         Object.assign(draft, experienceInitialState);
+        Object.assign(draft, homeInitialState);
         Object.assign(draft, identityInitialState);
         Object.assign(draft, preferenceInitialState);
 
@@ -85,11 +82,6 @@ export class BaseActionImpl {
         draft.editingMemoryLayer = undefined;
         draft.memoryFetchedAtMap = {};
         draft.memoryMap = {};
-        draft.persona = undefined;
-        draft.personaInit = true;
-        draft.roles = [];
-        draft.tags = [];
-        draft.tagsInit = true;
       }),
       false,
       n('purgeAllMemories'),
@@ -123,15 +115,11 @@ export class BaseActionImpl {
       mutate((key) => Array.isArray(key) && key[0] === userMemoryKeys.retrieve.root, undefined, {
         revalidate: true,
       }),
-      mutate(userMemoryKeys.persona(), null, { revalidate: false }),
-      mutate(
-        userMemoryKeys.tags(),
-        {
-          roles: [],
-          tags: [],
-        },
-        { revalidate: false },
-      ),
+      // The persona and the roles/tags aggregate are replica-backed now:
+      // revalidate their custom sync keys so the engine re-reads and folds the
+      // (now empty) server truth instead of trusting a stale view.
+      mutate(userMemoryKeys.persona(), undefined, { revalidate: true }),
+      mutate(userMemoryKeys.tags(), undefined, { revalidate: true }),
     ]);
   };
 
