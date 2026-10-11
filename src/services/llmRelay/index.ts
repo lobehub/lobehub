@@ -2,14 +2,19 @@ import { CLIENT_LLM_WAIT_CAPABILITY, LLM_RELAY_CAPABILITY } from '@lobechat/agen
 import type { ExecAgentLlmExecutor } from '@lobechat/types';
 
 import { initializeWithClientStore } from '@/services/chat/mecha/clientModelRuntime';
-import { getAiInfraStoreState } from '@/store/aiInfra';
+import { aiProviderSelectors, getAiInfraStoreState, useAiInfraStore } from '@/store/aiInfra';
 import { getServerConfigStoreState } from '@/store/serverConfig';
+import { useUserStore } from '@/store/user';
+import { userProfileSelectors } from '@/store/user/selectors';
 
+import { subscribeLlmRelayChannel } from './channelSubscription';
 import { getLlmRelayClientId } from './clientId';
 import { LlmRelayExecutor } from './executor';
+import { OneShotRelay } from './oneShot';
 
 export { getLlmRelayClientId } from './clientId';
 export type { ExecuteRelayCallOptions } from './executor';
+export type { OneShotRelayHandle } from './oneShot';
 
 /**
  * The page-wide relay executor. Runs on this client's own provider
@@ -21,12 +26,78 @@ export const llmRelayExecutor = new LlmRelayExecutor({
     initializeWithClientStore({ payload, provider, runtimeProvider }),
 });
 
-const isLlmRelayEnabled = () => {
-  const state =
-    (typeof window !== 'undefined' ? window.global_serverConfigStore?.getState() : undefined) ??
-    getServerConfigStoreState();
-  return !!state?.featureFlags?.enableLlmRelay;
+const getConfigState = () =>
+  (typeof window !== 'undefined' ? window.global_serverConfigStore?.getState() : undefined) ??
+  getServerConfigStoreState();
+
+const isLlmRelayEnabled = () => !!getConfigState()?.featureFlags?.enableLlmRelay;
+
+/** How long a one-shot call waits for the provider runtime state to load. */
+const PROVIDER_STATE_WAIT_MS = 5000;
+
+const isProviderRuntimeStateKnown = () =>
+  aiProviderSelectors.isInitAiProviderRuntimeState(getAiInfraStoreState());
+
+/**
+ * Nothing when the provider runtime state is loaded; else resolves once it is,
+ * or after {@link PROVIDER_STATE_WAIT_MS}: whether a custom provider runs on
+ * the device (private base URL, `fetchOnClient`) is only known from it.
+ */
+const waitForProviderRuntimeState = () => {
+  if (isProviderRuntimeStateKnown()) return;
+
+  return new Promise<void>((resolve) => {
+    const done = () => {
+      clearTimeout(timer);
+      unsubscribe();
+      resolve();
+    };
+    const timer = setTimeout(done, PROVIDER_STATE_WAIT_MS);
+    const unsubscribe = useAiInfraStore.subscribe(() => {
+      if (isProviderRuntimeStateKnown()) done();
+    });
+  });
 };
+
+/**
+ * The page-wide one-shot relay: LLM calls this tab asks the server for (preset
+ * tasks, structured output, model lists) whose provider only this device can
+ * reach are relayed back here instead of being called from the browser.
+ * Active only within the `agent_llm_relay` rollout on a deployment that can
+ * relay (Agent Gateway + Redis); elsewhere `oneShotRelay.run` just makes the
+ * request.
+ */
+export const oneShotRelay = new OneShotRelay({
+  // `llmRelayAvailable`: the server can relay (gateway + Redis); otherwise it
+  // would call a device-only provider itself, so keep the browser path.
+  isAvailable: () => {
+    const serverConfig = getConfigState()?.serverConfig;
+    return (
+      isLlmRelayEnabled() && !!serverConfig?.agentGatewayUrl && !!serverConfig.llmRelayAvailable
+    );
+  },
+  isDeviceProvider: (provider) =>
+    aiProviderSelectors.isProviderFetchOnClient(provider)(getAiInfraStoreState()),
+  onCancel: (data) => llmRelayExecutor.cancel(data),
+  onExecute: (data) => void llmRelayExecutor.execute(data),
+  subscribe: (channel, onEvent) => {
+    const subscription = subscribeLlmRelayChannel(
+      getConfigState()!.serverConfig!.agentGatewayUrl!,
+      channel,
+      onEvent,
+    );
+    return subscription.then((sub) => ({
+      ...sub,
+      close: () => {
+        // The request is over: whatever it left running on this tab is moot.
+        llmRelayExecutor.cancelOperation(channel);
+        sub.close();
+      },
+    }));
+  },
+  userId: () => userProfileSelectors.userId(useUserStore.getState()),
+  whenProvidersKnown: waitForProviderRuntimeState,
+});
 
 /**
  * `execAgent`'s `llmExecutor`: this client can run relayed LLM attempts for

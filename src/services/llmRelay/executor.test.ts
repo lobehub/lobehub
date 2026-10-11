@@ -302,6 +302,156 @@ describe('LlmRelayExecutor', () => {
   });
 });
 
+describe('LlmRelayExecutor non-chat methods (one-shot relay)', () => {
+  const run = async (data: LlmExecuteData, runtime: RelayRuntime) => {
+    const server = createServer();
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: async () => runtime,
+      fetch: server.fetch,
+    });
+    await executor.execute(data);
+    return server;
+  };
+
+  const resultOf = (batches: LlmRelayBatch[]) =>
+    JSON.parse(
+      batches
+        .flatMap((batch) => batch.chunks)
+        .filter((chunk) => chunk.type === 'result_part')
+        .map((chunk) => chunk.data)
+        .join(''),
+    );
+
+  it('runs generateObject and uploads its value as JSON parts', async () => {
+    const generateObject = vi.fn(async () => ({ title: 'Hello' }));
+    const server = await run(callData({ method: 'generateObject' }), {
+      chat: vi.fn(),
+      generateObject,
+    });
+
+    expect(generateObject).toHaveBeenCalledWith(PAYLOAD, expect.anything());
+    expect(resultOf(server.batches)).toEqual({ title: 'Hello' });
+    expect(server.batches.at(-1)?.final).toEqual({ reason: 'done' });
+  });
+
+  // The server reads "no result parts" as `undefined` — what a provider returns
+  // for absent structured output — and must not get `null` instead.
+  it('uploads no result for an undefined value', async () => {
+    const server = await run(callData({ method: 'generateObject' }), {
+      chat: vi.fn(),
+      generateObject: vi.fn(async () => undefined),
+    });
+
+    const parts = server.batches
+      .flatMap((batch) => batch.chunks)
+      .filter((chunk) => chunk.type === 'result_part');
+    expect(parts).toEqual([]);
+    expect(server.batches.at(-1)?.final).toEqual({ reason: 'done' });
+  });
+
+  // `models()` takes no signal and a local endpoint can accept the connection
+  // and stall: a cancel must still settle the call instead of holding it.
+  it('settles a cancelled model list even when the provider never answers', async () => {
+    const server = createServer();
+    const models = vi.fn(() => new Promise<never>(() => {}));
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: async () => ({ chat: vi.fn(), models }),
+      fetch: server.fetch,
+    });
+
+    const done = executor.execute(callData({ method: 'models' }));
+    await waitFor(() => models.mock.calls.length === 1);
+    executor.cancel({ callId: 'op-1:0:1', reason: 'interrupted' });
+    await done;
+
+    expect(server.batches.at(-1)?.final).toEqual({ reason: 'aborted' });
+    expect(executor.isRunning('op-1:0:1')).toBe(false);
+  });
+
+  it('never starts the model list when cancelled while the runtime is created', async () => {
+    const server = createServer();
+    const models = vi.fn(() => new Promise<never>(() => {}));
+    let resolveRuntime!: (runtime: RelayRuntime) => void;
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: () => new Promise((resolve) => (resolveRuntime = resolve)),
+      fetch: server.fetch,
+    });
+
+    const done = executor.execute(callData({ method: 'models' }));
+    await waitFor(() => !!resolveRuntime);
+    executor.cancel({ callId: 'op-1:0:1', reason: 'interrupted' });
+    resolveRuntime({ chat: vi.fn(), models });
+    await done;
+
+    expect(models).not.toHaveBeenCalled();
+    expect(executor.isRunning('op-1:0:1')).toBe(false);
+  });
+
+  it('never starts a model download when cancelled while the runtime is created', async () => {
+    const server = createServer();
+    const pullModel = vi.fn(async () => new Response(''));
+    let resolveRuntime!: (runtime: RelayRuntime) => void;
+    const executor = new LlmRelayExecutor({
+      clientId: () => 'tab-1',
+      createRuntime: () => new Promise((resolve) => (resolveRuntime = resolve)),
+      fetch: server.fetch,
+    });
+
+    const done = executor.execute(callData({ method: 'pullModel' }));
+    await waitFor(() => !!resolveRuntime);
+    executor.cancel({ callId: 'op-1:0:1', reason: 'interrupted' });
+    resolveRuntime({ chat: vi.fn(), pullModel });
+    await done;
+
+    expect(pullModel).not.toHaveBeenCalled();
+  });
+
+  it('splits a large model list across batches under the size cap', async () => {
+    const list = Array.from({ length: 3000 }, (_, i) => ({ id: `model-${i}`, displayName: 'x' }));
+    const server = await run(callData({ method: 'models' }), {
+      chat: vi.fn(),
+      models: vi.fn(async () => list),
+    });
+
+    expect(resultOf(server.batches)).toEqual(list);
+    for (const batch of server.batches)
+      expect(JSON.stringify(batch).length).toBeLessThan(256 * 1024);
+  });
+
+  it('streams pullModel progress text', async () => {
+    const progress = '{"status":"pulling","completed":1,"total":2}\n{"status":"success"}\n';
+    const server = await run(callData({ method: 'pullModel' }), {
+      chat: vi.fn(),
+      pullModel: vi.fn(async () => new Response(progress)),
+    });
+
+    const text = server.batches
+      .flatMap((batch) => batch.chunks)
+      .filter((chunk) => chunk.type === 'progress')
+      .map((chunk) => chunk.data)
+      .join('');
+    expect(text).toBe(progress);
+    expect(server.batches.at(-1)?.final).toEqual({ reason: 'done' });
+  });
+
+  it('reports a failed method as the final error', async () => {
+    const server = await run(callData({ method: 'generateObject' }), {
+      chat: vi.fn(),
+      generateObject: vi.fn(async () => {
+        throw { error: { message: 'model not found' }, errorType: 'OllamaBizError' };
+      }),
+    });
+
+    expect(server.batches.at(-1)?.final).toMatchObject({
+      error: { errorType: 'OllamaBizError', provider: 'ollama' },
+      reason: 'error',
+    });
+  });
+});
+
 describe('RelayBatchUploader', () => {
   it('sends an empty heartbeat batch while the model produces nothing', async () => {
     vi.useFakeTimers();
