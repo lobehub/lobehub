@@ -33,7 +33,7 @@ const List = memo((props: ListProps) => {
   // shows error + Retry here too, instead of a permanent skeleton grid
   // (`initAiProviderList` only flips on success).
   const useFetchAiProviderList = useAiInfraStore((s) => s.useFetchAiProviderList);
-  const { error, mutate } = useFetchAiProviderList();
+  const { error, revalidate } = useFetchAiProviderList();
 
   const skeleton = (
     <Flexbox gap={24} paddingBlock={'0 16px'}>
@@ -64,7 +64,7 @@ const List = memo((props: ListProps) => {
       errorVariant={'page'}
       isLoading={!initAiProviderList && !error}
       loading={skeleton}
-      onRetry={() => mutate()}
+      onRetry={() => revalidate()}
     >
       <Flexbox gap={24}>
         <Flexbox horizontal align={'center'} gap={8}>

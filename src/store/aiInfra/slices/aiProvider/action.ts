@@ -12,9 +12,13 @@ import type {
   Pricing,
 } from 'model-bank';
 import { isAiModelVisible } from 'model-bank/aiModel';
-import { type SWRResponse } from 'swr';
 
-import { mutate, useClientDataSWR } from '@/libs/swr';
+import {
+  createReplicaSlice,
+  recordLens,
+  type ReplicaLens,
+  type ReplicaSyncResult,
+} from '@/libs/replica';
 import { aiProviderService } from '@/services/aiProvider';
 import { type AiInfraStore } from '@/store/aiInfra/store';
 import { type StoreSetter } from '@/store/types';
@@ -27,14 +31,27 @@ import {
   type AiProviderSortMap,
   type CreateAiProviderParams,
   type EnabledProvider,
-  type EnabledProviderWithModels,
   type UpdateAiProviderConfigParams,
   type UpdateAiProviderParams,
 } from '@/types/aiProvider';
 import { AiProviderSourceEnum } from '@/types/aiProvider';
 import { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
+import { setNamespace } from '@/utils/storeDebug';
 
-import { seedModelReasoningConfigMap } from '../aiModel/initialState';
+import { initialAIModelState, seedModelReasoningConfigMap } from '../aiModel/initialState';
+import {
+  AI_PROVIDER_LIST_KEY,
+  aiProviderDetailResource,
+  aiProviderListResource,
+  type AiProviderRuntimeStateParams,
+  aiProviderRuntimeStateResource,
+  type AiProviderRuntimeStateView,
+} from './projection';
+
+const n = setNamespace('aiInfra/aiProvider');
+
+/** The provider list has one entry per scope; its params carry no filters. */
+const AI_PROVIDER_LIST_PARAMS = {} as Record<string, never>;
 
 export { filterEnabledProvidersByModelType, filterHiddenBuiltinModels } from '@/utils/aiProvider';
 
@@ -309,19 +326,244 @@ const buildVideoProviderModelLists = async (
   enabledAiModels: EnabledAiModel[],
 ) => buildProviderModelLists(providers, enabledAiModels, getVideoModelList);
 
-enum AiProviderSwrKey {
-  fetchAiProviderItem = 'FETCH_AI_PROVIDER_ITEM',
-  fetchAiProviderList = 'FETCH_AI_PROVIDER',
-  fetchAiProviderRuntimeState = 'FETCH_AI_PROVIDER_RUNTIME_STATE',
-}
+/**
+ * Derives the runtime state from the server rows plus the bundled model bank —
+ * the exact body of the old runtime-state `useClientDataSWR` fetcher, extracted
+ * so the replica resource can own the sync. `isLogin` separates the signed-in
+ * entry (server-backed) from the signed-out one (bundled defaults only).
+ */
+const fetchAiProviderRuntimeState = async (
+  isLogin: boolean,
+): Promise<AiProviderRuntimeStateView> => {
+  const [{ loadDefaultHiddenBuiltinModels, loadModels }, { DEFAULT_MODEL_PROVIDER_LIST }] =
+    await Promise.all([
+      import('@/business/client/model-bank/loadModels'),
+      import('model-bank/modelProviders'),
+    ]);
+  const [allBuiltinAiModels, defaultHiddenBuiltinModels] = await Promise.all([
+    loadModels(),
+    loadDefaultHiddenBuiltinModels(),
+  ]);
 
-type AiProviderRuntimeStateWithBuiltinModels = AiProviderRuntimeState & {
-  builtinAiModelList: LobeDefaultAiModelListItem[];
-  enabledAsrModelList?: EnabledProviderWithModels[];
-  enabledChatModelList?: EnabledProviderWithModels[];
-  enabledEmbeddingModelList?: EnabledProviderWithModels[];
-  enabledImageModelList?: EnabledProviderWithModels[];
-  enabledVideoModelList?: EnabledProviderWithModels[];
+  if (isLogin) {
+    const data = await aiProviderService.getAiProviderRuntimeState();
+    const { builtinAiModelList, enabledAiModels, hiddenBuiltinModels } =
+      resolveUserScopedBuiltinModelState(allBuiltinAiModels, data, defaultHiddenBuiltinModels);
+
+    const enabledChatAiProviders = filterEnabledProvidersByModelType(
+      data.enabledChatAiProviders,
+      enabledAiModels,
+      'chat',
+    );
+    const enabledEmbeddingAiProviders = filterEnabledProvidersByModelType(
+      data.enabledAiProviders,
+      enabledAiModels,
+      'embedding',
+    );
+    const enabledAsrAiProviders = filterEnabledProvidersByModelType(
+      data.enabledAiProviders,
+      enabledAiModels,
+      'asr',
+    );
+    const enabledImageAiProviders = filterEnabledProvidersByModelType(
+      data.enabledImageAiProviders,
+      enabledAiModels,
+      'image',
+    );
+    const enabledVideoAiProviders = filterEnabledProvidersByModelType(
+      data.enabledVideoAiProviders,
+      enabledAiModels,
+      'video',
+    );
+
+    // Build model lists with proper async handling
+    const [
+      enabledChatModelList,
+      enabledEmbeddingModelList,
+      enabledAsrModelList,
+      enabledImageModelList,
+      enabledVideoModelList,
+    ] = await Promise.all([
+      buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
+      buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
+      buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
+      buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
+      buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+    ]);
+
+    return {
+      ...data,
+      builtinAiModelList,
+      enabledAiModels,
+      enabledAsrModelList,
+      enabledChatAiProviders,
+      enabledChatModelList,
+      enabledEmbeddingModelList,
+      enabledImageAiProviders,
+      enabledImageModelList,
+      enabledVideoAiProviders,
+      enabledVideoModelList,
+      hiddenBuiltinModels,
+    };
+  }
+
+  const builtinAiModelList = filterHiddenBuiltinModels(
+    allBuiltinAiModels,
+    defaultHiddenBuiltinModels,
+  );
+  const enabledAiProviders: EnabledProvider[] = DEFAULT_MODEL_PROVIDER_LIST.filter(
+    (provider) => provider.enabled,
+  ).map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
+
+  const enabledChatAiProviders = enabledAiProviders.filter((provider) => {
+    return builtinAiModelList.some(
+      (model) => model.providerId === provider.id && model.type === 'chat',
+    );
+  });
+
+  const enabledImageAiProviders = enabledAiProviders
+    .filter((provider) => {
+      return builtinAiModelList.some(
+        (model) => model.providerId === provider.id && model.type === 'image',
+      );
+    })
+    .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
+
+  const enabledVideoAiProviders = enabledAiProviders
+    .filter((provider) => {
+      return builtinAiModelList.some(
+        (model) => model.providerId === provider.id && model.type === 'video',
+      );
+    })
+    .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
+
+  const enabledEmbeddingAiProviders = enabledAiProviders
+    .filter((provider) => {
+      return builtinAiModelList.some(
+        (model) => model.providerId === provider.id && model.type === 'embedding',
+      );
+    })
+    .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
+
+  // Build model lists for non-login state as well
+  const enabledAiModels = builtinAiModelList.filter((m) => m.enabled);
+  const enabledAsrAiProviders = filterEnabledProvidersByModelType(
+    enabledAiProviders,
+    enabledAiModels,
+    'asr',
+  );
+  const [
+    enabledChatModelList,
+    enabledEmbeddingModelList,
+    enabledAsrModelList,
+    enabledImageModelList,
+    enabledVideoModelList,
+  ] = await Promise.all([
+    buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
+    buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
+    buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
+    buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
+    buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
+  ]);
+
+  return {
+    builtinAiModelList,
+    enabledAiModels,
+    enabledAiProviders,
+    enabledAsrModelList,
+    enabledChatAiProviders,
+    enabledChatModelList,
+    enabledEmbeddingModelList,
+    enabledImageAiProviders,
+    enabledImageModelList,
+    enabledVideoAiProviders,
+    enabledVideoModelList,
+    hiddenBuiltinModels: defaultHiddenBuiltinModels,
+    // without a server there is no routing layer, so no redirects exist
+    modelRedirects: {},
+    providerBindingAgentTypes: {},
+    runtimeConfig: {},
+  };
+};
+
+/**
+ * The provider list keeps its flat shape (`aiProviderList` + `initAiProviderList`)
+ * where existing readers expect it; `initAiProviderList` is what distinguishes
+ * "loaded, possibly empty" from "not loaded yet", which a bare array cannot.
+ * Memory-only resources (`detail` / `runtimeState`) never persist, so they do
+ * not need a lens.
+ */
+const aiProviderListLens: ReplicaLens<AiInfraStore, AiProviderListItem[]> = {
+  clear: () => ({ aiProviderList: [], initAiProviderList: false }),
+  get: (state) => (state.initAiProviderList ? state.aiProviderList : undefined),
+  set: (_state, _key, data) =>
+    data === undefined
+      ? { aiProviderList: [], initAiProviderList: false }
+      : { aiProviderList: data, initAiProviderList: true },
+};
+
+/**
+ * Projects a confirmed runtime-state value onto the flat fields the many
+ * existing selectors read. `enabled*` stays derived here rather than becoming a
+ * selector over the entry map, so no reader has to change.
+ */
+const projectRuntimeState = (
+  state: AiInfraStore,
+  data: AiProviderRuntimeStateView,
+): Partial<AiInfraStore> => ({
+  aiProviderRuntimeConfig: data.runtimeConfig,
+  builtinAiModelList: data.builtinAiModelList,
+  enabledAiModels: data.enabledAiModels,
+  enabledAiProviders: data.enabledAiProviders,
+  enabledAsrModelList: data.enabledAsrModelList || [],
+  enabledChatModelList: data.enabledChatModelList || [],
+  enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
+  enabledImageModelList: data.enabledImageModelList || [],
+  enabledVideoModelList: data.enabledVideoModelList || [],
+  hiddenBuiltinModels: data.hiddenBuiltinModels,
+  isInitAiProviderRuntimeState: true,
+  modelRedirects: data.modelRedirects,
+  ...(data.modelReasoningConfigs && {
+    modelReasoningConfigMap: seedModelReasoningConfigMap(
+      state.modelReasoningConfigMap,
+      data.modelReasoningConfigs,
+      data.enabledAiModels,
+      state.modelReasoningConfigUpdatingKeys,
+    ),
+  }),
+  providerBindingAgentTypes: data.providerBindingAgentTypes ?? {},
+});
+
+const aiProviderRuntimeStateLens: ReplicaLens<AiInfraStore, AiProviderRuntimeStateView> = {
+  clear: () => ({
+    aiProviderRuntimeConfig: {},
+    aiProviderRuntimeStateMap: {},
+    builtinAiModelList: initialAIModelState.builtinAiModelList,
+    enabledAiModels: undefined,
+    enabledAiProviders: undefined,
+    enabledAsrModelList: [],
+    enabledChatModelList: [],
+    enabledEmbeddingModelList: [],
+    enabledImageModelList: [],
+    enabledVideoModelList: [],
+    hiddenBuiltinModels: undefined,
+    isInitAiProviderRuntimeState: false,
+    modelRedirects: undefined,
+    providerBindingAgentTypes: {},
+  }),
+  get: (state, key) => state.aiProviderRuntimeStateMap[key],
+  keys: (state) => Object.keys(state.aiProviderRuntimeStateMap),
+  set: (state, key, data) => {
+    const next = { ...state.aiProviderRuntimeStateMap };
+    if (data === undefined) delete next[key];
+    else next[key] = data;
+
+    // A removed entry only drops the map row; the flat projection is left to
+    // the next confirmed value (or the scope `clear`).
+    if (data === undefined) return { aiProviderRuntimeStateMap: next };
+
+    return { aiProviderRuntimeStateMap: next, ...projectRuntimeState(state, data) };
+  },
 };
 
 type Setter = StoreSetter<AiInfraStore>;
@@ -329,13 +571,39 @@ export const createAiProviderSlice = (set: Setter, get: () => AiInfraStore, _api
   new AiProviderActionImpl(set, get, _api);
 
 export class AiProviderActionImpl {
+  readonly #detail;
   readonly #get: () => AiInfraStore;
+  readonly #list;
+  readonly #runtimeState;
   readonly #set: Setter;
 
   constructor(set: Setter, get: () => AiInfraStore, _api?: unknown) {
     void _api;
     this.#set = set;
     this.#get = get;
+    this.#list = createReplicaSlice(aiProviderListResource, {
+      actionPrefix: n('list'),
+      fetcher: () => aiProviderService.getAiProviderList(),
+      get,
+      set,
+      stateKey: 'aiProviderListReplica',
+      view: aiProviderListLens,
+    });
+    this.#detail = createReplicaSlice(aiProviderDetailResource, {
+      actionPrefix: n('detail'),
+      get,
+      set,
+      stateKey: 'aiProviderDetailReplica',
+      view: recordLens<AiInfraStore, AiProviderDetailItem>('aiProviderDetailMap'),
+    });
+    this.#runtimeState = createReplicaSlice(aiProviderRuntimeStateResource, {
+      actionPrefix: n('runtimeState'),
+      fetcher: (params) => fetchAiProviderRuntimeState(params.isLogin),
+      get,
+      set,
+      stateKey: 'aiProviderRuntimeStateReplica',
+      view: aiProviderRuntimeStateLens,
+    });
   }
 
   createNewAiProvider = async (params: CreateAiProviderParams): Promise<void> => {
@@ -346,6 +614,9 @@ export class AiProviderActionImpl {
   deleteAiProvider = async (id: string): Promise<void> => {
     await aiProviderService.deleteAiProvider(id);
 
+    // Drop the cached detail: a deleted provider must not stay readable from
+    // the in-memory entry map.
+    this.#detail.remove(id);
     await this.#get().refreshAiProviderList();
   };
 
@@ -377,20 +648,20 @@ export class AiProviderActionImpl {
   };
 
   refreshAiProviderDetail = async (): Promise<void> => {
-    await mutate([AiProviderSwrKey.fetchAiProviderItem, this.#get().activeAiProvider]);
+    const active = this.#get().activeAiProvider;
+    if (active) await this.#detail.revalidate(active);
     await this.#get().refreshAiProviderRuntimeState();
   };
 
   refreshAiProviderList = async (): Promise<void> => {
-    await mutate(AiProviderSwrKey.fetchAiProviderList);
+    await this.#list.revalidate(AI_PROVIDER_LIST_KEY);
     await this.#get().refreshAiProviderRuntimeState();
   };
 
   refreshAiProviderRuntimeState = async (): Promise<void> => {
-    await Promise.all([
-      mutate([AiProviderSwrKey.fetchAiProviderRuntimeState, true]),
-      mutate([AiProviderSwrKey.fetchAiProviderRuntimeState, false]),
-    ]);
+    // Revalidate every entry of the resource in scope: only the entry whose
+    // hook is mounted has a live query, and the other is left to its next mount.
+    await this.#runtimeState.revalidate();
   };
 
   /**
@@ -418,6 +689,7 @@ export class AiProviderActionImpl {
 
   removeAiProvider = async (id: string): Promise<void> => {
     await aiProviderService.deleteAiProvider(id);
+    this.#detail.remove(id);
     await this.#get().refreshAiProviderList();
   };
 
@@ -425,16 +697,12 @@ export class AiProviderActionImpl {
     this.#get().internal_toggleAiProviderLoading(id, true);
     await aiProviderService.toggleProviderEnabled(id, enabled);
 
-    // Immediately update local aiProviderList to reflect the change
-    // This ensures the switch displays correctly without waiting for SWR refresh
-    this.#set(
-      (state) => ({
-        aiProviderList: state.aiProviderList.map((item) =>
-          item.id === id ? { ...item, enabled } : item,
-        ),
-      }),
-      false,
-      'toggleProviderEnabled/syncEnabled',
+    // Immediately reflect the change in the list view so the switch does not
+    // wait for the refresh round trip; the refresh then confirms and persists it.
+    this.#list.update(
+      AI_PROVIDER_LIST_KEY,
+      (items) => items?.map((item) => (item.id === id ? { ...item, enabled } : item)),
+      { persist: false },
     );
 
     await this.#get().refreshAiProviderList();
@@ -458,7 +726,10 @@ export class AiProviderActionImpl {
     this.#get().internal_toggleAiProviderConfigUpdating(id, true);
     await aiProviderService.updateAiProviderConfig(id, value);
 
-    // Immediately update local state for instant UI feedback
+    // Immediately update local state for instant UI feedback. This is a
+    // transient overlay on the memory-only detail view and on the projected
+    // runtime config: `refreshAiProviderDetail` revalidates both right after,
+    // and the fresh server value (which the engine folds in) replaces it.
     this.#set(
       (state) => {
         const currentRuntimeConfig = state.aiProviderRuntimeConfig[id];
@@ -522,253 +793,52 @@ export class AiProviderActionImpl {
     await this.#get().refreshAiProviderList();
   };
 
-  useFetchAiProviderItem = (id: string): SWRResponse<AiProviderDetailItem | undefined> => {
-    return useClientDataSWR<AiProviderDetailItem | undefined>(
-      [AiProviderSwrKey.fetchAiProviderItem, id],
-      () => aiProviderService.getAiProviderById(id),
-      {
-        onSuccess: (data) => {
-          if (!data) return;
-
-          this.#set(
-            (state) => ({
-              activeAiProvider: id,
-              aiProviderDetailMap: { ...state.aiProviderDetailMap, [id]: data },
-            }),
-            false,
-            'useFetchAiProviderItem',
-          );
-        },
+  /**
+   * Fetches one provider detail into `aiProviderDetailMap[id]` and adopts it as
+   * the active provider. Read the value with
+   * `aiProviderSelectors.providerDetailById(id)`.
+   */
+  useFetchAiProviderItem = (id: string): ReplicaSyncResult => {
+    return this.#detail.useSync(id || null, {
+      onSuccess: (data) => {
+        // The server no longer has this id: drop the cached row so the detail
+        // page renders "not found" instead of a stale provider.
+        if (!data) {
+          this.#detail.remove(id);
+          return;
+        }
+        this.#set({ activeAiProvider: id }, false, n('detail/active'));
       },
-    );
+    });
   };
 
-  useFetchAiProviderList = (opts?: { enabled?: boolean }): SWRResponse<AiProviderListItem[]> => {
-    return useClientDataSWR<AiProviderListItem[]>(
-      opts?.enabled === false ? null : AiProviderSwrKey.fetchAiProviderList,
-      () => aiProviderService.getAiProviderList(),
-      {
-        onSuccess: (data) => {
-          if (!this.#get().initAiProviderList) {
-            this.#set(
-              { aiProviderList: data, initAiProviderList: true },
-              false,
-              'useFetchAiProviderList/init',
-            );
-            return;
-          }
-
-          this.#set({ aiProviderList: data }, false, 'useFetchAiProviderList/refresh');
-        },
-      },
-    );
+  /**
+   * Fetches the provider list (the singleton entry of the active scope). Read
+   * the rows from `aiProviderList`; `initAiProviderList` flips once the entry is
+   * confirmed (or hydrated), which is what gates the loading skeleton.
+   */
+  useFetchAiProviderList = (opts?: { enabled?: boolean }): ReplicaSyncResult => {
+    return this.#list.useSync(AI_PROVIDER_LIST_PARAMS, { enabled: opts?.enabled !== false });
   };
 
+  /**
+   * Fetches the derived runtime state. Only the entry matching the current login
+   * state is fetched; the flat `enabled*` / `aiProviderRuntimeConfig` fields are
+   * projected from the confirmed value by the slice lens.
+   */
   useFetchAiProviderRuntimeState = (
     isLoginOnInit: boolean | undefined,
     isSyncActive?: boolean,
-  ): SWRResponse<AiProviderRuntimeStateWithBuiltinModels | undefined> => {
+  ): ReplicaSyncResult => {
     void isSyncActive;
     const isLogin = isLoginOnInit;
     const isAuthLoaded = useUserStore(authSelectors.isLoaded);
     // Only fetch when auth is loaded and login status is explicitly defined (true or false)
     // Prevents unnecessary requests when login state is null/undefined
     const shouldFetch = isAuthLoaded && isLogin !== null && isLogin !== undefined;
+    const params: AiProviderRuntimeStateParams | null = shouldFetch ? { isLogin: !!isLogin } : null;
 
-    return useClientDataSWR<AiProviderRuntimeStateWithBuiltinModels | undefined>(
-      shouldFetch ? [AiProviderSwrKey.fetchAiProviderRuntimeState, isLogin] : null,
-      async ([, isLogin]) => {
-        const [{ loadDefaultHiddenBuiltinModels, loadModels }, { DEFAULT_MODEL_PROVIDER_LIST }] =
-          await Promise.all([
-            import('@/business/client/model-bank/loadModels'),
-            import('model-bank/modelProviders'),
-          ]);
-        const [allBuiltinAiModels, defaultHiddenBuiltinModels] = await Promise.all([
-          loadModels(),
-          loadDefaultHiddenBuiltinModels(),
-        ]);
-
-        if (isLogin) {
-          const data = await aiProviderService.getAiProviderRuntimeState();
-          const { builtinAiModelList, enabledAiModels, hiddenBuiltinModels } =
-            resolveUserScopedBuiltinModelState(
-              allBuiltinAiModels,
-              data,
-              defaultHiddenBuiltinModels,
-            );
-
-          const enabledChatAiProviders = filterEnabledProvidersByModelType(
-            data.enabledChatAiProviders,
-            enabledAiModels,
-            'chat',
-          );
-          const enabledEmbeddingAiProviders = filterEnabledProvidersByModelType(
-            data.enabledAiProviders,
-            enabledAiModels,
-            'embedding',
-          );
-          const enabledAsrAiProviders = filterEnabledProvidersByModelType(
-            data.enabledAiProviders,
-            enabledAiModels,
-            'asr',
-          );
-          const enabledImageAiProviders = filterEnabledProvidersByModelType(
-            data.enabledImageAiProviders,
-            enabledAiModels,
-            'image',
-          );
-          const enabledVideoAiProviders = filterEnabledProvidersByModelType(
-            data.enabledVideoAiProviders,
-            enabledAiModels,
-            'video',
-          );
-
-          // Build model lists with proper async handling
-          const [
-            enabledChatModelList,
-            enabledEmbeddingModelList,
-            enabledAsrModelList,
-            enabledImageModelList,
-            enabledVideoModelList,
-          ] = await Promise.all([
-            buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
-            buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
-            buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
-            buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
-            buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
-          ]);
-
-          return {
-            ...data,
-            builtinAiModelList,
-            enabledAiModels,
-            enabledAsrModelList,
-            enabledChatAiProviders,
-            enabledChatModelList,
-            enabledEmbeddingModelList,
-            enabledImageAiProviders,
-            enabledImageModelList,
-            enabledVideoAiProviders,
-            enabledVideoModelList,
-            hiddenBuiltinModels,
-          };
-        }
-
-        const builtinAiModelList = filterHiddenBuiltinModels(
-          allBuiltinAiModels,
-          defaultHiddenBuiltinModels,
-        );
-        const enabledAiProviders: EnabledProvider[] = DEFAULT_MODEL_PROVIDER_LIST.filter(
-          (provider) => provider.enabled,
-        ).map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
-
-        const enabledChatAiProviders = enabledAiProviders.filter((provider) => {
-          return builtinAiModelList.some(
-            (model) => model.providerId === provider.id && model.type === 'chat',
-          );
-        });
-
-        const enabledImageAiProviders = enabledAiProviders
-          .filter((provider) => {
-            return builtinAiModelList.some(
-              (model) => model.providerId === provider.id && model.type === 'image',
-            );
-          })
-          .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
-
-        const enabledVideoAiProviders = enabledAiProviders
-          .filter((provider) => {
-            return builtinAiModelList.some(
-              (model) => model.providerId === provider.id && model.type === 'video',
-            );
-          })
-          .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
-
-        const enabledEmbeddingAiProviders = enabledAiProviders
-          .filter((provider) => {
-            return builtinAiModelList.some(
-              (model) => model.providerId === provider.id && model.type === 'embedding',
-            );
-          })
-          .map((item) => ({ id: item.id, name: item.name, source: AiProviderSourceEnum.Builtin }));
-
-        // Build model lists for non-login state as well
-        const enabledAiModels = builtinAiModelList.filter((m) => m.enabled);
-        const enabledAsrAiProviders = filterEnabledProvidersByModelType(
-          enabledAiProviders,
-          enabledAiModels,
-          'asr',
-        );
-        const [
-          enabledChatModelList,
-          enabledEmbeddingModelList,
-          enabledAsrModelList,
-          enabledImageModelList,
-          enabledVideoModelList,
-        ] = await Promise.all([
-          buildChatProviderModelLists(enabledChatAiProviders, enabledAiModels),
-          buildEmbeddingProviderModelLists(enabledEmbeddingAiProviders, enabledAiModels),
-          buildAsrProviderModelLists(enabledAsrAiProviders, enabledAiModels),
-          buildImageProviderModelLists(enabledImageAiProviders, enabledAiModels),
-          buildVideoProviderModelLists(enabledVideoAiProviders, enabledAiModels),
-        ]);
-
-        return {
-          builtinAiModelList,
-          enabledAiModels,
-          enabledAiProviders,
-          enabledAsrModelList,
-          enabledChatAiProviders,
-          enabledChatModelList,
-          enabledEmbeddingModelList,
-          enabledImageAiProviders,
-          enabledImageModelList,
-          enabledVideoAiProviders,
-          enabledVideoModelList,
-          hiddenBuiltinModels: defaultHiddenBuiltinModels,
-          // without a server there is no routing layer, so no redirects exist
-          modelRedirects: {},
-          providerBindingAgentTypes: {},
-          runtimeConfig: {},
-        };
-      },
-      {
-        onSuccess: (data) => {
-          if (!data) return;
-
-          const state = this.#get();
-
-          this.#set(
-            {
-              aiProviderRuntimeConfig: data.runtimeConfig,
-              builtinAiModelList: data.builtinAiModelList,
-              enabledAiModels: data.enabledAiModels,
-              enabledAiProviders: data.enabledAiProviders,
-              enabledAsrModelList: data.enabledAsrModelList || [],
-              enabledChatModelList: data.enabledChatModelList || [],
-              enabledEmbeddingModelList: data.enabledEmbeddingModelList || [],
-              enabledImageModelList: data.enabledImageModelList || [],
-              enabledVideoModelList: data.enabledVideoModelList || [],
-              /** Preserve "not loaded" so a later business-config refresh can still fail closed. */
-              hiddenBuiltinModels: data.hiddenBuiltinModels,
-              isInitAiProviderRuntimeState: true,
-              modelRedirects: data.modelRedirects,
-              ...(data.modelReasoningConfigs && {
-                modelReasoningConfigMap: seedModelReasoningConfigMap(
-                  state.modelReasoningConfigMap,
-                  data.modelReasoningConfigs,
-                  data.enabledAiModels,
-                  state.modelReasoningConfigUpdatingKeys,
-                ),
-              }),
-              providerBindingAgentTypes: data.providerBindingAgentTypes ?? {},
-            },
-            false,
-            'useFetchAiProviderRuntimeState',
-          );
-        },
-      },
-    );
+    return this.#runtimeState.useSync(params, { enabled: shouldFetch });
   };
 }
 

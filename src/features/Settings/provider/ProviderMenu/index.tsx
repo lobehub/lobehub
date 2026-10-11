@@ -98,7 +98,7 @@ const ProviderMenu = ({
   // Own the provider-list fetch here so a failed load surfaces error + Retry
   // instead of a permanent skeleton — `initAiProviderList` only flips on success
   //
-  const { error, mutate } = useFetchAiProviderList();
+  const { error, revalidate } = useFetchAiProviderList();
 
   // Search overrides everything (matches prior behavior); otherwise gate the
   // list on load/error via AsyncBoundary.
@@ -111,7 +111,7 @@ const ProviderMenu = ({
       errorVariant={'page'}
       isLoading={!initAiProviderList && !error}
       loading={<SkeletonList />}
-      onRetry={() => mutate()}
+      onRetry={() => revalidate()}
     >
       <ProviderList mobile={mobile} onProviderSelect={onProviderSelect} />
     </AsyncBoundary>
