@@ -6,7 +6,7 @@ import type {
 
 import { getServerDB } from '@/database/server';
 import { getRedisConfig } from '@/envs/redis';
-import { isRedisEnabled } from '@/libs/redis';
+import { isRedisEnabled } from '@/server/modules/Redis';
 import {
   createTaskRecommendationService,
   TaskRecommendationNotFoundError,

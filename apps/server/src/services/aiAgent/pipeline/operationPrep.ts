@@ -28,6 +28,8 @@ import type { ServerUserMemoryConfig } from '@/server/modules/Mecha/ContextEngin
 import type { AgentDocumentsService } from '@/server/services/agentDocuments';
 import { deviceGateway } from '@/server/services/deviceGateway';
 import { FileService } from '@/server/services/file';
+import { redisService } from '@/server/services/redis';
+import { afterUnscoped } from '@/server/utils/scheduleAfterResponse';
 
 import { pruneRegeneratedBranch } from '../pruneRegeneratedBranch';
 import { resolveDeviceWorkingDirectoryConfig } from '../resolveDeviceWorkingDirectory';
@@ -294,26 +296,10 @@ const resolveWorkspaceInit = async (
       return { ...resolved, workspace: cached.workspace };
     }
 
-    const scanned = await deviceGateway.initWorkspace({
-      deviceId: activeDeviceId,
-      scope: boundCwd,
-      userId: deps.userId,
-      workspaceId: deviceWorkspaceId,
-    });
-    if (!scanned) {
-      // Scan failed (offline mid-run / parse error). Fall back to a stale
-      // cache rather than dropping the project's skills + instructions.
-      if (cached?.workspace) {
-        log('execAgent: workspace init scan failed, using stale cache for %s', boundCwd);
-        return { ...resolved, workspace: cached.workspace };
-      }
-      return { ...resolved, workspace: empty };
-    }
-
-    // Persist the fresh scan back onto `workingDirs` (update in place or prepend
-    // a new MRU entry), keeping the JSONB payload bounded. Workspace devices
-    // are owned by the workspace, not a userId — use the workspace-scoped
-    // update path so the writeback actually lands.
+    // Scan the directory on the device and persist the result back onto
+    // `workingDirs` (update in place or prepend a new MRU entry), keeping the
+    // JSONB payload bounded. Workspace devices are owned by the workspace, not
+    // a userId — use the workspace-scoped update path so the writeback lands.
     //
     // Update the MATCHED entry's path, not `boundCwd`: the lookup above can
     // match a source entry by its effective (worktree) path, so a selected
@@ -321,15 +307,85 @@ const resolveWorkspaceInit = async (
     // recorded entry is keyed by the source path. Upserting on `boundCwd`
     // would prepend a bare worktree recent and lose the source/worktree
     // metadata the picker relies on; upsert on the matched source path instead.
-    const updated = upsertWorkspaceScan(workingDirs, cached?.path ?? boundCwd, scanned, Date.now());
-    if (deviceWorkspaceId) {
-      await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
-    } else {
-      await deviceModel.update(activeDeviceId, { workingDirs: updated });
-    }
-    log('execAgent: scanned and cached workspace init for %s', boundCwd);
+    const scanAndPersist = async (): Promise<WorkspaceInitResult | undefined> => {
+      const scanned = await deviceGateway.initWorkspace({
+        deviceId: activeDeviceId,
+        scope: boundCwd,
+        userId: deps.userId,
+        workspaceId: deviceWorkspaceId,
+      });
+      if (!scanned) return undefined;
 
-    return { ...resolved, workspace: scanned };
+      // Re-read the row before writing: the scan runs for up to 30s, and the
+      // user (or another refresh) may have edited `workingDirs` in the
+      // meantime. Merging the fresh scan into the CURRENT list keeps those
+      // edits instead of overwriting them with the pre-scan snapshot.
+      const latest = deviceWorkspaceId
+        ? await deviceModel.findWorkspaceDeviceById(activeDeviceId)
+        : await deviceModel.findByDeviceId(activeDeviceId);
+      const current = latest?.workingDirs ?? workingDirs;
+
+      // The entry this scan refreshes was removed mid-scan. Writing it back
+      // would resurrect it — and `workingDirs` is the allowlist for device
+      // file-operation roots — so keep the answer for this turn only.
+      if (cached && !current.some((dir) => dir.path === cached.path)) {
+        log('execAgent: %s was removed during the scan; skip the writeback', cached.path);
+        return scanned;
+      }
+
+      const updated = upsertWorkspaceScan(current, cached?.path ?? boundCwd, scanned, Date.now());
+      if (deviceWorkspaceId) {
+        await deviceModel.updateWorkspaceDevice(activeDeviceId, { workingDirs: updated });
+      } else {
+        await deviceModel.update(activeDeviceId, { workingDirs: updated });
+      }
+      log('execAgent: scanned and cached workspace init for %s', boundCwd);
+      return scanned;
+    };
+
+    // A stale scan still describes the project well enough for this turn:
+    // project skills and AGENTS.md change on the order of commits, not sends.
+    // Serve it now and refresh after the response, so the user does not wait
+    // on a directory walk over the device's WebSocket (up to 30s) just
+    // because an hour passed. A directory never scanned still scans inline —
+    // there is nothing to serve instead.
+    //
+    // Unscoped on purpose: a sub-agent or group-member run reaches here from
+    // inside a step's scheduled-work scope, whose step-boundary flush has a
+    // short budget — a rescan of this length would stall it. The refresh is
+    // not part of the step's settlement, so it goes straight to the host.
+    //
+    // Claimed before scanning: concurrent sends, sub-agents and group members
+    // that read the same stale entry would each schedule their own 30s walk
+    // and the same writeback. One of them wins the claim for the length of a
+    // scan; the others leave the refresh to it.
+    if (cached?.workspace) {
+      log('execAgent: serving stale workspace init for %s, refreshing in background', boundCwd);
+      afterUnscoped(async () => {
+        try {
+          if (
+            !(await redisService.workspaceRescan.claim({
+              userId: deps.userId,
+              workspaceId: deviceWorkspaceId,
+              deviceId: activeDeviceId,
+              cwd: boundCwd,
+            }))
+          ) {
+            log('execAgent: workspace rescan for %s already in flight, skipping', boundCwd);
+            return;
+          }
+          await scanAndPersist();
+        } catch (error) {
+          log('execAgent: background workspace rescan failed for %s: %O', boundCwd, error);
+        }
+      });
+      return { ...resolved, workspace: cached.workspace };
+    }
+
+    const scanned = await scanAndPersist();
+    // Scan failed (offline mid-run / parse error) and there is no cache to
+    // fall back to: the run proceeds without project skills + instructions.
+    return { ...resolved, workspace: scanned ?? empty };
   } catch (error) {
     log('execAgent: resolveWorkspaceInit failed: %O', error);
     return { workspace: empty };

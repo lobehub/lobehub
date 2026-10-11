@@ -58,6 +58,15 @@ const memoize = <T>(read: (key: string) => Promise<T>) => {
 
 const KEY_SEPARATOR = String.fromCodePoint(0);
 
+/**
+ * How old a device's system-info answer may be when a send reuses it. The
+ * answer only changes when the client upgrades or the daemon moves, and the
+ * send path asked for it on every turn (240–620ms over the device's
+ * WebSocket); three minutes covers a burst of sends without hiding a client
+ * upgrade for long.
+ */
+export const DEVICE_SYSTEM_INFO_MAX_AGE_MS = 3 * 60 * 1000;
+
 export const createRunFacts = ({ db, userId, workspaceId }: RunFactsSource): RunFacts => {
   const readDeviceSystemInfo = memoize(async (key: string) => {
     const [deviceId, scope] = key.split(KEY_SEPARATOR);
@@ -68,6 +77,7 @@ export const createRunFacts = ({ db, userId, workspaceId }: RunFactsSource): Run
       userId,
       deviceId,
       scope === 'workspace' ? workspaceId : undefined,
+      { maxAgeMs: DEVICE_SYSTEM_INFO_MAX_AGE_MS },
     );
   });
 

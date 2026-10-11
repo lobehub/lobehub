@@ -524,7 +524,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue(liveResponse);
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue({ tools: [] });
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(liveResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...liveResponse,
+        source: 'live',
+      });
 
       expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
       expect((service as any).market.skills.listTools).not.toHaveBeenCalled();
@@ -538,7 +541,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockRejectedValue(new Error('boom'));
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...staticResponse,
+        source: 'static',
+      });
 
       expect((service as any).market.skills.listLiveTools).toHaveBeenCalledWith('posthog');
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
@@ -552,7 +558,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue({ tools: [] });
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...staticResponse,
+        source: 'static',
+      });
 
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
     });
@@ -565,7 +574,10 @@ describe('MarketService', () => {
       (service as any).market.skills.listLiveTools = vi.fn().mockResolvedValue(null);
       (service as any).market.skills.listTools = vi.fn().mockResolvedValue(staticResponse);
 
-      await expect(service.listSkillTools('posthog')).resolves.toBe(staticResponse);
+      await expect(service.listSkillTools('posthog')).resolves.toEqual({
+        ...staticResponse,
+        source: 'static',
+      });
 
       expect((service as any).market.skills.listTools).toHaveBeenCalledWith('posthog');
     });

@@ -1,5 +1,5 @@
 import debug from 'debug';
-import { type Redis } from 'ioredis';
+import IORedis, { type Redis } from 'ioredis';
 
 import {
   type BaseRedisProvider,
@@ -26,11 +26,9 @@ export class IoRedisRedisProvider implements BaseRedisProvider {
   constructor(private config: RedisConfig) {}
 
   async initialize() {
-    const IORedis = await import('ioredis');
-
-    this.client = new IORedis.default(this.config.url, {
-      commandTimeout: REDIS_COMMAND_TIMEOUT_MS,
-      connectTimeout: REDIS_CONNECT_TIMEOUT_MS,
+    this.client = new IORedis(this.config.url, {
+      commandTimeout: this.config.commandTimeoutMs ?? REDIS_COMMAND_TIMEOUT_MS,
+      connectTimeout: this.config.connectTimeoutMs ?? REDIS_CONNECT_TIMEOUT_MS,
       db: this.config.database,
       keyPrefix: this.config.prefix ? `${this.config.prefix}:` : undefined,
       lazyConnect: true,

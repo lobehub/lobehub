@@ -4,7 +4,7 @@ import { and, eq, gte, isNotNull, or, sql } from 'drizzle-orm';
 import { asyncTasks, generationBatches, generations } from '@/database/schemas';
 import { getServerDB } from '@/database/server';
 import { getRedisConfig } from '@/envs/redis';
-import { initializeRedis, isRedisEnabled, type RedisClient } from '@/libs/redis';
+import { initializeRedis, isRedisEnabled, type RedisClient } from '@/server/modules/Redis';
 
 const CACHE_KEY_PREFIX = 'video:avg_latency';
 const CACHE_TTL_SECONDS = 300; // 5 minutes

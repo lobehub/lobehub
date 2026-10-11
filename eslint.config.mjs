@@ -158,6 +158,96 @@ const browserRuntimeRestrictedImportPatterns = [
   },
 ];
 
+// Business code uses domain methods in services/redis. The client lib is infrastructure.
+// Existing consumers are migration debt; this list only shrinks.
+const redisAccessRestrictedImportPaths = [
+  {
+    message:
+      'Redis service connections are internal. Use domain methods from @/server/services/redis.',
+    name: '@/server/services/redis/client',
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Redis client access belongs inside services/redis. Use a domain method or add one there.',
+    name: '@/server/modules/Redis',
+  },
+  {
+    allowTypeImports: true,
+    message:
+      'Server code must not open its own ioredis client. Use domain methods in "@/server/services/redis"; add missing business capabilities there.',
+    name: 'ioredis',
+  },
+  {
+    message:
+      'The raw agent-runtime Redis client is legacy. New code uses domain methods in "@/server/services/redis".',
+    name: '@/server/modules/AgentRuntime/redis',
+  },
+];
+const redisAccessRestrictedSyntax = [
+  {
+    message:
+      'Server code must not open its own ioredis client, not even lazily. Use "@/server/services/redis".',
+    selector: "ImportExpression > Literal[value='ioredis']",
+  },
+  {
+    message: 'Redis client access belongs inside services/redis.',
+    selector: 'ImportExpression > Literal[value=/^@\\/server\\/modules\\/Redis(?:\\/|$)/]',
+  },
+];
+const legacyRawRedisClientConsumers = [
+  'apps/server/src/services/home/index.ts',
+  'apps/server/src/services/agent/index.ts',
+  'apps/server/src/services/file/impls/s3.ts',
+  'apps/server/src/services/generation/latency.ts',
+  'apps/server/src/workflows/runGuard/store.ts',
+  'apps/server/src/runtimeConfig/providers/RedisRuntimeConfigProvider.ts',
+  'apps/server/src/router-hono/workflows/memory-user-memory/workflows/runGuard.ts',
+  'apps/server/src/modules/AgentRuntime/redis.ts',
+  'apps/server/src/modules/AgentRuntime/AgentStateManager.ts',
+  'apps/server/src/modules/AgentRuntime/StreamEventManager.ts',
+  'apps/server/src/modules/AgentRuntime/adapters/ServerLLMTransport.ts',
+  'apps/server/src/modules/AgentRuntime/dispatchClientTool.ts',
+  'apps/server/src/modules/AgentRuntime/factory.ts',
+  'apps/server/src/router-hono/agent/handlers/gatewayCron.ts',
+  'apps/server/src/router-hono/agent/handlers/llmRelay.ts',
+  'apps/server/src/router-hono/agent/handlers/toolResult.ts',
+  'apps/server/src/router-hono/webhooks/handlers/github.ts',
+  'apps/server/src/routers/lambda/messenger.ts',
+  'apps/server/src/services/agentRuntime/opportunisticSweep.ts',
+  'apps/server/src/services/agentSignal/store/adapters/redis/shared.ts',
+  'apps/server/src/services/bot/BotCallbackService.ts',
+  'apps/server/src/services/bot/BotMessageRouter.ts',
+  'apps/server/src/services/bot/deferredMessages.ts',
+  'apps/server/src/services/bot/platforms/discord/chatComposition.ts',
+  'apps/server/src/services/bot/platforms/feishu/chatComposition.ts',
+  'apps/server/src/services/bot/platforms/feishu/reactionTracker.ts',
+  'apps/server/src/services/bot/platforms/telegram/guestSession.ts',
+  'apps/server/src/services/bot/platforms/wechat/service.ts',
+  'apps/server/src/services/bot/reactionState.ts',
+  'apps/server/src/services/connector/stateStore.ts',
+  'apps/server/src/services/editLock/index.ts',
+  'apps/server/src/services/gateway/GatewayManager.ts',
+  'apps/server/src/services/gateway/botConnectQueue.ts',
+  'apps/server/src/services/gateway/runtimeStatus.ts',
+  'apps/server/src/services/messenger/MessengerRouter.ts',
+  'apps/server/src/services/messenger/installations/wechat.ts',
+  'apps/server/src/services/messenger/linkTokenStore.ts',
+  'apps/server/src/services/messenger/oauth/stateStore.ts',
+  'apps/server/src/services/messenger/platforms/linq/webhook.ts',
+  'apps/server/src/services/messenger/platforms/wechat/binder.ts',
+  'apps/server/src/services/messenger/wechatPush.ts',
+  'apps/server/src/services/messenger/wechatQrSessionStore.ts',
+  'apps/server/src/services/onboardingProgress/index.ts',
+  'apps/server/src/services/resourceEvents/index.ts',
+  'apps/server/src/services/scm/ScmControlService.ts',
+  'apps/server/src/services/scm/oauth/stateStore.ts',
+  'apps/server/src/services/taskResultBridge/redisStore.ts',
+  'apps/server/src/services/toolExecution/serverRuntimes/lobeAgent.ts',
+  'apps/server/src/services/toolExecution/serverRuntimes/message/index.ts',
+  'apps/server/src/services/understanding/sourceStore.ts',
+];
+
 const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false } = {}) => [
   'error',
   {
@@ -610,6 +700,44 @@ export default eslint(
         'error',
         ...useRefLazyInitRestrictedSyntax,
         ...uppercaseRestrictedSyntax,
+      ],
+    },
+  },
+  {
+    // Redis access boundary for server code (see `redisAccessRestrictedImportPaths`).
+    files: ['apps/server/src/**/*.{ts,tsx}'],
+    // Tests of the legacy consumers import the raw module to mock or seed it;
+    // the boundary is about production code paths.
+    ignores: [
+      ...legacyRawRedisClientConsumers,
+      'apps/server/src/services/redis/**',
+      'apps/server/src/modules/Redis/**',
+      '**/*.test.{ts,tsx}',
+      '**/__tests__/**',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          ...baseRestrictedImportOptions,
+          paths: [
+            ...(baseRestrictedImportOptions.paths ?? []),
+            ...redisAccessRestrictedImportPaths,
+          ],
+          patterns: [
+            ...(baseRestrictedImportOptions.patterns ?? []),
+            {
+              group: ['@/server/modules/Redis/*'],
+              message: 'Use domain methods in services/redis.',
+            },
+          ],
+        },
+      ],
+      'no-restricted-syntax': [
+        'error',
+        ...useRefLazyInitRestrictedSyntax,
+        ...uppercaseRestrictedSyntax,
+        ...redisAccessRestrictedSyntax,
       ],
     },
   },

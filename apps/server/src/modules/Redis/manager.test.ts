@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { initializeRedis, RedisManager, resetRedisClient } from './manager';
+import {
+  initializeRedis,
+  RedisManager,
+  resetPrefixedRedisClient,
+  resetRedisClient,
+  tryInitializeRedisWithPrefix,
+} from './manager';
 import { type RedisConfig } from './types';
 
 const { mockIoRedisInitialize, mockIoRedisDisconnect } = vi.hoisted(() => ({
@@ -69,5 +75,36 @@ describe('RedisManager', () => {
     await resetRedisClient();
 
     expect(mockIoRedisDisconnect).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('tryInitializeRedisWithPrefix', () => {
+  const config = {
+    enabled: true,
+    prefix: 'test',
+    tls: false,
+    url: 'redis://localhost:6379',
+  } satisfies RedisConfig;
+
+  afterEach(async () => {
+    await resetPrefixedRedisClient();
+  });
+
+  it('returns null instead of throwing when the connection fails, then retries', async () => {
+    mockIoRedisInitialize.mockRejectedValueOnce(new Error('ECONNREFUSED'));
+
+    await expect(tryInitializeRedisWithPrefix(config, 'cache')).resolves.toBeNull();
+
+    // The failed setup is dropped, so the next caller gets a live provider.
+    const provider = await tryInitializeRedisWithPrefix(config, 'cache');
+    expect(provider).not.toBeNull();
+    expect(mockIoRedisInitialize).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns null when redis is disabled', async () => {
+    await expect(
+      tryInitializeRedisWithPrefix({ ...config, enabled: false, url: '' }, 'cache'),
+    ).resolves.toBeNull();
+    expect(mockIoRedisInitialize).not.toHaveBeenCalled();
   });
 });

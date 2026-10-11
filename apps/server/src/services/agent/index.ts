@@ -16,14 +16,14 @@ import { SessionModel } from '@/database/models/session';
 import { UserModel } from '@/database/models/user';
 import { normalizeInboxAgentAvatar, normalizeInboxAgentTitle } from '@/database/utils/inboxAgent';
 import { getRedisConfig } from '@/envs/redis';
+import { getServerDefaultAgentConfig } from '@/server/globalConfig';
 import {
   getJSONFromRedis,
   initializeRedisWithPrefix,
   isRedisEnabled,
   RedisKeyNamespace,
   RedisKeys,
-} from '@/libs/redis';
-import { getServerDefaultAgentConfig } from '@/server/globalConfig';
+} from '@/server/modules/Redis';
 import { assertCanPerformResourceAction } from '@/server/services/resourcePermission';
 
 import { type UpdateAgentResult } from './type';

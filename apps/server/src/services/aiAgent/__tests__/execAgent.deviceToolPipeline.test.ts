@@ -693,7 +693,9 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
 
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
-      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'ws-dev-1', workspaceId);
+      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'ws-dev-1', workspaceId, {
+        maxAgeMs: expect.any(Number),
+      });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('ws-dev-1');
@@ -741,7 +743,9 @@ describe('AiAgentService.execAgent - device tool pipeline ()', () => {
       await service.execAgent({ agentId: 'agent-1', prompt: 'Hello' });
 
       // Personal principal: third arg must stay undefined (not this.workspaceId).
-      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'personal-dev-1', undefined);
+      expect(mockQueryDeviceSystemInfo).toHaveBeenCalledWith(userId, 'personal-dev-1', undefined, {
+        maxAgeMs: expect.any(Number),
+      });
 
       const createOpArgs = mockCreateOperation.mock.calls[0][0];
       expect(createOpArgs.activeDeviceId).toBe('personal-dev-1');

@@ -14,7 +14,10 @@ describe('listSkillToolsWithLiveFallback', () => {
       listTools: vi.fn().mockResolvedValue({ tools: [] }),
     };
 
-    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toBe(liveResponse);
+    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toEqual({
+      ...liveResponse,
+      source: 'live',
+    });
 
     expect(skills.listLiveTools).toHaveBeenCalledWith('posthog');
     expect(skills.listTools).not.toHaveBeenCalled();
@@ -33,7 +36,7 @@ describe('listSkillToolsWithLiveFallback', () => {
 
     await expect(
       listSkillToolsWithLiveFallback(skills, 'posthog', onLiveDiscoveryError),
-    ).resolves.toBe(staticResponse);
+    ).resolves.toEqual({ ...staticResponse, source: 'static' });
 
     expect(onLiveDiscoveryError).toHaveBeenCalledWith(error);
     expect(skills.listTools).toHaveBeenCalledWith('posthog');
@@ -48,7 +51,10 @@ describe('listSkillToolsWithLiveFallback', () => {
       listTools: vi.fn().mockResolvedValue(staticResponse),
     };
 
-    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toBe(staticResponse);
+    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toEqual({
+      ...staticResponse,
+      source: 'static',
+    });
 
     expect(skills.listTools).toHaveBeenCalledWith('posthog');
   });
@@ -62,7 +68,10 @@ describe('listSkillToolsWithLiveFallback', () => {
       listTools: vi.fn().mockResolvedValue(staticResponse),
     };
 
-    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toBe(staticResponse);
+    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toEqual({
+      ...staticResponse,
+      source: 'static',
+    });
 
     expect(skills.listTools).toHaveBeenCalledWith('posthog');
   });
@@ -75,7 +84,10 @@ describe('listSkillToolsWithLiveFallback', () => {
       listTools: vi.fn().mockResolvedValue(staticResponse),
     };
 
-    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toBe(staticResponse);
+    await expect(listSkillToolsWithLiveFallback(skills, 'posthog')).resolves.toEqual({
+      ...staticResponse,
+      source: 'static',
+    });
 
     expect(skills.listTools).toHaveBeenCalledWith('posthog');
   });
@@ -89,9 +101,9 @@ describe('listSkillToolsWithLiveFallback', () => {
       listTools: vi.fn().mockResolvedValue(staticResponse),
     };
 
-    await expect(listSkillToolsWithLiveFallback(skills, 'posthog', undefined, 3000)).resolves.toBe(
-      staticResponse,
-    );
+    await expect(
+      listSkillToolsWithLiveFallback(skills, 'posthog', undefined, 3000),
+    ).resolves.toEqual({ ...staticResponse, source: 'static' });
 
     const liveSignal = skills.listLiveTools.mock.calls[0][1]?.signal;
     const staticSignal = skills.listTools.mock.calls[0][1]?.signal;

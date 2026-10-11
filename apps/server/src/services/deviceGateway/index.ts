@@ -74,6 +74,7 @@ import debug from 'debug';
 import { isAbsolute, relative, resolve } from 'pathe';
 
 import { gatewayEnv } from '@/envs/gateway';
+import { redisService } from '@/server/services/redis';
 
 const log = debug('lobe-server:device-gateway');
 
@@ -266,13 +267,36 @@ export class DeviceGateway {
     );
   }
 
+  /**
+   * Ask the device for its system info (paths, shell, supported tools).
+   *
+   * `maxAgeMs` lets a caller accept an answer this device gave within that
+   * window instead of a fresh round trip over its WebSocket. The send path
+   * asks every turn and the answer changes only when the client upgrades or
+   * the user moves the daemon, so a few minutes of staleness there is a
+   * round trip saved per send; callers that need the live answer (an
+   * explicit device inspection) leave it unset. Only successful answers are
+   * remembered — an offline device is asked again next time.
+   */
   async queryDeviceSystemInfo(
     userId: string,
     deviceId: string,
     workspaceId?: string,
+    options?: { maxAgeMs?: number },
   ): Promise<DeviceSystemInfo | undefined> {
-    const read = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
-    return read.ok ? read.systemInfo : undefined;
+    const query = async () => {
+      const read = await this.readDeviceSystemInfo(userId, deviceId, workspaceId);
+      return read.ok ? read.systemInfo : undefined;
+    };
+
+    const maxAgeMs = options?.maxAgeMs;
+    if (!maxAgeMs || maxAgeMs <= 0) return query();
+
+    return redisService.deviceSystemInfo.remember(
+      { userId, deviceId, workspaceId },
+      query,
+      maxAgeMs,
+    );
   }
 
   /**

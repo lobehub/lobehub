@@ -108,7 +108,7 @@
     "lint:md": "remark . --silent --output",
     "lint:mdx": "npm run workflow:mdx && remark \"docs/**/*.mdx\" -r ./.remarkrc.mdx.mjs --silent --output && eslint \"docs/**/*.mdx\" --quiet --fix",
     "lint:style": "stylelint \"{src,tests}/**/*.{js,jsx,ts,tsx}\" --fix",
-    "lint:ts": "eslint src/ tests/ --concurrency=auto",
+    "lint:ts": "eslint src/ tests/ apps/server/src/ --concurrency=auto",
     "lint:unused": "knip --include files,exports,types,enumMembers,duplicates",
     "prepare": "git rev-parse --git-dir > /dev/null 2>&1 && git config core.hooksPath .githooks || true",
     "prettier": "prettier -c --write \"**/**\"",

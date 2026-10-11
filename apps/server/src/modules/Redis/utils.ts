@@ -64,3 +64,7 @@ export const buildIORedisSetArgs = (options?: SetOptions): Array<string | number
 
   return args;
 };
+
+// Cache/claim policy (read-through, atomic claim) lives in the service
+// boundary — see `services/redis/cache.ts`. This module keeps only transport
+// primitives (key/Buffer normalization, ioredis argument building, JSON reads).

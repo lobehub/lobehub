@@ -26,6 +26,16 @@ const MockGatewayHttpClient = vi.hoisted(() =>
   }),
 );
 
+// The send-path cache rides on the Redis service; hand its connection seam a
+// fake client so the test sees which key and TTL the gateway asked for,
+// independent of whether this environment has Redis configured.
+const { cacheRedis, getRedisServiceClient } = vi.hoisted(() => {
+  const cacheRedis = { get: vi.fn(async () => null), set: vi.fn(async () => 'OK') };
+  return { cacheRedis, getRedisServiceClient: vi.fn(async () => cacheRedis) };
+});
+
+vi.mock('@/server/services/redis/client', () => ({ getRedisServiceClient }));
+
 vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
 }));
@@ -439,6 +449,37 @@ describe('DeviceGateway', () => {
       const result = await proxy.queryDeviceSystemInfo('user-1', 'dev-1');
 
       expect(result).toBeUndefined();
+    });
+
+    it('asks the device directly when no maxAge is given', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo: {} });
+
+      await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
+
+      expect(getRedisServiceClient).not.toHaveBeenCalled();
+      expect(cacheRedis.get).not.toHaveBeenCalled();
+    });
+
+    it('serves a recent answer through the cache when maxAge is set', async () => {
+      mockEnv.DEVICE_GATEWAY_URL = 'https://gateway.example.com';
+      mockEnv.DEVICE_GATEWAY_SERVICE_TOKEN = 'token';
+      const systemInfo = { arch: 'arm64' };
+      mockClient.getDeviceSystemInfo.mockResolvedValue({ success: true, systemInfo });
+
+      const result = await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1', 'ws-1', {
+        maxAgeMs: 180_000,
+      });
+
+      expect(result).toEqual(systemInfo);
+      // The key carries user, pool and device so two principals never share an answer.
+      expect(cacheRedis.get).toHaveBeenCalledWith('device_system_info:v1:user-1:ws-1:dev-1');
+      expect(cacheRedis.set).toHaveBeenCalledWith(
+        'device_system_info:v1:user-1:ws-1:dev-1',
+        JSON.stringify(systemInfo),
+        { px: 180_000 },
+      );
     });
   });
 

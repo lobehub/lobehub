@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { createRunFacts } from '../runFacts';
+import { createRunFacts, DEVICE_SYSTEM_INFO_MAX_AGE_MS } from '../runFacts';
 
 const { getUserSettings, queryDeviceSystemInfo } = vi.hoisted(() => ({
   getUserSettings: vi.fn(),
@@ -43,7 +43,9 @@ describe('createRunFacts', () => {
     expect(queryDeviceSystemInfo).toHaveBeenCalledTimes(1);
     expect(a).toBe(b);
     // A personal device must not receive the workspace id.
-    expect(queryDeviceSystemInfo).toHaveBeenCalledWith('owner-1', 'dev-1', undefined);
+    expect(queryDeviceSystemInfo).toHaveBeenCalledWith('owner-1', 'dev-1', undefined, {
+      maxAgeMs: DEVICE_SYSTEM_INFO_MAX_AGE_MS,
+    });
   });
 
   it('keeps the workspace and personal scopes of the same device apart', async () => {
@@ -53,8 +55,12 @@ describe('createRunFacts', () => {
     await runFacts.deviceSystemInfo('dev-1', 'personal');
 
     expect(queryDeviceSystemInfo).toHaveBeenCalledTimes(2);
-    expect(queryDeviceSystemInfo).toHaveBeenNthCalledWith(1, 'owner-1', 'dev-1', 'ws-1');
-    expect(queryDeviceSystemInfo).toHaveBeenNthCalledWith(2, 'owner-1', 'dev-1', undefined);
+    expect(queryDeviceSystemInfo).toHaveBeenNthCalledWith(1, 'owner-1', 'dev-1', 'ws-1', {
+      maxAgeMs: DEVICE_SYSTEM_INFO_MAX_AGE_MS,
+    });
+    expect(queryDeviceSystemInfo).toHaveBeenNthCalledWith(2, 'owner-1', 'dev-1', undefined, {
+      maxAgeMs: DEVICE_SYSTEM_INFO_MAX_AGE_MS,
+    });
   });
 
   it('remembers an unreachable device rather than asking again', async () => {
