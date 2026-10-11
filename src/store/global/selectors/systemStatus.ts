@@ -3,11 +3,13 @@ import { type TopicGroupMode } from '@/types/topic';
 import type {
   GlobalState,
   ModelDetailPanelExpandedKey,
+  RecentSidebarType,
   SystemStatus,
   WorkspaceOverridableField,
 } from '../initialState';
 import {
   DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS,
+  DEFAULT_RECENT_SIDEBAR_TYPES,
   INITIAL_STATUS,
   MODEL_DETAIL_PANEL_EXPANDABLE_KEYS,
   WORKSPACE_OVERRIDABLE_FIELDS,
@@ -102,6 +104,10 @@ const agentPageSize = (s: GlobalState): number => s.status.agentPageSize || 5;
 const privateAgentPageSize = (s: GlobalState): number => s.status.privateAgentPageSize || 5;
 
 const recentPageSize = (s: GlobalState): number => s.status.recentPageSize || 5;
+
+/** Types the sidebar "Recents" section lists; see the section's ⋯ filter. */
+const recentSidebarTypes = (s: GlobalState): RecentSidebarType[] =>
+  s.status.recentSidebarTypes ?? DEFAULT_RECENT_SIDEBAR_TYPES;
 
 const pagePageSize = (s: GlobalState): number => s.status.pagePageSize || 20;
 const taskListViewOptions = (s: GlobalState) =>
@@ -511,6 +517,7 @@ export const systemStatusSelectors = {
   portalWidths,
   privateAgentPageSize,
   recentPageSize,
+  recentSidebarTypes,
   taskCreateInlineCollapsed,
   taskKanbanHiddenColumns,
   taskKanbanHiddenPanelCollapsed,

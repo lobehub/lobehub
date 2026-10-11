@@ -15,7 +15,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { cacheScope } from '@/libs/replica';
 import { setScopedMutate } from '@/libs/swr/mutate';
-import { recentService } from '@/services/recent';
+import { RECENT_SIDEBAR_TYPES, recentService } from '@/services/recent';
 import { taskService } from '@/services/task';
 import { useHomeStore } from '@/store/home';
 import { createRecentQueryKey, initialRecentState } from '@/store/home/slices/recent/initialState';
@@ -102,7 +102,7 @@ afterEach(() => {
 describe('recents replica', () => {
   it('paints the persisted rows before the network answers', async () => {
     await recentListResource.storage!.set(
-      { queryKey: recentListResource.storageKey({ limit: 11 }), scope },
+      { queryKey: recentListResource.storageKey({ limit: 11, types: RECENT_SIDEBAR_TYPES }), scope },
       { data: [item('a', 'Cached')], updatedAt: 1 },
     );
     vi.spyOn(recentService, 'getAll').mockImplementation(() => new Promise(() => {}));
@@ -120,6 +120,14 @@ describe('recents replica', () => {
     renderHook(() => useHomeStore((s) => s.useFetchRecents)(false, 10), { wrapper });
     expect(getAll).not.toHaveBeenCalled();
   });
+  it('scopes the sidebar fetch to the selected entity types', async () => {
+    const getAll = vi.spyOn(recentService, 'getAll').mockResolvedValue([]);
+
+    renderHook(() => useHomeStore((s) => s.useFetchRecents)(true, 10, ['topic']), { wrapper });
+
+    await waitFor(() => expect(getAll).toHaveBeenCalledWith(11, ['topic']));
+  });
+
 
   it('shows an optimistic title and rolls it back when persistence fails', async () => {
     await load([item('a', 'Old')]);

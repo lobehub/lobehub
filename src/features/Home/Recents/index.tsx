@@ -16,6 +16,7 @@ import {
   ArrowUpIcon,
   EyeOffIcon,
   Hash,
+  ListFilter,
   LucideCheck,
   MoreHorizontalIcon,
   SlidersHorizontalIcon,
@@ -27,6 +28,7 @@ import { useActiveWorkspaceId } from '@/business/client/hooks/useActiveWorkspace
 import { openCustomizeSidebarModal } from '@/features/HomeSidebar/Body/CustomizeSidebarModal';
 import SkeletonList from '@/features/NavPanel/components/SkeletonList';
 import { useGlobalStore } from '@/store/global';
+import { type RecentSidebarType } from '@/store/global/initialState';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { reorderSidebarItems } from '@/store/global/selectors/systemStatus';
 import { useHomeStore } from '@/store/home';
@@ -46,10 +48,11 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
   const isLogin = useUserStore(authSelectors.isLogin);
   const activeWorkspaceId = useActiveWorkspaceId();
   const recentPageSize = useGlobalStore(systemStatusSelectors.recentPageSize);
+  const recentSidebarTypes = useGlobalStore(systemStatusSelectors.recentSidebarTypes);
   const queryKey = createRecentQueryKey(recentPageSize + 1);
   const items = useHomeStore(homeRecentSelectors.query(queryKey));
   const useFetchRecents = useHomeStore((s) => s.useFetchRecents);
-  const syncStatus = useFetchRecents(isLogin, recentPageSize);
+  const syncStatus = useFetchRecents(isLogin, recentPageSize, recentSidebarTypes);
   const refreshRecents = useHomeStore((s) => s.refreshRecents);
   const sidebarItems = useGlobalStore(systemStatusSelectors.sidebarItems(activeWorkspaceId));
   const hiddenSections = useGlobalStore(
@@ -77,7 +80,32 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
     updateSystemStatus({ hiddenSidebarSections: [...hiddenSections, 'recents'] });
   }, [hiddenSections, updateSystemStatus]);
 
+  const toggleRecentType = useCallback(
+    (type: RecentSidebarType) => {
+      const next = recentSidebarTypes.includes(type)
+        ? recentSidebarTypes.filter((item) => item !== type)
+        : [...recentSidebarTypes, type];
+      // An empty filter would list nothing at all — hiding the section is what
+      // "Hide Section" is for, so the last checked type stays checked.
+      if (next.length === 0) return;
+      updateSystemStatus({ recentSidebarTypes: next });
+    },
+    [recentSidebarTypes, updateSystemStatus],
+  );
+
   const dropdownMenu = useMemo(() => {
+    const typeOptions: { label: string; type: RecentSidebarType }[] = [
+      { label: t('navPanel.recentType.topic'), type: 'topic' },
+      { label: t('navPanel.recentType.document'), type: 'document' },
+      { label: t('navPanel.recentType.task'), type: 'task' },
+    ];
+    const typeItems = typeOptions.map(({ label, type }) => ({
+      icon: recentSidebarTypes.includes(type) ? <Icon icon={LucideCheck} /> : <div />,
+      key: `type-${type}`,
+      label,
+      onClick: () => toggleRecentType(type),
+    }));
+
     const pageSizeOptions = [5, 10, 15, 20];
     const pageSizeItems = pageSizeOptions.map((size) => ({
       icon: recentPageSize === size ? <Icon icon={LucideCheck} /> : <div />,
@@ -89,6 +117,12 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
     }));
 
     return [
+      {
+        children: typeItems,
+        icon: <Icon icon={ListFilter} />,
+        key: 'filter',
+        label: t('navPanel.filter'),
+      },
       {
         children: pageSizeItems,
         extra: recentPageSize,
@@ -125,7 +159,17 @@ const Recents = memo<RecentsProps>(({ itemKey }) => {
         onClick: () => openCustomizeSidebarModal(),
       },
     ] as MenuProps['items'];
-  }, [recentPageSize, updateSystemStatus, t, isFirst, isLast, moveSection, hideSection]);
+  }, [
+    recentPageSize,
+    recentSidebarTypes,
+    toggleRecentType,
+    updateSystemStatus,
+    t,
+    isFirst,
+    isLast,
+    moveSection,
+    hideSection,
+  ]);
 
   if (!isLogin) return null;
   if (items && items.length === 0) return null;

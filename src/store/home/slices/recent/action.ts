@@ -70,7 +70,7 @@ export class RecentActionImpl {
     this.#recentList = createReplicaSlice(recentListResource, {
       actionPrefix: n('recentList'),
       entity: recentEntity,
-      fetcher: ({ limit }) => recentService.getAll(limit, RECENT_SIDEBAR_TYPES),
+      fetcher: ({ limit, types }) => recentService.getAll(limit, types ?? RECENT_SIDEBAR_TYPES),
       get,
       set,
       stateKey: 'recentListReplica',
@@ -136,10 +136,17 @@ export class RecentActionImpl {
 
   /**
    * Sidebar recents. Asks for `limit + 1` rows to know whether "view all" is
-   * needed; read them with `homeRecentSelectors.query`.
+   * needed; read them with `homeRecentSelectors.query`. `types` is the
+   * section's own type filter (documents + tasks by default) and is part of
+   * the query identity, so changing it refetches instead of reusing the
+   * previous selection.
    */
-  useFetchRecents = (isLogin: boolean | undefined, limit: number = 10): ReplicaSyncResult =>
-    this.#recentList.useSync({ limit: limit + 1 }, { enabled: isLogin === true });
+  useFetchRecents = (
+    isLogin: boolean | undefined,
+    limit: number = 10,
+    types: readonly RecentItem['type'][] = RECENT_SIDEBAR_TYPES,
+  ): ReplicaSyncResult =>
+    this.#recentList.useSync({ limit: limit + 1, types }, { enabled: isLogin === true });
 }
 
 export type RecentAction = Pick<RecentActionImpl, keyof RecentActionImpl>;

@@ -145,6 +145,20 @@ export type TaskViewMode = 'kanban' | 'list';
 
 export const DEFAULT_HOME_SIDEBAR_EXPANDED_KEYS = ['recents', 'agent', 'private'];
 
+/**
+ * Entity types the sidebar "Recents" section can list. Mirrors
+ * `RecentItem['type']` but stays structural, so the global store does not
+ * depend on the data layer.
+ */
+export type RecentSidebarType = 'topic' | 'document' | 'task';
+
+/**
+ * Sidebar recents start with the work artifacts: topics already own the Home
+ * page, so listing them here as well would print the same feed twice. The
+ * section's ⋯ menu lets the viewer opt topics — or documents/tasks — back in.
+ */
+export const DEFAULT_RECENT_SIDEBAR_TYPES: RecentSidebarType[] = ['document', 'task'];
+
 export interface SystemStatus {
   /**
    * Agent Builder panel width
@@ -299,6 +313,12 @@ export interface SystemStatus {
    * number of recent items to display
    */
   recentPageSize?: number;
+  /**
+   * Entity types listed in the sidebar "Recents" section. Defaults to
+   * documents + tasks (see `DEFAULT_RECENT_SIDEBAR_TYPES`); persisted so the
+   * filter survives a reload.
+   */
+  recentSidebarTypes?: RecentSidebarType[];
   /**
    * Resource Manager column widths
    */
@@ -510,6 +530,7 @@ export const INITIAL_STATUS = {
   privateAgentPageSize: 5,
   chatInputHeight: 64,
   recentPageSize: 5,
+  recentSidebarTypes: [...DEFAULT_RECENT_SIDEBAR_TYPES],
   taskListViewOptions: {
     groupBy: 'status',
     hideCompleted: true,
