@@ -18,6 +18,24 @@ import type { ServerRuntimeRegistration } from './types';
 const PLAN_WAIT_ATTEMPTS = 6;
 const PLAN_WAIT_INTERVAL_MS = 500;
 
+/**
+ * Mirror back the fields the server actually received for an evidence item.
+ * Models routinely "remember" writing a payload they never emitted in the
+ * arguments JSON (T-574: a builder resubmitted `{type}`-only items six times
+ * because the rejection never showed what had arrived, so it could not tell a
+ * transport problem from its own output). The echo turns each rejection into a
+ * self-diagnosable signal instead of a blind retry loop.
+ */
+const describeEvidenceFields = (item: SubmitAcceptanceEvidenceParams['evidence'][number]) => {
+  const present = (['content', 'description', 'documentId', 'fileId', 'type'] as const).filter(
+    (key) => {
+      const value = item[key];
+      return typeof value === 'string' && value.trim().length > 0;
+    },
+  );
+  return present.length > 0 ? present.join(', ') : 'no fields';
+};
+
 class AcceptanceEvidenceExecutionRuntime {
   constructor(
     private readonly db: LobeChatDatabase,
@@ -150,7 +168,11 @@ class AcceptanceEvidenceExecutionRuntime {
     const empty = params.evidence.find((item) => !item.content && !item.documentId && !item.fileId);
     if (empty) {
       return {
-        content: 'Every evidence item needs content, a documentId, or a fileId.',
+        content:
+          'Every evidence item needs content, a documentId, or a fileId. ' +
+          `The server received only [${describeEvidenceFields(empty)}] for the rejected item — ` +
+          'if you intended a payload, write it as literal item fields inside the `evidence` ' +
+          'array of the tool arguments, e.g. {"type":"text","content":"..."}, and resend.',
         error: 'INVALID_EVIDENCE',
         success: false,
       };
@@ -180,7 +202,8 @@ class AcceptanceEvidenceExecutionRuntime {
           `Evidence of type "${unbacked.type}" must reference a real artifact through fileId — ` +
           'inline content cannot stand in for one. Capture the artifact with a tool that ' +
           'returns a files.id, then cite that id. If you cannot produce one, submit what you ' +
-          'actually observed as type "text" instead of claiming a visual artifact.',
+          'actually observed as type "text" instead of claiming a visual artifact. ' +
+          `The server received only [${describeEvidenceFields(unbacked)}] for the rejected item.`,
         error: 'UNBACKED_VISUAL_EVIDENCE',
         success: false,
       };

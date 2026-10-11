@@ -392,4 +392,62 @@ describe('acceptanceEvidenceRuntime', () => {
     expect(result).toEqual(expect.objectContaining({ error: 'UNKNOWN_FILE', success: false }));
     expect(mocks.evidenceCreateMany).not.toHaveBeenCalled();
   });
+
+  it('echoes received fields when rejecting an empty evidence item', async () => {
+    // T-574: a live builder resubmitted {type}-only items six times because the
+    // rejection never showed what had arrived. The echo makes the gap visible.
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'evidence-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const result = await runtime.submitEvidence({
+      checkItemId: 'criterion-1',
+      evidence: [{ type: 'text' }],
+    });
+
+    expect(result).toEqual(expect.objectContaining({ error: 'INVALID_EVIDENCE', success: false }));
+    expect(result.content).toContain('The server received only [type] for the rejected item');
+    expect(result.content).toContain('{"type":"text","content":"..."}');
+    expect(mocks.evidenceCreateMany).not.toHaveBeenCalled();
+  });
+
+  it('echoes "no fields" when an item arrives with nothing recognizable', async () => {
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'evidence-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const result = await runtime.submitEvidence({
+      checkItemId: 'criterion-1',
+      evidence: [{}] as never,
+    });
+
+    expect(result).toEqual(expect.objectContaining({ error: 'INVALID_EVIDENCE', success: false }));
+    expect(result.content).toContain('The server received only [no fields]');
+  });
+
+  it('echoes received fields when rejecting an unbacked visual item', async () => {
+    mocks.operationFindById.mockResolvedValue({ id: 'task-op', parentOperationId: null });
+    const runtime = acceptanceEvidenceRuntime.factory({
+      operationId: 'task-op',
+      serverDB: {} as never,
+      toolManifestMap: {},
+      userId: 'user-1',
+    });
+
+    const result = await runtime.submitEvidence({
+      checkItemId: 'criterion-1',
+      evidence: [{ content: 'I opened the page and captured it', type: 'screenshot' }],
+    });
+
+    expect(result).toEqual(
+      expect.objectContaining({ error: 'UNBACKED_VISUAL_EVIDENCE', success: false }),
+    );
+    expect(result.content).toContain('The server received only [content, type] for the rejected item');
+  });
 });
