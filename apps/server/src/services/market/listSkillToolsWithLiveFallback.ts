@@ -13,6 +13,8 @@ export type SkillToolsDiscoverySource = 'live' | 'static';
  * answer and retry the fallback on the next call.
  */
 export type SkillToolsDiscovery = {
+  /** Provider-authored usage notes, appended to the manifest's system role. */
+  instruction?: string;
   source: SkillToolsDiscoverySource;
   tools?: unknown[];
 } & Record<string, unknown>;

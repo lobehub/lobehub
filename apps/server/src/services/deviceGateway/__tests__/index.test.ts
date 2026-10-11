@@ -1,8 +1,6 @@
 import type * as DeviceGatewayClientModule from '@lobechat/device-gateway-client';
 import { describe, expect, it, vi } from 'vitest';
 
-import type * as RedisLib from '@/server/modules/Redis';
-
 // Import after mocks are set up
 import { DeviceGateway } from '../index';
 
@@ -28,17 +26,15 @@ const MockGatewayHttpClient = vi.hoisted(() =>
   }),
 );
 
-// The send-path cache rides on the unified Redis lib; hand it a fake provider
-// so the test sees which key and TTL the gateway asked for.
-const { cacheRedis, tryInitializeRedisWithPrefix } = vi.hoisted(() => {
+// The send-path cache rides on the Redis service; hand its connection seam a
+// fake client so the test sees which key and TTL the gateway asked for,
+// independent of whether this environment has Redis configured.
+const { cacheRedis, getRedisServiceClient } = vi.hoisted(() => {
   const cacheRedis = { get: vi.fn(async () => null), set: vi.fn(async () => 'OK') };
-  return { cacheRedis, tryInitializeRedisWithPrefix: vi.fn(async () => cacheRedis) };
+  return { cacheRedis, getRedisServiceClient: vi.fn(async () => cacheRedis) };
 });
 
-vi.mock('@/server/modules/Redis', async (importOriginal) => ({
-  ...(await importOriginal<typeof RedisLib>()),
-  tryInitializeRedisWithPrefix,
-}));
+vi.mock('@/server/services/redis/client', () => ({ getRedisServiceClient }));
 
 vi.mock('@/envs/gateway', () => ({
   gatewayEnv: mockEnv,
@@ -462,7 +458,7 @@ describe('DeviceGateway', () => {
 
       await new DeviceGateway().queryDeviceSystemInfo('user-1', 'dev-1');
 
-      expect(tryInitializeRedisWithPrefix).not.toHaveBeenCalled();
+      expect(getRedisServiceClient).not.toHaveBeenCalled();
       expect(cacheRedis.get).not.toHaveBeenCalled();
     });
 
