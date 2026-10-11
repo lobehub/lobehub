@@ -6,7 +6,7 @@ import type {
 import type { OpenAIChatMessage, RequestTrigger } from '@lobechat/types';
 
 import type { LobeChatDatabase } from '@/database/type';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
 
 export interface AiGenerationObjectInput {
   messages: OpenAIChatMessage[] | GenerateObjectPayload['messages'];
@@ -38,7 +38,7 @@ export interface AiGenerationObjectOptions {
 }
 
 /**
- * Thin wrapper around `initModelRuntimeFromDB` + `ModelRuntime.generateObject`.
+ * Thin wrapper around `initModelRuntimeForRequest` + `ModelRuntime.generateObject`.
  *
  * Almost every server-side caller that produces structured output goes through
  * the same two-step dance: resolve the user's provider config from the DB,
@@ -48,6 +48,11 @@ export interface AiGenerationObjectOptions {
  * has one place to land.
  *
  * Construct one per request — `db` and `userId` come from the request context.
+ *
+ * A provider only the user's device reaches (Ollama, LM Studio, a private base
+ * URL; `agent_llm_relay` on) is relayed to the browser tab that sent the
+ * request; with no such tab — a bot, a workflow, deferred work — the call
+ * fails at once with `ClientLlmExecutorUnavailable` (`no_executor`).
  */
 export class AiGenerationService {
   private readonly db: LobeChatDatabase;
@@ -64,9 +69,9 @@ export class AiGenerationService {
     input: AiGenerationObjectInput,
     options: AiGenerationObjectOptions,
   ): Promise<T> {
-    const runtime = this.workspaceId
-      ? await initModelRuntimeFromDB(this.db, this.userId, input.provider, this.workspaceId)
-      : await initModelRuntimeFromDB(this.db, this.userId, input.provider);
+    const runtime = await initModelRuntimeForRequest(this.db, this.userId, input.provider, {
+      workspaceId: this.workspaceId,
+    });
     return (await runtime.generateObject(
       {
         messages: input.messages as GenerateObjectPayload['messages'],

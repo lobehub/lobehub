@@ -1,8 +1,11 @@
 import type { DocumentLoadFormat, DocumentLoadRule } from '@lobechat/agent-templates';
 import { type AgentContextDocument } from '@lobechat/context-engine';
 
-import { lambdaClient } from '@/libs/trpc/client';
+import { lambdaClient, withLlmRelay } from '@/libs/trpc/client';
 import { invalidateDocumentMutation } from '@/services/document/invalidation';
+import { oneShotRelay } from '@/services/llmRelay';
+import { useUserStore } from '@/store/user';
+import { systemAgentSelectors } from '@/store/user/selectors';
 import { toAgentContextDocuments } from '@/utils/agentDocumentContextMapping';
 
 export { agentDocumentSWRKeys } from '@/services/document/swrKeys';
@@ -281,8 +284,15 @@ class AgentDocumentService {
     return result;
   };
 
+  /**
+   * Runs on the `agentMeta` system agent model; a model only this device
+   * reaches is relayed back to this tab (one-shot relay).
+   */
   generateSkillMeta = async (params: { agentId: string; sourceAgentDocumentId: string }) => {
-    return lambdaClient.agentDocument.generateSkillMeta.mutate(params);
+    const { provider } = systemAgentSelectors.agentMeta(useUserStore.getState());
+    return oneShotRelay.run(provider, (relay) =>
+      lambdaClient.agentDocument.generateSkillMeta.mutate(params, withLlmRelay(relay)),
+    );
   };
 
   /**
