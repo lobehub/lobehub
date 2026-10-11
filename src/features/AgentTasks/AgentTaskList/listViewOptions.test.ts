@@ -53,6 +53,25 @@ describe('normalizeTaskListViewOptions', () => {
   });
 });
 
+describe('automation switch grouping', () => {
+  it('groups both automation modes by their switch, enabled first regardless of execution status', () => {
+    const items = [
+      task('off', { automationMode: null, schedulePattern: '0 9 * * *' }),
+      task('cron', { automationMode: 'schedule', status: 'paused' }),
+      task('heartbeat', { automationMode: 'heartbeat', status: 'failed' }),
+    ];
+    expect(
+      groupTaskItems(items, 'automationEnabled').map(([group, tasks]) => [
+        group.automationEnabled,
+        tasks.map((item) => item.id),
+      ]),
+    ).toEqual([
+      [true, ['cron', 'heartbeat']],
+      [false, ['off']],
+    ]);
+  });
+});
+
 describe('automation mode grouping', () => {
   it('groups scheduled and heartbeat tasks separately with schedule first', () => {
     const schedule = task('schedule', { automationMode: 'schedule' });

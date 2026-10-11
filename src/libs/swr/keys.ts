@@ -325,10 +325,12 @@ export const taskKeys = {
       visibility: 'all' | 'private' | 'workspace' = 'all',
       limit?: number,
       offset?: number,
+      includeDisabledAutomation = false,
     ) => [
       'task:scheduledList',
       agentKey,
       visibility,
+      ...(includeDisabledAutomation ? [{ includeDisabledAutomation }] : []),
       ...(limit === undefined && offset === undefined ? [] : [{ limit, offset }]),
     ],
   ),

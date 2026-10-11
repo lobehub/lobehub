@@ -241,7 +241,13 @@ export class TaskListSliceActionImpl {
       if (!last || page.data.length < limit || byId.size >= COMPLETE_TASK_LIST_MAX_ITEMS) break;
       page = await this.fetchTaskList({
         ...params,
-        after: { at: last[orderBy], seq: last.seq },
+        after: {
+          at: last[orderBy],
+          ...(params.automated && params.includeDisabledAutomation
+            ? { automationEnabled: !!last.automationMode }
+            : {}),
+          seq: last.seq,
+        },
         limit,
       });
     }
@@ -336,21 +342,32 @@ export class TaskListSliceActionImpl {
     options: {
       agentId?: string;
       enabled?: boolean;
+      includeDisabledAutomation?: boolean;
       limit?: number;
       offset?: number;
       projectId?: string;
     } = {},
   ) => {
-    const { agentId, enabled = true, limit, offset, projectId } = options;
+    const {
+      agentId,
+      enabled = true,
+      includeDisabledAutomation = false,
+      limit,
+      offset,
+      projectId,
+    } = options;
     const scopeKey = projectId
       ? `${PROJECT_LIST_KEY_PREFIX}${projectId}`
       : (agentId ?? ALL_AGENTS_LIST_KEY);
     return useClientDataSWR(
-      enabled ? taskKeys.scheduledList(scopeKey, 'all', limit, offset) : null,
+      enabled
+        ? taskKeys.scheduledList(scopeKey, 'all', limit, offset, includeDisabledAutomation)
+        : null,
       async () =>
         this.fetchTaskList({
           ...(projectId ? { projectId } : agentId ? { assigneeAgentId: agentId } : {}),
           automated: true,
+          ...(includeDisabledAutomation ? { includeDisabledAutomation: true } : {}),
           limit,
           offset,
           orderBy: 'updatedAt',

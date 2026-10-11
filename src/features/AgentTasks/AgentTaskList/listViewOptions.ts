@@ -4,7 +4,8 @@ import { t } from 'i18next';
 
 import type { TaskListItem } from '@/store/task/slices/list/initialState';
 
-export type TaskGroupBy = 'assignee' | 'automationMode' | 'member' | 'none' | 'priority' | 'status';
+export type TaskGroupBy =
+  'assignee' | 'automationEnabled' | 'automationMode' | 'member' | 'none' | 'priority' | 'status';
 export type TaskOrderBy = 'assignee' | 'createdAt' | 'priority' | 'status' | 'title' | 'updatedAt';
 export type TaskOrderDirection = 'asc' | 'desc';
 
@@ -44,6 +45,7 @@ const HIDDEN_COMPLETED_STATUS_SET = new Set<string>(HIDDEN_WHEN_COMPLETED_STATUS
 export interface TaskGroupMeta {
   assigneeId?: string;
   assigneeUserId?: string;
+  automationEnabled?: boolean;
   automationMode?: 'heartbeat' | 'schedule';
   groupBy: TaskGroupBy;
   key: string;
@@ -68,6 +70,7 @@ export const DEFAULT_TASK_LIST_VIEW_OPTIONS: TaskListViewOptions = {
 
 const TASK_GROUP_BY_SET = new Set<TaskGroupBy>([
   'assignee',
+  'automationEnabled',
   'automationMode',
   'member',
   'none',
@@ -290,6 +293,17 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
     case 'member': {
       return getTaskMemberGroupMeta(task.assigneeUserId);
     }
+    case 'automationEnabled': {
+      const automationEnabled = !!task.automationMode;
+      return {
+        automationEnabled,
+        groupBy: 'automationEnabled',
+        key: `automationEnabled:${automationEnabled}`,
+        label: t(`taskList.scheduled.${automationEnabled ? 'enabled' : 'disabled'}`, {
+          ns: 'chat',
+        }),
+      };
+    }
     case 'automationMode': {
       // Automated tasks created before automationMode was introduced are schedules.
       const automationMode = task.automationMode === 'heartbeat' ? 'heartbeat' : 'schedule';
@@ -333,6 +347,9 @@ export const getTaskGroupMeta = (task: TaskListItem, groupBy: TaskGroupBy): Task
 
 const getGroupRank = (group: TaskGroupMeta, groupBy: TaskGroupBy): number => {
   switch (groupBy) {
+    case 'automationEnabled': {
+      return group.automationEnabled ? 0 : 1;
+    }
     case 'automationMode': {
       return group.automationMode === 'schedule' ? 0 : 1;
     }

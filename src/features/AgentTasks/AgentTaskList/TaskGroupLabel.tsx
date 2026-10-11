@@ -1,7 +1,7 @@
 import { Flexbox, Icon } from '@lobehub/ui';
 import { Text } from '@lobehub/ui/base-ui';
 import { cssVar } from 'antd-style';
-import { CalendarClock, HeartPulse, UserRound } from 'lucide-react';
+import { CalendarClock, HeartPulse, Power, UserRound } from 'lucide-react';
 import { memo } from 'react';
 
 import AssigneeAvatar from '../features/AssigneeAvatar';
@@ -55,6 +55,10 @@ const TaskGroupPrefix = ({ group }: { group: TaskGroupMeta }) => {
         size={16}
       />
     );
+  }
+
+  if (group.groupBy === 'automationEnabled') {
+    return <Icon color={cssVar.colorTextDescription} icon={Power} size={16} />;
   }
 
   if (group.groupBy === 'automationMode') {

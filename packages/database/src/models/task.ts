@@ -267,8 +267,7 @@ export const isTaskIdentifierUniqueViolation = (error: unknown): boolean => {
  * leftover, not a schedule, and listing it as one lets dead entries crowd real
  * ones out of a bounded roll-up.
  *
- * Kept as one expression so the `automated` filter's two sides stay exact
- * complements and no row falls into neither bucket.
+ * Used for the runnable roll-up; management includes all configured automation.
  */
 const RUNNABLE_AUTOMATION = and(
   notInArray(tasks.status, ['canceled', 'completed', 'failed']),
@@ -282,6 +281,13 @@ const RUNNABLE_AUTOMATION = and(
   ),
 )!;
 
+/** Automation configuration survives switching a task off. */
+const CONFIGURED_AUTOMATION = or(
+  isNotNull(tasks.automationMode),
+  and(isNotNull(tasks.schedulePattern), ne(tasks.schedulePattern, '')),
+  gt(tasks.heartbeatInterval, 0),
+)!;
+
 interface TaskListFilterOptions {
   assigneeAgentId?: string;
   /** Only tasks assigned to this workspace member. */
@@ -289,6 +295,8 @@ interface TaskListFilterOptions {
   automated?: boolean;
   /** Only tasks created by this user. */
   createdByUserId?: string;
+  /** Include configured automation whose switch is off, for the management list. */
+  includeDisabledAutomation?: boolean;
   parentTaskId?: string | null;
   projectId?: string;
   visibility?: 'private' | 'public';
@@ -299,9 +307,10 @@ interface TaskListOptions extends TaskListFilterOptions {
    * Keyset cursor: only rows that sort strictly after this `(orderBy, seq)`
    * position in the list's newest-first order. Unlike `offset`, a cursor is
    * unaffected by rows inserted or deleted ahead of it, so a client walking
-   * the whole list page by page never repeats or skips a row.
+   * the whole list page by page never repeats or skips a row. Grouped
+   * automation queries also require the switch state captured with the row.
    */
-  after?: { at: Date; seq: number };
+  after?: { at: Date; automationEnabled?: boolean; seq: number };
   limit?: number;
   offset?: number;
   orderBy?: 'createdAt' | 'updatedAt';
@@ -395,6 +404,7 @@ export class TaskModel {
     assigneeUserId,
     automated,
     createdByUserId,
+    includeDisabledAutomation,
     parentTaskId,
     projectId,
     visibility,
@@ -404,10 +414,12 @@ export class TaskModel {
     if (assigneeAgentId) conditions.push(eq(tasks.assigneeAgentId, assigneeAgentId));
     if (assigneeUserId) conditions.push(eq(tasks.assigneeUserId, assigneeUserId));
     if (createdByUserId) conditions.push(eq(tasks.createdByUserId, createdByUserId));
-    if (automated === true) conditions.push(RUNNABLE_AUTOMATION);
+    if (automated === true) {
+      conditions.push(includeDisabledAutomation ? CONFIGURED_AUTOMATION : RUNNABLE_AUTOMATION);
+    }
     // `IS NOT TRUE`, not `NOT (…)`: nullable automation fields make the
-    // runnable expression NULL for manual tasks, and WHERE would drop them.
-    if (automated === false) conditions.push(sql`${RUNNABLE_AUTOMATION} IS NOT TRUE`);
+    // configuration expression NULL for manual tasks, and WHERE would drop them.
+    if (automated === false) conditions.push(sql`${CONFIGURED_AUTOMATION} IS NOT TRUE`);
     if (projectId) conditions.push(eq(tasks.projectId, projectId));
     if (visibility) conditions.push(eq(tasks.visibility, visibility));
 
@@ -1297,18 +1309,33 @@ export class TaskModel {
   async list(options: TaskListOptions = {}): Promise<{ tasks: TaskItem[]; total: number }> {
     const { after, statuses, priorities, limit = 50, offset = 0, orderBy = 'createdAt' } = options;
     const orderColumn = orderBy === 'updatedAt' ? tasks.updatedAt : tasks.createdAt;
+    const groupAutomation =
+      options.automated === true && options.includeDisabledAutomation === true;
+    const automationEnabled = isNotNull(tasks.automationMode);
 
     const conditions = this.buildListConditions(options);
 
     if (statuses?.length) conditions.push(inArray(tasks.status, statuses));
     if (priorities?.length) conditions.push(inArray(tasks.priority, priorities));
     if (after) {
-      conditions.push(
-        or(
-          lt(orderColumn, after.at),
-          and(eq(orderColumn, after.at), lt(tasks.seq, after.seq)),
-        ) as SQL,
-      );
+      const afterTimestamp = or(
+        lt(orderColumn, after.at),
+        and(eq(orderColumn, after.at), lt(tasks.seq, after.seq)),
+      )!;
+      if (groupAutomation) {
+        // Management pages order by the switch first, so the timestamp cursor
+        // must advance within its group before crossing into disabled tasks.
+        if (after.automationEnabled === undefined) {
+          throw new Error('Grouped automation cursors require automationEnabled');
+        }
+        conditions.push(
+          after.automationEnabled
+            ? or(isNull(tasks.automationMode), and(automationEnabled, afterTimestamp))!
+            : and(isNull(tasks.automationMode), afterTimestamp)!,
+        );
+      } else {
+        conditions.push(afterTimestamp);
+      }
     }
 
     const where = and(...conditions);
@@ -1324,7 +1351,11 @@ export class TaskModel {
       .where(where)
       // `seq` breaks timestamp ties so the order is total — required for the
       // keyset cursor above and for offset pages to never repeat or skip a row.
-      .orderBy(desc(orderColumn), desc(tasks.seq))
+      .orderBy(
+        ...(groupAutomation ? [desc(automationEnabled)] : []),
+        desc(orderColumn),
+        desc(tasks.seq),
+      )
       .limit(limit)
       .offset(offset);
     const [countResult, taskList] = await Promise.all([countQuery, taskListQuery]);

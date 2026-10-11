@@ -7,6 +7,7 @@ import {
   getMyTaskViewOptions,
   getScheduledTaskViewOptions,
   getTaskCreateActionBehavior,
+  getTaskCreateVisibility,
   getTaskPageHeaderVisibility,
   PAGINATED_COLLECTION_PINNED_OPTIONS,
   resolveMyTaskScope,
@@ -46,11 +47,12 @@ describe('AgentTasksPage', () => {
         }),
       ).toEqual({
         ...DEFAULT_TASK_LIST_VIEW_OPTIONS,
-        groupBy: 'automationMode',
+        groupBy: 'automationEnabled',
         hideCompleted: false,
         orderBy: 'updatedAt',
         orderDirection: 'asc',
         showSubTasks: true,
+        subGroupBy: 'none',
       });
     });
 
@@ -172,6 +174,28 @@ describe('AgentTasksPage', () => {
 
     it('opens the created sub-view from its addressable URL', () => {
       expect(resolveMyTaskScope(new URLSearchParams('scope=created'))).toBe('created');
+    });
+  });
+
+  describe('scheduled task creation', () => {
+    it.each(['list', 'kanban'] as const)(
+      'keeps the composer available with persisted %s view',
+      (view) => {
+        expect(getTaskCreateVisibility('scheduled', view, false)).toEqual({
+          showAction: false,
+          showInline: true,
+        });
+        expect(getTaskCreateVisibility('scheduled', view, true)).toEqual({
+          showAction: true,
+          showInline: false,
+        });
+      },
+    );
+    it('does not inherit ordinary task subgrouping', () => {
+      expect(
+        getScheduledTaskViewOptions({ ...DEFAULT_TASK_LIST_VIEW_OPTIONS, subGroupBy: 'priority' })
+          .subGroupBy,
+      ).toBe('none');
     });
   });
 

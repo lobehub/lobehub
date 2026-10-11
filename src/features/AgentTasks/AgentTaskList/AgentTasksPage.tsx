@@ -119,14 +119,16 @@ export const clampCollectionPage = (page: number, total: number): number =>
 /**
  * View options every paginated (server-sliced) collection pins, because a
  * client-side reorder or cut would only ever apply to the fetched page:
- * - ordering follows the server's updatedAt DESC page order. `compareTaskItems`
+ * - ordering within each group follows updatedAt DESC. `compareTaskItems`
  *   inverts `orderDirection` for the date columns (see
  *   `effectiveOrderDirection`), so the token that renders newest-first is 'asc';
  * - every fetched row renders. With `showSubTasks: false` `TaskList` folds a
  *   child away whenever its parent shares the page, which would leave the page
  *   sparse while `total` still counts the hidden rows. Nesting (when enabled)
  *   still tucks a child under a parent that is on the same page.
- * Grouping stays client-side — it only arranges the rows of the current page.
+ * Group headers stay client-side. Scheduled management queries order enabled
+ * automation first on the server, before slicing a page; client grouping then
+ * arranges the rows without letting newer disabled tasks displace enabled ones.
  */
 const PAGINATED_COLLECTION_VIEW = {
   orderBy: 'updatedAt',
@@ -139,7 +141,8 @@ export const getScheduledTaskViewOptions = (
 ): TaskListViewOptions => ({
   ...viewOptions,
   ...PAGINATED_COLLECTION_VIEW,
-  groupBy: 'automationMode',
+  groupBy: 'automationEnabled',
+  subGroupBy: 'none',
   hideCompleted: false,
 });
 
@@ -170,6 +173,18 @@ export const resolveTaskCollectionView = (
   collection: TaskCollection,
   viewMode: TaskViewMode,
 ): 'board' | 'list' => (collection !== 'scheduled' && viewMode === 'kanban' ? 'board' : 'list');
+
+export const getTaskCreateVisibility = (
+  collection: TaskCollection,
+  viewMode: TaskViewMode,
+  inlineCollapsed: boolean,
+) => {
+  const isList = resolveTaskCollectionView(collection, viewMode) === 'list';
+  return {
+    showAction: collection !== 'mine' && (inlineCollapsed || !isList),
+    showInline: collection !== 'mine' && isList && !inlineCollapsed,
+  };
+};
 
 const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const { t } = useTranslation('chat');
@@ -239,6 +254,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
   const scheduledSWR = useFetchScheduledTaskList({
     agentId,
     enabled: isScheduledCollection,
+    includeDisabledAutomation: true,
     limit: COLLECTION_PAGE_SIZE,
     offset: (collectionPage - 1) * COLLECTION_PAGE_SIZE,
     projectId,
@@ -281,22 +297,30 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
       const normalized = normalizeTaskListViewOptions(updater(viewOptions));
       const next = {
         ...normalized,
-        groupBy: normalized.groupBy === 'automationMode' ? 'status' : normalized.groupBy,
-        subGroupBy: normalized.subGroupBy === 'automationMode' ? 'none' : normalized.subGroupBy,
+        groupBy:
+          normalized.groupBy === 'automationMode' || normalized.groupBy === 'automationEnabled'
+            ? 'status'
+            : normalized.groupBy,
+        subGroupBy:
+          normalized.subGroupBy === 'automationMode' ||
+          normalized.subGroupBy === 'automationEnabled'
+            ? 'none'
+            : normalized.subGroupBy,
       };
       updateSystemStatus({ taskListViewOptions: next }, 'updateTaskListViewOptions');
     },
     [updateSystemStatus, viewOptions],
   );
 
+  const createVisibility = getTaskCreateVisibility(collection, viewMode, inlineCollapsed);
   const createActionBehavior = useMemo(
     () =>
       getTaskCreateActionBehavior({
         canCreateTask,
         inlineCollapsed,
-        viewMode,
+        viewMode: isBoardView ? 'kanban' : 'list',
       }),
-    [canCreateTask, inlineCollapsed, viewMode],
+    [canCreateTask, inlineCollapsed, isBoardView],
   );
 
   const handleCreateTask = useCallback(() => {
@@ -387,7 +411,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
         right={
           <Flexbox horizontal align={'center'} gap={4}>
             {isOrdinaryCollection && !agentId && !projectId && <TaskListVisibilityFilter />}
-            {isOrdinaryCollection && (inlineCollapsed || viewMode === 'kanban') && (
+            {createVisibility.showAction && (
               <ActionIcon
                 disabled={createActionBehavior.disabled}
                 icon={Plus}
@@ -440,6 +464,13 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
           paddingInline={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
+          {createVisibility.showInline && (
+            <CreateTaskInlineEntry
+              agentId={agentId}
+              lockAssignee={!!agentId}
+              projectId={projectId}
+            />
+          )}
           <TaskList
             data={isCollectionListInit || undefined}
             error={collectionSWR.error}
@@ -489,7 +520,7 @@ const AgentTasksPage = memo<AgentTasksPageProps>(({ agentId, projectId }) => {
           paddingInline={16}
           wrapperStyle={{ flex: 1, overflowY: 'auto' }}
         >
-          {!inlineCollapsed && (
+          {createVisibility.showInline && (
             <CreateTaskInlineEntry
               agentId={agentId}
               lockAssignee={!!agentId}

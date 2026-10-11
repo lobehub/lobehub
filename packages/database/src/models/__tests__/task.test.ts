@@ -408,11 +408,11 @@ describe('TaskModel', () => {
       const automated = await model.list({ automated: true });
       expect(automated.tasks.map((t) => t.id)).toEqual([live.id]);
 
-      // Complementary, so nothing falls into neither bucket.
-      const manual = await model.list({ automated: false });
-      expect(manual.tasks.map((t) => t.id).sort()).toEqual(
-        [noPattern.id, noInterval.id, done.id].sort(),
+      const management = await model.list({ automated: true, includeDisabledAutomation: true });
+      expect(management.tasks.map((t) => t.id).sort()).toEqual(
+        [live.id, noPattern.id, noInterval.id, done.id].sort(),
       );
+      expect((await model.list({ automated: false })).tasks).toEqual([]);
     });
 
     it('should order by last activity when asked, not by creation', async () => {
@@ -530,6 +530,138 @@ describe('TaskModel', () => {
         })
       ).tasks;
       expect(rest.map((t) => t.id)).toEqual([c.id, b.id]);
+    });
+
+    it.each([true, false])(
+      'continues grouped pagination after deleting a cursor in the enabled=%s group',
+      async (enabled) => {
+        const model = new TaskModel(serverDB, userId);
+        for (const mode of ['schedule', 'schedule', null, null] as const) {
+          await model.create({
+            automationMode: mode,
+            instruction: 'Grouped cursor',
+            schedulePattern: '0 9 * * *',
+          });
+        }
+        const options = {
+          automated: true,
+          includeDisabledAutomation: true,
+          limit: 1,
+          orderBy: 'updatedAt' as const,
+        };
+        const full = await model.list({ ...options, limit: 10 });
+        const index = enabled ? 0 : 2;
+        const row = full.tasks[index];
+        const cursor = { at: row.updatedAt, seq: row.seq, automationEnabled: enabled };
+        await model.delete(row.id);
+        const rest = await model.list({ ...options, limit: 10, after: cursor });
+        expect(rest.tasks.map((task) => task.id)).toEqual(
+          full.tasks.slice(index + 1).map((task) => task.id),
+        );
+      },
+    );
+
+    it('orders enabled automation before disabled automation across page boundaries', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const enabled = [];
+      for (let index = 0; index < 3; index += 1) {
+        enabled.push(
+          await model.create({
+            automationMode: 'schedule',
+            instruction: `Enabled ${index}`,
+            schedulePattern: '0 9 * * *',
+          }),
+        );
+      }
+      const disabled = [];
+      for (let index = 0; index < 51; index += 1) {
+        disabled.push(
+          await model.create({ instruction: `Disabled ${index}`, schedulePattern: '0 9 * * *' }),
+        );
+      }
+      await serverDB.execute(
+        sql`update tasks set updated_at = '2026-01-01' where automation_mode is not null and created_by_user_id = ${userId}`,
+      );
+      await serverDB.execute(
+        sql`update tasks set updated_at = '2026-02-01' where automation_mode is null and created_by_user_id = ${userId}`,
+      );
+      const options = {
+        automated: true,
+        includeDisabledAutomation: true,
+        limit: 50,
+        orderBy: 'updatedAt' as const,
+      };
+      const first = await model.list(options);
+      const second = await model.list({ ...options, offset: 50 });
+      const cursorPage = await model.list({
+        ...options,
+        after: {
+          at: first.tasks[49].updatedAt,
+          automationEnabled: !!first.tasks[49].automationMode,
+          seq: first.tasks[49].seq,
+        },
+      });
+      expect(cursorPage.tasks.map((task) => task.id)).toEqual(second.tasks.map((task) => task.id));
+      const enabledCursorPage = await model.list({
+        ...options,
+        after: {
+          at: first.tasks[1].updatedAt,
+          automationEnabled: !!first.tasks[1].automationMode,
+          seq: first.tasks[1].seq,
+        },
+      });
+      expect(enabledCursorPage.tasks[0].id).toBe(first.tasks[2].id);
+      expect(enabledCursorPage.tasks.slice(1).every((task) => task.automationMode === null)).toBe(
+        true,
+      );
+      expect(first.total).toBe(54);
+      expect(first.tasks.slice(0, 3).map((task) => task.id)).toEqual(
+        enabled.map((task) => task.id).reverse(),
+      );
+      expect(first.tasks.slice(3).every((task) => task.automationMode === null)).toBe(true);
+      expect(second.tasks.every((task) => task.automationMode === null)).toBe(true);
+      expect(new Set([...first.tasks, ...second.tasks].map((task) => task.id)).size).toBe(54);
+      expect(second.tasks.map((task) => task.id)).toEqual(
+        disabled
+          .slice(0, 4)
+          .map((task) => task.id)
+          .reverse(),
+      );
+    });
+
+    it('keeps switched-off configured automation in the management list but out of the runnable roll-up', async () => {
+      const model = new TaskModel(serverDB, userId);
+      const cron = await model.create({
+        automationMode: 'schedule',
+        instruction: 'Cron',
+        schedulePattern: '0 9 * * *',
+      });
+      const heartbeat = await model.create({
+        automationMode: 'heartbeat',
+        heartbeatInterval: 3600,
+        instruction: 'Heartbeat',
+      });
+      await model.update(cron.id, { automationMode: null });
+      await model.update(heartbeat.id, { automationMode: null });
+      const manual = await model.create({ instruction: 'Manual' });
+      const other = new TaskModel(serverDB, userId2);
+      await other.create({ instruction: 'Other owner', schedulePattern: '0 9 * * *' });
+      const management = await model.list({ automated: true, includeDisabledAutomation: true });
+      expect(management.total).toBe(2);
+      expect(management.tasks.map((item) => item.id).sort()).toEqual(
+        [cron.id, heartbeat.id].sort(),
+      );
+      expect((await model.list({ automated: true })).total).toBe(0);
+      const ordinary = await model.list({ automated: false });
+      expect(ordinary.tasks.map((task) => task.id)).toEqual([manual.id]);
+      expect(ordinary.total).toBe(1);
+      const [board] = await model.groupList({
+        automated: false,
+        groups: [{ key: 'backlog', statuses: ['backlog'] }],
+      });
+      expect(board.tasks.map((task) => task.id)).toEqual([manual.id]);
+      expect(board.total).toBe(1);
+      expect(new Set([...management.tasks, ...ordinary.tasks].map((task) => task.id)).size).toBe(3);
     });
 
     it('should split automated tasks from manual ones', async () => {

@@ -2646,6 +2646,8 @@ export default {
   'taskList.mine.emptyCreated': "You haven't created any tasks yet",
   'taskList.mine.title': 'My tasks',
   'taskList.scheduled.empty': 'No scheduled tasks yet',
+  'taskList.scheduled.enabled': 'Enabled',
+  'taskList.scheduled.disabled': 'Disabled',
   'taskList.scheduled.title': 'Scheduled tasks',
   'taskList.subtaskProgress.loadFailed':
     "Couldn't load sub-tasks. Click the progress badge to retry.",

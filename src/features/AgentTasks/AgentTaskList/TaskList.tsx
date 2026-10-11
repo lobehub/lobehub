@@ -67,6 +67,7 @@ const DEFAULT_ROW_HEIGHT = 52;
 
 const TASK_GROUP_BY_VALUES = new Set<TaskGroupBy>([
   'assignee',
+  'automationEnabled',
   'automationMode',
   'member',
   'none',

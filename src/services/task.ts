@@ -16,10 +16,11 @@ class TaskService {
   getDetail = async (id: string) => lambdaClient.task.detail.query({ id });
 
   list = async (params: {
-    /** Keyset cursor: rows strictly after this `(orderBy timestamp, seq)` position. */
-    after?: { at: Date | string; seq: number };
+    /** Keyset cursor; grouped automation queries also carry the row's switch state. */
+    after?: { at: Date | string; automationEnabled?: boolean; seq: number };
     assigneeAgentId?: string;
     automated?: boolean;
+    includeDisabledAutomation?: boolean;
     orderBy?: 'createdAt' | 'updatedAt';
     limit?: number;
     offset?: number;

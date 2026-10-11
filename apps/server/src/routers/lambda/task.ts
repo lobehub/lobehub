@@ -148,33 +148,50 @@ const updateSchema = z.object({
   status: z.enum(TASK_STATUSES).optional(),
 });
 
-const listSchema = z.object({
-  // Keyset cursor — rows strictly after this `(orderBy timestamp, seq)` position
-  // in newest-first order. Stable under concurrent inserts/deletes, unlike `offset`.
-  after: z.object({ at: z.coerce.date(), seq: z.number().int() }).optional(),
-  assigneeAgentId: z.string().optional(),
-  // true → only tasks whose schedule or heartbeat can still fire (a terminal or
-  // misconfigured one cannot), false → its exact complement. Omitted leaves the
-  // set unnarrowed.
-  automated: z.boolean().optional(),
-  limit: z.number().min(1).max(100).default(50),
-  offset: z.number().min(0).default(0),
-  // Which timestamp orders the page, newest first. Defaults to creation time.
-  orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
-  parentIdentifier: z.string().optional(),
-  parentTaskId: z.string().nullish(),
-  priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
-  projectId: z.string().optional(),
-  // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
-  // caller, 'created' → tasks the caller created. Always resolved against
-  // `ctx.userId` so the endpoint never filters by an arbitrary member.
-  scope: z.enum(['assigned', 'created']).optional(),
-  statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
-  // UI-side narrowing of the result set. Omitted means "All" (the chip's
-  // default 'private' is enforced client-side; the server stays permissive
-  // so router tests / external callers don't have to know the chip).
-  visibility: z.enum(['private', 'public']).optional(),
-});
+const listSchema = z
+  .object({
+    // Keyset cursor — rows strictly after this `(orderBy timestamp, seq)` position
+    // in newest-first order. Stable under concurrent inserts/deletes, unlike `offset`.
+    after: z
+      .object({
+        at: z.coerce.date(),
+        automationEnabled: z.boolean().optional(),
+        seq: z.number().int(),
+      })
+      .optional(),
+    assigneeAgentId: z.string().optional(),
+    // true → only tasks whose schedule or heartbeat can still fire (a terminal or
+    // misconfigured one cannot). includeDisabledAutomation includes all configured
+    // automation; false selects tasks without configuration. Omitted leaves the set unnarrowed.
+    automated: z.boolean().optional(),
+    includeDisabledAutomation: z.boolean().optional(),
+    limit: z.number().min(1).max(100).default(50),
+    offset: z.number().min(0).default(0),
+    // Which timestamp orders the page, newest first. Defaults to creation time.
+    orderBy: z.enum(['createdAt', 'updatedAt']).optional(),
+    parentIdentifier: z.string().optional(),
+    parentTaskId: z.string().nullish(),
+    priorities: z.array(z.number().min(0).max(4)).max(5).optional(),
+    projectId: z.string().optional(),
+    // "My tasks" narrowing: 'assigned' → tasks whose member assignee is the
+    // caller, 'created' → tasks the caller created. Always resolved against
+    // `ctx.userId` so the endpoint never filters by an arbitrary member.
+    scope: z.enum(['assigned', 'created']).optional(),
+    statuses: z.array(z.enum(TASK_STATUSES)).max(10).optional(),
+    // UI-side narrowing of the result set. Omitted means "All" (the chip's
+    // default 'private' is enforced client-side; the server stays permissive
+    // so router tests / external callers don't have to know the chip).
+    visibility: z.enum(['private', 'public']).optional(),
+  })
+  .refine(
+    (input) =>
+      !(input.automated && input.includeDisabledAutomation && input.after) ||
+      input.after?.automationEnabled !== undefined,
+    {
+      message: 'Grouped automation cursors require automationEnabled',
+      path: ['after', 'automationEnabled'],
+    },
+  );
 
 const groupListSchema = z
   .object({
