@@ -39,6 +39,22 @@ export interface OpenRouterModelCard {
   top_provider: TopProvider;
 }
 
+export type OpenRouterImageParameter =
+  | { type: 'boolean' }
+  | { type: 'enum'; values: string[] }
+  | { max: number; min: number; type: 'range' };
+
+export interface OpenRouterImageModelCard {
+  architecture: Pick<Architecture, 'input_modalities' | 'output_modalities'>;
+  created: number;
+  description: string;
+  endpoints: string;
+  id: string;
+  name: string;
+  supported_parameters: Record<string, OpenRouterImageParameter>;
+  supports_streaming: boolean;
+}
+
 export interface OpenRouterReasoning {
   effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   enabled?: boolean;

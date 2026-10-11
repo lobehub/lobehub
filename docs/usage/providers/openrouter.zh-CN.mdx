@@ -66,3 +66,13 @@ tags:
 </Steps>
 
 至此你已经可以在 LobeHub 中使用 OpenRouter 提供的模型进行对话了。
+
+## 生成图像
+
+配置 API 密钥后，在 OpenRouter 服务商设置中获取模型列表，并启用需要使用的图像模型。然后在图像生成中选择 OpenRouter 和已启用的图像模型。
+
+LobeHub 通过 OpenRouter 专用的 `/images/models` 接口获取图像模型，并将生成请求（包括带有参考图像的请求）发送至 `/images`。可用的宽高比、分辨率、质量、随机种子和参考图像数量限制取决于模型公布的能力。图像请求会显式转换这些参数，不会向图像接口发送仅用于对话的参数。
+
+此前已启用且模型 ID 带有 `:image` 后缀的图像模型仍通过对话补全接口生成图像。获取模型列表时会携带配置的 API 密钥和请求头，因此需要身份验证的代理接口也可以获取模型。
+
+有关接口详情和费用，请参阅 [OpenRouter 图像 API 文档](https://openrouter.ai/docs/api/api-reference/images/generate-an-image)。

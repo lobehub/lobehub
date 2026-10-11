@@ -113,6 +113,16 @@ describe('postProcessModelList', () => {
     });
   });
 
+  it('keeps dedicated image models without adding chat-derived image variants', async () => {
+    const imageModel: ChatModelCard = {
+      id: 'google/gemini-3.1-flash-image',
+      type: 'image',
+      parameters: { prompt: { default: '' }, resolution: { default: '2K', enum: ['2K'] } },
+    };
+
+    expect(await postProcessModelList([imageModel])).toEqual([imageModel]);
+  });
+
   it('generates the stable Gemini 3.1 Flash image model from dynamic chat metadata', async () => {
     const result = await postProcessModelList([
       {

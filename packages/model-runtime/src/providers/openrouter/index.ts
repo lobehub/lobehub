@@ -1,13 +1,55 @@
+import type { ModelParamsSchema } from 'model-bank';
 import { ModelProvider } from 'model-bank';
 
 import type { OpenAICompatibleFactoryOptions } from '../../core/openaiCompatibleFactory';
 import { createOpenAICompatibleRuntime } from '../../core/openaiCompatibleFactory';
 import { processMultiProviderModelList } from '../../utils/modelParse';
-import type { OpenRouterModelCard, OpenRouterReasoning } from './type';
+import { createOpenRouterImage } from './createImage';
+import type { OpenRouterImageModelCard, OpenRouterModelCard, OpenRouterReasoning } from './type';
+
+const defaultHeaders = {
+  'HTTP-Referer': 'https://lobehub.com',
+  'X-Title': 'LobeHub',
+};
 
 const formatPrice = (price?: string) => {
   if (price === undefined || price === '-1') return undefined;
   return Number((Number(price) * 1e6).toPrecision(5));
+};
+
+const imageParameters = (model: OpenRouterImageModelCard): ModelParamsSchema => {
+  const parameters: ModelParamsSchema = { prompt: { default: '' } };
+
+  // The catalog descriptors describe accepted values, not provider defaults.
+  const enumParameters = {
+    aspect_ratio: 'aspectRatio',
+    quality: 'quality',
+    resolution: 'resolution',
+    size: 'size',
+  } as const;
+
+  for (const [remoteKey, key] of Object.entries(enumParameters)) {
+    const descriptor = model.supported_parameters[remoteKey];
+    if (descriptor?.type === 'enum' && descriptor.values.length > 0) {
+      parameters[key] = { default: descriptor.values[0], enum: descriptor.values };
+    }
+  }
+
+  // A boolean descriptor means the numeric seed parameter is accepted.
+  const seed = model.supported_parameters.seed;
+  if (seed?.type === 'boolean') {
+    parameters.seed = { default: null };
+  } else if (seed?.type === 'range') {
+    parameters.seed = { default: null, max: seed.max, min: seed.min };
+  }
+
+  const references = model.supported_parameters.input_references;
+  const maxReferences = references?.type === 'range' ? Math.min(16, references.max) : 16;
+  if (model.architecture.input_modalities.includes('image') && maxReferences > 0) {
+    parameters.imageUrls = { default: [], maxCount: maxReferences };
+  }
+
+  return parameters;
 };
 
 export const params = {
@@ -83,23 +125,32 @@ export const params = {
       } as any;
     },
   },
-  constructorOptions: {
-    defaultHeaders: {
-      'HTTP-Referer': 'https://lobehub.com',
-      'X-Title': 'LobeHub',
-    },
-  },
+  constructorOptions: { defaultHeaders },
+  createImage: createOpenRouterImage,
   debug: {
     chatCompletion: () => process.env.DEBUG_OPENROUTER_CHAT_COMPLETION === '1',
   },
-  models: async () => {
-    const response = await fetch('https://openrouter.ai/api/v1/models');
+  models: async ({ client, options }) => {
+    const baseURL = client.baseURL.replace(/\/+$/, '');
+    const fetchCatalog = options?.fetch ?? fetch;
+    const headers = new Headers(options?.defaultHeaders ?? defaultHeaders);
+    if (!headers.has('Authorization')) headers.set('Authorization', `Bearer ${client.apiKey}`);
+    const response = await fetchCatalog(`${baseURL}/models`, { headers });
     if (!response.ok) {
       throw new Error(`OpenRouter models API request failed with status ${response.status}`);
     }
 
     const data = (await response.json()) as { data: OpenRouterModelCard[] };
     const modelList = data.data;
+
+    const imageResponse = await fetchCatalog(`${baseURL}/images/models`, { headers });
+    if (!imageResponse.ok) {
+      throw new Error(
+        `OpenRouter image models API request failed with status ${imageResponse.status}`,
+      );
+    }
+
+    const imageData = (await imageResponse.json()) as { data: OpenRouterImageModelCard[] };
 
     // Process the model info fetched from the frontend and convert to standard format
     const formattedModels = modelList.map((model) => {
@@ -197,7 +248,22 @@ export const params = {
       };
     });
 
-    return await processMultiProviderModelList(formattedModels, 'openrouter');
+    // Dedicated image catalog entries take precedence, including their API-derived schema.
+    const imageModelIds = new Set(imageData.data.map((model) => model.id));
+    const imageModels = imageData.data.map((model) => ({
+      description: model.description,
+      displayName: model.name,
+      id: model.id,
+      parameters: imageParameters(model),
+      releasedAt: new Date(model.created * 1000).toISOString().split('T')[0],
+      type: 'image' as const,
+      vision: model.architecture.input_modalities.includes('image'),
+    }));
+
+    return await processMultiProviderModelList(
+      [...formattedModels.filter((model) => !imageModelIds.has(model.id)), ...imageModels],
+      'openrouter',
+    );
   },
   provider: ModelProvider.OpenRouter,
 } satisfies OpenAICompatibleFactoryOptions;

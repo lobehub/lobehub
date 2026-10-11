@@ -68,3 +68,13 @@ This guide will walk you through how to use OpenRouter in LobeHub:
 </Steps>
 
 You’re now ready to start using OpenRouter’s models in LobeHub for conversations.
+
+## Generate images
+
+After configuring your API key, fetch the model list in the OpenRouter provider settings and enable the image models you want to use. Then select OpenRouter and an enabled image model in image generation.
+
+LobeHub discovers image models through OpenRouter's dedicated `/images/models` catalog and sends generation requests to `/images`, including requests with reference images. Available aspect ratios, resolution tiers, quality settings, seeds, and reference-image limits depend on the model's advertised capabilities. Image requests translate these controls explicitly; chat-only parameters are not sent to the image endpoint.
+
+Previously enabled image selections with a `:image` model ID continue to use the chat-completion image path. Catalog requests include your configured API key and headers, so authenticated proxy endpoints can also fetch models.
+
+See [OpenRouter's image API reference](https://openrouter.ai/docs/api/api-reference/images/generate-an-image) for endpoint details and pricing.
