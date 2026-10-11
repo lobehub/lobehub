@@ -201,6 +201,35 @@ describe('aiModelRouter', () => {
     });
   });
 
+  it('should accept null optional object fields in updateAiModel and normalize them to undefined', async () => {
+    const mockUpdate = vi.fn().mockResolvedValue(true);
+    vi.mocked(AiModelModel).mockImplementation(function () {
+      return {
+        update: mockUpdate,
+      } as any;
+    });
+
+    const caller = aiModelRouter.createCaller(mockCtx);
+
+    await caller.updateAiModel({
+      id: 'model-1',
+      providerId: 'provider-1',
+      value: {
+        abilities: null,
+        config: null,
+        displayName: 'Updated Model',
+        settings: null,
+      },
+    });
+
+    expect(mockUpdate).toHaveBeenCalledWith('model-1', 'provider-1', {
+      abilities: undefined,
+      config: undefined,
+      displayName: 'Updated Model',
+      settings: undefined,
+    });
+  });
+
   it('should toggle model enabled status', async () => {
     const mockToggle = vi.fn().mockResolvedValue(true);
     vi.mocked(AiModelModel).mockImplementation(function () {

@@ -766,7 +766,7 @@ export interface AiProviderModelListItem {
 
 // Update
 export const UpdateAiModelSchema = z.object({
-  abilities: AiModelAbilitiesSchema.optional(),
+  abilities: AiModelAbilitiesSchema.nullish().transform((val) => val ?? undefined),
   // NOTE: `chatConfig` is deliberately NOT accepted here — model-instance reasoning
   // defaults go through the dedicated updateAiModelReasoningConfig procedure so the
   // generic update path can never carry (and thus never stomp) that namespace.
@@ -774,10 +774,11 @@ export const UpdateAiModelSchema = z.object({
     .object({
       deploymentName: z.string().optional(),
     })
-    .optional(),
+    .nullish()
+    .transform((val) => val ?? undefined),
   contextWindowTokens: z.number().nullish(),
   displayName: z.string().nullish(),
-  settings: AiModelSettingsSchema.optional(),
+  settings: AiModelSettingsSchema.nullish().transform((val) => val ?? undefined),
   type: AiModelTypeSchema.optional(),
 });
 

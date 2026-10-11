@@ -257,6 +257,38 @@ describe('AiModelModel', () => {
         deploymentName: 'my-deploy',
       });
     });
+
+    it('should not wipe existing config when update receives config: null', async () => {
+      const { id } = await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'openai' });
+      await aiProviderModel.updateModelReasoningConfig(id, 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await aiProviderModel.update(id, 'openai', {
+        config: null,
+        displayName: 'Renamed Model',
+      });
+
+      const row = await aiProviderModel.findByIdAndProvider(id, 'openai');
+      expect(row!.displayName).toBe('Renamed Model');
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'high' },
+      });
+    });
+
+    it('should treat a payload with only config: null as a no-op that keeps config', async () => {
+      const { id } = await aiProviderModel.create({ id: 'gpt-5.6-sol', providerId: 'openai' });
+      await aiProviderModel.updateModelReasoningConfig(id, 'openai', {
+        gpt5_6ReasoningEffort: 'high',
+      });
+
+      await expect(aiProviderModel.update(id, 'openai', { config: null })).resolves.not.toThrow();
+
+      const row = await aiProviderModel.findByIdAndProvider(id, 'openai');
+      expect(row!.config).toEqual({
+        chatConfig: { gpt5_6ReasoningEffort: 'high' },
+      });
+    });
   });
 
   describe('model reasoning config (personal scope)', () => {
