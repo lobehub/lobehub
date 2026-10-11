@@ -29,6 +29,14 @@ export const workingDirectoryChipStyles = createStaticStyles(({ css }) => ({
       background: ${cssVar.colorFillTertiary};
     }
   `,
+  /** Shown, not picked — e.g. a directory owned by the conversation's project. */
+  readonly: css`
+    cursor: default;
+
+    &:hover {
+      background: transparent;
+    }
+  `,
   label: css`
     overflow: hidden;
     max-width: 140px;

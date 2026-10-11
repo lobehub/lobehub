@@ -147,5 +147,23 @@ describe('projectWorkingDirectory store', () => {
       expect(invalidates('projectTopics', 'project-2')).toBe(false);
       expect(invalidates('projectDirectories', 'project-1')).toBe(false);
     });
+
+    it('moves a conversation and refreshes both directories it touched', async () => {
+      const moveTopic = vi
+        .spyOn(projectWorkingDirectoryService, 'moveTopic')
+        .mockResolvedValue({ data: { projectId: 'project-1' } } as never);
+
+      await useProjectDirectoryStore
+        .getState()
+        .moveTopic({ directoryId: 'directory-2', topicId: 'topic-1' });
+
+      expect(moveTopic).toHaveBeenCalledWith({ directoryId: 'directory-2', topicId: 'topic-1' });
+      expect(invalidates('projectTopics', 'project-1')).toBe(true);
+      // Left one directory for another: every directory projection is stale.
+      expect(invalidates('directoryTopics', 'directory-1')).toBe(true);
+      expect(invalidates('directoryTopics', 'directory-2')).toBe(true);
+      // The directory rows themselves did not change.
+      expect(invalidates('projectDirectories', 'project-1')).toBe(false);
+    });
   });
 });

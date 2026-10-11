@@ -82,6 +82,8 @@ export default {
   'directories.environment': 'Environment',
   'directories.newEnvironment': 'Create environment',
 
+  'directories.boundTip':
+    "This directory belongs to the project ({{path}}). Switch devices to use the project's directory on another device.",
   'directories.boundRoot':
     'This conversation is bound to a project directory. Start a new conversation to use a different directory.',
   'directories.detectRepository': 'Detect GitHub repository',
