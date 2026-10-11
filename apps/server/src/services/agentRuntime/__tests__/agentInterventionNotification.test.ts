@@ -254,7 +254,11 @@ describe('buildRuntimeInterventionNotification', () => {
     });
 
     expect(result?.items[0]).toMatchObject({
-      allowedActions: ['approve_tool', 'reject_continue', 'stop'],
+      // No `approve_tool`: only the card can resolve the secure form — a
+      // notification-surface approve would skip the secret entry entirely and
+      // strand the run in an approve-without-form loop (CredentialNotFound →
+      // re-request → approve again).
+      allowedActions: ['reject_continue', 'stop'],
       interactionKind: 'tool_approval',
       surface: 'form',
     });
