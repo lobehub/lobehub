@@ -51,6 +51,7 @@ run commands.
 | \`lh file\` | File management |
 | \`lh doc\` | Document management (create, parse, organize) |
 | \`lh agent\` | Agent management (create, configure, run) |
+| \`lh goal\` | Long-horizon goals (plan, supervise, steer; created on \`/goal\` runs) |
 | \`lh search\` | Search local resources or the web |
 | \`lh gen\` | Content generation (text, image, video, TTS, ASR) |
 | \`lh message\` | Message management and search |
@@ -98,4 +99,8 @@ lh agent run -a <agentId> -p "Summarize today's tasks"
 - Use \`--yes\` to skip confirmation prompts on destructive operations
 - IDs can be found via \`list\` commands
 - For detailed usage of any module, read its reference file using \`readReference\`
+- A goal (see \`references/goal\`) is where long-horizon work that should keep
+  progressing across turns belongs, but goals are created on a \`/goal\` request —
+  never create or bind one on your own initiative. If the ask is genuinely
+  long-horizon, say so and tell the user to send \`/goal\`
 </lobehub_platform_guides>`;

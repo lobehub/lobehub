@@ -17,6 +17,7 @@ import doc from './references/doc';
 import eval_ from './references/eval';
 import file from './references/file';
 import generate from './references/generate';
+import goal from './references/goal';
 import kb from './references/kb';
 import memory from './references/memory';
 import message from './references/message';
@@ -47,6 +48,7 @@ export const LobeHubSkill: BuiltinSkill = {
     'references/eval': eval_,
     'references/file': file,
     'references/generate': generate,
+    'references/goal': goal,
     'references/kb': kb,
     'references/memory': memory,
     'references/message': message,

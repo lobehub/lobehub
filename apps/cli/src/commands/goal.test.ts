@@ -24,12 +24,18 @@ const { mockClient } = vi.hoisted(() => ({
       setBudget: { mutate: vi.fn() },
       supervision: { query: vi.fn() },
       tick: { mutate: vi.fn() },
+      updateRequirement: { mutate: vi.fn() },
     },
   },
 }));
 
+// A plan/report is read as JSON; `goal set-requirement --file` reads plain
+// markdown. Key the fixture off the path so both keep a realistic payload.
 vi.mock('node:fs/promises', () => ({
-  readFile: async () => JSON.stringify({ action: 'verify', reason: 'Ready' }),
+  readFile: async (path: string) =>
+    path === 'requirement.md'
+      ? '# What counts as done\n- Ship the migration with real evidence'
+      : JSON.stringify({ action: 'verify', reason: 'Ready' }),
 }));
 
 vi.mock('../utils/format', async (importOriginal) => ({
@@ -770,6 +776,63 @@ describe('goal set-budget command', () => {
         maxStepsPerRun: null,
       }),
     );
+  });
+});
+
+describe('goal set-requirement command', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(log, 'info').mockImplementation(() => {});
+    mockClient.goal.updateRequirement.mutate.mockResolvedValue({
+      data: { id: 'goal-1' },
+      success: true,
+    });
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('replaces the requirement from --requirement, trimming the surplus whitespace', async () => {
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'set-requirement',
+      'goal-1',
+      '-r',
+      '  Done only when the dashboard reads from the merged backend  ',
+    ]);
+
+    expect(mockClient.goal.updateRequirement.mutate).toHaveBeenCalledWith({
+      id: 'goal-1',
+      requirement: 'Done only when the dashboard reads from the merged backend',
+    });
+  });
+
+  it('reads a long, multi-line requirement from --file instead of the command line', async () => {
+    await createProgram().parseAsync([
+      'node',
+      'test',
+      'goal',
+      'set-requirement',
+      'goal-1',
+      '--file',
+      'requirement.md',
+    ]);
+
+    expect(mockClient.goal.updateRequirement.mutate).toHaveBeenCalledWith({
+      id: 'goal-1',
+      requirement: '# What counts as done\n- Ship the migration with real evidence',
+    });
+  });
+
+  it('refuses an empty edit rather than blanking the acceptance bar', async () => {
+    await expect(
+      createProgram().parseAsync(['node', 'test', 'goal', 'set-requirement', 'goal-1']),
+    ).rejects.toThrow('Provide the requirement');
+
+    expect(mockClient.goal.updateRequirement.mutate).not.toHaveBeenCalled();
   });
 });
 
