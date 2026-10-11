@@ -2,11 +2,13 @@ import type { WorkspaceUserPreference } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import {
   boolean,
+  foreignKey,
   index,
   jsonb,
   pgTable,
   primaryKey,
   text,
+  unique,
   uniqueIndex,
   uuid,
   varchar,
@@ -229,6 +231,8 @@ export const workspaceTeams = pgTable(
   (t) => [
     uniqueIndex('workspace_teams_workspace_identifier_unique').on(t.workspaceId, t.identifier),
     index('workspace_teams_workspace_id_idx').on(t.workspaceId),
+    // Target of the composite FK that pins a membership's workspace to its team's.
+    unique('workspace_teams_id_workspace_unique').on(t.id, t.workspaceId),
   ],
 );
 
@@ -245,10 +249,11 @@ export const workspaceTeamMembers = pgTable(
   'workspace_team_members',
   {
     id: uuid('id').defaultRandom().notNull().primaryKey(),
-    teamId: text('team_id')
-      .references(() => workspaceTeams.id, { onDelete: 'cascade' })
-      .notNull(),
-    /** Denormalized so member-scoped lookups never need to join the team table. */
+    teamId: text('team_id').notNull(),
+    /**
+     * Denormalized so member-scoped lookups never need to join the team table.
+     * The composite FK below keeps it equal to the team's own workspace.
+     */
     workspaceId: text('workspace_id')
       .references(() => workspaces.id, { onDelete: 'cascade' })
       .notNull(),
@@ -259,6 +264,11 @@ export const workspaceTeamMembers = pgTable(
     createdAt: createdAt(),
   },
   (t) => [
+    foreignKey({
+      columns: [t.teamId, t.workspaceId],
+      foreignColumns: [workspaceTeams.id, workspaceTeams.workspaceId],
+      name: 'workspace_team_members_team_workspace_fk',
+    }).onDelete('cascade'),
     uniqueIndex('workspace_team_members_team_user_unique').on(t.teamId, t.userId),
     index('workspace_team_members_workspace_user_idx').on(t.workspaceId, t.userId),
   ],

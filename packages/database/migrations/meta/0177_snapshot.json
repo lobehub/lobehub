@@ -1,5 +1,5 @@
 {
-  "id": "22a60647-8201-4943-b131-6f9e538ffd26",
+  "id": "1eddfbed-aaa2-4e46-b08c-a314e686df6f",
   "prevId": "ed8f0898-8436-4cf1-8ffe-1de4ae2902a4",
   "version": "7",
   "dialect": "postgresql",
@@ -42297,19 +42297,6 @@
         }
       },
       "foreignKeys": {
-        "workspace_team_members_team_id_workspace_teams_id_fk": {
-          "name": "workspace_team_members_team_id_workspace_teams_id_fk",
-          "tableFrom": "workspace_team_members",
-          "tableTo": "workspace_teams",
-          "columnsFrom": [
-            "team_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
         "workspace_team_members_workspace_id_workspaces_id_fk": {
           "name": "workspace_team_members_workspace_id_workspaces_id_fk",
           "tableFrom": "workspace_team_members",
@@ -42332,6 +42319,21 @@
           ],
           "columnsTo": [
             "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "workspace_team_members_team_workspace_fk": {
+          "name": "workspace_team_members_team_workspace_fk",
+          "tableFrom": "workspace_team_members",
+          "tableTo": "workspace_teams",
+          "columnsFrom": [
+            "team_id",
+            "workspace_id"
+          ],
+          "columnsTo": [
+            "id",
+            "workspace_id"
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
@@ -42471,7 +42473,16 @@
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "workspace_teams_id_workspace_unique": {
+          "name": "workspace_teams_id_workspace_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "id",
+            "workspace_id"
+          ]
+        }
+      },
       "policies": {},
       "checkConstraints": {},
       "isRLSEnabled": false

@@ -7,7 +7,8 @@ CREATE TABLE IF NOT EXISTS "workspace_teams" (
 	"avatar" text,
 	"created_by" text,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
+	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+	CONSTRAINT "workspace_teams_id_workspace_unique" UNIQUE("id","workspace_id")
 );
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "workspace_team_members" (
@@ -28,7 +29,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
 DO $$ BEGIN
-  ALTER TABLE "workspace_team_members" ADD CONSTRAINT "workspace_team_members_team_id_workspace_teams_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."workspace_teams"("id") ON DELETE cascade ON UPDATE no action;
+  ALTER TABLE "workspace_team_members" ADD CONSTRAINT "workspace_team_members_team_workspace_fk" FOREIGN KEY ("team_id","workspace_id") REFERENCES "public"."workspace_teams"("id","workspace_id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
 DO $$ BEGIN

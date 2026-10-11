@@ -4693,6 +4693,7 @@ table workspace_team_members {
   created_at "timestamp with time zone" [not null, default: `now()`]
 
   indexes {
+    
     (team_id, user_id) [name: 'workspace_team_members_team_user_unique', unique]
     (workspace_id, user_id) [name: 'workspace_team_members_workspace_user_idx']
   }
@@ -4712,6 +4713,7 @@ table workspace_teams {
   indexes {
     (workspace_id, identifier) [name: 'workspace_teams_workspace_identifier_unique', unique]
     workspace_id [name: 'workspace_teams_workspace_id_idx']
+    (id, workspace_id) [name: 'workspace_teams_id_workspace_unique', unique]
   }
 }
 
