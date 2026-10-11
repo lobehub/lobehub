@@ -51,6 +51,18 @@ A persisted read is asynchronous, so a list hydrated only by `useSync` paints it
 
 Inside LobeHub, use `@/libs/replica`. It presets the cache scope, IndexedDB / localStorage storage and the app's SWR driver.
 
+## Invalidation
+
+Persisted rows are kept per entry key **and** per query (`key?<query>`), so a resource can hold several rows for one key. Never delete through a plain `set` or by clearing SWR keys: the persisted rows survive and a reload paints the deleted data. Use the primitive that matches what is gone:
+
+| What is gone                               | Call                                                                            | What it does                                                                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| One entity (a deleted topic, file, memory) | `linkReplicaEntity(...).remove(id)` / `slice.updateEntity(id, () => undefined)` | Drops it from every loaded entry and from persisted rows of unloaded entries. A value hydrated later — even by a read already in flight — comes back without it until a server value holds it again.    |
+| One entry key, under every filter / sort   | `slice.remove(key)`                                                             | Drops the entry and every persisted query variant of the key. No variant hydrates again until a server `replace` for the key supersedes the removal.                                                    |
+| The whole resource ("delete all", a reset) | `slice.clear()` / `linkReplicaEntity(...).clear()`                              | Empties memory in one commit, deletes every persisted row and the index of the active scope, and drops hydrates and `useSync` responses that started before it. Resolves `true` once storage is purged. |
+
+Prefer the narrowest call: an entity delete keeps the rest of every list; `remove(key)` is for a key whose whole value is gone or denied (NOT_FOUND / FORBIDDEN); `clear()` is for flows that invalidate everything the user has of that resource. `clear()` does not refetch: mounted views show their loading state until the next sync, so call `slice.revalidate()` after it when the server still has data to show.
+
 ## Transcripts and other irregular pages
 
 Message-like resources page backward by cursor, with windows whose length changes on every refresh. The paging config covers them:
