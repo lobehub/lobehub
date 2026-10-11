@@ -40,6 +40,7 @@ const createMemoryStorage = (delays: Record<string, number> = {}) => {
         ? (indexRows.get(scope) as ReplicaRow<string[]> | undefined)
         : rows.get(`${scope}|${queryKey}`),
     remove: async ({ queryKey, scope }) => {
+      if (queryKey === REPLICA_INDEX_KEY) return void indexRows.delete(scope);
       rows.delete(`${scope}|${queryKey}`);
     },
     set: async ({ queryKey, scope }, projection) => {
@@ -682,6 +683,226 @@ describe('createReplicaSlice', () => {
       scopeState.trusted = true;
       act(() => slice.remove('a'));
       await waitFor(() => expect(storage.rows.get('user-1:personal|a')).toBeUndefined());
+    });
+  });
+
+  describe('invalidation', () => {
+    interface QueryParams {
+      id: string;
+      q?: string;
+    }
+    /** A resource whose rows are persisted per query (`a`, `a?{"q":"x"}` …). */
+    const setupQueried = ({
+      driver: queryDriver = driver,
+      storage = createMemoryStorage(),
+    }: {
+      driver?: Parameters<typeof createReplicaSlice>[1]['driver'];
+      storage?: ReturnType<typeof createMemoryStorage>;
+    } = {}) => {
+      const resource = defineReplica<QueryParams, string[]>({
+        fetcher: async () => ['server'],
+        key: ({ id }) => id,
+        name: 'queriedList',
+        query: ({ q }) => ({ q }),
+        scope,
+        storage: storage.storage,
+        version: 1,
+      });
+      const store = createStore<TestState>()(() => ({
+        lists: {},
+        listsReplica: createReplicaState(),
+      }));
+      const slice = createReplicaSlice<TestState, QueryParams, string[]>(resource, {
+        driver: queryDriver,
+        get: store.getState,
+        set: (partial) => store.setState(partial),
+        stateKey: 'listsReplica',
+        view: recordLens('lists'),
+      });
+      return { resource, slice, storage, store };
+    };
+    const row = (resource: { storageKey: (params: QueryParams) => string }, params: QueryParams) =>
+      `user-1:personal|${resource.storageKey(params)}`;
+
+    /** Persist `a` (unfiltered + filtered) and `ab` in one session. */
+    const persistVariants = async () => {
+      const first = setupQueried();
+      act(() => {
+        first.slice.replace({ id: 'a' }, ['a-all']);
+        first.slice.replace({ id: 'a', q: 'x' }, ['a-x']);
+        first.slice.replace({ id: 'ab' }, ['ab-all']);
+      });
+      await waitFor(() => expect(first.storage.rows.size).toBe(3));
+      return first;
+    };
+
+    it('remove drops every persisted query variant of the key, not only the one in memory', async () => {
+      const { resource, slice, storage } = await persistVariants();
+
+      // Memory holds the filtered query; the unfiltered row was persisted earlier.
+      act(() => slice.remove('a'));
+
+      await waitFor(() => {
+        expect(storage.rows.has(row(resource, { id: 'a' }))).toBe(false);
+        expect(storage.rows.has(row(resource, { id: 'a', q: 'x' }))).toBe(false);
+      });
+      // Another key that merely shares the prefix is untouched.
+      expect(storage.rows.get(row(resource, { id: 'ab' }))?.data).toEqual(['ab-all']);
+    });
+
+    it('remove drops variants persisted by an earlier session, through the index', async () => {
+      const first = await persistVariants();
+      // Reload: memory is empty, only the persisted index knows the variants.
+      const { resource, slice, storage, store } = setupQueried({ storage: first.storage });
+
+      act(() => slice.remove('a'));
+
+      await waitFor(() => {
+        expect(storage.rows.has(row(resource, { id: 'a' }))).toBe(false);
+        expect(storage.rows.has(row(resource, { id: 'a', q: 'x' }))).toBe(false);
+      });
+      // No variant of the removed key hydrates.
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a', q: 'x' })).toBe(false);
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+
+    it('an off-scope purge drops every query variant of its scope', async () => {
+      const { resource, slice, storage } = await persistVariants();
+
+      scopeState.current = 'user-2:personal';
+      act(() => slice.remove('a', 'user-1:personal'));
+
+      await waitFor(() => {
+        expect(storage.rows.has(row(resource, { id: 'a' }))).toBe(false);
+        expect(storage.rows.has(row(resource, { id: 'a', q: 'x' }))).toBe(false);
+      });
+    });
+
+    it('clear wipes memory, every persisted row and the index of the active scope', async () => {
+      const first = await persistVariants();
+      // A later session loads only one entry; the rest is known only to the index.
+      const { slice, storage, store } = setupQueried({ storage: first.storage });
+      act(() => slice.replace({ id: 'b' }, ['b-all']));
+      storage.rows.set('user-2:personal|a', { data: ['other-user'], updatedAt: 1 });
+
+      let purge!: Promise<boolean>;
+      act(() => {
+        purge = slice.clear();
+      });
+      expect(store.getState().lists).toEqual({});
+      expect(store.getState().listsReplica.entries).toEqual({});
+
+      await act(async () => {
+        expect(await purge).toBe(true);
+      });
+      // Only the other identity's row survives; the index is gone too.
+      expect([...storage.rows.keys()]).toEqual(['user-2:personal|a']);
+      expect(
+        await storage.storage.get({ queryKey: REPLICA_INDEX_KEY, scope: 'user-1:personal' }),
+      ).toBeUndefined();
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a' })).toBe(false);
+      });
+    });
+
+    it('clear refuses a hydrate that was already reading', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['wiped'], updatedAt: 1 });
+      const originalGet = storage.storage.get;
+      let release!: () => void;
+      const held = new Promise<void>((resolve) => (release = resolve));
+      storage.storage.get = async (key) => {
+        const value = await originalGet(key);
+        if (key.queryKey === 'a') await held;
+        return value;
+      };
+      const { slice, store } = setup({ storage });
+
+      let hydration!: Promise<boolean>;
+      await act(async () => {
+        hydration = slice.hydrate({ id: 'a' });
+      });
+      act(() => {
+        void slice.clear();
+      });
+      await act(async () => {
+        release();
+        expect(await hydration).toBe(false);
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+
+    it('clear discards a head response that started before it, and applies one started after', () => {
+      const requests: { fetch: () => Promise<unknown>; onSuccess: (data: string[]) => void }[] = [];
+      const useQuery = vi.fn((key: any, fetch: () => Promise<unknown>, options: any) => {
+        if (key?.[0] === 'replica:sync') requests.push({ fetch, onSuccess: options.onSuccess });
+        return { isValidating: false, mutate: vi.fn() };
+      });
+      const { slice, store } = setupQueried({ driver: { revalidate: vi.fn(), useQuery } });
+      renderHook(() => slice.useSync({ id: 'a' }));
+      const request = requests.at(-1)!;
+
+      // The request is issued, then the resource is wiped before it settles.
+      void request.fetch();
+      act(() => {
+        void slice.clear();
+      });
+      act(() => request.onSuccess(['before-clear']));
+      expect(store.getState().lists.a).toBeUndefined();
+
+      // A request issued after the clear is ordinary.
+      void request.fetch();
+      act(() => request.onSuccess(['after-clear']));
+      expect(store.getState().lists.a).toEqual(['after-clear']);
+    });
+
+    it('a clear whose purge could not run keeps refusing hydration', async () => {
+      const storage = createMemoryStorage();
+      storage.rows.set('user-1:personal|a', { data: ['stale'], updatedAt: 1 });
+      const { slice, store } = setup({ storage });
+
+      // Identity is not resolved yet, so the row deletes are refused.
+      scopeState.trusted = false;
+      let purge!: Promise<boolean>;
+      act(() => {
+        purge = slice.clear();
+      });
+      expect(await purge).toBe(false);
+      scopeState.trusted = true;
+
+      await act(async () => {
+        expect(await slice.hydrate({ id: 'a' })).toBe(false);
+      });
+      expect(store.getState().lists.a).toBeUndefined();
+    });
+
+    it('does not surface the error of a query the entry has moved past', () => {
+      const requests: { onError: (error: unknown) => void; params: { q?: string } }[] = [];
+      const useQuery = vi.fn((key: any, _fetch: unknown, options: any) => {
+        if (key?.[0] === 'replica:sync')
+          requests.push({ onError: options.onError, params: key.at(-1) });
+        return { isValidating: false, mutate: vi.fn() };
+      });
+      const { slice } = setupQueried({ driver: { revalidate: vi.fn(), useQuery } });
+      const onError = vi.fn();
+
+      const { rerender } = renderHook((props: QueryParams) => slice.useSync(props, { onError }), {
+        initialProps: { id: 'a' } as QueryParams,
+      });
+      rerender({ id: 'a', q: 'b' });
+
+      const base = requests.find((request) => request.params.q === undefined)!;
+      const search = requests.find((request) => request.params.q === 'b')!;
+
+      // The superseded query fails late: the search on screen must not see it.
+      act(() => base.onError(new Error('stale')));
+      expect(onError).not.toHaveBeenCalled();
+
+      const failure = new Error('search failed');
+      act(() => search.onError(failure));
+      expect(onError).toHaveBeenCalledWith(failure, { key: 'a', scope: 'user-1:personal' });
     });
   });
 

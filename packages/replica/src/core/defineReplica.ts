@@ -4,6 +4,10 @@ import type { ReplicaResource, ReplicaScope, ReplicaStorage } from './types';
 /** Persisted row key: one row per entry key and query. */
 export const replicaStorageKey = (key: string, query?: string) => (query ? `${key}?${query}` : key);
 
+/** Whether `storageKey` is a persisted row of entry `key`, under any query. */
+export const isReplicaStorageKeyOf = (storageKey: string, key: string) =>
+  storageKey === key || storageKey.startsWith(`${key}?`);
+
 /** Deterministic JSON: sorted keys, `undefined` dropped. */
 export const stableQueryKey = (value: unknown): string =>
   JSON.stringify(value, (_key, item) =>

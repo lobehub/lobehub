@@ -1,5 +1,6 @@
 import { useLayoutEffect } from 'react';
 
+import { stableQueryKey } from '../core/defineReplica';
 import { createReplicaEngine, type ReplicaEngineOptions } from '../core/engine';
 import { isReplicaSyncKey, replicaKeys } from '../core/keys';
 import type { ReplicaPagedData } from '../core/paging';
@@ -121,7 +122,7 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
     },
     revalidate,
   });
-  const { ensureScope, fetcher, hydrate, replace } = engine;
+  const { clearGeneration, ensureScope, fetcher, hydrate, replace } = engine;
 
   /**
    * Row key of the head query each entry last asked for. One entry backs a
@@ -132,6 +133,15 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
    * leave a request's own callback live after the query changed.
    */
   const headQuery = new Map<string, string>();
+
+  /**
+   * `clear()` generation each in-flight head request started under, by sync
+   * key. A response to a request that started before a `clear()` of its scope
+   * holds wiped data and is discarded. The driver settles one request per key
+   * at a time (a newer request supersedes the older one), so the latest start
+   * is the one that settles.
+   */
+  const requestGeneration = new Map<string, number>();
 
   /**
    * Hydrates the persisted row once per scope/key/query, then lets the driver
@@ -168,21 +178,44 @@ export const createReplicaSlice = <TStore, TParams, TData, TFetched = TData>(
       { once: true },
     );
 
-    const sync = driver.useQuery<TFetched>(
+    const syncKey =
       active && fetcher
         ? (resource.syncKey?.(params!) ??
-            replicaKeys.sync(resource.name, resource.version, scope, key!, params))
-        : null,
-      () => fetcher!(params!, undefined),
+          replicaKeys.sync(resource.name, resource.version, scope, key!, params))
+        : null;
+    const requestId = () => `${scope}\u0000${stableQueryKey(syncKey)}`;
+    /** Whether the request settling now still belongs to the entry's active query. */
+    const isActiveQuery = () => queryKey !== undefined && headQuery.get(key!) === queryKey;
+    /** Whether the settling request started after the latest `clear()` of its scope. */
+    const isSinceClear = () => {
+      const id = requestId();
+      const started = requestGeneration.get(id);
+      requestGeneration.delete(id);
+      return started === undefined || started === clearGeneration(scope);
+    };
+
+    const sync = driver.useQuery<TFetched>(
+      syncKey,
+      () => {
+        requestGeneration.set(requestId(), clearGeneration(scope));
+        return fetcher!(params!, undefined);
+      },
       {
         ...schedule,
-        // Bind the captured key/scope to the error callback: a late terminal
-        // removal must not land in a scope that became active after the request.
-        onError: onError ? (error: unknown) => onError(error, { key, scope }) : undefined,
+        // A failure of a query the entry has moved past (or of a request from
+        // before a clear) must not surface on the query now on screen. The
+        // captured key/scope is bound so a late terminal removal cannot land in
+        // a scope that became active after the request.
+        onError: onError
+          ? (error: unknown) => {
+              if (!isSinceClear() || !isActiveQuery()) return;
+              onError(error, { key, scope });
+            }
+          : undefined,
         onSuccess: (data) => {
-          // Discard a head response the entry has moved past: the newer query
-          // owns the view (see `headQuery`).
-          if (queryKey === undefined || headQuery.get(key!) !== queryKey) return;
+          // Discard a head response the entry has moved past (the newer query
+          // owns the view, see `headQuery`) or one that started before a clear.
+          if (!isSinceClear() || !isActiveQuery()) return;
           replace(params!, data, scope);
           onSuccess?.(data);
         },

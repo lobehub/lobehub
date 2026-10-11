@@ -45,4 +45,13 @@ describe('createTombstones', () => {
     expect(tombstones.has('s', 'a')).toBe(true);
     expect(tombstones.has('s', 'b')).toBe(true);
   });
+
+  it('lists the keys of one scope, oldest first', () => {
+    const tombstones = createTombstones(3);
+    for (const key of ['a', 'b', 'c', 'd']) tombstones.add('s', key);
+    tombstones.add('other', 'x');
+
+    expect(tombstones.list('s')).toEqual(['c', 'd']);
+    expect(tombstones.list('missing')).toEqual([]);
+  });
 });

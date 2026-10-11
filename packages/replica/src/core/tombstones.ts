@@ -11,6 +11,8 @@ export interface ReplicaTombstones {
   /** Forget `scope`/`key`; an emptied scope bucket is dropped too. */
   clear: (scope: string, key: string) => void;
   has: (scope: string, key: string) => boolean;
+  /** Keys tracked for `scope`, oldest first. */
+  list: (scope: string) => string[];
   /** Tracked key count (observability + tests). */
   size: () => number;
 }
@@ -60,6 +62,7 @@ export const createTombstones = (limit = DEFAULT_REMOVAL_TOMBSTONE_LIMIT): Repli
       if (keys.size === 0) byScope.delete(scope);
     },
     has: (scope, key) => byScope.get(scope)?.has(key) ?? false,
+    list: (scope) => [...(byScope.get(scope) ?? [])],
     size: () => tracked,
   };
 };

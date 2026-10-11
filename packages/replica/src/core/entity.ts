@@ -6,6 +6,8 @@ export interface ReplicaEntityTarget {
     id: string,
     fn: (item: TItem) => TItem | undefined,
   ) => ReplicaOptimisticToken<any>[];
+  /** Wipe the resource in the active scope (memory + every persisted row). */
+  clear?: () => Promise<boolean>;
   /** Patch persisted rows whose entry is not loaded in memory. */
   patchStoredEntity: <TItem>(id: string, fn: (item: TItem) => TItem | undefined) => Promise<void>;
   revalidate: (key?: string) => Promise<unknown>;
@@ -38,9 +40,23 @@ export const linkReplicaEntity = <TItem>(targets: ReplicaEntityTarget[]) => {
     for (const target of targets) target.updateEntity<TItem>(id, fn, options);
   };
 
-  /** Confirmed removal everywhere (list rows dropped, single-entity values removed). */
+  /**
+   * Confirmed removal everywhere (list rows dropped, single-entity values
+   * removed). A value hydrated later — even one whose read was already in
+   * flight — comes back without the entity.
+   */
   const remove = (id: string, options?: { persist?: boolean }): void => {
     for (const target of targets) target.updateEntity<TItem>(id, () => undefined, options);
+  };
+
+  /**
+   * Wipe every linked resource in the active scope (e.g. "delete all"): memory,
+   * every persisted row and reads in flight. Resolves `true` once every
+   * persisted row is gone.
+   */
+  const clear = async (): Promise<boolean> => {
+    const purged = await Promise.all(targets.map((target) => target.clear?.() ?? true));
+    return purged.every(Boolean);
   };
 
   /**
@@ -70,5 +86,5 @@ export const linkReplicaEntity = <TItem>(targets: ReplicaEntityTarget[]) => {
 
   const revalidate = () => Promise.all(targets.map((target) => target.revalidate()));
 
-  return { optimistic, remove, revalidate, update };
+  return { clear, optimistic, remove, revalidate, update };
 };
