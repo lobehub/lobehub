@@ -64,6 +64,8 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -92,6 +94,8 @@ describe('PluginSlice Actions', () => {
           plugins: [],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -120,6 +124,8 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -148,6 +154,8 @@ describe('PluginSlice Actions', () => {
           plugins: [],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -177,6 +185,8 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -205,6 +215,8 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
   });
@@ -235,6 +247,8 @@ describe('PluginSlice Actions', () => {
           plugins: [],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -264,6 +278,8 @@ describe('PluginSlice Actions', () => {
           plugins: ['existing-plugin'],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
   });
@@ -295,6 +311,8 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'disabled' }, 'plugin-2'],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -325,6 +343,8 @@ describe('PluginSlice Actions', () => {
           plugins: [{ identifier: 'plugin-1', mode: 'pinned' }],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
 
@@ -357,6 +377,8 @@ describe('PluginSlice Actions', () => {
           plugins: ['plugin-2'],
         }),
         expect.any(AbortSignal),
+        // Plugin edits never replace per-device working-directory selections.
+        undefined,
       );
     });
   });
