@@ -482,6 +482,55 @@ export class TaskService {
   }
 
   /**
+   * Arm the run-count window when a schedule write reaches a dispatchable task
+   * without a status transition.
+   *
+   * `setTaskSchedule` (agent tool, both client executor and server runtime) and
+   * REST patches land in `task.update` *without* a status, so a backlog task
+   * configured this way keeps its status and never passes through
+   * `updateStatus` — leaving `context.scheduler.scheduleStartedAt` unstamped.
+   * The dispatch sweep includes such tasks (`getScheduledTasks` does not filter
+   * out `backlog`), and an unstamped task evaluates with `armedAt = null`, so a
+   * cron slot that falls inside the dispatch grace window fires immediately —
+   * consuming a one-shot `maxExecutions` quota before the user ever intended
+   * the schedule to go live (vent T-634, David Tai 2026-09-14 / Rex 2026-10-07).
+   *
+   * Stamp only when the resulting task is actually dispatchable (schedule mode
+   * with a pattern, non-terminal/non-paused/non-running status) and the task
+   * has no stamp yet: re-arming must not reset an existing quota window, and
+   * the `updateStatus` path keeps its own stamping logic — the two must not
+   * double-stamp on a transition that carries schedule columns.
+   */
+  async stampScheduleArmedOnColumnWrite(task: {
+    automationMode: string | null;
+    context?: unknown;
+    id: string;
+    schedulePattern?: string | null;
+    status: string;
+  }): Promise<void> {
+    if (task.automationMode !== 'schedule' || !task.schedulePattern) return;
+    const status = task.status;
+    if (
+      status === 'running' ||
+      status === 'paused' ||
+      status === 'completed' ||
+      status === 'failed' ||
+      status === 'canceled'
+    ) {
+      return;
+    }
+
+    const scheduler =
+      ((task.context as { scheduler?: { scheduleStartedAt?: string } } | null) ?? {}).scheduler ??
+      {};
+    if (scheduler.scheduleStartedAt) return;
+
+    await this.taskModel.updateContext(task.id, {
+      scheduler: { scheduleStartedAt: new Date().toISOString() },
+    });
+  }
+
+  /**
    * Transition a task to a new status, cascading the side effects:
    *   - leaving `running`: interrupt + cancel still-running topics
    *   - entering `completed`: check parent checkpoint, count sibling
