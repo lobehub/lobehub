@@ -12,6 +12,7 @@ import { DEFAULT_AGENT_CONFIG } from '@/const/settings';
 import { isCanUseFC } from '@/helpers/isCanUseFC';
 import * as toolEngineeringModule from '@/helpers/toolEngineering';
 import { agentDocumentService } from '@/services/agentDocument';
+import { oneShotRelay } from '@/services/llmRelay';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, chatConfigByIdSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors, useAiInfraStore } from '@/store/aiInfra';
@@ -1762,6 +1763,53 @@ describe('ChatService', () => {
         expect.not.objectContaining({ topicId: expect.anything() }),
         expect.objectContaining({ metadata: { topicId: 'topic-browser' } }),
       );
+    });
+
+    // Within the LLM relay a device-only provider is called by the server and
+    // relayed back to this tab: the browser must not dial it itself.
+    it('sends a device-only provider through the server with the one-shot relay headers', async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'needsRelay').mockReturnValue(true);
+      const relayHeaders = {
+        'x-lobe-client-id': 'tab-1',
+        'x-lobe-llm-relay-channel': 'llmcall:user-1:abcdefgh',
+      };
+      const run = vi
+        .spyOn(oneShotRelay, 'run')
+        .mockImplementation(async (_provider, request) =>
+          request({ channel: relayHeaders['x-lobe-llm-relay-channel'], headers: relayHeaders }),
+        );
+      const initializeWithClientStore = vi.spyOn(mechaModule, 'initializeWithClientStore');
+
+      await chatService.getChatCompletion({ messages: [], model: 'qwen3', provider: 'ollama' });
+
+      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), { signal: undefined });
+      const [url, options] = mockFetchSSE.mock.calls[0];
+      expect(url).toContain('/ollama');
+      expect(options.fetcher).toBeUndefined();
+      expect(options.headers).toMatchObject(relayHeaders);
+      expect(options.requestContext.fetchOnClient).toBe(false);
+      expect(initializeWithClientStore).not.toHaveBeenCalled();
+    });
+
+    // An abort while the relay channel is still being set up must not sit out
+    // the subscribe timeout (manual compaction, preset-task loading state).
+    it("hands the caller's abort signal to the relay setup", async () => {
+      vi.spyOn(chatHelper, 'isEnableFetchOnClient').mockReturnValue(true);
+      vi.spyOn(oneShotRelay, 'needsRelay').mockReturnValue(true);
+      const run = vi
+        .spyOn(oneShotRelay, 'run')
+        .mockImplementation(async (_provider, request) => request());
+      const controller = new AbortController();
+
+      await chatService.getChatCompletion(
+        { messages: [], model: 'qwen3', provider: 'ollama' },
+        { signal: controller.signal },
+      );
+
+      expect(run).toHaveBeenCalledWith('ollama', expect.any(Function), {
+        signal: controller.signal,
+      });
     });
 
     it('should make a POST request with the correct payload', async () => {
