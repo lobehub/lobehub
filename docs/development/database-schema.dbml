@@ -4696,6 +4696,7 @@ table workspace_team_members {
     
     (team_id, user_id) [name: 'workspace_team_members_team_user_unique', unique]
     (workspace_id, user_id) [name: 'workspace_team_members_workspace_user_idx']
+    user_id [name: 'workspace_team_members_user_id_idx']
   }
 }
 
@@ -4713,6 +4714,7 @@ table workspace_teams {
   indexes {
     (workspace_id, identifier) [name: 'workspace_teams_workspace_identifier_unique', unique]
     workspace_id [name: 'workspace_teams_workspace_id_idx']
+    created_by [name: 'workspace_teams_created_by_idx']
     (id, workspace_id) [name: 'workspace_teams_id_workspace_unique', unique]
   }
 }

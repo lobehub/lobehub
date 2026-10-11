@@ -231,6 +231,8 @@ export const workspaceTeams = pgTable(
   (t) => [
     uniqueIndex('workspace_teams_workspace_identifier_unique').on(t.workspaceId, t.identifier),
     index('workspace_teams_workspace_id_idx').on(t.workspaceId),
+    // Lets a user deletion find the rows its `created_by` FK must null out.
+    index('workspace_teams_created_by_idx').on(t.createdBy),
     // Target of the composite FK that pins a membership's workspace to its team's.
     unique('workspace_teams_id_workspace_unique').on(t.id, t.workspaceId),
   ],
@@ -271,6 +273,8 @@ export const workspaceTeamMembers = pgTable(
     }).onDelete('cascade'),
     uniqueIndex('workspace_team_members_team_user_unique').on(t.teamId, t.userId),
     index('workspace_team_members_workspace_user_idx').on(t.workspaceId, t.userId),
+    // Lets a user deletion find the rows its `user_id` FK must cascade to.
+    index('workspace_team_members_user_id_idx').on(t.userId),
   ],
 );
 

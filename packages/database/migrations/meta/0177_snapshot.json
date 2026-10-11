@@ -1,5 +1,5 @@
 {
-  "id": "1eddfbed-aaa2-4e46-b08c-a314e686df6f",
+  "id": "95fb5832-a161-4bdb-a738-19fd1983f25c",
   "prevId": "ed8f0898-8436-4cf1-8ffe-1de4ae2902a4",
   "version": "7",
   "dialect": "postgresql",
@@ -42294,6 +42294,21 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "workspace_team_members_user_id_idx": {
+          "name": "workspace_team_members_user_id_idx",
+          "columns": [
+            {
+              "expression": "user_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -42433,6 +42448,21 @@
           "columns": [
             {
               "expression": "workspace_id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "workspace_teams_created_by_idx": {
+          "name": "workspace_teams_created_by_idx",
+          "columns": [
+            {
+              "expression": "created_by",
               "isExpression": false,
               "asc": true,
               "nulls": "last"

@@ -42,5 +42,7 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "workspace_teams_workspace_identifier_unique" ON "workspace_teams" USING btree ("workspace_id","identifier");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "workspace_teams_workspace_id_idx" ON "workspace_teams" USING btree ("workspace_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "workspace_teams_created_by_idx" ON "workspace_teams" USING btree ("created_by");--> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "workspace_team_members_team_user_unique" ON "workspace_team_members" USING btree ("team_id","user_id");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "workspace_team_members_workspace_user_idx" ON "workspace_team_members" USING btree ("workspace_id","user_id");
+CREATE INDEX IF NOT EXISTS "workspace_team_members_workspace_user_idx" ON "workspace_team_members" USING btree ("workspace_id","user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "workspace_team_members_user_id_idx" ON "workspace_team_members" USING btree ("user_id");
