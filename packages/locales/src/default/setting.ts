@@ -4075,6 +4075,16 @@ When I am ___, I need ___
   'environments.form.exclude': 'Regenerable paths',
   'environments.form.excludeHint':
     'One per line, relative to the copy. Listing a path says it can be rebuilt, so it is kept apart from your work and may be discarded to reclaim space. Anything named here that cannot be rebuilt is work you can lose.',
+  'environments.form.filesDesc': 'What this folder is called and what it holds for the agent.',
+  'environments.kind.code': 'Code',
+  'environments.kind.codeDesc':
+    'Clone a repository, set variables and run setup before the agent starts.',
+  'environments.kind.files': 'Files',
+  'environments.kind.filesDesc':
+    'Upload files for an agent to work on. Ready as soon as it is created.',
+  'environments.kind.filesHint':
+    'A folder you upload files to for an agent to work on. Nothing is cloned or installed, so there is no build — it is ready the moment it is created.',
+  'environments.kind.label': 'Type',
   'environments.meta.creatorTooltip': 'Created by {{name}}',
   'environments.meta.unknownCreator': 'Unknown',
   'environments.meta.createdAt': 'Created {{time}}',
@@ -4157,6 +4167,10 @@ When I am ___, I need ___
     'Could not read which instances are running right now',
   'environments.instances.inUse':
     'A conversation is using this instance — try again once that run ends',
+  // The default copy is what the environment is, so it goes with the
+  // environment; a broken one is rebuilt, not deleted on its own.
+  'environments.instances.defaultUndeletable':
+    "This is the environment's default copy and can't be deleted on its own — rebuild it, or delete the environment",
   'environments.instances.runningHint':
     'A run is still using this instance — a conversation, a build, or the file browser. It is released on its own roughly 15 minutes after that run goes quiet; Run history shows which one is holding it.',
   'environments.instances.runningHintStoppable':

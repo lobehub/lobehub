@@ -1,4 +1,5 @@
-import type { EnvironmentSource, EnvironmentVisibility } from '@lobechat/types';
+import type { EnvironmentKind, EnvironmentSource, EnvironmentVisibility } from '@lobechat/types';
+import { markDefaultInstances } from '@lobechat/utils/environmentInstance';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -29,6 +30,7 @@ export interface SandboxEnvironmentSpecification {
   env?: Record<string, string>;
   excludePaths?: string[];
   internetAccess?: boolean;
+  kind?: EnvironmentKind;
   maintenanceCommand?: string;
   sources?: Extract<EnvironmentSource, { kind: 'git' }>[];
 }
@@ -90,10 +92,17 @@ class SandboxStorageService {
    *
    * Reaching the snapshot store needs a live sandbox session, so this can take
    * seconds on a cold start and callers should render a loading state.
+   *
+   * Each instance carries `isDefault`, from the same rule the server's delete
+   * guard applies, so no caller has to re-derive which copy is the default.
    */
   listInstances = async (
     params: { environmentId?: string; topicId?: string; withSizes?: boolean } = {},
-  ) => lambdaClient.sandboxStorage.listInstances.query(params);
+  ) => {
+    const result = await lambdaClient.sandboxStorage.listInstances.query(params);
+
+    return { ...result, instances: markDefaultInstances(result.instances) };
+  };
 
   /**
    * The run history of every instance of one environment, newest first: each

@@ -91,6 +91,12 @@ interface InstanceListProps {
   onStop: (id: string) => Promise<{ stopped: boolean }>;
   /** `owner/name` of the environment's checkout, when it builds from one. */
   repository?: string;
+  /**
+   * Whether builds are this environment's business at all. A files
+   * environment clones and installs nothing, so a build line or a rebuild on
+   * its rows would describe work that never happens.
+   */
+  showBuild: boolean;
 }
 
 interface InstanceRowProps {
@@ -100,6 +106,7 @@ interface InstanceRowProps {
   onRemove: (id: string) => Promise<void>;
   onStop: (id: string) => Promise<{ stopped: boolean }>;
   repository?: string;
+  showBuild: boolean;
 }
 
 /**
@@ -184,14 +191,14 @@ BuildLine.displayName = 'InstanceBuildLine';
  * so the one thing worth explaining was the one thing an inline editor hid.
  */
 const InstanceRow = memo<InstanceRowProps>(
-  ({ editable, instance, onBuild, onRemove, onStop, repository }) => {
+  ({ editable, instance, onBuild, onRemove, onStop, repository, showBuild }) => {
     const { t } = useTranslation('setting');
 
     // Worth following only while something is in flight. A settled instance
     // must not keep a poll running: the query writes when a build ends, so an
     // idle one would be a round trip every two seconds for a row nobody is
     // looking at.
-    const building = instance.status === 'pending' && Boolean(instance.buildId);
+    const building = showBuild && instance.status === 'pending' && Boolean(instance.buildId);
     const {
       error: pollError,
       log,
@@ -201,7 +208,8 @@ const InstanceRow = memo<InstanceRowProps>(
     // Made before instances built themselves, or its build request never
     // arrived: pending with nothing to follow. Without saying so the row looks
     // settled while the folder behind it is empty.
-    const unbuilt = instance.status === 'pending' && !instance.buildId && instance.buildable;
+    const unbuilt =
+      showBuild && instance.status === 'pending' && !instance.buildId && instance.buildable;
 
     // Bridges the gap between confirming and the refreshed row arriving. The
     // request is not instant — starting a build cold-starts a sandbox — and
@@ -373,7 +381,7 @@ const InstanceRow = memo<InstanceRowProps>(
             said so here first rather than after a confirmation. Absent when
             the definition clones and installs nothing: there is nothing a
             rebuild would redo. */}
-          {editable && instance.status === 'ready' && instance.buildable && (
+          {showBuild && editable && instance.status === 'ready' && instance.buildable && (
             <ActionIcon
               // `starting` too: the row still reads ready until the refreshed
               // one lands, and a second click in that window starts a second
@@ -461,26 +469,28 @@ const InstanceRow = memo<InstanceRowProps>(
           </Flexbox>
         )}
 
-        {!removing && (starting || building || unbuilt || instance.status === 'error') && (
-          <BuildLine
-            error={instance.buildError}
-            log={log}
-            state={
-              // A poll that ran out of retries is not a running build. Left as
-              // one the row spins forever with nothing to click.
-              pollError && building && !state
-                ? 'stalled'
-                : starting || (building && state !== 'failed')
-                  ? 'running'
-                  : unbuilt
-                    ? 'unbuilt'
-                    : 'failed'
-            }
-            // Building a copy is the owner's; everyone else reads the state.
-            onBuild={editable ? confirmBuild : undefined}
-            onRetry={retry}
-          />
-        )}
+        {showBuild &&
+          !removing &&
+          (starting || building || unbuilt || instance.status === 'error') && (
+            <BuildLine
+              error={instance.buildError}
+              log={log}
+              state={
+                // A poll that ran out of retries is not a running build. Left as
+                // one the row spins forever with nothing to click.
+                pollError && building && !state
+                  ? 'stalled'
+                  : starting || (building && state !== 'failed')
+                    ? 'running'
+                    : unbuilt
+                      ? 'unbuilt'
+                      : 'failed'
+              }
+              // Building a copy is the owner's; everyone else reads the state.
+              onBuild={editable ? confirmBuild : undefined}
+              onRetry={retry}
+            />
+          )}
       </Flexbox>
     );
   },
@@ -505,6 +515,7 @@ const InstanceList = memo<InstanceListProps>(
     onRemove,
     onStop,
     repository,
+    showBuild,
   }) => {
     const { t } = useTranslation('setting');
 
@@ -548,6 +559,7 @@ const InstanceList = memo<InstanceListProps>(
                 instance={instance}
                 key={instance.id}
                 repository={repository}
+                showBuild={showBuild}
                 onBuild={onBuild}
                 onRemove={onRemove}
                 onStop={onStop}
