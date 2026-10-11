@@ -33,6 +33,16 @@ interface DragUploadProviderProps {
 }
 
 /**
+ * Watchdog grace period. While a drag is in progress the browser fires
+ * `dragover` continuously; if no `dragover` has been seen for this long the
+ * drag has ended without a matching event (Esc, drop outside the window, or a
+ * `dragleave` lost to DOM churn), so the overlay must be force-closed.
+ */
+const DRAG_IDLE_TIMEOUT_MS = 1_000;
+
+const WATCHDOG_INTERVAL_MS = 300;
+
+/**
  * Provider that tracks global drag state across the entire page.
  * When files are dragged anywhere on the page, all DragUploadZone components
  * can highlight to show they are drop targets.
@@ -41,6 +51,14 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
   const [isDraggingGlobally, setIsDraggingGlobally] = useState(false);
   const [dragContentKind, setDragContentKind] = useState<DragContentKind>('none');
   const dragCounter = useRef(0);
+  const lastDragOverAt = useRef(0);
+
+  const endDrag = useCallback(() => {
+    dragCounter.current = 0;
+    lastDragOverAt.current = 0;
+    setIsDraggingGlobally(false);
+    setDragContentKind('none');
+  }, []);
 
   const handleDragEnter = useCallback((e: DragEvent) => {
     if (!e.dataTransfer?.types.includes('Files')) return;
@@ -49,6 +67,7 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
     dragCounter.current += 1;
 
     if (dragCounter.current === 1) {
+      lastDragOverAt.current = Date.now();
       setIsDraggingGlobally(true);
       setDragContentKind(detectDragContentKind(e.dataTransfer.items));
     }
@@ -57,27 +76,60 @@ export const DragUploadProvider = memo<DragUploadProviderProps>(({ children }) =
   const handleDragOver = useCallback((e: DragEvent) => {
     if (!e.dataTransfer?.types.includes('Files')) return;
     e.preventDefault();
+    lastDragOverAt.current = Date.now();
   }, []);
 
-  const handleDragLeave = useCallback((e: DragEvent) => {
-    if (!e.dataTransfer?.types.includes('Files')) return;
+  const handleDragLeave = useCallback(
+    (e: DragEvent) => {
+      if (!e.dataTransfer?.types.includes('Files')) return;
 
-    e.preventDefault();
-    dragCounter.current -= 1;
+      e.preventDefault();
 
-    if (dragCounter.current === 0) {
-      setIsDraggingGlobally(false);
-      setDragContentKind('none');
-    }
-  }, []);
+      // relatedTarget is null when the drag left the window entirely. Browsers
+      // can also lose the dragleave of a removed node mid-drag, so treat an
+      // empty relatedTarget as a hard "left the page" signal instead of
+      // decrementing the counter — the next dragenter re-opens the overlay if
+      // the drag is still inside the page.
+      if (!e.relatedTarget) {
+        endDrag();
+        return;
+      }
 
-  const handleDrop = useCallback((e: DragEvent) => {
-    // Prevent browser from opening the file if dropped outside a zone
-    e.preventDefault();
-    dragCounter.current = 0;
-    setIsDraggingGlobally(false);
-    setDragContentKind('none');
-  }, []);
+      dragCounter.current = Math.max(0, dragCounter.current - 1);
+
+      if (dragCounter.current === 0) {
+        endDrag();
+      }
+    },
+    [endDrag],
+  );
+
+  const handleDrop = useCallback(
+    (e: DragEvent) => {
+      // Prevent browser from opening the file if dropped outside a zone
+      e.preventDefault();
+      endDrag();
+    },
+    [endDrag],
+  );
+
+  // Self-healing watchdog: browsers do not guarantee dragenter/dragleave pairs
+  // (a dragged-over node removed mid-drag, an Esc-cancelled drag, or a drop
+  // outside the window can strand dragCounter above zero), and the overlay
+  // would then never close — it even survives route changes because this
+  // provider lives at the SPA root. dragover fires continuously during an
+  // active drag, so once it goes silent the drag is over: force-reset.
+  useEffect(() => {
+    if (!isDraggingGlobally) return;
+
+    const timer = setInterval(() => {
+      if (Date.now() - lastDragOverAt.current > DRAG_IDLE_TIMEOUT_MS) {
+        endDrag();
+      }
+    }, WATCHDOG_INTERVAL_MS);
+
+    return () => clearInterval(timer);
+  }, [endDrag, isDraggingGlobally]);
 
   useEffect(() => {
     window.addEventListener('dragenter', handleDragEnter);
