@@ -29,6 +29,8 @@ class ProjectWorkingDirectoryService {
       success: true,
     };
   };
+  moveTopic = (input: Parameters<Client['moveTopic']['mutate']>[0]) =>
+    lambdaClient.projectWorkingDirectory.moveTopic.mutate(input);
   resolve = (id: string) => lambdaClient.projectWorkingDirectory.resolve.query({ id });
   startTopic = (input: Parameters<Client['startTopic']['mutate']>[0]) =>
     lambdaClient.projectWorkingDirectory.startTopic.mutate(input);

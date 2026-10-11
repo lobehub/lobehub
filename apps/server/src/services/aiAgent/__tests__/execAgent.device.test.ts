@@ -708,30 +708,27 @@ describe('AiAgentService.execAgent - device auto-activation', () => {
   });
 
   describe('project directory binding', () => {
-    it('rejects a project topic whose directory binding was deleted instead of following its pinned device', async () => {
+    it('keeps a project topic without a directory on the device it already ran on', async () => {
       mockDeviceProxy.isConfigured = true;
-      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice]);
-      // Deleting the directory row nulls the FK but keeps projectId + the pinned device.
+      mockDeviceProxy.queryDeviceList.mockResolvedValue([onlineDevice, onlineDevice2]);
+      // Started outside any directory: the first run stamped its device.
       topicMock.findById.mockResolvedValue({
         id: 'topic-1',
-        metadata: { boundDeviceId: 'device-001', workingDirectory: '/repo' },
+        metadata: { boundDeviceId: 'device-002', workingDirectory: '/repo' },
         projectId: 'project-1',
         projectWorkingDirectoryId: null,
       });
-      mockResolveProjectDirectoryForTopic.mockRejectedValueOnce(
-        new Error('Project directory binding no longer exists'),
-      );
+      // The agent default points elsewhere; the conversation's pin must win.
+      await useAgencyConfig({ boundDeviceId: 'device-001', executionTarget: 'device' });
 
-      await expect(
-        service.execAgent({
-          agentId: 'agent-1',
-          prompt: 'Keep working',
-          appContext: { topicId: 'topic-1' },
-        }),
-      ).rejects.toThrow('Project directory binding no longer exists');
+      await service.execAgent({
+        agentId: 'agent-1',
+        prompt: 'Keep working',
+        appContext: { topicId: 'topic-1' },
+      });
 
-      expect(mockResolveProjectDirectoryForTopic).toHaveBeenCalledWith('topic-1');
-      expect(mockCreateOperation).not.toHaveBeenCalled();
+      expect(mockResolveProjectDirectoryForTopic).not.toHaveBeenCalled();
+      expect(mockCreateOperation.mock.calls[0][0].activeDeviceId).toBe('device-002');
     });
 
     it('does not consult the project resolver for plain device-bound topics', async () => {

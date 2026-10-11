@@ -176,6 +176,20 @@ export const projectWorkingDirectoryRouter = router({
     );
     return { data, success: true };
   }),
+  /** Switch a project-directory conversation to its project's directory on another device. */
+  moveTopic: procedure
+    .use(withScopedPermission('topic:update'))
+    .input(z.object({ directoryId: z.string().uuid(), topicId: z.string() }))
+    .mutation(async ({ ctx, input }) => {
+      await assertCanUseTopicTargets(
+        { db: ctx.serverDB, userId: ctx.userId, workspaceId: ctx.workspaceId },
+        [input.topicId],
+      );
+      return {
+        data: await ctx.directoryRepo.moveTopic(input.topicId, input.directoryId),
+        success: true,
+      };
+    }),
   resolve: procedure.input(idInput).query(async ({ ctx, input }) => ({
     data: await ctx.directoryModel.resolve(input.id),
     success: true,

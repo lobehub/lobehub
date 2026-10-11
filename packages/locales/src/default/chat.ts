@@ -718,6 +718,10 @@ export default {
   'heteroAgent.executionTarget.online': 'Online',
   'heteroAgent.executionTarget.onlineConnections_one': 'Online · {{count}} connection',
   'heteroAgent.executionTarget.onlineConnections_other': 'Online · {{count}} connections',
+  'heteroAgent.executionTarget.projectDevicesHint':
+    "Only devices with this project's working directory are listed. Add a directory for another device in the project settings.",
+  'heteroAgent.executionTarget.switchProjectTopic.content':
+    'This topic will run in the project directory "{{directory}}" on {{device}}. Its next turn starts a fresh session there.',
   'heteroAgent.executionTarget.reconnect': 'Reconnect',
   'heteroAgent.executionTarget.reconnectFailed':
     'Could not reconnect this device. Make sure the desktop app is running, then try again.',

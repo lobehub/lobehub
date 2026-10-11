@@ -300,3 +300,71 @@ describe('ProjectDirectoryRepository.associateTopic', () => {
     });
   });
 });
+
+describe('ProjectDirectoryRepository.moveTopic', () => {
+  const second = { ...base, deviceId: 'second-device', path: '/work/second' };
+  const pinnedTopic = async (directoryId: string) => {
+    await db.insert(topics).values({
+      id: 'to-move',
+      agentId: 'repo-agent',
+      metadata: {
+        boundDeviceId: base.deviceId,
+        heteroSessionId: 'old-session',
+        workingDirectory: base.path,
+        workingDirectoryConfig: { path: base.path },
+      },
+      projectId: base.projectId,
+      projectWorkingDirectoryId: directoryId,
+      userId,
+    });
+  };
+  beforeEach(async () => {
+    await db
+      .insert(devices)
+      .values({ deviceId: second.deviceId, identitySource: 'fallback', platform: 'linux', userId });
+  });
+
+  it("moves a conversation to its project's directory on another device", async () => {
+    const first = await repo.bind(base);
+    const target = await repo.bind(second);
+    await pinnedTopic(first.id);
+    await repo.moveTopic('to-move', target.id);
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'to-move'));
+    expect(topic.projectWorkingDirectoryId).toBe(target.id);
+    expect(topic.metadata).toMatchObject({
+      boundDeviceId: second.deviceId,
+      workingDirectory: second.path,
+      workingDirectoryConfig: { path: second.path },
+    });
+    // The CLI session lives on the old machine and cannot follow the move.
+    expect(topic.metadata?.heteroSessionId).toBeUndefined();
+  });
+
+  it("refuses another project's directory and running conversations", async () => {
+    const first = await repo.bind(base);
+    await db.insert(agents).values({ id: 'other-coordinator', userId });
+    await db.insert(projects).values({
+      coordinatorAgentId: 'other-coordinator',
+      id: 'other-project',
+      identifier: 'OTH',
+      name: 'Other project',
+      userId,
+    });
+    const foreign = await repo.bind({ ...second, projectId: 'other-project' });
+    await pinnedTopic(first.id);
+    await expect(repo.moveTopic('to-move', foreign.id)).rejects.toThrow();
+    await db.update(topics).set({ status: 'running' }).where(eq(topics.id, 'to-move'));
+    const target = await repo.bind(second);
+    await expect(repo.moveTopic('to-move', target.id)).rejects.toThrow('running');
+    const [topic] = await db.select().from(topics).where(eq(topics.id, 'to-move'));
+    expect(topic.projectWorkingDirectoryId).toBe(first.id);
+  });
+
+  it('only moves conversations that run in a project directory', async () => {
+    const target = await repo.bind(second);
+    await db.insert(topics).values({ id: 'plain', agentId: 'repo-agent', userId });
+    await expect(repo.moveTopic('plain', target.id)).rejects.toThrow(
+      'not bound to a project directory',
+    );
+  });
+});

@@ -99,6 +99,8 @@ interface ProjectDirectoryStore extends ProjectDirectoryStoreState {
   createProjectTopic: (
     ...args: ServiceParams<'createProjectTopic'>
   ) => Promise<ServiceData<'createProjectTopic'>>;
+  /** Move a directory conversation to its project's directory on another device. */
+  moveTopic: (...args: ServiceParams<'moveTopic'>) => Promise<ServiceData<'moveTopic'>>;
   /** Create or rename an environment. */
   saveEnvironment: (
     ...args: ServiceParams<'saveEnvironment'>
@@ -203,6 +205,17 @@ export const useProjectDirectoryStore: UseBoundStoreWithEqualityFn<
         projectTopics.revalidate(input.projectId),
         // The topic now points at a directory, so every projection that lists
         // it (one directory's, or a set of directories') is stale too.
+        directoryTopics.revalidate(),
+        environmentTopics.revalidate(),
+      ]);
+      return result.data;
+    },
+    moveTopic: async (input) => {
+      const result = await projectWorkingDirectoryService.moveTopic(input);
+      await Promise.all([
+        result.data.projectId && projectTopics.revalidate(result.data.projectId),
+        // The topic left one directory for another, so both directories'
+        // projections are stale.
         directoryTopics.revalidate(),
         environmentTopics.revalidate(),
       ]);

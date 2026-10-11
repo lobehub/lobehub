@@ -48,6 +48,7 @@
   "directories.bindDescription": "Link the folder below to a project so you can continue working from that project. Files stay on the current device.",
   "directories.bindFailed": "Could not link directory",
   "directories.boundRoot": "This conversation is bound to a project directory. Start a new conversation to use a different directory.",
+  "directories.boundTip": "This directory belongs to the project ({{path}}). Switch devices to use the project's directory on another device.",
   "directories.chooseAgent": "Choose Agent",
   "directories.conversations": "Conversations",
   "directories.coordinator": "Project coordinator",

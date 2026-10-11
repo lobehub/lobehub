@@ -604,15 +604,9 @@ export const setupTurn = async (
       // (config source of truth), NOT in metadata.
       const existingTopic = await deps.topicModel.findById(topicId);
       topicEditingGroupId = existingTopic?.metadata?.editingGroupId ?? undefined;
-      // Deleting a project directory nulls the FK but leaves `projectId` and the
-      // pinned device on the topic; route that signature through the resolver
-      // too so it rejects the stale binding instead of falling through to the
-      // plain topic-pinned device path below.
-      const hasStaleProjectBinding =
-        !existingTopic?.projectWorkingDirectoryId &&
-        !!existingTopic?.projectId &&
-        !!existingTopic?.metadata?.boundDeviceId;
-      if (existingTopic?.projectWorkingDirectoryId || hasStaleProjectBinding) {
+      // A project conversation without a directory follows the plain
+      // topic-pinned device path below, like any other conversation.
+      if (existingTopic?.projectWorkingDirectoryId) {
         if (shareGate || (botContext && !resolveDeviceAccessPolicy({ botContext }).canUseDevice))
           throw new Error('Project directory access denied');
         const directory = await new ProjectWorkingDirectoryModel(

@@ -266,4 +266,73 @@ export class ProjectDirectoryRepository {
       return updated;
     });
   }
+  /**
+   * Move a project-directory conversation to its project's directory on another
+   * device. The directory belongs to the project, so switching devices means
+   * switching to that project's directory there — never to an arbitrary path.
+   * The cwd and CLI session only hold on the old machine, so they go with it.
+   */
+  async moveTopic(topicId: string, directoryId: string) {
+    return this.db.transaction(async (tx) => {
+      const db = tx as LobeChatDatabase;
+      const [topic] = await db
+        .select()
+        .from(topics)
+        .where(
+          and(
+            eq(topics.id, topicId),
+            eq(topics.userId, this.userId),
+            buildWorkspaceWhere(this.scope(), topics),
+            isNull(topics.deletedAt),
+          ),
+        )
+        .for('update');
+      if (!topic) throw new Error('Topic not found or access denied');
+      if (!topic.projectId || !topic.projectWorkingDirectoryId)
+        throw new Error('Topic is not bound to a project directory');
+      if (topic.status === 'running' || topic.metadata?.runningOperation)
+        throw new Error('Wait for the running topic to finish before moving it');
+      // Scoped to the topic's own project: another project's directory is not
+      // a device switch, it is a different conversation context.
+      const directory = await new ProjectWorkingDirectoryModel(
+        db,
+        this.userId,
+        this.workspaceId,
+      ).resolve(directoryId, topic.projectId);
+      if (directory.id === topic.projectWorkingDirectoryId) return topic;
+      if (topic.agentId) {
+        const [agent] = await db
+          .select()
+          .from(agents)
+          .where(and(eq(agents.id, topic.agentId), buildWorkspaceWhere(this.scope(), agents)));
+        if (
+          !agent ||
+          (agent.agencyConfig?.executionTargetSelectionPolicy === 'fixed' &&
+            agent.agencyConfig.boundDeviceId !== directory.deviceId)
+        )
+          throw new Error('Agent cannot use this execution target');
+      }
+      const {
+        heteroSessionBindingKey: _bindingKey,
+        heteroSessionBindingKeyByWorkingDirectory: _bindingKeys,
+        heteroSessionId: _sessionId,
+        heteroSessionIdByWorkingDirectory: _sessionIds,
+        ...metadata
+      } = topic.metadata ?? {};
+      const [updated] = await db
+        .update(topics)
+        .set({
+          metadata: {
+            ...metadata,
+            boundDeviceId: directory.deviceId,
+            workingDirectory: directory.path,
+            workingDirectoryConfig: { path: directory.path },
+          },
+          projectWorkingDirectoryId: directory.id,
+        })
+        .where(eq(topics.id, topicId))
+        .returning();
+      return updated;
+    });
+  }
 }

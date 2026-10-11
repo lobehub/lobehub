@@ -48,6 +48,7 @@
   "directories.bindDescription": "将下方文件夹绑定到项目，之后即可从项目中继续工作。文件仍保留在当前设备上。",
   "directories.bindFailed": "目录关联失败",
   "directories.boundRoot": "此对话已绑定项目工作目录。要使用其他目录，请新建对话。",
+  "directories.boundTip": "该目录属于项目（{{path}}）。切换设备即可改用该设备上的项目目录。",
   "directories.chooseAgent": "选择 Agent",
   "directories.conversations": "已有话题",
   "directories.coordinator": "项目协调 Agent",
