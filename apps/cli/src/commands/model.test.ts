@@ -34,6 +34,7 @@ describe('model command', () => {
   beforeEach(() => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockGetTrpcClient.mockClear();
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
     for (const method of Object.values(mockTrpcClient.aiModel)) {
       for (const fn of Object.values(method)) {
@@ -107,6 +108,78 @@ describe('model command', () => {
       expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenCalledWith(
         expect.objectContaining({ id: 'openai', type: 'asr' }),
       );
+    });
+
+    it('should paginate limits larger than the API page size', async () => {
+      const createModels = (count: number, offset: number) =>
+        Array.from({ length: count }, (_, index) => ({ id: `model-${offset + index}` }));
+      mockTrpcClient.aiModel.getAiProviderModelList.query
+        .mockResolvedValueOnce(createModels(200, 0))
+        .mockResolvedValueOnce(createModels(200, 200))
+        .mockResolvedValueOnce(createModels(100, 400));
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'list',
+        'openrouter',
+        '--limit',
+        '500',
+        '--json',
+      ]);
+
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenNthCalledWith(1, {
+        id: 'openrouter',
+        limit: 200,
+        offset: 0,
+      });
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenNthCalledWith(2, {
+        id: 'openrouter',
+        limit: 200,
+        offset: 200,
+      });
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenNthCalledWith(3, {
+        id: 'openrouter',
+        limit: 100,
+        offset: 400,
+      });
+      expect(JSON.parse(consoleSpy.mock.calls.at(-1)?.[0] as string)).toHaveLength(500);
+    });
+
+    it('should stop pagination after a short page', async () => {
+      const models = [{ id: 'model-1' }, { id: 'model-2' }];
+      mockTrpcClient.aiModel.getAiProviderModelList.query.mockResolvedValue(models);
+
+      const program = createProgram();
+      await program.parseAsync([
+        'node',
+        'test',
+        'model',
+        'list',
+        'openrouter',
+        '--limit',
+        '500',
+        '--json',
+      ]);
+
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenCalledOnce();
+      expect(mockTrpcClient.aiModel.getAiProviderModelList.query).toHaveBeenCalledWith({
+        id: 'openrouter',
+        limit: 200,
+        offset: 0,
+      });
+      expect(consoleSpy).toHaveBeenCalledWith(JSON.stringify(models, null, 2));
+    });
+
+    it('should reject a non-positive limit before creating the API client', async () => {
+      const program = createProgram();
+
+      await expect(
+        program.parseAsync(['node', 'test', 'model', 'list', 'openai', '--limit', '0']),
+      ).rejects.toThrow('--limit must be a positive integer');
+      expect(mockGetTrpcClient).not.toHaveBeenCalled();
     });
   });
 
