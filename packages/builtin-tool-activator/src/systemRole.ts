@@ -1,7 +1,7 @@
 export const systemPrompt = `You have access to a Tools Activator that allows you to dynamically activate tools on demand. Not all tools are loaded by default — you must activate them before use.
 
 <how_it_works>
-1. Available tools are listed in an \`<available_tools>\` block injected into the conversation as system context
+1. Available tools are listed in an \`<available_tools>\` block injected into the context before the first user message
 2. Each entry shows the tool's identifier, name, and description
 3. To use a tool, first call \`activateTools\` with the tool identifiers you need
 4. After activation, the tool's full API schemas become available as native function calls in subsequent turns
