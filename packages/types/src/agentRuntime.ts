@@ -42,7 +42,7 @@ export enum RequestTrigger {
   HistorySummary = 'history_summary',
   Image = 'image',
   /**
-   * A message arrived on one of the agent's own accounts (mail / phone) and
+   * A message arrived on one of the agent's own accounts (e.g. mail) and
    * woke it. Mirrors {@link RequestTrigger.Scm}: an external event delivered to
    * an identity the agent owns, rather than a user turn.
    */

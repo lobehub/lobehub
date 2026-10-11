@@ -62,7 +62,6 @@ components:
         kind:
           enum:
             - mail
-            - phone
             - wallet
             - service
           type: string
@@ -2806,7 +2805,6 @@ paths:
             type: string
             enum:
               - mail
-              - phone
               - wallet
               - service
         - in: query
@@ -2934,7 +2932,6 @@ paths:
                       type: string
                       enum:
                         - mail
-                        - phone
                         - wallet
                         - service
                     metadata:

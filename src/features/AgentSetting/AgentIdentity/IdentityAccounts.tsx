@@ -25,7 +25,7 @@ interface IdentityAccountsProps {
  *
  * Every channel is rendered either as the address that exists or as the offer
  * to open one — never as a plain list that silently omits a channel, so "the
- * agent has no phone number" is visible rather than inferred from absence.
+ * agent has no mail address" is visible rather than inferred from absence.
  */
 const IdentityAccounts = memo<IdentityAccountsProps>(({ agentId, disabled }) => {
   const { t } = useTranslation('setting');

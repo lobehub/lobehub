@@ -300,7 +300,7 @@ describe('agentAccountRouter', () => {
       new AgentAccountError('identifier_taken', 'agent@github is already bound to another agent'),
     );
     service.provision.mockRejectedValueOnce(
-      new AgentAccountError('capacity_exhausted', 'All 1 phone number(s) are already in use'),
+      new AgentAccountError('identifier_taken', 'bot@lobe.id is already bound to another agent'),
     );
     const caller = agentAccountRouter.createCaller(ctx);
 
@@ -312,7 +312,9 @@ describe('agentAccountRouter', () => {
         provider: 'user',
       }),
     ).rejects.toMatchObject({ code: 'CONFLICT', message: expect.stringMatching(/already bound/) });
-    await expect(caller.provision({ agentId: 'agt_1', provider: 'linq' })).rejects.toMatchObject({
+    await expect(
+      caller.provision({ agentId: 'agt_1', provider: 'agent-mail' }),
+    ).rejects.toMatchObject({
       code: 'CONFLICT',
     });
   });

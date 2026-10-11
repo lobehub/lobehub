@@ -350,8 +350,6 @@ export default {
   'identity.mail.desc': 'A @lobe.id inbox the agent can receive mail at and reply from.',
   'identity.mail.title': 'Email',
   'identity.noAgent': 'Select an agent to see the addresses it owns.',
-  'identity.phone.desc': 'A phone number people can text the agent at.',
-  'identity.phone.title': 'Phone',
   'identity.prefix.hint': 'Optional. Letters, numbers, dot, underscore and dash.',
   'identity.prefix.placeholder': 'Preferred prefix (optional)',
   'identity.provision': 'Open',

@@ -4,6 +4,7 @@ import type {
   AgentAccountKind,
   AgentAccountStatus,
 } from '@lobechat/types';
+import { AGENT_ACCOUNT_KINDS } from '@lobechat/types';
 import { and, desc, eq, inArray, ne, sql } from 'drizzle-orm';
 
 import type { AgentAccountItem, NewAgentAccount } from '../schemas';
@@ -108,7 +109,7 @@ export const ROUTING_KEY_HELD_STATUSES: AgentAccountStatus[] = [
 ];
 
 /**
- * Agent accounts (mail / phone / wallet / service) and their credentials.
+ * Agent accounts (mail / wallet / service) and their credentials.
  *
  * Credential handling mirrors `AgentBotProviderModel` / `messengerAccountLinks`:
  * the secret is AES-GCM ciphertext written through an injected gatekeeper, and
@@ -268,7 +269,14 @@ export class AgentAccountModel {
   }): Promise<AgentAccountView[]> => {
     const conditions = [this.ownership()];
 
-    if (params?.liveOnly) conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
+    if (params?.liveOnly) {
+      conditions.push(inArray(agentAccounts.status, INBOUND_ROUTABLE_STATUSES));
+      // `kind` is a plain text column, so a kind the product retired (the
+      // agent-owned `phone`, now a messenger channel) can outlive its
+      // provider. Such a row must not reach the runtime as a usable address;
+      // it stays visible to the unfiltered query so it can still be revoked.
+      conditions.push(inArray(agentAccounts.kind, [...AGENT_ACCOUNT_KINDS]));
+    }
 
     if (params?.agentId) conditions.push(eq(agentAccounts.agentId, params.agentId));
     if (params?.kind) conditions.push(eq(agentAccounts.kind, params.kind));
@@ -397,12 +405,11 @@ export class AgentAccountModel {
    * signature can be verified *before* the request is trusted. The trust model
    * is the same as the bot path: nothing else may call this.
    *
-   * Only a live account is routable. A revoked number that keeps receiving is
+   * Only a live account is routable. A revoked address that keeps receiving is
    * the worst kind of release: the row says the identity is gone while the
-   * carrier still delivers to it — and for Linq it is not even caught by the
-   * credential check, because the signing secret comes from deployment config
-   * rather than the account. Suspended accounts are excluded for the same
-   * reason.
+   * provider still delivers to it — and when the signing secret comes from
+   * deployment config rather than the account, the credential check does not
+   * catch it either. Suspended accounts are excluded for the same reason.
    */
   static findForInboundVerification = async (
     db: LobeChatDatabase,

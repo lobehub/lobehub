@@ -1,22 +1,22 @@
 import type { AgentAccountKind } from '@lobechat/types';
 import type { LucideIcon } from 'lucide-react';
-import { KeyRound, Mail, Phone, Wallet } from 'lucide-react';
+import { KeyRound, Mail, Wallet } from 'lucide-react';
 
 /**
  * One address channel the identity tab can open.
  *
  * The pair (kind, provider) is what the control plane is asked for; the icon
  * and copy are presentation. `prefixable` marks the channels where the caller
- * may ask for a specific handle — mailbox local parts are choosable, carrier
- * numbers are operator inventory.
+ * may ask for a specific handle (a mailbox local part, for example); a channel
+ * whose handles the provider mints on its own leaves it off.
  */
 export interface IdentityChannel {
-  descKey: 'identity.mail.desc' | 'identity.phone.desc';
+  descKey: 'identity.mail.desc';
   icon: LucideIcon;
   kind: AgentAccountKind;
   prefixable: boolean;
   provider: string;
-  titleKey: 'identity.mail.title' | 'identity.phone.title';
+  titleKey: 'identity.mail.title';
 }
 
 export const IDENTITY_CHANNELS: IdentityChannel[] = [
@@ -27,14 +27,6 @@ export const IDENTITY_CHANNELS: IdentityChannel[] = [
     prefixable: true,
     provider: 'agent-mail',
     titleKey: 'identity.mail.title',
-  },
-  {
-    descKey: 'identity.phone.desc',
-    icon: Phone,
-    kind: 'phone',
-    prefixable: false,
-    provider: 'linq',
-    titleKey: 'identity.phone.title',
   },
 ];
 
@@ -51,7 +43,6 @@ export const isChannelAccount = (
 /** Icon for an account that belongs to no built-in channel (a mounted address). */
 export const KIND_ICONS: Record<AgentAccountKind, LucideIcon> = {
   mail: Mail,
-  phone: Phone,
   service: KeyRound,
   wallet: Wallet,
 };

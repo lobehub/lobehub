@@ -171,8 +171,6 @@ export class AgentAccountService {
     const issued = await provider.provision({
       agentId: params.agentId,
       displayName: params.displayName,
-      isIdentifierHeld: (identifier) =>
-        AgentAccountModel.isRoutingKeyHeld(this.db, provider.provider, identifier),
       prefix: params.prefix,
       userId: this.userId,
       workspaceId: this.options.workspaceId,
@@ -226,7 +224,7 @@ export class AgentAccountService {
       }
       if (committed && committed.agentId === params.agentId) return committed;
 
-      // The provider holds a resource (an inbox, a number binding) that no live
+      // The provider holds a resource (an inbox) that no live
       // row of this agent points at. Hand it back so a failed write leaves
       // nothing billable behind; the release is best-effort because the original
       // error is the one worth surfacing.

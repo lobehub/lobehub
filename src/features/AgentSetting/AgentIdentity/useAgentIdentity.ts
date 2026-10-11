@@ -1,7 +1,7 @@
+import type { AgentInboxMessage } from '@lobechat/types';
 import useSWR from 'swr';
 import useSWRInfinite from 'swr/infinite';
 
-import type { AgentInboxMessage } from '@lobechat/types';
 import { agentAccountService } from '@/services/agentAccount';
 
 const accountsKey = (agentId: string): [string, string] | null =>

@@ -830,8 +830,6 @@
   "identity.mail.desc": "一个 @lobe.id 邮箱，Agent 可收发邮件。",
   "identity.mail.title": "邮箱",
   "identity.noAgent": "请选择一个 Agent 以查看它拥有的地址。",
-  "identity.phone.desc": "一个手机号，人们可以向它发短信。",
-  "identity.phone.title": "手机号",
   "identity.prefix.hint": "可选。支持字母、数字、点、下划线和连字符。",
   "identity.prefix.placeholder": "期望的前缀（可选）",
   "identity.provision": "开通",
