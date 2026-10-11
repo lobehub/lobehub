@@ -856,6 +856,26 @@ export class AgentRuntimeService {
   }
 
   /**
+   * The Group Agent Builder target frozen on the durable operation row.
+   *
+   * An intervention continuation rebuilds its app context from server-side
+   * evidence (never client input), and `state.origin` expires with the runtime
+   * snapshot. The row is the only durable copy — older topics may lack
+   * `topics.metadata.editingGroupId`, so without it the resumed member tools
+   * answer `NoGroupContext`.
+   */
+  async getOperationEditingGroupId(operationId: string): Promise<string | undefined> {
+    try {
+      const row = await this.agentOperationModel.findById(operationId);
+      const value = row?.appContext?.editingGroupId;
+      return typeof value === 'string' && value ? value : undefined;
+    } catch (error) {
+      log('[%s] Failed to read the editing group target: %O', operationId, error);
+      return undefined;
+    }
+  }
+
+  /**
    * Whether the client that started this operation declared it handles
    * `member_runtime_end`. An unknown or expired operation reads as `false`, so
    * a continuation then keeps the verbatim terminal every client understands.
@@ -1270,6 +1290,11 @@ export class AgentRuntimeService {
           defaultTaskAssigneeAgentId: appContext?.defaultTaskAssigneeAgentId,
           documentId: appContext?.documentId,
           editingAgentId: appContext?.editingAgentId,
+          // The Group Agent Builder target must survive on the durable row: an
+          // intervention continuation rebuilds its app context from this row
+          // (never from client input), and a topic whose metadata predates the
+          // `editingGroupId` stamp has nothing else to recover it from.
+          editingGroupId: appContext?.editingGroupId,
           groupId: appContext?.groupId,
           scope: appContext?.scope,
           sessionId: appContext?.sessionId,

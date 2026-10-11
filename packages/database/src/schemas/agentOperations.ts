@@ -31,6 +31,8 @@ export interface AgentOperationAppContext {
   documentId?: string | null;
   /** The agent a builder run edits (scope `agent_builder`); the run itself is owned by the builder. */
   editingAgentId?: string;
+  /** The group a Group Agent Builder run edits; recovered by intervention continuations. */
+  editingGroupId?: string;
   groupId?: string | null;
   scope?: string | null;
   sessionId?: string;
