@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "它會保留在您歸檔的資料庫中——其他成員將無法再看到它",
   "visibilityConfirm.makePrivate.itemLoaded": "其他人已載入的內容無法撤回",
   "visibilityConfirm.makePrivate.itemReferences": "現有的訊息附件和引用將顯示為不可用",
-  "visibilityConfirm.publish.itemCapturedState": "成員可以執行其實例並存取其捕獲的所有內容——檔案、CLI 登錄、您的登入身份",
+  "visibilityConfirm.publish.itemCapturedState": "成員可以運行其副本並訪問其捕獲的所有內容——文件、CLI 登錄、您已登入的身份",
   "visibilityConfirm.publish.itemLoaded": "切換回來後，其他人已載入的內容無法撤回",
   "visibilityConfirm.publish.itemReversible": "您可以稍後從相同的選單切換回私人",
   "visibilityConfirm.publish.itemVisible": "所有工作區成員將立即看到此內容",

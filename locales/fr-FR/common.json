@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "Il reste dans la bibliothèque où vous l'avez classé — les autres membres cessent simplement de le voir là-bas",
   "visibilityConfirm.makePrivate.itemLoaded": "Le contenu déjà chargé par d'autres ne peut pas être récupéré",
   "visibilityConfirm.makePrivate.itemReferences": "Les pièces jointes et références des messages existants apparaîtront comme indisponibles",
-  "visibilityConfirm.publish.itemCapturedState": "Les membres peuvent exécuter ses instances et accéder à tout ce qu'il a capturé — fichiers, connexions CLI, votre identité connectée",
+  "visibilityConfirm.publish.itemCapturedState": "Les membres peuvent exécuter ses copies et accéder à tout ce qu'il a capturé — fichiers, connexions CLI, votre identité connectée",
   "visibilityConfirm.publish.itemLoaded": "Après le changement, le contenu déjà chargé par d'autres ne peut pas être récupéré",
   "visibilityConfirm.publish.itemReversible": "Vous pouvez le repasser en privé plus tard depuis le même menu",
   "visibilityConfirm.publish.itemVisible": "Tous les membres de l'espace de travail verront ceci immédiatement",

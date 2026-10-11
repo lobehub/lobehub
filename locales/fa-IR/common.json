@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "در کتابخانه‌ای که آن را بایگانی کرده‌اید باقی می‌ماند — فقط دیگر اعضا آن را در آنجا نمی‌بینند",
   "visibilityConfirm.makePrivate.itemLoaded": "محتوایی که دیگران قبلاً بارگذاری کرده‌اند، قابل بازگرداندن نیست",
   "visibilityConfirm.makePrivate.itemReferences": "پیوست‌ها و ارجاعات پیام‌های موجود به‌عنوان غیرقابل دسترس نمایش داده می‌شوند",
-  "visibilityConfirm.publish.itemCapturedState": "اعضا می‌توانند نمونه‌های آن را اجرا کنند و به هر چیزی که ضبط کرده است دسترسی داشته باشند — فایل‌ها، ورودهای CLI، هویت وارد شده شما",
+  "visibilityConfirm.publish.itemCapturedState": "اعضا می‌توانند نسخه‌های آن را اجرا کنند و به هر چیزی که ضبط کرده است دسترسی داشته باشند — فایل‌ها، ورودهای CLI، هویت وارد شده شما",
   "visibilityConfirm.publish.itemLoaded": "پس از تغییر وضعیت، محتوایی که دیگران قبلاً بارگذاری کرده‌اند، قابل بازگرداندن نیست",
   "visibilityConfirm.publish.itemReversible": "می‌توانید بعداً از همان منو دوباره آن را به حالت خصوصی تغییر دهید",
   "visibilityConfirm.publish.itemVisible": "تمام اعضای فضای کاری فوراً این را مشاهده خواهند کرد",

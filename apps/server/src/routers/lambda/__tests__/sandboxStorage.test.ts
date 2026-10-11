@@ -2,10 +2,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // serverDatabase middleware calls getServerDB(); stub it (the model mock
-// ignores the db handle anyway).
+// ignores the db handle anyway). A transaction just runs its body: rollback is
+// covered against a real database in sandboxStorage.defaultInstance.test.ts.
+const { mockServerDB, mockTransaction } = vi.hoisted(() => {
+  const mockTransaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>) => fn({}));
+  return { mockServerDB: { transaction: mockTransaction }, mockTransaction };
+});
+
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(function () {
-    return {};
+    return mockServerDB;
   }),
 }));
 
@@ -16,12 +22,13 @@ const mockFindById = vi.fn();
 // path that is supposed to demand ownership.
 const mockFindOwnedById = vi.fn();
 const mockUpdate = vi.fn();
+const mockDelete = vi.fn();
 
 vi.mock('@/database/models/environment', () => ({
   EnvironmentModel: vi.fn(function () {
     return {
       create: mockCreate,
-      delete: vi.fn(),
+      delete: mockDelete,
       findById: mockFindById,
       findOwnedById: mockFindOwnedById,
       query: vi.fn(),
@@ -137,12 +144,13 @@ const environmentId = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
 const buildInstanceId = '7b1e9c2a-5d43-4f8a-9c21-8f0e6a3b1d77';
 
 describe('sandboxStorageRouter', () => {
-  const ctx: any = { serverDB: {}, userId: 'user-1', workspaceId: 'ws-1' };
+  const ctx: any = { serverDB: mockServerDB, userId: 'user-1', workspaceId: 'ws-1' };
 
   beforeEach(() => {
     vi.clearAllMocks();
     mockResolveClaim.mockResolvedValue({ key: 'ws-org-1', quotaBytes: 1024 });
     mockInstanceRecordBuildResult.mockResolvedValue(undefined);
+    mockReadOccupancy.mockResolvedValue({ held: [], unavailable: false });
   });
 
   describe('createInstance', () => {
@@ -194,9 +202,60 @@ describe('sandboxStorageRouter', () => {
 
   describe('removeInstance', () => {
     const instanceId = '0726286c-f1a1-4c9e-980d-80a8e837321d';
+    const defaultId = '00000000-0000-4000-8000-000000000001';
+    const created = new Date('2026-01-01T00:00:00Z');
 
     beforeEach(() => {
-      mockInstanceFindOwnedById.mockResolvedValue({ id: instanceId });
+      mockInstanceFindOwnedById.mockResolvedValue({ environmentId, id: instanceId });
+      // An older sibling is the default, so the instance under test is a copy.
+      mockInstanceQuery.mockResolvedValue([
+        { createdAt: created, id: defaultId },
+        { createdAt: new Date('2026-02-01T00:00:00Z'), id: instanceId },
+      ]);
+    });
+
+    it('refuses the default instance before reaching the execution plane', async () => {
+      // The default is what the environment is: it goes with the environment,
+      // and a broken one is rebuilt rather than deleted on its own.
+      mockInstanceFindOwnedById.mockResolvedValue({ environmentId, id: defaultId });
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).removeInstance({ id: defaultId }),
+      ).rejects.toMatchObject({ code: 'FORBIDDEN', message: 'DEFAULT_INSTANCE' });
+
+      expect(mockInstanceQuery).toHaveBeenCalledWith({ environmentId });
+      expect(mockDeleteEnvironment).not.toHaveBeenCalled();
+      expect(mockInstanceDelete).not.toHaveBeenCalled();
+    });
+
+    it("refuses an environment's only instance, which is its default", async () => {
+      mockInstanceQuery.mockResolvedValue([{ createdAt: created, id: instanceId }]);
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).removeInstance({ id: instanceId }),
+      ).rejects.toMatchObject({ message: 'DEFAULT_INSTANCE' });
+      expect(mockDeleteEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('decides a tie on creation time by id: the lower id is the default', async () => {
+      const lower = '10000000-0000-4000-8000-000000000000';
+      const higher = '90000000-0000-4000-8000-000000000000';
+      mockInstanceQuery.mockResolvedValue([
+        { createdAt: created, id: higher },
+        { createdAt: created, id: lower },
+      ]);
+      mockDeleteEnvironment.mockResolvedValue(undefined);
+      const caller = sandboxStorageRouter.createCaller(ctx);
+
+      mockInstanceFindOwnedById.mockResolvedValue({ environmentId, id: lower });
+      await expect(caller.removeInstance({ id: lower })).rejects.toMatchObject({
+        message: 'DEFAULT_INSTANCE',
+      });
+
+      mockInstanceFindOwnedById.mockResolvedValue({ environmentId, id: higher });
+      await caller.removeInstance({ id: higher });
+      expect(mockInstanceDelete).toHaveBeenCalledWith(higher);
+      expect(mockInstanceDelete).not.toHaveBeenCalledWith(lower);
     });
 
     it('deletes the row when the execution plane has no snapshot for it', async () => {
@@ -413,6 +472,192 @@ describe('sandboxStorageRouter', () => {
       expect(mockInstanceUpdate).toHaveBeenCalledWith('copy-1', { status: 'ready' });
       expect(result.status).toBe('ready');
     });
+
+    describe('while the source is held', () => {
+      beforeEach(() => {
+        mockInstanceFindOwnedById.mockResolvedValue({
+          environmentId,
+          id: buildInstanceId,
+          workingDirectory: 'src',
+        });
+      });
+
+      it('refuses a source a conversation is holding, before any row exists', async () => {
+        // A held instance is mid-write; a copy would capture a half-changed tree.
+        mockReadOccupancy.mockResolvedValue({
+          held: [{ id: buildInstanceId, own: false }],
+          unavailable: false,
+        });
+
+        await expect(
+          sandboxStorageRouter
+            .createCaller(ctx)
+            .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' }),
+        ).rejects.toMatchObject({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
+
+        expect(mockReadOccupancy).toHaveBeenCalledWith({ names: [buildInstanceId] });
+        expect(mockInstanceCreate).not.toHaveBeenCalled();
+        expect(mockCopyEnvironment).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the lease store cannot answer, rather than reading it as free', async () => {
+        mockReadOccupancy.mockRejectedValue(new Error('redis down'));
+
+        await expect(
+          sandboxStorageRouter
+            .createCaller(ctx)
+            .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' }),
+        ).rejects.toMatchObject({ code: 'CONFLICT', message: 'INSTANCE_IN_USE' });
+
+        expect(mockInstanceCreate).not.toHaveBeenCalled();
+        expect(mockCopyEnvironment).not.toHaveBeenCalled();
+      });
+
+      it('refuses when the lease store reports itself unavailable', async () => {
+        mockReadOccupancy.mockResolvedValue({ held: [], unavailable: true });
+
+        await expect(
+          sandboxStorageRouter
+            .createCaller(ctx)
+            .copyInstance({ id: buildInstanceId, name: 'copy', workingDirectory: 'copy' }),
+        ).rejects.toMatchObject({ message: 'INSTANCE_IN_USE' });
+
+        expect(mockInstanceCreate).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('createEnvironment', () => {
+    const created = { id: environmentId, name: 'Python 数据分析' };
+
+    it('creates the default instance in the same call and returns it unbuilt', async () => {
+      // The build is a sandbox cold start, so it stays the client's next call.
+      mockCreate.mockResolvedValue(created);
+      mockInstanceCreate.mockResolvedValue({
+        id: 'default-1',
+        status: 'pending',
+        workingDirectory: 'python-数据分析',
+      });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .createEnvironment({ name: 'Python 数据分析' });
+
+      expect(mockInstanceCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          environmentId,
+          kind: 'sandbox',
+          name: 'python-数据分析',
+          providerScope: 'ws-org-1',
+          workingDirectory: 'python-数据分析',
+        }),
+      );
+      expect(result).toMatchObject({
+        defaultInstance: { id: 'default-1', status: 'pending' },
+        id: environmentId,
+      });
+      expect(mockTransaction).toHaveBeenCalledTimes(1);
+      expect(mockBuildInstance).not.toHaveBeenCalled();
+    });
+
+    it('derives the next free directory when the first is taken', async () => {
+      mockCreate.mockResolvedValue(created);
+      mockInstanceCreate
+        .mockRejectedValueOnce(uniqueViolation('environment_instances_provider_path_unique'))
+        .mockResolvedValueOnce({ id: 'default-1', workingDirectory: 'python-数据分析-2' });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .createEnvironment({ name: 'Python 数据分析' });
+
+      expect(mockInstanceCreate).toHaveBeenLastCalledWith(
+        expect.objectContaining({ workingDirectory: 'python-数据分析-2' }),
+      );
+      expect(result.defaultInstance.workingDirectory).toBe('python-数据分析-2');
+    });
+
+    it('fails the whole transaction when its default instance cannot be created', async () => {
+      // No compensating delete: the environment insert is rolled back with it.
+      mockCreate.mockResolvedValue(created);
+      mockInstanceCreate.mockRejectedValueOnce(new Error('db down'));
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).createEnvironment({ name: 'Python 数据分析' }),
+      ).rejects.toThrow('db down');
+      expect(mockTransaction).toHaveBeenCalledTimes(1);
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('removeEnvironment', () => {
+    const onlyInstance = { id: '0726286c-f1a1-4c9e-980d-80a8e837321d', kind: 'sandbox' };
+
+    beforeEach(() => {
+      mockFindOwnedById.mockResolvedValue({ id: environmentId });
+      mockDelete.mockResolvedValue({ id: environmentId });
+      mockInstanceDelete.mockResolvedValue(onlyInstance);
+    });
+
+    it('takes the default instance with it, rows first and the snapshot last', async () => {
+      // The snapshot goes only once both deletes have gone through, inside the
+      // transaction: anything that refuses earlier leaves it untouched.
+      mockInstanceQuery.mockResolvedValue([onlyInstance]);
+      mockDeleteEnvironment.mockRejectedValue(new SandboxStorageFilesError('gone', 404));
+
+      await sandboxStorageRouter.createCaller(ctx).removeEnvironment({ id: environmentId });
+
+      expect(mockTransaction).toHaveBeenCalledTimes(1);
+      expect(mockInstanceDelete).toHaveBeenCalledWith(onlyInstance.id);
+      expect(mockDelete).toHaveBeenCalledWith(environmentId);
+      expect(mockDeleteEnvironment).toHaveBeenCalledWith({ name: onlyInstance.id });
+      expect(mockDelete.mock.invocationCallOrder[0]).toBeLessThan(
+        mockDeleteEnvironment.mock.invocationCallOrder[0],
+      );
+    });
+
+    it('never drops the snapshot when the environment delete is refused', async () => {
+      // A project still bound to the environment: its restrict reference fails
+      // the delete, the transaction rolls the instance row back, and the built
+      // state has not been touched.
+      mockInstanceQuery.mockResolvedValue([onlyInstance]);
+      const restricted = new Error('violates foreign key constraint');
+      (restricted as any).cause = { code: '23503' };
+      mockDelete.mockRejectedValueOnce(restricted);
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).removeEnvironment({ id: environmentId }),
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'ENVIRONMENT_HAS_INSTANCES' });
+      expect(mockDeleteEnvironment).not.toHaveBeenCalled();
+    });
+
+    it('fails the transaction when a run still holds the default instance', async () => {
+      mockInstanceQuery.mockResolvedValue([onlyInstance]);
+      mockDeleteEnvironment.mockRejectedValueOnce(new SandboxStorageFilesError('in use', 409));
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).removeEnvironment({ id: environmentId }),
+      ).rejects.toMatchObject({ code: 'CONFLICT' });
+    });
+
+    it('refuses while copies other than the default remain', async () => {
+      mockInstanceQuery.mockResolvedValue([onlyInstance, { id: 'copy', kind: 'sandbox' }]);
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).removeEnvironment({ id: environmentId }),
+      ).rejects.toMatchObject({ code: 'CONFLICT', message: 'ENVIRONMENT_HAS_INSTANCES' });
+      expect(mockDeleteEnvironment).not.toHaveBeenCalled();
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('refuses an environment the caller does not own, before reaching the execution plane', async () => {
+      mockFindOwnedById.mockResolvedValue(undefined);
+
+      await expect(
+        sandboxStorageRouter.createCaller(ctx).removeEnvironment({ id: environmentId }),
+      ).rejects.toMatchObject({ code: 'NOT_FOUND' });
+      expect(mockInstanceQuery).not.toHaveBeenCalled();
+      expect(mockDeleteEnvironment).not.toHaveBeenCalled();
+    });
   });
 
   describe('startInstanceBuild', () => {
@@ -449,6 +694,56 @@ describe('sandboxStorageRouter', () => {
       });
       expect(result.buildId).toBe('b-1');
       expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, { buildId: 'b-1' });
+    });
+
+    // The execution plane digests the specification it is sent to decide which
+    // build a snapshot belongs to. `kind` only picks the form the product
+    // shows, so an instance created after its environment gained one must be
+    // sent exactly what it would have been sent before.
+    it('sends the same specification whether or not the definition carries a kind', async () => {
+      mockBuildInstance.mockResolvedValue({ buildId: 'b-1' });
+
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+        workingDirectory: 'atlas',
+      });
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+      const before = mockBuildInstance.mock.lastCall?.[0].specification;
+
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: { ...spec, kind: 'code' },
+        id: buildInstanceId,
+        workingDirectory: 'atlas',
+      });
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+      const after = mockBuildInstance.mock.lastCall?.[0].specification;
+
+      expect(after).toEqual(before);
+      expect(after).toEqual(spec);
+      expect(after).not.toHaveProperty('kind');
+    });
+
+    // A files environment clones nothing and installs nothing, so its instance
+    // is ready the moment it exists rather than waiting on a sandbox.
+    it('settles a files environment ready without starting a build', async () => {
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: { kind: 'files' },
+        id: buildInstanceId,
+        workingDirectory: 'notes',
+      });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(result).toEqual({ buildId: null });
+      expect(mockBuildInstance).not.toHaveBeenCalled();
+      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, { status: 'ready' });
     });
 
     it('carries the App installation credential when one could be minted', async () => {
@@ -767,6 +1062,30 @@ describe('sandboxStorageRouter', () => {
     });
   });
 
+  describe('environment kind', () => {
+    // Stored with the rest of the definition, in the same jsonb column: no
+    // migration and no backfill, so the parse must keep it rather than strip it
+    // as an unknown key.
+    it('stores the kind chosen at creation and refuses any other value', async () => {
+      const caller = sandboxStorageRouter.createCaller(ctx);
+      mockCreate.mockResolvedValue({ id: 'env-files', name: 'Notes' });
+
+      await caller.createEnvironment({ configuration: { kind: 'files' }, name: 'Notes' });
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ configuration: { kind: 'files' } }),
+      );
+
+      mockCreate.mockClear();
+      await expect(
+        caller.createEnvironment({
+          configuration: { kind: 'cluster' as never },
+          name: 'Refused',
+        }),
+      ).rejects.toThrow();
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+  });
+
   describe('environment source urls', () => {
     it('stores a github checkout and refuses any other host', async () => {
       // The picker only ever produces a github.com URL, but this is an RPC: a
@@ -774,6 +1093,7 @@ describe('sandboxStorageRouter', () => {
       // and have the build make the execution plane fetch it.
       const caller = sandboxStorageRouter.createCaller(ctx);
       mockCreate.mockResolvedValue({ id: 'env-allowed', name: 'Allowed' });
+      mockInstanceCreate.mockResolvedValue({ id: 'default-allowed' });
 
       await caller.createEnvironment({
         configuration: { sources: [{ kind: 'git', url: 'https://github.com/lobehub/lobehub' }] },

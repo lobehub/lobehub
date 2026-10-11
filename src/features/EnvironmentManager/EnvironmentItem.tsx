@@ -1,13 +1,15 @@
 'use client';
 
+import { environmentKind } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { DropdownMenu, Flexbox, Icon, Tooltip } from '@lobehub/ui';
-import { Avatar, Button, confirmModal, Text, toast } from '@lobehub/ui/base-ui';
+import { Avatar, Button, confirmModal, Tag, Text, toast } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar, cx } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   ContainerIcon,
   EyeOffIcon,
+  FolderIcon,
   GlobeIcon,
   MoreHorizontalIcon,
   PlusIcon,
@@ -22,6 +24,7 @@ import { formatSize } from '@/utils/format';
 import { describeError } from './errorMessage';
 import { repositoryPath } from './repository';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
+import { useConfirmRemoveEnvironment } from './useConfirmRemoveEnvironment';
 import { type SandboxEnvironment, useEnvironmentActions } from './useEnvironmentData';
 
 const styles = createStaticStyles(({ css }) => ({
@@ -133,6 +136,7 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
     const canEdit = useCanEditEnvironment()(environment);
 
     const repository = repositoryPath(environment.configuration);
+    const kind = environmentKind(environment);
     const creator =
       environment.creator?.fullName ||
       environment.creator?.username ||
@@ -190,28 +194,8 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
             ]
         : [];
 
-    const remove = () =>
-      actions
-        .removeEnvironment(environment.id)
-        // A refusal has to reach the person. An environment still holding
-        // instances is refused on purpose, and that is what they need to read.
-        .catch((error: unknown) =>
-          toast.error(describeError(error, t, t('environments.removeFailed'))),
-        );
-
-    // Asked for, like deleting an instance is — the row is emptied of
-    // instances by then, but the environment still carries its specification,
-    // its variables and the snapshot built from them, and none of that comes
-    // back. A single click in a menu was the whole gesture.
-    const confirmRemove = () =>
-      confirmModal({
-        cancelText: tCommon('cancel'),
-        content: t('environments.removeConfirmContent'),
-        okButtonProps: { danger: true },
-        okText: t('environments.remove'),
-        onOk: remove,
-        title: t('environments.removeConfirmTitle', { name: environment.name }),
-      });
+    const confirmRemoveEnvironment = useConfirmRemoveEnvironment();
+    const confirmRemove = () => confirmRemoveEnvironment(environment);
 
     return (
       <Flexbox
@@ -231,7 +215,11 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
         }}
       >
         <div className={styles.iconTile}>
-          {repository ? <Github size={20} /> : <Icon icon={ContainerIcon} size={20} />}
+          {repository ? (
+            <Github size={20} />
+          ) : (
+            <Icon icon={kind === 'files' ? FolderIcon : ContainerIcon} size={20} />
+          )}
         </div>
 
         <Flexbox flex={1} gap={2} style={{ minWidth: 0 }}>
@@ -247,6 +235,12 @@ const EnvironmentItem = memo<EnvironmentItemProps>(
             <Text ellipsis fontSize={15} style={{ flex: '0 1 auto', minWidth: 0 }} weight={500}>
               {environment.name}
             </Text>
+            {/* The one word that says which of the two things this is: a
+                folder of files or a repository with setup. Beside the name
+                because it is how the list is told apart at a glance. */}
+            <Tag size={'small'} style={{ alignSelf: 'center', flex: 'none' }}>
+              {t(`environments.kind.${kind}`)}
+            </Tag>
             {environment.description && (
               /* Shrinks a thousand times more readily than the name, the same
                  way the repository yields to the facts on the line below. */

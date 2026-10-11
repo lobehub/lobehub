@@ -1,5 +1,6 @@
 'use client';
 
+import type { EnvironmentKind } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox } from '@lobehub/ui';
 import { ActionIcon, Button, Switch, Text, toast } from '@lobehub/ui/base-ui';
@@ -48,6 +49,12 @@ export type EnvironmentFormSection = 'settings' | 'variables';
 
 interface EnvironmentFormProps {
   environment: SandboxEnvironment;
+  /**
+   * A files environment shows its name and description only: it has no
+   * repository, setup, variables or runtime switches, and fields for them
+   * would invite configuring a build that never runs.
+   */
+  kind: EnvironmentKind;
   onSave: (params: {
     configuration?: SandboxEnvironmentSpecification;
     description?: string;
@@ -128,7 +135,7 @@ BranchField.displayName = 'EnvironmentBranchField';
  * at the bottom of four sections, and changes typed above it were lost to a
  * tab switch before anyone scrolled down to it.
  */
-const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, section }) => {
+const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, kind, onSave, section }) => {
   const { t } = useTranslation('setting');
   const configuration = (environment.configuration ?? {}) as SandboxEnvironmentSpecification;
   const [pickingRepository, setPickingRepository] = useState(false);
@@ -221,27 +228,34 @@ const EnvironmentForm = memo<EnvironmentFormProps>(({ environment, onSave, secti
     );
   }
 
+  const basics = (
+    <PanelSection
+      desc={t(kind === 'files' ? 'environments.form.filesDesc' : 'environments.form.desc')}
+      icon={InfoIcon}
+      last={kind === 'files'}
+      title={t('environments.form.basics')}
+    >
+      <InlineField
+        required
+        label={t('environments.nameLabel')}
+        placeholder={t('environments.namePlaceholder')}
+        value={environment.name}
+        onSave={(name) => onSave({ name })}
+      />
+      <InlineField
+        label={t('environments.form.description')}
+        placeholder={t('environments.form.descriptionPlaceholder')}
+        value={environment.description ?? ''}
+        onSave={(description) => onSave({ description })}
+      />
+    </PanelSection>
+  );
+
+  if (kind === 'files') return <Flexbox>{basics}</Flexbox>;
+
   return (
     <Flexbox>
-      <PanelSection
-        desc={t('environments.form.desc')}
-        icon={InfoIcon}
-        title={t('environments.form.basics')}
-      >
-        <InlineField
-          required
-          label={t('environments.nameLabel')}
-          placeholder={t('environments.namePlaceholder')}
-          value={environment.name}
-          onSave={(name) => onSave({ name })}
-        />
-        <InlineField
-          label={t('environments.form.description')}
-          placeholder={t('environments.form.descriptionPlaceholder')}
-          value={environment.description ?? ''}
-          onSave={(description) => onSave({ description })}
-        />
-      </PanelSection>
+      {basics}
 
       <PanelSection
         desc={t('environments.form.sourcesHint')}

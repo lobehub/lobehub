@@ -518,7 +518,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "Ele permanece na biblioteca em que você o arquivou — outros membros apenas param de vê-lo lá",
   "visibilityConfirm.makePrivate.itemLoaded": "O conteúdo que outros já carregaram não pode ser recuperado",
   "visibilityConfirm.makePrivate.itemReferences": "Anexos de mensagens e referências existentes aparecerão como indisponíveis",
-  "visibilityConfirm.publish.itemCapturedState": "Os membros podem executar suas instâncias e acessar tudo o que ele capturou — arquivos, logins de CLI, sua identidade conectada",
+  "visibilityConfirm.publish.itemCapturedState": "Os membros podem executar suas cópias e acessar tudo o que ele capturou — arquivos, logins de CLI, sua identidade conectada",
   "visibilityConfirm.publish.itemLoaded": "Após mudar de volta, o conteúdo que outros já carregaram não pode ser recuperado",
   "visibilityConfirm.publish.itemReversible": "Você pode torná-lo privado novamente mais tarde no mesmo menu",
   "visibilityConfirm.publish.itemVisible": "Todos os membros do espaço de trabalho verão isso imediatamente",

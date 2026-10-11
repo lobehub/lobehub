@@ -1,5 +1,6 @@
 'use client';
 
+import { environmentKind } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Avatar, Tabs, Tag, Text } from '@lobehub/ui/base-ui';
@@ -7,9 +8,11 @@ import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
   ContainerIcon,
+  FolderIcon,
   HistoryIcon,
   KeyRoundIcon,
   LayersIcon,
+  LayoutDashboardIcon,
   LockIcon,
   SettingsIcon,
   XIcon,
@@ -17,6 +20,7 @@ import {
 import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { type CopyTab, copyTabs, resolveDetailTab } from './detailTabs';
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
 import { repositoryPath } from './repository';
@@ -60,7 +64,7 @@ const styles = createStaticStyles(({ css }) => ({
   `,
 }));
 
-type DetailTab = 'instances' | 'sessions' | EnvironmentFormSection;
+type DetailTab = CopyTab | EnvironmentFormSection;
 
 interface EnvironmentDetailPanelProps {
   environment: SandboxEnvironment;
@@ -86,10 +90,14 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
   const { data } = useInstances();
   const canEdit = useCanEditEnvironment()(environment);
   // Local to the panel and reset with it (the panel is keyed on the
-  // environment), so opening another environment lands on its instances.
-  const [tab, setTab] = useState<DetailTab>('instances');
+  // environment), so opening another environment lands on its first tab.
+  const [picked, setTab] = useState<DetailTab>();
 
   const repository = repositoryPath(environment.configuration);
+  // A files environment is a folder: there is no repository, setup or runtime
+  // to configure, so the panel keeps its name, description and files and
+  // drops the tabs and fields that would only ever be empty.
+  const kind = environmentKind(environment);
   const creator =
     environment.creator?.fullName ||
     environment.creator?.username ||
@@ -97,12 +105,18 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
   const instanceCount = (data?.instances ?? []).filter(
     (instance) => instance.environmentId === environment.id,
   ).length;
+  const copies = copyTabs(instanceCount);
+  const tab: DetailTab = resolveDetailTab(picked, instanceCount);
 
   return (
     <Flexbox className={styles.container} gap={20}>
       <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
         <span className={styles.iconTile}>
-          {repository ? <Github size={18} /> : <Icon icon={ContainerIcon} size={18} />}
+          {repository ? (
+            <Github size={18} />
+          ) : (
+            <Icon icon={kind === 'files' ? FolderIcon : ContainerIcon} size={18} />
+          )}
         </span>
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Text ellipsis weight={600}>
@@ -115,6 +129,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
                 the list is scanned for "is this recent", the panel is read
                 for "when". */}
           <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            <Tag size={'small'}>{t(`environments.kind.${kind}`)}</Tag>
             <Tag size={'small'}>
               {instanceCount === 0
                 ? t('environments.instances.empty')
@@ -163,30 +178,44 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
         </Flexbox>
       )}
 
-      {/* Instances and their run history are what everyone with access
+      {/* The copies and their run history are what everyone with access
             comes here for; variables and settings reshape the environment,
-            which only its editor may do, so a read-only panel keeps the first
-            two tabs and drops the rest. */}
+            which only its editor may do, so a read-only panel keeps those and
+            drops the rest. */}
       <Tabs
         activeKey={tab}
         items={[
-          {
-            icon: <Icon icon={LayersIcon} size={16} />,
-            key: 'instances',
-            label: t('environments.instances.title'),
-          },
-          {
-            icon: <Icon icon={HistoryIcon} size={16} />,
-            key: 'sessions',
-            label: t('environments.sessions.title'),
-          },
-          ...(canEdit
+          ...(copies.includes('overview')
             ? [
                 {
-                  icon: <Icon icon={KeyRoundIcon} size={16} />,
-                  key: 'variables',
-                  label: t('environments.form.env'),
+                  icon: <Icon icon={LayoutDashboardIcon} size={16} />,
+                  key: 'overview',
+                  label: t('environments.detail.tabs.overview'),
                 },
+              ]
+            : [
+                {
+                  icon: <Icon icon={LayersIcon} size={16} />,
+                  key: 'instances',
+                  label: t('environments.instances.title'),
+                },
+                {
+                  icon: <Icon icon={HistoryIcon} size={16} />,
+                  key: 'sessions',
+                  label: t('environments.sessions.title'),
+                },
+              ]),
+          ...(canEdit
+            ? [
+                ...(kind === 'code'
+                  ? [
+                      {
+                        icon: <Icon icon={KeyRoundIcon} size={16} />,
+                        key: 'variables',
+                        label: t('environments.form.env'),
+                      },
+                    ]
+                  : []),
                 {
                   icon: <Icon icon={SettingsIcon} size={16} />,
                   key: 'settings',
@@ -202,9 +231,25 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
             sections and meets the next one's icon exactly, so any space
             between them would show as a break in the line. */}
       <Flexbox>
+        {/* The one copy, as the environment itself: its build state (a code
+            environment's only — a files one has nothing to build), its files
+            and what ran in it, without a list of one to click through. */}
+        {tab === 'overview' && (
+          <TabPane>
+            <InstanceSection single editable={canEdit} environmentId={environment.id} kind={kind} />
+            <Flexbox gap={8}>
+              <Text weight={500}>{t('environments.sessions.title')}</Text>
+              <Text fontSize={12} type={'secondary'}>
+                {t('environments.sessions.desc')}
+              </Text>
+              <SessionHistorySection environmentId={environment.id} />
+            </Flexbox>
+          </TabPane>
+        )}
+
         {tab === 'instances' && (
           <TabPane desc={t('environments.instances.desc')}>
-            <InstanceSection editable={canEdit} environmentId={environment.id} />
+            <InstanceSection editable={canEdit} environmentId={environment.id} kind={kind} />
           </TabPane>
         )}
 
@@ -219,6 +264,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
         {canEdit && (tab === 'variables' || tab === 'settings') && (
           <EnvironmentForm
             environment={environment}
+            kind={kind}
             section={tab}
             onSave={(changes) => actions.updateEnvironment({ ...changes, id: environment.id })}
           />

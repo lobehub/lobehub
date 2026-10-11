@@ -32,6 +32,13 @@ interface CreateInstanceContentProps {
    */
   instance?: SandboxInstance;
   onCreated?: (instance: SandboxInstance) => void;
+  /**
+   * The instance to copy, when this dialog makes a copy rather than a fresh
+   * instance. Asks the same two questions — what to call it, where it lives —
+   * but the new folder starts with everything the source had built, so there is
+   * nothing to build afterwards.
+   */
+  source?: SandboxInstance;
 }
 
 /**
@@ -45,7 +52,7 @@ interface CreateInstanceContentProps {
  * person by deriving it from the environment's name.
  */
 const CreateInstanceContent = memo<CreateInstanceContentProps>(
-  ({ environmentId, instance, onCreated }) => {
+  ({ environmentId, instance, onCreated, source }) => {
     const { t } = useTranslation('setting');
     const { close } = useModalContext();
     const actions = useEnvironmentActions();
@@ -95,6 +102,15 @@ const CreateInstanceContent = memo<CreateInstanceContentProps>(
           return;
         }
 
+        if (source) {
+          // Ready on arrival: the server copies the source's built state and
+          // marks the copy ready, so no build follows.
+          await actions.copyInstance({ id: source.id, name: name.trim(), workingDirectory });
+          close();
+
+          return;
+        }
+
         const created = await actions.createInstance({
           environmentId,
           name: name.trim(),
@@ -124,7 +140,9 @@ const CreateInstanceContent = memo<CreateInstanceContentProps>(
                   t(
                     editing
                       ? 'environments.instances.renameFailed'
-                      : 'environments.instances.createFailed',
+                      : source
+                        ? 'environments.instances.copyFailed'
+                        : 'environments.instances.createFailed',
                   ),
                 ),
         );
@@ -223,12 +241,18 @@ export const openCreateInstanceModal = (params: CreateInstanceContentProps) =>
     footer: null,
     maskClosable: true,
     styles: { content: { padding: 0 } },
-    title: translate(
-      params.instance ? 'environments.instances.rename' : 'environments.instances.add',
-      { ns: 'setting' },
-    ),
+    title: params.source
+      ? translate('environments.instances.copyTitle', { name: params.source.name, ns: 'setting' })
+      : translate(
+          params.instance ? 'environments.instances.rename' : 'environments.instances.add',
+          { ns: 'setting' },
+        ),
     width: 'min(90vw, 480px)',
   });
+
+/** The same dialog, making a copy of `source` beside it. */
+export const openCopyInstanceModal = (source: SandboxInstance) =>
+  openCreateInstanceModal({ environmentId: source.environmentId, source });
 
 /** The same dialog, opened on an instance that already exists. */
 export const openEditInstanceModal = (instance: SandboxInstance) =>

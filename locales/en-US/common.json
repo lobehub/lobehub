@@ -521,7 +521,7 @@
   "visibilityConfirm.makePrivate.itemLibrary": "It stays in the library you filed it in — other members just stop seeing it there",
   "visibilityConfirm.makePrivate.itemLoaded": "Content others have already loaded can’t be pulled back",
   "visibilityConfirm.makePrivate.itemReferences": "Existing message attachments and references will show as unavailable",
-  "visibilityConfirm.publish.itemCapturedState": "Members can run its instances and reach everything it has captured — files, CLI logins, your signed-in identity",
+  "visibilityConfirm.publish.itemCapturedState": "Members can run its copies and reach everything it has captured — files, CLI logins, your signed-in identity",
   "visibilityConfirm.publish.itemLoaded": "After switching back, content others have already loaded can’t be pulled back",
   "visibilityConfirm.publish.itemReversible": "You can switch it back to private later from the same menu",
   "visibilityConfirm.publish.itemVisible": "All workspace members will see this immediately",
