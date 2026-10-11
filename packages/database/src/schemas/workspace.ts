@@ -197,3 +197,72 @@ export const workspaceUserSettings = pgTable(
 
 export type WorkspaceUserSettingsItem = typeof workspaceUserSettings.$inferSelect;
 export type NewWorkspaceUserSettings = typeof workspaceUserSettings.$inferInsert;
+
+/**
+ * Teams inside a workspace (modeled after Linear teams). A lightweight
+ * organizing unit for now — no sidebar grouping or permission scoping yet —
+ * reserved as the future anchor for team-owned resources such as projects.
+ *
+ * `identifier` is the short uppercase key (e.g. `ENG`) used as a prefix for
+ * team-scoped ids later on, so it is unique per workspace.
+ */
+export const workspaceTeams = pgTable(
+  'workspace_teams',
+  {
+    id: text('id')
+      .$defaultFn(() => createNanoId(16)())
+      .notNull()
+      .primaryKey(),
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    /** Uppercase short key, unique per workspace. Normalized by the writer. */
+    identifier: varchar('identifier', { length: 16 }).notNull(),
+    description: varchar('description', { length: 1000 }),
+    /** Emoji (or image URL) shown next to the team name. */
+    avatar: text('avatar'),
+    createdBy: text('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [
+    uniqueIndex('workspace_teams_workspace_identifier_unique').on(t.workspaceId, t.identifier),
+    index('workspace_teams_workspace_id_idx').on(t.workspaceId),
+  ],
+);
+
+export type WorkspaceTeamItem = typeof workspaceTeams.$inferSelect;
+export type NewWorkspaceTeam = typeof workspaceTeams.$inferInsert;
+
+/**
+ * Membership of a workspace member in a team. Surrogate PK with the business
+ * uniqueness in a unique index (same reasoning as `workspace_user_settings`).
+ * `role` is reserved for future team-level permissions; everyone is `member`
+ * today.
+ */
+export const workspaceTeamMembers = pgTable(
+  'workspace_team_members',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    teamId: text('team_id')
+      .references(() => workspaceTeams.id, { onDelete: 'cascade' })
+      .notNull(),
+    /** Denormalized so member-scoped lookups never need to join the team table. */
+    workspaceId: text('workspace_id')
+      .references(() => workspaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: text('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    role: text('role').notNull().default('member'),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex('workspace_team_members_team_user_unique').on(t.teamId, t.userId),
+    index('workspace_team_members_workspace_user_idx').on(t.workspaceId, t.userId),
+  ],
+);
+
+export type WorkspaceTeamMemberItem = typeof workspaceTeamMembers.$inferSelect;
+export type NewWorkspaceTeamMember = typeof workspaceTeamMembers.$inferInsert;
