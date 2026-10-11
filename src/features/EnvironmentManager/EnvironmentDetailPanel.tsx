@@ -1,12 +1,13 @@
 'use client';
 
+import { environmentKind } from '@lobechat/types';
 import { Github } from '@lobehub/icons';
 import { Flexbox, Icon, Tooltip } from '@lobehub/ui';
 import { ActionIcon, Avatar, Tabs, Tag, Text } from '@lobehub/ui/base-ui';
 import { createStaticStyles, cssVar } from 'antd-style';
 import dayjs from 'dayjs';
 import {
-  ContainerIcon,
+  FolderIcon,
   HistoryIcon,
   KeyRoundIcon,
   LayersIcon,
@@ -19,7 +20,6 @@ import { useTranslation } from 'react-i18next';
 
 import EnvironmentForm, { type EnvironmentFormSection } from './EnvironmentForm';
 import InstanceSection from './InstanceSection';
-import { repositoryPath } from './repository';
 import SessionHistorySection from './SessionHistorySection';
 import TabPane from './TabPane';
 import { useCanEditEnvironment } from './useCanEditEnvironment';
@@ -89,7 +89,10 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
   // environment), so opening another environment lands on its instances.
   const [tab, setTab] = useState<DetailTab>('instances');
 
-  const repository = repositoryPath(environment.configuration);
+  // A files environment is a folder: there is no repository, setup or runtime
+  // to configure, so the panel keeps its name, description and files and
+  // drops the tabs and fields that would only ever be empty.
+  const kind = environmentKind(environment);
   const creator =
     environment.creator?.fullName ||
     environment.creator?.username ||
@@ -102,7 +105,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
     <Flexbox className={styles.container} gap={20}>
       <Flexbox horizontal align={'center'} className={styles.header} gap={12}>
         <span className={styles.iconTile}>
-          {repository ? <Github size={18} /> : <Icon icon={ContainerIcon} size={18} />}
+          {kind === 'files' ? <Icon icon={FolderIcon} size={18} /> : <Github size={18} />}
         </span>
         <Flexbox flex={1} gap={4} style={{ minWidth: 0 }}>
           <Text ellipsis weight={600}>
@@ -115,6 +118,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
                 the list is scanned for "is this recent", the panel is read
                 for "when". */}
           <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+            <Tag size={'small'}>{t(`environments.kind.${kind}`)}</Tag>
             <Tag size={'small'}>
               {instanceCount === 0
                 ? t('environments.instances.empty')
@@ -182,11 +186,15 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
           },
           ...(canEdit
             ? [
-                {
-                  icon: <Icon icon={KeyRoundIcon} size={16} />,
-                  key: 'variables',
-                  label: t('environments.form.env'),
-                },
+                ...(kind === 'code'
+                  ? [
+                      {
+                        icon: <Icon icon={KeyRoundIcon} size={16} />,
+                        key: 'variables',
+                        label: t('environments.form.env'),
+                      },
+                    ]
+                  : []),
                 {
                   icon: <Icon icon={SettingsIcon} size={16} />,
                   key: 'settings',
@@ -204,7 +212,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
       <Flexbox>
         {tab === 'instances' && (
           <TabPane desc={t('environments.instances.desc')}>
-            <InstanceSection editable={canEdit} environmentId={environment.id} />
+            <InstanceSection editable={canEdit} environmentId={environment.id} kind={kind} />
           </TabPane>
         )}
 
@@ -219,6 +227,7 @@ const EnvironmentDetailPanel = memo<EnvironmentDetailPanelProps>(({ environment,
         {canEdit && (tab === 'variables' || tab === 'settings') && (
           <EnvironmentForm
             environment={environment}
+            kind={kind}
             section={tab}
             onSave={(changes) => actions.updateEnvironment({ ...changes, id: environment.id })}
           />

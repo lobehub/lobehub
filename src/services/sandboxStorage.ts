@@ -1,4 +1,4 @@
-import type { EnvironmentSource, EnvironmentVisibility } from '@lobechat/types';
+import type { EnvironmentKind, EnvironmentSource, EnvironmentVisibility } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 
@@ -29,6 +29,7 @@ export interface SandboxEnvironmentSpecification {
   env?: Record<string, string>;
   excludePaths?: string[];
   internetAccess?: boolean;
+  kind?: EnvironmentKind;
   maintenanceCommand?: string;
   sources?: Extract<EnvironmentSource, { kind: 'git' }>[];
 }

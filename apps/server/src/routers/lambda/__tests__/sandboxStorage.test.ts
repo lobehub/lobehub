@@ -451,6 +451,56 @@ describe('sandboxStorageRouter', () => {
       expect(mockInstanceUpdate).toHaveBeenLastCalledWith(buildInstanceId, { buildId: 'b-1' });
     });
 
+    // The execution plane digests the specification it is sent to decide which
+    // build a snapshot belongs to. `kind` only picks the form the product
+    // shows, so an instance created after its environment gained one must be
+    // sent exactly what it would have been sent before.
+    it('sends the same specification whether or not the definition carries a kind', async () => {
+      mockBuildInstance.mockResolvedValue({ buildId: 'b-1' });
+
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: spec,
+        id: buildInstanceId,
+        workingDirectory: 'atlas',
+      });
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+      const before = mockBuildInstance.mock.lastCall?.[0].specification;
+
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: { ...spec, kind: 'code' },
+        id: buildInstanceId,
+        workingDirectory: 'atlas',
+      });
+      await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+      const after = mockBuildInstance.mock.lastCall?.[0].specification;
+
+      expect(after).toEqual(before);
+      expect(after).toEqual(spec);
+      expect(after).not.toHaveProperty('kind');
+    });
+
+    // A files environment clones nothing and installs nothing, so its instance
+    // is ready the moment it exists rather than waiting on a sandbox.
+    it('settles a files environment ready without starting a build', async () => {
+      mockInstanceFindOwnedById.mockResolvedValue({
+        configurationSnapshot: { kind: 'files' },
+        id: buildInstanceId,
+        workingDirectory: 'notes',
+      });
+
+      const result = await sandboxStorageRouter
+        .createCaller(ctx)
+        .startInstanceBuild({ id: buildInstanceId, topicId: 'tpc-1' });
+
+      expect(result).toEqual({ buildId: null });
+      expect(mockBuildInstance).not.toHaveBeenCalled();
+      expect(mockInstanceUpdate).toHaveBeenCalledWith(buildInstanceId, { status: 'ready' });
+    });
+
     it('carries the App installation credential when one could be minted', async () => {
       // Resolved on this side because the App's private key lives here; the
       // execution plane is handed the result and never the inputs.
@@ -764,6 +814,30 @@ describe('sandboxStorageRouter', () => {
 
       expect(mockReadOccupancy).not.toHaveBeenCalled();
       expect(result.occupancyUnavailable).toBe(false);
+    });
+  });
+
+  describe('environment kind', () => {
+    // Stored with the rest of the definition, in the same jsonb column: no
+    // migration and no backfill, so the parse must keep it rather than strip it
+    // as an unknown key.
+    it('stores the kind chosen at creation and refuses any other value', async () => {
+      const caller = sandboxStorageRouter.createCaller(ctx);
+      mockCreate.mockResolvedValue({ id: 'env-files', name: 'Notes' });
+
+      await caller.createEnvironment({ configuration: { kind: 'files' }, name: 'Notes' });
+      expect(mockCreate).toHaveBeenCalledWith(
+        expect.objectContaining({ configuration: { kind: 'files' } }),
+      );
+
+      mockCreate.mockClear();
+      await expect(
+        caller.createEnvironment({
+          configuration: { kind: 'cluster' as never },
+          name: 'Refused',
+        }),
+      ).rejects.toThrow();
+      expect(mockCreate).not.toHaveBeenCalled();
     });
   });
 

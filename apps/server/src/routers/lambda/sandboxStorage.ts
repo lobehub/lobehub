@@ -1,6 +1,7 @@
 import { isSafeSandboxCwd } from '@lobechat/builtin-tool-cloud-sandbox';
 import { ConnectorDataError } from '@lobechat/connector-data';
 import { MAX_REPOSITORY_BRANCHES } from '@lobechat/connector-data/github';
+import { toExecutionConfiguration } from '@lobechat/types';
 import { TRPCError } from '@trpc/server';
 import pMap from 'p-map';
 import { z } from 'zod';
@@ -271,6 +272,9 @@ const configurationSchema = z.object({
   env: environmentEnvSchema.optional(),
   excludePaths: z.array(relativePathSchema).max(64).optional(),
   internetAccess: z.boolean().optional(),
+  // Which form the product shows. Accepted here so it is stored rather than
+  // stripped by the parse; it never travels on to the execution plane.
+  kind: z.enum(['files', 'code']).optional(),
   maintenanceCommand: z.string().max(8000).optional(),
   // One repository per environment. The wire format stays a list because the
   // execution plane checks out an array of sources, but an environment that
@@ -782,7 +786,10 @@ export const sandboxStorageRouter = router({
           // which is what its file browser opens.
           instanceDir: instance.workingDirectory,
           name: input.id,
-          specification,
+          // Without the product's own fields: the execution plane digests
+          // what it is sent, and an instance created before `kind` existed
+          // must keep matching the build it already has.
+          specification: toExecutionConfiguration(specification),
           topicId: input.topicId,
         });
         await ctx.instanceModel.update(input.id, { buildId });
