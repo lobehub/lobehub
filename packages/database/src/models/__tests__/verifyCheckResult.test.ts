@@ -14,6 +14,7 @@ import {
 import type { LobeChatDatabase } from '../../type';
 import { AgentOperationModel } from '../agentOperation';
 import { VerifyCheckResultModel } from '../verifyCheckResult';
+import { VerifyCriterionModel } from '../verifyCriterion';
 import { VerifyEvidenceModel } from '../verifyEvidence';
 import { VerifyRunModel } from '../verifyRun';
 
@@ -353,5 +354,73 @@ describe('VerifyRunModel plan', () => {
     expect((await new VerifyRunModel(serverDB, userId).findByOperation(operationId))?.id).toBe(
       verifyRunId,
     );
+  });
+});
+
+describe('VerifyCheckResultModel sourceCriterion and batch reads', () => {
+  it('creates a standalone result without a run', async () => {
+    const model = new VerifyCheckResultModel(serverDB, userId);
+    const created = await model.create({
+      checkItemId: 'standalone',
+      checkItemIndex: 0,
+      verifierType: 'llm',
+    });
+
+    expect(created.verifyRunId).toBeNull();
+    expect(created.sourceCriterionId).toBeNull();
+  });
+
+  it('back-fills sourceCriterionId from the run plan and lists by criterion and runs', async () => {
+    const criterion = await new VerifyCriterionModel(serverDB, userId).create({
+      title: 'goal met',
+      verifierType: 'llm',
+    });
+    await new VerifyRunModel(serverDB, userId).setPlan(verifyRunId, [
+      buildItem({ id: 'item-1', sourceCriterionId: criterion.id }),
+    ]);
+    const model = new VerifyCheckResultModel(serverDB, userId);
+
+    const created = await model.create({
+      checkItemId: 'item-1',
+      checkItemIndex: 0,
+      verifierType: 'llm',
+      verifyRunId,
+    });
+    expect(created.sourceCriterionId).toBe(criterion.id);
+
+    // an empty run-id list short-circuits
+    expect(await model.listByRuns([])).toEqual([]);
+
+    // default and explicit limits both clamp to a sane window
+    expect((await model.listByCriterion(criterion.id)).map((r) => r.id)).toEqual([created.id]);
+    expect((await model.listByCriterion(criterion.id, 0)).map((r) => r.id)).toEqual([created.id]);
+    expect((await model.listByCriterion(criterion.id, 1000)).map((r) => r.id)).toEqual([
+      created.id,
+    ]);
+
+    expect((await model.listByRuns([verifyRunId])).map((r) => r.id)).toEqual([created.id]);
+  });
+
+  it('refuses to upsert over a colliding row owned by another user', async () => {
+    const otherUserId = 'verify-result-conflict-user';
+    await serverDB.insert(users).values([{ id: otherUserId }]);
+    await serverDB.insert(verifyCheckResults).values({
+      checkItemId: 'collide',
+      checkItemIndex: 0,
+      userId: otherUserId,
+      verifierType: 'llm',
+      verifyRunId,
+    });
+
+    await expect(
+      new VerifyCheckResultModel(serverDB, userId).upsertByCheckItem({
+        checkItemId: 'collide',
+        checkItemIndex: 0,
+        status: 'passed',
+        verdict: 'passed',
+        verifierType: 'llm',
+        verifyRunId,
+      }),
+    ).rejects.toThrow('not found in the current workspace');
   });
 });
