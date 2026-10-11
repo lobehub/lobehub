@@ -1,54 +1,48 @@
-import type { OptimisticMutationSnapshot } from '@/store/utils/optimisticEngine';
-import type { ResourceItem, ResourceQueryParams } from '@/types/resource';
+import { createReplicaState, type ReplicaState } from '@/libs/replica';
+import { type ResourceItem } from '@/types/resource';
+
+import { type ResourceListParams, type ResourceListValue } from './projection';
 
 /**
- * Resource slice state
+ * Resource slice state.
+ *
+ * The list itself is a `@lobechat/replica` paged resource: `resourceListEntry`
+ * is the replica view, and `resourceList` / `resourceMap` / `hasMore` / `total`
+ * / `offset` / `queryParams` / `isLoadingMore` are derived from it by the
+ * slice's lens, so every existing selector keeps reading the same place.
  */
 export interface ResourceState {
-  /**
-   * Pagination state
-   */
+  /** Pagination state (derived from the replica view). */
   hasMore: boolean;
 
-  /**
-   * Loading states
-   */
+  /** Loading states */
   isLoadingMore: boolean;
 
-  isSyncing: boolean;
-
-  /**
-   * Sync status
-   */
-  lastSyncTime?: Date;
-
+  /** Number of rows currently painted (derived from the replica view). */
   offset: number;
+  /** Current query parameters (the query the painted page set answers). */
+  queryParams?: ResourceListParams;
   /**
-   * Current query parameters
-   */
-  queryParams?: ResourceQueryParams;
-  /**
-   * Derived sorted/filtered list (computed from map)
+   * Derived sorted/filtered list (computed from the replica view)
    * Used for rendering in UI
    */
   resourceList: ResourceItem[];
 
   /**
-   * Primary store - Map for O(1) lookups
+   * The replica view of the explorer list — what the engine reads and writes.
+   * `undefined` until the persisted row hydrates or the first network page
+   * lands, so an un-loaded list never reads as an empty one.
+   */
+  resourceListEntry?: ResourceListValue;
+
+  /** Replica bookkeeping of `resourceListEntry`. */
+  resourceListReplica: ReplicaState<ResourceListValue>;
+
+  /**
+   * Primary store - Map for O(1) lookups (derived from the replica view)
    */
   resourceMap: Map<string, ResourceItem>;
 
-  syncError?: Error;
-  /**
-   * Track which resources are currently syncing
-   */
-  syncingIds: Set<string>;
-
-  /**
-   * Sync queue (FIFO)
-   * Contains pending operations to be synced to server
-   */
-  syncQueue: OptimisticMutationSnapshot[];
   total: number;
 }
 
@@ -58,11 +52,11 @@ export interface ResourceState {
 export const initialResourceState: ResourceState = {
   hasMore: false,
   isLoadingMore: false,
-  isSyncing: false,
   offset: 0,
+  queryParams: undefined,
   resourceList: [],
+  resourceListEntry: undefined,
+  resourceListReplica: createReplicaState(),
   resourceMap: new Map(),
-  syncQueue: [],
-  syncingIds: new Set(),
   total: 0,
 };

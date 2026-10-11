@@ -13,6 +13,13 @@ export type ReplicaAction<T> =
   | {
       data: T;
       key: string;
+      /**
+       * Repaint a slot that answers a *different* query from the persisted page
+       * (a navigation). Only the caller that knows the entry has moved on
+       * (the requested query changed) may ask for it; by default a hydrate only
+       * fills an empty slot.
+       */
+      overwrite?: boolean;
       params?: unknown;
       query?: string;
       scope: string;
@@ -35,7 +42,15 @@ export type ReplicaAction<T> =
       scope: string;
       type: 'update';
     }
-  | { apply: (data: T) => T; id: number; key: string; scope: string; type: 'optimistic' }
+  | {
+      apply: (data: T) => T;
+      id: number;
+      key: string;
+      /** Query the overlay is started under (see `ReplicaPendingMutation`). */
+      query?: string;
+      scope: string;
+      type: 'optimistic';
+    }
   | { confirm?: (data: T) => T; id: number; key: string; scope: string; type: 'commit' }
   | { id: number; key: string; scope: string; type: 'rollback' }
   | { key: string; scope: string; type: 'remove' }
@@ -103,8 +118,21 @@ export const replicaReducer = <T>(
   switch (action.type) {
     case 'hydrate': {
       // Hydrate only fills an empty slot: a server-confirmed value, an
-      // optimistic write or any local write always wins over storage.
-      if (entry || view !== undefined) return noop(state);
+      // optimistic write or any local write always wins over storage. A caller
+      // that knows the slot answers a *different* query (a navigation) may ask
+      // to repaint it from that query's persisted page instead — the overlays it
+      // drops belong to the query being left. An overlay whose query is unknown
+      // still wins: we cannot prove it is not this query's.
+      if (entry) {
+        if (
+          !action.overwrite ||
+          entry.query === action.query ||
+          entry.pending.some((mutation) => mutation.query === undefined)
+        )
+          return noop(state);
+      } else if (view !== undefined) {
+        return noop(state);
+      }
       return {
         effects: [],
         state: withEntry({
@@ -119,8 +147,16 @@ export const replicaReducer = <T>(
     }
 
     case 'replace': {
-      const pending = entry?.pending ?? [];
-      const next = action.data(confirmed) ?? confirmed;
+      // An overlay only describes the query it was started under, so a replace
+      // for another query drops it instead of reapplying it: its base belongs to
+      // the old query, and a later commit would insert that query's row here.
+      const pending = (entry?.pending ?? []).filter(
+        (mutation) => mutation.query === undefined || mutation.query === action.query,
+      );
+      // The merge basis under a query change is the old query's confirmed value
+      // (never the view, which may still carry a dropped overlay).
+      const basis = entry && entry.query !== action.query ? (entry.base ?? view) : confirmed;
+      const next = action.data(basis) ?? basis;
       const query = 'query' in action ? action.query : entry?.query;
       const nextState = withEntry({
         base: pending.length ? next : undefined,
@@ -164,7 +200,10 @@ export const replicaReducer = <T>(
 
     case 'optimistic': {
       if (view === undefined) return noop(state);
-      const pending = [...(entry?.pending ?? []), { apply: action.apply, id: action.id }];
+      const pending = [
+        ...(entry?.pending ?? []),
+        { apply: action.apply, id: action.id, query: action.query },
+      ];
       return {
         effects: [],
         state: withEntry({

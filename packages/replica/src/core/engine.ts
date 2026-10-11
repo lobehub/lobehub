@@ -121,7 +121,12 @@ export interface OptimisticMutationOptions<TData, TResult> {
 
 /** Handle of an optimistic overlay that is settled later (see `beginOptimistic`). */
 export interface ReplicaOptimisticToken<TData> {
-  commit: (confirm?: (data: TData) => TData) => void;
+  /**
+   * Settle the overlay. Returns `false` when the overlay can no longer be
+   * found — e.g. a query change dropped it — so the caller can force a
+   * reconciliation instead of silently leaving the server change unreflected.
+   */
+  commit: (confirm?: (data: TData) => TData) => boolean;
   rollback: () => void;
 }
 
@@ -307,7 +312,34 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     return entry?.pending.length ? entry.base : port.read(key);
   };
 
-  const hydrate = async (params: TParams, scope = resource.scope.get()) => {
+  /**
+   * An overwrite hydrate repaints the entry from another query's persisted page.
+   * Client-only rows (an in-flight upload / create) have no server row yet, so
+   * that page cannot contain them — keep the ones still in the view, so a
+   * same-pool query change (a re-sort, a view-mode switch) never drops them.
+   * A cross-pool navigate is not "client-only" for the new params and is dropped.
+   */
+  const keepClientOnlyRows = (incoming: TData, current: TData | undefined): TData => {
+    if (!paging || !options.isClientOnly || !current) return incoming;
+    const page = incoming as unknown as ReplicaPagedData<unknown, unknown>;
+    const currentItems = (current as unknown as ReplicaPagedData<unknown, unknown>).items ?? [];
+    const incomingIds = new Set(page.items.map((item) => paging.getId(item)));
+    const survivors = currentItems.filter(
+      (item) => options.isClientOnly!(item) && !incomingIds.has(paging.getId(item)),
+    );
+    if (survivors.length === 0) return incoming;
+    const items =
+      paging.direction === 'forward'
+        ? [...survivors, ...page.items]
+        : [...page.items, ...survivors];
+    return { ...(incoming as object), items } as TData;
+  };
+
+  const hydrate = async (
+    params: TParams,
+    scope = resource.scope.get(),
+    { overwrite = false }: { overwrite?: boolean } = {},
+  ) => {
     if (!resource.storage) return false;
     // An identity-less runtime reads network-only: its scope is a guess, so
     // hydrating it could paint another session's private rows.
@@ -324,9 +356,11 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     // not resurrect the row it just dropped.
     if (isRemoved(scope, key)) return false;
     if (options.isHydratable && !options.isHydratable(cached.data, params)) return false;
+    const data = overwrite ? keepClientOnlyRows(cached.data, port.read(key)) : cached.data;
     return dispatch({
-      data: cached.data,
+      data,
       key,
+      overwrite,
       params,
       query,
       scope,
@@ -479,18 +513,31 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
   const revalidate = (key?: string): Promise<unknown> =>
     options.revalidate ? options.revalidate(key) : Promise.resolve();
 
-  /** Start an optimistic overlay now and settle it later (multi-resource flows). */
+  /**
+   * Start an optimistic overlay now and settle it later (multi-resource flows).
+   * `query` tags the overlay with the query it describes; a caller that knows
+   * the requested query (e.g. before the first page painted) should pass it, so
+   * the overlay is scoped to that query rather than kept across every change.
+   */
   const beginOptimistic = (
     key: string,
     apply: (data: TData) => TData,
+    query?: string,
   ): ReplicaOptimisticToken<TData> => {
     const scope = resource.scope.get();
     const id = ++mutationSeq;
-    dispatch({ apply, id, key, scope, type: 'optimistic' });
+    // Tag the overlay with the query it describes: the entry may move on to
+    // another query (or another query may reuse the key) before it settles.
+    dispatch({
+      apply,
+      id,
+      key,
+      query: query ?? getSlot().entries[key]?.query,
+      scope,
+      type: 'optimistic',
+    });
     return {
-      commit: (confirm) => {
-        dispatch({ confirm, id, key, scope, type: 'commit' });
-      },
+      commit: (confirm) => dispatch({ confirm, id, key, scope, type: 'commit' }),
       rollback: () => {
         dispatch({ id, key, scope, type: 'rollback' });
       },
@@ -652,6 +699,41 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     }
   };
 
+  /**
+   * Read-modify-write the persisted rows memory does not hold, keyed by row
+   * rather than by entity: a cached list for a folder the user is not viewing
+   * gets its projection patched in the per-key write queue, so a later visit
+   * hydrates the reconciled value instead of a stale page. `fn` returns the
+   * next data, the same reference (or `undefined`) to skip, or `null` to drop
+   * the row. Runs in the write queue, so it sees every earlier write.
+   */
+  const patchStoredRows = async (fn: (data: TData) => TData | null | undefined): Promise<void> => {
+    if (!writeQueue || !resource.scope.canPersist()) return;
+    const scope = resource.scope.get();
+    const slot = getSlot();
+    const loaded = new Set(
+      slot.scope === scope
+        ? Object.entries(slot.entries).map(([key, entry]) => storageKey(key, entry.query).queryKey)
+        : [],
+    );
+    const keys = await readIndex(scope);
+    // Identity changed while reading the index: those rows are not ours to touch.
+    if (resource.scope.get() !== scope) return;
+    for (const queryKey of keys) {
+      if (loaded.has(queryKey)) continue;
+      writeQueue.update({ queryKey, scope }, (current) => {
+        if (!current) return undefined;
+        const next = fn(current.data);
+        if (next === current.data || next === undefined) return undefined;
+        if (next === null) {
+          trackStorageKey(scope, queryKey, false);
+          return null;
+        }
+        return { data: next, updatedAt: Date.now() };
+      });
+    }
+  };
+
   const updateEntity = <TItem>(
     id: string,
     fn: (item: TItem) => TItem | undefined,
@@ -697,6 +779,7 @@ export const createReplicaEngine = <TParams, TData, TFetched = TData>(
     loadMore,
     optimistic,
     patchStoredEntity,
+    patchStoredRows,
     persist,
     remove,
     replace,

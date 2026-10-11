@@ -66,6 +66,70 @@ describe('replicaReducer', () => {
       expect(h.view.k).toEqual(['memory']);
     });
 
+    it('repaints a slot answering another query when the caller asks to overwrite', () => {
+      const h = createHarness();
+      h.run({ data: ['query-1'], key: 'k', params: 1, query: 'q1', scope: S, type: 'hydrate' });
+
+      h.run({
+        data: ['query-2'],
+        key: 'k',
+        overwrite: true,
+        params: 2,
+        query: 'q2',
+        scope: S,
+        type: 'hydrate',
+      });
+
+      expect(h.view.k).toEqual(['query-2']);
+      expect(h.state.entries.k.query).toBe('q2');
+      expect(h.state.entries.k.source).toBe('storage');
+      expect(h.effects).toEqual([]);
+    });
+
+    it('keeps the slot when the overwriting hydrate asks for the query it already answers', () => {
+      const h = createHarness();
+      h.run({
+        data: () => ['server'],
+        key: 'k',
+        params: 1,
+        query: 'q1',
+        scope: S,
+        type: 'replace',
+      });
+
+      const transition = h.run({
+        data: ['stale-cache'],
+        key: 'k',
+        overwrite: true,
+        params: 1,
+        query: 'q1',
+        scope: S,
+        type: 'hydrate',
+      });
+
+      expect(h.view.k).toEqual(['server']);
+      expect(transition.writes).toEqual([]);
+    });
+
+    it('never clobbers an in-flight optimistic write, even with overwrite', () => {
+      const h = createHarness();
+      h.run({ data: ['a'], key: 'k', params: 1, query: 'q1', scope: S, type: 'hydrate' });
+      h.run({ apply: append('opt'), id: 1, key: 'k', scope: S, type: 'optimistic' });
+
+      h.run({
+        data: ['b'],
+        key: 'k',
+        overwrite: true,
+        params: 2,
+        query: 'q2',
+        scope: S,
+        type: 'hydrate',
+      });
+
+      expect(h.view.k).toEqual(['a', 'opt']);
+      expect(h.state.entries.k.query).toBe('q1');
+    });
+
     it('replace overwrites hydrated data and persists it', () => {
       const h = createHarness();
       h.run({ data: ['cached'], key: 'k', scope: S, type: 'hydrate' });
@@ -227,6 +291,109 @@ describe('replicaReducer', () => {
 
       expect(h.view).toEqual({});
       expect(h.effects).toEqual([{ key: 'k', scope: S, type: 'remove' }]);
+    });
+  });
+
+  describe('optimistic overlay query affinity', () => {
+    it('does not carry an overlay into another query, and its commit stays out', () => {
+      const h = createHarness();
+      h.run({ data: ['a'], key: 'k', params: 1, query: 'q1', scope: S, type: 'hydrate' });
+      h.run({
+        apply: append('pending-a'),
+        id: 1,
+        key: 'k',
+        query: 'q1',
+        scope: S,
+        type: 'optimistic',
+      });
+      expect(h.view.k).toEqual(['a', 'pending-a']);
+
+      // The key is reused for another query while the overlay is in flight.
+      h.run({
+        data: (basis) => [...(basis ?? []), 'b'],
+        key: 'k',
+        params: 2,
+        query: 'q2',
+        scope: S,
+        type: 'replace',
+      });
+
+      // The overlay described q1, so it must not surface under q2 ...
+      expect(h.view.k).toEqual(['a', 'b']);
+      expect(h.state.entries.k.pending).toEqual([]);
+
+      // ... and settling it later must not insert q1's row into q2.
+      h.run({ confirm: append('created-a'), id: 1, key: 'k', scope: S, type: 'commit' });
+      expect(h.view.k).toEqual(['a', 'b']);
+    });
+
+    it('still rebases a same-query overlay onto the fresh server value', () => {
+      const h = createHarness();
+      h.run({ data: ['a'], key: 'k', params: 1, query: 'q1', scope: S, type: 'hydrate' });
+      h.run({
+        apply: append('pending'),
+        id: 1,
+        key: 'k',
+        query: 'q1',
+        scope: S,
+        type: 'optimistic',
+      });
+
+      h.run({
+        data: (basis) => [...(basis ?? []), 'server'],
+        key: 'k',
+        params: 1,
+        query: 'q1',
+        scope: S,
+        type: 'replace',
+      });
+
+      expect(h.view.k).toEqual(['a', 'server', 'pending']);
+      expect(h.state.entries.k.pending).toHaveLength(1);
+    });
+
+    it('keeps an untagged overlay: its query cannot be proven different', () => {
+      const h = createHarness({ k: ['a'] });
+      h.run({ apply: append('untagged'), id: 1, key: 'k', scope: S, type: 'optimistic' });
+
+      h.run({
+        data: (basis) => [...(basis ?? []), 'b'],
+        key: 'k',
+        params: 2,
+        query: 'q2',
+        scope: S,
+        type: 'replace',
+      });
+
+      // Rebased onto the fresh value, exactly as before query affinity existed.
+      expect(h.view.k).toEqual(['a', 'b', 'untagged']);
+      expect(h.state.entries.k.pending).toHaveLength(1);
+    });
+
+    it('lets a navigation hydrate repaint over the query being left', () => {
+      const h = createHarness();
+      h.run({ data: ['a'], key: 'k', params: 1, query: 'q1', scope: S, type: 'hydrate' });
+      h.run({
+        apply: append('pending-a'),
+        id: 1,
+        key: 'k',
+        query: 'q1',
+        scope: S,
+        type: 'optimistic',
+      });
+
+      h.run({
+        data: ['b-cached'],
+        key: 'k',
+        overwrite: true,
+        params: 2,
+        query: 'q2',
+        scope: S,
+        type: 'hydrate',
+      });
+
+      expect(h.view.k).toEqual(['b-cached']);
+      expect(h.state.entries.k.pending).toEqual([]);
     });
   });
 });

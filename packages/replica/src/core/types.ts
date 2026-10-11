@@ -54,6 +54,13 @@ export interface ReplicaScope {
 export interface ReplicaPendingMutation<T> {
   apply: (data: T) => T;
   id: number;
+  /**
+   * Query the overlay was started under. An entry key can be reused for another
+   * query (a navigation), and an overlay only ever describes the query that
+   * created it — carrying it over would apply (and later persist) one query's
+   * row inside another.
+   */
+  query?: string;
 }
 
 export interface ReplicaEntryMeta<T> {

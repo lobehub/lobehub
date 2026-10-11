@@ -144,6 +144,43 @@ describe('offset / forward paging (topic-like list)', () => {
     expect(getNextPageCursor({ ...legacy, hasMore: false }, offset)).toBeNull();
   });
 
+  describe('server-reported exhaustion (rows filtered after paging)', () => {
+    it('keeps paging past a short page the server says is not the end', () => {
+      // The server consumed a full raw window of 3 but filtered one row out.
+      const head = applyHeadPage(
+        undefined,
+        { items: rows('a', 'b'), nextCursor: 1 },
+        { pageSize: 3 },
+        offset,
+      );
+      expect(head).toMatchObject({ currentPage: 0, hasMore: true, nextCursor: 1 });
+
+      const next = applyNextPage(head, { items: rows('c'), nextCursor: 2 }, offset);
+      expect(next).toMatchObject({ currentPage: 1, hasMore: true, nextCursor: 2 });
+
+      const last = applyNextPage(next, { items: rows('d', 'e', 'f'), nextCursor: null }, offset);
+      expect(last).toMatchObject({ currentPage: 2, hasMore: false, nextCursor: null });
+    });
+
+    it('persists the server verdict for a short head page', () => {
+      const head = applyHeadPage(
+        undefined,
+        { items: rows('a', 'b'), nextCursor: 1 },
+        { pageSize: 3 },
+        offset,
+      );
+      expect(toPersistedPage(head, offset)).toMatchObject({ hasMore: true, nextCursor: 1 });
+
+      const done = applyHeadPage(
+        undefined,
+        { items: rows('a', 'b'), nextCursor: null },
+        { pageSize: 3 },
+        offset,
+      );
+      expect(toPersistedPage(done, offset)).toMatchObject({ hasMore: false, nextCursor: null });
+    });
+  });
+
   describe('persistence limits', () => {
     it('persists the head page only by default, without flags or client-only rows', () => {
       const data = { ...insertHeadItems(twoPages(), rows('tmp'), offset), isLoadingMore: true };
