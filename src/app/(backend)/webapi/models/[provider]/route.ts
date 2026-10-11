@@ -3,7 +3,8 @@ import { ChatErrorType } from '@lobechat/types';
 import { NextResponse } from 'next/server';
 
 import { checkAuth } from '@/app/(backend)/middleware/auth';
-import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
+import { initModelRuntimeForRequest } from '@/server/modules/AgentRuntime/llmRelay/oneShot';
+import { runRouteWithLlmRelayRequest } from '@/server/modules/AgentRuntime/llmRelay/requestScope';
 import { createErrorResponse } from '@/utils/errorResponse';
 
 import { resolveValidWorkspaceIdFromRequest } from '../../_utils/workspace';
@@ -50,18 +51,28 @@ const createModelListErrorResponse = (provider: string, e: unknown) => {
   });
 };
 
+// A device-only provider is relayed through the requesting tab, which can take
+// the whole one-shot relay window (240 s).
+export const maxDuration = 300;
+
 export const GET = checkAuth(async (req, { params, userId, serverDB }) => {
   const provider = (await params)!.provider!;
 
   try {
     const workspaceId = await resolveValidWorkspaceIdFromRequest({ req, serverDB, userId });
 
-    // Read user's provider config from database
-    const agentRuntime = await initModelRuntimeFromDB(serverDB, userId, provider, workspaceId);
+    // A provider only the user's device reaches lists its models through the
+    // requesting tab (one-shot relay).
+    return await runRouteWithLlmRelayRequest(req, userId, async () => {
+      // Read user's provider config from database
+      const agentRuntime = await initModelRuntimeForRequest(serverDB, userId, provider, {
+        workspaceId,
+      });
 
-    const list = await agentRuntime.models();
+      const list = await agentRuntime.models();
 
-    return NextResponse.json(list);
+      return NextResponse.json(list);
+    });
   } catch (e) {
     return createModelListErrorResponse(provider, e);
   }
