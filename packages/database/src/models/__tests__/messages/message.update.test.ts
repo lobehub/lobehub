@@ -947,24 +947,33 @@ describe('MessageModel Update Tests', () => {
       ).not.toHaveProperty('answer');
     });
 
-    it('keeps the first deferred completion when callbacks race', async () => {
+    it('publishes a single deferred completion when callbacks race', async () => {
       await serverDB
         .insert(messages)
         .values({ id: 'completion-race', userId, role: 'tool', content: '' });
       await serverDB.insert(messagePlugins).values({ id: 'completion-race', userId });
-      const results = await Promise.all(
-        ['first', 'late'].map((content) =>
-          messageModel.updateToolMessage('completion-race', {
-            content,
-            pluginState: { content },
-            onlyIfEmpty: true,
-          }),
-        ),
-      );
-      expect(results.filter((result) => result.applied)).toHaveLength(1);
-      expect((await messageModel.findById('completion-race'))?.content).toBe('first');
+
+      // Two simultaneous finalizations race for the placeholder. `onlyIfEmpty`
+      // serializes them on the row lock, so exactly one may publish — but which
+      // of the two wins is scheduler-dependent. Assert the invariant (a single
+      // publish, and the surviving content/state belongs to whichever callback
+      // actually applied) instead of a fixed winner, so the test cannot flake.
+      const attempts = ['first', 'late'].map((content) => ({
+        content,
+        result: messageModel.updateToolMessage('completion-race', {
+          content,
+          pluginState: { content },
+          onlyIfEmpty: true,
+        }),
+      }));
+      const settled = await Promise.all(attempts.map((attempt) => attempt.result));
+      expect(settled.filter((result) => result.applied)).toHaveLength(1);
+
+      const winner = attempts.find((_, index) => settled[index].applied);
+      expect(winner).toBeDefined();
+      expect((await messageModel.findById('completion-race'))?.content).toBe(winner!.content);
       expect((await messageModel.findMessagePlugin('completion-race'))?.state).toEqual({
-        content: 'first',
+        content: winner!.content,
       });
     });
 
