@@ -8,11 +8,8 @@ import { useTranslation } from 'react-i18next';
 import { FORM_STYLE } from '@/const/layoutTokens';
 import { useGatewayKeepAwake } from '@/features/Electron/connection/useGatewayKeepAwake';
 
-/**
- * Desktop-only: keep this computer from idle-sleeping while it is connected as
- * a device, so remote runs can still reach it after the user walks away.
- */
-const KeepAwake = memo(() => {
+/** Desktop-only keep-awake setting for this computer as a device. */
+const ThisComputer = memo(() => {
   const { t } = useTranslation('setting');
   const { enabled, isLoading, setKeepAwake } = useGatewayKeepAwake();
   const form = useForm();
@@ -47,6 +44,6 @@ const KeepAwake = memo(() => {
   );
 });
 
-KeepAwake.displayName = 'KeepAwake';
+ThisComputer.displayName = 'ThisComputer';
 
-export default KeepAwake;
+export default ThisComputer;

@@ -553,13 +553,15 @@ export default class AuthCtr extends ControllerModule {
   }
 
   /**
-   * Connect to device gateway (fire-and-forget)
+   * Connect to device gateway (fire-and-forget). A sign-in may be another
+   * account or another server, so whatever the previous login had open is
+   * replaced rather than joined.
    */
   private connectGateway() {
     const gatewaySrv = this.app.getService(GatewayConnectionService);
     if (gatewaySrv) {
       logger.info('Triggering gateway connection after login');
-      gatewaySrv.connect().catch((error) => {
+      gatewaySrv.restart().catch((error) => {
         logger.error('Gateway connection after login failed:', error);
       });
     }

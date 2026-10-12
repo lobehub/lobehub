@@ -20,7 +20,7 @@ import {
 import NavHeader from '@/features/NavHeader';
 import SettingContainer from '@/features/Setting/SettingContainer';
 
-import KeepAwake from './KeepAwake';
+import ThisComputer from './ThisComputer';
 
 const styles = createStaticStyles(({ css }) => ({
   // The onboarding state carries its own padding; a thin, even inset keeps its
@@ -111,7 +111,7 @@ const Page = memo<PageProps>(({ mobile }) => {
         ]}
         {...FORM_STYLE}
       />
-      {isDesktop && <KeepAwake />}
+      {isDesktop && <ThisComputer />}
     </Flexbox>
   );
 
