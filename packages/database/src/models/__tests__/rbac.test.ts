@@ -326,6 +326,47 @@ describe('RbacModel — workspace mode (membership.role is the source of truth)'
   });
 });
 
+describe('RbacModel.updateUserRoles', () => {
+  const insertRole = async (name: string) => {
+    const [role] = await serverDB
+      .insert(roles)
+      .values({ displayName: name, isActive: true, isSystem: false, name })
+      .returning({ id: roles.id });
+
+    return role.id;
+  };
+
+  it('replaces the granted roles atomically', async () => {
+    await grantGlobalRole(userId, 'legacy_role', ['test:legacy:all']);
+    const rbac = new RbacModel(serverDB, userId);
+    const nextRoleId = await insertRole('next_role');
+
+    await rbac.updateUserRoles(userId, [nextRoleId]);
+
+    expect((await rbac.getUserRoles()).map(({ name }) => name)).toEqual(['next_role']);
+  });
+
+  it('clears every role when the new list is empty', async () => {
+    await grantGlobalRole(userId, 'legacy_role', ['test:legacy:all']);
+    const rbac = new RbacModel(serverDB, userId);
+
+    await rbac.updateUserRoles(userId, []);
+
+    expect(await rbac.getUserRoles()).toEqual([]);
+  });
+
+  it('refuses the whole change when a role id does not exist, leaving the grants intact', async () => {
+    await grantGlobalRole(userId, 'legacy_role', ['test:legacy:all']);
+    const rbac = new RbacModel(serverDB, userId);
+    const nextRoleId = await insertRole('next_role');
+
+    await expect(rbac.updateUserRoles(userId, [nextRoleId, 'missing-role'])).rejects.toThrow(
+      'Roles missing-role do not exist',
+    );
+    expect((await rbac.getUserRoles()).map(({ name }) => name)).toEqual(['legacy_role']);
+  });
+});
+
 describe('WORKSPACE_ROLE_PERMISSIONS matrix — topic comments', () => {
   it('assigns the topic comment permission matrix to built-in roles', () => {
     expect(WORKSPACE_ROLE_PERMISSIONS[WORKSPACE_SYSTEM_ROLES.OWNER]).toEqual(

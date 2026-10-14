@@ -681,4 +681,71 @@ describe('DeviceModel', () => {
       expect(row).toBeUndefined();
     });
   });
+
+  describe('workspace device updates and removal', () => {
+    const wsMutId = 'device-model-ws-mut';
+
+    beforeEach(async () => {
+      await serverDB.insert(workspaces).values({
+        id: wsMutId,
+        name: 'WS mut',
+        primaryOwnerId: userId,
+        slug: 'device-model-ws-mut-slug',
+      });
+    });
+
+    afterEach(async () => {
+      await serverDB.delete(devices).where(eq(devices.workspaceId, wsMutId));
+      await serverDB.delete(workspaces).where(eq(workspaces.id, wsMutId));
+    });
+
+    it('updates a workspace device from its workspace, and no-ops without workspace context', async () => {
+      await serverDB
+        .insert(devices)
+        .values({ deviceId: 'mut-1', identitySource: 'machine-id', userId, workspaceId: wsMutId });
+      const wsModel = new DeviceModel(serverDB, userId, wsMutId);
+
+      await wsModel.updateWorkspaceDevice('mut-1', {
+        defaultCwd: '/pooled',
+        friendlyName: 'Pooled',
+      });
+
+      expect(await wsModel.findByDeviceId('mut-1')).toMatchObject({
+        defaultCwd: '/pooled',
+        friendlyName: 'Pooled',
+      });
+
+      // The personal path carries no workspace context, so the workspace write
+      // must be a no-op rather than a userId-scoped update.
+      await deviceModel.updateWorkspaceDevice('mut-1', { friendlyName: 'personal-call' });
+      expect((await wsModel.findByDeviceId('mut-1'))?.friendlyName).toBe('Pooled');
+    });
+
+    it('does not let another workspace update or remove the device', async () => {
+      await serverDB
+        .insert(devices)
+        .values({ deviceId: 'mut-2', identitySource: 'machine-id', userId, workspaceId: wsMutId });
+      const otherWsModel = new DeviceModel(serverDB, userId, 'device-model-ws-other');
+
+      await otherWsModel.updateWorkspaceDevice('mut-2', { friendlyName: 'hijacked' });
+      await otherWsModel.deleteWorkspaceDevice('mut-2');
+
+      expect(
+        await new DeviceModel(serverDB, userId, wsMutId).findByDeviceId('mut-2'),
+      ).toMatchObject({ friendlyName: null });
+    });
+
+    it('removes a workspace device from its workspace, and no-ops without workspace context', async () => {
+      await serverDB
+        .insert(devices)
+        .values({ deviceId: 'mut-3', identitySource: 'machine-id', userId, workspaceId: wsMutId });
+      const wsModel = new DeviceModel(serverDB, userId, wsMutId);
+
+      await deviceModel.deleteWorkspaceDevice('mut-3');
+      expect(await wsModel.findByDeviceId('mut-3')).toBeDefined();
+
+      await wsModel.deleteWorkspaceDevice('mut-3');
+      expect(await wsModel.findByDeviceId('mut-3')).toBeUndefined();
+    });
+  });
 });

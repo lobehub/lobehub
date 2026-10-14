@@ -161,4 +161,28 @@ describe('UserSkillModel', () => {
       .where(and(eq(documents.userId, userId)));
     expect(new Set(stored.map((row) => row.sourceType))).toEqual(new Set(['agent']));
   });
+
+  it('findAll returns every skill of the library with its body, and only mine', async () => {
+    await create();
+    await model.create({
+      content: '---\nname: second-slice\n---\nsecond body',
+      description: 'Second',
+      name: 'second-slice',
+      title: 'Second slice',
+    });
+    await new UserSkillModel(serverDB, otherUserId).create({
+      content: '---\nname: their-slice\n---\ntheir body',
+      description: 'Theirs',
+      name: 'their-slice',
+      title: 'Their slice',
+    });
+
+    const all = await model.findAll();
+
+    expect(all.map(({ name }) => name)).toEqual(['migrate-slice', 'second-slice']);
+    expect(all.find(({ name }) => name === 'migrate-slice')?.content).toContain('v1 body');
+    expect(all.find(({ name }) => name === 'second-slice')?.content).toContain('second body');
+
+    await serverDB.delete(documents).where(eq(documents.userId, otherUserId));
+  });
 });
