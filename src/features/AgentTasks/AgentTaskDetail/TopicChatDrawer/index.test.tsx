@@ -13,6 +13,7 @@ import TopicChatDrawer, { TopicChatDrawerBody } from './index';
 const mocks = vi.hoisted(() => ({
   agentState: {
     agentMap: {},
+    builtinAgentIdMap: {} as Record<string, string>,
     useHydrateAgentConfig: vi.fn(),
   },
   chatState: {
@@ -40,6 +41,7 @@ const mocks = vi.hoisted(() => ({
   },
   taskState: {
     activeTaskId: 'T-1',
+    activeTopicDrawerAgentId: undefined as string | undefined,
     activeTopicDrawerFocusRequest: undefined as number | undefined,
     activeTopicDrawerTopicId: 'topic-1',
     closeTopicDrawer: vi.fn(),
@@ -56,11 +58,12 @@ const mocks = vi.hoisted(() => ({
             type: 'topic',
           },
         ] as TaskDetailActivity[],
-        agentId: 'agt_assignee',
+        agentId: 'agt_assignee' as string | undefined,
         id: 'task-parent',
         identifier: 'T-1',
         instruction: 'Do the task',
         status: 'completed',
+        userId: undefined as string | undefined,
       },
     },
   },
@@ -81,6 +84,7 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
   }: {
     children?: ReactNode;
     items?: {
+      desc?: ReactNode;
       disabled?: boolean;
       key: string;
       label?: ReactNode;
@@ -92,7 +96,12 @@ vi.mock('@lobehub/ui', async (importOriginal) => ({
       {children}
       {items?.map((item) =>
         item.type === 'divider' ? null : (
-          <button disabled={item.disabled} key={item.key} onClick={item.onClick}>
+          <button
+            data-desc={item.desc}
+            disabled={item.disabled}
+            key={item.key}
+            onClick={item.onClick}
+          >
             {item.label}
           </button>
         ),
@@ -295,6 +304,9 @@ describe('TopicChatDrawer', () => {
     mocks.taskState.activeTopicDrawerFocusRequest = undefined;
     mocks.taskState.runTask.mockReset().mockResolvedValue({ operationId: 'op-continued' });
     mocks.taskState.taskDetailMap['T-1'].agentId = 'agt_assignee';
+    mocks.taskState.taskDetailMap['T-1'].userId = undefined;
+    mocks.taskState.activeTopicDrawerAgentId = undefined;
+    mocks.agentState.builtinAgentIdMap = {};
     mocks.taskState.taskDetailMap['T-1'].status = 'completed';
     mocks.taskState.activeTopicDrawerTopicId = 'topic-1';
     mocks.taskState.taskDetailMap['T-1'].activities[0] = {
@@ -360,17 +372,72 @@ describe('TopicChatDrawer', () => {
     const button = view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' });
     /** @example The menu reflects the authorization gate. */
     expect(button).toBeDisabled();
+    /** @example The disabled item explains the missing permission. */
+    expect(button).toHaveAttribute('data-desc', 'requires member');
     fireEvent.click(button);
     /** @example No dispatch crosses the disabled gate. */
     expect(mocks.taskState.runTask).not.toHaveBeenCalled();
   });
 
   /** @example Running or scheduled Tasks remain owned by their active scheduler. */
-  it.each(['running', 'scheduled'])('does not continue a %s Task', (status) => {
+  it.each([
+    ['running', 'taskDetail.topicMenu.continueDisabled.running'],
+    ['scheduled', 'taskDetail.topicMenu.continueDisabled.scheduled'],
+    ['canceled', 'taskDetail.topicMenu.continueDisabled.status'],
+  ])('does not continue a %s Task and explains why', (status, reason) => {
     mocks.taskState.taskDetailMap['T-1'].status = status;
     const view = render(<TopicChatDrawer />);
+    const button = view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' });
     /** @example Continue uses the same eligibility selector as the Task Run action. */
-    expect(view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' })).toBeDisabled();
+    expect(button).toBeDisabled();
+    /** @example The disabled item names what unblocks it. */
+    expect(button).toHaveAttribute('data-desc', reason);
+  });
+
+  /** @example A running Topic explains that continuation waits for the run. */
+  it('explains that a running Topic must finish first', () => {
+    mocks.taskState.taskDetailMap['T-1'].activities[0].status = 'running';
+    const view = render(<TopicChatDrawer />);
+    const button = view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('data-desc', 'taskDetail.topicMenu.continueDisabled.running');
+  });
+
+  // ROOT CAUSE:
+  // A member-assigned Task has no persisted agent assignee; the runner executes
+  // it through the inbox agent. Requiring `activeTaskAgentId` disabled
+  // continuation for every member-assigned Task the server would accept.
+  /** @example A member-assigned Task continues its inbox-agent Topic. */
+  it('continues a member-assigned Task through its inbox-agent Topic', async () => {
+    mocks.taskState.taskDetailMap['T-1'].agentId = undefined;
+    mocks.taskState.taskDetailMap['T-1'].userId = 'user-member';
+    mocks.taskState.activeTopicDrawerAgentId = 'agt_inbox';
+    mocks.taskState.taskDetailMap['T-1'].activities[0].agentId = 'agt_inbox';
+    mocks.agentState.builtinAgentIdMap = { inbox: 'agt_inbox' };
+    const view = render(<TopicChatDrawer />);
+    const button = view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' });
+    expect(button).not.toBeDisabled();
+    fireEvent.click(button);
+    await waitFor(() =>
+      expect(mocks.taskState.runTask).toHaveBeenCalledWith(
+        'T-1',
+        { continueTopicId: 'topic-1' },
+        { throwOnError: true },
+      ),
+    );
+  });
+
+  /** @example A member-assigned Task cannot continue a Topic of a non-inbox agent. */
+  it('does not continue a member-assigned Task Topic run by another agent', () => {
+    mocks.taskState.taskDetailMap['T-1'].agentId = undefined;
+    mocks.taskState.taskDetailMap['T-1'].userId = 'user-member';
+    mocks.taskState.activeTopicDrawerAgentId = 'agt_previous';
+    mocks.taskState.taskDetailMap['T-1'].activities[0].agentId = 'agt_previous';
+    mocks.agentState.builtinAgentIdMap = { inbox: 'agt_inbox' };
+    const view = render(<TopicChatDrawer />);
+    const button = view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' });
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('data-desc', 'taskDetail.topicMenu.continueDisabled.owner');
   });
 
   // ROOT CAUSE:
@@ -383,6 +450,7 @@ describe('TopicChatDrawer', () => {
     const button = view.getByRole('button', { name: 'taskDetail.topicMenu.continueTask' });
     /** @example The invalid continuation is disabled before any click. */
     expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('data-desc', 'taskDetail.topicMenu.continueDisabled.owner');
     fireEvent.click(button);
     /** @example The parent task ID is never sent with the child Topic ID. */
     expect(mocks.taskState.runTask).not.toHaveBeenCalled();

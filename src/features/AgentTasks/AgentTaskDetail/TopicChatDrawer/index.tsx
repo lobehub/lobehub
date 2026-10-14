@@ -41,6 +41,7 @@ import { useGatewayReconnect } from '@/hooks/useGatewayReconnect';
 import { useOperationState } from '@/hooks/useOperationState';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
+import { builtinAgentSelectors } from '@/store/agent/selectors';
 import { useChatStore } from '@/store/chat';
 import { useServerConfigStore } from '@/store/serverConfig';
 import { serverConfigSelectors } from '@/store/serverConfig/selectors';
@@ -177,7 +178,10 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   const [expanded, setExpanded] = useState(defaultExpanded);
   const [continuing, setContinuing] = useState(false);
   const canRunTask = useTaskStore(taskDetailSelectors.canRunActiveTask);
+  const taskStatus = useTaskStore(taskDetailSelectors.activeTaskStatus);
   const assigneeAgentId = useTaskStore(taskDetailSelectors.activeTaskAgentId);
+  const assigneeUserId = useTaskStore(taskDetailSelectors.activeTaskAssigneeUserId);
+  const inboxAgentId = useAgentStore(builtinAgentSelectors.inboxAgentId);
   const runTask = useTaskStore((s) => s.runTask);
   const topicId = useTaskStore(taskDetailSelectors.activeTopicDrawerTopicId);
   const activeTaskId = useTaskStore((s) => s.activeTaskId);
@@ -212,7 +216,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   }, [closeArtifact, inputFocusRequest, showArtifactPortal]);
   const enableTopicLinkShare = useServerConfigStore(serverConfigSelectors.enableBusinessFeatures);
   const { allowed: canShare, reason } = usePermission('edit_own_content');
-  const { allowed: canEditTask } = usePermission('create_content');
+  const { allowed: canEditTask, reason: editTaskReason } = usePermission('create_content');
 
   // Hydrate task detail when the drawer is opened outside of TaskDetailPage
   // (e.g. from a brief on home) so the header has agentId / status / seq.
@@ -234,27 +238,49 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   );
   const { openShareModal } = useShareModal({ context: shareContext });
 
+  // Mirrors `TaskRunnerService.runTask`: a Task assigned only to a workspace
+  // member runs through the inbox agent without persisting it as the assignee,
+  // so that agent owns the member-assigned Task's Topics.
+  const executionAgentId = assigneeAgentId || (assigneeUserId ? inboxAgentId : undefined);
+  const isActivityLoaded = !!topicId && activity?.id === topicId && !!activity.status;
+  const isTopicRunning =
+    isActivityLoaded && (activity.status === 'running' || !!activity.runningOperation);
+  const isOwnTopic =
+    isActivityLoaded &&
+    // Direct Topics omit sourceTaskId; descendant activities retain their owner.
+    (!activity.sourceTaskId || activity.sourceTaskId === activeTaskDatabaseId) &&
+    !!executionAgentId &&
+    executionAgentId === agentId &&
+    (resolveRunAgentId(activity) ?? agentId) === executionAgentId;
+
   const canContinueTask =
     canEditTask &&
     canRunTask &&
     !continuing &&
     !!activeTaskId &&
-    !!topicId &&
-    activity?.id === topicId &&
-    // Direct Topics omit sourceTaskId; descendant activities retain their owner.
-    (!activity.sourceTaskId || activity.sourceTaskId === activeTaskDatabaseId) &&
-    !!activity.status &&
-    activity.status !== 'running' &&
-    !activity.runningOperation &&
-    !!assigneeAgentId &&
-    assigneeAgentId === agentId &&
-    (resolveRunAgentId(activity) ?? agentId) === assigneeAgentId;
+    isActivityLoaded &&
+    !isTopicRunning &&
+    isOwnTopic;
+
+  // Shown under the disabled menu item so the user knows what unblocks it.
+  // Transient states (hydrating, a pending request) carry no reason.
+  let continueDisabledReason: string | undefined;
+  if (!canContinueTask && !continuing && isActivityLoaded) {
+    if (!canEditTask) continueDisabledReason = editTaskReason;
+    else if (taskStatus === 'running' || isTopicRunning)
+      continueDisabledReason = t('taskDetail.topicMenu.continueDisabled.running');
+    else if (taskStatus === 'scheduled')
+      continueDisabledReason = t('taskDetail.topicMenu.continueDisabled.scheduled');
+    else if (!canRunTask)
+      continueDisabledReason = t('taskDetail.topicMenu.continueDisabled.status');
+    else if (!isOwnTopic) continueDisabledReason = t('taskDetail.topicMenu.continueDisabled.owner');
+  }
 
   /**
    * Continue the Task in this Topic using its current Task configuration.
    *
    * Use when:
-   * - Resuming a settled run owned by the current Task assignee.
+   * - Resuming a settled run owned by the Task's execution agent.
    *
    * Expects:
    * - The same edit permission and runnable Task state as the main Run action.
@@ -332,6 +358,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
   const menuItems = useMemo<DropdownItem[]>(
     () => [
       {
+        desc: continueDisabledReason,
         disabled: !canContinueTask,
         icon: Play,
         key: 'continueTask',
@@ -383,6 +410,7 @@ const TopicChatDrawer = memo<TopicChatDrawerProps>(({ defaultExpanded = false })
       agentId,
       canEditTask,
       canContinueTask,
+      continueDisabledReason,
       handleContinueTask,
       handleCopyOperationId,
       handleCopyTopicId,

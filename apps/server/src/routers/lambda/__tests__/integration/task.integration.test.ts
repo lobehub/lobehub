@@ -864,6 +864,32 @@ describe('Task Router Integration', () => {
         expect(topic).toMatchObject({ status: 'running', topicId: testTopicId });
       });
 
+      // A member-assigned Task runs through the inbox agent without persisting
+      // it; its Topics must stay continuable, matching the Topic drawer.
+      it('continues a member-assigned task through its inbox-agent Topic', async () => {
+        const task = await caller.create({ assigneeUserId: userId, instruction: 'Test' });
+        await caller.run({ id: task.data.id });
+        const { AgentModel } = await import('@/database/models/agent');
+        const inboxAgent = await new AgentModel(serverDB, userId).getBuiltinAgent('inbox');
+        const { topics } = await import('@/database/schemas');
+        const { eq } = await import('drizzle-orm');
+        await serverDB
+          .update(topics)
+          .set({ agentId: inboxAgent!.id })
+          .where(eq(topics.id, testTopicId));
+        await settleRun(task.data.id, testTopicId);
+
+        await caller.run({ continueTopicId: testTopicId, id: task.data.id });
+
+        expect(mockExecAgent).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            appContext: expect.objectContaining({ topicId: testTopicId }),
+          }),
+        );
+        const found = await caller.find({ id: task.data.id });
+        expect(found.data).toMatchObject({ assigneeAgentId: null, assigneeUserId: userId });
+      });
+
       it('rejects a Topic that is not a run of the task', async () => {
         const task = await caller.create({ assigneeAgentId: testAgentId, instruction: 'Test' });
         const unrelatedTopicId = await createTestTopic(serverDB, userId);
