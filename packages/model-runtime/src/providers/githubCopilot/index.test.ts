@@ -616,5 +616,63 @@ describe('LobeGithubCopilotAI', () => {
 
       vi.doUnmock('@anthropic-ai/sdk');
     });
+
+    it('should price claude responses at the cache ttl that was sent', async () => {
+      vi.resetModules();
+
+      const anthropicMessagesCreateMock = vi.fn().mockResolvedValue({
+        tee: () => [new ReadableStream(), new ReadableStream()],
+      });
+      const anthropicStreamMock = vi.fn(() => new ReadableStream());
+
+      vi.doMock('@anthropic-ai/sdk', () => {
+        return {
+          default: class MockAnthropic {
+            messages = {
+              create: anthropicMessagesCreateMock,
+            };
+          },
+        };
+      });
+      vi.doMock('../../core/streams', async (importOriginal) => ({
+        ...(await importOriginal<Record<string, unknown>>()),
+        AnthropicStream: anthropicStreamMock,
+      }));
+      vi.doMock('../../utils/getModelPricing', () => ({
+        getModelPricing: vi.fn().mockResolvedValue(undefined),
+      }));
+
+      const { LobeGithubCopilotAI: ReloadedLobeGithubCopilotAI } = await import('./index');
+
+      const futureTime = Date.now() + 600_000;
+      const instance = new ReloadedLobeGithubCopilotAI({
+        bearerToken: 'cached-bearer-token',
+        bearerTokenExpiresAt: futureTime,
+        oauthAccessToken: 'ghu_oauth',
+      });
+
+      await instance.chat({
+        contextCachingTTL: '1h',
+        messages: [
+          { content: 'You are a helpful assistant', role: 'system' },
+          { content: 'hello', role: 'user' },
+        ],
+        model: 'claude-opus-5',
+      } as any);
+
+      const payload = anthropicMessagesCreateMock.mock.calls[0][0];
+
+      expect(payload.system[0].cache_control).toEqual({ ttl: '1h', type: 'ephemeral' });
+      expect(anthropicStreamMock).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          payload: expect.objectContaining({ pricingOptions: { lookupParams: { ttl: '1h' } } }),
+        }),
+      );
+
+      vi.doUnmock('@anthropic-ai/sdk');
+      vi.doUnmock('../../core/streams');
+      vi.doUnmock('../../utils/getModelPricing');
+    });
   });
 });

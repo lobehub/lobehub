@@ -158,6 +158,62 @@ describe('LobeBedrockAI', () => {
     });
 
     describe('Claude model', () => {
+      it('should stamp contextCachingTTL on every cache breakpoint', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        await instance.chat({
+          contextCachingTTL: '1h',
+          messages: [
+            { content: 'You are an awesome greeter', role: 'system' },
+            { content: 'Hello', role: 'user' },
+          ],
+          model: 'global.anthropic.claude-sonnet-4-6',
+          tools: [{ function: { name: 'lookup', parameters: {} }, type: 'function' }],
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+        const cacheControl = { ttl: '1h', type: 'ephemeral' };
+
+        expect(body.system[0].cache_control).toEqual(cacheControl);
+        expect(body.messages.at(-1).content.at(-1).cache_control).toEqual(cacheControl);
+        expect(body.tools.at(-1).cache_control).toEqual(cacheControl);
+      });
+
+      it('should not send a cache breakpoint when context caching is disabled, even with a ttl', async () => {
+        const mockStream = new ReadableStream({
+          start(controller) {
+            controller.close();
+          },
+        });
+        (instance['client'].send as Mock).mockResolvedValue(Promise.resolve(mockStream));
+
+        await instance.chat({
+          contextCachingTTL: '1h',
+          enabledContextCaching: false,
+          messages: [
+            { content: 'You are an awesome greeter', role: 'system' },
+            { content: 'Hello', role: 'user' },
+          ],
+          model: 'global.anthropic.claude-sonnet-4-6',
+          tools: [{ function: { name: 'lookup', parameters: {} }, type: 'function' }],
+        });
+
+        const commandInput = (InvokeModelWithResponseStreamCommand as unknown as Mock).mock
+          .calls[0][0];
+        const body = JSON.parse(commandInput.body);
+
+        expect(body.system[0].cache_control).toBeUndefined();
+        expect(JSON.stringify(body.messages)).not.toContain('cache_control');
+        expect(body.tools.at(-1).cache_control).toBeUndefined();
+      });
+
       it('should return a Response on successful API call', async () => {
         const result = await instance.chat({
           messages: [{ content: 'Hello', role: 'user' }],

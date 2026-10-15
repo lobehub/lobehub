@@ -16,7 +16,11 @@ import { resolveCacheTTL } from '../../core/anthropicCompatibleFactory/resolveCa
 import { resolveMaxTokens } from '../../core/anthropicCompatibleFactory/resolveMaxTokens';
 import { resolveClaudeThinkingConfig } from '../../core/anthropicCompatibleFactory/resolveThinkingConfig';
 import type { LobeRuntimeAI } from '../../core/BaseAI';
-import { buildAnthropicMessages, buildAnthropicTools } from '../../core/contextBuilders/anthropic';
+import {
+  buildAnthropicMessages,
+  buildAnthropicTools,
+  buildCacheControl,
+} from '../../core/contextBuilders/anthropic';
 import { resolveModelSamplingParameters } from '../../core/parameterResolver';
 import {
   finalizeProviderResponse,
@@ -273,6 +277,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     options?: ChatMethodOptions,
   ): Promise<Response> => {
     const {
+      contextCachingTTL,
       effort,
       enabledContextCaching = true,
       max_tokens,
@@ -306,7 +311,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     const systemPrompts = !!systemPromptText
       ? ([
           {
-            cache_control: enabledContextCaching ? { type: 'ephemeral' } : undefined,
+            cache_control: enabledContextCaching ? buildCacheControl(contextCachingTTL) : undefined,
             text: systemPromptText,
             type: 'text',
           },
@@ -314,6 +319,7 @@ export class LobeBedrockAI implements LobeRuntimeAI {
       : undefined;
 
     const postTools = buildAnthropicTools(tools, {
+      cacheTTL: contextCachingTTL,
       enabledContextCaching,
     });
 
@@ -322,7 +328,10 @@ export class LobeBedrockAI implements LobeRuntimeAI {
     // which would otherwise skip the strip and 400 on a trailing assistant turn.
     const postMessages = stripUnsupportedClaudeAssistantPrefill(
       this.resolveModelId(model),
-      await buildAnthropicMessages(user_messages, { enabledContextCaching }),
+      await buildAnthropicMessages(user_messages, {
+        cacheTTL: contextCachingTTL,
+        enabledContextCaching,
+      }),
     );
 
     const anthropicBase = {

@@ -105,3 +105,113 @@ describe('convertAnthropicUsage', () => {
     expect(usage).toBeUndefined();
   });
 });
+
+describe('convertAnthropicUsage cache-write TTL', () => {
+  const deltaEvent = {
+    type: 'message_delta',
+    usage: { output_tokens: 5 },
+  } as unknown as Anthropic.MessageStreamEvent;
+
+  const streamUsage = {
+    inputCacheMissTokens: 0,
+    inputWriteCacheTokens: 1_000_000,
+    totalInputTokens: 1_000_000,
+    totalOutputTokens: 0,
+  };
+
+  // `pricingParams: ['ttl']` is what every current Anthropic card older than Opus 4.7 uses.
+  const ttlPricing = {
+    units: [
+      {
+        lookup: { prices: { '1h': 6, '5m': 3.75 }, pricingParams: ['ttl'] },
+        name: 'textInput_cacheWrite',
+        strategy: 'lookup',
+        unit: 'millionTokens',
+      },
+    ],
+  } as any;
+
+  it('prices a cache write instead of billing it as zero', () => {
+    const usage = convertAnthropicUsage(deltaEvent, streamUsage, { pricing: ttlPricing } as any);
+
+    // 1M tokens at $3.75/MTok — before the fix the lookup key was unresolved and cost was 0.
+    expect(usage?.cost).toBeCloseTo(3.75, 6);
+  });
+
+  it('lets a caller-supplied ttl win over the default', () => {
+    const usage = convertAnthropicUsage(deltaEvent, streamUsage, {
+      pricing: ttlPricing,
+      pricingOptions: { lookupParams: { ttl: '1h' } },
+    } as any);
+
+    expect(usage?.cost).toBeCloseTo(6, 6);
+  });
+
+  it('keeps other pricingOptions intact', () => {
+    const usage = convertAnthropicUsage(deltaEvent, streamUsage, {
+      pricing: {
+        currency: 'CNY',
+        units: [
+          { name: 'textInput_cacheWrite', rate: 10, strategy: 'fixed', unit: 'millionTokens' },
+        ],
+      },
+      pricingOptions: { usdToCnyRate: 10 },
+    } as any);
+
+    // 1M tokens at CNY 10/MTok converted at the supplied rate, not the built-in one.
+    expect(usage?.cost).toBeCloseTo(1, 6);
+  });
+});
+
+describe('cache_creation split', () => {
+  it('carries the per-TTL cache-write split into usage', () => {
+    const event = {
+      type: 'message_start',
+      message: {
+        id: 'msg_2',
+        usage: {
+          cache_creation: {
+            ephemeral_1h_input_tokens: 15,
+            ephemeral_5m_input_tokens: 5,
+          },
+          cache_creation_input_tokens: 20,
+          cache_read_input_tokens: 10,
+          input_tokens: 100,
+          output_tokens: 5,
+        },
+      },
+    } as unknown as Anthropic.MessageStreamEvent;
+
+    const usage = convertAnthropicUsage(event);
+
+    expect(usage).toMatchObject({
+      inputWriteCacheTokens: 20,
+      inputWriteCacheTokens1h: 15,
+      inputWriteCacheTokens5m: 5,
+    });
+  });
+
+  it('omits zero split buckets', () => {
+    const event = {
+      type: 'message_start',
+      message: {
+        id: 'msg_3',
+        usage: {
+          cache_creation: {
+            ephemeral_1h_input_tokens: 0,
+            ephemeral_5m_input_tokens: 20,
+          },
+          cache_creation_input_tokens: 20,
+          cache_read_input_tokens: 0,
+          input_tokens: 100,
+          output_tokens: 5,
+        },
+      },
+    } as unknown as Anthropic.MessageStreamEvent;
+
+    const usage = convertAnthropicUsage(event);
+
+    expect(usage?.inputWriteCacheTokens5m).toBe(20);
+    expect(usage?.inputWriteCacheTokens1h).toBeUndefined();
+  });
+});
