@@ -84,6 +84,7 @@ import { OpenAICompatibleClient } from './client';
 import { createOpenAICompatibleImage } from './createImage';
 import { createOpenAICompatibleVideo, pollOpenAICompatibleVideoStatus } from './createVideo';
 import { transformResponseAPIToStream, transformResponseToStream } from './nonStreamToStream';
+import { resolvePromptCacheKey } from './promptCacheKey';
 import {
   initializeOpenAIDiagnostics,
   observeOpenAIChatCompletionStream,
@@ -589,26 +590,6 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
       return false;
     }
 
-    private resolvePromptCacheKey(model?: string, user?: string) {
-      if (!user) return;
-
-      // Keep the default key at {userId}:{model}; {agentId/topicId} can be added later if a narrower cache bucket is needed.
-      if (model?.startsWith('gpt-') || /^o\d/.test(model || '') || model === 'chat-latest') {
-        return `lobe:${user}:${model}`;
-      }
-
-      const matchesProviderPromptCacheModel = promptCacheKeyModels?.some((item) => {
-        if (!model) return false;
-        if (typeof item === 'string') return model.includes(item);
-
-        item.lastIndex = 0;
-        return item.test(model);
-      });
-      if (matchesProviderPromptCacheModel) {
-        return `lobe:${user}:${model}`;
-      }
-    }
-
     private resolvePromptCacheKeyParams(
       model?: string,
       user?: string,
@@ -616,7 +597,7 @@ export const createOpenAICompatibleRuntime = <T extends Record<string, any> = an
     ) {
       if (existingPromptCacheKey !== undefined) return {};
 
-      const promptCacheKey = this.resolvePromptCacheKey(model, user);
+      const promptCacheKey = resolvePromptCacheKey(model, user, promptCacheKeyModels);
 
       return promptCacheKey ? { prompt_cache_key: promptCacheKey } : {};
     }
