@@ -11,6 +11,8 @@ import { useCurrentProjectDetail, useProjectStore } from '@/store/project';
 import { useUserStore } from '@/store/user';
 import { userProfileSelectors } from '@/store/user/selectors';
 
+import { MembersSettings } from '../Review/MembersSettings';
+import { SitesSettings } from '../Review/SitesSettings';
 import { AdvancedSettings } from './AdvancedSettings';
 import { GeneralSettings } from './GeneralSettings';
 import { ProjectWorkingDirectories } from './index';
@@ -49,6 +51,16 @@ export function ProjectDirectoriesPage() {
       key: 'directories',
       label: t('settings.workLocations'),
       render: () => <WorkingDirectorySettings projectId={detail.project.id} />,
+    },
+    {
+      key: 'sites',
+      label: t('review.sites.title'),
+      render: () => <SitesSettings projectId={detail.project.id} />,
+    },
+    {
+      key: 'members',
+      label: t('review.members.title'),
+      render: () => <MembersSettings projectId={detail.project.id} />,
     },
     // Destructive settings are owner-only, so the tab is hidden for everyone else.
     ...(canManage

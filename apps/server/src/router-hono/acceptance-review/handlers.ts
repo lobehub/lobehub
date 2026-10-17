@@ -56,6 +56,9 @@ export const getSession = async (c: ReviewContext) => {
     },
     can,
     expiresAt: new Date(c.get('expiresAt') * 1000).toISOString(),
+    project: c.get('project'),
+    role: c.get('role') ?? undefined,
+    site: c.get('site'),
     user: {
       avatar: profile?.avatar ?? undefined,
       id: userId,

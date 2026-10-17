@@ -17,7 +17,9 @@ export async function resolveReviewAccess(
 ): Promise<ReviewAccess | null> {
   try {
     const access = await resolveAcceptanceCommentAccess(db, userId, acceptanceId);
-    const decide = await canManageAcceptance({ serverDB: db, userId }, access.acceptance);
+    const decide =
+      access.acceptance.subjectType !== 'site' &&
+      (await canManageAcceptance({ serverDB: db, userId }, access.acceptance));
     return {
       acceptance: access.acceptance,
       can: { comment: access.canComment, decide, moderate: access.canApprove },

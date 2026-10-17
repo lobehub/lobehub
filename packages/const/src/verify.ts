@@ -220,8 +220,10 @@ export const PROGRAMMATIC_TEST_CHECK_HINT =
  * is not coupled to task-only workflows: a future run can accept a topic,
  * document, artifact, release, etc. without another schema reshape.
  */
-export const acceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone'] as const;
+export const acceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone', 'site'] as const;
 export type AcceptanceSubjectType = (typeof acceptanceSubjectTypes)[number];
+// A site's standing review is created only with the site itself, never through the generic acceptance API.
+export const creatableAcceptanceSubjectTypes = ['task', 'topic', 'document', 'standalone'] as const;
 
 /**
  * Business-level acceptance state. Check-level and run-level verdicts stay in the

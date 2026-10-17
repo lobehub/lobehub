@@ -1,8 +1,8 @@
 import {
   acceptanceCheckReviewActions,
   acceptanceRejectIntents,
-  acceptanceSubjectTypes,
   acceptanceVisibilities,
+  creatableAcceptanceSubjectTypes,
   reviewAdjudications,
   reviewProposalEdits,
   verifyEvidenceChapterKinds,
@@ -23,7 +23,6 @@ import { ProjectModel } from '@/database/models/project';
 import { ScmChangeRequestModel } from '@/database/models/scm';
 import { VerifyReviewPredictionModel } from '@/database/models/verifyReviewPrediction';
 import { VerifyRunModel } from '@/database/models/verifyRun';
-import { WorkspaceMemberModel } from '@/database/models/workspaceMember';
 import { users } from '@/database/schemas';
 import type { AcceptanceItem } from '@/database/schemas/verify';
 import { acceptances } from '@/database/schemas/verify';
@@ -58,6 +57,7 @@ import {
 import { after } from '@/server/utils/scheduleAfterResponse';
 
 import { previewUrlSchema, recordPreviewUrl } from './_helpers/acceptancePreviewUrl';
+import { canReadAcceptance } from './_helpers/acceptanceReadScope';
 import {
   type AcceptanceRepairDispatch,
   dispatchAcceptanceRepair,
@@ -138,7 +138,7 @@ const flowDefinitionSchema = z.object({
     .max(300),
 });
 
-const subjectTypeSchema = z.enum(acceptanceSubjectTypes);
+const subjectTypeSchema = z.enum(creatableAcceptanceSubjectTypes);
 
 /** Reads addressed purely by acceptance id — visibility is checked in the handler. */
 const publicAcceptanceProcedure = publicProcedure.use(serverDatabase);
@@ -198,22 +198,6 @@ export const resolveAcceptanceForWrite = async (
       { actorUserId: ctx.userId },
     ),
   };
-};
-
-const canReadAcceptance = async (
-  ctx: { serverDB: LobeChatDatabase; userId?: string | null },
-  acceptance: AcceptanceItem,
-) => {
-  if (ctx.userId && ctx.userId === acceptance.userId) return true;
-  if (acceptance.visibility === 'public') return true;
-  if (!ctx.userId || !acceptance.workspaceId) return false;
-  // Membership in the acceptance's OWN workspace — not the viewer's currently
-  // active one, which may be a different workspace entirely.
-  const member = await new WorkspaceMemberModel(ctx.serverDB, ctx.userId).getMember(
-    acceptance.workspaceId,
-    ctx.userId,
-  );
-  return Boolean(member);
 };
 
 /**
@@ -693,7 +677,10 @@ export const acceptanceRouter = router({
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }
 
-      const isOwner = Boolean(ctx.userId) && ctx.userId === acceptance.userId;
+      const isOwner =
+        acceptance.subjectType !== 'site' &&
+        Boolean(ctx.userId) &&
+        ctx.userId === acceptance.userId;
       if (!isOwner && !(await canReadAcceptance(ctx, acceptance))) {
         throw new TRPCError({ code: 'NOT_FOUND', message: 'Acceptance not found' });
       }

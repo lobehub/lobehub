@@ -1,4 +1,4 @@
-import { acceptanceIdFromReviewResource } from '@lobechat/const';
+import { acceptanceIdFromReviewResource, siteReviewFromResource } from '@lobechat/const';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
 
@@ -177,7 +177,12 @@ export const verifyAcceptanceReviewJWT = async (token: string) => {
   const { jwtVerify } = await import('jose');
   const { payload } = await jwtVerify(token, publicKey, { algorithms: ['RS256'] });
   const acceptanceId = acceptanceIdFromReviewResource(payload.aud);
-  if (!isAcceptanceReviewClient(payload.client_id as string) || !acceptanceId || !payload.sub)
+  const site = siteReviewFromResource(payload.aud);
+  if (
+    !isAcceptanceReviewClient(payload.client_id as string) ||
+    (!acceptanceId && !site) ||
+    !payload.sub
+  )
     throw new Error('Not an acceptance review token');
-  return { acceptanceId, expiresAt: payload.exp, userId: payload.sub };
+  return { acceptanceId, expiresAt: payload.exp, site, userId: payload.sub };
 };

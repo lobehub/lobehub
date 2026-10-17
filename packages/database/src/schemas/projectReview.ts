@@ -1,0 +1,87 @@
+import type { ProjectMemberRole } from '@lobechat/types';
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  foreignKey,
+  index,
+  pgTable,
+  text,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
+
+import { idGenerator } from '../utils/idGenerator';
+import { timestamps } from './_helpers';
+import { projects } from './project';
+import { users } from './user';
+import { acceptances } from './verify';
+import { workspaceMembers, workspaces } from './workspace';
+
+export const projectSites = pgTable(
+  'project_sites',
+  {
+    id: text('id')
+      .primaryKey()
+      .$defaultFn(() => idGenerator('projectSites'))
+      .notNull(),
+    projectId: text('project_id')
+      .references(() => projects.id, { onDelete: 'cascade' })
+      .notNull(),
+    workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
+    createdByUserId: text('created_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+
+    name: varchar('name', { length: 255 }).notNull(),
+    origins: text('origins').array().notNull(),
+    acceptanceId: uuid('acceptance_id').references(() => acceptances.id, { onDelete: 'set null' }),
+
+    ...timestamps,
+  },
+  (t) => [
+    index('project_sites_project_id_idx').on(t.projectId),
+    index('project_sites_workspace_id_idx').on(t.workspaceId),
+    check('project_sites_name_not_empty', sql`length(btrim(${t.name})) > 0`),
+    check('project_sites_origins_not_empty', sql`cardinality(${t.origins}) > 0`),
+  ],
+);
+
+export type NewProjectSite = typeof projectSites.$inferInsert;
+export type ProjectSiteItem = typeof projectSites.$inferSelect;
+
+/** Role overrides for existing workspace members; no row inherits the workspace role. */
+export const projectMembers = pgTable(
+  'project_members',
+  {
+    id: uuid('id').defaultRandom().notNull().primaryKey(),
+    projectId: text('project_id').notNull(),
+    workspaceId: text('workspace_id').notNull(),
+    userId: text('user_id').notNull(),
+    addedByUserId: text('added_by_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+
+    role: text('role').$type<ProjectMemberRole>().notNull().default('member'),
+
+    ...timestamps,
+  },
+  (t) => [
+    foreignKey({
+      columns: [t.projectId, t.workspaceId],
+      foreignColumns: [projects.id, projects.workspaceId],
+      name: 'project_members_project_workspace_fk',
+    }).onDelete('cascade'),
+    foreignKey({
+      columns: [t.workspaceId, t.userId],
+      foreignColumns: [workspaceMembers.workspaceId, workspaceMembers.userId],
+      name: 'project_members_workspace_member_fk',
+    }).onDelete('cascade'),
+    uniqueIndex('project_members_project_user_unique').on(t.projectId, t.userId),
+    index('project_members_workspace_id_idx').on(t.workspaceId),
+    index('project_members_user_id_idx').on(t.userId),
+  ],
+);
+
+export type NewProjectMember = typeof projectMembers.$inferInsert;
+export type ProjectMemberItem = typeof projectMembers.$inferSelect;
