@@ -2,7 +2,7 @@ import { type IncomingMessage, type ServerResponse } from 'node:http';
 import { Readable } from 'node:stream';
 
 import debug from 'debug';
-import { cookies } from 'next/headers';
+import { cookies, headers as requestHeaders } from 'next/headers';
 import { type NextRequest } from 'next/server';
 import urlJoin from 'url-join';
 
@@ -241,9 +241,7 @@ export const createContextForInteractionDetails = async (
     'x-forwarded-host': hostName,
     'x-forwarded-proto': protocol,
   });
-  const cookieString = Object.entries(realCookies)
-    .map(([name, value]) => `${name}=${value}`)
-    .join('; ');
+  const cookieString = (await requestHeaders()).get('cookie');
   if (cookieString) {
     headers.set('cookie', cookieString);
     log('Setting cookie header');
