@@ -1,0 +1,52 @@
+---
+title: TokenDos 提供商配置
+description: 学习如何在 LobeHub 中配置和使用 TokenDos 模型网关
+tags:
+  - TokenDos
+  - 提供商配置
+  - 配置指南
+---
+
+# TokenDos 提供商配置
+
+TokenDos 是面向开发者的专业 AI 模型聚合与直连平台，支持 Anthropic Claude 和 OpenAI 双协议原生直连，提供低延迟推理、原生思考流与 1:1 充值计费。本指南将帮助您在 LobeHub 中设置 TokenDos。
+
+在 LobeHub 中配置时，打开 **应用设置 → AI 服务商**，选择 **TokenDos** 并打开开关。
+
+## 前置条件
+
+在使用 TokenDos API 之前，您需要：
+
+1. **注册 TokenDos 账户**
+   - 访问 [TokenDos 官网](https://www.tokendos.com)
+   - 注册账户并登录
+
+2. **获取 API 密钥**
+   - 登录控制台，进入 [API 密钥管理](https://www.tokendos.com/token)
+   - 创建并复制您的 API 密钥
+
+## 配置
+
+### 界面配置
+
+在 LobeHub 的设置界面中：
+- 填入您的 `TokenDos API Key`
+- API 代理地址默认为 `https://api.tokendos.com`，如有自定义代理也可在此填入
+
+### 环境变量（自托管）
+
+在您的 `.env` 文件或 Docker 运行参数中添加：
+
+```bash
+# TokenDos API 密钥
+TOKENDOS_API_KEY=your_tokendos_api_key
+
+# 可选：自定义代理地址（默认为 https://api.tokendos.com）
+TOKENDOS_PROXY_URL=https://api.tokendos.com
+```
+
+## 特性亮点
+
+1. **多协议原生智能路由**：Claude 3.7 / 3.5 Sonnet 模型原生走 Anthropic Messages 协议，支持原生 Thinking 思考流；OpenAI、DeepSeek 等模型走 OpenAI `/v1` 协议。
+2. **动态模型列表**：在设置页点击“获取模型列表”即可实时拉取 TokenDos 线上全部可用模型。
+3. **真实 1:1 计费与透明度**：按实际 Token 消耗计费，支持在线真伪验证。
