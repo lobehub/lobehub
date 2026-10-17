@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   applyModelExtendParams,
+  resolveDefaultEffortForModel,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
   resolveEffectiveReasoningChatConfig,
@@ -420,6 +421,27 @@ describe('resolveDefaultEnableAdaptiveThinkingForModel', () => {
     );
     expect(resolveDefaultEnableAdaptiveThinkingForModel('claude-opus-5-fast')).toBe(true);
     expect(resolveDefaultEnableAdaptiveThinkingForModel('claude-sonnet-4.6')).toBeUndefined();
+  });
+});
+
+describe('resolveDefaultEffortForModel', () => {
+  // `effort` is omitted until saved, so the shown default must be the model's own API default.
+  it('uses medium for Claude Opus 5.5 and Haiku 5.5 across provider id spellings', () => {
+    expect(resolveDefaultEffortForModel('claude-opus-5-5', 'opus47Effort')).toBe('medium');
+    expect(resolveDefaultEffortForModel('global.anthropic.claude-opus-5-5', 'opus47Effort')).toBe(
+      'medium',
+    );
+    expect(resolveDefaultEffortForModel('claude-haiku-5-5', 'opus47Effort')).toBe('medium');
+    expect(resolveDefaultEffortForModel('anthropic/claude-haiku-5.5', 'opus47Effort')).toBe(
+      'medium',
+    );
+  });
+
+  it('uses high for other Claude models and non-Claude ids', () => {
+    expect(resolveDefaultEffortForModel('claude-opus-5', 'opus47Effort')).toBe('high');
+    expect(resolveDefaultEffortForModel('claude-fable-5-1', 'opus47Effort')).toBe('high');
+    expect(resolveDefaultEffortForModel('claude-sonnet-4-6', 'effort')).toBe('high');
+    expect(resolveDefaultEffortForModel('custom-model', 'opus47Effort')).toBe('high');
   });
 });
 

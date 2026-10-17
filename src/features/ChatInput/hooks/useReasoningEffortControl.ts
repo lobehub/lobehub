@@ -1,6 +1,9 @@
 'use client';
 
-import { resolveDefaultThinkingLevelForModel } from '@lobechat/model-runtime/utils/modelExtendParams';
+import {
+  resolveDefaultEffortForModel,
+  resolveDefaultThinkingLevelForModel,
+} from '@lobechat/model-runtime/utils/modelExtendParams';
 import isEqual from 'fast-deep-equal';
 import type { AiModelReasoningConfig } from 'model-bank';
 import { MODEL_REASONING_PARAM_DEFAULTS, MODEL_REASONING_PARAM_LEVELS } from 'model-bank/aiModel';
@@ -44,6 +47,8 @@ export const resolveReasoningEffortValue = (
   if (saved) return saved;
 
   if (effortKey === 'gpt5_2ReasoningEffort' && model === 'gpt-5.5') return 'medium';
+  if (effortKey === 'effort' || effortKey === 'opus47Effort')
+    return resolveDefaultEffortForModel(model, effortKey);
   if (
     effortKey === 'thinkingLevel' ||
     effortKey === 'thinkingLevel2' ||

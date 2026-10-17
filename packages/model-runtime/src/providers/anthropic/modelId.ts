@@ -233,6 +233,24 @@ export const supportsClaudeEffortLevel = (
 };
 
 /**
+ * The effort level a Claude model runs at when a request omits `effort`. Claude Opus 5.5 and
+ * Claude Haiku 5.5 default to `medium`; every other Claude model that supports effort defaults
+ * to `high`. Later Opus / Haiku versions are assumed to keep the `medium` default until Anthropic
+ * documents otherwise. Returns `undefined` for ids that are not Claude models.
+ * @see https://platform.claude.com/docs/en/build-with-claude/effort#effort-levels
+ */
+export const getClaudeDefaultEffort = (model: string): 'high' | 'medium' | undefined => {
+  const parsed = parseClaudeModelId(model);
+  if (!parsed) return;
+
+  const isMediumByDefault =
+    isClaudeFamily(parsed, ['opus', 'haiku']) &&
+    (parsed.majorVersion > 5 || (parsed.majorVersion === 5 && hasMinorVersionAtLeast(parsed, 5)));
+
+  return isMediumByDefault ? 'medium' : 'high';
+};
+
+/**
  * Claude Fable 5.1 / Mythos 5.1 / Opus 5.5 / Sonnet 5.5 reject forced tool use. `tool_choice` of
  * type `any` or `tool` returns a 400; keep `auto` (or `none`) and use `strict: true` for schema
  * enforcement instead. Fable 5 / Mythos 5 / Opus 5 / Sonnet 5 still accept forced choice.

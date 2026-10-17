@@ -6,6 +6,7 @@ import {
 } from '@lobechat/mecha';
 import {
   type ModelExtendParams,
+  resolveDefaultEffortForModel,
   resolveDefaultEnableAdaptiveThinkingForModel,
   resolveDefaultThinkingLevelForModel,
 } from '@lobechat/model-runtime/utils/modelExtendParams';
@@ -17,7 +18,11 @@ import { getChatStoreState } from '@/store/chat';
 import { topicSelectors } from '@/store/chat/selectors';
 
 export type { ModelExtendParams };
-export { resolveDefaultEnableAdaptiveThinkingForModel, resolveDefaultThinkingLevelForModel };
+export {
+  resolveDefaultEffortForModel,
+  resolveDefaultEnableAdaptiveThinkingForModel,
+  resolveDefaultThinkingLevelForModel,
+};
 
 const toModelCard = (item: EnabledAiModel | LobeDefaultAiModelListItem) => ({
   abilities: item.abilities,
