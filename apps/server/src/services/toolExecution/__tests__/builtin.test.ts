@@ -124,7 +124,11 @@ describe('BuiltinToolsExecutor truncated arguments', () => {
     expect(result.success).toBe(false);
     expect(result.error?.code).toBe('TRUNCATED_ARGUMENTS');
     expect(result.content).toMatch(/truncated/i);
-    expect(result.content).toMatch(/max_tokens/);
+    // Both causes are listed and neither is asserted: blaming max_tokens made
+    // models tell users the platform caps output when the stream was cut.
+    expect(result.content).toMatch(/output length limit/);
+    expect(result.content).toMatch(/stream was interrupted/);
+    expect(result.content).not.toMatch(/max_tokens/);
     // The raw truncated payload is echoed back so the model sees exactly what
     // it produced and cannot blame upstream for a different payload.
     expect(result.content).toContain(truncated);
