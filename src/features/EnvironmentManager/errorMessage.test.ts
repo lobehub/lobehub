@@ -1,10 +1,30 @@
 import { describe, expect, it } from 'vitest';
 
+import enUS from '../../../locales/en-US/setting.json';
+import zhCN from '../../../locales/zh-CN/setting.json';
 import { describeError } from './errorMessage';
 
 const t = (key: string) => `<${key}>`;
 
 describe('describeError', () => {
+  it.each([
+    [
+      'en-US',
+      enUS,
+      'Storage space is insufficient. Free up space or upgrade your plan, then try again.',
+    ],
+    ['zh-CN', zhCN, '存储空间不足。请释放空间或升级套餐后重试。'],
+  ] as const)(
+    'explains how to recover from a storage quota refusal in %s',
+    (_, messages, expected) => {
+      const translate = (key: string) => messages[key as keyof typeof messages] ?? key;
+
+      expect(describeError(new Error('STORAGE_QUOTA_EXCEEDED'), translate, 'Copy failed')).toBe(
+        expected,
+      );
+    },
+  );
+
   it('turns the has-instances refusal code into its sentence', () => {
     expect(describeError(new Error('ENVIRONMENT_HAS_INSTANCES'), t, 'fallback')).toBe(
       '<environments.hasInstances>',

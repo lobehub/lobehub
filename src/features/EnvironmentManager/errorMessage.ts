@@ -27,6 +27,7 @@ const CODE_KEYS: Record<string, string> = {
   // Retryable on purpose: the run is still packing its snapshot, and the
   // execution plane would rather leave it running than cut the save off.
   SNAPSHOT_IN_PROGRESS: 'environments.instances.stopSnapshotPending',
+  STORAGE_QUOTA_EXCEEDED: 'environments.storage.quotaExceeded',
 };
 
 /**

@@ -4142,6 +4142,8 @@ When I am ___, I need ___
   'environments.removeConfirmTitle': 'Delete environment {{name}}?',
   'environments.removeConfirmContent':
     "Its specification, variables, its copy's folder and the saved snapshot go with it, and cannot be recovered.",
+  'environments.storage.quotaExceeded':
+    'Storage space is insufficient. Free up space or upgrade your plan, then try again.',
   'environments.storage.used': '{{used}} of {{total}}',
   'environments.storage.unmeasured': 'Storage not measured yet · {{total}} available',
   'environments.storage.measuredAt': 'Measured {{time}}. Refresh to measure again.',
