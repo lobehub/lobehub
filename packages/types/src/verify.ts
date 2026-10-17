@@ -1,5 +1,5 @@
 import type { VerifyCheckDefinition } from './acceptanceFlow';
-import type { GoalReleaseGateDossier } from './goal';
+import type { GoalReleaseGateDossier } from './goalRollout';
 /**
  * Verify (delivery checker) domain types — the shared vocabulary, frozen-item
  * shape, Toulmin narrative, and rubric run-policy config. Kept here (not in the

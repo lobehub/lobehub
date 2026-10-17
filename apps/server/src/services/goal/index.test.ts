@@ -3547,7 +3547,7 @@ describe('GoalService', () => {
     // The re-plan receives the answer and, even though the planner still
     // reports a blocking question, proceeds on assumptions: one round only.
     expect((await service.tick(graph.goal.id)).outcome).toBe('advanced');
-    expect(planner).toHaveBeenLastCalledWith({
+    expect(planner.mock.lastCall?.[0]).toMatchObject({
       clarifications: [{ answer: '开发者 (只关心 SDK)', question: '这份说明给谁看？' }],
       requirement: expect.any(String),
     });

@@ -131,6 +131,22 @@ class GoalService {
     resolution?: string;
   }) => lambdaClient.goal.decide.mutate(params);
 
+  /** Hand the goal to another agent; with no executor, its unfinished Tasks follow. */
+  setAgent = async (id: string, agentId: string) =>
+    lambdaClient.goal.setAgent.mutate({ agentId, id });
+
+  /** Route the goal's Tasks to a dedicated executor; `null` hands them back to the goal agent. */
+  setTaskAgent = async (id: string, agentId: string | null) =>
+    lambdaClient.goal.setTaskAgent.mutate({ agentId, id });
+
+  /** The model the goal agent plans with; `null` falls back to the agent's own. */
+  setModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>
+    lambdaClient.goal.setModel.mutate({ id, modelConfig });
+
+  /** The model the goal's Tasks run on; `null` falls back to their executor's own. */
+  setTaskModel = async (id: string, modelConfig: { model: string; provider: string } | null) =>
+    lambdaClient.goal.setTaskModel.mutate({ id, modelConfig });
+
   setBudget = async (params: {
     deadline?: string | null;
     id: string;

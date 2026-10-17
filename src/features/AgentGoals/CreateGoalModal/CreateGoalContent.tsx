@@ -43,7 +43,8 @@ import { usePermission } from '@/hooks/usePermission';
 import { goalService } from '@/services/goal';
 import { shinyTextStyles } from '@/styles';
 
-import { buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
+import GoalAgentPill from '../GoalAgentPill';
+import { buildGoalAgents, buildGoalCreateInput, buildReviewedGoalContent } from './goalConfig';
 import { createFallbackGoalCriterion, generateGoalCriteria } from './goalCriteria';
 import { deriveGoalTitle } from './goalTitle';
 
@@ -241,6 +242,10 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     name: initialTitle ?? '',
   });
   const [remainingSeconds, setRemainingSeconds] = useState(GENERATION_ESTIMATE_SECONDS);
+  // Who plans the goal (its main agent) and who does its Tasks. Unset executor
+  // means the main agent does them itself.
+  const [plannerId, setPlannerId] = useState(agentId);
+  const [executorId, setExecutorId] = useState<string>();
 
   const editor = useEditor();
   const instructionRef = useRef(plan.instruction);
@@ -369,10 +374,12 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
 
     setIsCreating(true);
     try {
+      const { agentId: goalAgentId, taskAgentId } = buildGoalAgents(plannerId, executorId);
       const graph = await goalService.create({
-        agentId,
+        agentId: goalAgentId,
         config: {
           recovery: { maxAttemptsPerTask: resolveGoalAttemptBudget(plan.maxIterations) },
+          ...(taskAgentId ? { taskAgentId } : {}),
         },
         // `maxIterations` is the per-Task attempt budget above; it is not the
         // graph-wide round cap, which counts runs across every Task and would
@@ -405,7 +412,7 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
     } finally {
       setIsCreating(false);
     }
-  }, [agentId, canCreate, close, onCreated, plan, projectId, t]);
+  }, [canCreate, close, executorId, onCreated, plan, plannerId, projectId, t]);
 
   const handlePrimaryAction =
     step === 'describe' ? handleNext : step === 'review' ? handleSubmit : undefined;
@@ -590,6 +597,40 @@ const CreateGoalContent = memo<CreateGoalContentProps>((props) => {
                 </CriterionRow>
               ))}
             </CriterionList>
+          </Flexbox>
+
+          <Flexbox className={styles.reviewSection} gap={10}>
+            <Text fontSize={13} weight={600}>
+              {t('createGoal.agentsTitle')}
+            </Text>
+            <Flexbox horizontal align={'center'} gap={8} wrap={'wrap'}>
+              <GoalAgentPill
+                agentId={plannerId}
+                disabled={!canCreate}
+                label={t('goalDetail.mainAgentLabel')}
+                placeholder={t('goalDetail.mainAgentUnassigned')}
+                tooltip={t('goalDetail.mainAgent')}
+                onChange={(next) => {
+                  if (!next) return;
+                  setPlannerId(next);
+                  // One agent, one slot: the new main agent does its own Tasks.
+                  if (next === executorId) setExecutorId(undefined);
+                }}
+              />
+              {plannerId && (
+                <GoalAgentPill
+                  agentId={executorId}
+                  disabled={!canCreate}
+                  label={t('goalDetail.taskAgentLabel')}
+                  placeholder={t('goalDetail.taskAgentFollowsMain')}
+                  tooltip={t('goalDetail.taskAgent')}
+                  onChange={(next) => setExecutorId(next && next !== plannerId ? next : undefined)}
+                />
+              )}
+            </Flexbox>
+            <Text className={styles.sectionHint} fontSize={12}>
+              {t('createGoal.agentsHint')}
+            </Text>
           </Flexbox>
 
           <Flexbox className={styles.reviewSection} gap={10}>

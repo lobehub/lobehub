@@ -24,6 +24,7 @@ import {
 } from '@/server/services/heterogeneousAgent/operationPrincipal';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { goalAssignmentProcedures } from './goalAssignment';
 import { goalGraphEditProcedures } from './goalGraphEdit';
 import { goalProcedure, goalWriteProcedure, idInput, mapGoalError } from './goalProcedures';
 
@@ -534,6 +535,7 @@ export const goalRouter = router({
       return { data, success: true };
     }),
   ...goalGraphEditProcedures,
+  ...goalAssignmentProcedures,
 
   /**
    * `/goal` from a conversation run authenticated by its operation token (device
@@ -1171,63 +1173,6 @@ export const goalRouter = router({
         return { success: true };
       } catch (error) {
         mapGoalError(error, 'setAcceptanceCriteria');
-      }
-    }),
-
-  /**
-   * Hand the goal to a different agent — the one that supervises and plans it.
-   * When that agent also does the goal's Tasks, unfinished ones follow by
-   * default (`goalOnly` keeps them); Tasks mid-run switch on their next attempt.
-   */
-  setAgent: goalWriteProcedure
-    .input(idInput.extend({ agentId: z.string().min(1), goalOnly: z.boolean().optional() }))
-    .mutation(async ({ ctx, input: { id, agentId, goalOnly } }) => {
-      try {
-        // Same ownership rule as restart/delete: visibility is not
-        // manageability, so only the goal's owner may hand it to a new agent.
-        const goal = await ctx.goalModel.findById(id);
-        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
-
-        const data = await ctx.goalService.setAgent(id, agentId, { goalOnly });
-        const reassigned = data.reassignedTaskIds.length;
-        return {
-          data,
-          message: reassigned
-            ? `Goal agent updated; ${reassigned} task(s) reassigned`
-            : 'Goal agent updated',
-          success: true,
-        };
-      } catch (error) {
-        mapGoalError(error, 'setAgent');
-      }
-    }),
-
-  /**
-   * Route the goal's Tasks to a dedicated executor (`null` hands them back to
-   * the goal agent). Unfinished Tasks follow unless `goalOnly` is set.
-   */
-  setTaskAgent: goalWriteProcedure
-    .input(
-      idInput.extend({ agentId: z.string().min(1).nullable(), goalOnly: z.boolean().optional() }),
-    )
-    .mutation(async ({ ctx, input: { id, agentId, goalOnly } }) => {
-      try {
-        const goal = await ctx.goalModel.findById(id);
-        if (!goal) throw new TRPCError({ code: 'NOT_FOUND', message: 'Goal not found' });
-        assertWorkspaceRowManageable(ctx, goal.userId, 'goal');
-
-        const data = await ctx.goalService.setTaskAgent(id, agentId, { goalOnly });
-        const reassigned = data.reassignedTaskIds.length;
-        return {
-          data,
-          message: reassigned
-            ? `Task agent updated; ${reassigned} task(s) reassigned`
-            : 'Task agent updated',
-          success: true,
-        };
-      } catch (error) {
-        mapGoalError(error, 'setTaskAgent');
       }
     }),
 

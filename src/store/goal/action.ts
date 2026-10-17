@@ -331,6 +331,42 @@ export class GoalActionImpl {
     await this.refreshGoalGraph(goalId);
   };
 
+  /**
+   * The goal moves to the new agent's goal list, so both agents' lists re-read
+   * along with the page.
+   */
+  setGoalAgent = async (goalId: string, agentId: string): Promise<void> => {
+    await goalService.setAgent(goalId, agentId);
+    await Promise.all([
+      this.refreshGoalGraph(goalId),
+      revalidateReplica(goalListResource),
+      revalidateReplica(homeGoalListResource),
+    ]);
+  };
+
+  /** Unfinished Tasks move with the executor, so their rows on the page re-read too. */
+  setGoalTaskAgent = async (goalId: string, agentId: string | null): Promise<void> => {
+    await goalService.setTaskAgent(goalId, agentId);
+    await this.refreshGoalGraph(goalId);
+  };
+
+  setGoalModel = async (
+    goalId: string,
+    modelConfig: { model: string; provider: string } | null,
+  ): Promise<void> => {
+    await goalService.setModel(goalId, modelConfig);
+    await this.refreshGoalGraph(goalId);
+  };
+
+  /** Unfinished Tasks switch model with it, so their rows re-read too. */
+  setGoalTaskModel = async (
+    goalId: string,
+    modelConfig: { model: string; provider: string } | null,
+  ): Promise<void> => {
+    await goalService.setTaskModel(goalId, modelConfig);
+    await this.refreshGoalGraph(goalId);
+  };
+
   updateGoalRequirement = async (goalId: string, requirement: string): Promise<void> => {
     await goalService.updateRequirement(goalId, requirement);
     await this.refreshGoalGraph(goalId);

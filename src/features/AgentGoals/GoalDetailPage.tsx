@@ -25,6 +25,7 @@ import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
 import { goalSelectors, useGoalStore } from '@/store/goal';
 
+import GoalAgentModelConfig from './GoalAgentModelConfig';
 import GoalChat from './GoalChat';
 import GoalDetailActions from './GoalDetailActions';
 import GoalHeaderMetrics from './GoalHeaderMetrics';
@@ -242,9 +243,12 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   button is only the control. */}
               {/* A draft is still being arranged: nothing has been dispatched,
                   and starting it is the one explicit move into running. */}
-              {goal.status === 'draft' && (
-                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
-                  {canEdit && canStart && (
+              <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'} wrap={'wrap'}>
+                {/* One control at a time: a draft is started, a moving goal is
+                    paused or resumed — the two states never overlap. */}
+                {goal.status === 'draft' ? (
+                  canEdit &&
+                  canStart && (
                     <Button
                       icon={PlayIcon}
                       loading={starting}
@@ -262,14 +266,8 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                     >
                       {t('goalProcess.start')}
                     </Button>
-                  )}
-                  <Text fontSize={12} type={'secondary'}>
-                    {t('goalProcess.draft')}
-                  </Text>
-                </Flexbox>
-              )}
-              {canPause && (
-                <Flexbox horizontal align={'center'} gap={10} paddingBlock={'8px 0'}>
+                  )
+                ) : canPause ? (
                   <Button
                     icon={paused ? PlayIcon : PauseIcon}
                     type={paused ? 'primary' : 'default'}
@@ -277,13 +275,21 @@ const GoalDetailPage = memo<GoalDetailPageProps>(({ agentId, goalId }) => {
                   >
                     {paused ? t('goalProcess.resume') : t('goalProcess.pause')}
                   </Button>
-                  {paused && (
-                    <Text fontSize={12} type={'secondary'}>
-                      {t('goalProcess.paused')}
-                    </Text>
-                  )}
-                </Flexbox>
-              )}
+                ) : null}
+                {/* Who plans the goal and who does its Tasks, next to the control
+                    that starts or pauses that work. Also the way to give an
+                    agent-less goal its main agent. */}
+                <GoalAgentModelConfig
+                  disabled={!canEdit || !canStart}
+                  goalId={goal.id}
+                  routeAgentId={agentId}
+                />
+                {goal.status === 'draft' && (
+                  <Text fontSize={12} type={'secondary'}>
+                    {t('goalProcess.draft')}
+                  </Text>
+                )}
+              </Flexbox>
               {/* North-star strip reads with the requirement document — the
                   measured clauses ARE half of the acceptance contract — and
                   leads it rather than trailing it (review feedback, r3). It

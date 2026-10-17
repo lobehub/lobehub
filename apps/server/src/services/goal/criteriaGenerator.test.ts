@@ -121,4 +121,15 @@ describe('GoalCriteriaGeneratorService', () => {
       title: 'Publish benchmark paper',
     });
   });
+
+  it("plans a goal's decomposition on the goal's own planning model", async () => {
+    const goalConfig = { model: 'gemini-3.8-flash', provider: 'google' };
+    generateObject.mockResolvedValueOnce({ problemStatement: 'p', tasks: [] });
+
+    await new GoalCriteriaGeneratorService({} as never, 'user-1')
+      .decompose({ goalConfig, requirement: 'Upgrade office editing' })
+      .catch(() => undefined);
+
+    expect(resolveGoalModelConfig).toHaveBeenCalledWith({}, 'user-1', goalConfig);
+  });
 });

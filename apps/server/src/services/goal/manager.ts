@@ -39,6 +39,8 @@ import { deviceGateway } from '@/server/services/deviceGateway';
 
 import { GoalBriefService } from './goalBriefs';
 import { TERMINAL_GOAL_STATUSES as finishedGoalStatuses } from './goalTraceRecorder';
+import { splitManagerFeedback } from './managerFeedback';
+import { goalModelOverride } from './modelConfig';
 import {
   classifyRunFailure,
   countUnchargedRuns,
@@ -199,8 +201,6 @@ type GoalPlan = z.infer<typeof goalPlanSchema>;
 const activeStatuses = new Set(['planning', 'running']);
 const terminalNodes = new Set(['resolved', 'retired', 'rejected']);
 const TIMEOUT_MS = 20 * 60_000;
-/** Task comments listed in one planning turn's message; older ones are counted, not shown. */
-const FEEDBACK_NOTE_LIMIT = 20;
 /** Source message id prefix of a dispatched planning turn; the suffix is its token. */
 const MANAGER_SOURCE_MESSAGE_PREFIX = 'msg_goal_manager_';
 /** Consecutive charged turns that errored without a plan before the Goal pauses. */
@@ -1370,27 +1370,11 @@ export class GoalManagerService {
       };
       await this.save(db, goal.id, next);
       if (fresh.status === 'planning') await model.updateStatus(goal.id, 'running');
-      // Split at the previous turn's start, so the message names what is new to
-      // this turn instead of resending the same comments every turn.
-      // Only the latest FEEDBACK_NOTE_LIMIT are listed; the rest are counted so
-      // the agent knows to read them in full rather than treating the list as all.
-      const since = freshState?.startedAt ? Date.parse(freshState.startedAt) : undefined;
-      const isNew = (n: (typeof reviews.notes)[number]) =>
-        since === undefined || n.updatedAt.getTime() > since;
-      const listed = reviews.notes.slice(-FEEDBACK_NOTE_LIMIT);
-      const omitted = reviews.notes.slice(0, -FEEDBACK_NOTE_LIMIT);
-      const note = ({ updatedAt, ...rest }: (typeof reviews.notes)[number]) => ({
-        ...rest,
-        updatedAt: updatedAt.toISOString(),
-      });
       return {
         ...next,
-        earlierFeedback: listed.filter((n) => !isNew(n)).map(note),
-        newFeedback: listed.filter(isNew).map(note),
-        omittedFeedback: {
-          earlier: omitted.filter((n) => !isNew(n)).length,
-          new: omitted.filter(isNew).length,
-        },
+        ...splitManagerFeedback(reviews.notes, freshState?.startedAt),
+        // Read under the lock, so a model picked just before this turn applies to it.
+        modelOverride: goalModelOverride(fresh.config),
         previousTurn: freshState && {
           neverStarted: freshState.dispatchNeverStarted,
           plan: freshState.submitted,
@@ -1407,6 +1391,7 @@ export class GoalManagerService {
         clientIds: { userMessageId: `msg_goal_manager_${claimed.token}` },
         autoStart: true,
         maxSteps: 80,
+        ...claimed.modelOverride,
         userInterventionConfig: { approvalMode: 'headless' },
         prompt: buildGoalManagerPrompt({
           goalId: goal.id,

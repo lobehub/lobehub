@@ -57,6 +57,11 @@ vi.mock('@/store/global/selectors', () => ({
   systemStatusSelectors: { showLeftPanel: () => false },
 }));
 
+// The main-agent picker follows a handover to the new agent's route.
+vi.mock('@/features/Workspace/useWorkspaceAwareNavigate', () => ({
+  useWorkspaceAwareNavigate: () => vi.fn(),
+}));
+
 vi.mock('@/hooks/usePermission', () => ({ usePermission: () => ({ allowed: mocks.canEdit }) }));
 
 vi.mock('@/features/Portal/usePortalPanelWidth', () => ({
