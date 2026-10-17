@@ -1,0 +1,409 @@
+import {
+  type RecentTopic,
+  type RecentTopicGroup,
+  type RecentTopicGroupMember,
+} from '@lobechat/types';
+import { cleanObject } from '@lobechat/utils';
+import { TRPCError } from '@trpc/server';
+import { and, inArray } from 'drizzle-orm';
+import { z } from 'zod';
+
+import { withScopedPermission } from '@/business/server/trpc-middlewares/rbacPermission';
+import { MessageModel } from '@/database/models/message';
+import { chatGroups } from '@/database/schemas';
+import { notTrashed } from '@/database/utils/softDelete';
+import { TopicReferenceService } from '@/server/services/topicReference';
+import { after } from '@/server/utils/scheduleAfterResponse';
+
+import {
+  batchResolveAgentIdFromSessions,
+  resolveAgentIdFromSession,
+  resolveContext,
+} from '../_helpers/resolveContext';
+import { topicProcedure, topicSearchProcedure } from './procedures';
+
+export const queryProcedures = {
+  getTopicDetail: topicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input, ctx }) => {
+      const topic = await ctx.topicModel.findOwnTopicById(input.id);
+      if (!topic) return null;
+      return topic;
+    }),
+  getTopicTranscript: topicProcedure
+    .input(
+      z.object({
+        includeMessages: z.boolean().default(true),
+        limit: z.number().int().min(1).max(500).default(50),
+        offset: z.number().int().min(0).default(0),
+        topicId: z.string(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      // `lh topic view` from a workspace run may be given one of the user's personal topic ids.
+      const topic = await new TopicReferenceService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).findTopic(input.topicId);
+
+      if (!topic) {
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          message: `Topic not found: ${input.topicId}`,
+        });
+      }
+
+      if (!input.includeMessages) {
+        return { items: [], topic, total: null };
+      }
+
+      const messageModel =
+        (topic.workspaceId ?? undefined) === (ctx.workspaceId ?? undefined)
+          ? ctx.messageModel
+          : new MessageModel(ctx.serverDB, ctx.userId, topic.workspaceId ?? undefined);
+      const transcript = await messageModel.queryTopicTranscript({
+        limit: input.limit,
+        offset: input.offset,
+        topicId: input.topicId,
+      });
+
+      return { ...transcript, topic };
+    }),
+  /**
+   * @deprecated The `lobe-topic-reference` tool was removed; agents read topics with
+   * `lh topic view`. Kept for released Desktop builds and cached web bundles whose
+   * client executor still calls this. Remove once those clients have aged out.
+   */
+  getTopicContext: topicProcedure
+    .input(z.object({ topicId: z.string() }))
+    .query(async ({ input, ctx }) =>
+      new TopicReferenceService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      ).getTopicContext(input),
+    ),
+  countTopics: topicProcedure
+    .input(
+      z
+        .object({
+          agentId: z.string().optional(),
+          containerId: z.string().nullish(),
+          endDate: z.string().optional(),
+          range: z.tuple([z.string(), z.string()]).optional(),
+          startDate: z.string().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ ctx, input }) => {
+      return ctx.topicModel.count(input);
+    }),
+  queryTopics: topicProcedure
+    .input(
+      z
+        .object({
+          pageSize: z.number().max(500).optional(),
+          statuses: z.array(z.string()).optional(),
+          withLastMessage: z.boolean().optional(),
+        })
+        .optional(),
+    )
+    .query(async ({ input, ctx }) => {
+      return ctx.topicModel.queryTopics({
+        pageSize: input?.pageSize,
+        statuses: input?.statuses,
+        withLastMessage: input?.withLastMessage,
+      });
+    }),
+  getTopics: topicProcedure
+    .input(
+      z.object({
+        agentId: z.string().nullish(),
+        current: z.number().optional(),
+        /**
+         * Scope an `agentId` query to the builder conversations that configured
+         * one target. Builder panels show their full history on purpose; these
+         * are for callers that want a single agent's / group's builds.
+         */
+        editingAgentId: z.string().nullish(),
+        editingGroupId: z.string().nullish(),
+        excludeStatuses: z.array(z.string()).optional(),
+        excludeTriggers: z.array(z.string()).optional(),
+        groupId: z.string().nullish(),
+        includeTriggers: z.array(z.string()).optional(),
+        isInbox: z.boolean().optional(),
+        pageSize: z.number().max(100).optional(),
+        sessionId: z.string().nullish(),
+        /**
+         * Server-side ordering. Defaults to `updatedAt`; `status` orders by
+         * status priority for the sidebar "group by status" mode.
+         */
+        sortBy: z.enum(['updatedAt', 'status']).optional(),
+        triggers: z.array(z.string()).optional(),
+        /**
+         * When true, returns extra card-detail columns (firstUserMessage,
+         * messageCount, cost, tokenUsage, description, trigger). Default false
+         * so the sidebar list stays cheap — only the management page opts in.
+         */
+        withDetails: z.boolean().optional(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const {
+        sessionId,
+        isInbox,
+        groupId,
+        excludeStatuses,
+        excludeTriggers,
+        includeTriggers,
+        triggers,
+        ...rest
+      } = input;
+
+      // If groupId is provided, query by groupId directly
+      if (groupId) {
+        const result = await ctx.topicModel.query({
+          excludeStatuses,
+          excludeTriggers,
+          groupId,
+          includeTriggers,
+          triggers,
+          ...rest,
+        });
+        return { items: result.items, total: result.total };
+      }
+
+      // If sessionId is provided but no agentId, need to reverse lookup agentId
+      let effectiveAgentId = rest.agentId;
+      if (!effectiveAgentId && sessionId) {
+        effectiveAgentId = await resolveAgentIdFromSession(
+          sessionId,
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+      }
+
+      const result = await ctx.topicModel.query({
+        ...rest,
+        agentId: effectiveAgentId,
+        excludeStatuses,
+        excludeTriggers,
+        includeTriggers,
+        isInbox,
+        triggers,
+      });
+
+      // Runtime migration: backfill agentId for ALL legacy topics and messages under this agent
+      const runMigration = async () => {
+        if (!effectiveAgentId) return;
+
+        // Get the associated sessionId for migration
+        const resolved = await resolveContext(
+          { agentId: effectiveAgentId },
+          ctx.serverDB,
+          ctx.userId,
+          ctx.workspaceId ?? undefined,
+        );
+
+        const migrationParams = isInbox
+          ? { agentId: effectiveAgentId, isInbox: true as const, sessionId: resolved.sessionId }
+          : resolved.sessionId
+            ? { agentId: effectiveAgentId, sessionId: resolved.sessionId }
+            : null;
+
+        if (migrationParams) {
+          try {
+            await ctx.agentMigrationRepo.migrateAgentId(migrationParams);
+          } catch (error) {
+            console.error('[AgentMigration] Failed to migrate agentId:', error);
+          }
+        }
+      };
+
+      after(runMigration);
+
+      return { items: result.items, total: result.total };
+    }),
+  hasTopicFiles: topicProcedure
+    .use(withScopedPermission('topic:delete'))
+    .input(z.object({ ids: z.array(z.string()).min(1) }))
+    .query(async ({ input, ctx }) => {
+      try {
+        const hasFiles = await ctx.fileModel.hasFilesByTopicIds(input.ids);
+        return { data: { hasFiles }, success: true };
+      } catch (error) {
+        console.error('[topic:hasTopicFiles]', error);
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: 'Failed to check topic files',
+        });
+      }
+    }),
+  hasTopics: topicProcedure.query(async ({ ctx }) => {
+    return (await ctx.topicModel.count()) === 0;
+  }),
+  getMaxTaskDuration: topicProcedure.query(async ({ ctx }) => {
+    return ctx.agentOperationModel.getMaxDurationSeconds();
+  }),
+  rankTopics: topicProcedure.input(z.number().max(50).optional()).query(async ({ ctx, input }) => {
+    return ctx.topicModel.rank(input);
+  }),
+  recentTopics: topicProcedure
+    .input(z.object({ limit: z.number().max(50).optional() }).optional())
+    .query(async ({ ctx, input }): Promise<RecentTopic[]> => {
+      const recentTopics = await ctx.topicModel.queryRecent(input?.limit ?? 12);
+
+      // Separate agent topics and group topics
+      const agentTopics = recentTopics.filter((t) => t.type === 'agent');
+      const groupTopics = recentTopics.filter((t) => t.type === 'group');
+
+      // Find legacy topics: no agentId but has sessionId
+      const legacyTopics = agentTopics.filter(
+        (topic) => topic.agentId === null && topic.sessionId !== null,
+      );
+
+      // Batch resolve agentId for legacy topics
+      const sessionIds = [...new Set(legacyTopics.map((t) => t.sessionId!))];
+      const sessionAgentMap = await batchResolveAgentIdFromSessions(
+        sessionIds,
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      // Build agentId map: merge existing agentId with resolved ones
+      const topicAgentIdMap = new Map<string, string>();
+      for (const topic of agentTopics) {
+        if (topic.agentId) {
+          topicAgentIdMap.set(topic.id, topic.agentId);
+        } else if (topic.sessionId) {
+          const resolvedAgentId = sessionAgentMap.get(topic.sessionId);
+          if (resolvedAgentId) {
+            topicAgentIdMap.set(topic.id, resolvedAgentId);
+          }
+        }
+      }
+
+      // Collect all agentIds to fetch agent info
+      const allAgentIds = [...new Set(topicAgentIdMap.values())];
+
+      // Batch query agent info (already normalized for the inbox agent)
+      const agentInfoMap = new Map<
+        string,
+        { avatar: string | null; backgroundColor: string | null; id: string; title: string | null }
+      >();
+
+      if (allAgentIds.length > 0) {
+        const agentInfos = await ctx.agentModel.getAgentAvatarsByIds(allAgentIds);
+
+        for (const agent of agentInfos) {
+          agentInfoMap.set(agent.id, agent);
+        }
+      }
+
+      // Batch query group info with member avatars
+      const groupInfoMap = new Map<string, RecentTopicGroup>();
+      const allGroupIds = [...new Set(groupTopics.map((t) => t.groupId!).filter(Boolean))];
+
+      if (allGroupIds.length > 0) {
+        // Query chat groups
+        const chatGroupInfos = await ctx.serverDB
+          .select({
+            id: chatGroups.id,
+            title: chatGroups.title,
+          })
+          .from(chatGroups)
+          .where(and(inArray(chatGroups.id, allGroupIds), notTrashed(chatGroups.isDeleted)));
+
+        // Query group member avatars (already normalized for the inbox agent)
+        const groupMembersMap: Map<string, RecentTopicGroupMember[]> =
+          await ctx.chatGroupModel.getMemberAvatarsByGroupIds(allGroupIds);
+
+        // Build group info map
+        for (const group of chatGroupInfos) {
+          groupInfoMap.set(group.id, {
+            id: group.id,
+            members: groupMembersMap.get(group.id) || [],
+            title: group.title,
+          });
+        }
+      }
+
+      // Runtime migration: backfill agentId for legacy topics
+      const runMigration = async () => {
+        for (const [sessionId, agentId] of sessionAgentMap) {
+          try {
+            await ctx.agentMigrationRepo.migrateAgentId({ agentId, sessionId });
+          } catch (error) {
+            console.error('[AgentMigration] Failed to migrate agentId for recentTopics:', error);
+          }
+        }
+      };
+
+      after(runMigration);
+
+      // Assemble final result
+      return recentTopics.map((topic) => {
+        if (topic.type === 'group' && topic.groupId) {
+          const groupInfo = groupInfoMap.get(topic.groupId);
+          return {
+            agent: null,
+            group: groupInfo ?? null,
+            id: topic.id,
+            title: topic.title,
+            type: 'group' as const,
+            updatedAt: topic.updatedAt,
+          };
+        }
+
+        // Agent topic
+        const agentId = topicAgentIdMap.get(topic.id);
+        const agentInfo = agentId ? agentInfoMap.get(agentId) : null;
+
+        // Always return agent with id if agentId exists (even if avatar/title are null)
+        // Frontend needs agent.id to generate links
+        const validAgent = agentInfo ? cleanObject(agentInfo) : null;
+
+        return {
+          agent: validAgent,
+          group: null,
+          id: topic.id,
+          title: topic.title,
+          type: 'agent' as const,
+          updatedAt: topic.updatedAt,
+        };
+      });
+    }),
+  searchTopics: topicSearchProcedure
+    .input(
+      z.object({
+        agentId: z.string().optional(),
+        groupId: z.string().nullish(),
+        keywords: z.string(),
+        sessionId: z.string().nullish(),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      const resolved = await resolveContext(
+        { agentId: input.agentId, sessionId: input.sessionId },
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+
+      // Scope the search exactly like the topics list (`query`): by agentId
+      // directly (the new agent system stamps every topic with an agentId).
+      // Passing only the resolved sessionId used to miss every agentId-scoped
+      // topic — the cause of "no topics match" in the per-agent Topics search.
+      // `containerId` is only the fallback for legacy callers that pass no
+      // agentId/groupId.
+      return ctx.topicModel.queryByKeyword(input.keywords, {
+        agentId: input.agentId,
+        containerId: resolved.sessionId,
+        groupId: input.groupId,
+      });
+    }),
+};
