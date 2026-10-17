@@ -461,8 +461,8 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('include artifact paths, commands, and observed results');
     expect(result).toContain('an independent verifier decides whether this Task is complete');
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
-    expect(result).toContain('lh acceptance install');
-    expect(result).toContain('lh acceptance run result submit');
+    expect(result).toMatch(/`lh acceptance install`.*plan path.*chapters on every recording/);
+    expect(result).not.toContain('lh acceptance run result submit'); // the skill owns publishing
     expect(result).toContain('proved by a screenshot or recording');
     // The portable skill is pulled to disk by CLI builders and is absent from
     // `builtinSkills`, so it must never be named as an unconditional step.
@@ -487,7 +487,7 @@ describe('buildTaskRunPrompt', () => {
     expect(result).toContain('Verify — delivery acceptance');
     expect(result).toContain('Run the Acceptance inside this Task, not after it');
     expect(result).toContain('Criterion ids are minted when this run starts');
-    expect(result).toContain('lh verify plan state');
+    expect(result).toContain('lh acceptance plan state');
   });
 
   it('should omit the verify section when verify is disabled', () => {

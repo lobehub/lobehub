@@ -23,6 +23,7 @@ apps/cli/src/
 ├── index.ts                  # Entry point — parses argv, invokes program.ts
 ├── program.ts                # Builds the Commander program, registers every command
 ├── api/
+│   ├── acceptance/           # `lh acceptance`: review loop, rounds (run/), plans, criteria, rubrics; `lh verify` aliases
 │   ├── client.ts             # tRPC client (type-safe backend API)
 │   └── http.ts               # Raw HTTP utilities
 ├── auth/
@@ -69,8 +70,6 @@ apps/cli/src/
 │   ├── trace/                # Inspect and replay recorded agent execution traces
 │   ├── update.ts             # Self-update to the latest published version
 │   ├── user.ts               # User account & settings
-│   ├── verify.ts             # Agent Run verification machinery (criteria, rubrics, check plans)
-│   ├── verifyAcceptance.ts   # `lh acceptance`: cross-round delivery review loop
 │   └── workspace.ts          # Workspace list/scope/members/usage/audit
 ├── daemon/
 │   └── manager.ts            # Background daemon process management
@@ -106,8 +105,8 @@ apps/cli/src/
 | `lh task`          | -     | Manage agent tasks (assignees, checkpoints, deps, review)                          |
 | `lh thread`        | -     | Manage message threads                                                             |
 | `lh trace`         | -     | Inspect and replay recorded agent execution traces                                 |
-| `lh verify`        | -     | Agent Run verification machinery — criteria, rubrics, per-run check plans          |
-| `lh acceptance`    | -     | Delivery acceptances — the cross-round review loop (checks, feedback, decision)    |
+| `lh acceptance`    | -     | Delivery acceptances: review loop, rounds, per-run check plans, criteria, rubrics  |
+| `lh verify`        | -     | Deprecated alias of `lh acceptance` commands                                       |
 | `lh eval`          | -     | Manage evaluation workflows and benchmarks                                         |
 | `lh generate`      | `gen` | Content generation (text, image, video, tts, asr, download)                        |
 | `lh doc`           | -     | Document CRUD, batch-create, parse, topic linking                                  |

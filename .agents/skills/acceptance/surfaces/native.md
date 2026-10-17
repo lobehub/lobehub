@@ -27,16 +27,17 @@ osascript -e "tell application \"$APP\" to activate"
 sleep 1
 # ... navigate + act via osascript (see computer-use.md) ...
 sleep 2 # let the result settle
-screencapture -l "$(osascript -e "tell application \"System Events\" to tell process \"$APP\" to get id of window 1")" ./proof/native-result.png
+screencapture -l "$(osascript -e "tell application \"System Events\" to tell process \"$APP\" to get id of window 1")" "$REPORT_DIR/assets/native-result.png"
 ```
 
-Upload as evidence (provenance `cli`, since osascript/screencapture are
-shell-driven):
+Save it into the round's `assets/` and cite it from the case once you have
+looked at it:
 
-```bash
-lh acceptance run result submit --operation "$OPERATION_ID" --item "$CHECK_ITEM_ID" --type screenshot \
-  --file ./proof/native-result.png --by cli \
-  --desc "Native app shows the expected state after the change"
+```jsonc
+"evidence": [
+  { "path": "assets/native-result.png",
+    "description": "Native app shows the expected state after the change" }
+]
 ```
 
 ## Mid-flow use from another surface

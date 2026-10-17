@@ -1,6 +1,5 @@
 import { fetchAcceptanceSkillBundle } from '@lobechat/builtin-skills/acceptance';
 import {
-  normalizeEvidenceMetadata,
   normalizeVerifySurface,
   verifyRunScenarios,
   verifySurfaces,
@@ -10,7 +9,6 @@ import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type {
   VerifyCheckItem,
   VerifyCheckResultMetadata,
-  VerifyEvidenceType,
   VerifyRunContext,
   VerifyRunScenario,
 } from '@lobechat/types';
@@ -49,7 +47,6 @@ import { GoalCriteriaGeneratorService } from '@/server/services/goal/criteriaGen
 import {
   AcceptanceService,
   createEvidenceFileResolver,
-  evidenceTypeForStoredFile,
   finalizeVerifyRun,
   purgeVerifyRun,
   resolveLiveRoundForItem,
@@ -60,6 +57,7 @@ import {
 } from '@/server/services/verify';
 
 import { assertWorkspaceRowManageable } from './_helpers/assertWorkspaceRowManageable';
+import { createVerifyEvidenceRow } from './_helpers/verifyEvidenceRow';
 
 const verifierTypeSchema = z.enum(['program', 'agent', 'llm']);
 const onFailSchema = z.enum(['manual', 'auto_repair']);
@@ -327,14 +325,6 @@ const resolveRunByOperation = async (ctx: { runModel: VerifyRunModel }, operatio
 
   return run;
 };
-
-/** Store a file-backed artifact under the medium of the file itself, not the caller's label. */
-const storedEvidenceType = async (
-  ctx: { fileModel: FileModel },
-  type: VerifyEvidenceType,
-  fileId?: string | null,
-): Promise<VerifyEvidenceType> =>
-  fileId ? evidenceTypeForStoredFile(type, await ctx.fileModel.findById(fileId)) : type;
 
 export const verifyRouter = router({
   // ---- criteria (reusable atomic standards) ----
@@ -743,7 +733,7 @@ export const verifyRouter = router({
       // Settle the run through the SAME finalizer the completion-time gate uses
       // (runVerifyOnCompletion → finalizeVerifyRun): repair-aware tail (spawn a
       // repair round on auto_repair failures), then report + drive the bound task.
-      // Without this, a verify triggered via the CLI (`lh verify run`, e.g. a
+      // Without this, a verify triggered via the CLI (`lh acceptance run`, e.g. a
       // device/agent-testing run) would write verdicts and stop — never auto-repair.
       await finalizeVerifyRun(
         ctx.serverDB,
@@ -973,18 +963,8 @@ export const verifyRouter = router({
       // Attaching evidence mutates another member's result — creator-scoped,
       // mirroring submitCheckEvidence.
       assertWorkspaceRowManageable(ctx, result.userId, 'verify result');
-      const type = await storedEvidenceType(ctx, input.type, input.fileId);
 
-      return ctx.evidenceModel.create({
-        capturedAt: new Date(),
-        capturedBy: input.capturedBy ?? null,
-        checkResultId: result.id,
-        content: input.content ?? null,
-        description: input.description ?? null,
-        fileId: input.fileId ?? null,
-        metadata: normalizeEvidenceMetadata(input.metadata, type) ?? null,
-        type,
-      });
+      return createVerifyEvidenceRow(ctx, result.id, input);
     }),
 
   /**
@@ -1010,6 +990,7 @@ export const verifyRouter = router({
                   content: z.string().min(1).optional(),
                   description: z.string().optional(),
                   fileId: z.string().min(1).optional(),
+                  metadata: z.unknown().optional(), // as on uploadEvidence: a video's chapters
                   type: evidenceTypeSchema,
                 })
                 .refine((e) => Boolean(e.content) !== Boolean(e.fileId), {
@@ -1082,17 +1063,7 @@ export const verifyRouter = router({
 
       const evidence = input.evidence?.length
         ? await Promise.all(
-            input.evidence.map(async (e) =>
-              ctx.evidenceModel.create({
-                capturedAt: new Date(),
-                capturedBy: e.capturedBy ?? null,
-                checkResultId: checkResult.id,
-                content: e.content ?? null,
-                description: e.description ?? null,
-                fileId: e.fileId ?? null,
-                type: await storedEvidenceType(ctx, e.type, e.fileId),
-              }),
-            ),
+            input.evidence.map((e) => createVerifyEvidenceRow(ctx, checkResult.id, e)),
           )
         : [];
 

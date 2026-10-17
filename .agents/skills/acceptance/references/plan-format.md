@@ -1,14 +1,14 @@
-# Plan-driven rounds — discover, submit, self-check
+# Plan-driven rounds — read the plan, capture, ingest into its round
 
 Use this path only when the invocation handed you an operation id: a verify plan
-already exists and you satisfy it criterion by criterion. Authoring your own
-checks (the default) is [report.md](./report.md). Never mix both for one round.
+already exists and its round is waiting. Everything except where the checks come
+from and where the round lands is the authored path in [report.md](./report.md):
+the same `new_round` directory, `result.json`, `proposal.md`, assets, and capture
+discipline — surface guides, recordings with [chapters](./video-chapters.md),
+before/after pairs, screenshots you looked at. Never mix this path with an
+authored ingest for one round.
 
-`--operation` and `--run` are interchangeable on `result submit` and
-`result list`; `evidence list` keys off a positional `<checkResultId>` from
-`result list`.
-
-## (a) `lh verify plan state $OPERATION_ID --json`
+## Read the frozen plan — `lh verify plan state $OPERATION_ID --json`
 
 Returns the run's verify state plus the **frozen plan** (immutable once
 confirmed):
@@ -43,6 +43,28 @@ confirmed):
 - `hint` is guidance for what the artifact should show — it is not validated, but
   follow it so the reviewer can recognize the proof.
 
+## Write the round against the frozen plan
+
+Allocate the round under the subject the invocation named (`task-T-12`, or the
+operation when there is none) and copy each frozen item into `plan[]` unchanged,
+so the local report reads the same as the page:
+
+```bash
+REPORT_DIR=$(new_round "task-$TASK_IDENTIFIER" plan-round)
+```
+
+| Field in `result.json` | From the frozen plan                                                          |
+| ---------------------- | ----------------------------------------------------------------------------- |
+| `plan[].id`            | `verifyPlan[].id` — verbatim                                                  |
+| `plan[].title`         | `verifyPlan[].title`                                                          |
+| `requiredEvidence`     | `verifyPlan[].verifierConfig.requiredEvidence[].type`                         |
+| `cases[].id`           | the `verifyPlan[].id` the case proves — ingest rejects any id outside the plan |
+
+Then pick the surface for each item and capture into `$REPORT_DIR/assets/`
+exactly as an authored round does. Every recording gets its chapters while you
+drive it; each case's `observation` says what you saw. Leave `status` honest —
+it is your record, not the verdict.
+
 Only items with a non-empty `requiredEvidence` need an artifact; the rest are
 judged on the deliverable text — don't fabricate evidence for them. The `hint`
 usually implies the surface (SKILL.md, Pick the surface).
@@ -51,59 +73,76 @@ Apply [acceptance-checker.md](acceptance-checker.md) before execution and at fin
 of the first round; follow-up rounds have no acceptance-checker. Preserve frozen check IDs;
 report coverage gaps instead of silently changing the supplied plan. The
 acceptance-checker's review does not replace the configured verifier or authorize
-overriding its verdict. Keep existing submission and round semantics.
+overriding its verdict.
 
-## Your worklist → submit by checkItemId
-
-For each `verifyPlan[]` item with non-empty `requiredEvidence`, capture each
-`type` with the selected surface guide and submit **one artifact per call** by
-`checkItemId` (the same `--item` reuses the row):
-
-| checkItemId  | title                            | requiredEvidence |
-| ------------ | -------------------------------- | ---------------- |
-| `vci_a1b2c3` | Login flow reaches the workspace | `screenshot`     |
+## Publish into the operation's round
 
 ```bash
-OP="$OPERATION_ID"
-lh acceptance run result submit --operation "$OP" --item vci_a1b2c3 --type screenshot \
-  --file ./proof/home.png --by agent-browser --desc "…"
+lh acceptance run ingest "$REPORT_DIR" --operation "$OPERATION_ID" --json
 ```
 
-`lh acceptance run result submit` resolves the session from the operation id and **creates the
-check-result row for you** (idempotent on `checkItemId`), then attaches the
-evidence — there is no `checkResultId` to look up first. `--by` records
-provenance (`agent-browser` | `cdp` | `cli` | `program`); `--file` for binaries,
-`--content` for text, exactly one. Leave the verdict to the review step — add
-`--verdict` only when the task explicitly asks you to self-assert. Keep the
-printed run URL internal.
+With `--operation`, ingest finds the round the operation already owns and writes
+into it — it never creates another round or acceptance. It attaches every case's
+evidence (chapters, comparisons and captions included) to that round's rows and
+posts `proposal.md`. It publishes no verdicts and no `report.md`: the round's
+verifier judges every item and writes the report when it settles, so put your
+narrative in the final response.
+
+Read the JSON: `mode` is `plan-round`; `missingEvidence`, `failedEvidence` and
+`unexecuted` must be empty. A case id outside the plan fails before anything is
+written and lists the valid ids.
+
+An older CLI without plan-round ingest fails on `--operation` with a duplicate
+run error — check first: `lh acceptance run ingest --help` describes
+`--operation` as publishing into the run's existing round. Without it, submit
+each artifact with `result submit` (below), chapters included.
+
+## Supplement one artifact
+
+A single missing or failed artifact — a retry, or a verifier asking for one more
+capture — goes in with `result submit`, not a second ingest (re-ingesting
+duplicates every artifact):
+
+```bash
+lh acceptance run result submit --operation "$OPERATION_ID" --item vci_a1b2c3 --type video \
+  --file "$REPORT_DIR/assets/reload.mp4" --chapters "$REPORT_DIR/assets/reload.chapters.json" \
+  --by cdp --desc "…"
+```
+
+It resolves the round from the operation id, creates the check-result row on
+first use (idempotent on `checkItemId`), and rejects a malformed chapter or
+chapters on a non-video before uploading. Add the artifact to the case's
+`evidence` in `result.json` too, so the local round stays the full record.
+Leave `--verdict` off unless the task explicitly asks you to self-assert.
 
 ## Self-check coverage (do not skip)
 
-Once you've submitted, the result rows exist. Map each `checkItemId` to its
-`checkResultId` and list that row's evidence:
+Ingest's `missingEvidence` is the first check. To read the round back, map each
+`checkItemId` to its `checkResultId` and list that row's evidence:
 
 ```jsonc
 // lh acceptance run result list --operation "$OP" --json
 [
   {
-    "id": "vcr_x9y8z7", // checkResultId (created by submit)
+    "id": "vcr_x9y8z7", // checkResultId
     "checkItemId": "vci_a1b2c3", // joins back to verifyPlan[].id
-    "status": "running",
+    "status": "pending",
   },
 ]
 ```
 
 ```bash
-lh acceptance run evidence list "$CHECK_RESULT_ID" --json # confirm each required type is present
+lh acceptance run evidence list "$CHECK_RESULT_ID" --json # each required type present; videos carry metadata.chapters
 ```
 
 Coverage rule: for each required criterion, **every** `requiredEvidence[].type`
-appears at least once in its evidence list. A missing type → capture and submit
-again; then hand off per SKILL.md (acceptance URL + `coverage: n/n`).
+appears at least once in its evidence list, and every video has chapters. A gap →
+capture and supplement it; then hand off per SKILL.md (acceptance URL +
+`coverage: n/n`).
 
 ## Resolve the plan round's handoff links
 
-`result submit --json` returns an internal `url`, not `acceptanceUrl`. Some plans need no evidence submissions at all. In both cases, resolve
+`ingest --operation --json` returns `acceptanceUrl`; copy it. Some plans need no evidence at all, and an older CLI's `result submit --json` returns only an internal `url`. In those cases, resolve
 the supplied operation ID with `lh verify plan state <operationId> --json`, then
 read its `verifyRunId` using `lh acceptance run get <runId> --json`. The run's
 `acceptanceId` and `roundIndex` identify the existing handoff; do not substitute a

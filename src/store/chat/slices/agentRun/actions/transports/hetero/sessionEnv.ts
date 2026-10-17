@@ -9,7 +9,7 @@
  * spawns (`lh`, a script, a test harness), and each one can attribute its output
  * back to this topic without the agent having to pass ids it cannot see.
  *
- * Read by `lh verify ingest-report`, which stamps them onto the report's
+ * Read by `lh acceptance run ingest`, which stamps them onto the report's
  * `metadata.origin`.
  */
 export interface LobeHubSessionEnvIds {

@@ -305,7 +305,7 @@ export class VerifyExecutorService {
         // round of its own, so the command targets the caller's operation, not
         // this run: naming this (settled) run sent every repair's evidence one
         // round behind the round its gate checks.
-        suggestion: `Capture and upload the missing evidence (${missing}) to your current run via \`lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item ${item.id} --type ${gaps.length === 1 ? gaps[0] : `<${gaps.join('|')}>`} --file <path>\`.`,
+        suggestion: `Capture and upload the missing evidence (${missing}) to your current run via \`lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item ${item.id} --type ${gaps.length === 1 ? gaps[0] : `<${gaps.join('|')}>`} --file <path>${gaps.includes('video') ? ' --chapters <file>' : ''}\`.`,
         toulmin: { limitation: `Required evidence not provided: ${missing}.` },
         verdict: 'uncertain',
       });

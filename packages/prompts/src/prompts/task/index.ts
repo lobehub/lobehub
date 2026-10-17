@@ -776,17 +776,17 @@ export const buildTaskRunPrompt = (input: TaskRunPromptInput, now?: Date): strin
       }
     }
     taskLines.push(
-      '  Run the Acceptance inside this Task, not after it: drive the real product surface and submit each artifact as soon as the criterion it proves is provable.',
+      '  Run the Acceptance inside this Task, not after it: drive the real product surface, capture each artifact as soon as the criterion it proves is provable, and publish before you finish.',
     );
     taskLines.push(
-      '  Criterion ids are minted when this run starts, so they are not listed above. Read them at runtime with `listCriteria`, or `lh verify plan state "$LOBEHUB_OPERATION_ID" --json` if you have a shell.',
+      '  Criterion ids are minted when this run starts, so they are not listed above. Read them at runtime with `listCriteria`, or `lh acceptance plan state "$LOBEHUB_OPERATION_ID" --json` if you have a shell.',
     );
     // Two builder shapes, two toolchains. The portable `acceptance` skill is
-    // pulled to disk by external CLI builders and is deliberately absent from
-    // `builtinSkills`, so naming it unconditionally hands the in-product agent
-    // an instruction it cannot act on.
+    // pulled to disk by CLI builders and absent from `builtinSkills`, so only a
+    // shell builder is pointed at it — and given no inline commands, which let
+    // builders skip the skill's capture (chapters) and publishing rules.
     taskLines.push(
-      '  With a shell: `lh acceptance install` gives you the `acceptance` skill, and `lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item <checkItemId> --type screenshot --file <path>` uploads a captured artifact.',
+      "  With a shell: load the `acceptance` skill (`lh acceptance install` if it is not available) and follow its plan path for operation `$LOBEHUB_OPERATION_ID`. It owns reading the criteria, capturing evidence — chapters on every recording included — writing the round report, and publishing it into this run's round.",
     );
     taskLines.push(
       '  Without a shell: drive the product with your own tools and cite artifacts by id through `submitEvidence`.',

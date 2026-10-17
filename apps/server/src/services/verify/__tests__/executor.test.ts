@@ -298,6 +298,45 @@ describe('VerifyExecutorService', () => {
     );
   });
 
+  it('asks for chapters when the missing run evidence is a video', async () => {
+    mocks.runEnsureForOperation.mockResolvedValue({
+      id: 'run-1',
+      plan: [
+        {
+          id: 'video-check',
+          index: 0,
+          onFail: 'auto_repair',
+          required: true,
+          title: 'Recording',
+          verifierConfig: {
+            requiredEvidence: [{ modality: 'video', scope: 'run_evidence', type: 'video' }],
+          },
+          verifierType: 'llm',
+        },
+      ],
+      planConfirmedAt: new Date(),
+    });
+
+    await new VerifyExecutorService({} as never, 'user-1').execute({
+      deliverable: 'ui change',
+      goal: 'verify ui',
+      modelConfig: { model: 'model', provider: 'provider' },
+      operationId: 'builder-op-video',
+      runVerifierAgent: vi.fn().mockResolvedValue({ verifierOperationId: 'verifier-op-video' }),
+    });
+
+    expect(mocks.resultUpdateByCheckItem).toHaveBeenCalledWith(
+      'run-1',
+      'video-check',
+      expect.objectContaining({
+        suggestion: expect.stringContaining(
+          'lh acceptance run result submit --operation "$LOBEHUB_OPERATION_ID" --item video-check --type video --file <path> --chapters <file>',
+        ),
+        verdict: 'uncertain',
+      }),
+    );
+  });
+
   it('routes file-backed text evidence to an agent that can inspect the stored artifact', async () => {
     mocks.runEnsureForOperation.mockResolvedValue({
       id: 'run-1',
