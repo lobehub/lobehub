@@ -34,15 +34,16 @@ CRAWLER_IMPLS="naive,search1api"
 
 支持的爬虫类型如下：
 
-| 值             | 说明                                                               | 环境变量                                                                        |
-| ------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `browserless` | 基于 [Browserless](https://www.browserless.io/) 的无头浏览器爬虫，适合渲染复杂页面。 | `BROWSERLESS_TOKEN`                                                         |
-| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                       | `EXA_API_KEY`                                                               |
-| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。          | `FIRECRAWL_API_KEY`                                                         |
-| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                 | `JINA_READER_API_KEY`                                                       |
-| `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                              |                                                                             |
-| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。 | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
-| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。               | `TAVILY_API_KEY`                                                            |
+| 值             | 说明                                                                                           | 环境变量                                                                        |
+| ------------- | -------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `browserless` | 基于 [Browserless](https://www.browserless.io/) 的无头浏览器爬虫，适合渲染复杂页面。                             | `BROWSERLESS_TOKEN`                                                         |
+| `deepseek`    | 使用 [DeepSeek](https://api-docs.deepseek.com/zh-cn/guides/search) 的网页抓取 API 直接提取 Markdown 正文。 | `DEEPSEEK_SEARCH_API_KEY` `DEEPSEEK_SEARCH_API_URL`                         |
+| `exa`         | 使用 [Exa](https://exa.ai/) 提供的爬虫能力，需申请 API。                                                   | `EXA_API_KEY`                                                               |
+| `firecrawl`   | [Firecrawl](https://firecrawl.dev/) 无头浏览器 API，适合现代网站抓取。                                      | `FIRECRAWL_API_KEY`                                                         |
+| `jina`        | 使用 [Jina AI](https://jina.ai/) 的爬虫服务，支持快速提取摘要信息。                                             | `JINA_READER_API_KEY`                                                       |
+| `naive`       | 内置简易通用爬虫，适用于标准网页结构。                                                                          |                                                                             |
+| `search1api`  | 利用 [Search1API](https://www.search1api.com) 提供的页面抓取能力，适合结构化内容提取。                             | `SEARCH1API_API_KEY` `SEARCH1API_CRAWL_API_KEY` `SEARCH1API_SEARCH_API_KEY` |
+| `tavily`      | 使用 [Tavily](https://www.tavily.com/) 的网页抓取与摘要 API。                                           | `TAVILY_API_KEY`                                                            |
 
 > 💡 设置多个爬虫可提升成功率，系统将根据优先级尝试不同爬虫。
 
@@ -98,6 +99,7 @@ SEARCH_PROVIDERS="searxng"
 | `anspire`    | 基于 [Anspire（安思派）](https://anspire.ai/) 提供的搜索服务。                                       | `ANSPIRE_API_KEY`                                                           |
 | `bocha`      | 基于 [Bocha（博查）](https://open.bochaai.com/) 提供的搜索服务。                                    | `BOCHA_API_KEY`                                                             |
 | `brave`      | [Brave](https://search.brave.com/help/api)，隐私友好的搜索源。                                  | `BRAVE_API_KEY`                                                             |
+| `deepseek`   | 使用 [DeepSeek](https://api-docs.deepseek.com/zh-cn/guides/search) 官方自研搜索引擎。            | `DEEPSEEK_SEARCH_API_KEY` `DEEPSEEK_SEARCH_API_URL`                         |
 | `exa`        | [Exa](https://exa.ai/)，面向 AI 的搜索 API。                                                 | `EXA_API_KEY`                                                               |
 | `firecrawl`  | 支持 [Firecrawl](https://firecrawl.dev/) 提供的搜索服务。                                       | `FIRECRAWL_API_KEY`                                                         |
 | `google`     | 使用 [Google Programmable Search Engine](https://programmablesearchengine.google.com/)。 | `GOOGLE_PSE_API_KEY` `GOOGLE_PSE_ENGINE_ID`                                 |
