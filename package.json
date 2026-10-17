@@ -184,7 +184,7 @@
     "baseline-browser-mapping": "2.10.31",
     "better-auth": "1.6.15",
     "drizzle-orm": "^0.45.2",
-    "fast-xml-parser": "5.4.2",
+    "fast-xml-parser": "5.7.0",
     "lexical": "0.42.0",
     "pdfjs-dist": "5.4.530",
     "stylelint-config-clean-order": "7.0.0"

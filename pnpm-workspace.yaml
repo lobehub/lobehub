@@ -73,7 +73,7 @@ overrides:
   '@vitest/coverage-v8': 5.0.0
   baseline-browser-mapping: 2.10.31
   drizzle-orm: ^0.45.2
-  fast-xml-parser: 5.4.2
+  fast-xml-parser: 5.7.0
   lexical: 0.42.0
   # Keep the coupled core/autolink patches applied without a root lockfile.
   micromark: 4.0.3
