@@ -180,3 +180,6 @@ export const getCacheScope = (): string => {
  * anonymous scope is a legitimate durable context there).
  */
 export const isScopeTrusted = (): boolean => isIdentityResolved(getUserStoreState());
+
+/** React form of `isScopeTrusted`: re-renders when the identity resolves. */
+export const useIsScopeTrusted = (): boolean => useUserStore(isIdentityResolved);

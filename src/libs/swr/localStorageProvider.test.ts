@@ -1,17 +1,20 @@
 /**
  * @vitest-environment happy-dom
  */
+import { unstable_serialize } from 'swr';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bootTiming } from '@/libs/bootTiming';
 
-import { taskKeys, taskTemplateKeys } from './keys';
+import { resourcePermissionKeys, taskKeys, taskTemplateKeys } from './keys';
 import { buildLocalDataKey, localDataCache } from './localDataCache';
 import {
   CACHE_TIERS,
   clearSWRCache,
   createCacheProvider,
   getScopedCacheKey,
+  LOCAL_PATTERN_LIMITS,
+  LOCAL_SNAPSHOT_PATTERNS,
 } from './localStorageProvider';
 
 /** Poll until `fn` returns truthy (for async IndexedDB tier assertions). */
@@ -113,6 +116,186 @@ describe('createCacheProvider — tiering', () => {
     const stored = JSON.parse(localStorage.getItem(getScopedCacheKey('s1'))!);
     expect(stored.map(([k]: [string]) => k)).toContain(key);
     expect(await localDataCache.entriesByScope('s1')).toEqual([]);
+  });
+
+  // Regression: the provider persisted SWR's whole state, so a failed fetch was
+  // stored as `{ error, isLoading: true, isValidating: true }` and replayed on the
+  // next boot as an error page / stuck spinner before the key ever revalidated.
+  it('persists only settled data, never request flags or a failed fetch', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope);
+    const map = provider();
+
+    map.set('recents', {
+      _k: ['recents'],
+      data: [1],
+      error: new Error('stale'),
+      isLoading: false,
+      isValidating: true,
+    });
+    map.set('recents:failed', {
+      _k: ['recents:failed'],
+      error: { message: 'Resource not found' },
+      isLoading: true,
+      isValidating: true,
+    });
+    map.set('MSGS:failed', { error: { message: 'boom' }, isLoading: true });
+
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
+    await new Promise((r) => setTimeout(r, 30));
+
+    const stored = JSON.parse(localStorage.getItem(getScopedCacheKey('s1'))!);
+    expect(stored.map(([k, e]: [string, { data: unknown }]) => [k, e.data])).toEqual([
+      ['recents', { _k: ['recents'], data: [1] }],
+    ]);
+    expect(await localDataCache.entriesByScope('s1')).toEqual([]);
+  });
+
+  // Regression: every agent row in a long list reads its access record, and the
+  // shared 50-entry local cap let those rows evict recents / model config.
+  it('caps per-resource permission rows separately from the shared local budget', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      localPatternLimits: LOCAL_PATTERN_LIMITS,
+      localPatterns: ['recents', 'resourcePermission:'],
+    });
+    const map = provider();
+
+    for (let i = 0; i < 5; i++) map.set(`recents:${i}`, { data: [i] });
+    const permissionKey = (i: number) =>
+      unstable_serialize(resourcePermissionKeys.generalAccess('agent', `agt_${i}`));
+    for (let i = 0; i < 120; i++) map.set(permissionKey(i), { data: { accessLevel: 'edit' } });
+
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
+    await new Promise((r) => setTimeout(r, 30));
+
+    const keys: string[] = JSON.parse(localStorage.getItem(getScopedCacheKey('s1'))!).map(
+      ([k]: [string]) => k,
+    );
+    expect(keys.filter((k) => k.startsWith('recents'))).toHaveLength(5);
+    const permissionKeys = keys.filter((k) => k.includes('resourcePermission:'));
+    expect(permissionKeys).toHaveLength(LOCAL_PATTERN_LIMITS['resourcePermission:']);
+    expect(permissionKeys).toContain(permissionKey(119));
+    expect(permissionKeys).not.toContain(permissionKey(0));
+  });
+
+  // Regression: every save stamped every retained row with `Date.now()`, so
+  // unrelated writes kept renewing an access record that was never re-fetched
+  // and a revoked grant could outlive the 7-day TTL indefinitely.
+  it('ages access records from their own fetch time, not from unrelated saves', async () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      localPatterns: ['recents', 'resourcePermission:'],
+      localSnapshotPatterns: LOCAL_SNAPSHOT_PATTERNS,
+    });
+    const map = provider();
+    const fetched = unstable_serialize(resourcePermissionKeys.generalAccess('agent', 'agt_1'));
+    const legacy = unstable_serialize(resourcePermissionKeys.generalAccess('agent', 'agt_2'));
+    map.set(fetched, { data: { accessLevel: 'edit', fetchedAt: 1000 } });
+    map.set(legacy, { data: { accessLevel: 'edit' } });
+    map.set('recents', { data: [1] });
+
+    const timestamps = () =>
+      new Map<string, number>(
+        JSON.parse(localStorage.getItem(getScopedCacheKey('s1')) ?? '[]').map(
+          ([k, e]: [string, { timestamp: number }]) => [k, e.timestamp],
+        ),
+      );
+    await until(() => timestamps().has('recents'));
+    // An unrelated write must not renew the access rows.
+    map.set('recents', { data: [2] });
+    await new Promise((r) => setTimeout(r, 30));
+
+    expect(timestamps().get(fetched)).toBe(1000);
+    expect(timestamps().get(legacy)).toBe(0);
+    expect(timestamps().get('recents')).toBeGreaterThan(1000);
+
+    // …so they expire on the next boot rather than being restored.
+    const reloaded = buildProvider(scope, {
+      localPatterns: ['recents', 'resourcePermission:'],
+      localSnapshotPatterns: LOCAL_SNAPSHOT_PATTERNS,
+    }).provider();
+    expect(reloaded.get(fetched)).toBeUndefined();
+    expect(reloaded.get('recents')).toEqual({ data: [2] });
+  });
+
+  // Regression: another tab's stale snapshot (e.g. `canManage: true`) replaced
+  // a record this tab had already re-confirmed, re-exposing manage controls.
+  it('does not adopt access records from another tab', () => {
+    const scope = { value: 's1' };
+    const { provider } = buildProvider(scope, {
+      localPatterns: ['recents', 'resourcePermission:'],
+      localSnapshotPatterns: LOCAL_SNAPSHOT_PATTERNS,
+    });
+    const map = provider();
+    const key = unstable_serialize(resourcePermissionKeys.generalAccess('agent', 'agt_1'));
+    map.set(key, { data: { canManage: false, fetchedAt: Date.now() } });
+
+    window.dispatchEvent(
+      new StorageEvent('storage', {
+        key: getScopedCacheKey('s1'),
+        newValue: JSON.stringify([
+          [
+            key,
+            { data: { data: { canManage: true, fetchedAt: 1 } }, timestamp: 1, version: '1.0.0' },
+          ],
+          ['recents', { data: { data: [9] }, timestamp: Date.now(), version: '1.0.0' }],
+        ]),
+      }),
+    );
+
+    expect(map.get(key)).toMatchObject({ data: { canManage: false } });
+    expect(map.get('recents')).toEqual({ data: [9] });
+  });
+
+  // Regression: rows written to IndexedDB before the sanitizer existed carry the
+  // same version and never expire, so hydration must clean them too.
+  it('hydrates legacy IndexedDB rows without their request flags or failed state', async () => {
+    const scope = { value: 's1' };
+    await localDataCache.set(
+      buildLocalDataKey('s1', 'MSGS:ok'),
+      { data: [1], error: { message: 'stale' }, isLoading: false, isValidating: true },
+      '1.0.0',
+    );
+    await localDataCache.set(
+      buildLocalDataKey('s1', 'MSGS:failed'),
+      { error: { message: 'Resource not found' }, isLoading: true, isValidating: true },
+      '1.0.0',
+    );
+    await localDataCache.set(buildLocalDataKey('s1', 'MSGS:clean'), { data: [2] }, '1.0.0');
+
+    const { provider } = buildProvider(scope);
+    await provider.hydrateScope?.();
+
+    expect(provider().get('MSGS:ok')).toEqual({ data: [1] });
+    expect(provider().has('MSGS:failed')).toBe(false);
+    expect(provider().get('MSGS:clean')).toEqual({ data: [2] });
+
+    await until(async () => (await localDataCache.entriesByScope('s1')).length === 2);
+    const rows = Object.fromEntries(
+      (await localDataCache.entriesByScope('s1')).map((e) => [e.key, e.data]),
+    );
+    expect(rows).toEqual({ 'MSGS:clean': { data: [2] }, 'MSGS:ok': { data: [1] } });
+  });
+
+  // Regression: the resource access record was memory-only, so every reload of
+  // an Agent / Group profile page showed a full-form skeleton until the
+  // permission request settled. It now restores synchronously on first paint.
+  it('restores resource access synchronously after a reload, isolated per scope', async () => {
+    const options = { idbPatterns: [...CACHE_TIERS.idb], localPatterns: [...CACHE_TIERS.local] };
+    const { provider } = buildProvider({ value: 's1' }, options);
+    const key = unstable_serialize(resourcePermissionKeys.generalAccess('agent', 'agt_1'));
+    const data = { data: { accessLevel: 'edit', canManage: true } };
+    provider().set(key, data);
+
+    await until(() => localStorage.getItem(getScopedCacheKey('s1')) !== null);
+
+    const { provider: reloaded } = buildProvider({ value: 's1' }, options);
+    expect(reloaded().get(key)).toEqual(data);
+    expect(await localDataCache.entriesByScope('s1')).toEqual([]);
+
+    const { provider: otherUser } = buildProvider({ value: 's2' }, options);
+    expect(otherUser().get(key)).toBeUndefined();
   });
 
   it('persists model config keys in the local tier', async () => {

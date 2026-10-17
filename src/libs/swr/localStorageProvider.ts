@@ -58,8 +58,22 @@ export interface CacheProviderOptions {
    * these scopes closes that leak.
    */
   isEphemeralScope?: (scope: string) => boolean;
+  /**
+   * Local-tier key patterns with their own entry cap, outside the shared
+   * `maxLocalEntries` budget. Use it for per-row records (one entry per
+   * resource) so a long list cannot evict the other first-paint shells.
+   */
+  localPatternLimits?: Record<string, number>;
   /** SWR key patterns persisted to the localStorage tier. */
   localPatterns?: string[];
+  /**
+   * Local-tier patterns whose rows are server-confirmed snapshots (e.g. access
+   * records), mapped to a reader of the row's own fetch time. Such a row ages
+   * from that time (missing → already expired) instead of being re-stamped by
+   * every unrelated save, and is never adopted from another tab's `storage`
+   * event: that tab's snapshot can be older than what this tab confirmed.
+   */
+  localSnapshotPatterns?: Record<string, (value: unknown) => number | undefined>;
   /** Max localStorage-tier entries, defaults to 50. */
   maxLocalEntries?: number;
   /** Error callback */
@@ -113,6 +127,31 @@ const matchesPattern = (key: string, patterns: string[]): boolean =>
   patterns.some((pattern) => key.includes(pattern));
 
 /**
+ * Reduce an SWR cache state to what is worth restoring after a reload. SWR
+ * stores `{ data, error, isValidating, isLoading, ... }` per key; persisting
+ * the request flags or a failed fetch's `error` would replay a stale spinner or
+ * error page on the next boot before the key ever revalidates. Only settled
+ * `data` survives; a state without it is not persisted at all.
+ */
+const TRANSIENT_STATE_FIELDS = ['error', 'isLoading', 'isValidating'];
+
+const toPersisted = (value: unknown): unknown => {
+  if (!value || typeof value !== 'object') return value;
+  const hasTransient = TRANSIENT_STATE_FIELDS.some((field) => field in value);
+  if (!hasTransient && !('data' in value)) return value;
+  if ((value as { data?: unknown }).data === undefined) return undefined;
+  // Already clean: keep the same object so callers can tell nothing changed.
+  if (!hasTransient) return value;
+  const {
+    error: _error,
+    isLoading: _isLoading,
+    isValidating: _isValidating,
+    ...rest
+  } = value as Record<string, unknown>;
+  return rest;
+};
+
+/**
  * Build the scoped localStorage cache key (localStorage tier namespace).
  *
  * Partitioned per identity scope so different users / workspaces sharing the
@@ -130,6 +169,8 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     idbPatterns = [],
     isEphemeralScope,
     localPatterns = [],
+    localPatternLimits = {},
+    localSnapshotPatterns = {},
     ttl = 7 * 24 * 60 * 60 * 1000, // 7 days
     maxLocalEntries = 50,
     version = '1.0.0',
@@ -184,7 +225,8 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       return new Map(
         entries
           .filter(([, e]) => now - e.timestamp <= ttl && e.version === version)
-          .map(([key, e]) => [key, e.data] as [string, unknown]),
+          .map(([key, e]) => [key, toPersisted(e.data)] as [string, unknown])
+          .filter(([, data]) => data !== undefined),
       );
     } catch (error) {
       onError(error as Error);
@@ -192,21 +234,50 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
     }
   };
 
+  /**
+   * Keep the newest entries of each bounded pattern within its own limit and
+   * the rest within `maxLocalEntries`. `scale` shrinks every budget alike.
+   */
+  const capLocalEntries = <T extends readonly [string, unknown]>(entries: T[], scale = 1): T[] => {
+    const groups = new Map<string | null, T[]>();
+    for (const entry of entries) {
+      const group =
+        Object.keys(localPatternLimits).find((pattern) => entry[0].includes(pattern)) ?? null;
+      const list = groups.get(group) ?? [];
+      list.push(entry);
+      groups.set(group, list);
+    }
+    const kept = new Set<T>();
+    for (const [group, list] of groups) {
+      const limit = group === null ? maxLocalEntries : localPatternLimits[group];
+      for (const entry of list.slice(-Math.floor(limit * scale))) kept.add(entry);
+    }
+    return entries.filter((entry) => kept.has(entry));
+  };
+
+  const snapshotFetchedAtOf = (key: string) =>
+    Object.entries(localSnapshotPatterns).find(([pattern]) => key.includes(pattern))?.[1];
+
   const saveLocal = () => {
     if (!cacheMapInstance) return;
     if (!isPersistableScope()) return;
     const key = getScopedCacheKey(getScope());
     try {
-      const entries = Array.from(cacheMapInstance.entries())
+      const persisted = Array.from(cacheMapInstance.entries())
         .filter(([k]) => matchesPattern(k, localPatterns))
-        .slice(-maxLocalEntries)
-        .map(([k, data]) => [k, { data, timestamp: Date.now(), version } as CacheEntry]);
+        .map(([k, value]) => [k, toPersisted(value)] as const)
+        .filter(([, data]) => data !== undefined);
+      const entries = capLocalEntries(persisted).map(([k, data]) => {
+        const fetchedAtOf = snapshotFetchedAtOf(k);
+        const timestamp = fetchedAtOf ? (fetchedAtOf(data) ?? 0) : Date.now();
+        return [k, { data, timestamp, version } as CacheEntry] as const;
+      });
 
       const serialized = JSON.stringify(entries);
       const sizeInMB = new Blob([serialized]).size / (1024 * 1024);
       if (sizeInMB > 4) {
         // Drop oldest half rather than wiping everything.
-        localStorage.setItem(key, JSON.stringify(entries.slice(-Math.floor(maxLocalEntries / 2))));
+        localStorage.setItem(key, JSON.stringify(capLocalEntries(entries, 0.5)));
         console.warn(`[SWR Cache] localStorage tier too large (${sizeInMB.toFixed(2)}MB), trimmed`);
       } else {
         localStorage.setItem(key, serialized);
@@ -246,8 +317,10 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
 
     for (const k of dels) void localDataCache.delete(buildLocalDataKey(scope, k));
     for (const k of writes) {
-      const v = cacheMapInstance.get(k);
-      if (v !== undefined) void localDataCache.set(buildLocalDataKey(scope, k), v, version);
+      const v = toPersisted(cacheMapInstance.get(k));
+      // A state without settled data must not leave an older row behind.
+      if (v === undefined) void localDataCache.delete(buildLocalDataKey(scope, k));
+      else void localDataCache.set(buildLocalDataKey(scope, k), v, version);
     }
   };
 
@@ -275,9 +348,24 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       // and a version bump still evicts everyone. TTL governs the localStorage
       // tier only (see `loadLocal`).
       const valid = migratedEntries.filter((e) => e.version === version);
+      // Rows written before `toPersisted` existed may still carry request flags
+      // or a failed fetch's error: restore only their settled data, and drop
+      // (or rewrite) the stored row so it is not re-read on every boot.
+      const restored: [string, unknown][] = [];
+      for (const entry of valid) {
+        const data = toPersisted(entry.data);
+        if (data === undefined) {
+          void localDataCache.delete(buildLocalDataKey(scope, entry.key));
+          continue;
+        }
+        if (data !== entry.data) {
+          void localDataCache.set(buildLocalDataKey(scope, entry.key), data, version);
+        }
+        restored.push([entry.key, data]);
+      }
       // Map may have changed scope while we awaited; only apply if still current.
       if (cacheMapInstance && getScope() === scope && hydrationEpoch === epoch) {
-        cacheMapInstance.hydrate(valid.map((e) => [e.key, e.data]));
+        cacheMapInstance.hydrate(restored);
         hydratedScope = scope;
       }
       succeeded = true;
@@ -390,7 +478,9 @@ export function createCacheProvider(options: CacheProviderOptions = {}): ScopedS
       try {
         const parsed: [string, CacheEntry][] = JSON.parse(event.newValue);
         parsed.forEach(([key, entry]) => {
-          if (matchesPattern(key, localPatterns)) cacheMapInstance!.hydrate([[key, entry.data]]);
+          if (matchesPattern(key, localPatterns) && !snapshotFetchedAtOf(key)) {
+            cacheMapInstance!.hydrate([[key, entry.data]]);
+          }
         });
       } catch (error) {
         onError(error as Error);
@@ -500,8 +590,30 @@ export const CACHE_TIERS = {
     'agentBuilder:suggestions', // builder opening-suggestion chips (skip LLM regen on revisit)
     'taskTemplate:', // home task-template recommendations
     'modelConfig:', // small remote model config shells used by home starter chips
+    'resourcePermission:', // last confirmed access level for agent/group config gates
   ],
 } as const;
+
+/**
+ * Local-tier patterns that hold one row per resource. They get their own cap
+ * so, e.g., scrolling a long agent list (every row reads its access record)
+ * cannot push recents / model config out of the shared 50-entry budget.
+ */
+export const LOCAL_PATTERN_LIMITS: Record<string, number> = {
+  'resourcePermission:': 100,
+};
+
+/**
+ * Local-tier snapshot rows (see `localSnapshotPatterns`): an access record
+ * expires 7 days after its own last successful fetch, so a resource the user
+ * stopped opening cannot keep a revoked grant alive through unrelated writes.
+ */
+export const LOCAL_SNAPSHOT_PATTERNS: Record<string, (value: unknown) => number | undefined> = {
+  'resourcePermission:': (value) => {
+    const fetchedAt = (value as { data?: { fetchedAt?: unknown } } | undefined)?.data?.fetchedAt;
+    return typeof fetchedAt === 'number' ? fetchedAt : undefined;
+  },
+};
 
 /**
  * Provider factory for SWRConfig.
@@ -527,7 +639,9 @@ export const swrCacheProvider = (
     // scope is a legitimate durable context. `reloadScope` clears the dirty set
     // on a real scope flip, so quarantined writes never survive a switch.
     isEphemeralScope: () => !isScopeTrusted(),
+    localPatternLimits: LOCAL_PATTERN_LIMITS,
     localPatterns: [...CACHE_TIERS.local],
+    localSnapshotPatterns: LOCAL_SNAPSHOT_PATTERNS,
     onScopeHydrated,
     // Governs the localStorage tier only (recents-style shells); the IndexedDB
     // tier (messages, topics, …) never expires. 7 days is plenty for recents.

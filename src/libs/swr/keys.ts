@@ -22,13 +22,10 @@ import { type ConversationContext } from '@lobechat/types';
 
 import { agentDocumentSWRKeys } from '@/services/document/swrKeys';
 
-type KeyFactory<A extends unknown[]> = ((...args: A) => readonly unknown[]) & { root: string };
+import { def } from './defineKey';
+import { resourcePermissionKeys } from './resourcePermissionKeys';
 
-/** Define a key factory carrying its namespace root (for `mutate` matchers). */
-const def = <A extends unknown[]>(
-  root: string,
-  build: (...args: A) => readonly unknown[],
-): KeyFactory<A> => Object.assign(build, { root });
+export { resourcePermissionKeys };
 
 interface LocalFilePreviewKeyParams {
   accept?: 'image';
@@ -1122,6 +1119,7 @@ export const swrKeys = {
   recent: recentKeys,
   recommendations: recommendationsKeys,
   resource: resourceKeys,
+  resourcePermission: resourcePermissionKeys,
   serverConfig: serverConfigKeys,
   session: sessionKeys,
   share: shareKeys,
