@@ -10,10 +10,7 @@ const QualitySelect = memo(() => {
 
   const options =
     enumValues?.map((quality) => ({
-      label:
-        quality === 'standard' || quality === 'hd'
-          ? t(`config.quality.options.${quality}`)
-          : quality,
+      label: t(`config.quality.options.${quality}`, { defaultValue: quality }),
       value: quality,
     })) ?? [];
 
