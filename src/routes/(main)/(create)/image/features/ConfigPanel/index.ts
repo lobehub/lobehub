@@ -9,4 +9,5 @@ export { default as ResolutionSelect } from '@/routes/(main)/(create)/image/feat
 export { default as SeedNumberInput } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/SeedNumberInput';
 export { default as SizeSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/SizeSelect';
 export { default as StepsSliderInput } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/StepsSliderInput';
+export { default as ThinkingLevelSelect } from '@/routes/(main)/(create)/image/features/ConfigPanel/components/ThinkingLevelSelect';
 export { useAutoDimensions } from '@/routes/(main)/(create)/image/features/ConfigPanel/hooks/useAutoDimensions';
