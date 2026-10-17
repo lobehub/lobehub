@@ -43,6 +43,7 @@ import MetaProvider from './meta';
 import MinimaxProvider from './minimax';
 import MinimaxCodingPlanProvider from './minimaxCodingPlan';
 import MistralProvider from './mistral';
+import ModelflareProvider from './modelflare';
 import ModelScopeProvider from './modelscope';
 import MoonshotProvider from './moonshot';
 import NebiusProvider from './nebius';
@@ -102,6 +103,7 @@ export const LOBE_DEFAULT_MODEL_LIST: ChatModelCard[] = [
   GithubProvider.chatModels,
   MinimaxProvider.chatModels,
   MistralProvider.chatModels,
+  ModelflareProvider.chatModels,
   ModelScopeProvider.chatModels,
   MoonshotProvider.chatModels,
   OllamaProvider.chatModels,
@@ -189,6 +191,7 @@ export const DEFAULT_MODEL_PROVIDER_LIST = [
   FireworksAIProvider,
   GroqProvider,
   PerplexityProvider,
+  ModelflareProvider,
   ModelScopeProvider,
   Ai21Provider,
   UpstageProvider,
@@ -339,6 +342,7 @@ export { default as MetaProviderCard } from './meta';
 export { default as MinimaxProviderCard } from './minimax';
 export { default as MinimaxCodingPlanProviderCard } from './minimaxCodingPlan';
 export { default as MistralProviderCard } from './mistral';
+export { default as ModelflareProviderCard } from './modelflare';
 export { default as ModelScopeProviderCard } from './modelscope';
 export { default as MoonshotProviderCard } from './moonshot';
 export { default as NebiusProviderCard } from './nebius';
