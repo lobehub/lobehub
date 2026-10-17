@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { agentRouter } from './agent';
+import { agentRouter } from '.';
 
 const { mockMarketSDK, mockCreateAgentVersionHeader } = vi.hoisted(() => {
   const mockCreateAgentVersionHeader = vi.fn();

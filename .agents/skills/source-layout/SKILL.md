@@ -51,7 +51,7 @@ A split keeps the public import path: `Foo.tsx` becomes `Foo/index.tsx`, so `imp
 | --------------- | ----------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
 | React component | Public API, shared top-level state, composition | Child components (PascalCase), `useXxx.ts` for state transitions and side effects, pure logic modules with their own tests | `Conversation/Messages/GoalTaskCard/`    |
 | Server service  | The class and its orchestration methods         | Stage functions taking an explicit `deps` object (`pipeline/<stage>.ts`), sub-domain folders                               | `services/aiAgent/`, `services/comfyui/` |
-| tRPC router     | The merged router                               | One sub-router per sub-domain (`market/agent.ts` exports `agentRouter`)                                                    | `routers/lambda/market/`                 |
+| tRPC router     | The merged router                               | One sub-router per sub-domain (`market/agent/` exports `agentRouter`)                                                      | `routers/lambda/market/`                 |
 | Zustand store   | —                                               | Follow `zustand`                                                                                                           | `src/store/page`                         |
 
 - Prefer flat siblings. Add a sub-folder for a sub-area with several files of its own (`ChatInput/ControlBar/`).

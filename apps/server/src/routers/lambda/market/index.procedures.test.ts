@@ -1,0 +1,190 @@
+// @vitest-environment node
+import { describe, expect, it } from 'vitest';
+
+import { marketRouter } from './index';
+
+/**
+ * Pins the router's public surface: every procedure path, its kind, and its
+ * middleware chain length (which encodes the procedure builder and its input
+ * parsers). Splitting the router across files must keep all three.
+ */
+describe('marketRouter procedures', () => {
+  const procedures = (marketRouter as any)._def.procedures as Record<string, any>;
+
+  it('exposes exactly the expected procedure paths', () => {
+    expect(Object.keys(procedures).sort()).toEqual(expected().map(([name]) => name));
+  });
+
+  // Nested sub-routers contribute flattened `<key>.<procedure>` paths above; an
+  // empty one (the OSS `deployments` stub) contributes none, so pin the
+  // top-level keys too.
+  it('exposes exactly the expected top-level keys', () => {
+    expect(Object.keys((marketRouter as any)._def.record).sort()).toEqual([
+      'agent',
+      'agentGroup',
+      'creds',
+      'deployments',
+      'getAgentsByPlugin',
+      'getAssistantCategories',
+      'getAssistantDetail',
+      'getAssistantIdentifiers',
+      'getAssistantList',
+      'getGroupAgentCategories',
+      'getGroupAgentDetail',
+      'getGroupAgentIdentifiers',
+      'getGroupAgentList',
+      'getLegacyPluginList',
+      'getMcpCategories',
+      'getMcpDetail',
+      'getMcpList',
+      'getMcpManifest',
+      'getModelCategories',
+      'getModelDetail',
+      'getModelIdentifiers',
+      'getModelList',
+      'getPluginCategories',
+      'getPluginDetail',
+      'getPluginIdentifiers',
+      'getPluginList',
+      'getProviderDetail',
+      'getProviderIdentifiers',
+      'getProviderList',
+      'getUserInfo',
+      'oidc',
+      'registerClientInMarketplace',
+      'registerM2MToken',
+      'reportAgentEvent',
+      'reportAgentInstall',
+      'reportCall',
+      'reportGroupAgentEvent',
+      'reportGroupAgentInstall',
+      'reportMcpEvent',
+      'reportMcpInstallResult',
+      'skill',
+      'social',
+      'socialProfile',
+      'submitFeedback',
+      'user',
+    ]);
+  });
+
+  it.each(expected())('%s is a %s with %i middlewares', (name, type, middlewares) => {
+    expect(procedures[name]._def.type).toBe(type);
+    expect(procedures[name]._def.middlewares).toHaveLength(middlewares);
+  });
+});
+
+function expected(): Array<
+  [name: string, type: 'mutation' | 'query' | 'subscription', middlewares: number]
+> {
+  return [
+    ['agent.checkOwnership', 'query', 13],
+    ['agent.createAgent', 'mutation', 14],
+    ['agent.createAgentVersion', 'mutation', 14],
+    ['agent.deprecateAgent', 'mutation', 14],
+    ['agent.forkAgent', 'mutation', 14],
+    ['agent.getAgentDetail', 'query', 13],
+    ['agent.getAgentForkSource', 'query', 13],
+    ['agent.getAgentForks', 'query', 13],
+    ['agent.getOnboardingFull', 'query', 13],
+    ['agent.getOwnAgents', 'query', 13],
+    ['agent.publishAgent', 'mutation', 14],
+    ['agent.publishOrCreate', 'mutation', 14],
+    ['agent.unpublishAgent', 'mutation', 14],
+    ['agentGroup.checkOwnership', 'query', 13],
+    ['agentGroup.deprecateAgentGroup', 'mutation', 14],
+    ['agentGroup.forkAgentGroup', 'mutation', 14],
+    ['agentGroup.getAgentGroupDetail', 'query', 13],
+    ['agentGroup.getAgentGroupForkSource', 'query', 13],
+    ['agentGroup.getAgentGroupForks', 'query', 13],
+    ['agentGroup.getAgentGroupList', 'query', 13],
+    ['agentGroup.publishOrCreate', 'mutation', 14],
+    ['creds.createFile', 'mutation', 12],
+    ['creds.createKV', 'mutation', 12],
+    ['creds.createOAuth', 'mutation', 12],
+    ['creds.delete', 'mutation', 12],
+    ['creds.deleteByKey', 'mutation', 12],
+    ['creds.get', 'query', 12],
+    ['creds.getByKey', 'query', 12],
+    ['creds.getSkillCredStatus', 'query', 11],
+    ['creds.inject', 'mutation', 11],
+    ['creds.injectForSkill', 'mutation', 11],
+    ['creds.list', 'query', 10],
+    ['creds.listForContext', 'query', 10],
+    ['creds.listOAuthConnections', 'query', 11],
+    ['creds.publish', 'mutation', 11],
+    ['creds.share', 'mutation', 11],
+    ['creds.unshare', 'mutation', 11],
+    ['creds.update', 'mutation', 12],
+    ['creds.uploadFile', 'mutation', 12],
+    ['getAgentsByPlugin', 'query', 9],
+    ['getAssistantCategories', 'query', 9],
+    ['getAssistantDetail', 'query', 9],
+    ['getAssistantIdentifiers', 'query', 9],
+    ['getAssistantList', 'query', 9],
+    ['getGroupAgentCategories', 'query', 9],
+    ['getGroupAgentDetail', 'query', 9],
+    ['getGroupAgentIdentifiers', 'query', 8],
+    ['getGroupAgentList', 'query', 9],
+    ['getLegacyPluginList', 'query', 9],
+    ['getMcpCategories', 'query', 9],
+    ['getMcpDetail', 'query', 9],
+    ['getMcpList', 'query', 9],
+    ['getMcpManifest', 'query', 9],
+    ['getModelCategories', 'query', 9],
+    ['getModelDetail', 'query', 9],
+    ['getModelIdentifiers', 'query', 8],
+    ['getModelList', 'query', 9],
+    ['getPluginCategories', 'query', 9],
+    ['getPluginDetail', 'query', 9],
+    ['getPluginIdentifiers', 'query', 8],
+    ['getPluginList', 'query', 9],
+    ['getProviderDetail', 'query', 9],
+    ['getProviderIdentifiers', 'query', 8],
+    ['getProviderList', 'query', 9],
+    ['getUserInfo', 'query', 9],
+    ['oidc.exchangeAuthorizationCode', 'mutation', 9],
+    ['oidc.getOAuthHandoff', 'query', 9],
+    ['oidc.getUserInfo', 'mutation', 9],
+    ['oidc.refreshToken', 'mutation', 9],
+    ['registerClientInMarketplace', 'mutation', 9],
+    ['registerM2MToken', 'query', 9],
+    ['reportAgentEvent', 'mutation', 9],
+    ['reportAgentInstall', 'mutation', 9],
+    ['reportCall', 'mutation', 9],
+    ['reportGroupAgentEvent', 'mutation', 9],
+    ['reportGroupAgentInstall', 'mutation', 9],
+    ['reportMcpEvent', 'mutation', 9],
+    ['reportMcpInstallResult', 'mutation', 9],
+    ['skill.getSkillCategories', 'query', 9],
+    ['skill.getSkillComments', 'query', 9],
+    ['skill.getSkillDetail', 'query', 9],
+    ['skill.getSkillList', 'query', 9],
+    ['skill.getSkillRatingDistribution', 'query', 9],
+    ['social.addFavorite', 'mutation', 12],
+    ['social.checkFavorite', 'query', 9],
+    ['social.checkFollowStatus', 'query', 9],
+    ['social.checkLike', 'query', 9],
+    ['social.follow', 'mutation', 12],
+    ['social.getFollowCounts', 'query', 9],
+    ['social.getFollowers', 'query', 9],
+    ['social.getFollowing', 'query', 9],
+    ['social.getMyFavorites', 'query', 12],
+    ['social.getUserFavoriteAgents', 'query', 9],
+    ['social.getUserFavoritePlugins', 'query', 9],
+    ['social.getUserFavorites', 'query', 9],
+    ['social.getUserLikedAgents', 'query', 9],
+    ['social.getUserLikedPlugins', 'query', 9],
+    ['social.like', 'mutation', 12],
+    ['social.removeFavorite', 'mutation', 12],
+    ['social.toggleLike', 'mutation', 12],
+    ['social.unfollow', 'mutation', 12],
+    ['social.unlike', 'mutation', 12],
+    ['socialProfile.claimResources', 'mutation', 12],
+    ['socialProfile.scanClaimableResources', 'query', 11],
+    ['socialProfile.submitRepo', 'mutation', 12],
+    ['submitFeedback', 'mutation', 9],
+    ['user.getUserByUsername', 'query', 9],
+    ['user.updateUserProfile', 'mutation', 12],
+  ];
+}
