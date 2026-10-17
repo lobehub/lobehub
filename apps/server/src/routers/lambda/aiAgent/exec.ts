@@ -1,0 +1,719 @@
+import { randomUUID } from 'node:crypto';
+
+import type { ExecAgentResult } from '@lobechat/types';
+import { RequestTrigger } from '@lobechat/types';
+import { TRPCError } from '@trpc/server';
+import debug from 'debug';
+import pMap from 'p-map';
+
+import {
+  type AgentInterventionShareVisitorScope,
+  type AgentInterventionSourceAction,
+  resolveAgentInterventionBySource,
+} from '@/business/server/agent-run/agentInterventionReview';
+import type { MessageModel } from '@/database/models/message';
+import { HumanApprovalAlreadyResolvedError } from '@/database/models/message';
+import { unwrapPgError } from '@/server/modules/AgentRuntime/pgError';
+import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
+import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
+import { createTaskRunHooks } from '@/server/services/task/runHooks';
+import { type TopicRunReopenOutcome, TopicRunService } from '@/server/services/task/topicRun';
+
+import type { ExecAgentInput } from './execSchemas';
+import {
+  ExecAgentSchema,
+  ExecAgentsSchema,
+  ExecGroupAgentSchema,
+  ExecSubAgentTaskSchema,
+  ScheduleAgentRunSchema,
+} from './execSchemas';
+import { assertCanUseAgentRunConversation } from './guards';
+import type { AgentInterventionDispatchContext } from './interventionDispatch';
+import { dispatchClaimedAgentIntervention } from './interventionDispatch';
+import { aiAgentWriteProcedure } from './procedures';
+import { acceptsFileWorksOf, acceptsMemberRuntimeEndOf } from './utils';
+
+const log = debug('lobe-server:ai-agent-router');
+
+/**
+ * Cross-version bridge: older Web clients call execAgent directly with resume
+ * payloads and know nothing about the v2 source endpoint. Recover the
+ * authoritative operation/batch from the tool rows and claim the same generic
+ * intervention before the legacy message CAS can run.
+ *
+ * Shared by the owner `execAgent` and the share-visitor `shareChat.execAgent`
+ * resume paths; `shareVisitor` scopes the claim to the visitor's own share run.
+ * Resolves `undefined` when no durable generic row exists (OSS, or a pre-v2
+ * row), so the caller continues with the legacy message-row resume.
+ */
+export const bridgeLegacyResumeToSourceIntervention = async (
+  params: {
+    messageModel: MessageModel;
+    parentMessageId?: string;
+    resumeApproval?: ExecAgentInput['resumeApproval'];
+    resumeApprovals?: ExecAgentInput['resumeApprovals'];
+    resumeToolResult?: ExecAgentInput['resumeToolResult'];
+    shareVisitor?: AgentInterventionShareVisitorScope;
+  },
+  ctx: AgentInterventionDispatchContext,
+  /** Forwarded to {@link dispatchClaimedAgentIntervention}; see its `options`. */
+  options: { acceptsFileWorks?: boolean; acceptsMemberRuntimeEnd?: boolean } = {},
+): Promise<ExecAgentResult | undefined> => {
+  const {
+    messageModel,
+    parentMessageId,
+    resumeApproval,
+    resumeApprovals,
+    resumeToolResult,
+    shareVisitor,
+  } = params;
+
+  const legacyResumeTargets = [
+    ...(resumeApprovals ?? []),
+    ...(resumeApproval ? [resumeApproval] : []),
+    ...(resumeToolResult
+      ? [
+          {
+            decision: 'approved' as const,
+            parentMessageId: resumeToolResult.parentMessageId,
+            toolCallId: resumeToolResult.toolCallId,
+          },
+        ]
+      : []),
+  ];
+  if (legacyResumeTargets.length > 0) {
+    const plugins = await pMap(
+      legacyResumeTargets,
+      ({ parentMessageId }) => messageModel.findMessagePlugin(parentMessageId),
+      { concurrency: 5 },
+    );
+    const firstIntervention = plugins[0]?.intervention;
+    const hasGenericSource = Boolean(
+      firstIntervention?.operationId &&
+      firstIntervention.batchId &&
+      plugins.every(
+        (plugin) =>
+          plugin?.intervention?.operationId === firstIntervention.operationId &&
+          plugin?.intervention?.batchId === firstIntervention.batchId,
+      ),
+    );
+
+    if (hasGenericSource) {
+      let sourceAction: AgentInterventionSourceAction | undefined;
+      if (resumeToolResult) {
+        if (resumeToolResult.outcome === 'skipped') {
+          sourceAction = { type: 'skip_interaction' };
+        } else {
+          const pluginState = resumeToolResult.pluginState as
+            | {
+                askUserAnswers?: Record<string, unknown>;
+                selectedAgentIds?: unknown;
+              }
+            | undefined;
+          const answers = pluginState?.askUserAnswers;
+          if (
+            answers &&
+            Object.keys(answers).length > 0 &&
+            Object.values(answers).every(
+              (answer) =>
+                typeof answer === 'string' ||
+                (Array.isArray(answer) && answer.every((item) => typeof item === 'string')),
+            )
+          ) {
+            sourceAction = {
+              result: answers as Record<string, string | string[]>,
+              type: 'submit_answers',
+            };
+          } else if (
+            plugins[0]?.identifier === 'lobe-web-onboarding' &&
+            plugins[0]?.apiName === 'showAgentMarketplace' &&
+            Array.isArray(pluginState?.selectedAgentIds) &&
+            pluginState.selectedAgentIds.every((id) => typeof id === 'string')
+          ) {
+            sourceAction = {
+              result: {
+                kind: 'agent_marketplace',
+                selectedTemplateIds: pluginState.selectedAgentIds as string[],
+              },
+              type: 'submit_custom',
+            };
+          }
+        }
+      } else if (legacyResumeTargets.every(({ decision }) => decision === 'approved')) {
+        // The legacy resume envelope has neither staged edits nor remember
+        // intent. Cloud therefore compares the durable revision with the
+        // authoritative message arguments and rejects a pre-mutated old
+        // edit as stale with a refresh-required conflict; it must never
+        // reinterpret already-written client state as an atomic edit.
+        // Old clients may also have changed their personal allow-list
+        // before this call, which remains a rollout-only non-atomic edge.
+        // Current Web sends both edits and remember through the source
+        // endpoint before any side effect.
+        sourceAction = { scope: 'once', type: 'approve_tool' };
+      } else if (
+        legacyResumeTargets.every(
+          ({ decision }) => decision === 'rejected' || decision === 'rejected_continue',
+        )
+      ) {
+        const reasons = [
+          ...new Set(
+            legacyResumeTargets
+              .map(({ rejectionReason }) => rejectionReason)
+              .filter((reason): reason is string => Boolean(reason)),
+          ),
+        ];
+        sourceAction = {
+          ...(reasons.length === 1 && { reason: reasons[0] }),
+          type: 'reject_continue',
+        };
+      }
+
+      if (!sourceAction) {
+        throw new Error('Unsupported legacy intervention payload for a durable generic row');
+      }
+
+      const sourceResolution = await resolveAgentInterventionBySource({
+        action: sourceAction,
+        actorUserId: ctx.userId,
+        batchId: firstIntervention!.batchId!,
+        operationId: firstIntervention!.operationId!,
+        resolutionRequestId: randomUUID(),
+        targets: legacyResumeTargets.map(({ parentMessageId, toolCallId }) => ({
+          toolCallId,
+          toolMessageId: parentMessageId,
+        })),
+        ...(shareVisitor && { shareVisitor }),
+        workspaceId: ctx.workspaceId ?? undefined,
+      });
+      if (sourceResolution.handled) {
+        if (sourceResolution.state === 'already_resolved') {
+          throw new HumanApprovalAlreadyResolvedError(parentMessageId ?? 'intervention');
+        }
+        const dispatch = await dispatchClaimedAgentIntervention(sourceResolution, ctx, options);
+        if (!dispatch.execution) {
+          throw new Error('Durable intervention resume did not create an operation');
+        }
+        return toClientExecAgentResult(dispatch.execution);
+      }
+    }
+  }
+
+  return undefined;
+};
+
+export const execProcedures = {
+  execAgent: aiAgentWriteProcedure.input(ExecAgentSchema).mutation(async ({ input, ctx }) => {
+    const {
+      agentId,
+      slug,
+      prompt,
+      appContext,
+      autoStart = true,
+      deviceId,
+      localDeviceId,
+      existingMessageIds = [],
+      fileIds,
+      mentionedAgents,
+      parentMessageId,
+      resumeApproval,
+      resumeApprovals,
+      resumeToolResult,
+      selectedSkillIds,
+      selectedToolIds,
+      steer,
+      trigger,
+      userInterventionConfig,
+    } = input;
+
+    log('execAgent: identifier=%s, prompt=%s', agentId || slug, prompt.slice(0, 50));
+
+    try {
+      await assertCanUseWorkspaceAgent({
+        agentId,
+        db: ctx.serverDB,
+        groupId: appContext?.groupId,
+        slug,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      await assertCanUseAgentRunConversation({
+        db: ctx.serverDB,
+        messageIds: [
+          ...existingMessageIds,
+          parentMessageId,
+          // A new subtopic branches off an existing message — authorize that
+          // anchor too, or a caller could fork a thread off someone else's turn.
+          appContext?.newThread?.sourceMessageId,
+          resumeApproval?.parentMessageId,
+          // Every batch target is authorized too — a caller must not be able to
+          // slip a message it doesn't own into the list behind an owned anchor.
+          ...(resumeApprovals ?? []).map((decision) => decision.parentMessageId),
+          resumeToolResult?.parentMessageId,
+        ],
+        topicId: appContext?.topicId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+
+      const bridged = await bridgeLegacyResumeToSourceIntervention(
+        {
+          messageModel: ctx.messageModel,
+          parentMessageId,
+          resumeApproval,
+          resumeApprovals,
+          resumeToolResult,
+        },
+        ctx,
+        {
+          acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
+          acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+        },
+      );
+      if (bridged) return bridged;
+
+      // A message typed into a Task's own conversation continues that Task's
+      // run — and the composer dispatches it, not `runTask`. Everything the Task
+      // side needs for this run is attached here: the hook that settles the run
+      // when it ends, and the reopen that puts its run row back in flight.
+      // Without the pair, an answered run is invisible to the Task: the run card
+      // keeps the finished state of the run it replied to, `cancelTopic` refuses
+      // to stop the live one, and the detail page stops polling for it.
+      const topicRunService = new TopicRunService(
+        ctx.serverDB,
+        ctx.userId,
+        ctx.workspaceId ?? undefined,
+      );
+      const topicRun = appContext?.topicId
+        ? await topicRunService.resolveOwnableRun(appContext.topicId)
+        : undefined;
+      // Recorded on the operation-created boundary and acted on once the
+      // dispatch has returned.
+      let reopenOutcome: TopicRunReopenOutcome | undefined;
+
+      const result = await ctx.aiAgentService.execAgent({
+        acceptsFileWorks: acceptsFileWorksOf(input.streamFeatures),
+        acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(input.streamFeatures),
+        agentId,
+        appContext,
+        autoStart,
+        clientIds: input.clientIds,
+        clientRunSnapshot: {
+          operations: input.clientOperations ?? [],
+          replacesOperationId: input.replacesOperationId,
+        },
+        clientProtocol: input.clientProtocol,
+        includeFinalState: input.includeFinalState,
+        llmExecutor: input.llmExecutor,
+        // This procedure serves the composer (`aiAgentService.execAgentTask`).
+        // The client already queues follow-ups behind a live run and shows the
+        // user a tray; refusing here would only make the message disappear.
+        interactiveStart: true,
+        // Propagate the originating request's client IP / user agent into the run
+        // so downstream LLM-call metadata can carry them for auditing and spend
+        // attribution. These are server-derived from the tRPC context and are
+        // intentionally not part of the client-passable input schema.
+        clientIp: ctx.clientIp ?? undefined,
+        deviceId,
+        localDeviceId,
+        existingMessageIds,
+        ...(topicRun && {
+          hooks: createTaskRunHooks({
+            db: ctx.serverDB,
+            taskId: topicRun.taskId,
+            taskIdentifier: topicRun.taskIdentifier,
+            trigger: 'manual',
+            // The Task's creator, not the caller: the completion callback
+            // resolves the workspace from `tasks.createdByUserId`, so passing a
+            // workspace member would make that lookup miss and strand the run.
+            userId: topicRun.ownerUserId,
+            workspaceId: ctx.workspaceId ?? undefined,
+          }),
+          // Before the run's first step, so a short run can never finish — and
+          // have its own completion hook settle the row — ahead of the reopen.
+          onOperationCreated: async (operationId) => {
+            reopenOutcome = await topicRunService
+              .reopen({ link: topicRun, operationId })
+              .catch((error) => {
+                console.error('[aiAgent.execAgent] failed to reopen the task run: %O', error);
+                return 'refused' as const;
+              });
+          },
+        }),
+        fileIds,
+        mentionedAgents,
+        parentMessageId,
+        prompt,
+        replacesOperationId: input.replacesOperationId,
+        // When parentMessageId is provided, this is a regeneration/continue or a
+        // human-approval resume — either way, skip user message creation.
+        resume: !!parentMessageId,
+        resumeApproval,
+        resumeApprovals,
+        resumeToolResult,
+        selectedSkillIds,
+        selectedToolIds,
+        slug,
+        sourceOperationId: input.sourceOperationId,
+        steer,
+        trigger: trigger ?? RequestTrigger.Chat,
+        userAgent: ctx.userAgent ?? undefined,
+        userInterventionConfig,
+      });
+      // The run was dispatched but it did not take the Task's run row over. Two
+      // ways that happens: the Task was retired while the run was starting (the
+      // write failed or there is no row to keep honest), or a concurrent send on
+      // the same topic won the reopen and already owns the row. In both cases
+      // the run's hooks are already attached for the whole run, and
+      // `onTopicComplete` settles the topic row by id without checking which
+      // operation owns it — so letting this run continue would let the loser
+      // settle a row it does not own, finishing the winner's run ahead of it and
+      // overwriting its handoff/result. Stop it, exactly as the runner stops the
+      // run it dispatched under the same race.
+      if (reopenOutcome === 'refused' || reopenOutcome === 'already-running') {
+        const lostTheRow = reopenOutcome === 'already-running';
+        const stop = await ctx.aiAgentService
+          .interruptTask({ operationId: result.operationId })
+          .catch((error) => {
+            console.error('[aiAgent.execAgent] failed to stop the orphaned task run: %O', error);
+            return undefined;
+          });
+        // Same confirmation gate as `TaskService.interruptTaskOperation`.
+        const stopped = !!stop?.success && stop.deviceCancellationConfirmed !== false;
+        throw new TRPCError({
+          code: stopped ? 'CONFLICT' : 'INTERNAL_SERVER_ERROR',
+          message: stopped
+            ? lostTheRow
+              ? 'Another run is already live on this task; this duplicate send was stopped.'
+              : 'This task run could not be recorded while it was starting; the run was stopped.'
+            : `This task run could not be recorded while it was starting, and stopping it (operation ${result.operationId}) could not be confirmed.`,
+        });
+      }
+
+      return toClientExecAgentResult(result);
+    } catch (error: any) {
+      console.error('execAgent failed: %O', error);
+
+      if (error instanceof TRPCError) {
+        throw error;
+      }
+
+      if (error instanceof HumanApprovalAlreadyResolvedError) {
+        throw new TRPCError({
+          cause: error,
+          code: 'CONFLICT',
+          message: 'This approval has already been resolved.',
+        });
+      }
+
+      // A primary-key collision on a client-supplied id (a retried send
+      // replaying the same `clientIds`) is client-correctable — surface it as
+      // CONFLICT, not a 500. Generic message on purpose: echoing the id would
+      // let a caller probe for rows it cannot read.
+      if (unwrapPgError(error)?.code === '23505') {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'This run has already been created.',
+        });
+      }
+
+      throw new TRPCError({
+        cause: error,
+        code: 'INTERNAL_SERVER_ERROR',
+        message: `Failed to execute agent: ${error.message}`,
+      });
+    }
+  }),
+  /**
+   * Defer an agent run to a future time ("send this in 3 hours").
+   *
+   * Kept separate from `execAgent` rather than folded in behind a `runAt` flag:
+   * nothing is executed here, so every run-shaped field of `ExecAgentResult`
+   * (operationId, assistantMessageId, autoStarted) would come back empty and
+   * every caller would have to branch on it.
+   *
+   * Cancelling / rescheduling goes through the ordinary topic update mutations —
+   * those are already ownership-scoped, and a schedule is just topic state.
+   */
+  scheduleAgentRun: aiAgentWriteProcedure
+    .input(ScheduleAgentRunSchema)
+    .mutation(async ({ input, ctx }) => {
+      log('scheduleAgentRun: identifier=%s, runAt=%s', input.agentId || input.slug, input.runAt);
+
+      try {
+        await assertCanUseWorkspaceAgent({
+          agentId: input.agentId,
+          db: ctx.serverDB,
+          slug: input.slug,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        return await ctx.aiAgentService.scheduleAgentRun(input);
+      } catch (error: any) {
+        if (error instanceof TRPCError) throw error;
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to schedule agent run: ${error.message}`,
+        });
+      }
+    }),
+  /**
+   * Batch execute multiple agents
+   * Supports parallel or sequential execution
+   */
+  execAgents: aiAgentWriteProcedure.input(ExecAgentsSchema).mutation(async ({ input, ctx }) => {
+    const { tasks, parallel = true } = input;
+
+    log('execAgents: %d tasks, parallel=%s', tasks.length, parallel);
+
+    type TaskResult = {
+      autoStarted?: boolean;
+      error?: string;
+      operationId?: string;
+      success: boolean;
+      taskIndex: number;
+    };
+
+    const executeTask = async (
+      task: (typeof tasks)[number],
+      taskIndex: number,
+    ): Promise<TaskResult> => {
+      const {
+        agentId,
+        slug,
+        prompt,
+        appContext,
+        autoStart = true,
+        deviceId,
+        existingMessageIds = [],
+        parentMessageId,
+        trigger,
+      } = task;
+
+      try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId: appContext?.groupId,
+          slug,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: [
+            ...existingMessageIds,
+            parentMessageId,
+            task.resumeApproval?.parentMessageId,
+            task.resumeToolResult?.parentMessageId,
+          ],
+          topicId: appContext?.topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        const result = await ctx.aiAgentService.execAgent({
+          acceptsFileWorks: acceptsFileWorksOf(task.streamFeatures),
+          acceptsMemberRuntimeEnd: acceptsMemberRuntimeEndOf(task.streamFeatures),
+          clientProtocol: task.clientProtocol,
+          includeFinalState: task.includeFinalState,
+          llmExecutor: task.llmExecutor,
+          agentId,
+          appContext,
+          autoStart,
+          deviceId,
+          existingMessageIds,
+          parentMessageId,
+          prompt,
+          // When parentMessageId is provided, this is a regeneration/continue — skip user message creation
+          resume: !!parentMessageId,
+          // NOTICE: the batch route forwards only a subset of `ExecAgentSchema`;
+          // other per-turn picks (`selectedToolIds`, `mentionedAgents`, `fileIds`)
+          // are still dropped here, as before this field was added.
+          selectedSkillIds: task.selectedSkillIds,
+          slug,
+          trigger: trigger ?? RequestTrigger.Chat,
+        });
+
+        return {
+          autoStarted: result.autoStarted,
+          operationId: result.operationId,
+          success: true,
+          taskIndex,
+        };
+      } catch (error: any) {
+        log('execAgents task %d failed: %O', taskIndex, error);
+
+        return {
+          error: error.message || 'Unknown error',
+          success: false,
+          taskIndex,
+        };
+      }
+    };
+
+    // Execute tasks with pMap for concurrency control
+    // parallel=true: concurrency of 5, parallel=false: sequential (concurrency of 1)
+    const concurrency = parallel ? 5 : 1;
+
+    const results = await pMap(tasks, (task, index) => executeTask(task, index), { concurrency });
+
+    // Calculate summary
+    const succeeded = results.filter((r) => r.success).length;
+    const failed = results.filter((r) => !r.success).length;
+
+    return {
+      results,
+      success: failed === 0,
+      summary: {
+        failed,
+        succeeded,
+        total: tasks.length,
+      },
+    };
+  }),
+  /**
+   * Execute Group Agent (Supervisor) in a single call
+   *
+   * This endpoint combines message creation and agent execution:
+   * 1. Create topic (if needed)
+   * 2. Create user message
+   * 3. Create assistant message placeholder
+   * 4. Trigger Supervisor Agent execution
+   * 5. Return operationId for SSE connection + messages for UI sync
+   */
+  execGroupAgent: aiAgentWriteProcedure
+    .input(ExecGroupAgentSchema)
+    .mutation(async ({ input, ctx }) => {
+      const { agentId, groupId, message, files, topicId, newTopic } = input;
+
+      log('execGroupAgent: agentId=%s, groupId=%s', agentId, groupId);
+
+      try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: newTopic?.topicMessageIds,
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        // Execute group agent
+        const result = await ctx.aiAgentService.execGroupAgent({
+          agentId,
+          files,
+          groupId,
+          message,
+          newTopic,
+          topicId,
+        });
+
+        // Get messages and topics for UI sync
+        // Messages include the assistant message with error if operation failed to start
+        const { messages, topics } = await ctx.aiChatService.getMessagesAndTopics({
+          agentId,
+          groupId,
+          includeTopic: result.isCreateNewTopic,
+          topicId: result.topicId,
+        });
+
+        // Return result with messages/topics - includes error/success fields
+        // Frontend can check success to decide whether to connect to SSE stream
+        return { ...result, messages, topics };
+      } catch (error: any) {
+        log('execGroupAgent failed: %O', error);
+
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to execute group agent: ${error.message}`,
+        });
+      }
+    }),
+  /**
+   * Execute SubAgent task (supports both Group and Single Agent mode)
+   *
+   * This endpoint is called by Supervisor (Group mode) or Agent (Single mode)
+   * to delegate tasks to SubAgents. Each task runs in an isolated Thread context.
+   *
+   * - Group mode: pass groupId, Thread will be associated with the Group
+   * - Single Agent mode: omit groupId, Thread will only be associated with the Agent
+   */
+  execSubAgentTask: aiAgentWriteProcedure
+    .input(ExecSubAgentTaskSchema)
+    .mutation(async ({ input, ctx }) => {
+      const {
+        agentId,
+        groupId,
+        instruction,
+        llmExecutor,
+        llmRelayChannel,
+        parentMessageId,
+        parentOperationId,
+        title,
+        topicId,
+        timeout,
+      } = input;
+
+      log('execSubAgentTask: agentId=%s, groupId=%s', agentId, groupId);
+
+      try {
+        await assertCanUseWorkspaceAgent({
+          agentId,
+          db: ctx.serverDB,
+          groupId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+        await assertCanUseAgentRunConversation({
+          db: ctx.serverDB,
+          messageIds: [parentMessageId],
+          topicId,
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+        });
+
+        // External procedure name stays `execSubAgentTask`; the service method is `execSubAgent`.
+        return await ctx.aiAgentService.execSubAgent(
+          {
+            agentId,
+            groupId,
+            instruction,
+            parentMessageId,
+            ...(parentOperationId && { parentOperationId }),
+            timeout,
+            title,
+            topicId,
+          },
+          {
+            llmRelay:
+              llmExecutor && llmRelayChannel
+                ? { channel: llmRelayChannel, executor: llmExecutor }
+                : undefined,
+          },
+        );
+      } catch (error: any) {
+        log('execSubAgentTask failed: %O', error);
+
+        if (error instanceof TRPCError) {
+          throw error;
+        }
+
+        throw new TRPCError({
+          cause: error,
+          code: 'INTERNAL_SERVER_ERROR',
+          message: `Failed to execute sub-agent task: ${error.message}`,
+        });
+      }
+    }),
+};
