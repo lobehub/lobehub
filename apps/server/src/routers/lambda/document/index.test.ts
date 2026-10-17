@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createCallerFactory } from '@/libs/trpc/lambda';
 import { createContextInner } from '@/libs/trpc/lambda/context';
 
-import { documentRouter } from './document';
+import { documentRouter } from '.';
 
 const mocks = vi.hoisted(() => ({
   createDocument: vi.fn(),
@@ -46,7 +46,7 @@ vi.mock('@/server/services/file', () => ({
     return { getFileAccessUrl: mocks.getFileAccessUrl };
   }),
 }));
-vi.mock('./_helpers/knowledgeBaseAccess', () => ({
+vi.mock('../_helpers/knowledgeBaseAccess', () => ({
   assertContentsNotInRestrictedKnowledgeBase: vi.fn(),
   getRestrictedKnowledgeBaseIds: vi.fn(),
 }));
