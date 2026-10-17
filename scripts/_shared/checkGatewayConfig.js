@@ -63,7 +63,7 @@ function collectGatewayConfigIssues(env = process.env) {
   if (missing.length > 0) {
     issues.push({
       message:
-        'docker-compose.yml enables Gateway Mode, but .env is missing its settings. The gateway container cannot start and agent runs fall back to the browser. Add the variables to .env, then run `docker compose up -d --force-recreate`.',
+        'docker-compose.yml enables Gateway Mode, but .env is missing its settings. The gateway container cannot start and agents cannot run until this is fixed. Add the variables to .env, then run `docker compose up -d --force-recreate`.',
       name: 'Gateway Mode is not configured',
       vars: missing,
     });
@@ -81,7 +81,7 @@ function collectGatewayConfigIssues(env = process.env) {
   if (privateJwk?.n && publicJwk?.n && privateJwk.n !== publicJwk.n) {
     issues.push({
       message:
-        'JWKS_PUBLIC_KEY is not the public half of JWKS_KEY, so the gateway rejects every browser session and agent runs fall back to the browser. Derive it again from JWKS_KEY.',
+        'JWKS_PUBLIC_KEY is not the public half of JWKS_KEY, so the gateway rejects every browser session and agents cannot run until this is fixed. Derive it again from JWKS_KEY.',
       name: 'JWKS_PUBLIC_KEY does not match JWKS_KEY',
       vars: ['JWKS_PUBLIC_KEY'],
     });

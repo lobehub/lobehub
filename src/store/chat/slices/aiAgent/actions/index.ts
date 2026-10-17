@@ -3,10 +3,10 @@ import { type StateCreator } from 'zustand/vanilla';
 import { type ChatStore } from '@/store/chat/store';
 import { flattenActions } from '@/store/utils/flattenActions';
 
-import { type GroupOrchestrationAction } from './groupOrchestration';
-import { GroupOrchestrationActionImpl } from './groupOrchestration';
+import { type TaskStatusPollingAction } from './taskStatusPolling';
+import { TaskStatusPollingActionImpl } from './taskStatusPolling';
 
-export type ChatAIAgentAction = GroupOrchestrationAction;
+export type ChatAIAgentAction = TaskStatusPollingAction;
 
 export const chatAiAgent: StateCreator<
   ChatStore,
@@ -17,4 +17,4 @@ export const chatAiAgent: StateCreator<
   ...params: Parameters<
     StateCreator<ChatStore, [['zustand/devtools', never]], [], ChatAIAgentAction>
   >
-) => flattenActions<ChatAIAgentAction>([new GroupOrchestrationActionImpl(...params)]);
+) => flattenActions<ChatAIAgentAction>([new TaskStatusPollingActionImpl(...params)]);

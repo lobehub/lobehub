@@ -19,7 +19,7 @@ tags:
 </div>
 
 <Callout type="warning">
-  **正在升级已有的 Docker Compose 部署？** 最新的 `docker-compose.yml` 新增了 Gateway 模式所需的网关服务。启动前请先按 [升级已有部署](#升级已有部署) 更新 `.env`，否则网关容器会反复重启、智能体退回浏览器中运行，`docker logs lobehub` 也会打印 `ACTION REQUIRED` 告警。
+  **正在升级已有的 Docker Compose 部署？** 最新的 `docker-compose.yml` 新增了 Gateway 模式所需的网关服务。启动前请先按 [升级已有部署](#升级已有部署) 更新 `.env`，否则网关容器会反复重启、智能体无法运行，`docker logs lobehub` 也会打印 `ACTION REQUIRED` 告警。
 </Callout>
 
 ## 快速启动
@@ -335,7 +335,7 @@ INTERNAL_APP_URL=http://localhost:3210
 
 4. Agent 网关（Gateway 模式）
 
-`gateway` 服务让智能体在 LobeHub 服务端运行，而不是在浏览器中运行。它需要在 `.env` 中配置以下变量，`setup.sh` 会自动填写：
+`gateway` 服务让智能体在 LobeHub 服务端运行，并将输出流式推送到浏览器。没有它，智能体无法运行。它需要在 `.env` 中配置以下变量，`setup.sh` 会自动填写：
 
 - `AGENT_GATEWAY_URL`：浏览器访问网关的地址，例如 `https://gateway.example.com` 或 `http://your_server_ip:8787`。浏览器会向该地址建立 WebSocket 连接，因此其前面的反向代理需要允许 WebSocket 升级并设置较长的读取超时。LobeHub 服务端则在 Compose 网络内通过 `http://gateway:8787` 访问网关。
 - `GATEWAY_SERVICE_TOKEN`：LobeHub 与网关共享的随机 Token。
@@ -362,7 +362,7 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
 ## 升级已有部署
 
 <Callout type="warning">
-  请在启动新的 `docker-compose.yml` 之前完成以下步骤。完成之前，`lobe-gateway` 容器会反复重启、智能体退回浏览器中运行，`docker logs lobehub` 启动时会打印 `ACTION REQUIRED` 告警。
+  请在启动新的 `docker-compose.yml` 之前完成以下步骤。完成之前，`lobe-gateway` 容器会反复重启、智能体无法运行，`docker logs lobehub` 启动时会打印 `ACTION REQUIRED` 告警。
 </Callout>
 
 <Steps>

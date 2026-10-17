@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "新增自訂技能",
   "tab.advanced": "進階",
   "tab.advanced.appUpdates.title": "應用更新",
-  "tab.advanced.gatewayMode.desc": "預設通過雲端網關執行支援的代理任務。個別代理可從聊天選單中覆蓋此設定。",
-  "tab.advanced.gatewayMode.title": "網關模式",
   "tab.advanced.toolsAndDiagnostics.title": "工具與診斷",
   "tab.advanced.updateChannel.canary": "金絲雀版",
   "tab.advanced.updateChannel.canaryDesc": "每次 PR 合併後觸發，每天多次構建。最不穩定的版本。",

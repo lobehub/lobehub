@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Aangepaste skill toevoegen",
   "tab.advanced": "Geavanceerd",
   "tab.advanced.appUpdates.title": "App-updates",
-  "tab.advanced.gatewayMode.desc": "Voer standaard ondersteunde agenttaken uit via de cloud Gateway. Individuele agents kunnen dit overschrijven via het chatmenu.",
-  "tab.advanced.gatewayMode.title": "Gateway-modus",
   "tab.advanced.toolsAndDiagnostics.title": "Hulpmiddelen en diagnostiek",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Geactiveerd bij elke PR-merge, meerdere builds per dag. Meest onstabiel.",

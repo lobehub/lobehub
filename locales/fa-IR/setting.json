@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "افزودن مهارت سفارشی",
   "tab.advanced": "پیشرفته",
   "tab.advanced.appUpdates.title": "به‌روزرسانی‌های برنامه",
-  "tab.advanced.gatewayMode.desc": "اجرای وظایف پشتیبانی شده‌ی عامل‌ها به صورت پیش‌فرض از طریق دروازه ابری. عامل‌های جداگانه می‌توانند این تنظیم را از منوی چت تغییر دهند.",
-  "tab.advanced.gatewayMode.title": "حالت دروازه",
   "tab.advanced.toolsAndDiagnostics.title": "ابزارها و تشخیص‌ها",
   "tab.advanced.updateChannel.canary": "کناری",
   "tab.advanced.updateChannel.canaryDesc": "فعال‌شده با هر ادغام PR، چندین ساخت در روز. ناپایدارترین.",

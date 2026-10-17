@@ -6,21 +6,10 @@
  * Delegates to AgentManagerRuntime for actual implementation.
  */
 import { AgentManagerRuntime } from '@lobechat/agent-manager-runtime';
-import {
-  BaseExecutor,
-  type BuiltinToolContext,
-  type BuiltinToolResult,
-  type ConversationContext,
-} from '@lobechat/types';
+import { BaseExecutor, type BuiltinToolResult } from '@lobechat/types';
 
 import { agentService } from '@/services/agent';
 import { discoverService } from '@/services/discover';
-import { getAgentStoreState, useAgentStore } from '@/store/agent';
-import { agentSelectors } from '@/store/agent/selectors';
-import { useChatStore } from '@/store/chat';
-import { dispatchNonHeteroSubAgent } from '@/store/chat/slices/agentRun/actions/dispatch/nonHeteroSubAgentDispatcher';
-import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
-import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 import {
   AgentManagementApiName,
@@ -105,143 +94,14 @@ class AgentManagementExecutor extends BaseExecutor<typeof AgentManagementApiName
 
   // ==================== Execution ====================
 
-  callAgent = async (
-    params: CallAgentParams,
-    ctx: BuiltinToolContext,
-  ): Promise<BuiltinToolResult> => {
+  callAgent = async (params: CallAgentParams): Promise<BuiltinToolResult> => {
     const { agentId, instruction, skipCallSupervisor = false } = params;
 
-    // Execute as synchronous speak
-    // Two modes: Group vs Agents
-
-    // Mode 1: Group environment - use group orchestration
-    if (ctx.groupId && ctx.groupOrchestration && ctx.agentId && ctx.registerAfterCompletion) {
-      // Register afterCompletion callback to trigger group orchestration
-      ctx.registerAfterCompletion(() =>
-        ctx.groupOrchestration!.triggerSpeak({
-          agentId,
-          instruction,
-          skipCallSupervisor,
-          supervisorAgentId: ctx.agentId!,
-        }),
-      );
-
-      return {
-        content: `Triggered agent "${agentId}" to respond.`,
-        state: {
-          agentId,
-          instruction,
-          mode: 'speak',
-          skipCallSupervisor,
-        } as CallAgentState,
-        stop: true,
-        success: true,
-      };
-    }
-
-    // Mode 2: Agents mode (non-group) - execute directly with subAgentId
-    if (ctx.registerAfterCompletion) {
-      // Pre-load target agent config if not already loaded (before registerAfterCompletion)
-      // This ensures we fail fast with a clear error message if agent doesn't exist
-      const targetAgentExists = useAgentStore.getState().agentMap[agentId];
-      if (!targetAgentExists) {
-        try {
-          const config = await agentService.getAgentConfigById(agentId);
-          if (!config) {
-            return {
-              content: `Agent "${agentId}" not found in your workspace. Please check the agent ID and try again.`,
-              success: false,
-            };
-          }
-          useAgentStore.getState().internal_dispatchAgentMap(agentId, config);
-        } catch (error) {
-          console.error('[callAgent] Failed to load agent config:', error);
-          return {
-            content: `Failed to load agent "${agentId}": ${(error as Error).message}`,
-            success: false,
-          };
-        }
-      }
-
-      // Register afterCompletion to execute the agent.
-      // Runtime routing is fully delegated to dispatchNonHeteroSubAgent ().
-      ctx.registerAfterCompletion(async () => {
-        const get = useChatStore.getState;
-
-        const conversationContext: ConversationContext = {
-          agentId: ctx.agentId || '',
-          topicId: ctx.topicId || null,
-        };
-
-        // Get current messages for client-mode runner (gateway loads from DB).
-        const chatKey = messageMapKey(conversationContext);
-        const messages = dbMessageSelectors.getDbMessagesByKey(chatKey)(get());
-
-        if (messages.length === 0) {
-          console.error('[callAgent] No messages found in current conversation');
-          return;
-        }
-
-        // Inject a virtual instruction message so the sub-agent has clear direction.
-        // Only used by the client runner; gateway mode sends `instruction` as a real
-        // user message via dispatchNonHeteroSubAgent.
-        const now = Date.now();
-        const messagesWithInstruction = instruction
-          ? [
-              ...messages,
-              {
-                content: `<speaker name="Supervisor" />\n${instruction}`,
-                createdAt: now,
-                id: `virtual_speak_instruction_${now}`,
-                role: 'user' as const,
-                updatedAt: now,
-              },
-            ]
-          : messages;
-
-        const parentAgentConfig = conversationContext.agentId
-          ? agentSelectors.getAgentConfigById(conversationContext.agentId)(getAgentStoreState())
-          : undefined;
-
-        try {
-          await dispatchNonHeteroSubAgent(
-            {
-              kind: 'callAgent',
-              targetAgentId: agentId,
-              instruction,
-              parentMessageId: ctx.messageId,
-            },
-            {
-              conversationContext,
-              heterogeneousProvider: parentAgentConfig?.agencyConfig?.heterogeneousProvider,
-              isGatewayMode: get().isGatewayModeEnabled(),
-              messages: messagesWithInstruction,
-            },
-            get(),
-          );
-        } catch (error) {
-          console.error('[callAgent] dispatchNonHeteroSubAgent failed:', error);
-          throw error;
-        }
-      });
-
-      return {
-        content: `Called agent "${agentId}" to respond.`,
-        state: {
-          agentId,
-          instruction,
-          mode: 'speak',
-          skipCallSupervisor,
-        } as CallAgentState,
-        stop: true,
-        success: true,
-      };
-    }
-
-    // Fallback if registerAfterCompletion not available
-    console.warn('[callAgent] registerAfterCompletion not available in context');
+    // `callAgent` runs on the server (the agent loop is server-side; see
+    // `serverRuntimes/agentManagement`). There is no browser runtime to hand
+    // the call to, so a browser invocation reports that instead of pretending.
     return {
-      content: `Called agent "${agentId}" but execution may not complete properly.`,
+      content: `Calling agent "${agentId}" is only supported in server-side agent runs.`,
       state: {
         agentId,
         instruction,

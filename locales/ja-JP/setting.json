@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "カスタムスキルを追加",
   "tab.advanced": "高度な設定",
   "tab.advanced.appUpdates.title": "アプリの更新",
-  "tab.advanced.gatewayMode.desc": "サポートされているエージェントタスクをデフォルトでクラウドゲートウェイを通じて実行します。個々のエージェントはチャットメニューからこれを上書きすることができます。",
-  "tab.advanced.gatewayMode.title": "ゲートウェイモード",
   "tab.advanced.toolsAndDiagnostics.title": "ツールと診断",
   "tab.advanced.updateChannel.canary": "カナリア",
   "tab.advanced.updateChannel.canaryDesc": "すべてのPRマージでトリガーされ、1日に複数回ビルドされます。最も不安定です。",

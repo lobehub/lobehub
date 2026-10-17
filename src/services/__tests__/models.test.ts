@@ -6,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { aiProviderSelectors } from '@/store/aiInfra';
 
 import { createHeaderWithAuth } from '../_auth';
-import { resolveRuntimeProvider } from '../chat/helper';
 import { initializeWithClientStore } from '../chat/mecha';
 import { ModelsService } from '../models';
 
@@ -27,10 +26,6 @@ vi.mock('@/const/version', () => ({
 
 vi.mock('../_auth', () => ({
   createHeaderWithAuth: vi.fn(async () => ({})),
-}));
-
-vi.mock('../chat/helper', () => ({
-  resolveRuntimeProvider: vi.fn((provider: string) => provider),
 }));
 
 vi.mock('../chat/mecha', () => ({
@@ -77,7 +72,6 @@ const modelsService = new ModelsService();
 
 const mockedCreateHeaderWithAuth = vi.mocked(createHeaderWithAuth);
 const mockedGetMessageError = vi.mocked(getMessageError);
-const mockedResolveRuntimeProvider = vi.mocked(resolveRuntimeProvider);
 const mockedInitializeWithClientStore = vi.mocked(initializeWithClientStore);
 
 describe('ModelsService', () => {
@@ -85,8 +79,6 @@ describe('ModelsService', () => {
     (fetch as Mock).mockClear();
     mockedCreateHeaderWithAuth.mockClear();
     mockedGetMessageError.mockClear();
-    mockedResolveRuntimeProvider.mockReset();
-    mockedResolveRuntimeProvider.mockImplementation((provider: string) => provider);
     mockedInitializeWithClientStore.mockClear();
   });
 
@@ -167,50 +159,49 @@ describe('ModelsService', () => {
   });
 
   describe('getModels', () => {
-    it('should call the endpoint for runtime provider when server fetching', async () => {
+    it('should fetch the server models endpoint', async () => {
       (fetch as Mock).mockResolvedValueOnce(
         new Response(JSON.stringify({ models: [] }), { status: 200 }),
       );
 
       await modelsService.getModels('openai');
 
-      expect(mockedResolveRuntimeProvider).toHaveBeenCalledWith('openai');
+      expect(oneShotRelay.run).toHaveBeenLastCalledWith('openai', expect.any(Function));
       expect(fetch).toHaveBeenCalledWith('/webapi/models/openai', { headers: {} });
       expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
     });
 
-    it('should map custom provider to runtime provider endpoint', async () => {
-      mockedResolveRuntimeProvider.mockImplementation(() => 'openai');
+    it('should use the original custom provider id in the endpoint', async () => {
       (fetch as Mock).mockResolvedValueOnce(
         new Response(JSON.stringify({ models: [] }), { status: 200 }),
       );
 
       await modelsService.getModels('custom-provider');
 
-      expect(mockedResolveRuntimeProvider).toHaveBeenCalledWith('custom-provider');
       // API endpoint uses original provider, allowing server to query correct config
       expect(fetch).toHaveBeenCalledWith('/webapi/models/custom-provider', { headers: {} });
       expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
     });
 
-    it('should fetch models on client when isProviderFetchOnClient is true', async () => {
-      // Mock isProviderFetchOnClient to return true
+    // Regression: the browser model runtime is gone. A fetchOnClient provider
+    // with no relay available still lists models through the server endpoint.
+    it('should not build a browser runtime for a fetchOnClient provider without relay', async () => {
       const spyIsClient = vi
         .spyOn(aiProviderSelectors, 'isProviderFetchOnClient')
         .mockReturnValue(() => true);
-      // Mock initializeWithClientStore to return a runtime with a models() method
-      const mockModels = vi.fn().mockResolvedValue({ models: ['model1', 'model2'] });
-      mockedInitializeWithClientStore.mockResolvedValue({ models: mockModels } as any);
+      oneShotRelay.needsRelay.mockReturnValue(false);
+      (fetch as Mock).mockResolvedValueOnce(
+        new Response(JSON.stringify([{ id: 'model1' }]), { status: 200 }),
+      );
 
       const result = await modelsService.getModels('openai');
 
-      expect(spyIsClient).toHaveBeenCalledWith('openai');
-      expect(mockedInitializeWithClientStore).toHaveBeenCalledWith({
-        provider: 'openai',
-        runtimeProvider: 'openai',
-      });
-      expect(mockModels).toHaveBeenCalled();
-      expect(result).toEqual({ models: ['model1', 'model2'] });
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      // Regression: the provider reaches `run` even before it is known as
+      // device-only, so a late-loading custom provider can still be relayed.
+      expect(oneShotRelay.run).toHaveBeenLastCalledWith('openai', expect.any(Function));
+      expect(fetch).toHaveBeenCalledWith('/webapi/models/openai', { headers: {} });
+      expect(result).toEqual([{ id: 'model1' }]);
 
       spyIsClient.mockRestore();
     });
@@ -269,14 +260,23 @@ describe('ModelsService', () => {
       await expect(modelsService.getModels('openai')).rejects.toThrow('network down');
     });
 
-    it('should propagate client runtime model fetch errors', async () => {
+    it('should pull through the server for a fetchOnClient provider without relay', async () => {
       const spyIsClient = vi
         .spyOn(aiProviderSelectors, 'isProviderFetchOnClient')
         .mockReturnValue(() => true);
-      const mockModels = vi.fn().mockRejectedValue(new Error('client runtime failed'));
-      mockedInitializeWithClientStore.mockResolvedValue({ models: mockModels } as any);
+      oneShotRelay.needsRelay.mockReturnValue(false);
+      (fetch as Mock).mockResolvedValueOnce(new Response(''));
 
-      await expect(modelsService.getModels('openai')).rejects.toThrow('client runtime failed');
+      await modelsService.downloadModel({ model: 'qwen3:1.7b', provider: 'ollama' });
+
+      expect(mockedInitializeWithClientStore).not.toHaveBeenCalled();
+      expect(oneShotRelay.run).toHaveBeenLastCalledWith('ollama', expect.any(Function), {
+        signal: expect.any(AbortSignal),
+      });
+      expect(fetch).toHaveBeenCalledWith(
+        '/webapi/models/ollama/pull',
+        expect.objectContaining({ headers: {}, method: 'POST' }),
+      );
 
       spyIsClient.mockRestore();
     });

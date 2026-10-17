@@ -363,7 +363,7 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
       workingDirectory
     );
   }, [deviceDirs, topicWorkingDirectoryConfig, workingDirectory]);
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(activeAgentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled();
   const effectiveTarget = resolveExecutionTarget(agencyConfig, {
     clientExecutionAvailable: isDesktop,
     deviceRoutingAvailable,

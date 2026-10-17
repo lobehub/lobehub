@@ -7,18 +7,10 @@
 
 // Re-export core types from @lobechat/types
 export type {
-  AfterCompletionCallback,
   BuiltinToolContext,
   BuiltinToolExecutor,
   BuiltinToolResult,
-  GroupOrchestrationBaseParams,
-  GroupOrchestrationCallbacks,
   IBuiltinToolExecutor,
-  TriggerBroadcastParams,
-  TriggerDelegateParams,
-  TriggerExecuteTaskItem,
-  TriggerExecuteTasksParams,
-  TriggerSpeakParams,
 } from '@lobechat/types';
 
 /**

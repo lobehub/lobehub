@@ -4,10 +4,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import * as DatabaseModule from '@/database/core/db-adaptor';
 import { notShareVisitorMessage } from '@/database/utils/shareVisitor';
+import type * as FeatureFlagsModule from '@/server/featureFlags';
 import * as ModelRuntimeModule from '@/server/modules/ModelRuntime';
 import * as TracingServiceModule from '@/server/services/llmGenerationTracing';
 
 import { FollowUpActionService } from './index';
+
+// These tests cover the server-side model call itself. `agent_llm_relay` is on
+// by default and would first look the provider up in the (mocked) database to
+// decide whether to relay it to a browser tab; keep the relay out of the way.
+vi.mock('@/server/featureFlags', async (importOriginal) => {
+  const actual = await importOriginal<typeof FeatureFlagsModule>();
+  return {
+    ...actual,
+    getServerFeatureFlagsStateFromRuntimeConfig: async (
+      ...args: Parameters<typeof actual.getServerFeatureFlagsStateFromRuntimeConfig>
+    ) => ({
+      ...(await actual.getServerFeatureFlagsStateFromRuntimeConfig(...args)),
+      enableLlmRelay: false,
+    }),
+  };
+});
 
 const TEST_USER = 'user-1';
 const TEST_TOPIC = 'topic-1';

@@ -201,23 +201,29 @@ So:
 
 The runtime hands every executor method an optional `BuiltinToolContext` as the second argument:
 
-| Field                         | Use                                                            |
-| ----------------------------- | -------------------------------------------------------------- |
-| `agentId`                     | Default agent for "current agent" semantics (e.g. `listTasks`) |
-| `groupId`                     | Group chat scope                                               |
-| `topicId`                     | Current topic — needed when creating messages/operations       |
-| `taskId`                      | Current task identifier — fallback for "implicit" param        |
-| `documentId`                  | Current page/document scope                                    |
-| `messageId`                   | The tool message being created (for state attachments)         |
-| `sourceMessageId`             | The user message that triggered this tool turn                 |
-| `operationId`                 | Operation lineage (use for cancellation, tracing)              |
-| `scope`                       | `'task' \| 'agent' \| …` — toggles default behaviors           |
-| `signal: AbortSignal`         | Honor for long-running ops                                     |
-| `stepContext`                 | Cross-message runtime state (lobe-agent todos, etc.)           |
-| `registerAfterCompletion(cb)` | Defer side-effects past message-update race                    |
-| `groupOrchestration`          | Group orchestration callbacks                                  |
+| Field                 | Use                                                            |
+| --------------------- | -------------------------------------------------------------- |
+| `agentId`             | Default agent for "current agent" semantics (e.g. `listTasks`) |
+| `groupId`             | Group chat scope                                               |
+| `topicId`             | Current topic — needed when creating messages/operations       |
+| `taskId`              | Current task identifier — fallback for "implicit" param        |
+| `documentId`          | Current page/document scope                                    |
+| `messageId`           | The tool message being created (for state attachments)         |
+| `sourceMessageId`     | The user message that triggered this tool turn                 |
+| `operationId`         | Operation lineage (use for cancellation, tracing)              |
+| `scope`               | `'task' \| 'agent' \| …` — toggles default behaviors           |
+| `signal: AbortSignal` | Honor for long-running ops                                     |
+| `stepContext`         | Cross-message runtime state (lobe-agent todos, etc.)           |
 
 **Use rule:** read with `?.`, fall back to explicit params, **never silently override** an explicit param with a context value.
+
+There is no deferred-callback or orchestration hook on the browser context
+(`registerAfterCompletion`, `groupOrchestration` and `subAgent` went with the
+in-browser agent runtime). Agent runs execute on the server, so a tool that
+starts other agents — group speak / broadcast / delegate, `callAgent`,
+`callSubAgent` — is implemented as a server runtime under
+`apps/server/src/services/toolExecution/serverRuntimes/` and driven by the
+server agent loop; the browser executor only returns its result shape.
 
 ---
 

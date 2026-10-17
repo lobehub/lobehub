@@ -57,6 +57,14 @@ env:
   S3_SECRET_ACCESS_KEY: e2e-mock-secret-key
   S3_BUCKET: e2e-mock-bucket
   S3_ENDPOINT: https://e2e-mock-s3.localhost
+  # Agent runs execute on the server and stream over the Agent Gateway (there is
+  # no in-browser runtime), so the job runs the self-hosted gateway and answers
+  # the default provider from the E2E LLM mock endpoint (e2e/src/mocks/llm/server.ts).
+  AGENT_GATEWAY_URL: http://localhost:8787
+  AGENT_GATEWAY_SERVICE_TOKEN: e2e-agent-gateway-service-token
+  ENABLE_AGENT_GATEWAY: '1'
+  DEEPSEEK_API_KEY: e2e-mock-key
+  DEEPSEEK_PROXY_URL: http://127.0.0.1:3990/v1
 
 jobs:
   e2e:
@@ -95,6 +103,22 @@ jobs:
         run: |
           JWKS_KEY="$(bun -e "import { createTestOidcJwks } from './e2e/src/support/oidcTestKey'; process.stdout.write(createTestOidcJwks());")"
           printf 'JWKS_KEY=%s\n' "$JWKS_KEY" >> "$GITHUB_ENV"
+
+      - name: Start Agent Gateway
+        run: |
+          docker run -d --name e2e-agent-gateway --network host \
+            -e SERVICE_TOKEN="$AGENT_GATEWAY_SERVICE_TOKEN" \
+            -e JWKS_PUBLIC_KEY="$JWKS_KEY" \
+            -e LOBE_API_BASE_URL=http://localhost:3006 \
+            ghcr.io/lobehub/lobehub-gateway:0.5.0
+          for i in {1..30}; do
+            if curl -fsS http://localhost:8787/health > /dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs e2e-agent-gateway
+          exit 1
 
       - name: Install Playwright browsers (with system deps)
         run: bunx playwright install --with-deps chromium
@@ -257,6 +281,10 @@ jobs:
           E2E_PARALLEL: '3'
           E2E_REPORTS: '0'
           HEADLESS: 'true'
+
+      - name: Print Agent Gateway logs (on failure)
+        if: failure()
+        run: docker logs e2e-agent-gateway 2>&1 | tail -200 || true
 
       - name: Upload E2E test artifacts (on failure)
         if: failure()

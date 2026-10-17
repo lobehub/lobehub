@@ -136,8 +136,7 @@ export interface ToolRunContext {
 
 /**
  * Executes a single tool call. Server adapter wraps `ToolExecutionService`
- * (absorbing `dispatchClientTool`, result archival, and device audit); the
- * client adapter wraps `internal_invokeDifferentTypePlugin`.
+ * (absorbing `dispatchClientTool`, result archival, and device audit).
  */
 export interface ToolTransport {
   /** Execution-entry control; a returned result settles this call without launching it. */

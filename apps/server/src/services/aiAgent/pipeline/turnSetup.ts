@@ -12,11 +12,13 @@ import type {
   HeterogeneousRuntimePinSources,
   HeterogeneousTopicPin,
   RequestTrigger,
+  SendUserMessageMetadata,
 } from '@lobechat/types';
 import {
   agentShareFileAccessScope,
   ChatErrorType,
   ordinaryFileAccessScope,
+  pickSendUserMessageMetadata,
   resolveHeterogeneousModelOverride,
   resolveHeterogeneousProviderTopicModel,
   resolveHeterogeneousTopicRuntimeSnapshot,
@@ -373,6 +375,8 @@ export interface TurnSetupInput {
   throwIfExecutionAborted: (stage: string) => Promise<void>;
   title?: string;
   trigger?: string;
+  userMessageEditorData?: Record<string, any>;
+  userMessageMetadata?: SendUserMessageMetadata;
 }
 
 export interface TurnSetupResult {
@@ -467,6 +471,8 @@ export const setupTurn = async (
     throwIfExecutionAborted,
     title,
     trigger,
+    userMessageEditorData,
+    userMessageMetadata,
   } = input;
 
   let topicId = appContext?.topicId;
@@ -927,12 +933,17 @@ export const setupTurn = async (
       const userMessageParams = {
         agentId: conversationAgentId,
         content: prompt,
+        editorData: userMessageEditorData,
         files: runAttachments.fileIds,
         // Group reads filter on messages.groupId (MessageModel.query group
         // branch), so a group turn must stamp groupId or the message never
         // shows when the topic is reopened (group topic sidebar + ownership fix).
         groupId: appContext?.groupId ?? undefined,
-        metadata: requestTriggerMetadata,
+        // Selected context rides on the user row, where the injectors read it.
+        metadata: {
+          ...requestTriggerMetadata,
+          ...pickSendUserMessageMetadata(userMessageMetadata),
+        },
         parentId: userMessageParentId,
         role: 'user' as const,
         threadId: appContext?.threadId ?? undefined,

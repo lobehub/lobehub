@@ -12,7 +12,6 @@ import { setNamespace } from '@/utils/storeDebug';
 
 import { operationSelectors } from './selectors';
 import {
-  type AfterCompletionCallback,
   AI_RUNTIME_OPERATION_TYPES,
   type Operation,
   type OperationCancelContext,
@@ -390,43 +389,6 @@ export class OperationActionsImpl {
       }),
       false,
       n(`onOperationCancel/${operationId}`),
-    );
-  };
-
-  registerAfterCompletionCallback = (
-    operationId: string,
-    callback: AfterCompletionCallback,
-  ): void => {
-    this.#set(
-      produce((state: ChatStore) => {
-        const operation = state.operations[operationId];
-        if (!operation) {
-          log('[registerAfterCompletionCallback] WARNING: Operation not found: %s', operationId);
-          return;
-        }
-
-        // Initialize runtimeHooks if not exists
-        if (!operation.metadata.runtimeHooks) {
-          operation.metadata.runtimeHooks = {};
-        }
-
-        // Initialize afterCompletionCallbacks array if not exists
-        if (!operation.metadata.runtimeHooks.afterCompletionCallbacks) {
-          operation.metadata.runtimeHooks.afterCompletionCallbacks = [];
-        }
-
-        // Add callback to array
-        operation.metadata.runtimeHooks.afterCompletionCallbacks.push(callback);
-
-        log(
-          '[registerAfterCompletionCallback] registered callback for %s (type=%s), total callbacks: %d',
-          operationId,
-          operation.type,
-          operation.metadata.runtimeHooks.afterCompletionCallbacks.length,
-        );
-      }),
-      false,
-      n(`registerAfterCompletionCallback/${operationId}`),
     );
   };
 

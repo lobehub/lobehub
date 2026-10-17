@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Özel yetenek ekle",
   "tab.advanced": "Gelişmiş",
   "tab.advanced.appUpdates.title": "Uygulama Güncellemeleri",
-  "tab.advanced.gatewayMode.desc": "Desteklenen ajan görevlerini varsayılan olarak bulut Gateway üzerinden çalıştırın. Bireysel ajanlar bunu sohbet menüsünden geçersiz kılabilir.",
-  "tab.advanced.gatewayMode.title": "Gateway Modu",
   "tab.advanced.toolsAndDiagnostics.title": "Araçlar ve Tanılama",
   "tab.advanced.updateChannel.canary": "Kanarya",
   "tab.advanced.updateChannel.canaryDesc": "Her PR birleştirmesinde tetiklenir, günde birden fazla yapı. En kararsız.",

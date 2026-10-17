@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Добавить пользовательский навык",
   "tab.advanced": "Дополнительно",
   "tab.advanced.appUpdates.title": "Обновления приложения",
-  "tab.advanced.gatewayMode.desc": "По умолчанию выполнять поддерживаемые задачи агента через облачный шлюз. Отдельные агенты могут переопределить это через меню чата.",
-  "tab.advanced.gatewayMode.title": "Режим шлюза",
   "tab.advanced.toolsAndDiagnostics.title": "Инструменты и диагностика",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Запускается при каждом слиянии PR, несколько сборок в день. Наименее стабильный.",

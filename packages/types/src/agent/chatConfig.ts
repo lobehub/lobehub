@@ -42,8 +42,9 @@ export interface LobeAgentChatConfig extends AgentMemoryChatConfig, AgentSelfIte
    */
   disableContextCaching?: boolean;
   /**
-   * Disable Gateway mode for this agent. Undefined means Gateway mode follows
-   * the app-level default and stays enabled when the server supports it.
+   * @deprecated Ignored. Agents always run on the server through the Agent
+   * Gateway — the browser has no agent runtime to opt into. Kept so stored
+   * configs that still carry it keep parsing.
    */
   disableGatewayMode?: boolean;
 

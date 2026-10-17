@@ -95,7 +95,7 @@ export const useTaskRunTarget = (agentId: string, pinnedDeviceId?: string): Task
   // binding, so the conversation that happens to be open must not move it.
   const { agencyConfig, canSelectExecutionTarget, isPreferenceLoading, workspaceScoped } =
     useEffectiveAgencyConfig(agentId, { topicId: null });
-  const deviceRoutingAvailable = useIsGatewayModeEnabled(agentId);
+  const deviceRoutingAvailable = useIsGatewayModeEnabled();
   const legacyAgentWorkingDirectory = useAgentStore(
     (s) => s.localAgentWorkingDirectoryMap[agentId],
   );

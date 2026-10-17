@@ -46,7 +46,7 @@ export const scheduleQueuedFollowUp = (
         metadata: { ...merged.metadata, steer: true },
       })
       .catch((error: unknown) => {
-        console.error('[executeClientAgent] sendMessage for queued content failed:', error);
+        console.error('[queuedFollowUp] sendMessage for queued content failed:', error);
       });
   }, 100);
 };

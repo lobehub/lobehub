@@ -379,7 +379,7 @@ const ChatInput = memo<ChatInputProps>(
           ? topicSelectors.getTopicById(sendContext.topicId)(chatState)
           : undefined;
         try {
-          await checkProjectExecution(topic, chatState.isGatewayModeEnabled(sendContext.agentId));
+          await checkProjectExecution(topic, chatState.isGatewayModeEnabled());
         } catch (error) {
           console.error('Project execution preflight failed', error);
           toast.error(error instanceof Error ? error.message : String(error));

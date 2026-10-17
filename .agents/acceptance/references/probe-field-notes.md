@@ -701,6 +701,7 @@ executionTarget: 'local'` in `agencyConfig`) + one message per case asking CC to
 - **Situation**: verifying a **client-only** builtin tool (`executors: ['client']`) via a real agent turn on the desktop. The agent's `executionTarget` is `local` and the tool-enable gate (`isLocalSystemEnabled` = runtime `local`) passes, so it _looks_ like it will run client-side.
 - **Doesn't work**: sending the message as-is. On a cloud-connected desktop, gateway mode is on by default, so the run dispatches to `execServerAgentRuntime` (server/queue path) even for a `local` agent. The client-only tool isn't executable there — the model flails and returns a non-answer (e.g. "browser closed") with no real tool effect. Confirm the path by reading the running op's `type` in `window.__LOBE_STORES.chat().operations` (`execServerAgentRuntime` = server; `executeToolCall` = client).
 - **Works**: set the agent's `chatConfig.disableGatewayMode = true` (via `agentStore.updateAgentChatConfigById(id, { disableGatewayMode: true })`) before sending. The run then goes through `executeToolCall` (client runtime); the composer's runtime chip flips to "Local device" and the client executor runs. The gate (`isLocalSystemEnabled`) and the transport (`disableGatewayMode`) are INDEPENDENT — enabling the tool does not force client execution.
+- **Obsolete since the client runtime removal (feat/remove-client-runtime, 2026-10)**: `disableGatewayMode` is ignored and no agent run executes in the renderer. Every non-hetero run is `execServerAgentRuntime`; a tool the model calls during it executes on the server or is dispatched to the device through the device gateway. Verify a device-side tool through that server→device path (probe-mock-patterns.md P90), not by forcing client execution.
 
 ### E19. Desktop has no classic session store — reconfigure the existing agent, don't `createSession`
 
@@ -850,6 +851,7 @@ nodeintegration, plugins, disablewebsecurity, allowpopups, preload, …`). The h
 
 ### E31. Web agent turns run the CLIENT runtime — no `agent_operations` row will appear
 
+- **Obsolete since the client runtime removal (feat/remove-client-runtime, 2026-10)**: web turns now always run on the server over the Agent Gateway and do write an `agent_operations` row; without a gateway the send fails ("no Agent Gateway configured"). Poll `agent_operations` (or the chat-store `execServerAgentRuntime` op) for web turns too. The notes below are history.
 - **Situation**: driving a real web turn and polling `agent_operations` for the run.
 - **Doesn't work**: waiting for a server operation when the web surface dispatched the client runtime.
 - **Works**: use client observables (`messages.model`, thread ids, and chat-store operations) for web;

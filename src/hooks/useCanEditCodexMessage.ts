@@ -1,7 +1,6 @@
 import { isDesktop } from '@lobechat/const';
 
 import { resolveExecutionTarget } from '@/helpers/executionTarget';
-import { useIsGatewayModeEnabled } from '@/helpers/gatewayMode';
 import { useEffectiveAgencyConfig } from '@/hooks/useEffectiveAgencyConfig';
 import { useAgentStore } from '@/store/agent';
 import { selectRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
@@ -22,7 +21,6 @@ export const useCanEditCodexMessage = (agentId?: string, topicId?: string | null
   const { agencyConfig, isPreferenceLoading, workspaceScoped } = useEffectiveAgencyConfig(agentId, {
     topicId,
   });
-  const isGatewayMode = useIsGatewayModeEnabled(agentId);
   const isWorkspaceAgent = useAgentStore((s) => !!(agentId && s.agentMap[agentId]?.workspaceId));
   if (!agentId || isPreferenceLoading || agencyConfig?.heterogeneousProvider?.type !== 'codex')
     return false;
@@ -31,7 +29,6 @@ export const useCanEditCodexMessage = (agentId?: string, topicId?: string | null
       boundDeviceId: agencyConfig.boundDeviceId,
       executionTarget: agencyConfig.executionTarget,
       heterogeneousProvider: agencyConfig.heterogeneousProvider,
-      isGatewayMode,
       isWorkspaceAgent,
       workspaceScoped,
     });

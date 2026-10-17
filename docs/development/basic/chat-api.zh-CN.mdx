@@ -23,7 +23,7 @@ tags:
 
 ## 本页范围
 
-下方时序图主要展开客户端 Agent 循环。服务端执行另见[客户端 vs 服务端执行](#客户端-vs-服务端执行)。不同 transport 和执行场景不应被当作完全相同的链路。
+下方时序图展开一次 Agent 运行。Agent 循环始终在服务端运行，并通过 Agent Gateway WebSocket 流式推送到浏览器，详见[服务端执行与 Agent Gateway](#服务端执行与-agent-gateway)。不同 transport 和执行场景不应被当作完全相同的链路。
 
 本文中的「预设任务」指应用内部直接调用模型的辅助功能，不是用户在任务面板创建的 Task 或 Scheduled 自动化任务。用户任务说明见[任务](/zh/docs/usage/getting-started/task)。
 
@@ -32,47 +32,51 @@ tags:
 ```mermaid
 sequenceDiagram
     participant Client as 前端客户端
-    participant AgentLoop as Agent Runtime 循环
-    participant ChatService as ChatService
-    participant ChatAPI as 后端 Chat API
+    participant Gateway as Agent Gateway (WebSocket)
+    participant AgentLoop as 服务端 Agent Runtime 循环
     participant ModelRuntime as Model Runtime
     participant ModelProvider as 模型提供商 API
     participant ToolExecution as 工具执行层
+    participant ChatAPI as 后端 Chat API
 
-    Client->>AgentLoop: sendMessage()
-    Note over AgentLoop: 创建 GeneralChatAgent + AgentRuntime
+    Client->>AgentLoop: sendMessage() → aiAgent.execAgent (tRPC)
+    Note over AgentLoop: AgentRuntimeService 创建 operation<br/>(GeneralChatAgent + AgentRuntime)
+    AgentLoop-->>Client: operationId + Gateway token
+    Client->>Gateway: executeGatewayAgent() 建立 WebSocket 连接
 
-    loop Agent Plan-Execute 循环
+    loop Agent Plan-Execute 循环（服务端）
         AgentLoop->>AgentLoop: Agent 决定下一步指令
 
         alt call_llm 指令
-            AgentLoop->>ChatService: getChatCompletion
-            Note over ChatService: 上下文工程 (context engineering)
-            ChatService->>ChatAPI: POST /webapi/chat/[provider]
-            ChatAPI->>ModelRuntime: 初始化 ModelRuntime
+            Note over AgentLoop: 上下文工程 (context engineering，服务端)
+            AgentLoop->>ModelRuntime: 初始化 ModelRuntime
             ModelRuntime->>ModelProvider: chat completion 请求
-            ModelProvider-->>ChatService: 流式返回 SSE 响应
-            ChatService-->>Client: onMessageHandle 回调
+            ModelProvider-->>AgentLoop: 流式响应
+            AgentLoop-->>Gateway: 推送流式事件
+            Gateway-->>Client: 流式事件（渲染消息）
 
         else call_tool 指令
             AgentLoop->>ToolExecution: 执行工具
-            Note over ToolExecution: Builtin / MCP / Plugin
+            Note over ToolExecution: Builtin / MCP / Plugin<br/>（仅浏览器可执行的工具走 tool_execute）
             ToolExecution-->>AgentLoop: 返回工具结果
 
         else request_human_* 指令
-            AgentLoop-->>Client: 请求用户介入
-            Client->>AgentLoop: 用户反馈
+            AgentLoop-->>Gateway: 请求用户介入
+            Gateway-->>Client: 介入事件
+            Client->>AgentLoop: 用户反馈 (processHumanIntervention)
 
         else finish 指令
-            AgentLoop-->>Client: onFinish 回调
+            AgentLoop-->>Gateway: 终止事件
+            Gateway-->>Client: operation 结束
         end
     end
 
-    Note over Client,ModelProvider: 预设任务场景 (不经过 Agent 循环)
-    Client->>ChatService: fetchPresetTaskResult
-    ChatService->>ChatAPI: 发送预设任务请求
-    ChatAPI-->>ChatService: 返回任务结果
-    ChatService-->>Client: 通过回调函数返回结果
+    Note over Client,ChatAPI: 预设任务场景 (不经过 Agent 循环)
+    Client->>ChatAPI: fetchPresetTaskResult → POST /webapi/chat/[provider]
+    ChatAPI->>ModelRuntime: 初始化 ModelRuntime
+    ModelRuntime->>ModelProvider: chat completion 请求
+    ModelProvider-->>ChatAPI: 流式响应
+    ChatAPI-->>Client: 通过回调函数返回结果
 ```
 
 ## 主要步骤说明
@@ -81,22 +85,32 @@ sequenceDiagram
 
 用户发送消息后，`sendMessage()`
 （`src/store/chat/slices/agentRun/actions/entries/conversationLifecycle.ts`）
-创建用户消息和助手消息占位，然后调用 `executeClientAgent()`。
+创建用户消息和助手消息占位，然后调用 `executeGatewayAgent()`
+（`src/store/chat/slices/agentRun/actions/transports/gateway/gateway.ts`）。
+它通过 `aiAgent.execAgent` tRPC 路由
+（`apps/server/src/routers/lambda/aiAgent.ts`）在服务端启动运行，
+并通过 Agent Gateway WebSocket 订阅该 operation 的事件。
+
+如果部署没有配置 Agent Gateway，发送会失败并提示
+"This deployment has no Agent Gateway configured…"，不存在浏览器端回退。
 
 ### 2. Agent Runtime 驱动循环
 
-本节描述的客户端 Agent 聊天链路通过 `AgentRuntime.step()` 循环驱动。下文的预设任务直接调用模型，不经过该循环。
+Agent 聊天链路由服务端的 `AgentRuntime.step()` 循环驱动。下文的预设任务直接调用模型，不经过该循环。
 
 **初始化**
-（`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`）：
+（`apps/server/src/services/agentRuntime/AgentRuntimeService.ts` 中的
+`AgentRuntimeService.createOperation()`）：
 
 1. 解析 agent 配置（模型、provider、插件列表等）
-2. 通过 `createAgentToolsEngine()` 创建工具注册表
+2. 创建工具注册表（`apps/server/src/modules/Mecha/AgentToolsEngine/`）
 3. 创建 `GeneralChatAgent`（"大脑"，决定下一步做什么）
    和 `AgentRuntime`（"引擎"，执行指令）
-4. 通过 `createClientRuntimeExecutors()` 将 package 共享执行器绑定到客户端 transport
+4. 通过 `createRuntimeExecutors()`
+   （`apps/server/src/modules/AgentRuntime/RuntimeExecutors.ts`）
+   将 package 共享执行器绑定到服务端 transport
 
-**执行循环**：
+**执行循环**（`AgentRuntimeService.executeStep()`）：
 
 ```ts
 while (state.status !== 'done' && state.status !== 'error') {
@@ -115,54 +129,55 @@ while (state.status !== 'done' && state.status !== 'error') {
 - `request_human_approve` / `request_human_prompt` /
   `request_human_select`：请求用户介入
 
-### 3. 前端处理 LLM 请求
+### 3. 服务端准备 LLM 请求
 
-当 Agent 发出 `call_llm` 指令时，executor 调用 ChatService：
+当 Agent 发出 `call_llm` 指令时，服务端 executor 准备请求：
 
-- `src/services/chat/index.ts` 对消息、工具和参数进行预处理
-- `src/services/chat/mecha/` 下的模块完成上下文工程
+- `apps/server/src/modules/Mecha/` 下的模块完成上下文工程
   （context engineering），包括 agent 配置解析、
   模型参数解析、MCP 上下文注入等
-- 调用 `getChatCompletion` 准备请求参数
-- 使用 `@lobechat/fetch-sse` 包中的 `fetchSSE`
-  发送请求到后端 API
+- `initModelRuntimeFromDB`（`apps/server/src/modules/ModelRuntime/index.ts`）
+  从数据库读取用户的 provider 配置，初始化 ModelRuntime
 
-### 4. 后端处理请求
+### 4. 只有用户设备能访问的 Provider
 
-- `src/app/(backend)/webapi/chat/[provider]/route.ts` 接收请求
-- 调用 `initModelRuntimeFromDB` 从数据库读取用户的
-  provider 配置，初始化 ModelRuntime
-- 同时存在 tRPC 路由
-  `apps/server/src/routers/lambda/aiChat.ts`，
-  用于服务端消息发送和结构化输出等场景
+只有用户设备能访问的 provider（Ollama、LM Studio，或开启了「客户端请求模式」的
+provider）仍由服务端循环调用，但这一次 LLM 调用会转交给发起运行的浏览器标签页执行：
+
+- 服务端通过 Agent Gateway 发送 `llm_execute` 事件
+  （`apps/server/src/modules/AgentRuntime/llmRelay/`）
+- 浏览器执行该调用并将结果流式回传（`src/services/llmRelay/`）
+- 循环本身、工具调用和持久化仍在服务端
 
 ### 5. 模型调用与响应处理
 
 - `ModelRuntime`
   （`packages/model-runtime/src/core/ModelRuntime.ts`）
   调用相应模型提供商的 API，返回流式响应
-- 前端通过 `fetchSSE` 和
-  [fetchEventSource](https://github.com/Azure/fetch-event-source)
-  处理流式响应
-- 对不同类型的事件（文本、工具调用、推理等）进行处理
-- 通过回调函数将结果传递回客户端
+- 服务端循环处理不同类型的事件（文本、工具调用、推理等），
+  持久化消息，并向 Agent Gateway 发布流式事件
+- 浏览器通过 WebSocket 接收事件并更新消息
+  （`src/store/chat/slices/agentRun/actions/transports/gateway/gatewayEventHandler.ts`）
 
 ### 6. 工具调用场景
 
 当 AI 模型在响应中返回 `tool_calls` 字段时，Agent 会发出
 `call_tool` 指令。LobeHub 支持三种工具类型：
 
-**Builtin 工具**：内置在应用中的工具，通过本地执行器直接运行。
+服务端通过 `ToolExecutionService`
+（`apps/server/src/services/toolExecution/index.ts`）分发工具调用。
 
-- 前端通过 `invokeBuiltinTool` 方法在客户端直接执行
-- 包括搜索、DALL-E 图像生成等内置功能
+**Builtin 工具**：内置在应用中的工具，由服务端执行器运行。
+
+- 服务端运行时位于
+  `apps/server/src/services/toolExecution/serverRuntimes/`
+- 包括搜索、图像生成等内置功能
 
 **MCP 工具**：通过
 [Model Context Protocol](https://modelcontextprotocol.io/)
 连接的外部工具。
 
-- 前端通过 `invokeMCPTypePlugin` 方法调用
-  `MCPService`（`src/services/mcp.ts`）
+- 服务端通过 `MCPService` 调用 MCP 服务器
 - 支持 stdio、HTTP（streamable-http/SSE）
   和云端（Composio）三种连接方式
 - MCP 工具的注册和发现通过 MCP 服务器配置管理
@@ -170,23 +185,27 @@ while (state.status !== 'done' && state.status !== 'error') {
 **Plugin 工具**：传统插件体系，通过 API 网关调用。
 该体系预期将逐步废弃，由 MCP 工具体系替代。
 
-- 前端通过 `invokeBuiltinTool` 方法调用
-- 获取插件设置和清单、创建认证请求头、
-  发送请求到插件网关
+**仅浏览器可执行的工具**：只能在用户设备上运行的工具
+（例如本地系统工具或仅设备可达的 MCP 服务器）会以 `tool_execute` 事件
+通过 Agent Gateway 发送给浏览器
+（`apps/server/src/modules/AgentRuntime/dispatchClientTool.ts`）。
+浏览器执行该工具
+（`src/store/chat/slices/agentRun/actions/transports/client/clientToolExecution.ts`）
+并回传结果，服务端等待结果后继续循环。
 
 工具执行完成后，结果写入消息并返回给 Agent 循环，
 Agent 会再次调用 LLM 基于工具结果生成最终响应。
-工具分发逻辑位于
-`src/store/chat/slices/plugin/actions/pluginTypes.ts`。
 
 ### 7. 预设任务处理
 
 预设任务是系统预定义的特定功能任务，
 通常在用户执行特定操作时触发
 （不经过 Agent Runtime 循环，直接调用 LLM）。
-这些任务使用 `fetchPresetTaskResult` 方法执行，
-该方法与正常聊天流程类似，
-但会使用专门设计的提示词（prompt chain）。
+这些任务使用 `fetchPresetTaskResult` 方法
+（`src/services/chat/index.ts`）执行，
+该方法携带专门设计的提示词（prompt chain）POST 到 `/webapi/chat/[provider]`
+（`src/app/(backend)/webapi/chat/[provider]/route.ts`）。
+由服务端调用模型；对于只有用户设备能访问的 provider，则转交给浏览器执行。
 
 **执行时机**：
 
@@ -295,23 +314,29 @@ translateMessage: async (id, targetLang) => {
 
 ### 8. 完成
 
-当 Agent 发出 `finish` 指令时，循环结束，
-调用 `onFinish` 回调，提供完整的响应结果。
+当 Agent 发出 `finish` 指令时，服务端循环结束，
+Agent Gateway 将终止事件推送到浏览器，浏览器完成消息的最终更新。
 
-## 客户端 vs 服务端执行
+## 服务端执行与 Agent Gateway
 
-Agent Runtime 循环的执行位置取决于场景：
+所有 Agent 运行都在服务端执行，浏览器不再运行 Agent Runtime 循环：
 
-- **客户端循环**（浏览器）：常规 1:1 对话、继续生成、
-  群组编排决策。循环在浏览器中运行，
-  入口为 `executeClientAgent()`
-  （`src/store/chat/slices/agentRun/actions/transports/client/streamingExecutor.ts`）
-- **服务端循环**（队列 / 本地）：群聊 supervisor agent、
-  子 agent 任务、API/Cron 触发。循环在服务端运行，
-  通过 SSE 流式推送事件到客户端，
-  入口为 `AgentRuntimeService.executeStep()`
-  （`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`），
-  tRPC 路由为 `apps/server/src/routers/lambda/aiAgent.ts`
+- **入口**：`aiAgent.execAgent` tRPC 路由
+  （`apps/server/src/routers/lambda/aiAgent.ts`）启动 operation，
+  `AgentRuntimeService.executeStep()`
+  （`apps/server/src/services/agentRuntime/AgentRuntimeService.ts`）
+  执行每一步。常规 1:1 对话、继续生成、群聊、子 agent 任务、
+  API/Cron 触发都使用这一循环。
+- **流式推送**：服务端将步骤事件发布到 Agent Gateway，
+  浏览器通过 `executeGatewayAgent()`
+  （`src/store/chat/slices/agentRun/actions/transports/gateway/gateway.ts`）
+  以 WebSocket 订阅。
+- **仅设备可执行的工作**：仅浏览器可执行的工具（`tool_execute`）和
+  只有用户设备能访问的 provider 的 LLM 调用（`llm_execute`）
+  会逐次转交给浏览器标签页执行，循环仍在服务端。
+- **必须配置 Gateway**：未配置 Agent Gateway 时 Agent 完全无法运行。
+  预设任务直接调用 `/webapi/chat/[provider]`，因此对服务端可访问的
+  provider 仍可使用；转交只有设备能访问的 provider 同样需要经过 Agent Gateway。
 
 ## Model Runtime
 

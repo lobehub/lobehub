@@ -108,7 +108,7 @@ export class OneShotRelay {
   /**
    * Whether a call to `provider` is relayed back to this tab: the deployment
    * relays, the provider only runs from the device, and the user is known (a
-   * channel is named after them). Callers drop their browser fetcher on this,
+   * channel is named after them). Callers pass the provider to `run` on this,
    * so it must match what `run` actually does.
    */
   needsRelay(provider: string | undefined): provider is string {

@@ -404,9 +404,11 @@ support is not implemented. Native Windows is unsupported. See the skill's
   nicety.
 
 - **Verify which runtime actually ran — do not assume.** Some features have two
-  execution paths and the UI silently picks one. Group orchestration is the
-  concrete example: the chat UI defaults to the **client** runtime, while a fix
-  may live in the **server** runtime / `AGENT_RUNTIME_MODE=queue` durable-op path.
+  execution paths and the UI silently picks one. Since the client runtime removal
+  every non-hetero run (group orchestration included) is a server operation over
+  the Agent Gateway, but it can still run in-process or on the
+  `AGENT_RUNTIME_MODE=queue` durable-op path, and desktop agents may take the
+  heterogeneous runtime instead.
   A test that exercises the wrong path passes green without touching the code
   under test. Prove which ran (a server `agent_operations` row, the QStash
   `/api/agent/run` steps, server-only log lines); if the UI will not take the

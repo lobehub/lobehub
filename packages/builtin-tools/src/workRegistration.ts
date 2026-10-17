@@ -482,11 +482,10 @@ export const WORK_REGISTRATION_ADAPTERS = {
 
 /**
  * Dispatch a Work registration intent through the same adapter registry that
- * produced builtin intents. Consumed by BOTH persistence layers — the server runtime
- * (`registerWorkFromIntent`, backed by `WorkModel`) and the legacy client
- * runtime (`registerClientWorkFromIntent`, backed by `workService`). Each layer
- * only supplies its own {@link WorkRegistrationPorts} and per-call
- * {@link WorkRegistrationProvenance}; type-specific behavior lives in its adapter.
+ * produced builtin intents. Consumed by the server runtime (`registerWorkFromIntent`,
+ * backed by `WorkModel`), which supplies its {@link WorkRegistrationPorts} and
+ * per-call {@link WorkRegistrationProvenance}; type-specific behavior lives in
+ * its adapter.
  *
  * Cost stamping happens in the wrappers, not here: the cumulative cost of a tool
  * call is known only after `accumulateTool` runs, so each wrapper computes

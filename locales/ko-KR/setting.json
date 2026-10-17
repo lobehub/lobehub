@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "사용자 정의 스킬 추가",
   "tab.advanced": "고급",
   "tab.advanced.appUpdates.title": "앱 업데이트",
-  "tab.advanced.gatewayMode.desc": "기본적으로 클라우드 게이트웨이를 통해 지원되는 에이전트 작업을 실행합니다. 개별 에이전트는 채팅 메뉴에서 이를 재정의할 수 있습니다.",
-  "tab.advanced.gatewayMode.title": "게이트웨이 모드",
   "tab.advanced.toolsAndDiagnostics.title": "도구 및 진단",
   "tab.advanced.updateChannel.canary": "카나리",
   "tab.advanced.updateChannel.canaryDesc": "모든 PR 병합 시 트리거되며, 하루에 여러 빌드가 생성됩니다. 가장 불안정합니다.",

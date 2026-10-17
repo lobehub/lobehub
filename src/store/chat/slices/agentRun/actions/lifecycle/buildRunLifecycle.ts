@@ -1,4 +1,3 @@
-import type { AgentState } from '@lobechat/agent-runtime';
 import { isDesktop } from '@lobechat/const';
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
@@ -6,7 +5,6 @@ import { t } from 'i18next';
 
 import { LOADING_FLAT } from '@/const/message';
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
-import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
 import { snapshotTopicWorkingDirGit } from '@/store/chat/slices/agentRun/actions/lifecycle/snapshotWorkingDirGit';
 import type { ChatStore } from '@/store/chat/store';
 import { notifyDesktopAgentCompleted } from '@/store/chat/utils/desktopNotification';
@@ -18,8 +16,6 @@ import { markdownToTxt } from '@/utils/markdownToTxt';
 
 import { messageMapKey } from '../../../../utils/messageMapKey';
 import { displayMessageSelectors } from '../../../message/selectors/displayMessage';
-import type { OperationStatus } from '../../../operation/types';
-import { AI_RUNTIME_OPERATION_TYPES } from '../../../operation/types';
 import { topicSelectors } from '../../../topic/selectors';
 import { scheduleQueuedFollowUp } from './queuedFollowUp';
 import type {
@@ -34,83 +30,27 @@ import type {
 
 const log = debug('lobe-store:run-lifecycle');
 
-/**
- * Normalize the runtime/operation status into the cross-runtime
- * `client.runtime.complete` signal status.
- *
- * Only TERMINAL states reach here: parked states (`waiting_for_human` /
- * `waiting_for_async_tool`) are routed to `onRunParked` by the executor and
- * never emit a completion signal — a run is not complete while it is parked.
- */
-const normalizeClientRuntimeCompleteStatus = (
-  runtimeStatus: AgentState['status'] | undefined,
-  operationStatus?: OperationStatus,
-): 'cancelled' | 'completed' | 'failed' | undefined => {
-  if (operationStatus === 'cancelled') return 'cancelled';
-  if (operationStatus === 'failed') return 'failed';
-  if (operationStatus === 'completed') return 'completed';
-  if (runtimeStatus === 'done') return 'completed';
-  if (runtimeStatus === 'error' || runtimeStatus === 'interrupted') return 'failed';
-  return undefined;
-};
-
 /** The effective terminal disposition a run ended on, transport-agnostic. */
 type TerminalDisposition = 'cancelled' | 'failed' | 'success';
 
 /**
- * Resolve the terminal disposition from EITHER the client's raw `runtimeStatus`
- * (`AgentState['status']`) OR the normalized cross-runtime `status` that gateway
- * / hetero supply. This lets `completeRun` drive the same store/UI side effects
- * regardless of which transport reached the terminal boundary.
+ * Resolve the terminal disposition from the normalized cross-runtime `status`
+ * that gateway / hetero supply. This lets `completeRun` drive the same store/UI
+ * side effects regardless of which transport reached the terminal boundary.
  *
- * `cancelled` completes the operation for gateway/hetero (their cancel reaches
- * this boundary with the op still `running`, so it must be moved to a terminal
- * state here) but NOT for the client (its cancel path already moved the op out
- * of band before reaching `completeRun`). `undefined` never completes — it means
- * the transport reached an unrecognized status and falls through untouched.
+ * `cancelled` completes the operation (the cancel reaches this boundary with
+ * the op still `running`, so it must be moved to a terminal state here).
+ * `undefined` never completes — it means the transport reached an
+ * unrecognized status and falls through untouched.
  */
 const resolveTerminalDisposition = (
-  event: Pick<RunCompleteEvent, 'runtimeStatus' | 'status'>,
+  event: Pick<RunCompleteEvent, 'status'>,
 ): TerminalDisposition | undefined => {
-  const { runtimeStatus, status } = event;
-  // Client drives off the raw runtime status.
-  if (runtimeStatus === 'done') return 'success';
-  if (runtimeStatus === 'error') return 'failed';
-  if (runtimeStatus === 'interrupted') return 'cancelled';
-  // Gateway / hetero drive off the normalized terminal status.
+  const { status } = event;
   if (status === 'completed') return 'success';
   if (status === 'failed') return 'failed';
   if (status === 'cancelled') return 'cancelled';
   return undefined;
-};
-
-const findCompletionAssistantMessageId = (
-  messages: UIChatMessage[],
-  parentMessageId: string,
-  parentMessageType: 'user' | 'assistant' | 'tool',
-) => {
-  const messagesById = new Map(messages.map((message) => [message.id, message]));
-  const parentMessage = messagesById.get(parentMessageId);
-  const isDescendantOfParent = (message: UIChatMessage) => {
-    let currentParentId = message.parentId;
-    const visited = new Set<string>();
-
-    while (currentParentId && !visited.has(currentParentId)) {
-      if (currentParentId === parentMessageId) return true;
-      visited.add(currentParentId);
-      currentParentId = messagesById.get(currentParentId)?.parentId;
-    }
-
-    return false;
-  };
-
-  return (
-    messages.findLast((message) => message.role === 'assistant' && isDescendantOfParent(message))
-      ?.id ??
-    (parentMessageType === 'assistant' && parentMessage?.role === 'assistant'
-      ? parentMessage.id
-      : undefined)
-  );
 };
 
 /**
@@ -132,9 +72,7 @@ const NOOP = async () => {};
 /**
  * Assemble the store/UI run-lifecycle hooks for a single run.
  *
- * The hook bodies are the CLIENT completion effects (the fullest set today), to
- * be reused as the shared implementation when gateway/hetero are wired in the
- * follow-up entry convergence. `completeRun` handles only TERMINAL states;
+ * Shared by the gateway and hetero transports. `completeRun` handles only TERMINAL states;
  * parked states route to `onRunParked` and fire no terminal side effects — a
  * run is not complete while it is parked — parked states are non-terminal and
  * must not emit terminal side effects (title, queue drain, notification, unread).
@@ -143,8 +81,8 @@ export const buildRunLifecycle = (
   get: () => ChatStore,
   adapter: RunAdapterContext,
 ): AgentRunLifecycle => {
-  const { context, parentMessageId, parentMessageType } = adapter;
-  const { agentId, topicId, threadId, groupId, workspaceSlug } = context;
+  const { context } = adapter;
+  const { agentId, topicId, groupId, workspaceSlug } = context;
   const messageKey = messageMapKey(context);
   const contextKey = messageKey;
   let voiceTopicTitleSummaryRequested = false;
@@ -173,38 +111,6 @@ export const buildRunLifecycle = (
           log('Failed to summarize voice topic title: %O', error);
         });
     }
-  };
-
-  const emitComplete = (operationId: string, runtimeStatus: AgentState['status'] | undefined) => {
-    // `client.runtime.complete` is a CLIENT-only source event (browser → server
-    // policy pipeline). Gateway / hetero emit their own `client.gateway.*` events
-    // at their transport boundaries, so the shared lifecycle must not emit it for
-    // them.
-    if (adapter.runtimeType !== 'client') return;
-    const finalMessages = get().messagesMap[messageKey] || [];
-    const assistantMessageId =
-      findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
-      findCompletionAssistantMessageId(
-        get().dbMessagesMap[messageKey] || [],
-        parentMessageId,
-        parentMessageType,
-      );
-    const operationStatus = get().operations[operationId]?.status;
-
-    void emitClientAgentSignalSourceEvent({
-      payload: {
-        agentId,
-        ...(assistantMessageId ? { anchorMessageId: assistantMessageId } : {}),
-        assistantMessageId,
-        operationId,
-        status: normalizeClientRuntimeCompleteStatus(runtimeStatus, operationStatus),
-        threadId: threadId ?? undefined,
-        topicId: topicId ?? undefined,
-        ...(parentMessageType === 'user' ? { triggerMessageId: parentMessageId } : {}),
-      },
-      sourceId: `${operationId}:client:complete`,
-      sourceType: 'client.runtime.complete',
-    });
   };
 
   return {
@@ -302,36 +208,7 @@ export const buildRunLifecycle = (
 
       const notificationContext = { agentId, groupId, topicId, workspaceSlug };
 
-      if (adapter.runtimeType === 'client') {
-        // CLIENT: notify only OUTSIDE tool-calling mode; content comes from the
-        // in-memory store. No badge (preserves the prior client behavior).
-        //
-        // Anchor to the assistant message THIS run produced (walk from
-        // parentMessageId), NOT a positional findLast on the topic. On a later
-        // turn the fresh assistant can still be settling into messagesMap while
-        // the previous turn's assistant is the last populated one — a naive
-        // findLast then surfaces the PRIOR turn's reply as the notification body.
-        // Mirror emitComplete's dual-map (messagesMap → dbMessagesMap) lookup so
-        // the body is pinned to this run's freshest persisted content.
-        const finalMessages = get().messagesMap[messageKey] || [];
-        const dbMessages = get().dbMessagesMap[messageKey] || [];
-        const assistantId =
-          findCompletionAssistantMessageId(finalMessages, parentMessageId, parentMessageType) ??
-          findCompletionAssistantMessageId(dbMessages, parentMessageId, parentMessageType);
-        const lastAssistant = assistantId
-          ? (finalMessages.find((m) => m.id === assistantId) ??
-            dbMessages.find((m) => m.id === assistantId))
-          : undefined;
-        if (!lastAssistant?.content || lastAssistant?.tools) return;
-
-        await notifyDesktopAgentCompleted(get, {
-          content: lastAssistant.content,
-          context: notificationContext,
-        });
-        return;
-      }
-
-      // GATEWAY / HETERO: the body content is executor-resolved (hetero's
+      // The body content is executor-resolved (hetero's
       // in-memory `accContent`) when supplied, else derived from the store's
       // final assistant content (gateway, after its terminal DB reconciliation).
       // Dock badge is set so a backgrounded app still signals completion.
@@ -349,11 +226,11 @@ export const buildRunLifecycle = (
     },
     beforeRunComplete: NOOP,
     completeRun: async (event: RunCompleteEvent): Promise<RunCompleteResult> => {
-      const { operationId, runtimeStatus } = event;
+      const { operationId } = event;
       if (get().operations[operationId]?.metadata.terminalReconciled) return { requeued: false };
-      // Effective terminal disposition, resolved from the client `runtimeStatus`
-      // OR the normalized `status` gateway/hetero pass — so the same side effects
-      // fire regardless of which transport reached this boundary.
+      // Effective terminal disposition, resolved from the normalized `status`
+      // gateway/hetero pass — so the same side effects fire regardless of which
+      // transport reached this boundary.
       const disposition = resolveTerminalDisposition(event);
 
       // Title recovery is a successful-completion side effect, not a notification
@@ -373,69 +250,7 @@ export const buildRunLifecycle = (
         }
       };
 
-      // The client transport persists `status: 'running'` at run start
-      // (streamingExecutor) but, unlike gateway (see gateway.ts onSessionComplete),
-      // had no terminal write that flips it back for the topic the user is
-      // watching — `markTopicUnread` early-returns on the active topic, so the
-      // persisted status stayed `running` forever and stuck both the sidebar
-      // spinner and the home "任务正在执行" card. Mirror gateway's rule here: a
-      // clean completion the user isn't watching is owned by `markTopicUnread`
-      // (status: 'unread'); every OTHER case (viewing, error, abort) force-resets
-      // to 'active'. Client + top-level + real topic only — sub-agents never wrote
-      // 'running', and gateway/hetero own their own reset.
-      const resetActiveTopicRunningStatus = () => {
-        if (adapter.runtimeType !== 'client') return;
-        if (adapter.runScope === 'sub_agent') return;
-        if (!topicId) return;
-        const hasNewerRuntime = Object.values(get().operations).some(
-          (candidate) =>
-            candidate.id !== operationId &&
-            candidate.status === 'running' &&
-            AI_RUNTIME_OPERATION_TYPES.includes(candidate.type) &&
-            candidate.context.topicId === topicId &&
-            candidate.context.agentId === agentId &&
-            candidate.context.groupId === groupId &&
-            !candidate.parentOperationId,
-        );
-        if (hasNewerRuntime) return;
-        const viewing = get().activeTopicId === topicId;
-        // Not-viewing clean success is owned by `markTopicUnread` (→ 'unread');
-        // skip so the two never race over the status field.
-        if (!viewing && disposition === 'success') return;
-        // Carry the group scope through, exactly like the start-write does. Without
-        // it `updateTopicStatus` auto-derives `group_agent` from agentId+groupId and
-        // the optimistic in-memory patch lands in the wrong bucket, leaving the
-        // VISIBLE group topic's sidebar spinner stuck until the next refetch.
-        void get().updateTopicStatus?.({
-          agentId,
-          groupId,
-          ...(context.scope === 'group' || context.scope === 'group_agent'
-            ? { scope: context.scope }
-            : {}),
-          status: 'active',
-          topicId,
-        });
-      };
-
-      // 1. afterCompletion callbacks — fire on ALL terminal states (tools that
-      //    registered post-run actions: speak / broadcast / delegate).
-      const operation = get().operations[operationId];
-      const afterCompletionCallbacks = operation?.metadata?.runtimeHooks?.afterCompletionCallbacks;
-      if (afterCompletionCallbacks && afterCompletionCallbacks.length > 0) {
-        for (const callback of afterCompletionCallbacks) {
-          try {
-            await callback();
-          } catch (error) {
-            // Keep the original log prefix — characterization tests lock it (behavior-preserving).
-            console.error('[executeClientAgent] afterCompletion callback error:', error);
-          }
-        }
-      }
-
-      // A server snapshot may have settled the run while a callback awaited IO.
-      if (get().operations[operationId]?.metadata.terminalReconciled) return { requeued: false };
-
-      // 2. On success with queued messages: drain, complete, and re-trigger a new
+      // 1. On success with queued messages: drain, complete, and re-trigger a new
       //    sendMessage. Only drain on success — on error the queue is preserved.
       //    Gated to TOP-LEVEL runs only: the input queue belongs to the parent
       //    run, so a nested sub-agent completion must never drain it (it would
@@ -446,14 +261,13 @@ export const buildRunLifecycle = (
         (get().queuedMessages?.[contextKey]?.length ?? 0) > 0
       ) {
         completeSuccess();
-        emitComplete(operationId, runtimeStatus);
 
-        scheduleQueuedFollowUp(get, context, operationId, resetActiveTopicRunningStatus);
+        scheduleQueuedFollowUp(get, context, operationId);
 
         return { requeued: true };
       }
 
-      // 3. Complete the operation based on the terminal disposition.
+      // 2. Complete the operation based on the terminal disposition.
       switch (disposition) {
         case 'success': {
           completeSuccess();
@@ -469,22 +283,14 @@ export const buildRunLifecycle = (
         case 'cancelled': {
           // Gateway / hetero reach this boundary with the op still `running`
           // (their interrupt ends the run segment server- / CLI-side), so the op
-          // must be moved to terminal here. The client is exempt: its cancel
-          // path already set the op to `cancelled` out of band, and
-          // `completeOperation` deliberately preserves a `cancelled` status.
-          if (adapter.runtimeType !== 'client') get().completeOperation(operationId);
+          // must be moved to terminal here.
+          get().completeOperation(operationId);
           break;
         }
         // `undefined`: unrecognized terminal status — fall through untouched.
         // Parked states never reach `completeRun` — the executor routes them to
         // `onRunParked`.
       }
-
-      // Runs past the requeue early-return, so a run that continues into a queued
-      // follow-up (which writes 'running' again) is never reset mid-flight.
-      resetActiveTopicRunningStatus();
-
-      emitComplete(operationId, runtimeStatus);
 
       return { requeued: false };
     },

@@ -1,4 +1,3 @@
-import type { AgentState } from '@lobechat/agent-runtime';
 import type { ConversationContext, UIChatMessage } from '@lobechat/types';
 
 import type { AgentRuntimeType } from '@/store/chat/slices/agentRun/actions/dispatch/agentDispatcher';
@@ -70,22 +69,11 @@ export interface RunCompleteEvent extends RunLifecycleEventBase {
    * Final assistant content (raw markdown) for transports whose reply lives in
    * executor memory rather than the store (hetero's `accContent`). When present,
    * {@link AgentRunLifecycle.afterRunComplete} feeds it to the notification body
-   * instead of deriving from `messagesMap`. The client adapter omits it (it reads
-   * the store); hetero supplies it.
+   * instead of deriving from `messagesMap`. Hetero supplies it.
    */
   notification?: { content?: string };
   operationStatus?: OperationStatus;
-  /**
-   * Raw runtime terminal/parked status (client `AgentState['status']`), used to
-   * reproduce the exact per-status completion branch. Optional — gateway/hetero
-   * adapters that don't expose it rely on `status` instead.
-   */
-  runtimeStatus?: AgentState['status'];
-  /**
-   * Normalized cross-runtime terminal disposition. Optional: the client adapter
-   * drives completion off {@link runtimeStatus}; gateway/hetero adapters supply
-   * this instead.
-   */
+  /** Normalized cross-runtime terminal disposition. */
   status?: RunTerminalStatus;
 }
 
@@ -123,9 +111,8 @@ export interface AgentRunLifecycle {
   afterUserMessagePersisted: (event: UserMessagePersistedEvent) => Promise<void>;
   beforeRunComplete: (event: RunCompleteEvent) => Promise<void>;
   /**
-   * Core completion, in a fixed order across all three runtimes:
-   * afterCompletion callbacks → completeOperation → markUnread → normalized
-   * `client.runtime.complete` signal → queue drain (success terminal only).
+   * Core completion, in a fixed order across runtimes:
+   * completeOperation → markUnread → queue drain (success terminal only).
    * Returns whether a queued follow-up was scheduled (see {@link RunCompleteResult}).
    */
   completeRun: (event: RunCompleteEvent) => Promise<RunCompleteResult>;

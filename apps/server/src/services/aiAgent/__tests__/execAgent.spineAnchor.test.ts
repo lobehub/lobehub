@@ -422,6 +422,24 @@ describe('AiAgentService.execAgent - queued follow-up steer mark', () => {
     expect(userMessageCall()![0].metadata).toMatchObject({ steer: true });
   });
 
+  // Regression: once every send ran on the server, selected page / code context
+  // and local-file snapshots never reached the user row the run created.
+  it('persists the client-selected context on the user turn', async () => {
+    const pageSelections = [
+      { content: 'selected text', id: 'sel-1', pageId: 'page-1', xml: '<p>selected text</p>' },
+    ];
+    await service.execAgent({
+      agentId: 'agent-1',
+      appContext: { topicId: 'topic-1' },
+      prompt: 'Explain this',
+      userMessageEditorData: { root: { type: 'root' } },
+      userMessageMetadata: { pageSelections } as any,
+    });
+
+    expect(userMessageCall()![0].metadata).toMatchObject({ pageSelections });
+    expect(userMessageCall()![0].editorData).toEqual({ root: { type: 'root' } });
+  });
+
   it('leaves an ordinary user turn unmarked', async () => {
     await service.execAgent({
       agentId: 'agent-1',

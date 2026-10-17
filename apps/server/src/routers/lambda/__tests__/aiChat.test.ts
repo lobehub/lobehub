@@ -10,9 +10,26 @@ import { AgentModel } from '@/database/models/agent';
 import { MessageModel } from '@/database/models/message';
 import { ThreadModel } from '@/database/models/thread';
 import { TopicModel } from '@/database/models/topic';
+import type * as FeatureFlagsModule from '@/server/featureFlags';
 import { AiChatService } from '@/server/services/aiChat';
 
 import { aiChatRouter } from '../aiChat';
+
+// These tests cover the server-side model call itself. `agent_llm_relay` is on
+// by default and would first look the provider up in the (mocked) database to
+// decide whether to relay it to a browser tab; keep the relay out of the way.
+vi.mock('@/server/featureFlags', async (importOriginal) => {
+  const actual = await importOriginal<typeof FeatureFlagsModule>();
+  return {
+    ...actual,
+    getServerFeatureFlagsStateFromRuntimeConfig: async (
+      ...args: Parameters<typeof actual.getServerFeatureFlagsStateFromRuntimeConfig>
+    ) => ({
+      ...(await actual.getServerFeatureFlagsStateFromRuntimeConfig(...args)),
+      enableLlmRelay: false,
+    }),
+  };
+});
 
 const flushAsyncTasks = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 

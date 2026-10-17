@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { useAgentStore } from '@/store/agent';
@@ -17,61 +17,39 @@ const mockServerConfig = (serverConfig?: {
       typeof serverConfigStore.getServerConfigStoreState
     >);
 
-const stateWith = (disableGatewayMode?: boolean): AgentStoreState =>
-  ({
-    activeAgentId: 'agent-1',
-    agentMap: { 'agent-1': { chatConfig: { disableGatewayMode } } },
-  }) as unknown as AgentStoreState;
-
 afterEach(() => {
   vi.restoreAllMocks();
 });
 
 describe('resolveGatewayModeEnabled', () => {
-  it('is enabled when the gateway URL + enableGatewayMode are set and the agent has not opted out', () => {
+  it('is enabled when the gateway URL + enableGatewayMode are set', () => {
     mockServerConfig({ agentGatewayUrl: 'wss://gw', enableGatewayMode: true });
 
-    expect(resolveGatewayModeEnabled(stateWith(false), 'agent-1')).toBe(true);
-    // `disableGatewayMode: undefined` counts as enabled.
-    expect(resolveGatewayModeEnabled(stateWith(undefined), 'agent-1')).toBe(true);
+    expect(resolveGatewayModeEnabled()).toBe(true);
   });
 
   it('is disabled when the deployment has no gateway URL', () => {
     mockServerConfig(undefined);
 
-    expect(resolveGatewayModeEnabled(stateWith(false), 'agent-1')).toBe(false);
+    expect(resolveGatewayModeEnabled()).toBe(false);
   });
 
   it('is disabled when Gateway mode is off even with a gateway URL', () => {
     mockServerConfig({ agentGatewayUrl: 'wss://gw', enableGatewayMode: false });
 
-    expect(resolveGatewayModeEnabled(stateWith(false), 'agent-1')).toBe(false);
+    expect(resolveGatewayModeEnabled()).toBe(false);
   });
 
-  it('is disabled when the agent opts out via disableGatewayMode', () => {
+  // There is no in-browser runtime to fall back to, so a stored per-agent
+  // `disableGatewayMode` (the removed toggle) no longer turns the gateway off.
+  it('ignores a legacy per-agent disableGatewayMode', () => {
     mockServerConfig({ agentGatewayUrl: 'wss://gw', enableGatewayMode: true });
+    useAgentStore.setState({
+      activeAgentId: 'agent-1',
+      agentMap: { 'agent-1': { chatConfig: { disableGatewayMode: true } } },
+    } as unknown as Partial<AgentStoreState>);
 
-    expect(resolveGatewayModeEnabled(stateWith(true), 'agent-1')).toBe(false);
-  });
-});
-
-describe('useIsGatewayModeEnabled', () => {
-  it('re-computes when the agent toggles disableGatewayMode (reactivity)', () => {
-    mockServerConfig({ agentGatewayUrl: 'wss://gw', enableGatewayMode: true });
-    useAgentStore.setState(stateWith(false));
-
-    const { result } = renderHook(() => useIsGatewayModeEnabled('agent-1'));
-    expect(result.current).toBe(true);
-
-    // Toggling Gateway Mode from the chat ActionBar mutates chatConfig only; the
-    // hook must still re-render off its own subscription (the display sites
-    // subscribe to agencyConfig, a sibling slice, so they would otherwise stay
-    // stale after sends fall back to sandbox).
-    act(() => {
-      useAgentStore.setState({
-        agentMap: { 'agent-1': { chatConfig: { disableGatewayMode: true } } },
-      } as Partial<AgentStoreState>);
-    });
-    expect(result.current).toBe(false);
+    expect(resolveGatewayModeEnabled()).toBe(true);
+    expect(renderHook(() => useIsGatewayModeEnabled()).result.current).toBe(true);
   });
 });

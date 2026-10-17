@@ -191,7 +191,8 @@ converse also holds: a CLI-driven state still needs UI evidence when the claim i
 about rendering.
 
 **Prove which runtime actually ran.** Several features have two execution paths and
-the UI picks one silently (client runtime vs server/queue runtime). A test that
+the UI picks one silently (server in-process vs `AGENT_RUNTIME_MODE=queue`, server
+vs desktop heterogeneous runtime). A test that
 exercises the wrong path passes green without touching the code under test. Confirm
 with a server-side operation row, a queue step, or a server-only log line; if the UI
 will not take the intended path, call the server endpoint directly.

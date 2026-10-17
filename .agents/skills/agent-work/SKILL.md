@@ -44,12 +44,12 @@ A share visitor's run executes as the creator, so owner scope alone cannot separ
 
 Four write paths, two timing classes:
 
-| Path                                                                    | When                                | Where                                                                                                                                                               |
-| ----------------------------------------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Skill structured tools + sandbox `runCommand` (github / linear)         | at tool execution                   | `WorkModel.handleSkillToolResult`, called from server `toolExecution` and the client executor (`registerClientWorkFromIntent.ts` on the legacy non-gateway runtime) |
-| Shell Work scan (hetero codex/claude-code + device `lobe-local-system`) | at operation completion             | `apps/server/src/services/workRegistration/shellWorkRegistration.ts` via `registerWorksForOperation`                                                                |
-| File Work scan (sandbox entity files)                                   | at operation completion             | `apps/server/src/services/workRegistration/registerWorksForOperation.ts`                                                                                            |
-| Task / document works                                                   | at creation by their owning feature | `WorkModel.registerTask` / `registerDocument`                                                                                                                       |
+| Path                                                                    | When                                | Where                                                                                                |
+| ----------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Skill structured tools + sandbox `runCommand` (github / linear)         | at tool execution                   | `WorkModel.handleSkillToolResult`, called from server `toolExecution`                                |
+| Shell Work scan (hetero codex/claude-code + device `lobe-local-system`) | at operation completion             | `apps/server/src/services/workRegistration/shellWorkRegistration.ts` via `registerWorksForOperation` |
+| File Work scan (sandbox entity files)                                   | at operation completion             | `apps/server/src/services/workRegistration/registerWorksForOperation.ts`                             |
+| Task / document works                                                   | at creation by their owning feature | `WorkModel.registerTask` / `registerDocument`                                                        |
 
 ### Execution-time: skill providers
 
@@ -143,4 +143,3 @@ The whole scan returns `{attempted, failed}` and the completion backstop (`Compl
 | Shell scan engine                                    | `apps/server/src/services/workRegistration/shellWorkRegistration.ts`     |
 | Desktop-local run scan (client-reported)             | `apps/server/src/services/workRegistration/localRunWorkRegistration.ts`  |
 | Per-CLI scanners                                     | `apps/server/src/services/workRegistration/shellWorkScanners/`           |
-| Client (non-gateway) registration                    | `src/store/chat/agents/registerClientWorkFromIntent.ts`                  |

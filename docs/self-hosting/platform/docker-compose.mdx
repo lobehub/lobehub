@@ -21,7 +21,7 @@ tags:
 </div>
 
 <Callout type="warning">
-  **Upgrading an existing Docker Compose deployment?** The latest `docker-compose.yml` adds a gateway service for Gateway Mode. Update `.env` as described in [Upgrading an Existing Deployment](#upgrading-an-existing-deployment) before starting it. Otherwise the gateway container keeps restarting, agent runs fall back to the browser, and `docker logs lobehub` prints an `ACTION REQUIRED` warning.
+  **Upgrading an existing Docker Compose deployment?** The latest `docker-compose.yml` adds a gateway service for Gateway Mode. Update `.env` as described in [Upgrading an Existing Deployment](#upgrading-an-existing-deployment) before starting it. Otherwise the gateway container keeps restarting, agents cannot run, and `docker logs lobehub` prints an `ACTION REQUIRED` warning.
 </Callout>
 
 ## Quick Start
@@ -341,7 +341,7 @@ INTERNAL_APP_URL=http://localhost:3210
 
 4. Agent Gateway (Gateway Mode)
 
-The `gateway` service lets agent runs execute on the LobeHub server instead of in the browser. It needs the following values in `.env`, which `setup.sh` fills in automatically:
+The `gateway` service runs agents on the LobeHub server and streams their output to the browser. Agents cannot run without it. It needs the following values in `.env`, which `setup.sh` fills in automatically:
 
 - `AGENT_GATEWAY_URL`: the gateway address as reached by the browser, such as `https://gateway.example.com` or `http://your_server_ip:8787`. The browser opens a WebSocket connection to it, so a reverse proxy in front of it must allow WebSocket upgrades and long read timeouts. The LobeHub server reaches the gateway at `http://gateway:8787` inside the Compose network.
 - `GATEWAY_SERVICE_TOKEN`: a random token shared by LobeHub and the gateway.
@@ -368,7 +368,7 @@ docker run --rm --entrypoint /bin/node lobehub/lobehub -e 'const c=require("cryp
 ## Upgrading an Existing Deployment
 
 <Callout type="warning">
-  Finish these steps before starting the new `docker-compose.yml`. Until they are done, the `lobe-gateway` container keeps restarting, agent runs fall back to the browser, and `docker logs lobehub` prints an `ACTION REQUIRED` warning at startup.
+  Finish these steps before starting the new `docker-compose.yml`. Until they are done, the `lobe-gateway` container keeps restarting, agents cannot run, and `docker logs lobehub` prints an `ACTION REQUIRED` warning at startup.
 </Callout>
 
 <Steps>

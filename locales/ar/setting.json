@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "إضافة مهارة مخصصة",
   "tab.advanced": "متقدم",
   "tab.advanced.appUpdates.title": "تحديثات التطبيق",
-  "tab.advanced.gatewayMode.desc": "تشغيل مهام الوكيل المدعومة عبر بوابة السحابة افتراضيًا. يمكن للوكلاء الفرديين تجاوز هذا من قائمة الدردشة.",
-  "tab.advanced.gatewayMode.title": "وضع البوابة",
   "tab.advanced.toolsAndDiagnostics.title": "الأدوات والتشخيصات",
   "tab.advanced.updateChannel.canary": "كناري",
   "tab.advanced.updateChannel.canaryDesc": "يتم تشغيله عند كل دمج PR، مع عدة إصدارات يومياً. الأكثر عدم استقراراً.",

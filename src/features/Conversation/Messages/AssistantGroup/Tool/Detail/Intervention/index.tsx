@@ -131,7 +131,7 @@ const Intervention = memo<InterventionProps>(
     const skipToolInteraction = useConversationStore((s) => s.skipToolInteraction);
     const cancelToolInteraction = useConversationStore((s) => s.cancelToolInteraction);
     // Hetero (CC / Codex) interventions ship the answer back through IPC to a
-    // running CLI subprocess instead of starting a fresh `executeClientAgent`
+    // running CLI subprocess instead of starting a fresh Gateway resume
     // turn. Route through the conversation store so it carries this card's own
     // `context` (agent/topic) to the chat store — otherwise the optimistic
     // writes and topic-status flip fall back to the global `activeTopicId` and

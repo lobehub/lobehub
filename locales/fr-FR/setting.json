@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Ajouter une compétence personnalisée",
   "tab.advanced": "Avancé",
   "tab.advanced.appUpdates.title": "Mises à jour de l'application",
-  "tab.advanced.gatewayMode.desc": "Exécutez par défaut les tâches d'agent prises en charge via le cloud Gateway. Les agents individuels peuvent remplacer cela depuis le menu de chat.",
-  "tab.advanced.gatewayMode.title": "Mode Gateway",
   "tab.advanced.toolsAndDiagnostics.title": "Outils et diagnostics",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Déclenché à chaque fusion de PR, plusieurs builds par jour. Le moins stable.",

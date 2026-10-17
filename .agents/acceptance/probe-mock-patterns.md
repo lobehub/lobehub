@@ -19,6 +19,10 @@ rg -n '^#{2,4} ' "$P"     # every heading, to find the next bound
 `applies-to` filters a round: **surface** = web / electron / cli / any; **runtime** = client /
 gateway / hetero / any (the agent runtime the recipe depends on); **phase** = env / auth / fixture /
 drive / probe / capture / publish. Skip a row only when its surface AND runtime both miss yours.
+Since the client runtime removal (feat/remove-client-runtime, 2026-10) there is no in-browser agent
+runtime: every non-hetero run executes on the server and streams over the Agent Gateway. Rows still
+tagged `client` describe the renderer side of a gateway run or a dev-env concern; read their
+"Obsolete since" notes before following an instruction that assumes the browser runs the agent.
 
 | id  | surface       | runtime         | phase          | situation                                                                                                                                                    |
 | --- | ------------- | --------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -57,13 +61,13 @@ drive / probe / capture / publish. Skip a row only when its surface AND runtime 
 | P33 | web, electron | any             | fixture        | Backfill `pluginState` from each tool message's result after Agent Mock playback                                                                             |
 | P34 | web, electron | any             | fixture        | Dispatch an assistant+tool pair into an empty conversation; truncate args to reach the Streaming render                                                      |
 | P87 | web, electron | any             | fixture        | Render a pending intervention card: explicit dispatch context, `messagesInit`, `intervention` on BOTH projections, a registered operation                    |
-| P35 | web           | gateway         | probe          | Step-boundary `uiMessages` snapshots overwrite the bucket; record `replaceMessages` stacks, A/B with `disableGatewayMode`                                    |
+| P35 | web           | gateway         | probe          | Step-boundary `uiMessages` snapshots overwrite the bucket; record `replaceMessages` stacks; control is a cold `refreshMessages()` / DB read                  |
 | P36 | web           | gateway         | env            | Run the JWT handshake probe after every gateway restart; `/health` 200 proves nothing                                                                        |
 | P37 | any           | gateway         | env            | QStash / s3rver on fixed ports may belong to a sibling session; read the start log before stopping anything                                                  |
 | P38 | web           | any             | fixture        | Call the real load-more store action when the fixture is too short for the observer                                                                          |
 | P39 | web, electron | any             | fixture        | Replace the react-query `mutationFn` with a rejection via HMR so no network call ever fires                                                                  |
 | P40 | web, electron | any             | drive          | Remount the DevDock panel after a reload; pre-seed `LOBE_DEV_DOCK_UI` to land on it                                                                          |
-| P41 | web           | client          | fixture, drive | openai speaks `/v1/responses`; the model must be in `enabledAiModels`; set approval `auto-run`                                                               |
+| P41 | web           | gateway         | fixture, drive | openai speaks `/v1/responses`; the model must be in `enabledAiModels`; set approval `auto-run`                                                               |
 | P42 | web           | hetero          | fixture, drive | In-page IPC mock feeding stream-json through the real `ClaudeCodeAdapter`, no Electron needed                                                                |
 | P43 | web, electron | any             | capture        | Focus and read in one eval, wait past the transition, assert an untransitioned property too                                                                  |
 | P44 | web, electron | any             | capture        | Inject `html > canvas { display: none }` at capture time and disclose it                                                                                     |
@@ -211,9 +215,16 @@ the way to capture a page's first-load request after installing a fetch wrapper.
 
 **applies-to:** surface=any · runtime=client, gateway · phase=probe
 
-Client and server agent runtimes can produce the same visible result. Prove the
+Different agent runtimes can produce the same visible result. Prove the
 runtime with a server-only artifact: operation row, queue step, or enabled
 main/server log namespace. Renderer state alone is not sufficient.
+
+Since the client runtime removal (feat/remove-client-runtime) the browser no longer
+runs agents: a non-hetero turn is always a server operation streamed over the Agent
+Gateway, and with no gateway configured the send fails ("no Agent Gateway
+configured") instead of falling back. The question is now server (in-process vs
+`AGENT_RUNTIME_MODE=queue`) vs desktop heterogeneous runtime, and whether the
+gateway stream actually reached the tab.
 
 #### P04 · `eval` declarations persist in the page global scope
 
@@ -1250,6 +1261,13 @@ applies a pushed snapshot. If the behavior is correct there and wrong in gateway
 mode, the defect is in the gateway transport or in the server snapshot, and you have
 halved the search space before reading any code.
 
+> Obsolete since the client runtime removal (feat/remove-client-runtime, 2026-10):
+> `disableGatewayMode` is ignored and there is no non-gateway path to A/B against.
+> Use a cold read as the control instead: after the bucket goes wrong, call
+> `refreshMessages()` (or query the topic's `messages` rows). Correct there and wrong
+> after the next `step_start` / `agent_runtime_end` means the pushed snapshot is the
+> writer; wrong in the DB too means the server persisted it wrong.
+
 #### P36 · `curl /health` does not prove the local agent-gateway trusts your key — run the JWT probe
 
 **applies-to:** surface=web · runtime=gateway · phase=env
@@ -1354,9 +1372,17 @@ localStorage.setItem(
 );
 ```
 
-#### P41 · Driving a real queued-message (steer) run in client runtime: Responses-API stub, an enabled function-call model, and auto-run approval
+#### P41 · Driving a real queued-message (steer) run (formerly client runtime): Responses-API stub, an enabled function-call model, and auto-run approval
 
-**applies-to:** surface=web · runtime=client · phase=fixture, drive
+**applies-to:** surface=web · runtime=gateway · phase=fixture, drive
+
+> Obsolete since the client runtime removal (feat/remove-client-runtime, 2026-10): the
+> run no longer executes in the browser. It is a server operation streamed over the
+> Agent Gateway, so a local closed loop needs a gateway (references/agent-gateway.md),
+> and the provider request (and the stub's `/v1/responses` traffic) now comes from the
+> server process, not the tab. The model, `enabledAiModels` and approval traps below
+> still apply. For a deterministic stub, prefer the e2e OpenAI-compatible mock
+> (`e2e/src/mocks/llm/server.ts`, wired through `DEEPSEEK_PROXY_URL`).
 
 **Situation:** verifying anything downstream of the input queue (steer/follow-up drain,
 the merged assistant chain) needs a turn that stays open long enough to enqueue a
@@ -2715,8 +2741,9 @@ picks a connection when one device holds several clients (`desktop` + `cli`).
   sibling `../device-gateway`, which does not exist next to `lobehub-worktrees/`.
 - A plain `lh connect` beside the dev desktop: the CLI derives its `deviceId` from the
   machine id, the dev Electron instance does not, so they show up as two devices.
-- Web without the local agent-gateway: a normal agent then runs in the client runtime,
-  and nothing reaches the server-side device runtimes (P03 — no `agent_operations` row).
+- Web without the local agent-gateway: the send fails with "no Agent Gateway
+  configured" (since the client runtime removal there is no browser fallback), so
+  nothing reaches the server-side device runtimes.
 - The dev Electron golden profile: it is `storageMode: cloud`, and its first launch
   auto-opens a cloud OIDC page in the default browser — approving it signs the instance
   into the production account.

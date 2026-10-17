@@ -39,7 +39,6 @@ vi.mock('@/store/chat', () => ({
       replaceMessages: vi.fn(),
       internal_dispatchMessage: vi.fn(),
       internal_dispatchTopic: vi.fn(),
-      executeClientAgent: vi.fn(),
       sendMessage: vi.fn(),
       switchTopic: vi.fn(),
       summaryTopicTitle: vi.fn(),

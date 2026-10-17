@@ -942,6 +942,8 @@ export class AiAgentService {
       title,
       steer,
       trigger,
+      userMessageEditorData,
+      userMessageMetadata,
       cronJobId,
       taskId,
       evalContext,
@@ -1270,6 +1272,8 @@ export class AiAgentService {
           throwIfExecutionAborted,
           title,
           trigger,
+          userMessageEditorData,
+          userMessageMetadata,
         },
       ),
     );

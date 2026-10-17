@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Добавяне на персонализирано умение",
   "tab.advanced": "Разширени",
   "tab.advanced.appUpdates.title": "Актуализации на приложението",
-  "tab.advanced.gatewayMode.desc": "Изпълнявайте поддържаните задачи на агентите през облачния Gateway по подразбиране. Индивидуалните агенти могат да променят това от менюто за чат.",
-  "tab.advanced.gatewayMode.title": "Режим Gateway",
   "tab.advanced.toolsAndDiagnostics.title": "Инструменти и диагностика",
   "tab.advanced.updateChannel.canary": "Канарче",
   "tab.advanced.updateChannel.canaryDesc": "Задейства се при всяко сливане на PR, множество компилации на ден. Най-нестабилната версия.",

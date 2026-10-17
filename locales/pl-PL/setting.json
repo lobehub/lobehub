@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Dodaj własną umiejętność",
   "tab.advanced": "Zaawansowane",
   "tab.advanced.appUpdates.title": "Aktualizacje aplikacji",
-  "tab.advanced.gatewayMode.desc": "Domyślnie uruchamiaj obsługiwane zadania agenta przez chmurę Gateway. Poszczególni agenci mogą to zmienić w menu czatu.",
-  "tab.advanced.gatewayMode.title": "Tryb Gateway",
   "tab.advanced.toolsAndDiagnostics.title": "Narzędzia i diagnostyka",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Uruchamiane przy każdym scaleniu PR, wiele kompilacji dziennie. Najmniej stabilne.",

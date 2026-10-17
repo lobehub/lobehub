@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Aggiungi skill personalizzata",
   "tab.advanced": "Avanzato",
   "tab.advanced.appUpdates.title": "Aggiornamenti dell'app",
-  "tab.advanced.gatewayMode.desc": "Esegui le attività degli agenti supportati tramite il Gateway cloud per impostazione predefinita. Gli agenti individuali possono sovrascrivere questa impostazione dal menu chat.",
-  "tab.advanced.gatewayMode.title": "Modalità Gateway",
   "tab.advanced.toolsAndDiagnostics.title": "Strumenti e diagnostica",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Attivato ad ogni merge di PR, con più build al giorno. La versione meno stabile.",

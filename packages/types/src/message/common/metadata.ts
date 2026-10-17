@@ -387,6 +387,33 @@ export const omitServerOwnedMessageMetadata = <T>(metadata: T): T => {
   return rest as T;
 };
 
+/**
+ * The user-message metadata a client attaches to a send (selected page / code
+ * context, desktop local-file snapshots). A server-run turn persists it on the
+ * user row it creates, where the context-engine injectors read it.
+ */
+export const SendUserMessageMetadataSchema = MessageMetadataSchema.pick({
+  contextSelections: true,
+  localSystemToolSnapshots: true,
+  pageSelections: true,
+});
+
+export type SendUserMessageMetadata = z.infer<typeof SendUserMessageMetadataSchema>;
+
+/** The non-empty {@link SendUserMessageMetadata} fields of `metadata`, or `undefined`. */
+export const pickSendUserMessageMetadata = (
+  metadata?: SendUserMessageMetadata | null,
+): SendUserMessageMetadata | undefined => {
+  const picked: SendUserMessageMetadata = {
+    ...(metadata?.contextSelections?.length && { contextSelections: metadata.contextSelections }),
+    ...(metadata?.localSystemToolSnapshots?.length && {
+      localSystemToolSnapshots: metadata.localSystemToolSnapshots,
+    }),
+    ...(metadata?.pageSelections?.length && { pageSelections: metadata.pageSelections }),
+  };
+  return Object.keys(picked).length > 0 ? picked : undefined;
+};
+
 export interface ModelUsage extends ModelTokensUsage {
   /**
    * dollar

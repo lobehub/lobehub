@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Adicionar habilidade personalizada",
   "tab.advanced": "Avançado",
   "tab.advanced.appUpdates.title": "Atualizações do Aplicativo",
-  "tab.advanced.gatewayMode.desc": "Execute tarefas de agente suportadas através do Gateway na nuvem por padrão. Agentes individuais podem substituir isso no menu de chat.",
-  "tab.advanced.gatewayMode.title": "Modo Gateway",
   "tab.advanced.toolsAndDiagnostics.title": "Ferramentas e Diagnósticos",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Acionado a cada merge de PR, múltiplas compilações por dia. O mais instável.",

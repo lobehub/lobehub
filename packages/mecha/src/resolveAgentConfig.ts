@@ -192,9 +192,9 @@ export interface ResolvedAgentConfig {
   agentConfig: LobeAgentConfig;
   /** The chat config */
   chatConfig: LobeAgentChatConfig;
-  /** Enabled manifests for context engineering (populated by internal_createAgentState) */
+  /** Enabled manifests for context engineering (populated by the runtime host) */
   enabledManifests?: LobeToolManifest[];
-  /** Enabled tool IDs after filtering (populated by internal_createAgentState) */
+  /** Enabled tool IDs after filtering (populated by the runtime host) */
   enabledToolIds?: string[];
   /** Whether this is a builtin agent */
   isBuiltinAgent: boolean;
@@ -213,7 +213,7 @@ export interface ResolvedAgentConfig {
    * reasoning choices on top of the model-instance defaults.
    */
   subAgentChatConfigOverride?: Partial<LobeAgentChatConfig>;
-  /** Pre-generated tools array (populated by internal_createAgentState, undefined means tools disabled) */
+  /** Pre-generated tools array (populated by the runtime host, undefined means tools disabled) */
   tools?: ChatCompletionTool[];
 }
 

@@ -443,89 +443,19 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
 
   // ==================== Sub-Agent ====================
   //
-  // A sub-agent call is a normal tool call: the executor runs the sub-agent in
-  // an isolated Thread via `ctx.subAgent` (the current runtime, injected by the
-  // client) and returns the sub-agent's final output as the tool result. The
-  // Thread id is persisted in state so the Render can open it in the portal.
+  // Sub-agents run on the server: the agent loop, and with it `callSubAgent`,
+  // is server-side (`serverRuntimes`). The browser has no runtime to start
+  // one in, so a browser invocation says so instead of pretending.
 
   callSubAgent = async (
-    params: CallSubAgentParams,
+    _params: CallSubAgentParams,
     ctx: BuiltinToolContext,
   ): Promise<BuiltinToolResult> => {
     if (ctx.isSubAgent) {
       return nestedSubAgentDisabledResult();
     }
 
-    const { description, instruction, inheritMessages, timeout } = params;
-
-    if (!description || !instruction) {
-      return { content: 'Sub-agent description and instruction are required.', success: false };
-    }
-
-    // Tool-call JSON reaches this executor without schema validation; a
-    // malformed id must not silently start a fresh (billed) sub-agent.
-    if (params.subAgentId !== undefined && typeof params.subAgentId !== 'string') {
-      return { content: 'subAgentId must be a string.', success: false };
-    }
-    // Strict-schema models send `subAgentId: ""` to mean "start a new one".
-    const subAgentId = params.subAgentId?.trim();
-
-    // Continuing an earlier sub-agent is implemented by the server runtime only.
-    // Fail loudly instead of silently starting a fresh sub-agent that has none
-    // of the earlier sub-agent's history.
-    if (subAgentId) {
-      return {
-        content:
-          'Continuing an earlier sub-agent (subAgentId) is not supported in this runtime. Leave subAgentId empty to start a new sub-agent.',
-        success: false,
-      };
-    }
-
-    if (!ctx.subAgent) {
-      return { content: 'Sub-agent execution is not available in this runtime.', success: false };
-    }
-
-    const {
-      result,
-      threadId,
-      success,
-      error,
-      model,
-      totalCost,
-      totalInputTokens,
-      totalOutputTokens,
-      totalToolCalls,
-      totalTokens,
-    } = await ctx.subAgent.run({
-      description,
-      inheritMessages,
-      instruction,
-      timeout,
-      toolMessageId: ctx.messageId,
-    });
-
-    if (!success) {
-      return { content: error ?? 'Sub-agent execution failed.', success: false };
-    }
-
-    // Cost + the token split are persisted alongside the totals because this row is
-    // where the parent's usage tray reads a sub-agent's spend — the child's own
-    // messages sit in an isolation thread the parent never loads, so anything left
-    // off here is invisible to the parent's ledger. Mirrors the shape the server
-    // path's completion bridge backfills.
-    return {
-      content: result,
-      state: {
-        model,
-        threadId,
-        totalCost,
-        totalInputTokens,
-        totalOutputTokens,
-        totalToolCalls,
-        totalTokens,
-      },
-      success: true,
-    };
+    return { content: 'Sub-agent execution is not available in this runtime.', success: false };
   };
 }
 

@@ -53,10 +53,10 @@ const cumulativeUsageSchema = z.object({
   usage: z.unknown().optional(),
 }) satisfies z.ZodType<WorkVersionCumulativeUsage>;
 
-// Every register* schema must accept `cumulativeCost` / `cumulativeUsage`: the
-// client-first runtime stamps the tool call's cumulative cost onto the
-// registration (see registerClientWorkFromIntent), and `z.object` strips
-// undeclared keys — omitting them here silently stores cost-less versions.
+// Every register* schema must accept `cumulativeCost` / `cumulativeUsage`: a
+// caller registering a Work for a finished tool call stamps its cumulative cost
+// onto the registration, and `z.object` strips undeclared keys — omitting them
+// here silently stores cost-less versions.
 const registerTaskSchema = z.object({
   agentId: z.string().nullable().optional(),
   cumulativeCost: z.number().nullable().optional(),

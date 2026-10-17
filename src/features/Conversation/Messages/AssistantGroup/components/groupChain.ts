@@ -120,9 +120,9 @@ export const getChainDurationsMs = (
  * block ids alone would end the span before the tools it is waiting on, so the
  * result rows join the candidates.
  *
- * A result row's own end is `updatedAt`, not `createdAt`: the client runtime
- * creates the row BEFORE invoking the tool (`ClientToolTransport.execute`) and
- * writes the result into it afterwards, so `createdAt` there marks when the
+ * A result row's own end is `updatedAt`, not `createdAt`: rows written by the
+ * former in-browser runtime were created BEFORE the tool ran and got the result
+ * written into them afterwards, so `createdAt` there marks when the
  * tool STARTED and would leave a slow tool's whole runtime outside the span.
  * The server runtime writes the row once, on completion, where the two stamps
  * coincide — so the later of the two is right on both paths. Assistant blocks

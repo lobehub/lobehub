@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Benutzerdefinierten Skill hinzufügen",
   "tab.advanced": "Erweitert",
   "tab.advanced.appUpdates.title": "App-Updates",
-  "tab.advanced.gatewayMode.desc": "Führen Sie unterstützte Agentenaufgaben standardmäßig über das Cloud-Gateway aus. Einzelne Agenten können dies im Chat-Menü überschreiben.",
-  "tab.advanced.gatewayMode.title": "Gateway-Modus",
   "tab.advanced.toolsAndDiagnostics.title": "Tools und Diagnosen",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Ausgelöst bei jedem PR-Merge, mehrere Builds pro Tag. Am instabilsten.",

@@ -42,11 +42,6 @@ vi.mock(
   }),
 );
 
-vi.mock('@/store/chat/utils/activeTopicDocumentContext', () => ({
-  mergeAgentRuntimeInitialContexts: () => undefined,
-  resolveActiveTopicDocumentInitialContext: async () => undefined,
-}));
-
 vi.mock('@/store/chat/slices/operation/selectors', () => ({
   operationSelectors: {
     getOperationById: () => () => undefined,

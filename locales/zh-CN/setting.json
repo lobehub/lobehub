@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "添加",
   "tab.advanced": "高级设置",
   "tab.advanced.appUpdates.title": "应用更新",
-  "tab.advanced.gatewayMode.desc": "默认通过云端 Gateway 运行支持的助理任务。单个助理可以在聊天菜单中覆盖该设置。",
-  "tab.advanced.gatewayMode.title": "后端运行模式",
   "tab.advanced.toolsAndDiagnostics.title": "工具与诊断",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "每次 PR 合并触发构建，一天可能多次。最不稳定。",

@@ -1747,8 +1747,6 @@
   "tab.addCustomSkill": "Thêm kỹ năng tùy chỉnh",
   "tab.advanced": "Nâng cao",
   "tab.advanced.appUpdates.title": "Cập nhật ứng dụng",
-  "tab.advanced.gatewayMode.desc": "Chạy các tác vụ của agent được hỗ trợ thông qua Gateway đám mây theo mặc định. Các agent riêng lẻ có thể ghi đè điều này từ menu trò chuyện.",
-  "tab.advanced.gatewayMode.title": "Chế độ Gateway",
   "tab.advanced.toolsAndDiagnostics.title": "Công cụ và chẩn đoán",
   "tab.advanced.updateChannel.canary": "Canary",
   "tab.advanced.updateChannel.canaryDesc": "Kích hoạt trên mỗi lần hợp nhất PR, nhiều bản dựng mỗi ngày. Không ổn định nhất.",

@@ -1504,9 +1504,8 @@ export default {
   'memory.on.desc': 'Allow AI to actively search and manage your memories during conversation.',
   'memory.on.title': 'Enable Memory Tool',
   'memory.title': 'Memory',
-  'gatewayMode.cardTitle': 'Agent Gateway Mode',
-  'gatewayMode.desc':
-    "Run agents in the cloud through LobeHub's Agent Gateway. Tasks keep running even after you close the page.",
+  'gateway.notConfigured':
+    "This deployment has no Agent Gateway configured, so agents can't run. Ask your administrator to enable the Agent Gateway",
   'sandboxStorage.ephemeral': 'Temporary working directory',
   'sandboxStorage.ephemeralDesc': 'Cleaned up when the sandbox is recycled',
   'sandboxStorage.persistentUpsell': 'Persistent working directory',

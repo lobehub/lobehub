@@ -61,8 +61,8 @@ export const FeatureFlagsSchema = z.object({
    * Rollout gate for relaying LLM calls to the user's device: a model provider
    * only that device can reach (a local Ollama / LM Studio, a private-network
    * endpoint) runs one attempt at a time on the client that started the run,
-   * while the agent loop stays on the server. Off: such providers keep being
-   * dialed by the server. Array values are user ids.
+   * while the agent loop stays on the server. Off: such providers are dialed
+   * by the server, which usually cannot reach them. Array values are user ids.
    */
   agent_llm_relay: FeatureFlagValue.optional(),
 
@@ -142,8 +142,10 @@ export const DEFAULT_FEATURE_FLAGS: IFeatureFlags = {
   agent_gateway_mux: false,
   agent_gateway_mux_mobile: false,
 
-  // Off until the client executor ships everywhere; allowlist first.
-  agent_llm_relay: false,
+  // On: the browser no longer runs agents or calls providers itself, so relaying
+  // is the only way a device-only provider (local Ollama / LM Studio, a private
+  // endpoint) can still be reached. `FEATURE_FLAGS=-agent_llm_relay` turns it off.
+  agent_llm_relay: true,
 
   // Off until an admin publishes a user allowlist or flips it to true.
   dashboard: false,

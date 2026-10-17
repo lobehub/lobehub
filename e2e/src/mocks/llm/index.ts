@@ -1,10 +1,16 @@
 /**
  * LLM Mock Framework
  *
- * Intercepts /webapi/chat/[provider] requests and returns mock SSE responses.
- * This allows E2E tests to run without real LLM API calls.
+ * Answers model calls with mock streams so E2E tests run without real LLM API
+ * calls:
+ * - agent runs execute on the server, which calls the shared OpenAI-compatible
+ *   endpoint in `./server` (replies are registered there);
+ * - requests the page itself sends to /webapi/chat/[provider] (preset tasks)
+ *   are answered by a browser-side fetch interceptor.
  */
 import type { Page } from 'playwright';
+
+import { type LLMMockReply, registerLLMReplies } from './server';
 
 // ============================================
 // Types
@@ -113,18 +119,24 @@ export class LLMMockManager {
   }
 
   /**
-   * Set a custom response for a specific user message
+   * Set a custom response for a specific user message. Await it before sending
+   * the prompt: server-run agent turns read the reply from the shared endpoint.
    */
-  setResponse(userMessage: string, response: string): void {
+  setResponse(userMessage: string, response: string): Promise<void> {
     this.customResponses.set(userMessage.toLowerCase().trim(), response);
+    return this.syncServer({ replies: [this.toReply('exact', userMessage, response)] });
   }
 
   /**
    * Set a response for requests whose final user message contains a fragment.
    * Useful for system-generated prompts that wrap the original user content.
+   * Await it before sending the prompt, like {@link setResponse}.
    */
-  setResponseContaining(userMessageFragment: string, response: string): void {
+  setResponseContaining(userMessageFragment: string, response: string): Promise<void> {
     this.customResponseFragments.set(userMessageFragment.toLowerCase().trim(), response);
+    return this.syncServer({
+      replies: [this.toReply('contains', userMessageFragment, response)],
+    });
   }
 
   /**
@@ -146,9 +158,45 @@ export class LLMMockManager {
   /**
    * Clear all custom responses
    */
-  clearResponses(): void {
+  clearResponses(): Promise<void> {
+    const clear = [
+      ...[...this.customResponses.keys()].map((key) => `exact:${key}`),
+      ...[...this.customResponseFragments.keys()].map((key) => `contains:${key}`),
+    ];
     this.customResponses.clear();
     this.customResponseFragments.clear();
+    return clear.length > 0 ? this.syncServer({ clear }) : this.pendingSync;
+  }
+
+  private pendingSync: Promise<void> = Promise.resolve();
+
+  private toReply(match: LLMMockReply['match'], key: string, response: string): LLMMockReply {
+    const { responseDelay, streamChunkSize, streamDelay } = this.config;
+    return {
+      key: key.toLowerCase().trim(),
+      match,
+      response,
+      responseDelay,
+      streamChunkSize,
+      streamDelay,
+    };
+  }
+
+  /**
+   * Push replies to the server-side endpoint. Registrations are chained so
+   * they land in call order; the returned promise (and `flush`) settles once
+   * this one has reached the endpoint.
+   */
+  private syncServer(payload: Parameters<typeof registerLLMReplies>[0]): Promise<void> {
+    this.pendingSync = this.pendingSync
+      .then(() => registerLLMReplies(payload))
+      .catch((error) => console.error('   ⚠️ LLM mock registration failed:', error));
+    return this.pendingSync;
+  }
+
+  /** Wait until every reply set so far has reached the server-side endpoint. */
+  flush(): Promise<void> {
+    return this.pendingSync;
   }
 
   /**
@@ -180,6 +228,9 @@ export class LLMMockManager {
       console.log('   🔇 LLM mocks disabled');
       return;
     }
+
+    // Server-run agent turns: make sure the endpoint holds this test's replies.
+    await this.flush();
 
     await page.exposeFunction(LLM_MOCK_BINDING, (requestBody: string) =>
       this.createStreamPlan(requestBody),
