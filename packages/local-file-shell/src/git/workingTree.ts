@@ -427,11 +427,24 @@ const listSubmodulePaths = async (dirPath: string): Promise<Set<string>> => {
   }
 };
 
+export interface GetGitWorkingTreeFilesOptions {
+  /**
+   * Reject when `git status` fails (including its timeout) instead of
+   * reporting a clean tree. Callers that persist the overlay must set this:
+   * a transient failure otherwise overwrites the saved dirty markers with an
+   * empty result that looks confirmed.
+   */
+  throwOnError?: boolean;
+}
+
 /**
  * Return dirty file paths bucketed into added / modified / deleted. Uses
  * `git status --porcelain -z` so paths are NUL-terminated and never C-quoted.
  */
-export const getGitWorkingTreeFiles = async (dirPath: string): Promise<GitWorkingTreeFiles> => {
+export const getGitWorkingTreeFiles = async (
+  dirPath: string,
+  options: GetGitWorkingTreeFilesOptions = {},
+): Promise<GitWorkingTreeFiles> => {
   const added: string[] = [];
   const modified: string[] = [];
   const deleted: string[] = [];
@@ -464,7 +477,8 @@ export const getGitWorkingTreeFiles = async (dirPath: string): Promise<GitWorkin
       }
     }
     return { added, deleted, modified };
-  } catch {
+  } catch (error) {
+    if (options.throwOnError) throw error;
     return { added: [], deleted: [], modified: [] };
   }
 };

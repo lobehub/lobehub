@@ -3671,6 +3671,9 @@ export default {
   'workingPanel.files.filters.title': 'Filter Files',
   'workingPanel.files.noSearchResults': 'No matching files',
   'workingPanel.files.open': 'Open File',
+  'workingPanel.files.partialIndexNotice':
+    'Only part of this large project is shown — refresh to load every file',
+  'workingPanel.files.refreshFailed': "Couldn't refresh this view — showing the last saved files",
   'workingPanel.files.search': 'Search Files',
   'workingPanel.files.searchPlaceholder': 'Filter files...',
   'workingPanel.files.showInReview': 'Show in Review',

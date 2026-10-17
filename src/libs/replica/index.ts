@@ -89,11 +89,13 @@ export const cacheScope: ReplicaScope = {
 
 export type ReplicaStorageKind = 'indexedDB' | 'localStorage' | 'memory';
 
-type AppStorageOption<TData> = ReplicaStorageKind | ReplicaStorage<TData>;
+type AppStorageOption<TData> =
+  ReplicaStorageKind | ReplicaStorage<TData> | ((namespace: string) => ReplicaStorage<TData>);
 
 const resolveStorage =
   <TData>(storage: AppStorageOption<TData> = 'indexedDB') =>
   (namespace: string): ReplicaStorage<TData> | undefined => {
+    if (typeof storage === 'function') return storage(namespace);
     if (typeof storage === 'object') return storage;
     if (storage === 'indexedDB') return new IndexedDBQueryProjectionStorage<TData>({ namespace });
     if (storage === 'localStorage')

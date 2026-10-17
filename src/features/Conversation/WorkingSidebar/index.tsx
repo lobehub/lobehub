@@ -82,7 +82,8 @@ import { systemStatusSelectors } from '@/store/global/selectors';
 import { sandboxActions, sandboxSelectors, useSandboxStore } from '@/store/sandbox';
 
 import { type ComposerTarget, createComposerTarget, resolveThreadComposerTarget } from '../types';
-import Files from './Files';
+import FilesPane from './Files/FilesPane';
+import { useFilesPaneLocation } from './Files/useFilesPaneLocation';
 import { sidebarWidthBudget } from './fitsBesidePortal';
 import { MAX_PANEL_WIDTH, MIN_PANEL_WIDTH, OVERVIEW_PANEL_WIDTH } from './layout';
 import Overview from './Overview';
@@ -408,27 +409,19 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
   const filesystemEnvironmentAvailable = isLocalExecution || isDeviceMode;
   const environmentWorkingDirectory = filesystemEnvironmentAvailable ? workingDirectory : undefined;
   const environmentRepoType = filesystemEnvironmentAvailable ? repoType : undefined;
-  // Files tab is an agent-mode affordance — in plain chat mode the working
-  // directory is irrelevant to the user, so hide the tab even when one resolves.
-  // Which directory the tree shows, and therefore whether there is a tree at
-  // all. Kept as one value rather than a pair of conditions: the sandbox's root
-  // is the empty string, so "has a directory" and "is truthy" part ways here,
-  // and the tab's availability has to follow the value it will render.
-  // A directory is only showable when something can actually read it: the
-  // sandbox through its workspace API, a device or this machine through the
-  // filesystem. A topic can carry a path persisted on a desktop the web client
-  // has no way to reach, and that path is not a tree — it is a string.
-  // An instance is what makes a sandbox tree addressable. Persistent mode with
-  // none picked is the workspace root, which the execution plane can only
-  // resolve through a conversation — so that one still waits for the topic.
-  const filesDirectory =
-    isSandboxExecution && (sandboxInstanceId || sandboxTopicId)
-      ? sandboxDirectoryKnown
-        ? sandboxDirectory
-        : undefined
-      : filesystemEnvironmentAvailable
-        ? workingDirectory
-        : undefined;
+  // Files is agent-mode only; the hook owns which directory (if any) is showable.
+  const { deviceId: filesDeviceId, directory: filesDirectory } = useFilesPaneLocation({
+    activeAgentId,
+    filesystemEnvironmentAvailable,
+    isSandboxExecution,
+    remoteDeviceId,
+    sandboxDirectory,
+    sandboxDirectoryKnown,
+    sandboxInstanceId,
+    sandboxTopicId,
+    topicId,
+    workingDirectory,
+  });
   const filesAvailable = !isChatMode && filesDirectory !== undefined;
   const reviewAvailable = (isLocalExecution || isDeviceMode) && !!workingDirectory && !!repoType;
   const snapshotConfig =
@@ -1125,6 +1118,17 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
           </Flexbox>
           <Flexbox className={styles.body} width={'100%'}>
             {!contentReady && <SkeletonList paddingBlock={8} paddingInline={8} rows={6} />}
+            <FilesPane
+              active={!!showRightPanel && activeTab === 'files'}
+              available={filesAvailable}
+              className={styles.pane}
+              contentReady={contentReady}
+              deviceId={filesDeviceId}
+              directory={filesDirectory}
+              prefetch={activeTab === 'files' && (!showRightPanel || !contentReady)}
+              sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
+              sandboxTopicId={sandboxTopicId}
+            />
             {contentReady && (
               <>
                 {commentsAvailable && (
@@ -1169,18 +1173,6 @@ const AgentWorkingSidebar = memo<AgentWorkingSidebarProps>(({ availableWidth }) 
                         url={pullRequest.url}
                         workingDirectory={workingDirectory}
                         onOpenTab={openTab}
-                      />
-                    </Flexbox>
-                  </Activity>
-                )}
-                {filesAvailable && (
-                  <Activity mode={showRightPanel && activeTab === 'files' ? 'visible' : 'hidden'}>
-                    <Flexbox className={styles.pane}>
-                      <Files
-                        deviceId={remoteDeviceId}
-                        sandboxInstanceId={isSandboxExecution ? sandboxInstanceId : undefined}
-                        sandboxTopicId={sandboxTopicId}
-                        workingDirectory={filesDirectory}
                       />
                     </Flexbox>
                   </Activity>

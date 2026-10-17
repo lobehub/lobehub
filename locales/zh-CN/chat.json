@@ -3047,6 +3047,8 @@
   "workingPanel.files.noSearchResults": "没有匹配的文件",
   "workingPanel.files.open": "打开文件",
   "workingPanel.files.openNeedsTopic": "先发一条消息 —— 该环境的文件要在对话建立会话后才能打开。",
+  "workingPanel.files.partialIndexNotice": "项目较大，当前只显示部分文件，刷新后可加载全部文件",
+  "workingPanel.files.refreshFailed": "刷新失败，当前显示上次保存的文件",
   "workingPanel.files.search": "搜索文件",
   "workingPanel.files.searchPlaceholder": "筛选文件...",
   "workingPanel.files.showInReview": "在审查中查看",
