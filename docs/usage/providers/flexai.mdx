@@ -1,0 +1,49 @@
+---
+title: Using FlexAI in LobeHub
+description: >-
+  Learn how to configure and use FlexAI's open-weight models in LobeHub, from
+  getting an API key to picking a model that matches what you need.
+tags:
+  - LobeHub
+  - FlexAI
+  - Open Weight Models
+  - API Key
+---
+
+# Using FlexAI in LobeHub
+
+[FlexAI](https://flex.ai) serves open-weight models — DeepSeek, Qwen, GLM, Llama, Gemma, gpt-oss, MiniMax and others — through an OpenAI-compatible API at `https://api.flex.ai/v1`, authenticated with a bearer token. One key covers chat, embeddings, image generation, speech and transcription. Usage is billed per token at per-model rates.
+
+<Steps>
+  ### Step 1: Get a FlexAI API Key
+
+  - Request access at [tokens.flex.ai](https://tokens.flex.ai). You will receive an invite email on approval.
+  - A billing address and a card are required before a key can be created. Add both on the dashboard's **Billing** page.
+  - Open **API Keys**, click **Create key**, and copy the `sk-…` value. It is shown only once.
+  - The full walkthrough is in FlexAI's [quickstart](https://docs.flex.ai/inference-api/quickstart).
+
+  ### Step 2: Configure FlexAI in LobeHub
+
+  - Open **App Settings → AI Providers**
+  - Find and select `FlexAI` from the provider list
+  - Paste the API key you created and enable the provider
+
+  ### Step 3: Choose a Model
+
+  - LobeHub ships a static list of FlexAI's chat and embedding models, so you can start without fetching anything.
+  - Click **Fetch Model List** to pull the live catalogue from `GET /v1/models`. New models appear there before they reach a LobeHub release.
+  - Run **Connection Check** against a chat model, then select it for your assistant.
+</Steps>
+
+## Capabilities
+
+- **Streaming and tool calling** work on every chat model FlexAI serves.
+- **Vision** is supported by a subset. The model row marks the ones that read images; a model without the marker will either reject an image attachment or silently ignore it, so check the marker before attaching one.
+- **Embeddings** are available through `bge-m3` (1024 dimensions).
+- **Image generation, text-to-speech and transcription** endpoints exist on the API but are not wired into this provider integration yet — use the chat and embedding models in LobeHub.
+
+## Pricing and Availability
+
+Per-model rates are published on the [FlexAI models page](https://flex.ai/models) and returned by the API itself, so the prices shown on each model card come from FlexAI's own catalogue rather than a copied table. Consult the models page for the current list; the catalogue changes as models are added and retired.
+
+For shared server configuration, see the [FlexAI environment variables](/docs/self-hosting/environment-variables/model-provider#flexai).

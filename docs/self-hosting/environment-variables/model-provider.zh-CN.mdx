@@ -410,6 +410,29 @@ LobeHub 在部署时提供了丰富的模型服务商相关的环境变量，你
 - 默认值：`-`
 - 示例：`-all,+accounts/fireworks/models/llama-v3p3-70b-instruct,+accounts/fireworks/models/deepseek-v3`
 
+## FlexAI
+
+### `FLEXAI_API_KEY`
+
+- 类型：必选
+- 描述：这是你在 FlexAI 控制台中创建的 API 密钥
+- 默认值：-
+- 示例：`sk-xxxxxx...xxxxxx`
+
+### `FLEXAI_MODEL_LIST`
+
+- 类型：可选
+- 描述：用来控制模型列表，使用 `+` 增加一个模型，使用 `-` 来隐藏一个模型，使用 `模型名=展示名<扩展配置>` 来自定义模型的展示名，用英文逗号隔开。模型定义语法规则见 [模型列表][model-list]
+- 默认值：`-`
+- 示例：`-all,+Llama-3.3-70B-Instruct-FP8,+Qwen3.8-Flash-Next`
+
+### `FLEXAI_PROXY_URL`
+
+- 类型：可选
+- 描述：覆盖 FlexAI API 的基础地址。仅在通过兼容同一套 API 的网关转发时才需要设置，使用官方托管服务无需填写
+- 默认值：`https://api.flex.ai/v1`
+- 示例：`https://your-gateway.example.com/v1`
+
 ## Ollama
 
 ### `ENABLED_OLLAMA`
