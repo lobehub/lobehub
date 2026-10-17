@@ -203,6 +203,19 @@ describe('parseCodexSessionDigest', () => {
     expect(digest.tokens).toBe(200 + 250); // (1000-800+50) + (2000-1900+100)
   });
 
+  it('truncates the title without splitting a surrogate pair', () => {
+    // 49 ASCII chars + emoji puts the 50 code-unit cut inside the first pair
+    const prompt = `${'a'.repeat(49)}${'🎉'.repeat(5)}`;
+    const transcript = [sessionMeta(), userMessage(prompt), assistantMessage('a')].join('\n');
+
+    const digest = parseCodexSessionDigest(transcript, '/tmp/rollout.jsonl')!;
+
+    // A lone high surrogate at the cut is escaped as an unpaired \ud8xx by
+    // JSON.stringify, which PostgreSQL's jsonb parser rejects
+    expect(digest.title).toBe('a'.repeat(49));
+    expect(digest.title!.charCodeAt(digest.title!.length - 1)).toBeLessThan(0xd8_00);
+  });
+
   it('returns null when only scaffolding user messages exist', () => {
     const transcript = [sessionMeta(), userMessage('# AGENTS.md instructions')].join('\n');
     expect(parseCodexSessionDigest(transcript, '/tmp/rollout.jsonl')).toBeNull();
