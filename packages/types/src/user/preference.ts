@@ -154,6 +154,10 @@ export type UserGuide = z.infer<typeof UserGuideSchema>;
 
 export const UserLabSchema = z.object({
   /**
+   * enable agent identity: give an agent its own mail address / phone number
+   */
+  enableAgentIdentity: z.boolean().optional(),
+  /**
    * enable graph runtime configuration for agents
    */
   enableAgentGraphConfig: z.boolean().optional(),

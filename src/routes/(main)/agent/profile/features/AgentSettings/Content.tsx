@@ -1,7 +1,7 @@
 'use client';
 
 import isEqual from 'fast-deep-equal';
-import { GitBranchIcon, MessageSquareHeartIcon } from 'lucide-react';
+import { GitBranchIcon, IdCardIcon, MessageSquareHeartIcon } from 'lucide-react';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { shallow } from 'zustand/shallow';
@@ -12,6 +12,7 @@ import {
   SettingsModalLayout,
   type SettingsModalTabItem,
 } from '@/features/AgentSetting';
+import { useShowAgentIdentity } from '@/features/AgentSetting/AgentIdentity/useShowAgentIdentity';
 import { usePermission } from '@/hooks/usePermission';
 import { useAgentStore } from '@/store/agent';
 import { agentSelectors, builtinAgentSelectors } from '@/store/agent/selectors';
@@ -21,6 +22,7 @@ import { labPreferSelectors } from '@/store/user/selectors';
 
 const TAB_META = {
   [ChatSettingsTabs.Graph]: { icon: GitBranchIcon, labelKey: 'agentTab.graph' },
+  [ChatSettingsTabs.Identity]: { icon: IdCardIcon, labelKey: 'agentTab.identity' },
   [ChatSettingsTabs.Opening]: { icon: MessageSquareHeartIcon, labelKey: 'agentTab.opening' },
 } as const;
 
@@ -37,13 +39,16 @@ const Content = memo(() => {
   const enableAgentGraphConfigLab = useUserStore(labPreferSelectors.enableAgentGraphConfig);
   const [tab, setTab] = useState(ChatSettingsTabs.Opening);
   const showGraphTab = enableAgentGraphConfigLab && !isInbox && !isHeterogeneous;
+  const showIdentityTab = useShowAgentIdentity();
 
   const availableTabs = useMemo(
     () =>
-      [ChatSettingsTabs.Opening, showGraphTab ? ChatSettingsTabs.Graph : null].filter(
-        Boolean,
-      ) as ChatSettingsTabs[],
-    [showGraphTab],
+      [
+        ChatSettingsTabs.Opening,
+        showIdentityTab ? ChatSettingsTabs.Identity : null,
+        showGraphTab ? ChatSettingsTabs.Graph : null,
+      ].filter(Boolean) as ChatSettingsTabs[],
+    [showGraphTab, showIdentityTab],
   );
 
   const activeTab = availableTabs.includes(tab) ? tab : availableTabs[0];

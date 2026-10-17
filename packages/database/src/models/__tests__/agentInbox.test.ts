@@ -91,6 +91,7 @@ describe('AgentInboxModel workspace isolation by agent visibility', () => {
     const member = new AgentInboxModel(serverDB, memberId, workspaceId);
 
     expect(await member.list({ agentId: privateAgentId })).toEqual([]);
+    expect(await member.findById(privateMessage.id)).toBeUndefined();
     expect(await member.unreadCount(privateAgentId)).toBe(0);
 
     // Writes are scoped the same way: the member cannot clear the owner's unread mark.
@@ -111,6 +112,21 @@ describe('AgentInboxModel workspace isolation by agent visibility', () => {
       expect.objectContaining({ id: publicMessage.id }),
     ]);
     expect(await member.unreadCount(publicAgentId)).toBe(1);
+  });
+});
+
+describe('AgentInboxModel.listSummaries', () => {
+  it('pages like list but leaves out what the sender wrote', async () => {
+    const message = await deliver(publicAgentId, 'summary@lobe.id', 'msg_summary');
+    const model = new AgentInboxModel(serverDB, ownerId, workspaceId);
+
+    const [summary] = await model.listSummaries({ agentId: publicAgentId });
+    const [row] = await model.list({ agentId: publicAgentId });
+
+    expect(summary).toMatchObject({ from: row.from, id: message.id, subject: row.subject });
+    expect(summary).not.toHaveProperty('text');
+    expect(summary).not.toHaveProperty('codes');
+    expect(summary).not.toHaveProperty('metadata');
   });
 });
 

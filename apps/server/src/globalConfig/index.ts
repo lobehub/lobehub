@@ -6,6 +6,7 @@ import urlJoin from 'url-join';
 import { loadModels } from '@/business/client/model-bank/loadModels';
 import { composioEnv } from '@/config/composio';
 import { isDesktop } from '@/const/version';
+import { agentIdentityEnv } from '@/envs/agentIdentity';
 import { appEnv, getAppConfig } from '@/envs/app';
 import { authEnv } from '@/envs/auth';
 import { fileEnv } from '@/envs/file';
@@ -147,6 +148,18 @@ export const getServerGlobalConfig = async () => {
   const { DEFAULT_AGENT_CONFIG } = getAppConfig();
 
   const config: GlobalServerConfig = {
+    agentIdentityProviders: [
+      agentIdentityEnv.ENABLED_AGENT_MAIL ? 'agent-mail' : null,
+      // A key alone cannot open a number: provisioning binds one from the
+      // operator pool, so without any number the offer would always fail. Nor
+      // can it receive: Linq accounts carry no per-account secret, so without
+      // the shared webhook secret every inbound text is rejected as unsigned.
+      agentIdentityEnv.ENABLED_LINQ &&
+      !!agentIdentityEnv.LINQ_WEBHOOK_SECRET &&
+      (agentIdentityEnv.LINQ_FROM_NUMBER ?? '').split(',').some((number) => number.trim())
+        ? 'linq'
+        : null,
+    ].filter((provider): provider is string => !!provider),
     aiProvider: await genServerAiProvidersConfig(getAiProviderSpecificConfig()),
     defaultAgent: {
       config: parseAgentConfig(DEFAULT_AGENT_CONFIG),

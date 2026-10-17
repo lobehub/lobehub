@@ -108,6 +108,21 @@ const entryColumns = {
   topicId: agentInboxMessages.topicId,
 };
 
+/** Who, what and when — the inbox's own columns, none of the source's content. */
+const summaryColumns = {
+  accountId: agentInboxMessages.accountId,
+  agentId: agentInboxMessages.agentId,
+  createdAt: agentInboxMessages.createdAt,
+  from: agentInboxMessages.sender,
+  id: agentInboxMessages.id,
+  preview: agentInboxMessages.preview,
+  readAt: agentInboxMessages.readAt,
+  receivedAt: agentInboxMessages.receivedAt,
+  sourceType: agentInboxMessages.sourceType,
+  subject: agentInboxMessages.title,
+  threadKey: agentInboxMessages.threadKey,
+};
+
 /**
  * The agent's inbox — one row per item that arrived for its attention.
  *
@@ -343,6 +358,12 @@ export class AgentInboxModel {
   list = async (params?: {
     accountId?: string;
     agentId?: string;
+    /**
+     * Keyset cursor for newest-first paging: only items strictly older than
+     * this (receivedAt, id) pair, so pages never overlap or skip an item that
+     * shares a timestamp.
+     */
+    before?: { id: string; receivedAt: Date };
     limit?: number;
     /** Only items received at or after this instant. */
     receivedAfter?: Date;
@@ -350,6 +371,15 @@ export class AgentInboxModel {
     unreadOnly?: boolean;
   }): Promise<AgentInboxEntry[]> => {
     const conditions = [this.ownership()];
+    if (params?.before) {
+      const { id, receivedAt } = params.before;
+      conditions.push(
+        or(
+          lt(agentInboxMessages.receivedAt, receivedAt),
+          and(eq(agentInboxMessages.receivedAt, receivedAt), lt(agentInboxMessages.id, id)),
+        )!,
+      );
+    }
     if (params?.agentId) conditions.push(eq(agentInboxMessages.agentId, params.agentId));
     if (params?.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
     if (params?.threadKey) conditions.push(eq(agentInboxMessages.threadKey, params.threadKey));
@@ -359,8 +389,65 @@ export class AgentInboxModel {
 
     return this.selectEntries()
       .where(and(...conditions))
-      .orderBy(desc(agentInboxMessages.receivedAt))
+      .orderBy(desc(agentInboxMessages.receivedAt), desc(agentInboxMessages.id))
       .limit(params?.limit ?? 20);
+  };
+
+  /**
+   * One message by id, scoped to the caller. Ownership is part of the `where`,
+   * so an id from someone else's inbox resolves to `undefined` rather than
+   * leaking the row's existence.
+   */
+  findById = async (id: string): Promise<AgentInboxMessageItem | undefined> => {
+    const [row] = await this.db
+      .select()
+      .from(agentInboxMessages)
+      .where(and(eq(agentInboxMessages.id, id), this.ownership()))
+      .limit(1);
+
+    return row;
+  };
+
+  /**
+   * The same page as {@link list}, without the content: who, what and when, plus
+   * the short preview the inbox stores itself. A list view renders only these,
+   * and a page of long mails would otherwise be transferred — and held — just
+   * to draw their subject lines. The full item is one {@link list} or detail
+   * read away.
+   */
+  listSummaries = async (params?: Parameters<AgentInboxModel['list']>[0]) => {
+    const conditions = [this.ownership()];
+    if (params?.before) {
+      const { id, receivedAt } = params.before;
+      conditions.push(
+        or(
+          lt(agentInboxMessages.receivedAt, receivedAt),
+          and(eq(agentInboxMessages.receivedAt, receivedAt), lt(agentInboxMessages.id, id)),
+        )!,
+      );
+    }
+    if (params?.agentId) conditions.push(eq(agentInboxMessages.agentId, params.agentId));
+    if (params?.accountId) conditions.push(eq(agentInboxMessages.accountId, params.accountId));
+    if (params?.threadKey) conditions.push(eq(agentInboxMessages.threadKey, params.threadKey));
+    if (params?.receivedAfter)
+      conditions.push(gte(agentInboxMessages.receivedAt, params.receivedAfter));
+    if (params?.unreadOnly) conditions.push(isNull(agentInboxMessages.readAt));
+
+    return this.db
+      .select(summaryColumns)
+      .from(agentInboxMessages)
+      .where(and(...conditions))
+      .orderBy(desc(agentInboxMessages.receivedAt), desc(agentInboxMessages.id))
+      .limit(params?.limit ?? 20);
+  };
+
+  /** One item with its content, scoped to the caller. */
+  findEntryById = async (id: string): Promise<AgentInboxEntry | undefined> => {
+    const [row] = await this.selectEntries()
+      .where(and(eq(agentInboxMessages.id, id), this.ownership()))
+      .limit(1);
+
+    return row;
   };
 
   unreadCount = async (agentId: string): Promise<number> => {
@@ -462,3 +549,6 @@ export class AgentInboxModel {
     return row?.value ?? 0;
   };
 }
+
+/** One inbox item as a list shows it. */
+export type AgentInboxSummaryRow = Awaited<ReturnType<AgentInboxModel['listSummaries']>>[number];

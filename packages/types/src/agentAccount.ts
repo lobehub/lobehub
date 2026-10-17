@@ -1,4 +1,4 @@
-import type { AgentMailAddress, AgentMailAttachment } from './agentMail';
+import type { AgentInboxSourceType, AgentMailAddress, AgentMailAttachment } from './agentMail';
 
 /**
  * Agent accounts — the identity assets an agent owns.
@@ -119,26 +119,48 @@ export interface AgentAccountInboundMailDetail {
  * the model as context.
  */
 export interface AgentInboxMessage {
-  /** The account that received it — the routing key resolved to an account id. */
-  accountId: string;
+  /** The account it arrived at, when the channel has one. */
+  accountId: string | null;
   agentId: string;
-  /** Verification codes pulled out of the body (3–8 digits), for the `wait` primitive. */
+  /** What the sender attached, as the provider holds it (descriptors only). */
+  attachments: AgentMailAttachment[];
+  /** Verification codes pulled out of the body (4–8 digits), for the `wait` primitive. */
   codes: string[];
   createdAt: Date;
-  /** Address the message came from. */
+  /** Who it is from. */
   from: string;
   id: string;
-  kind: AgentAccountKind;
-  /** When it was first read by the agent; `null` while unread. */
+  /** Short plain-text preview the inbox list shows. */
+  preview: string | null;
+  /** When it was first read; `null` while unread. */
   readAt: Date | null;
   receivedAt: Date;
+  /** What the item is (`mail` today). */
+  sourceType: AgentInboxSourceType;
+  /** Its title (a mail's subject). */
   subject: string | null;
   text: string;
-  /** Provider-normalized thread key, when the provider supplies one. */
+  /** Conversation key within the account, when the source supplies one. */
   threadKey: string | null;
-  /** The agent's own identifier the message was delivered to. */
+  /** Where it was delivered — the agent's own address. */
   to: string;
 }
+
+/** One inbox row as a list shows it: who, what and when, without the content. */
+export type AgentInboxMessageSummary = Pick<
+  AgentInboxMessage,
+  | 'accountId'
+  | 'agentId'
+  | 'createdAt'
+  | 'from'
+  | 'id'
+  | 'preview'
+  | 'readAt'
+  | 'receivedAt'
+  | 'sourceType'
+  | 'subject'
+  | 'threadKey'
+>;
 
 /**
  * The inbox as one glance: how much is waiting. Injected into the model's
@@ -227,6 +249,14 @@ export interface AgentAccountProvisionInput {
    * to pick a free unit instead of colliding on the routing key.
    */
   isIdentifierHeld?: (identifier: string) => Promise<boolean>;
+  /**
+   * Preferred handle the caller asks for, when the provider can honour it —
+   * the local part of a `mail` address, for example. A provider that cannot
+   * honour a preference ignores it and mints its own identifier; a provider
+   * that can either returns the requested prefix or fails, never a silent
+   * substitute.
+   */
+  prefix?: string;
   userId: string;
   workspaceId?: string;
 }
