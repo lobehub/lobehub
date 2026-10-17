@@ -8,7 +8,7 @@ import { UserMemoryModel } from '@/database/models/userMemory';
 import { FtsSearchCandidateError } from '@/database/repositories/ftsSearch';
 import { initModelRuntimeFromDB } from '@/server/modules/ModelRuntime';
 
-import { userMemoriesRouter } from './userMemories';
+import { userMemoriesRouter } from '.';
 
 vi.mock('@/database/core/db-adaptor', () => ({
   getServerDB: vi.fn(),
