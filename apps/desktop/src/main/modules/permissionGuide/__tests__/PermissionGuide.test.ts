@@ -12,14 +12,14 @@ import {
   TITLE_SETTLE_MS,
 } from '../PermissionGuide';
 
-const { addonMock, electronMock, emit, statusMock } = vi.hoisted(() => {
-  const listeners = new Set<(event: any) => void>();
+const { addonMock, electronMock, emit, statusMock, usableMock } = vi.hoisted(() => {
+  const listeners = new Set<(event: unknown) => void>();
   return {
     addonMock: {
       activateSettings: vi.fn(),
       hideGuide: vi.fn(),
       isSupported: vi.fn(() => true),
-      onGuideEvent: vi.fn((listener: (event: any) => void) => {
+      onGuideEvent: vi.fn((listener: (event: unknown) => void) => {
         listeners.add(listener);
         return () => listeners.delete(listener);
       }),
@@ -37,6 +37,7 @@ const { addonMock, electronMock, emit, statusMock } = vi.hoisted(() => {
     },
     emit: (event: any) => listeners.forEach((listener) => listener(event)),
     statusMock: vi.fn(() => 'denied'),
+    usableMock: vi.fn(() => true),
   };
 });
 
@@ -48,6 +49,7 @@ vi.mock('@/utils/permissions', () => ({
   getFullDiskAccessStatus: statusMock,
   getInputMonitoringStatus: statusMock,
   getScreenCaptureStatus: statusMock,
+  isScreenCaptureUsable: usableMock,
 }));
 
 const showMainWindow = vi.fn();
@@ -75,6 +77,7 @@ describe('PermissionGuide', () => {
     vi.useFakeTimers();
     vi.clearAllMocks();
     statusMock.mockReturnValue('denied');
+    usableMock.mockReturnValue(true);
     addonMock.isSupported.mockReturnValue(true);
     (process as any).getSystemVersion = vi.fn(() => '27.0.1');
     guide = new PermissionGuide(mockApp);
@@ -174,7 +177,31 @@ describe('PermissionGuide', () => {
     });
   });
 
-  it('asks to relaunch after Screen Recording is granted', async () => {
+  it('returns to the app after Screen Recording is granted, with no relaunch', async () => {
+    await guide.open('screen');
+    statusMock.mockReturnValue('granted');
+
+    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    expect(lastState()).toMatchObject({ accessory: 'success', draggable: false });
+
+    vi.advanceTimersByTime(GRANTED_DISMISS_MS);
+    expect(addonMock.hideGuide).toHaveBeenCalled();
+    expect(showMainWindow).toHaveBeenCalled();
+    expect(electronMock.app.relaunch).not.toHaveBeenCalled();
+  });
+
+  it('only consults the capture probe for Screen Recording', async () => {
+    await guide.open('accessibility');
+    statusMock.mockReturnValue('granted');
+
+    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+
+    expect(usableMock).not.toHaveBeenCalled();
+    expect(lastState()).toMatchObject({ accessory: 'success' });
+  });
+
+  it('asks to relaunch when a granted process still cannot read window titles', async () => {
+    usableMock.mockReturnValue(false);
     await guide.open('screen');
     statusMock.mockReturnValue('granted');
 
@@ -184,6 +211,27 @@ describe('PermissionGuide', () => {
     fire({ type: 'action' });
     expect(electronMock.app.relaunch).toHaveBeenCalled();
     expect(electronMock.app.exit).toHaveBeenCalledWith(0);
+  });
+
+  it('offers the relaunch straight away when the grant predates this process', async () => {
+    statusMock.mockReturnValue('granted');
+    usableMock.mockReturnValue(false);
+
+    await expect(guide.open('screen')).resolves.toBe(true);
+
+    // Nothing left to grant: the panel only carries the relaunch, and the pane
+    // still opens because the panel is only visible alongside it.
+    expect(lastState()).toMatchObject({ actionLabel: 'permissionGuide.relaunch.action' });
+    expect(electronMock.shell.openExternal).toHaveBeenCalledWith(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    );
+    expect(broadcastToAllWindows).toHaveBeenCalledWith('permissionGuideChanged', {
+      permission: 'screen',
+      status: 'granted',
+    });
+
+    fire({ type: 'action' });
+    expect(electronMock.app.relaunch).toHaveBeenCalled();
   });
 
   it('returns to the drag state when a drop raises no system prompt', async () => {

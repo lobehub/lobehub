@@ -5,6 +5,8 @@
  * IMPORTANT: node-mac-permissions is a macOS-only native module.
  * It must be dynamically imported to prevent loading errors on Windows/Linux.
  */
+import type * as GuideAddonModule from '@lobechat/electron-mac-permission-guide';
+import type * as ScreenCaptureAddonModule from '@lobechat/electron-mac-screen-capture';
 import { shell } from 'electron';
 import type * as MacPermissions from 'node-mac-permissions';
 
@@ -76,6 +78,89 @@ export function __setMacPermissionsModule(module: MacPermissionsModule | null): 
 }
 
 const logger = createLogger('utils:permissions');
+
+type GuideAddon = typeof GuideAddonModule;
+type ScreenCaptureAddon = typeof ScreenCaptureAddonModule;
+
+// The native guide addon answers Screen Recording queries live; see
+// `getScreenCaptureStatus`. Lazy and guarded like node-mac-permissions so a
+// missing or non-darwin build degrades instead of breaking the import graph.
+let guideAddonModule: GuideAddon | null = null;
+
+// Test injection override (set via __setGuideAddonModule for testing)
+let guideAddonOverride: GuideAddon | null = null;
+
+// The ScreenCaptureKit addon answers the same question from the capture side;
+// `isScreenCaptureUsable` prefers it wherever it exists.
+let screenCaptureAddonModule: ScreenCaptureAddon | null = null;
+
+// Test injection override (set via __setScreenCaptureModule for testing)
+let screenCaptureOverride: ScreenCaptureAddon | null = null;
+
+function requireAddon<T>(name: string, label: string): T | null {
+  try {
+    return require(name) as T;
+  } catch (error) {
+    logger.warn(`[Permission] ${label} native module unavailable:`, error);
+    return null;
+  }
+}
+
+function getGuideAddon(): GuideAddon | null {
+  if (guideAddonOverride) {
+    return guideAddonOverride;
+  }
+
+  if (!electronIs.macOS()) {
+    return null;
+  }
+
+  if (!guideAddonModule) {
+    guideAddonModule = requireAddon<GuideAddon>(
+      '@lobechat/electron-mac-permission-guide',
+      'permission guide',
+    );
+  }
+
+  return guideAddonModule;
+}
+
+function getScreenCaptureAddon(): ScreenCaptureAddon | null {
+  if (screenCaptureOverride) {
+    return screenCaptureOverride;
+  }
+
+  if (!electronIs.macOS()) {
+    return null;
+  }
+
+  if (!screenCaptureAddonModule) {
+    screenCaptureAddonModule = requireAddon<ScreenCaptureAddon>(
+      '@lobechat/electron-mac-screen-capture',
+      'screen capture',
+    );
+  }
+
+  return screenCaptureAddonModule;
+}
+
+/**
+ * Set the guide addon (for testing purposes)
+ * @internal
+ */
+export function __setGuideAddonModule(module: GuideAddon | null): void {
+  guideAddonOverride = module;
+  guideAddonModule = null;
+}
+
+/**
+ * Set the ScreenCaptureKit addon (for testing purposes)
+ * @internal
+ */
+export function __setScreenCaptureModule(module: ScreenCaptureAddon | null): void {
+  screenCaptureOverride = module;
+  screenCaptureAddonModule = null;
+}
 
 /**
  * Permission status mapping between node-mac-permissions and our internal representation
@@ -227,25 +312,96 @@ export async function requestCameraAccess(): Promise<boolean> {
 }
 
 /**
- * Check if Screen Recording permission is granted
+ * Screen Recording authorization as the native guide addon reports it, which
+ * asks tccd directly. Returns `null` when the addon is unavailable so callers
+ * can fall back to node-mac-permissions.
+ */
+function readLiveScreenCaptureStatus(): PermissionStatus | null {
+  const addon = getGuideAddon();
+  if (!addon) return null;
+
+  try {
+    const status = addon.screenCaptureStatus();
+    if (status === 'granted' || status === 'denied') return status;
+    if (status === 'unknown') return 'not-determined';
+    return null;
+  } catch (error) {
+    logger.warn('[Screen] Native status query failed:', error);
+    return null;
+  }
+}
+
+/**
+ * Check if Screen Recording permission is granted.
+ *
+ * `CGPreflightScreenCaptureAccess` caches whatever it first returned for the
+ * rest of the process lifetime, so an app that asked before the user flipped
+ * the switch keeps reading "denied" and had to be relaunched to notice. The
+ * native query re-reads the decision on every call, which is what lets the
+ * onboarding row and the permission guide follow the switch live.
  */
 export function getScreenCaptureStatus(): PermissionStatus {
+  const live = readLiveScreenCaptureStatus();
+  if (live !== null) return live;
   return getPermissionStatus('screen');
 }
 
 /**
+ * Whether this process can actually capture the screen right now.
+ *
+ * ScreenCaptureKit answers that directly and it is the API the capture path
+ * uses on macOS 14 and newer, so its verdict is the truth there. Below 14 the
+ * capture path is CoreGraphics, where a readable foreign window title is the
+ * live signal instead. Neither source caches an answer the way the public
+ * `CGPreflightScreenCaptureAccess` does.
+ *
+ * Defaults to `true` when no probe exists — the guide that consults this never
+ * runs without the native addons, and a missing probe must not send the user
+ * through a relaunch.
+ */
+export function isScreenCaptureUsable(): boolean {
+  // ScreenCaptureKit raises the system prompt while the permission is
+  // unresolved, so the prompt-free status read stays the gate in front of it.
+  if (getScreenCaptureStatus() !== 'granted') return false;
+
+  const capture = getScreenCaptureAddon();
+  if (capture?.isSupported()) {
+    try {
+      return capture.probeCapturePermission() === 'granted';
+    } catch (error) {
+      logger.warn('[Screen] ScreenCaptureKit probe failed:', error);
+    }
+  }
+
+  const guide = getGuideAddon();
+  if (!guide) return true;
+
+  try {
+    return guide.canReadOtherAppWindowTitles() ?? true;
+  } catch (error) {
+    logger.warn('[Screen] Native usability probe failed:', error);
+    return true;
+  }
+}
+
+/**
  * Request Screen Recording permission
- * Opens System Preferences if access not granted
- * @param openPreferences - Whether to open System Preferences (default: true)
+ *
+ * Deliberately does not call `CGRequestScreenCaptureAccess`: that alert is what
+ * makes macOS tell the user the app has to be quit and reopened, and Screen
+ * Recording cannot be granted from the alert anyway — the user has to add the
+ * app to the list by hand. Opening the pane hands off to the drag guide, and
+ * the live status query reports the grant afterwards.
+ *
+ * @param openPreferences - Whether to open System Settings (default: true)
  */
 export async function requestScreenCaptureAccess(openPreferences = true): Promise<boolean> {
-  const macPermissions = getMacPermissionsModule();
-  if (!macPermissions) {
+  if (!electronIs.macOS()) {
     logger.info('[Screen] Not macOS, returning true');
     return true;
   }
 
-  const currentStatus = getPermissionStatus('screen');
+  const currentStatus = getScreenCaptureStatus();
   logger.info(`[Screen] Current status: ${currentStatus}`);
 
   if (currentStatus === 'granted') {
@@ -253,14 +409,14 @@ export async function requestScreenCaptureAccess(openPreferences = true): Promis
     return true;
   }
 
-  // Request screen capture access - this will prompt the user or open settings
-  logger.info('[Screen] Requesting screen capture access...');
-  macPermissions.askForScreenCaptureAccess(openPreferences);
+  if (openPreferences) {
+    logger.info('[Screen] Opening Screen Recording settings...');
+    await shell.openExternal(
+      'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
+    );
+  }
 
-  // Check the status after requesting
-  const newStatus = getPermissionStatus('screen');
-  logger.info(`[Screen] Status after request: ${newStatus}`);
-  return newStatus === 'granted';
+  return getScreenCaptureStatus() === 'granted';
 }
 
 /**
@@ -344,7 +500,8 @@ export function getInputMonitoringStatus(): PermissionStatus {
 export function getMediaAccessStatus(mediaType: 'microphone' | 'screen'): string {
   if (!electronIs.macOS()) return 'granted';
 
-  const status = getPermissionStatus(mediaType === 'microphone' ? 'microphone' : 'screen');
+  const status =
+    mediaType === 'microphone' ? getPermissionStatus('microphone') : getScreenCaptureStatus();
 
   // Map our status back to Electron's expected format
   switch (status) {

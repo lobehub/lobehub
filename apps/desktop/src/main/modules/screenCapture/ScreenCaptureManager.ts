@@ -11,6 +11,7 @@ import type {
   ScreenCaptureSession,
   ScreenCaptureSubmitParams,
 } from '@lobechat/electron-client-ipc';
+import type { CaptureFailure } from '@lobechat/electron-mac-screen-capture';
 import { BrowserWindow, dialog, screen } from 'electron';
 
 import { BrowsersIdentifiers } from '@/appBrowsers';
@@ -26,6 +27,13 @@ import { enumerateWindows } from './WindowSourceService';
 const logger = createLogger('screenCapture:ScreenCaptureManager');
 
 const HIDE_SETTLE_MS = 40;
+// macOS 15+ raises a one-time "allow direct capture" consent for ScreenCaptureKit.
+// The overlay must not open on top of it, and an ignored dialog must not hang the
+// shortcut, so the wait is bounded.
+const CAPTURE_CONSENT_POLL_MS = 250;
+const CAPTURE_CONSENT_TIMEOUT_MS = 10_000;
+
+export { CAPTURE_CONSENT_POLL_MS, CAPTURE_CONSENT_TIMEOUT_MS };
 
 export interface OverlaySnapshotPayload {
   agents?: ScreenCaptureAgentOption[];
@@ -59,11 +67,18 @@ export class ScreenCaptureManager {
    */
   private captureUploads = new Map<string, CaptureUploadEntry>();
   /**
-   * macOS Screen Recording (TCC) status queries go through a native XPC call
-   * that can take seconds. A grant only takes effect after app relaunch, so a
-   * positive result is stable for the process lifetime and safe to cache.
+   * The status query is a live XPC round trip to tccd, so the overlay defers it
+   * to capture time rather than paying for it on every open. A granted result
+   * only changes if the user revokes it, so caching that is safe; a denied
+   * result is never cached, which is what lets a grant made while the app runs
+   * start working without a relaunch.
    */
   private screenCaptureGranted = false;
+  /**
+   * macOS asks for the direct-capture consent once per app, so the probe runs at
+   * most once per process.
+   */
+  private captureConsentEnsured = false;
 
   constructor(private readonly app: App) {}
 
@@ -123,6 +138,40 @@ export class ScreenCaptureManager {
   }
 
   /**
+   * ScreenCaptureKit needs a one-time "allow direct capture" consent on macOS 15
+   * and newer. Ask for it before the first capture, with the overlay hidden: the
+   * overlay sits at screen-saver level and would otherwise cover the system
+   * dialog, leaving the user no way to accept it. The wait is bounded so a hover
+   * never hangs — an ignored dialog only means the capture fails, exactly as it
+   * would have without this.
+   */
+  private async ensureCaptureConsent(): Promise<void> {
+    if (!isMac || this.captureConsentEnsured) return;
+    this.captureConsentEnsured = true;
+
+    const deadline = Date.now() + CAPTURE_CONSENT_TIMEOUT_MS;
+    for (;;) {
+      const started = Date.now();
+      const { png, reason } = await this.withOverlayHidden(() =>
+        captureRect({ height: 1, width: 1, x: 0, y: 0 }, 1, { height: 1, width: 1, x: 0, y: 0 }),
+      );
+      if (png) {
+        logger.info(`Screen capture consent ready (${Date.now() - started}ms)`);
+        return;
+      }
+      if (reason !== 'denied') {
+        logger.warn(`Screen capture consent probe failed: ${reason ?? 'unknown'}`);
+        return;
+      }
+      if (Date.now() >= deadline) {
+        logger.warn('Screen capture consent still missing; continuing without it');
+        return;
+      }
+      await delay(CAPTURE_CONSENT_POLL_MS);
+    }
+  }
+
+  /**
    * Switch the active session into capture mode: verify Screen Recording
    * access, then enumerate on-screen windows for hover hit-testing.
    * Resolves `false` when capture cannot start.
@@ -137,6 +186,8 @@ export class ScreenCaptureManager {
       await this.promptScreenCaptureAccess(status);
       return false;
     }
+
+    await this.ensureCaptureConsent();
 
     const { displayBounds, scaleFactor } = this.session;
     const windows = await enumerateWindows(displayBounds, scaleFactor);
@@ -164,18 +215,19 @@ export class ScreenCaptureManager {
     }
 
     logger.info(`Previewing window ${windowId} (${winInfo.appName})`);
-    const pngBuffer = await this.withOverlayHidden(() => captureWindow(windowId));
-    if (!pngBuffer) {
-      return { error: 'capture failed', success: false };
+    const captured = await this.withOverlayHidden(() => captureWindow(windowId));
+    if (!captured.png) {
+      logger.error(`Window ${windowId} capture failed: ${captured.reason ?? 'unknown'}`);
+      return { error: this.describeCaptureFailure(captured.reason), success: false };
     }
 
     const captureId = randomUUID();
     const filename = `screen-capture-${captureId}.png`;
-    this.dispatchUpload(captureId, filename, pngBuffer);
+    this.dispatchUpload(captureId, filename, captured.png);
 
     return {
       captureId,
-      dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`,
+      dataUrl: `data:image/png;base64,${captured.png.toString('base64')}`,
       rect: {
         height: winInfo.overlayBounds.height,
         width: winInfo.overlayBounds.width,
@@ -205,23 +257,38 @@ export class ScreenCaptureManager {
     };
 
     logger.info(`Previewing rect (${params.x},${params.y} ${params.width}x${params.height})`);
-    const pngBuffer = await this.withOverlayHidden(() =>
+    const captured = await this.withOverlayHidden(() =>
       captureRect(absolute, scaleFactor, displayBounds),
     );
-    if (!pngBuffer) {
-      return { error: 'capture failed', success: false };
+    if (!captured.png) {
+      logger.error(`Rect capture failed: ${captured.reason ?? 'unknown'}`);
+      return { error: this.describeCaptureFailure(captured.reason), success: false };
     }
 
     const captureId = randomUUID();
     const filename = `screen-capture-${captureId}.png`;
-    this.dispatchUpload(captureId, filename, pngBuffer);
+    this.dispatchUpload(captureId, filename, captured.png);
 
     return {
       captureId,
-      dataUrl: `data:image/png;base64,${pngBuffer.toString('base64')}`,
+      dataUrl: `data:image/png;base64,${captured.png.toString('base64')}`,
       rect: params,
       success: true,
     };
+  }
+
+  /**
+   * The overlay only traces this string, so it stays a stable code rather than
+   * prose. `denied` while the permission is already granted is the case worth
+   * naming: on macOS 15 and newer the first direct capture needs a one-time
+   * consent ("bypass the system window picker"), and until the user accepts it
+   * ScreenCaptureKit refuses exactly like a refused permission.
+   */
+  private describeCaptureFailure(reason: CaptureFailure | null): string {
+    if (reason !== 'denied') return 'capture failed';
+    return this.resolveScreenCaptureStatus() === 'granted'
+      ? 'consent-required'
+      : 'permission-denied';
   }
 
   /**

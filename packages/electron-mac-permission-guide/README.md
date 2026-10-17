@@ -36,3 +36,23 @@ automatically in `beforePack`.
   caller passes it per macOS version; `0` centers the panel on the window.
 - The background is `NSGlassEffectView` on macOS 26+, resolved at runtime, and
   `NSVisualEffectView` elsewhere.
+
+## Screen Recording status
+
+`screenCaptureStatus()` answers from tccd (`com.apple.tccd.system`, a
+`TCCAccessRequest` with `preflight: true`) instead of
+`CGPreflightScreenCaptureAccess`. The public preflight pins whatever it first
+returned for the rest of the process lifetime, so an app that asked before the
+user flipped the switch keeps reading `denied`, and the usual advice is to
+relaunch. tccd keeps no such cache: it re-reads the decision on every query,
+which is what lets the permission guide follow the switch live and removes the
+relaunch for a grant that is already in effect.
+
+`canReadOtherAppWindowTitles()` answers whether this process can read other
+apps' window titles — gated by the same permission, but resolved by
+WindowServer from the current decision. It separates "granted and already
+usable" from "granted, but this process still cannot capture", and the guide
+only asks for the relaunch in the second case.
+
+Both return `null` on platforms or builds without the addon, so callers keep
+their own source of truth.

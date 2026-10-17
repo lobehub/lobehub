@@ -30,8 +30,17 @@ export type PermissionGuideEvent =
   | { type: 'settingsLost' }
   | { title: string; type: 'windowTitle' };
 
+export type ScreenCaptureStatus = 'denied' | 'granted' | 'unknown';
+
 export function isSupported(): boolean;
 export function showGuide(state: PermissionGuideState): boolean;
 export function hideGuide(): void;
 export function activateSettings(): void;
 export function onGuideEvent(listener: (event: PermissionGuideEvent) => void): () => void;
+/**
+ * Screen Recording authorization as tccd reports it right now — not cached for
+ * the process lifetime the way `CGPreflightScreenCaptureAccess` is.
+ */
+export function screenCaptureStatus(): ScreenCaptureStatus | null;
+/** Whether other apps' window titles are readable, which Screen Recording gates. */
+export function canReadOtherAppWindowTitles(): boolean | null;

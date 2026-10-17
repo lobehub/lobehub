@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ScreenCaptureManager } from './ScreenCaptureManager';
+import { CAPTURE_CONSENT_POLL_MS, ScreenCaptureManager } from './ScreenCaptureManager';
 
 const {
   mockBrowserWindow,
@@ -127,6 +127,10 @@ describe('ScreenCaptureManager', () => {
     mockIsMac.value = true;
     mockRequestScreenCaptureAccess.mockResolvedValue(false);
     mockPermissionGuideOpen.mockResolvedValue(false);
+    // Captures resolve an outcome, and the consent probe runs one at the start
+    // of the first capture: a success here means "consent already in place".
+    mockCaptureRect.mockResolvedValue({ png: Buffer.from('rect'), reason: null });
+    mockCaptureWindow.mockResolvedValue({ png: Buffer.from('window'), reason: null });
   });
 
   it('keeps the app in regular mode when showing overlay on macOS', async () => {
@@ -201,6 +205,57 @@ describe('ScreenCaptureManager', () => {
       await expect(manager.beginCapture()).resolves.toBe(false);
 
       expect(mockEnumerateWindows).not.toHaveBeenCalled();
+    });
+
+    it('asks for the direct-capture consent once, then only enumerates', async () => {
+      const manager = new ScreenCaptureManager(createApp());
+
+      await manager.startSession();
+      await manager.beginCapture();
+      manager.close();
+      await manager.startSession();
+      await manager.beginCapture();
+
+      // One 1x1 probe: the consent is per app, and it is already in place.
+      expect(mockCaptureRect).toHaveBeenCalledTimes(1);
+      expect(mockCaptureRect).toHaveBeenCalledWith({ height: 1, width: 1, x: 0, y: 0 }, 1, {
+        height: 1,
+        width: 1,
+        x: 0,
+        y: 0,
+      });
+      expect(mockEnumerateWindows).toHaveBeenCalledTimes(2);
+    });
+
+    it('retries the consent probe while the system dialog is pending', async () => {
+      vi.useFakeTimers();
+      try {
+        const manager = new ScreenCaptureManager(createApp());
+        await manager.startSession();
+
+        mockCaptureRect
+          .mockResolvedValueOnce({ png: null, reason: 'denied' })
+          .mockResolvedValue({ png: Buffer.from('ok'), reason: null });
+
+        const capturing = manager.beginCapture();
+        await vi.advanceTimersByTimeAsync(CAPTURE_CONSENT_POLL_MS + 100);
+
+        await expect(capturing).resolves.toBe(true);
+        expect(mockCaptureRect).toHaveBeenCalledTimes(2);
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+
+    it('continues when the consent probe fails for another reason', async () => {
+      const manager = new ScreenCaptureManager(createApp());
+      await manager.startSession();
+      mockCaptureRect.mockResolvedValue({ png: null, reason: 'unsupported' });
+
+      await expect(manager.beginCapture()).resolves.toBe(true);
+
+      expect(mockCaptureRect).toHaveBeenCalledTimes(1);
+      expect(mockEnumerateWindows).toHaveBeenCalled();
     });
   });
 
@@ -316,7 +371,7 @@ describe('ScreenCaptureManager', () => {
       await manager.startSession();
 
       const pngBuffer = Buffer.from([1, 2, 3, 4]);
-      mockCaptureRect.mockResolvedValue(pngBuffer);
+      mockCaptureRect.mockResolvedValue({ png: pngBuffer, reason: null });
 
       const result = await manager.handlePreviewRect({ height: 50, width: 100, x: 10, y: 20 });
 
@@ -368,7 +423,7 @@ describe('ScreenCaptureManager', () => {
       await manager.beginCapture();
 
       const pngBuffer = Buffer.from([9, 9, 9]);
-      mockCaptureWindow.mockResolvedValue(pngBuffer);
+      mockCaptureWindow.mockResolvedValue({ png: pngBuffer, reason: null });
 
       const result = await manager.handlePreviewWindow(42);
 
@@ -388,7 +443,7 @@ describe('ScreenCaptureManager', () => {
       const manager = new ScreenCaptureManager(createApp());
       await manager.startSession();
 
-      mockCaptureRect.mockResolvedValue(null);
+      mockCaptureRect.mockResolvedValue({ png: null, reason: 'failed' });
 
       const result = await manager.handlePreviewRect({ height: 50, width: 100, x: 10, y: 20 });
 
@@ -417,7 +472,7 @@ describe('ScreenCaptureManager', () => {
       await manager.startSession();
 
       const pngBuffer = Buffer.from([1, 2, 3]);
-      mockCaptureRect.mockResolvedValue(pngBuffer);
+      mockCaptureRect.mockResolvedValue({ png: pngBuffer, reason: null });
       const result = await manager.handlePreviewRect({ height: 50, width: 100, x: 0, y: 0 });
       expect(result.captureId).toBeTruthy();
 
