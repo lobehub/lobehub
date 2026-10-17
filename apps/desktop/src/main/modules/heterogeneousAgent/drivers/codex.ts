@@ -1,6 +1,7 @@
 import path from 'node:path';
 
 import {
+  buildCodexLobeHubContextArgs,
   CODEX_DEFAULT_EXECUTION_ARGS,
   CODEX_EXECUTION_MODE_FLAGS,
   CODEX_REQUIRED_ARGS,
@@ -230,6 +231,21 @@ const buildServerDefaultModelCatalog = (
     2,
   )}\n`;
 };
+
+/**
+ * Prefix a Codex session's args with `shell_environment_policy.set.*`
+ * overrides for the LobeHub run context in its env (agent/operation/topic
+ * ids), so `lh` inside Codex's shell sees them even when the user's config
+ * sets `inherit = "core"`. Both the `codex exec` plan and the app-server
+ * thread config (`buildCodexAppServerThreadParams`) read these args. Other
+ * agent types are returned unchanged.
+ */
+export const withCodexContextArgs = (
+  agentType: string,
+  env: Record<string, string> | undefined,
+  args: string[] = [],
+): string[] =>
+  agentType === 'codex' && env ? [...buildCodexLobeHubContextArgs(env), ...args] : args;
 
 const buildCodexOptionArgs = async ({
   args,

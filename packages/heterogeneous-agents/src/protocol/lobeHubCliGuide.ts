@@ -28,7 +28,10 @@
  *   apply itself rather than claiming it is signed in. That fallback is phrased
  *   as "clear the variable", not `env -u`: devices run Windows too, and
  *   `pickAuthSource` only tests `LOBEHUB_JWT` for truthiness, so an empty value
- *   falls through to the stored login in every shell.
+ *   falls through to the stored login in every shell. Codex runs may carry the
+ *   token as `LOBEHUB_JWT_FILE` instead (see `codexShellEnv`); the CLI reads it
+ *   only while `LOBEHUB_JWT` is unset, and PowerShell/cmd unset a variable
+ *   assigned an empty value, so the guide clears both.
  * - **`LOBEHUB_AGENT_ID`.** Desktop client mode sets it through
  *   `buildLobeHubSessionEnv`. CLI/Desktop dispatch launchers, including
  *   OpenClaw/Hermes, clear inherited identity and inject the current dispatch's
@@ -49,6 +52,6 @@ export const lobeHubCliGuide = [
   '- **What it reaches:** `lh kb` knowledge bases · `lh doc` documents · `lh file` files · `lh artifact` artifacts · `lh topic` / `lh message` past conversations · `lh agent` agents · `lh task` / `lh project` work · `lh widget` / `lh dashboard` monitoring widgets and dashboards · `lh search` local resources and the web · `lh gen` text/image/video/TTS/ASR generation · `lh memory` user memory · `lh notify` notifications to the user · `lh model` / `lh provider` / `lh plugin` / `lh skill` platform configuration · `lh bot` chat-platform bots.',
   "- **Widgets run code with the user's credentials.** Before `lh widget dry-run` of a draft that declares connector credentials (`manifest.env`) or network hosts (`manifest.network.allow`), show the user that version id, what the script does and which credentials and hosts it uses, and wait for their explicit approval of that exact version before passing `--version <id> --yes`. Never publish (`lh widget publish`) without the user's confirmation.",
   '- **When to use it:** whenever the user asks for something that lives in LobeHub rather than in this working directory — saving a document, recalling an earlier conversation, generating an image, or changing your own agent configuration. Say what you did and where it landed.',
-  "- **If a command comes back with an authentication or permission error**, clear `LOBEHUB_JWT` and retry it once — some runs carry a narrow token scoped to this conversation, which shadows the machine's own login. An empty value is enough, so use whichever form your shell takes: `LOBEHUB_JWT= lh …` (sh/bash/zsh), `$env:LOBEHUB_JWT=''; lh …` (PowerShell), `set LOBEHUB_JWT=` then `lh …` (cmd). If it still fails, tell the user what you were trying to do — do not work around it.",
+  "- **If a command comes back with an authentication or permission error**, clear `LOBEHUB_JWT` and `LOBEHUB_JWT_FILE` and retry it once — some runs carry a narrow token scoped to this conversation, which shadows the machine's own login. An empty value is enough, so use whichever form your shell takes: `LOBEHUB_JWT= LOBEHUB_JWT_FILE= lh …` (sh/bash/zsh), `$env:LOBEHUB_JWT=''; $env:LOBEHUB_JWT_FILE=''; lh …` (PowerShell), `set LOBEHUB_JWT=` and `set LOBEHUB_JWT_FILE=` then `lh …` (cmd). If it still fails, tell the user what you were trying to do — do not work around it.",
   '- **Leave these alone:** `lh hetero` and `lh connect` run the infrastructure that is executing you. And never change the persistent workspace scope with `lh workspace use` — it silently rewrites the target of every later command in this session.',
 ].join('\n');
