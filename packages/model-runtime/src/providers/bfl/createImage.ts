@@ -14,6 +14,17 @@ import { BFL_ENDPOINTS, BflStatusResponse } from './types';
 const log = createDebug('lobe-image:bfl');
 
 const BASE_URL = 'https://api.bfl.ai';
+// Leave headroom for the server's roughly five-minute image-task timeout.
+const REQUEST_TIMEOUT_MS = 240_000;
+
+class BflStatusHttpError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
 
 interface BflCreateImageOptions {
   apiKey: string;
@@ -112,6 +123,7 @@ async function submitTask(
   model: BflModelId,
   payload: BflRequest,
   options: BflCreateImageOptions,
+  signal: AbortSignal,
 ): Promise<BflAsyncResponse> {
   const endpoint = BFL_ENDPOINTS[model];
   const url = `${options.baseURL || BASE_URL}${endpoint}`;
@@ -124,6 +136,7 @@ async function submitTask(
       'Content-Type': 'application/json',
       'x-key': options.apiKey,
     },
+    signal,
     method: 'POST',
   });
 
@@ -152,6 +165,7 @@ async function submitTask(
 async function queryTaskStatus(
   pollingUrl: string,
   options: BflCreateImageOptions,
+  signal: AbortSignal,
 ): Promise<BflResultResponse> {
   log('Querying task status using polling URL: %s', pollingUrl);
 
@@ -161,6 +175,7 @@ async function queryTaskStatus(
       'x-key': options.apiKey,
     },
     method: 'GET',
+    signal,
   });
 
   if (!response.ok) {
@@ -171,7 +186,8 @@ async function queryTaskStatus(
       // Failed to parse JSON error response
     }
 
-    throw new Error(
+    throw new BflStatusHttpError(
+      response.status,
       `Failed to query task status (${response.status}): ${errorData?.detail?.[0]?.msg || response.statusText}`,
     );
   }
@@ -196,12 +212,31 @@ export async function createBflImage(
     });
   }
 
+  const controller = new AbortController();
+  let taskId: string | undefined;
+  const timeout = setTimeout(() => {
+    controller.abort(
+      new Error(
+        taskId
+          ? `Timed out tracking BFL job ${taskId}. The job may still be running; check the provider before retrying.`
+          : 'Timed out submitting BFL generation. The request may have been accepted; check the provider before retrying.',
+      ),
+    );
+  }, REQUEST_TIMEOUT_MS);
+
   try {
     // 1. Build request payload
     const requestPayload = await buildRequestPayload(model as BflModelId, params);
 
     // 2. Submit image generation task
-    const taskResponse = await submitTask(model as BflModelId, requestPayload, options);
+    controller.signal.throwIfAborted();
+    const taskResponse = await submitTask(
+      model as BflModelId,
+      requestPayload,
+      options,
+      controller.signal,
+    );
+    taskId = taskResponse.id;
 
     // 3. Poll task status until completion using asyncifyPolling
     return await asyncifyPolling<BflResultResponse, CreateImageResponse>({
@@ -259,7 +294,18 @@ export async function createBflImage(
         debug: (message: any, ...args: any[]) => log(message, ...args),
         error: (message: any, ...args: any[]) => log(message, ...args),
       },
-      pollingQuery: () => queryTaskStatus(taskResponse.polling_url, options),
+      onPollingError: ({ error }) => ({
+        error: controller.signal.aborted ? controller.signal.reason : error,
+        isContinuePolling:
+          !controller.signal.aborted &&
+          (error instanceof BflStatusHttpError
+            ? error.status === 408 || error.status === 429 || error.status >= 500
+            : error instanceof TypeError),
+      }),
+      pollingQuery: () => {
+        controller.signal.throwIfAborted();
+        return queryTaskStatus(taskResponse.polling_url, options, controller.signal);
+      },
     });
   } catch (error) {
     log('Error in createBflImage: %O', error);
@@ -269,5 +315,7 @@ export async function createBflImage(
       errorType: 'ProviderBizError',
       provider: options.provider,
     });
+  } finally {
+    clearTimeout(timeout);
   }
 }
