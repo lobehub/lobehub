@@ -1267,6 +1267,13 @@
       "when": 1792048616001,
       "tag": "0180_task_archived_at",
       "breakpoints": true
+    },
+    {
+      "idx": 181,
+      "version": "7",
+      "when": 1792087999946,
+      "tag": "0181_quick_note_persistence",
+      "breakpoints": true
     }
   ],
   "version": "6"

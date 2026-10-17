@@ -1,5 +1,5 @@
 import { DEFAULT_PREFERENCE } from '@lobechat/const';
-import type { UserAgentOnboarding, UserOnboarding } from '@lobechat/types';
+import type { UserAgentOnboarding, UserOnboarding, UserQuickNoteSettings } from '@lobechat/types';
 import { sql } from 'drizzle-orm';
 import { boolean, index, jsonb, pgTable, text, varchar } from 'drizzle-orm/pg-core';
 
@@ -83,5 +83,6 @@ export const userSettings = pgTable('user_settings', {
   tool: jsonb('tool'),
   image: jsonb('image'),
   notification: jsonb('notification'),
+  quickNote: jsonb('quick_note').$type<UserQuickNoteSettings>(),
 });
 export type UserSettingsItem = typeof userSettings.$inferSelect;
