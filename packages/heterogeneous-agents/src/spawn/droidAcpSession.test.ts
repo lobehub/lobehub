@@ -148,9 +148,20 @@ describe('Factory Droid ACP helpers', () => {
       'lobe',
       '--enabled-tools=read,write',
     ]);
+    expect(buildDroidAcpArgs(['--tag', 'lobe'], '/host/settings.json')).toEqual([
+      'exec',
+      '--output-format',
+      'acp',
+      '--settings',
+      '/host/settings.json',
+      '--tag',
+      'lobe',
+    ]);
   });
 
   it.each([
+    ['--settings', '/user/settings.json'],
+    ['--settings=/user/settings.json'],
     ['--skip-permissions-unsafe'],
     ['--output-format', 'jsonl'],
     ['--model', 'gpt-5'],
