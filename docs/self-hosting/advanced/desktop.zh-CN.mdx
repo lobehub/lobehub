@@ -106,11 +106,23 @@ proxy_busy_buffers_size 32k;
   - Apple Silicon: `LobeHub-Beta-1.83.6-arm64.dmg` 或 `LobeHub-Beta-1.83.6-arm64-mac.zip`
   - Intel: `LobeHub-Beta-1.83.6-x64.dmg` 或 `LobeHub-Beta-1.83.6-mac.zip`
 
-### 图片加载问题
+### 图片加载或上传失败
 
-**问题：** 使用 Docker 部署的服务端，桌面端连接后无法加载头像或其他图片资源。
+**问题：** 使用 Docker 部署的服务端，桌面端连接后无法加载或上传图片。
 
 **解决方案：**
 
-- 如果您使用 Minio 作为存储，需要在 Minio 配置中允许跨域请求
-- 在您的 Minio 服务中添加适当的 CORS 配置
+- `S3_ENDPOINT` 必须是浏览器和桌面端都能访问的 HTTPS 地址。请勿使用 `http://minio:9000`、`http://rustfs:9000` 等仅能在容器网络内访问的地址。
+- 为 S3、MinIO 或 RustFS 配置 CORS，同时允许自部署站点域名和桌面端来源 `http://localhost:3015`。
+
+```json
+[
+  {
+    "AllowedOrigins": ["https://lobe.example.com", "http://localhost:3015"],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "POST", "DELETE"],
+    "AllowedHeaders": ["*"]
+  }
+]
+```
+
+请将 `https://lobe.example.com` 替换为实际访问 LobeHub 的域名。更多信息请参阅[配置 S3 存储服务](/zh/docs/self-hosting/advanced/s3)。
