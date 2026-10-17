@@ -1,0 +1,44 @@
+---
+title: Using LiteLLM in LobeHub
+description: >-
+  Learn how to connect LobeHub to a LiteLLM Proxy gateway and chat with the
+  models you set up in its config.
+tags:
+  - LobeHub
+  - LiteLLM
+  - LLM Gateway
+  - Web UI
+---
+
+# Using LiteLLM in LobeHub
+
+[LiteLLM](https://docs.litellm.ai) is an open-source LLM gateway. The LiteLLM Proxy runs on your own server and gives one OpenAI-compatible API for 100+ model providers. It also supports virtual keys, spend tracking, budgets, and fallbacks. LobeHub connects to your running proxy. This integration does not give a hosted account or a fixed model list.
+
+<Steps>
+  ### Step 1: Run the LiteLLM Proxy
+
+  - Follow the [Proxy quick start](https://docs.litellm.ai/docs/proxy/quick_start) to install the proxy and start it with a `config.yaml` file that lists your models.
+  - The default address is `http://localhost:4000`. LobeHub uses the OpenAI-compatible root `http://localhost:4000/v1`.
+  - Each `model_name` in the config is a model alias. LobeHub reads these aliases from `GET /v1/models`.
+
+  ### Step 2: Get an API Key (Optional)
+
+  - A proxy can run without authentication. In that case, leave the API key empty in LobeHub.
+  - To require a key, set a master key or create a [virtual key](https://docs.litellm.ai/docs/proxy/virtual_keys). Virtual keys start with `sk-`.
+
+  ### Step 3: Configure LiteLLM in LobeHub
+
+  - Open **App Settings → AI Providers**
+  - Find and select the `LiteLLM` provider from the list
+  - Enable the provider and enter your **Proxy URL**, for example `http://localhost:4000/v1`. Enter the API key if your proxy needs one.
+  - Click **Fetch Model List** and enable the aliases you want to use
+  - Select **Check** to test the connection, then select an alias for your assistant
+</Steps>
+
+## Connection Notes
+
+- **Proxy URL without an API key:** LobeHub sends requests from your browser. Your browser must reach the proxy, and the proxy must accept the origin of the LobeHub page.
+- **Proxy URL with an API key:** The LobeHub server sends requests by default. Use an address that the server can reach. Inside Docker, `localhost` refers to the container, not the host.
+- **Unknown model:** Use an alias from your `config.yaml`, as returned by `/v1/models`. LiteLLM routes the alias to the provider model you set in `litellm_params`.
+
+For shared server configuration, see the [LiteLLM environment variables](/docs/self-hosting/environment-variables/model-provider#litellm). To learn how LiteLLM works as a provider, see the [LiteLLM Proxy documentation](https://docs.litellm.ai/docs/providers/litellm_proxy). Models, prices, and limits depend on your proxy config and the providers behind it.
