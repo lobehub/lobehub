@@ -4,8 +4,8 @@ import { useToolStore } from '@/store/tool';
 import { ComposioServerStatus } from '@/store/tool/slices/composioStore';
 
 const POLL_INTERVAL_MS = 1000;
-const POLL_TIMEOUT_MS = 15_000;
-const WINDOW_CLOSED_POLL_TIMEOUT_MS = 4000; // Shorter timeout when window is closed
+const POLL_TIMEOUT_MS = 60_000;
+const WINDOW_CLOSED_POLL_TIMEOUT_MS = POLL_TIMEOUT_MS;
 
 interface UseComposioOAuthProps {
   serverStatus?: ComposioServerStatus;
