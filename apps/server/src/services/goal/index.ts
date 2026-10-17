@@ -42,7 +42,6 @@ import type {
   TaskTopicHandoff,
   WorkVersionEventItem,
 } from '@lobechat/types';
-import { isAgentOperationInFlight } from '@lobechat/types';
 import { experimentOwner, provenanceParentId } from '@lobechat/utils/goalGraph';
 import { goalSeedDependencyProblem, type GoalSeedTask } from '@lobechat/utils/goalSeeds';
 import { TRPCError } from '@trpc/server';
@@ -70,6 +69,7 @@ import { TaskService } from '../task';
 import { TaskRunnerService } from '../taskRunner';
 import { AcceptanceService } from '../verify/acceptanceService';
 import { VerifyPlanGeneratorService } from '../verify/planGenerator';
+import { isOrphanedRun, readRunTopicMetadata, stopStaleRun } from './abandonedRun';
 import { BatchPlanSkillService, learnedRulesClause, planSkillIdentifier } from './batchPlanSkill';
 import { GoalCriteriaGeneratorService, type GoalDecompositionDraft } from './criteriaGenerator';
 import {
@@ -85,6 +85,7 @@ import {
   selectFrontier,
   TERMINAL_NODE_STATUSES,
 } from './decideNextMove';
+import { isDeliverySettling } from './deliverySettle';
 import { experimentResults, exploreGraph } from './exploreGraph';
 import { classifyGoalFailure, isMachineFailureClass } from './failureClass';
 import { GoalBriefService } from './goalBriefs';
@@ -102,7 +103,6 @@ import {
   resolveMaxConcurrentTasks,
   resolveOperationLeaseTimeout,
   resolveTaskMaxSteps,
-  VERIFY_SETTLE_GRACE_MS,
 } from './recoveryPolicy';
 import { GoalReleaseReview } from './releaseReview';
 import { isGoalReportNode, withoutGoalReport } from './report';
@@ -3261,27 +3261,22 @@ export class GoalService {
     const staleBefore = new Date(Date.now() - resolveOperationLeaseTimeout(graph.goal));
 
     if (!operationId || !topicId) {
-      // No running topic covers two very different shapes. A verify-bound Task
-      // that delivered keeps its task `running` with a *completed* topic until
-      // the verify run settles, and that judgment — a full agent run — outlives
-      // the operation lease routinely. Re-dispatching there pays for a duplicate
-      // attempt the verify settle path will cancel, and the canceled retry then
-      // becomes the newest topic and shadows the delivered one. Hold off while
-      // the delivery is fresh; past the grace window, fall through to the
-      // release below so a verify run that died silently cannot strand the
-      // goal forever.
+      // No running topic covers two very different shapes. A delivered Task
+      // waiting on its verification (and any repair it sends back) outlives the
+      // operation lease routinely; re-dispatching there pays for a duplicate
+      // attempt that shadows the delivered one. Hold off while the delivery is
+      // settling; past its grace window, fall through to the release below so
+      // a verify run that died silently cannot strand the goal forever.
       const [lastTopic] = await this.taskTopicModel.findWithHandoff(task.id, 1);
-      if (lastTopic?.status === 'completed') {
-        const deliveredAt = lastTopic.completedAt ?? lastTopic.createdAt;
-        if (new Date(deliveredAt).getTime() >= Date.now() - VERIFY_SETTLE_GRACE_MS) {
-          return {
-            goalId: graph.goal.id,
-            message: `Task ${task.identifier} delivered; waiting for verification to settle`,
-            nodeId,
-            outcome: 'waiting_external',
-            taskId: task.id,
-          };
-        }
+      const operationModel = new AgentOperationModel(this.db, this.userId, this.workspaceId);
+      if (await isDeliverySettling(operationModel, lastTopic)) {
+        return {
+          goalId: graph.goal.id,
+          message: `Task ${task.identifier} delivered; waiting for verification to settle`,
+          nodeId,
+          outcome: 'waiting_external',
+          taskId: task.id,
+        };
       }
 
       // A task claimed for dispatch but with no run behind it. Normally this is
@@ -3301,15 +3296,37 @@ export class GoalService {
       };
     }
 
+    // A run that may still be writing must not get a replacement beside it; only
+    // a device known to be offline is left to the offline-device recovery below.
     const latestUsage = await new AgentRuntimeCoordinator().getOperationMetadata(operationId);
+    const owner = { userId: this.userId, workspaceId: this.workspaceId };
+    const latestTotalCost = latestUsage?.totalCost;
+    const stop = await stopStaleRun(this.db, owner, {
+      latestTotalCost,
+      operationId,
+      staleBefore,
+      topicId,
+    });
+    if (stop === 'fresh') return undefined;
+    if (stop === 'unconfirmed') {
+      const metadata = await readRunTopicMetadata(this.db, owner, topicId);
+      if ((await this.readRunDevicePresence({ metadata, operationId })) !== 'offline')
+        return undefined;
+    }
+
     const reclaimed = await this.db.transaction(async (tx) => {
       const operationModel = new AgentOperationModel(tx, this.userId, this.workspaceId);
       const settled = await operationModel.settleStaleRunning(
         operationId,
         staleBefore,
-        latestUsage?.totalCost,
+        latestTotalCost,
       );
-      if (!settled && !(await isOrphanedRun(operationModel, operationId, staleBefore)))
+      // `stopStaleRun` already claimed the lease atomically when it had to stop.
+      if (
+        !settled &&
+        stop === 'not_running' &&
+        !(await isOrphanedRun(operationModel, operationId, staleBefore))
+      )
         return false;
 
       await new TaskTopicModel(tx, this.userId, this.workspaceId).updateStatus(
@@ -5061,29 +5078,3 @@ interface FailureGateOptions {
 const MACHINE_HOLD_SCHEDULE_WINDOW_MS = 15 * 60 * 1000;
 /** Queue delays are bounded; the sweep covers anything further out. */
 const MAX_ADVANCE_DELAY_S = 86_400;
-
-/**
- * Whether a Task topic is still `running` although its run has already ended.
- *
- * The run's terminal normally moves the topic through the task lifecycle hook,
- * but that delivery can be lost — a watchdog-abandoned device run had none at
- * all, and a dropped webhook has no retry. The lease reclaim cannot see these:
- * it only settles an operation that is itself still `running`, so the Task
- * stays in flight forever and its goal with it. Once the run has been over for
- * longer than the lease, nothing is left to report it and the topic is lost.
- *
- * A missing operation row proves nothing — a run executed on the client never
- * writes one — so only a row that says the run ended counts.
- */
-const isOrphanedRun = async (
-  operationModel: AgentOperationModel,
-  operationId: string,
-  staleBefore: Date,
-): Promise<boolean> => {
-  const operation = await operationModel.findById(operationId);
-  // Still-owned states (including a run parked for a client) are the lease
-  // path's to reclaim, not this.
-  if (!operation || isAgentOperationInFlight(operation.status)) return false;
-  const endedAt = operation.completedAt ?? operation.updatedAt;
-  return new Date(endedAt) < staleBefore;
-};
