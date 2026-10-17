@@ -4188,6 +4188,55 @@ export const aiAgentRouter = router({
     }),
 
   /**
+   * Result-control review for a CLIENT-executed sub-agent / group-member
+   * completion (P1 round-23). The client completion bridge writes the child's
+   * raw final answer onto the parent's tool message and resumes the parent —
+   * but the runtime's deferred branch returns before the normal
+   * `afterToolCall` pipeline runs, so a hook configured to deny the result
+   * was silently bypassed on this path (the content reached the tool card and
+   * the parent model). The client bridge now submits the result BEFORE any
+   * backfill; the server runs the same `controlDeferredToolResult` pipeline
+   * the server-side bridges use and returns the (possibly replaced) result.
+   * Fail-closed: an evaluation error denies the content (the placeholder stays
+   * running, the fire retry re-fires).
+   */
+  controlClientSubAgentToolResult: aiAgentWriteProcedure
+    .input(
+      z.object({
+        /** The parked parent operation (hooks' owner context). */
+        operationId: z.string(),
+        result: z.object({
+          content: z.string(),
+          error: z.string().optional(),
+          state: z.record(z.string(), z.any()).optional(),
+          success: z.boolean(),
+        }),
+        toolMessageId: z.string(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const controlled = await ctx.agentRuntimeService.controlCompletedToolResult({
+        // preserveUsage: keep the child's cost/tokens when a hook denies the
+        // result (same contract as the server sub-agent/group bridges).
+        preserveUsage: true,
+        operationId: input.operationId,
+        toolMessageId: input.toolMessageId,
+        result: {
+          content: input.result.content,
+          error: input.result.error,
+          state: input.result.state,
+          success: input.result.success,
+        },
+      });
+      return {
+        blocked: controlled.blocked,
+        content: controlled.result.content,
+        error: typeof controlled.result.error === 'string' ? controlled.result.error : undefined,
+        state: controlled.result.state,
+      };
+    }),
+
+  /**
    * Mint the per-USER Gateway JWT for the multiplexed v2 WebSocket (one
    * socket per user, `GET /v2/ws`). Unlike `refreshGatewayToken` it is not
    * bound to a running operation: the user hub authorizes every `subscribe`

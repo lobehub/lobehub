@@ -292,6 +292,9 @@ export class GroupOrchestrationActionImpl {
       get: this.#get,
       messageContext: { agentId: supervisorAgentId, groupId, scope: 'group', topicId },
       orchestrationOperationId: operationId,
+      // Member-run park exits snapshot the supervisor machine so the client
+      // completion bridge's re-entry can restore the pre-park decision point.
+      snapshotSupervisor: () => orchestrationSupervisor.snapshot(),
       supervisorAgentId: groupConfig.supervisorAgentId,
     });
 
@@ -321,6 +324,20 @@ export class GroupOrchestrationActionImpl {
 
     // 7. Orchestration Loop
     // Start with the initial result (supervisor_decided) and loop until no more results
+    // A re-entry seeded by the client completion bridge carries the parked
+    // supervisor's state-machine snapshot on the task_completed payload; the
+    // resumed loop continues from the original decision point (round counter /
+    // skip-call-supervisor preserved) instead of resetting to a fresh machine
+    // and replaying decisions the original run had already consumed.
+    if (initialResult.type === 'task_completed' && initialResult.payload.supervisorSnapshot) {
+      orchestrationSupervisor.restore(initialResult.payload.supervisorSnapshot);
+      log(
+        '[internal_execGroupOrchestration] Restored supervisor snapshot (round=%d, skipCallSupervisor=%s) from the parked run',
+        initialResult.payload.supervisorSnapshot.round,
+        initialResult.payload.supervisorSnapshot.skipCallSupervisor,
+      );
+    }
+
     let currentResult: ExecutorResult | undefined = initialResult;
     let stepCount = 0;
 

@@ -478,6 +478,95 @@ describe('ThreadModel', () => {
     });
   });
 
+  describe('mergeMetadata', () => {
+    const insertThread = (values: Partial<typeof threads.$inferInsert> = {}) =>
+      serverDB.insert(threads).values({
+        id: 'thread-merge',
+        metadata: { clientMode: true, operationId: 'op-1', startedAt: 't0' },
+        status: ThreadStatus.Processing,
+        topicId,
+        type: ThreadType.Isolation,
+        userId,
+        ...values,
+      });
+
+    it('merges top-level keys without clobbering existing ones', async () => {
+      await insertThread();
+
+      const applied = await threadModel.mergeMetadata('thread-merge', {
+        bridge: { toolMessageId: 'm1' },
+      } as any);
+
+      const row = await serverDB.query.threads.findFirst({ where: eq(threads.id, 'thread-merge') });
+      expect(applied).toBe(true);
+      expect(row?.metadata).toMatchObject({
+        bridge: { toolMessageId: 'm1' },
+        clientMode: true,
+        operationId: 'op-1',
+        startedAt: 't0',
+      });
+    });
+
+    it('merges concurrently-written keys instead of replacing the whole blob', async () => {
+      // Simulate a settlement landing between the caller's read and the
+      // merge: the blob on the row now holds terminal fields the caller's
+      // patch does not know about. They must survive.
+      await insertThread();
+      await serverDB
+        .update(threads)
+        .set({
+          metadata: {
+            clientMode: true,
+            completedAt: 't1',
+            operationId: 'op-1',
+            startedAt: 't0',
+            totalCost: 0.5,
+          },
+        })
+        .where(eq(threads.id, 'thread-merge'));
+
+      await threadModel.mergeMetadata('thread-merge', { bridge: { toolMessageId: 'm1' } } as any);
+
+      const row = await serverDB.query.threads.findFirst({ where: eq(threads.id, 'thread-merge') });
+      expect(row?.metadata).toMatchObject({
+        bridge: { toolMessageId: 'm1' },
+        completedAt: 't1',
+        totalCost: 0.5,
+      });
+    });
+
+    it('refuses to apply the patch once the thread is no longer processing', async () => {
+      await insertThread({ status: ThreadStatus.Completed });
+
+      const applied = await threadModel.mergeMetadata('thread-merge', {
+        bridge: { toolMessageId: 'm1' },
+      } as any);
+
+      const row = await serverDB.query.threads.findFirst({ where: eq(threads.id, 'thread-merge') });
+      expect(applied).toBe(false);
+      // No stale bridge coordinates resurrected on the settled row.
+      expect(row?.metadata).not.toHaveProperty('bridge');
+    });
+
+    it('does not merge into a thread owned by another user', async () => {
+      await serverDB.transaction(async (tx) => {
+        await tx.insert(topics).values({ id: 'other-topic', userId: otherUserId });
+        await tx.insert(threads).values({
+          id: 'thread-other',
+          metadata: { clientMode: true },
+          status: ThreadStatus.Processing,
+          topicId: 'other-topic',
+          type: ThreadType.Isolation,
+          userId: otherUserId,
+        });
+      });
+
+      await expect(
+        threadModel.mergeMetadata('thread-other', { bridge: { toolMessageId: 'm1' } } as any),
+      ).resolves.toBe(false);
+    });
+  });
+
   describe('delete', () => {
     it('should delete a thread', async () => {
       await serverDB.insert(threads).values({

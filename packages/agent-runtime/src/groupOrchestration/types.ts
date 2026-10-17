@@ -1,4 +1,5 @@
 import type { AgentState } from '../types/state';
+import type { GroupOrchestrationSupervisorSnapshot } from './GroupOrchestrationSupervisor';
 
 // ==================== Supervisor Instructions (Output) ====================
 // These are the commands that the Supervisor decides to execute
@@ -198,6 +199,16 @@ export interface ExecutorResultTaskCompleted {
      * Whether the task completed successfully
      */
     success: boolean;
+    /**
+     * Supervisor state-machine snapshot taken when the member's run parked and
+     * the orchestration loop exited with the operation still running. The
+     * completion bridge re-enters the loop through a fresh
+     * `internal_execGroupOrchestration`, which restores it so the supervisor
+     * continues from the original decision point instead of resetting to a
+     * fresh machine (whose round counter would restart and whose
+     * skip-call-supervisor flag would be lost).
+     */
+    supervisorSnapshot?: GroupOrchestrationSupervisorSnapshot;
   };
   type: 'task_completed';
 }

@@ -483,6 +483,26 @@ class AiAgentService {
   async updateClientTaskThreadStatus(params: UpdateClientTaskThreadStatusParams) {
     return await lambdaClient.aiAgent.updateClientTaskThreadStatus.mutate(params);
   }
+
+  /**
+   * Result-control review for the CLIENT completion bridge (P1 round-23): the
+   * child's final answer is submitted BEFORE any backfill so the parent's
+   * configured `afterToolCall` hooks can deny/replace it — the same pipeline
+   * the server-side completion bridges run. Fail-closed on errors (the caller
+   * treats a rejection as "blocked", keeping the placeholder running).
+   */
+  async controlClientSubAgentToolResult(params: {
+    operationId: string;
+    result: {
+      content: string;
+      error?: string;
+      state?: Record<string, any>;
+      success: boolean;
+    };
+    toolMessageId: string;
+  }) {
+    return await lambdaClient.aiAgent.controlClientSubAgentToolResult.mutate(params);
+  }
 }
 
 export const aiAgentService = new AiAgentService();

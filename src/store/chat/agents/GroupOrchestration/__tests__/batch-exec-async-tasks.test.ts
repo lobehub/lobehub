@@ -10,6 +10,7 @@ import { createGroupOrchestrationExecutors } from '../createGroupOrchestrationEx
 
 vi.mock('@/services/aiAgent', () => ({
   aiAgentService: {
+    createClientGroupAgentTaskThread: vi.fn(),
     execSubAgentTask: vi.fn(),
     getSubAgentTaskStatus: vi.fn(),
   },
@@ -233,6 +234,71 @@ describe('createGroupOrchestrationExecutors', () => {
         undefined,
         expect.objectContaining({ operationId: TEST_IDS.OPERATION_ID }),
       );
+    });
+
+    // P1 (round-11): a parked member run must persist a durable park marker
+    // (`pluginState.status: 'running'` + threadId) on the group tool row —
+    // the executor-created state has no `status`, so after a reload the
+    // bridge's `isDeferredPlaceholderStillRunning` fallback always saw a
+    // non-running row and skipped the supervisor re-entry.
+    it('should persist a running pluginState marker when a member run parks', async () => {
+      const mockStore = createMockStore();
+
+      const userMessageId = `user_${nanoid()}`;
+      vi.mocked(aiAgentService.createClientGroupAgentTaskThread).mockResolvedValue({
+        messages: [],
+        success: true,
+        threadId: 'thread-parked',
+        threadMessages: [],
+        userMessageId,
+      } as any);
+      // The member run parks (human approval / async tool): executeClientAgent
+      // signals it with `{ parked: true }` — the park-exit under test.
+      (mockStore as any).executeClientAgent = vi.fn().mockResolvedValue({ parked: true });
+      (mockStore as any).optimisticUpdatePluginState = vi.fn().mockResolvedValue(undefined);
+      (mockStore as any).replaceMessages = vi.fn();
+
+      // The existing group tool row (executor-created state: no `status`).
+      (mockStore as any).dbMessagesMap = {
+        'group_test-group-id_test-topic-id': [
+          { id: TEST_IDS.TOOL_MESSAGE_ID, pluginState: { foo: 'bar' } },
+        ],
+      };
+
+      const executors = createGroupOrchestrationExecutors({
+        get: () => mockStore,
+        messageContext: {
+          agentId: TEST_IDS.GROUP_ID,
+          groupId: TEST_IDS.GROUP_ID,
+          scope: 'group',
+          topicId: TEST_IDS.TOPIC_ID,
+        },
+        orchestrationOperationId: TEST_IDS.ORCHESTRATION_OPERATION_ID,
+        supervisorAgentId: TEST_IDS.SUPERVISOR_AGENT_ID,
+      });
+
+      const result = await executors.exec_client_async_task!(
+        {
+          payload: {
+            agentId: TEST_IDS.AGENT_1_ID,
+            instruction: 'Task 1',
+            title: 'Task 1 Title',
+            toolMessageId: TEST_IDS.TOOL_MESSAGE_ID,
+          },
+          type: 'exec_client_async_task',
+        },
+        createInitialState(),
+      );
+
+      // The park marker must MERGE over the existing plugin state and mirror
+      // the sub-agent deferred placeholder shape.
+      expect(mockStore.optimisticUpdatePluginState).toHaveBeenCalledWith(TEST_IDS.TOOL_MESSAGE_ID, {
+        foo: 'bar',
+        status: 'running',
+        threadId: 'thread-parked',
+      });
+      // The loop must end without a terminal result (parked).
+      expect(result.result).toBeUndefined();
     });
 
     it('should call execSubAgentTask for each task', async () => {

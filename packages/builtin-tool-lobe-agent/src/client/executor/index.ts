@@ -505,6 +505,25 @@ class LobeAgentExecutor extends BaseExecutor<typeof LobeAgentApiName> {
     });
 
     if (!success) {
+      // A parked child ("still running" note from `runClientSubAgent`) is NOT
+      // a settled failure either: return the DEFERRED shape so the runtime
+      // parks the parent on this tool (`waiting_for_async_tool`) with this
+      // content as the placeholder, and the client completion bridge settles
+      // the tool message + resumes the parent once the child actually
+      // finishes. Returning `success: false` here (the previous intermediate
+      // behavior) settled the parent while the child was still live — the
+      // parent treated the call as done and never consumed the child's real
+      // result.
+      const isParked =
+        typeof result === 'string' && result.startsWith('Sub-agent is still running');
+      if (isParked && threadId) {
+        return {
+          content: result,
+          deferred: true,
+          state: { status: 'running', threadId },
+          success: true,
+        };
+      }
       return { content: error ?? 'Sub-agent execution failed.', success: false };
     }
 

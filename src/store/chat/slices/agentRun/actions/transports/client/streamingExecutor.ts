@@ -16,12 +16,7 @@ import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { createPathScopeAudit } from '@lobechat/builtin-tool-local-system';
 import { PageAgentIdentifier } from '@lobechat/builtin-tool-page-agent';
 import { manualModeExcludeToolIds } from '@lobechat/builtin-tools';
-import {
-  getSubAgentChatConfigOverride,
-  isDesktop,
-  resolveSubAgentChatConfig,
-  resolveSubAgentModel,
-} from '@lobechat/const';
+import { isDesktop, resolveSubAgentChatConfig } from '@lobechat/const';
 import { type ToolsEngine } from '@lobechat/context-engine';
 import {
   buildTaskDetailPrompt,
@@ -41,7 +36,6 @@ import {
 import debug from 'debug';
 
 import { createAgentToolsEngine } from '@/helpers/toolEngineering';
-import { aiAgentService } from '@/services/aiAgent';
 import { isCanUseAudio, isCanUseVideo, isCanUseVision } from '@/services/chat/helper';
 import { type ResolvedAgentConfig } from '@/services/chat/mecha';
 import { composeEnabledTools, resolveAgentConfig } from '@/services/chat/mecha';
@@ -54,6 +48,10 @@ import { getAgentStoreState } from '@/store/agent';
 import { agentSelectors } from '@/store/agent/selectors';
 import { aiModelSelectors } from '@/store/aiInfra/selectors';
 import { getAiInfraStoreState } from '@/store/aiInfra/store';
+import {
+  armClientSubAgentBridgesForContext,
+  fireClientSubAgentBridge,
+} from '@/store/chat/agents/transports/clientSubAgentBridge';
 import { createClientRuntimeExecutors } from '@/store/chat/agents/transports/createClientRuntimeExecutors';
 import { topicSelectors } from '@/store/chat/selectors';
 import { emitClientAgentSignalSourceEvent } from '@/store/chat/slices/agentRun/actions/lifecycle/agentSignalBridge';
@@ -76,6 +74,7 @@ import { getUserStoreState } from '@/store/user/store';
 
 import { buildRunLifecycle } from '../../lifecycle/buildRunLifecycle';
 import type { RunParkedReason, RunScope } from '../../lifecycle/types';
+import { runClientSubAgent as runClientSubAgentImpl } from './runClientSubAgent';
 
 const log = debug('lobe-store:streaming-executor');
 
@@ -558,7 +557,19 @@ export class StreamingExecutorActionImpl {
      */
     chatConfigOverride?: Partial<LobeAgentChatConfig> | null;
     userMessageId?: string;
-  }): Promise<{ cost?: Cost; model?: string; provider?: string; usage?: Usage } | void> => {
+  }): Promise<{
+    cost?: Cost;
+    /**
+     * True when the run parked (`waiting_for_human` / `waiting_for_async_tool` /
+     * `waiting_for_client`) instead of reaching a terminal state. The caller MUST
+     * NOT treat this as completion: the run is still alive and resumes out-of-band
+     * (user approval or async-tool callback), so there is no final output yet.
+     */
+    parked?: boolean;
+    model?: string;
+    provider?: string;
+    usage?: Usage;
+  } | void> => {
     const {
       disableTools,
       messages: originalMessages,
@@ -1004,18 +1015,52 @@ export class StreamingExecutorActionImpl {
     // complete signal). The run resumes under a new operation when the user
     // approves / rejects / submits / skips.
     if (isParkedStatus(state.status)) {
+      // Two-phase bridge activation (round-6): registrations are created
+      // unarmed by the spawner / group park-exit — BEFORE this run's deferred
+      // pause assembles (parallel tool lanes can still be running). Only now,
+      // at the actual park, are they armed: from here on the deferred
+      // placeholder is authoritative and resuming the parent cannot race this
+      // run's own deferred path.
+      armClientSubAgentBridgesForContext(this.#get, context);
       await runLifecycle.onRunParked({
         ...lifecycleEventBase,
         reason: state.status as RunParkedReason,
       });
-      return;
+      // Signal the parked state to programmatic callers (e.g. `runClientSubAgent`):
+      // returning bare `void` here made a parked sub-agent read as a successful
+      // empty run, so the spawner backfilled `Task completed` while the child was
+      // still executing.
+      return { parked: true };
     }
 
     const completeEvent = { ...lifecycleEventBase, runtimeStatus: state.status };
 
     const { requeued } = await runLifecycle.completeRun(completeEvent);
     // A queued follow-up sendMessage was scheduled — skip the post-run notification.
+    // The completion bridge also waits: the queued follow-up's own terminal
+    // boundary will fire it (the registry key is the thread, which survives
+    // across operations of the same child).
     if (requeued) return;
+
+    // Terminal boundary of a client run: settle any completion bridge parked
+    // on this run's thread (a parent parked on THIS run as its sub-agent /
+    // group member). Parked runs exit earlier — only terminal states fire.
+    // The terminal disposition travels with the fire so a failed/interrupted
+    // continuation reaches the parent as a failure, never as a success.
+    if (context.threadId) {
+      await fireClientSubAgentBridge(this.#get, context, {
+        cost: state.cost?.total,
+        error: state.status !== 'done' ? (state.error as string | undefined) : undefined,
+        status: state.status as 'done' | 'error' | 'interrupted',
+        usage: state.usage?.llm?.tokens
+          ? {
+              input: state.usage.llm.tokens.input,
+              output: state.usage.llm.tokens.output,
+              total: state.usage.llm.tokens.total,
+            }
+          : undefined,
+      });
+    }
 
     await runLifecycle.afterRunComplete(completeEvent);
 
@@ -1040,169 +1085,10 @@ export class StreamingExecutorActionImpl {
     toolMessageId: string;
     topicId: string;
   }): Promise<RunSubAgentResult> => {
-    const {
-      agentId,
-      topicId,
-      instruction,
-      description,
-      inheritMessages,
-      toolMessageId,
-      parentOperationId,
-    } = params;
-
-    const logId = `runClientSubAgent:${toolMessageId}`;
-
-    try {
-      // 1. Create the isolation Thread (persists thread + initial user message)
-      const threadResult = await aiAgentService.createClientTaskThread({
-        agentId,
-        instruction,
-        parentMessageId: toolMessageId,
-        title: description,
-        topicId,
-      });
-
-      if (!threadResult.success) {
-        log('[%s] Failed to create client task thread', logId);
-        return {
-          error: 'Failed to create sub-agent thread',
-          result: 'Failed to create sub-agent thread',
-          success: false,
-          threadId: '',
-        };
-      }
-
-      const { threadId, userMessageId, threadMessages } = threadResult;
-      log('[%s] Created thread %s, userMessage %s', logId, threadId, userMessageId);
-
-      // Register the freshly-created isolation thread in the client thread list
-      // so the tool Render can locate it (the "View Detail" button) and it shows
-      // in the sidebar without waiting for a topic switch to re-fetch threads.
-      void this.#get().refreshThreads();
-
-      // 2. Build the sub-agent ConversationContext (threadId provides isolation)
-      const workspaceSlug = parentOperationId
-        ? this.#get().operations[parentOperationId]?.context.workspaceSlug
-        : undefined;
-      const subContext: ConversationContext = {
-        agentId,
-        isSubAgent: true,
-        scope: 'thread',
-        threadId,
-        topicId,
-        ...(workspaceSlug ? { workspaceSlug } : {}),
-      };
-
-      // 3. Create a child operation chained to the parent runtime operation
-      const { operationId: taskOperationId } = this.#get().startOperation({
-        context: subContext,
-        metadata: { executionMode: 'client', startTime: Date.now(), taskDescription: description },
-        parentOperationId,
-        type: 'execClientSubAgent',
-      });
-
-      // 4. Seed the thread message map so the persisted user message renders
-      this.#get().replaceMessages(threadMessages, { context: subContext });
-
-      // 5. Optionally inherit the parent conversation messages
-      let subMessages = [...threadMessages];
-      if (inheritMessages) {
-        const parentMessages = (
-          this.#get().dbMessagesMap[messageMapKey({ agentId, topicId })] || []
-        ).filter((m) => m.role !== 'task');
-        subMessages = [...parentMessages, ...subMessages];
-        this.#get().replaceMessages(subMessages, { context: subContext });
-      }
-
-      // 6. Run the sub-agent with the current client runtime.
-      //    The model is resolved here at the spawn site (mirrors the server's
-      //    callSubAgent runner): an explicit `agencyConfig.subagent` override
-      //    wins, otherwise the sub-agent follows the parent's *effective* model
-      //    — topic-pinned model over the agent default, the same precedence
-      //    internal_createAgentState applies to the parent run itself.
-      const parentAgentConfig = agentSelectors.getAgentConfigById(agentId)(getAgentStoreState());
-      const parentEffectiveModel =
-        topicSelectors.getTopicModelById(topicId)(this.#get()) ?? parentAgentConfig;
-      const subAgentModel = resolveSubAgentModel(
-        parentAgentConfig?.agencyConfig?.subagent,
-        parentEffectiveModel,
-      );
-      // Warm the sub-agent model's user-level reasoning config before the run:
-      // the ChatInput loader only fetches the parent's effective model, while
-      // resolveModelExtendParams reads this cache synchronously mid-run.
-      await getAiInfraStoreState().ensureModelReasoningConfig(
-        subAgentModel.model,
-        subAgentModel.provider,
-      );
-      const runtimeResult = await this.#get().executeClientAgent({
-        chatConfigOverride: getSubAgentChatConfigOverride(
-          parentAgentConfig?.agencyConfig?.subagent,
-        ),
-        context: subContext,
-        isSubAgent: true,
-        messages: subMessages,
-        modelOverride: subAgentModel,
-        operationId: taskOperationId,
-        parentMessageId: userMessageId,
-        parentMessageType: 'user',
-        parentOperationId,
-        userMessageId,
-      });
-
-      // 7. Extract the sub-agent's final assistant output as the tool result
-      const subMessageKey = messageMapKey(subContext);
-      const subTaskMessages = this.#get().dbMessagesMap[subMessageKey] || [];
-      const lastAssistant = subTaskMessages.findLast((m) => m.role === 'assistant');
-      const resultContent = lastAssistant?.content || 'Task completed';
-      const totalToolCalls = subTaskMessages.filter((m) => m.role === 'tool').length;
-      const { usage, cost, model } = runtimeResult || {};
-      const totalCost = cost?.total;
-      const totalInputTokens = usage?.llm?.tokens?.input;
-      const totalOutputTokens = usage?.llm?.tokens?.output;
-      const totalTokens = usage?.llm?.tokens?.total;
-
-      // 8. Persist final Thread status + metadata
-      await aiAgentService.updateClientTaskThreadStatus({
-        completionReason: 'done',
-        metadata: {
-          totalCost,
-          totalMessages: subTaskMessages.length,
-          totalTokens,
-          totalToolCalls,
-        },
-        resultContent,
-        threadId,
-      });
-
-      this.#get().completeOperation(taskOperationId);
-
-      log('[%s] Completed, result %d chars', logId, resultContent.length);
-      // Cost + the token split ride back to the caller, not just the total: they
-      // land on the tool message's pluginState, which is the only place the parent's
-      // usage tray can see a sub-agent's spend (its messages are in a thread the
-      // parent never loads). Returning tokens alone makes a client sub-agent read as
-      // free.
-      return {
-        model,
-        result: resultContent,
-        success: true,
-        threadId,
-        totalCost,
-        totalInputTokens,
-        totalOutputTokens,
-        totalToolCalls,
-        totalTokens,
-      };
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      log('[%s] Error: %O', logId, error);
-      return {
-        error: errorMessage,
-        result: `Sub-agent execution failed: ${errorMessage}`,
-        success: false,
-        threadId: '',
-      };
-    }
+    // Extracted to ./runClientSubAgent (source-layout §3: this file is over
+    // the 800-line limit and must not grow). Thin delegation keeps the store
+    // action API and its callers unchanged.
+    return runClientSubAgentImpl(this.#get, params);
   };
 }
 

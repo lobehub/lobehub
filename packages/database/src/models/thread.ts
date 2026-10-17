@@ -204,4 +204,38 @@ export class ThreadModel {
       .set({ ...value, updatedAt: new Date() })
       .where(and(eq(threads.id, id), this.ownership()));
   };
+
+  /**
+   * P2 (bridge round-18): atomically merge top-level keys into the thread's
+   * jsonb metadata. `persistBridgeCoordinates` used to do read-modify-write
+   * with a full-metadata replace; a settlement (updateClientTaskThreadStatus)
+   * landing between its read and its write clobbered the just-written
+   * terminal fields (completedAt / cost / token totals) with the stale
+   * pre-settlement snapshot. Two guards:
+   *
+   * - `||` merge — top-level keys not present in `patch` survive regardless
+   *   of what landed between the caller's knowledge and this write;
+   * - `status = 'processing'` guard — the patch (bridge coordinates) only
+   *   makes sense mid-run; if the thread already settled, the coordinates
+   *   are stale and the write is skipped instead of resurrecting them on a
+   *   settled row.
+   *
+   * @returns whether the patch was applied (row existed, owned, and still
+   * mid-run).
+   */
+  mergeMetadata = async (id: string, patch: ThreadMetadata): Promise<boolean> => {
+    const rows = await this.db
+      .update(threads)
+      .set({
+        // jsonb `||` shallow-merges top-level keys server-side: concurrent
+        // writers of DISJOINT keys no longer overwrite each other, and keys
+        // absent from the patch always survive.
+        metadata: sql`COALESCE(${threads.metadata}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(threads.id, id), this.ownership(), eq(threads.status, ThreadStatus.Processing)))
+      .returning({ id: threads.id });
+
+    return rows.length > 0;
+  };
 }

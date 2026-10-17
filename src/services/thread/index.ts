@@ -31,6 +31,17 @@ export class ThreadService {
     return lambdaClient.thread.updateThread.mutate({ id, value: data });
   };
 
+  /**
+   * P2 (bridge round-18): atomically merge top-level keys into the thread's
+   * metadata server-side. Unlike `updateThread` (whole-blob replace), a
+   * settlement landing between the caller's read and this write cannot
+   * clobber the terminal fields — and the server skips the write entirely
+   * once the thread is no longer `processing`.
+   */
+  mergeThreadMetadata = async (id: string, patch: Record<string, unknown>) => {
+    return lambdaClient.thread.mergeThreadMetadata.mutate({ id, patch });
+  };
+
   removeThread = async (id: string) => {
     return lambdaClient.thread.removeThread.mutate({ id });
   };

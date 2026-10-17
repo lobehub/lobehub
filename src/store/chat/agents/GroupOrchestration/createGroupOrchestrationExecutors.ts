@@ -15,8 +15,14 @@ import { type ConversationContext, type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
 import { aiAgentService } from '@/services/aiAgent';
+import type { GroupOrchestrationExecutorsContext } from '@/store/chat/agents/GroupOrchestration/executorsContext';
+import {
+  formatGroupAsyncTaskResultContent,
+  type GroupAsyncTaskResultContentItem,
+  toGroupAsyncTaskResultPayload,
+} from '@/store/chat/agents/GroupOrchestration/groupAsyncTaskResult';
+import { handleMemberRunParkExit } from '@/store/chat/agents/GroupOrchestration/memberRunParkExit';
 import { dbMessageSelectors } from '@/store/chat/slices/message/selectors';
-import { type ChatStore } from '@/store/chat/store';
 import { messageMapKey } from '@/store/chat/utils/messageMapKey';
 
 const log = debug('lobe-store:group-orchestration-executors');
@@ -25,49 +31,6 @@ const sleep = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
-
-interface GroupAsyncTaskResultContentItem {
-  agentId: string;
-  error?: string;
-  result?: string;
-  success: boolean;
-  title?: string;
-}
-
-const formatGroupAsyncTaskResultContent = (items: GroupAsyncTaskResultContentItem[]) =>
-  items
-    .map((item, index) => {
-      const title = item.title ?? item.agentId;
-      const content = item.success
-        ? (item.result ?? 'Completed successfully.')
-        : `Failed: ${item.error ?? 'Unknown error'}`;
-
-      return `${index + 1}. ${title}\n${content}`;
-    })
-    .join('\n\n');
-
-const toGroupAsyncTaskResultPayload = ({
-  agentId,
-  error,
-  result,
-  success,
-}: GroupAsyncTaskResultContentItem) => ({
-  agentId,
-  ...(error === undefined ? {} : { error }),
-  ...(result === undefined ? {} : { result }),
-  success,
-});
-
-export interface GroupOrchestrationExecutorsContext {
-  get: () => ChatStore;
-  /**
-   * Message context for fetching messages
-   * Contains agentId (groupId for group chat), topicId, scope, etc.
-   */
-  messageContext: ConversationContext;
-  orchestrationOperationId: string;
-  supervisorAgentId: string;
-}
 
 /**
  * Creates executors for Group Orchestration
@@ -110,7 +73,8 @@ export interface GroupOrchestrationExecutorsContext {
 export const createGroupOrchestrationExecutors = (
   context: GroupOrchestrationExecutorsContext,
 ): Partial<Record<SupervisorInstruction['type'], GroupOrchestrationExecutor>> => {
-  const { get, messageContext, orchestrationOperationId, supervisorAgentId } = context;
+  const { get, messageContext, orchestrationOperationId, snapshotSupervisor, supervisorAgentId } =
+    context;
 
   // Pre-compute the chat key for message fetching
   const chatKey = messageMapKey(messageContext);
@@ -727,6 +691,35 @@ export const createGroupOrchestrationExecutors = (
         log(`[${sessionLogId}] Client-side AgentRuntime execution completed`);
 
         // 7. Get execution result from the isolated thread messages
+        // A parked member run (client tools / human approval / async tool) has
+        // NOT finished — the old code backfilled a false "Task completed" and
+        // reported success, so the supervisor settled the member while it was
+        // still executing.
+        //
+        // Persist the explanation onto the source tool message: the supervisor
+        // conversation is rebuilt from persisted messages, so a result payload
+        // alone would be invisible to it. Then END the orchestration loop with
+        // `result: undefined` WITHOUT marking the state done — emitting
+        // `task_completed` here would schedule `call_supervisor` and have it
+        // drive the group forward while the member is still active. The loop
+        // resumes through the park's own continuation (approval / async-tool
+        // callback), not through a supervisor decision.
+        if (runtimeResult?.parked) {
+          return handleMemberRunParkExit({
+            agentId,
+            get: () => get(),
+            messageContext,
+            orchestrationOperationId,
+            sessionLogId,
+            snapshotSupervisor,
+            state,
+            subContext,
+            taskOperationId,
+            supervisorAgentId,
+            toolMessageId: resultMessageId,
+          });
+        }
+
         const subMessageKey = messageMapKey(subContext);
         const subTaskMessages = get().dbMessagesMap[subMessageKey] || [];
         const lastAssistant = subTaskMessages.findLast((m) => m.role === 'assistant');
