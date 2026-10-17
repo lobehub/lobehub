@@ -7,6 +7,7 @@ import type {
   GeneralAgentCompressionResultPayload,
   InstructionExecutor,
 } from '../types';
+import { getExecutionStepCount } from '../utils/stepCount';
 
 const getErrorMessage = (error: unknown): string => {
   if (error instanceof Error && error.message) return error.message;
@@ -81,7 +82,7 @@ export const compressContext =
         messageCount: newState.messages.length,
         sessionId: operationId,
         status: 'running' as const,
-        stepCount: state.stepCount + 1,
+        stepCount: getExecutionStepCount(state) + 1,
       },
     });
 
@@ -291,7 +292,7 @@ export const compressContext =
             messageCount: compressedMessages.length,
             sessionId: operationId,
             status: 'running' as const,
-            stepCount: state.stepCount + 1,
+            stepCount: getExecutionStepCount(state) + 1,
           },
         },
       };

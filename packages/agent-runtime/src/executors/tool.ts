@@ -17,6 +17,7 @@ import type {
 import {
   extractActivatedSkillsFromMessages,
   extractTodosFromMessages,
+  getExecutionStepCount,
   redactResultForEvents,
 } from '../utils';
 import { selectEffectiveToolManifestMap, selectToolSourceMap } from '../utils/operationToolSet';
@@ -351,7 +352,7 @@ const settleAbortedCall = async ({
         messageCount: newState.messages.length,
         sessionId: host.operation.operationId,
         status: newState.status,
-        stepCount: state.stepCount + 1,
+        stepCount: getExecutionStepCount(state) + 1,
       },
     },
   };
@@ -791,7 +792,7 @@ export const callTool =
             toolCallId: tool.id,
           },
         ],
-        stepCount: state.stepCount,
+        stepCount: getExecutionStepCount(state),
       });
 
       const legacyAgentInvocationStateType = executionResult.state?.type as string | undefined;
@@ -826,7 +827,7 @@ export const callTool =
             messageCount: newState.messages.length,
             sessionId: host.operation.operationId,
             status: 'running',
-            stepCount: state.stepCount + 1,
+            stepCount: getExecutionStepCount(state) + 1,
           },
           stepUsage: {
             cost: toolCost,
@@ -1167,7 +1168,7 @@ export const callToolsBatch =
       effectiveManifestMap: buildEffectiveManifestMap(state),
       newState,
       results: toolResults,
-      stepCount: state.stepCount,
+      stepCount: getExecutionStepCount(state),
     });
 
     newState.messages = await host.transports.messages.query(
@@ -1225,7 +1226,7 @@ export const callToolsBatch =
           messageCount: newState.messages.length,
           sessionId: host.operation.operationId,
           status: 'running',
-          stepCount: state.stepCount + 1,
+          stepCount: getExecutionStepCount(state) + 1,
         },
       },
     };

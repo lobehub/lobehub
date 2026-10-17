@@ -6,6 +6,7 @@ import type {
   AgentState,
   InstructionExecutor,
 } from '../types';
+import { getExecutionStepCount } from '../utils/stepCount';
 import { publishPersistError, settleAbortedToolRows } from './abortedToolRows';
 
 const BLOCKED_TOOL_CONTENT = 'Blocked by security/privacy.';
@@ -21,7 +22,7 @@ const createSession = (state: AgentState, operationId: string): RuntimeSessionWi
   messageCount: state.messages.length,
   sessionId: operationId,
   status: state.status,
-  stepCount: state.stepCount + 1,
+  stepCount: getExecutionStepCount(state) + 1,
 });
 
 /**

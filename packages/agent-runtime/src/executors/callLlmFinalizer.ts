@@ -17,6 +17,7 @@ import type {
   GeneralAgentCallLLMResultPayload,
   InstructionExecutionResult,
 } from '../types';
+import { getExecutionStepCount } from '../utils/stepCount';
 import {
   hasRepeatedToolCall,
   TOOL_CALL_REPEAT_LIMIT,
@@ -394,7 +395,7 @@ export const finalizeCallLlmTurn = async ({
           messageCount: newState.messages.length,
           sessionId: operation.operationId,
           status: 'running',
-          stepCount: state.stepCount + 1,
+          stepCount: getExecutionStepCount(state) + 1,
         },
         stepUsage: finalizedOutput.usage,
       },
@@ -417,7 +418,7 @@ export const finalizeCallLlmTurn = async ({
         messageCount: newState.messages.length,
         sessionId: operation.operationId,
         status: 'running',
-        stepCount: state.stepCount + 1,
+        stepCount: getExecutionStepCount(state) + 1,
       },
       stepUsage: finalizedOutput.usage,
     },

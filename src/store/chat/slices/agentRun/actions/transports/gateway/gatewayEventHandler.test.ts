@@ -327,6 +327,41 @@ describe('createGatewayEventHandler', () => {
     expect(store.replaceMessages).not.toHaveBeenCalled();
   });
 
+  it('stores the LLM-call total from step_start alongside the execution step index', () => {
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(makeEvent('step_start', { llmCalls: 7 }));
+
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', {
+      llmCalls: 7,
+      stepCount: 2,
+    });
+  });
+
+  it('keeps the LLM-call total current on step_complete', () => {
+    const store = createStore();
+    const handler = createGatewayEventHandler(() => store, {
+      assistantMessageId: 'seed-msg',
+      context,
+      operationId: 'op-1',
+    });
+
+    handler(
+      makeEvent('step_complete', {
+        llmCalls: 9,
+        phase: 'execution_complete',
+        skipMessageFetch: true,
+      }),
+    );
+
+    expect(store.updateOperationMetadata).toHaveBeenCalledWith('op-1', { llmCalls: 9 });
+  });
+
   it('bootstraps a missing tool once and reapplies the latest snapshot after a stale refetch', async () => {
     const key = messageMapKey(context);
     let resolveFetch: ((messages: UIChatMessage[]) => void) | undefined;

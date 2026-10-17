@@ -1,3 +1,4 @@
+import { getExecutionStepCount } from '@lobechat/agent-runtime';
 import type { ExecutionSnapshot, ISnapshotStore, StepSnapshot } from '@lobechat/agent-tracing';
 import type { ChatMessageErrorAttribution, ChatMessageErrorSeverity } from '@lobechat/types';
 import debug from 'debug';
@@ -286,10 +287,9 @@ export class OperationTraceRecorder {
         steps: finalizedSteps,
         topicId: origin.topicId,
         totalCost: params.state?.cost?.total ?? 0,
-        // Trust the finalized step array over `state.stepCount`: on the error
-        // path stepCount comes from Redis and reflects the last completed
-        // step, so it lags behind the synthetic failed step we just appended.
-        totalSteps: finalizedSteps.length || (params.state?.stepCount ?? 0),
+        // Trust the finalized step array over the state counter: on the error
+        // path the state lags behind the synthetic failed step we just appended.
+        totalSteps: finalizedSteps.length || getExecutionStepCount(params.state),
         totalTokens: params.state?.usage?.llm?.tokens?.total ?? 0,
         traceId: operationId,
         userId: origin.userId,

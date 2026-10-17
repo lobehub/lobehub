@@ -1,4 +1,4 @@
-import { type AgentState } from '@lobechat/agent-runtime';
+import { type AgentState, getExecutionStepCount } from '@lobechat/agent-runtime';
 import { type UIChatMessage } from '@lobechat/types';
 import debug from 'debug';
 
@@ -196,7 +196,7 @@ export class AgentRuntimeCoordinator {
 
       // Send a terminal event once the operation first enters a terminal state.
       if (hasEnteredStreamEndState(previousState?.status, state.status)) {
-        const stepIndex = state.stepCount ?? previousState?.stepCount ?? 0;
+        const stepIndex = getExecutionStepCount(state) || getExecutionStepCount(previousState) || 0;
         const messagePatchMode = this.resolveMessagePatchMode(state);
         if (!hasVisibleOutputEndPublished(state)) {
           await this.publishVisibleOutputEnd(operationId, state, stepIndex);
@@ -233,8 +233,7 @@ export class AgentRuntimeCoordinator {
         // Example: call_llm step 3 can early-publish visible_output_end, then
         // finish step 4 enters done. Keep terminal stepIndex for end payloads,
         // but suppress visible_output_end once the operation marker exists.
-        const stepIndex =
-          stepResult.stepIndex ?? stepResult.newState.stepCount ?? previousState?.stepCount ?? 0;
+        const stepIndex = stepResult.stepIndex ?? getExecutionStepCount(stepResult.newState) ?? 0;
         const messagePatchMode = this.resolveMessagePatchMode(stepResult.newState);
         if (!hasVisibleOutputEndPublished(stepResult.newState)) {
           await this.publishVisibleOutputEnd(operationId, stepResult.newState, stepIndex);

@@ -1,4 +1,8 @@
-import type { AgentRuntimeContext, AgentState } from '@lobechat/agent-runtime';
+import {
+  type AgentRuntimeContext,
+  type AgentState,
+  getExecutionStepCount,
+} from '@lobechat/agent-runtime';
 import debug from 'debug';
 import { and, asc, eq, isNotNull, isNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import urlJoin from 'url-join';
@@ -278,9 +282,10 @@ export class StaleOperationReaper {
     // past whatever they are waiting on.
     if (!this.canRedrive(state)) return 'skipped';
 
-    // `stepCount` is the number of completed steps, so it is also the index of
-    // the step that never finished.
-    const stepIndex = state.stepCount;
+    // `executionStepCount` is the number of completed runtime iterations, so it
+    // is also the index of the step that never finished. (`stepCount` is the
+    // user-facing LLM-call metric and must not drive scheduling.)
+    const stepIndex = getExecutionStepCount(state);
 
     // The context is NOT optional in practice. `runtime.step` falls back to
     // `createInitialContext(state)` when it gets none, which re-enters the run
@@ -414,7 +419,7 @@ export class StaleOperationReaper {
       !!state &&
       (state.status === 'running' || state.status === 'idle') &&
       typeof state.stepCount === 'number' &&
-      state.stepCount >= 0
+      getExecutionStepCount(state) >= 0
     );
   }
 

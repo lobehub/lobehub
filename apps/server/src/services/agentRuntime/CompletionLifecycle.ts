@@ -1,4 +1,4 @@
-import { isParkedStatus } from '@lobechat/agent-runtime';
+import { getExecutionStepCount, isParkedStatus } from '@lobechat/agent-runtime';
 import { readHeterogeneousErrorContext } from '@lobechat/heterogeneous-agents/errors';
 import {
   type AgentOperationStatus,
@@ -469,7 +469,7 @@ export class CompletionLifecycle {
         processingTimeMs,
         provider: state?.provider,
         status,
-        stepCount: state?.stepCount ?? null,
+        stepCount: getExecutionStepCount(state) || null,
         toolCalls: add(state?.usage?.tools?.totalCalls, rollup?.toolCalls ?? 0),
         totalCost: add(state?.cost?.total, rollup?.totalCost ?? 0),
         totalInputTokens: add(state?.usage?.llm?.tokens?.input, rollup?.totalInputTokens ?? 0),
@@ -795,7 +795,7 @@ export class CompletionLifecycle {
                   // can project receipts. Undefined for every other agent.
                   selfIteration,
                   serializedContext: undefined,
-                  steps: state?.stepCount || 0,
+                  steps: getExecutionStepCount(state),
                   topicId: runOrigin.topicId,
                   turnCount: state?.stepCount || 0,
                 },
@@ -870,6 +870,8 @@ export class CompletionLifecycle {
    * previously drifted (e.g. a verify field added here was missed by heteroFinish).
    */
   private buildStateFromInput(input: OperationCompletionInput) {
+    const usage = input.usage as { llm?: { apiCalls?: number | null } } | undefined;
+
     return {
       cost: input.cost ?? { total: null },
       createdAt: input.startedAt,
@@ -888,7 +890,10 @@ export class CompletionLifecycle {
       },
       model: input.model ?? undefined,
       provider: input.provider ?? undefined,
-      stepCount: input.stepCount ?? null,
+      executionStepCount: input.stepCount ?? undefined,
+      // Synthetic terminals (heterogeneous CLI, bot bridges) report execution
+      // steps separately from LLM calls; expose the LLM count as `stepCount`.
+      stepCount: usage?.llm?.apiCalls ?? input.stepCount ?? 0,
       usage: input.usage ?? undefined,
     };
   }
@@ -1486,7 +1491,10 @@ export class CompletionLifecycle {
         operationId,
         reason,
         status: state?.status || reason,
-        steps: state?.stepCount || 0,
+        // The completion event keeps `steps` as the execution-iteration count
+        // for consumers that measure runtime work; `llmCalls` below is the
+        // user-facing LLM-call metric.
+        steps: getExecutionStepCount(state),
         toolCalls: state?.usage?.tools?.totalCalls,
         topicId: runOrigin.topicId,
         totalTokens: state?.usage?.llm?.tokens?.total,

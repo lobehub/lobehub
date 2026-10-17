@@ -16,6 +16,7 @@ import {
   extractActivatedToolIdsFromMessages,
   findInMessages,
   GeneralChatAgent,
+  getExecutionStepCount,
   isParkedStatus,
 } from '@lobechat/agent-runtime';
 import type { ISnapshotStore } from '@lobechat/agent-tracing';
@@ -1262,6 +1263,7 @@ export class AgentRuntimeService {
       parentOperationId,
       signal,
       userTimezone,
+      initialLlmCalls = 0,
       initialStepCount = 0,
       workspaceId,
     } = params;
@@ -1463,7 +1465,12 @@ export class AgentRuntimeService {
         // `selectToolManifestMap` and friends.
         operationToolSet,
         status: 'idle',
-        stepCount: initialStepCount,
+        // User-facing step metric: actual LLM calls. Resumed operations carry
+        // the previous runs' calls so the total stays cumulative.
+        stepCount: initialLlmCalls,
+        // Internal scheduling/idempotency counter; never conflated with
+        // `stepCount` above.
+        executionStepCount: initialStepCount,
         // How the run executes — frozen from here on.
         plan: {
           eval: evalRuntime,
@@ -1900,8 +1907,8 @@ export class AgentRuntimeService {
         );
       }
 
-      const currentStepCount = currentState?.stepCount;
-      if (currentState && typeof currentStepCount === 'number' && currentStepCount > stepIndex) {
+      const currentExecutionSteps = getExecutionStepCount(currentState);
+      if (currentState && currentExecutionSteps > stepIndex) {
         if (
           this.shouldReplayPendingInterventionLifecycle(currentState, stepIndex, externalRetryCount)
         ) {
@@ -1923,10 +1930,10 @@ export class AgentRuntimeService {
         }
 
         log(
-          '[%s][%d] Step lock conflict is stale (stepCount=%d), skipping',
+          '[%s][%d] Step lock conflict is stale (executionSteps=%d), skipping',
           operationId,
           stepIndex,
-          currentStepCount,
+          currentExecutionSteps,
         );
         return {
           nextStepScheduled: false,
@@ -2081,12 +2088,12 @@ export class AgentRuntimeService {
         // A parked approval step is already durable before its generic Review
         // is published. When that final Review write fails, the request returns
         // non-2xx and QStash retries this SAME step with `upstash-retried > 0`.
-        // The runtime state now has stepCount > stepIndex, so the ordinary stale
+        // The runtime state now has executionStepCount > stepIndex, so the ordinary stale
         // delivery guard below would ACK it and permanently strand the Review.
         // Replay only the idempotent completion lifecycle: never run beforeStep,
         // runtime.step (LLM/tools), afterStep, or saveStepResult again.
         if (
-          agentState.stepCount > stepIndex &&
+          getExecutionStepCount(agentState) > stepIndex &&
           this.shouldReplayPendingInterventionLifecycle(agentState, stepIndex, externalRetryCount)
         ) {
           agentState.metadata = {
@@ -2121,9 +2128,14 @@ export class AgentRuntimeService {
         const { uiMessages: stepStartUiMessages, messages: stepEntryMessages } =
           await this.queryStepEntryMessages(agentState);
         await this.streamManager.publishStreamEvent(operationId, {
-          data: gatewayMessagePatchEnabled
-            ? { messageRevision: stepIndex }
-            : { ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }) },
+          data: {
+            ...(gatewayMessagePatchEnabled
+              ? { messageRevision: stepIndex }
+              : { ...(stepStartUiMessages !== undefined && { uiMessages: stepStartUiMessages }) }),
+            // User-facing step metric (LLM calls so far), independent of the
+            // execution `stepIndex` that drives scheduling/idempotency.
+            llmCalls: agentState.stepCount,
+          },
           stepIndex,
           type: 'step_start',
         });
@@ -2153,12 +2165,12 @@ export class AgentRuntimeService {
         );
 
         // Layer 2 defense: catch extremely delayed retries that arrive after lock TTL expired
-        if (agentState.stepCount > stepIndex) {
+        if (getExecutionStepCount(agentState) > stepIndex) {
           log(
-            '[%s][%d] Step already completed (stepCount=%d), skipping',
+            '[%s][%d] Step already completed (executionSteps=%d), skipping',
             operationId,
             stepIndex,
-            agentState.stepCount,
+            getExecutionStepCount(agentState),
           );
           return {
             nextStepScheduled: false,
@@ -2289,7 +2301,7 @@ export class AgentRuntimeService {
               finalState: agentState,
               operationId,
               stepIndex,
-              steps: agentState?.stepCount || 0,
+              steps: getExecutionStepCount(agentState),
               userId: beforeStepOrigin.userId || this.userId,
             },
             agentState?.host?.hooks,
@@ -2728,6 +2740,9 @@ export class AgentRuntimeService {
             ...(stepResult.newState.host?.includeFinalState === true && {
               finalState: stepResult.newState,
             }),
+            // Post-step LLM-call total — keeps the status tray exact even when
+            // the step only executed tools (the number stays unchanged).
+            llmCalls: stepResult.newState.stepCount,
             nextStepScheduled,
             stepIndex,
           },
@@ -2817,7 +2832,7 @@ export class AgentRuntimeService {
               stepCost: stepPresentationData.stepCost,
               stepIndex,
               stepType: stepPresentationData.stepType,
-              steps: stepResult.newState?.stepCount || 0,
+              steps: getExecutionStepCount(stepResult.newState),
               thinking: stepPresentationData.thinking,
               toolCalls: stepResult.newState?.usage?.tools?.totalCalls,
               toolsCalling: stepPresentationData.toolsCalling,
@@ -3116,21 +3131,23 @@ export class AgentRuntimeService {
         finalStateWithError = {
           ...errorState!,
           error: formattedError,
+          executionStepCount: getExecutionStepCount(errorState) || stepIndex,
           metadata: {
             ...errorState?.metadata,
             externalRetryCount,
           },
           status: 'error' as const,
-          stepCount: errorState?.stepCount ?? stepIndex,
+          stepCount: errorState?.stepCount ?? 0,
         };
       } catch (loadError) {
         log('[%s] Failed to load error state (infra may be down): %O', operationId, loadError);
         // Fallback: construct a minimal error state so callbacks still receive useful info
         finalStateWithError = {
           error: formattedError,
+          executionStepCount: stepIndex,
           metadata: { externalRetryCount },
           status: 'error' as const,
-          stepCount: stepIndex,
+          stepCount: 0,
         };
       }
 
@@ -3483,7 +3500,7 @@ export class AgentRuntimeService {
             messageCount: currentState.messages?.length || 0,
             sessionId: operationId,
             status: 'idle' as const,
-            stepCount: currentState.stepCount || 0,
+            stepCount: getExecutionStepCount(currentState),
           },
         };
       }
@@ -3504,7 +3521,7 @@ export class AgentRuntimeService {
           endpoint: `${this.baseURL}/run`,
           operationId,
           priority,
-          stepIndex: currentState.stepCount || 0,
+          stepIndex: getExecutionStepCount(currentState),
         });
         log('Scheduled execution for operation %s (messageId: %s)', operationId, messageId);
       } else {
@@ -3710,7 +3727,7 @@ export class AgentRuntimeService {
     log(
       '[%s] won async-tool resume CAS, scheduling step %d (onComplete: %s)',
       parentOperationId,
-      state.stepCount,
+      getExecutionStepCount(state),
       onComplete,
     );
 
@@ -3723,7 +3740,7 @@ export class AgentRuntimeService {
         payload:
           onComplete === 'finish' ? { finishAfterAsyncTool: true } : { resumeAsyncTool: true },
         priority: 'high',
-        stepIndex: state.stepCount,
+        stepIndex: getExecutionStepCount(state),
       });
     } else {
       log('[%s] queue service disabled, skipping async-tool resume schedule', parentOperationId);
@@ -3806,6 +3823,7 @@ export class AgentRuntimeService {
       // limit, replay it as a forced final answer.
       ...(stepStartState && {
         forceFinish: stepStartState.forceFinish,
+        executionStepCount: stepStartState.executionStepCount,
         stepCount: stepStartState.stepCount,
       }),
       clientLlmWait: wait,
@@ -3857,7 +3875,7 @@ export class AgentRuntimeService {
         operationId,
         payload: { clientLlmWaitExpired: wait.parkedAt },
         priority: 'normal',
-        stepIndex: parkedState.stepCount,
+        stepIndex: getExecutionStepCount(parkedState),
       });
     } catch (error) {
       // Without the expiry the run could wait forever: fail it now instead
@@ -3949,7 +3967,7 @@ export class AgentRuntimeService {
         operationId,
         payload: { resumeClientLlm: true },
         priority: 'high',
-        stepIndex: state.stepCount,
+        stepIndex: getExecutionStepCount(state),
       });
     } catch (error) {
       log('[%s] Could not hand the run to a client, staying parked: %O', operationId, error);
@@ -4028,7 +4046,7 @@ export class AgentRuntimeService {
         operationId,
         payload: { clientLlmWaitExpired: wait.parkedAt },
         priority: 'normal',
-        stepIndex: parkedState.stepCount,
+        stepIndex: getExecutionStepCount(parkedState),
       })
       .catch((error) => log('[%s] Failed to re-arm the wait expiry: %O', operationId, error));
   }
@@ -4255,7 +4273,7 @@ export class AgentRuntimeService {
         operationId: parentOperationId,
         payload: { asyncToolVerifyAttempt: attempt, verifyAsyncToolBarrier: true },
         priority: 'high',
-        stepIndex: state?.stepCount ?? 0,
+        stepIndex: getExecutionStepCount(state),
       });
     } catch (error) {
       log(
@@ -5458,11 +5476,11 @@ export class AgentRuntimeService {
           messageCount: state.messages?.length ?? 0,
           sessionId: operationId,
           status: state.status,
-          stepCount: state.stepCount,
+          stepCount: getExecutionStepCount(state),
         },
       } as AgentRuntimeContext);
 
-    let stepIndex = state.stepCount;
+    let stepIndex = getExecutionStepCount(state);
 
     // Execution loop
     while (stepIndex < maxSteps) {

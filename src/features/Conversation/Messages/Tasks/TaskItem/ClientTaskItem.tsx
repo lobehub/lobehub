@@ -89,14 +89,15 @@ const ClientTaskItem = memo<ClientTaskItemProps>(({ item }) => {
         // invoked) rather than the in-thread first assistant's createdAt (when the
         // thread finished initializing) — the latter excludes init / approval wait.
         startTime: item.createdAt,
-        steps: blocks.length,
+        llmCalls: blocks.length,
         toolCalls,
       };
     }
     if (isCompleted || isError) {
       return {
         duration: taskDetail?.duration,
-        steps: taskDetail?.totalSteps,
+        // `totalSteps` is the server's user-facing step metric: actual LLM calls.
+        llmCalls: taskDetail?.totalSteps,
         toolCalls: taskDetail?.totalToolCalls,
       };
     }

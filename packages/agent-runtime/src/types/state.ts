@@ -388,6 +388,18 @@ export interface AgentState {
   /** @deprecated Use `world.enableExpertise`. */
   enableExpertise?: boolean;
   error?: any;
+  /**
+   * Number of runtime iterations executed in this session.
+   *
+   * This is the internal scheduling/idempotency counter (QStash `stepIndex`,
+   * stale-delivery guards, inline resume). It increments on every
+   * `runtime.step()` call, including tool-only iterations, and must never be
+   * confused with the user-facing {@link stepCount}.
+   *
+   * Optional for states persisted before the split; `normalizeAgentState`
+   * backfills it from the legacy `stepCount`.
+   */
+  executionStepCount?: number;
   /** @deprecated Use `world.expertise`. */
   expertise?: ExpertiseContextSnapshot;
   /**
@@ -414,6 +426,7 @@ export interface AgentState {
     /** Whether the interruption can be resumed */
     canResume: boolean;
   };
+
   lastModified: string;
 
   /**
@@ -468,7 +481,6 @@ export interface AgentState {
       provider: string;
     };
   };
-
   /**
    * Credentials this run listed once when it was created. A step renders
    * `{{CREDS_LIST}}` from here instead of asking the Market API again; absent
@@ -479,13 +491,13 @@ export interface AgentState {
   operationId: string;
   /** Operation-level tool set snapshot (immutable after creation) */
   operationToolSet?: OperationToolSet;
+
   // --- Origin ---
   /**
    * Where this run came from and where it sits in the run tree. Frozen when
    * the operation is created.
    */
   origin?: AgentRunOrigin;
-
   pendingApprovalBatch?: {
     assistantMessageId: string;
     id: string;
@@ -513,8 +525,8 @@ export interface AgentState {
    * Cleared once consumed.
    */
   pendingAssistantMessageId?: string;
-  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
 
+  pendingHumanPrompt?: { metadata?: Record<string, unknown>; prompt: string };
   pendingHumanSelect?: {
     metadata?: Record<string, unknown>;
     multi?: boolean;
@@ -536,6 +548,7 @@ export interface AgentState {
   principal?: AgentRunPrincipal;
   /** @deprecated Use `principal.policy.securityBlacklist`. */
   securityBlacklist?: SecurityBlacklistConfig;
+
   // --- State Machine ---
   status:
     | 'idle'
@@ -549,8 +562,12 @@ export interface AgentState {
 
   // --- Execution Tracking ---
   /**
-   * Number of execution steps in this session.
-   * Incremented on each runtime.step() call.
+   * Number of LLM calls made in this session — the product-facing "step"
+   * metric.
+   *
+   * Kept in sync with `usage.llm.apiCalls` at every step boundary. A runtime
+   * iteration that only executes tools does NOT increment it, so the number
+   * never mixes tool rounds into the step count.
    */
   stepCount: number;
 

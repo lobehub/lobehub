@@ -1048,6 +1048,7 @@ export const createGatewayEventHandler = (
 
       case 'step_start': {
         const data = event.data as {
+          llmCalls?: number;
           messageRevision?: number;
           pendingToolsCalling?: unknown[];
           phase?: string;
@@ -1068,11 +1069,14 @@ export const createGatewayEventHandler = (
           });
         }
 
-        // The server's stepIndex is the authoritative step counter — mirror it
-        // onto the operation so step-based UI (OpStatusTray) stays correct
-        // even across page-refresh reconnects.
+        // The server's stepIndex is the authoritative execution counter — it
+        // drives scheduling/idempotency, not the user-facing step metric.
+        // `llmCalls` is the LLM-call total the status tray displays.
         if (typeof event.stepIndex === 'number') {
-          get().updateOperationMetadata(operationId, { stepCount: event.stepIndex + 1 });
+          get().updateOperationMetadata(operationId, {
+            ...(typeof data?.llmCalls === 'number' && { llmCalls: data.llmCalls }),
+            stepCount: event.stepIndex + 1,
+          });
         }
 
         // Server attaches the canonical UIChatMessage[] snapshot at every
@@ -1207,6 +1211,12 @@ export const createGatewayEventHandler = (
       case 'step_complete': {
         const data = event.data as StepCompleteData | undefined;
 
+        // Post-step LLM-call total. Tool-only iterations report the unchanged
+        // count, so the tray never drifts toward the execution step index.
+        if (typeof data?.llmCalls === 'number') {
+          get().updateOperationMetadata(operationId, { llmCalls: data.llmCalls });
+        }
+
         // A parked `callSubAgent` child reporting its running totals. Patch them
         // onto the placeholder tool message in memory only — the persisted values
         // are written once, by `completeSubAgentBridge`, when the child finishes.
@@ -1270,12 +1280,20 @@ export const createGatewayEventHandler = (
         enqueue(async () => {
           const data = event.data as
             | {
+                finalState?: { usage?: { llm?: { apiCalls?: number } } };
                 messagePatchMode?: boolean;
                 messageRevision?: number;
                 reason?: string;
                 uiMessages?: UIChatMessage[];
               }
             | undefined;
+
+          // Authoritative terminal total; keeps the tray correct when the last
+          // step's `step_complete` was missed during a reconnect.
+          const finalLlmCalls = data?.finalState?.usage?.llm?.apiCalls;
+          if (typeof finalLlmCalls === 'number') {
+            get().updateOperationMetadata(operationId, { llmCalls: finalLlmCalls });
+          }
 
           void emitAgentSignal({
             payload: {

@@ -30,7 +30,9 @@ const ServerTaskItem = memo<ServerTaskItemProps>(({ item }) => {
     if (isCompleted || isError) {
       return {
         duration: taskDetail?.duration,
-        steps: taskDetail?.totalSteps,
+        // `totalSteps` is the server's user-facing step metric: actual LLM
+        // calls (tool-only iterations are excluded).
+        llmCalls: taskDetail?.totalSteps,
         toolCalls: taskDetail?.totalToolCalls,
       };
     }

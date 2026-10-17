@@ -84,7 +84,7 @@ export interface StepPresentationData {
   totalInputTokens: number;
   /** Cumulative output tokens */
   totalOutputTokens: number;
-  /** Total steps executed so far */
+  /** User-facing step metric: cumulative LLM calls (tool rounds excluded) */
   totalSteps: number;
   /** Cumulative total tokens */
   totalTokens: number;
@@ -568,6 +568,8 @@ export interface OperationCreationParams {
   /** Opt into runtime state snapshots on step_complete events. Defaults to false. */
   includeFinalState?: boolean;
   initialContext: AgentRuntimeContext;
+  /** Initial LLM call count offset for resumed operations (accumulated from previous runs) */
+  initialLlmCalls?: number;
   initialMessages?: any[];
   /** Initial step count offset for resumed operations (accumulated from previous runs) */
   initialStepCount?: number;

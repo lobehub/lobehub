@@ -19,6 +19,7 @@ import type {
   Usage,
 } from '../types';
 import { isBlockedStatus } from '../utils/status';
+import { getExecutionStepCount } from '../utils/stepCount';
 
 /**
  * Simplified Agent Runtime - The "Engine" that executes instructions from an "Agent" (Brain).
@@ -84,13 +85,16 @@ export class AgentRuntime {
     context?: AgentRuntimeContext,
   ): Promise<{ events: AgentEvent[]; newState: AgentState; nextContext?: AgentRuntimeContext }> {
     try {
-      // Increment step count and check limits
+      // Increment the internal execution counter (scheduling/idempotency) and
+      // check the LLM-call budget. `stepCount` itself is synced from
+      // `usage.llm.apiCalls` after the step, so tool-only iterations never
+      // inflate the user-facing step metric.
       const newState = structuredClone(state);
-      newState.stepCount += 1;
+      newState.executionStepCount = (state.executionStepCount ?? 0) + 1;
       newState.lastModified = new Date().toISOString();
 
-      // Check maximum steps limit
-      if (newState.maxSteps && newState.stepCount > newState.maxSteps) {
+      // Check maximum LLM-call budget
+      if (newState.maxSteps && newState.stepCount >= newState.maxSteps) {
         if (newState.forceFinish) {
           // Already in forceFinish flow, skip maxSteps check and continue execution
         } else {
@@ -217,10 +221,10 @@ export class AgentRuntime {
       let currentState = newState;
       const allEvents: AgentEvent[] = [];
       let finalNextContext: AgentRuntimeContext | undefined = undefined;
-      let hasFinishInstruction = false;
+      let executedLlmInstruction = false;
 
       for (const [instructionIndex, instruction] of normalizedInstructions.entries()) {
-        if (instruction.type === 'finish') hasFinishInstruction = true;
+        if (instruction.type === 'call_llm') executedLlmInstruction = true;
 
         let result;
         const instructionContext = { ...runtimeContext, instructionIndex };
@@ -281,14 +285,16 @@ export class AgentRuntime {
         }
       }
 
-      // Ensure stepCount and lastModified are preserved
-      currentState.stepCount = newState.stepCount;
+      // Preserve the execution counter and derive the user-facing step metric
+      // from actual LLM calls. `usage.llm.apiCalls` is authoritative (it also
+      // counts retries and compression calls); the instruction flag is the
+      // fallback for runtimes/tests that do not report usage. A tool-only
+      // iteration leaves the metric unchanged.
+      currentState.executionStepCount = newState.executionStepCount;
+      const reportedLlmCalls = currentState.usage?.llm?.apiCalls ?? 0;
+      const instructionLlmCalls = state.stepCount + (executedLlmInstruction ? 1 : 0);
+      currentState.stepCount = Math.max(reportedLlmCalls, instructionLlmCalls);
       currentState.lastModified = newState.lastModified;
-
-      // A 'finish' instruction is not a real execution step, undo the +1 from the top of step()
-      if (hasFinishInstruction) {
-        currentState.stepCount = Math.max(currentState.stepCount - 1, 0);
-      }
 
       return {
         events: allEvents,
@@ -300,7 +306,7 @@ export class AgentRuntime {
       };
     } catch (error) {
       const errorState = structuredClone(state);
-      errorState.stepCount += 1;
+      errorState.executionStepCount = (state.executionStepCount ?? 0) + 1;
       errorState.lastModified = new Date().toISOString();
       return this.createErrorResult(errorState, error);
     }
@@ -425,7 +431,7 @@ export class AgentRuntime {
 
     const newState = structuredClone(state);
     const resumedAt = new Date().toISOString();
-    const resumedFromStep = state.stepCount;
+    const resumedFromStep = getExecutionStepCount(state);
 
     // Clear interruption context and set status back to running
     newState.status = 'running';
@@ -520,6 +526,7 @@ export class AgentRuntime {
       cost: AgentRuntime.createDefaultCost(),
       // Default values
       createdAt: now,
+      executionStepCount: 0,
       lastModified: now,
       messages: [],
       status: 'idle',
@@ -1025,7 +1032,7 @@ export class AgentRuntime {
       messageCount: state.messages.length,
       sessionId: state.operationId,
       status: state.status,
-      stepCount: state.stepCount,
+      stepCount: state.executionStepCount ?? 0,
     };
   }
 

@@ -8,4 +8,5 @@ export * from './runtimeRetry';
 export * from './stateSlots';
 export * from './status';
 export * from './stepContextComputer';
+export * from './stepCount';
 export * from './tokenCounter';

@@ -12,6 +12,7 @@ import type {
   SubAgentsBatchResultPayload,
   SubAgentTask,
 } from '../types';
+import { getExecutionStepCount } from '../utils/stepCount';
 
 type TaskExecutionResult = SubAgentResultPayload['result'] & {
   status?: SubAgentExecutionStatus;
@@ -21,7 +22,7 @@ const createSessionContext = (state: AgentState, operationId: string) => ({
   messageCount: state.messages.length,
   sessionId: operationId,
   status: 'running' as const,
-  stepCount: state.stepCount + 1,
+  stepCount: getExecutionStepCount(state) + 1,
 });
 
 const createNestedSingleResult = (

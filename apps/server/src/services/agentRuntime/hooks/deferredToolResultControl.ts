@@ -1,5 +1,5 @@
 import type { AgentState, ToolRunResult } from '@lobechat/agent-runtime';
-import { selectToolSourceMap } from '@lobechat/agent-runtime';
+import { getExecutionStepCount, selectToolSourceMap } from '@lobechat/agent-runtime';
 import type { SerializedAgentHook } from '@lobechat/types';
 import { isRecord } from '@lobechat/utils/object';
 
@@ -134,7 +134,7 @@ export async function controlDeferredToolResult(
         result: input.result,
         sessionId: state?.origin?.sessionId ?? message.sessionId ?? undefined,
         sourceMessageId: state?.origin?.sourceMessageId,
-        stepIndex: Math.max(0, (state?.stepCount ?? 1) - 1),
+        stepIndex: Math.max(0, getExecutionStepCount(state) - 1),
         taskId: state?.origin?.taskId,
         threadId: state?.origin?.threadId ?? message.threadId ?? undefined,
         toolCallId: plugin.toolCallId,

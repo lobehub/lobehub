@@ -157,9 +157,25 @@ export const normalizeAgentState = <T extends AgentState>(state: T): T => {
   const hasMirror = (key: string) => isPresent(topLevel, key) && isPopulatedMirror(topLevel[key]);
   const mirrorKeys = LEGACY_MIRROR_KEYS.filter(hasMirror);
   const compatKeys = COMPAT_MIRROR_KEYS.filter(hasMirror);
-  if (!hasLegacyMetadata && mirrorKeys.length === 0 && compatKeys.length === 0) return state;
+  const needsStepCountSplit = state.executionStepCount === undefined;
+  if (
+    !hasLegacyMetadata &&
+    mirrorKeys.length === 0 &&
+    compatKeys.length === 0 &&
+    !needsStepCountSplit
+  ) {
+    return state;
+  }
 
   const next = { ...state } as Record<string, unknown>;
+
+  if (needsStepCountSplit) {
+    // Before the split, `stepCount` counted runtime iterations (LLM + tool
+    // rounds). Keep that value as the internal execution counter, then make
+    // the user-facing `stepCount` mean LLM calls only.
+    next.executionStepCount = typeof state.stepCount === 'number' ? state.stepCount : 0;
+    next.stepCount = state.usage?.llm?.apiCalls ?? 0;
+  }
 
   if (metadata && hasLegacyMetadata) {
     for (const [legacyKey, path] of Object.entries(LEGACY_KEY_PATHS)) {

@@ -30,12 +30,13 @@ export function calculateTotalTokens(usage?: AgentState['usage']): number | unde
  */
 export type ThreadUsageBaseline = Pick<
   ThreadMetadata,
-  'totalCost' | 'totalMessages' | 'totalTokens' | 'totalToolCalls'
+  'totalCost' | 'totalMessages' | 'totalSteps' | 'totalTokens' | 'totalToolCalls'
 >;
 
 export const pickThreadUsageBaseline = (metadata?: ThreadMetadata | null): ThreadUsageBaseline => ({
   totalCost: metadata?.totalCost,
   totalMessages: metadata?.totalMessages,
+  totalSteps: metadata?.totalSteps,
   totalTokens: metadata?.totalTokens,
   totalToolCalls: metadata?.totalToolCalls,
 });
@@ -79,6 +80,8 @@ export function createThreadMetadataCallbacks(
             operationId: state.operationId,
             startedAt,
             totalMessages: state.messages?.length ?? 0,
+            // User-facing step metric: actual LLM calls.
+            totalSteps: state.stepCount,
             totalTokens: calculateTotalTokens(state.usage),
             totalToolCalls: accumulatedToolCalls,
           },
@@ -155,6 +158,8 @@ export function createThreadMetadataCallbacks(
             startedAt,
             totalCost: finalState.cost?.total,
             totalMessages: finalState.messages?.length ?? 0,
+            // User-facing step metric: actual LLM calls.
+            totalSteps: finalState.stepCount,
             totalTokens: calculateTotalTokens(finalState.usage),
             totalToolCalls: accumulatedToolCalls,
           },
@@ -199,6 +204,8 @@ export function createThreadHooks(
               startedAt,
               totalCost: usageBaseline.totalCost,
               totalMessages: state.messages?.length ?? 0,
+              // User-facing step metric: actual LLM calls.
+              totalSteps: addUsage(usageBaseline.totalSteps, state.stepCount),
               totalTokens: addUsage(usageBaseline.totalTokens, calculateTotalTokens(state.usage)),
               totalToolCalls: addUsage(
                 usageBaseline.totalToolCalls,
@@ -279,6 +286,8 @@ export function createThreadHooks(
               startedAt,
               totalCost: addUsage(usageBaseline.totalCost, finalState.cost?.total),
               totalMessages: finalState.messages?.length ?? 0,
+              // User-facing step metric: actual LLM calls.
+              totalSteps: addUsage(usageBaseline.totalSteps, finalState.stepCount),
               totalTokens: addUsage(
                 usageBaseline.totalTokens,
                 calculateTotalTokens(finalState.usage),

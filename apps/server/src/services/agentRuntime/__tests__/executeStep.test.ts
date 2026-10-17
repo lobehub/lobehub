@@ -1252,13 +1252,14 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
     expect(coordinator.saveAgentState).toHaveBeenCalledWith(
       'op-fallback-step-count',
       expect.objectContaining({
+        executionStepCount: 6,
         status: 'error',
-        stepCount: 6,
+        stepCount: 0,
       }),
     );
   });
 
-  it('should preserve stepCount when loadAgentState returns null in error handler', async () => {
+  it('should preserve the execution step index when loadAgentState returns null in error handler', async () => {
     const service = createService();
     const coordinator = (service as any).coordinator;
     const streamManager = (service as any).streamManager;
@@ -1299,8 +1300,9 @@ describe('AgentRuntimeService.executeStep - Redis failure in error handler', () 
     expect(coordinator.saveAgentState).toHaveBeenCalledWith(
       'op-null-step-count',
       expect.objectContaining({
+        executionStepCount: 7,
         status: 'error',
-        stepCount: 7,
+        stepCount: 0,
       }),
     );
   });
@@ -1786,7 +1788,7 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
     const stepStartCall = streamManager.publishStreamEvent.mock.calls.find(
       ([, evt]: any) => evt?.type === 'step_start',
     );
-    expect(stepStartCall[1].data).toEqual({ messageRevision: 5 });
+    expect(stepStartCall[1].data).toEqual({ llmCalls: 3, messageRevision: 5 });
   });
 
   it('still pushes the whole snapshot to a client that declared nothing', async () => {
@@ -1819,6 +1821,7 @@ describe('AgentRuntimeService.executeStep - step_start uiMessages payload', () =
       ([, evt]: any) => evt?.type === 'step_start',
     );
     expect(stepStartCall[1].data).toEqual({
+      llmCalls: 3,
       uiMessages: [{ id: 'large-history', role: 'user' }],
     });
   });

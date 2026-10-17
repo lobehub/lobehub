@@ -7,6 +7,7 @@ const baseState = (): AgentState =>
   ({
     cost: { total: 0 },
     createdAt: '2026-01-01T00:00:00.000Z',
+    executionStepCount: 0,
     lastModified: '2026-01-01T00:00:00.000Z',
     messages: [],
     operationId: 'op_1',
@@ -20,6 +21,20 @@ describe('normalizeAgentState', () => {
   it('returns the same object when metadata carries no legacy keys', () => {
     const state = { ...baseState(), metadata: { _stepLabel: 'step', work: { id: 'work_1' } } };
     expect(normalizeAgentState(state)).toBe(state);
+  });
+
+  it('splits the legacy execution stepCount into executionStepCount and the LLM-call metric', () => {
+    const { executionStepCount: _executionStepCount, ...legacy } = baseState();
+    const state = {
+      ...legacy,
+      stepCount: 7,
+      usage: { llm: { apiCalls: 3 } },
+    } as unknown as AgentState;
+
+    const normalized = normalizeAgentState(state);
+
+    expect(normalized.executionStepCount).toBe(7);
+    expect(normalized.stepCount).toBe(3);
   });
 
   it('lifts legacy metadata keys into world and binding and strips them from metadata', () => {

@@ -1366,6 +1366,7 @@ export default {
   'opStatusTray.status.searching': 'Searching',
   'opStatusTray.status.toolCalling': 'Calling tools',
   'opStatusTray.cost': 'cost',
+  'opStatusTray.llmCalls': 'LLM calls',
   'opStatusTray.steps': 'steps',
   'opStatusTray.tokens': 'tokens',
 
@@ -1808,6 +1809,7 @@ export default {
   'task.instruction': 'Task Instruction',
   'task.intermediateSteps': '{{count}} intermediate steps',
   'task.metrics.duration': '(took {{duration}})',
+  'task.metrics.llmCallsShort': 'LLM calls',
   'task.metrics.stepsShort': 'steps',
   'task.metrics.toolCallsShort': 'skill uses',
   'task.status.cancelled': 'Task Cancelled',

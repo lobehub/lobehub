@@ -18,6 +18,7 @@ import { AgentRuntime } from '../runtime';
 class MockAgent implements Agent {
   tools = {};
   executors = {};
+  calculateUsage?: Agent['calculateUsage'];
   modelRuntime?: (payload: unknown) => AsyncIterable<any>;
 
   async runner(context: AgentRuntimeContext, state: AgentState) {
@@ -705,20 +706,47 @@ describe('AgentRuntime', () => {
   });
 
   describe('Step Count Tracking', () => {
-    it('should increment stepCount on each step execution', async () => {
+    it('should increment stepCount per LLM call and executionStepCount per runtime step', async () => {
       const agent = new MockAgent();
+      agent.modelRuntime = async function* () {
+        yield { content: 'test response' };
+      };
+      agent.calculateUsage = (operationType, _result, previousUsage) => {
+        const newUsage = structuredClone(previousUsage);
+        if (operationType === 'llm') newUsage.llm.apiCalls += 1;
+        return newUsage;
+      };
       const runtime = new AgentRuntime(agent);
 
       const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
       expect(state.stepCount).toBe(0);
+      expect(state.executionStepCount).toBe(0);
 
-      // First step
+      // First step: one LLM call
       const result1 = await runtime.step(state, createTestContext('user_input'));
       expect(result1.newState.stepCount).toBe(1);
+      expect(result1.newState.executionStepCount).toBe(1);
 
-      // Second step
+      // Second step: another LLM call
       const result2 = await runtime.step(result1.newState, createTestContext('user_input'));
       expect(result2.newState.stepCount).toBe(2);
+      expect(result2.newState.executionStepCount).toBe(2);
+    });
+
+    it('should not count non-LLM iterations as steps', async () => {
+      const agent = new MockAgent();
+      agent.runner = vi.fn().mockResolvedValue({
+        type: 'finish' as const,
+        reason: 'completed' as const,
+        reasonDetail: 'Done',
+      });
+      const runtime = new AgentRuntime(agent);
+
+      const state = AgentRuntime.createInitialState({ operationId: 'test-session' });
+      const result = await runtime.step(state, createTestContext('tool_result'));
+
+      expect(result.newState.stepCount).toBe(0);
+      expect(result.newState.executionStepCount).toBe(1);
     });
 
     it('should respect maxSteps limit', async () => {
@@ -770,7 +798,7 @@ describe('AgentRuntime', () => {
       const runtime = new AgentRuntime(agent);
       const state = AgentRuntime.createInitialState({
         operationId: 'test-session',
-        stepCount: 5, // Start with step 5
+        executionStepCount: 5, // Start with execution step 5
         messages: [{ role: 'user', content: 'test' }],
       });
 

@@ -1,4 +1,4 @@
-import { createAgentRuntimeExecutors } from '@lobechat/agent-runtime';
+import { createAgentRuntimeExecutors, getExecutionStepCount } from '@lobechat/agent-runtime';
 import type { ToolsEngine } from '@lobechat/context-engine';
 import type { MessageMetadata } from '@lobechat/types';
 
@@ -24,7 +24,7 @@ export const createClientRuntimeExecutors = (context: {
       messageKey: context.messageKey,
       operationId: context.operationId,
       runtimeContext,
-      stepIndex: state.stepCount,
+      stepIndex: getExecutionStepCount(state),
       toolsEngine: context.toolsEngine,
     }),
   );
