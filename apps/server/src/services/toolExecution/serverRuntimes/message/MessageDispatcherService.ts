@@ -33,6 +33,8 @@ import type {
   ReplyToThreadState,
   SearchMessagesParams,
   SearchMessagesState,
+  SendDirectMessageParams,
+  SendDirectMessageState,
   SendMessageParams,
   SendMessageState,
   UnpinMessageParams,
@@ -194,5 +196,13 @@ export class MessageDispatcherService implements MessageRuntimeService {
 
   createPoll = async (params: CreatePollParams): Promise<CreatePollState> => {
     return (await this.getService(params)).createPoll(params);
+  };
+
+  // ==================== Direct Messaging ====================
+
+  sendDirectMessage = async (
+    params: SendDirectMessageParams,
+  ): Promise<SendDirectMessageState> => {
+    return (await this.getService(params.platform)).sendDirectMessage!(params);
   };
 }
