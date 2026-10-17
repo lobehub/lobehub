@@ -215,7 +215,7 @@
   "compression.summary": "历史记录摘要",
   "confirmClearCurrentMessages": "确认清空当前会话消息吗？清空后无法恢复",
   "confirmRemoveChatGroupItemAlert": "确认删除该群组吗？群组专有助理将会被同样删除，外部助理不受影响",
-  "confirmRemoveGroupItemAlert": "确认删除该分类吗？分类内的助理会移回默认列表",
+  "confirmRemoveGroupItemAlert": "确认删除该分组吗？分组内的助理会移回默认列表",
   "confirmRemoveGroupSuccess": "群组已删除",
   "confirmRemoveSessionItemAlert": "即将删除此助手及其会话。它们会移入回收站，30 天内可以恢复。",
   "confirmRemoveSessionSuccess": "助理已删除",
