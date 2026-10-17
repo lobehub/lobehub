@@ -106,6 +106,8 @@ const runInSandbox = async (
 
   try {
     const result = await deps.runner.run({
+      // The widget's owner (or its workspace) pays for and is rate limited on the run.
+      actor: { userId: widget.userId, workspaceId: widget.workspaceId },
       env,
       network: { allow: manifest?.network?.allow ?? [] },
       runtime: version.runtime,

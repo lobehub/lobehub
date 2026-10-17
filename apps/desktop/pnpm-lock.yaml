@@ -654,11 +654,11 @@ importers:
   ../../packages/types:
     dependencies:
       '@lobehub/market-sdk':
-        specifier: 0.42.0
-        version: 0.42.0(supports-color@9.4.0)(zod@4.6.5)
+        specifier: 0.43.0
+        version: 0.43.0(supports-color@9.4.0)(zod@4.6.5)
       '@lobehub/market-types':
-        specifier: ^1.17.1
-        version: 1.17.1
+        specifier: ^1.19.0
+        version: 1.19.0
       '@lobehub/ui':
         specifier: ^6.0.4
         version: 6.0.4(@lobehub/fluent-emoji@5.0.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(@lobehub/icons@6.0.0)(@shikijs/themes@4.5.0)(@types/mdast@4.0.4)(@types/react@19.3.0)(date-fns@4.4.0)(micromark-util-types@2.0.3)(micromark@4.0.3(supports-color@9.4.0))(motion@14.2.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(supports-color@9.4.0)
@@ -2165,16 +2165,13 @@ packages:
       react: 19.2.7
       react-dom: 19.2.7
 
-  '@lobehub/market-sdk@0.42.0':
-    resolution: {integrity: sha512-1c+hf2lP9tqX9qyg6+J5Q90dYqvdZz7agrYWB9h9tiEJdIS57bzFcSRJZzxUiesbQ7jmvS5a7kBMUwsd9kxzKw==}
+  '@lobehub/market-sdk@0.43.0':
+    resolution: {integrity: sha512-pe0+otQzPBoq9X/C1fEYkM6yjVToO7esnW4b1CrfAe8jj9OPm7QZxgM5sHh4uZ6SU95+oEjOBKCutQyvruY8ZA==}
     peerDependencies:
       zod: ^3.24.4
 
-  '@lobehub/market-types@1.17.1':
-    resolution: {integrity: sha512-jwY3nXyJaP4V3kBYQpnPMYgWC4LWW03g1BP+s43p4d7SMWJ/wlDwfENoIyDP5p9NFZPIPV4ajaWpidcW7iENOg==}
-
-  '@lobehub/market-types@1.18.0':
-    resolution: {integrity: sha512-1xx+y4rtRpN0oplvJEC1WvmCymJoUNUJIR8wr/U+d/jgrPvJSb3as/NZRCUrxeFd6BDSlQHyJl12CwzFNA6ZAw==}
+  '@lobehub/market-types@1.19.0':
+    resolution: {integrity: sha512-t6384KeWcSii42kuOqZClhoMs4tus+bW/izoNq96p0M5CvTVxUjrqpmXcKQUK+bnOXMzqqcJZcCU/3hTmFz0lQ==}
 
   '@lobehub/streamdown@1.4.0':
     resolution: {integrity: sha512-kkqq2nqwcqz+rV/eUPQ7vY1TQWHWZE3kQt1MsSLtNFLNXMoKYPiF+cdahP97uunWKtf2dB48q/nkSWaZzEKRSw==}
@@ -9460,9 +9457,9 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
 
-  '@lobehub/market-sdk@0.42.0(supports-color@9.4.0)(zod@4.6.5)':
+  '@lobehub/market-sdk@0.43.0(supports-color@9.4.0)(zod@4.6.5)':
     dependencies:
-      '@lobehub/market-types': 1.18.0
+      '@lobehub/market-types': 1.19.0
       '@opentelemetry/api': 1.9.1
       debug: 4.4.3(supports-color@9.4.0)
       jose: 6.2.12
@@ -9471,11 +9468,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@lobehub/market-types@1.17.1':
-    dependencies:
-      zod: 3.25.76
-
-  '@lobehub/market-types@1.18.0':
+  '@lobehub/market-types@1.19.0':
     dependencies:
       zod: 3.25.76
 
