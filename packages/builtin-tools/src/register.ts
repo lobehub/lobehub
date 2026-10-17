@@ -79,6 +79,12 @@ import {
   ImageGenerationStreamings,
 } from '@lobechat/builtin-tool-image-generation/client';
 import {
+  InteractiveUIInspectors,
+  InteractiveUIManifest,
+  InteractiveUIRenders,
+  InteractiveUIStreamings,
+} from '@lobechat/builtin-tool-interactive-ui/client';
+import {
   KnowledgeBaseInspectors,
   KnowledgeBaseManifest,
   KnowledgeBaseRenders,
@@ -261,6 +267,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   if (builtinToolSurfacesRegistered) return;
 
   registerBuiltinRenders({
+    [InteractiveUIManifest.identifier]: InteractiveUIRenders as Record<string, BuiltinRender>,
     [AgentBuilderManifest.identifier]: AgentBuilderRenders as Record<string, BuiltinRender>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsRenders as Record<string, BuiltinRender>,
     [AgentManagementManifest.identifier]: AgentManagementRenders as Record<string, BuiltinRender>,
@@ -311,6 +318,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinInspectors({
+    [InteractiveUIManifest.identifier]: InteractiveUIInspectors as Record<string, BuiltinInspector>,
     [AuvIdentifier]: AuvInspectors as Record<string, BuiltinInspector>,
     // Read-only alias for messages recorded by the original private desktop PR.
     // New manifests and execution routes only advertise lobe-computer-use.
@@ -382,6 +390,7 @@ export const registerBuiltinToolSurfaces = (): void => {
   });
 
   registerBuiltinStreamings({
+    [InteractiveUIManifest.identifier]: InteractiveUIStreamings as Record<string, BuiltinStreaming>,
     [AgentBuilderManifest.identifier]: AgentBuilderStreamings as Record<string, BuiltinStreaming>,
     [AgentDocumentsManifest.identifier]: AgentDocumentsStreamings as Record<
       string,

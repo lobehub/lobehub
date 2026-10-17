@@ -154,6 +154,16 @@ vi.mock('./GroupItem', () => ({
   ),
 }));
 
+vi.mock('../Tools', () => ({
+  Tools: ({ disableEditing, toolIds }: { disableEditing?: boolean; toolIds?: string[] }) => (
+    <div
+      data-disable-editing={String(!!disableEditing)}
+      data-testid="persistent-tool"
+      data-tools={toolIds?.join(',')}
+    />
+  ),
+}));
+
 vi.mock('@/features/Conversation/Messages/components/ContentLoading', () => ({
   default: ({ id, startTime }: { id: string; startTime?: number }) => (
     <div data-id={id} data-start-time={startTime} data-testid="tail-running" />
@@ -182,6 +192,115 @@ describe('Group', () => {
     mockCreatingIds = new Set();
     mockDbMessages = [];
     mockOperations = [];
+  });
+
+  it('keeps interactive deliverables mounted outside process folds across completion and steers', () => {
+    const tools = [
+      { apiName: 'search', id: 'search', identifier: 'lobe-web-browsing' },
+      { apiName: 'renderUI', id: 'app', identifier: 'lobe-interactive-ui' },
+      { apiName: 'search', id: 'search-after', identifier: 'lobe-web-browsing' },
+    ];
+    const blocks = [blk({ content: 'Creating the app.', id: 'step', tools: tools as any })];
+    mockIsGenerating = true;
+    mockOperations = [{ metadata: {}, status: 'running' }];
+    const props = { disableEditing: true, enableProcessFold: true, id: 'group', messageIndex: 0 };
+    const { rerender } = render(<Group {...props} isLatestItem blocks={blocks} />);
+    const deliverable = screen.getByTestId('persistent-tool');
+    expect(deliverable).toHaveAttribute('data-tools', 'app');
+    expect(deliverable).toHaveAttribute('data-disable-editing', 'true');
+
+    mockIsGenerating = false;
+    mockOperations = [];
+    const finishedBlocks = [
+      blk({
+        ...blocks[0],
+        id: 'step',
+        tools: tools.map((tool) => ({ ...tool, result: { content: 'Done', id: tool.id } })) as any,
+      }),
+      blk({ content: 'Try the app below.', id: 'answer' }),
+    ];
+    rerender(<Group {...props} isLatestItem blocks={finishedBlocks} />);
+    expect(screen.getByTestId('persistent-tool')).toBe(deliverable);
+    expect(screen.getByTestId('process-fold').contains(deliverable)).toBe(false);
+    const final = screen
+      .getAllByTestId('answer-segment')
+      .find((node) => JSON.parse(node.getAttribute('data-block')!).id === 'answer')!;
+    expect(
+      deliverable.compareDocumentPosition(final) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+
+    rerender(
+      <Group
+        {...props}
+        blocks={finishedBlocks}
+        isLatestItem={false}
+        continuations={[
+          {
+            blocks: [
+              blk({
+                id: 'next-step',
+                tools: [
+                  { apiName: 'renderUI', id: 'next-app', identifier: 'lobe-interactive-ui' } as any,
+                ],
+              }),
+              blk({ content: 'Updated result.', id: 'next-answer' }),
+            ],
+            id: 'continuation',
+            steerUserId: 'steer',
+          },
+        ]}
+      />,
+    );
+    const deliverables = screen.getAllByTestId('persistent-tool');
+    expect(deliverables[0]).toBe(deliverable);
+    expect(deliverables.map((node) => node.getAttribute('data-tools'))).toEqual([
+      'app',
+      'next-app',
+    ]);
+    expect(
+      screen
+        .getAllByTestId('process-fold')
+        .some((fold) => deliverables.some((node) => fold.contains(node))),
+    ).toBe(false);
+    const steer = screen.getByTestId('steer-message');
+    expect(
+      deliverable.compareDocumentPosition(steer) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(
+      steer.compareDocumentPosition(deliverables[1]!) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  it('keeps a final answer before its trailing interactive deliverable when the process folds', () => {
+    render(
+      <Group
+        enableProcessFold
+        isLatestItem
+        id="group"
+        messageIndex={0}
+        blocks={[
+          blk({
+            content: 'Here is the comparison.\n\nAdjust the quantity to compare the plans.',
+            id: 'mixed',
+            tools: [
+              { apiName: 'search', id: 'search', identifier: 'lobe-web-browsing' } as any,
+              { apiName: 'renderUI', id: 'app', identifier: 'lobe-interactive-ui' } as any,
+            ],
+          }),
+        ]}
+      />,
+    );
+
+    const deliverable = screen.getByTestId('persistent-tool');
+    const final = screen
+      .getAllByTestId('answer-segment')
+      .find((node) => JSON.parse(node.getAttribute('data-block')!).content.startsWith('Here is'))!;
+    const fold = screen.getByTestId('process-fold');
+    expect(fold.contains(final)).toBe(false);
+    expect(fold.contains(deliverable)).toBe(false);
+    expect(
+      final.compareDocumentPosition(deliverable) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   it('keeps an empty terminal block when only the persisted message has its finish type', () => {

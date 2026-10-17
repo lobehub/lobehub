@@ -1,6 +1,9 @@
 import type { ReactNode } from 'react';
 
+import SafeBoundary from '@/components/ErrorBoundary';
+
 import CouncilList from '../../AgentCouncil/components/CouncilList';
+import { Tools } from '../Tools';
 import type { GroupChainView } from './groupChain';
 import {
   hasPendingIntervention,
@@ -31,6 +34,19 @@ export const renderChainSegment = (
 
   if (segment.kind === 'workflow') {
     if (segment.blocks.length === 0) return null;
+
+    if (segment.preserveOutsideProcessFold) {
+      const block = segment.blocks[0]!;
+      return (
+        <SafeBoundary key={block.renderKey} variant="alert">
+          <Tools
+            disableEditing={disableEditing}
+            messageId={block.id}
+            toolIds={block.tools?.map((tool) => tool.id)}
+          />
+        </SafeBoundary>
+      );
+    }
 
     if (segment.standalone || shouldInlineWorkflowSegment(segment.blocks)) {
       return segment.blocks.map((block, blockIndex) => {

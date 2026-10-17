@@ -6,7 +6,10 @@ import { isImageOutputTool } from '../toolRenderRules';
 import type { RenderableAssistantContentBlock } from './types';
 import type { WorkflowExpandLevel, WorkflowExpandLevelDefault } from './WorkflowCollapse';
 
-export type GroupRenderSegment = AssistantGroupSegment<RenderableAssistantContentBlock>;
+export type GroupRenderSegment = AssistantGroupSegment<RenderableAssistantContentBlock> & {
+  /** A tool deliverable that stays mounted outside workflow and turn-process folds. */
+  preserveOutsideProcessFold?: boolean;
+};
 
 export const countAssistantLlmCalls = (segments: GroupRenderSegment[]): number => {
   const assistantBlockIds = new Set<string>();

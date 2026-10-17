@@ -10,6 +10,7 @@ import { goalExecutor } from '@lobechat/builtin-tool-goal/client/executor';
 import { groupAgentBuilderExecutor } from '@lobechat/builtin-tool-group-agent-builder/executor';
 import { groupManagementExecutor } from '@lobechat/builtin-tool-group-management/executor';
 import { imageGenerationExecutor } from '@lobechat/builtin-tool-image-generation/executor';
+import { interactiveUIExecutor } from '@lobechat/builtin-tool-interactive-ui/executor';
 import { knowledgeBaseExecutor } from '@lobechat/builtin-tool-knowledge-base/client/executor';
 import { lobeAgentExecutor } from '@lobechat/builtin-tool-lobe-agent/client/executor';
 import { memoryExecutor } from '@lobechat/builtin-tool-memory/executor';
@@ -46,6 +47,7 @@ import { webOnboardingExecutor } from './lobe-web-onboarding';
 import { localSystemExecutorWithGitEffects } from './localSystem';
 
 export const builtinToolExecutors = [
+  interactiveUIExecutor,
   // Hook-only executors for heterogeneous CLI agents —
   // observe their shell tool results via `onAfterCall` (never invoked).
   ampExecutor,

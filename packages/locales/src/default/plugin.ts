@@ -1,4 +1,41 @@
 export default {
+  'builtins.lobe-interactive-ui.tooLong':
+    'Shorten this draft to {{limit}} characters before sending (currently {{count}}).',
+  'builtins.lobe-interactive-ui.chart.currentValue': 'Current {{label}}',
+  'builtins.lobe-interactive-ui.chart.empty': 'No valid chart values for these inputs',
+  'builtins.lobe-interactive-ui.state.saving': 'Saving selections…',
+  'builtins.lobe-interactive-ui.state.saved': 'Selections saved to this chat',
+  'builtins.lobe-interactive-ui.state.failed':
+    'Could not save these selections. Keep this chat open and try again.',
+  'builtins.lobe-interactive-ui.state.retry': 'Retry save',
+  'builtins.lobe-interactive-ui.generating': 'Building your interactive answer…',
+
+  'builtins.lobe-interactive-ui.paused':
+    'This widget paused. Use Restart to continue with its initial values.',
+  'builtins.lobe-interactive-ui.apiName.renderUI': 'Create interactive UI',
+  'builtins.lobe-interactive-ui.title': 'Interactive UI',
+  'builtins.lobe-interactive-ui.description':
+    'Explore interactive calculators, comparisons, and visual explanations inside chat.',
+  'builtins.lobe-interactive-ui.invalid':
+    'This interactive UI could not be opened. Ask the assistant to try again.',
+  'builtins.lobe-interactive-ui.details': 'Show details',
+
+  'builtins.lobe-interactive-ui.review': 'Review the proposed follow-up',
+  'builtins.lobe-interactive-ui.send': 'Send to this conversation',
+  'builtins.lobe-interactive-ui.dismiss': 'Dismiss',
+  'builtins.lobe-interactive-ui.readOnly':
+    'Sending is unavailable while this conversation is busy or read-only.',
+  'builtins.lobe-interactive-ui.sent':
+    'Follow-up requested. Check the conversation for the response.',
+  'builtins.lobe-interactive-ui.uncertain':
+    'The send could not be confirmed. Check the conversation before sending again.',
+  'builtins.lobe-interactive-ui.restart': 'Restart',
+  'builtins.lobe-interactive-ui.close': 'Close',
+  'builtins.lobe-interactive-ui.reopen': 'Reopen',
+  'builtins.lobe-interactive-ui.localState':
+    'Controls run locally. Reopening, restarting, or refreshing resets their values. Do not enter secrets or sensitive information.',
+  'builtins.lobe-interactive-ui.fallback': 'Text alternative',
+
   'builtins.lobe-attachments.apiName.readAttachment': 'Read attachment',
   'builtins.lobe-attachments.title': 'Attachments',
   'builtins.lobe-goal-supervisor.apiName.inspectGoal': 'Inspect goal',

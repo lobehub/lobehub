@@ -3,6 +3,10 @@ import {
   ImageGenerationIdentifier,
 } from '@lobechat/builtin-tool-image-generation';
 import {
+  InteractiveUIApiName,
+  InteractiveUIIdentifier,
+} from '@lobechat/builtin-tool-interactive-ui';
+import {
   WebOnboardingApiName,
   WebOnboardingIdentifier,
 } from '@lobechat/builtin-tool-web-onboarding';
@@ -12,6 +16,10 @@ interface ToolRenderRuleTarget {
   apiName: string;
   identifier: string;
 }
+
+/** Match before results arrive so the streaming and finished UI share one mount. */
+export const isInteractiveUITool = ({ apiName, identifier }: ToolRenderRuleTarget): boolean =>
+  identifier === InteractiveUIIdentifier && apiName === InteractiveUIApiName.renderUI;
 
 export const shouldRenderToolCall = ({ apiName, identifier }: ToolRenderRuleTarget) => {
   // This call immediately ends onboarding and switches the UI to the completion state.
@@ -60,3 +68,12 @@ export const isImageOutputTool = (tool: ChatToolPayloadWithResult): boolean => {
  */
 export const isImageBearingTool = (tool: ChatToolPayloadWithResult): boolean =>
   isImageOutputTool(tool) || hasUploadedImages(tool.result?.state);
+
+/** Native artifact state is deliberately small and retained on the transcript.
+ * Prefer that live value over the separate, possibly stale lazy body cache. */
+export const resolveToolResultState = <T>(
+  tool: ToolRenderRuleTarget,
+  liveState: T | undefined,
+  storedState: T | undefined,
+): T | undefined =>
+  isInteractiveUITool(tool) ? (liveState ?? storedState) : (storedState ?? liveState);

@@ -4,7 +4,12 @@ import {
 } from '@lobechat/builtin-tool-web-onboarding';
 import { describe, expect, it } from 'vitest';
 
-import { isImageBearingTool, isImageOutputTool, shouldRenderToolCall } from './toolRenderRules';
+import {
+  isImageBearingTool,
+  isImageOutputTool,
+  resolveToolResultState,
+  shouldRenderToolCall,
+} from './toolRenderRules';
 
 describe('shouldRenderToolCall', () => {
   it('hides the onboarding completion tool call', () => {
@@ -115,5 +120,26 @@ describe('isImageOutputTool', () => {
         result: { content: 'x', id: 'r', state: { generations: [{ asset: null }] } },
       } as any),
     ).toBe(false);
+  });
+});
+
+describe('resolveToolResultState', () => {
+  it('reopens interactive results with acknowledged live selections rather than a stale lazy payload', () => {
+    const tool = { apiName: 'renderUI', identifier: 'lobe-interactive-ui' };
+    const live = { status: 'ready', version: 2, values: { n: 1000, plan: 'C' } };
+    const stale = { status: 'ready', version: 2, values: { n: 500, plan: 'B' } };
+    expect(resolveToolResultState(tool, live, stale)).toBe(live);
+    expect(resolveToolResultState(tool, undefined, stale)).toBe(stale);
+  });
+  it('keeps lazy full-payload precedence for other projected tools', () => {
+    const projected = { summary: true };
+    const full = { summary: true, data: [1, 2, 3] };
+    expect(
+      resolveToolResultState(
+        { apiName: 'search', identifier: 'lobe-web-browsing' },
+        projected,
+        full,
+      ),
+    ).toBe(full);
   });
 });

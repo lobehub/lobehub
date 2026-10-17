@@ -12,6 +12,7 @@ import { useToolStore } from '@/store/tool';
 import { toolSelectors } from '@/store/tool/selectors';
 
 import { dataSelectors, useConversationStore } from '../../../store';
+import { isInteractiveUITool } from '../toolRenderRules';
 import Actions from './Actions';
 import Inspectors from './Inspector';
 import { hasToolResultBody } from './toolResultBody';
@@ -124,6 +125,31 @@ const Tool = memo<GroupToolProps>(({ assistantMessageId, disableEditing, id }) =
   if (!tool) return null;
 
   const isToolDetailExpand = forceShowStreamingRender || showToolRender || showDebug;
+
+  // Interactive results are answer content, not an execution accordion. Keep the
+  // registry inspector for inspection surfaces, but do not duplicate its title,
+  // status icon and divider around the native answer.
+  if (isInteractiveUITool({ apiName, identifier })) {
+    return (
+      <SafeBoundary alertTitle={`${identifier} / ${apiName}`} variant="alert">
+        <Detail
+          showCustomToolRender
+          apiName={apiName}
+          arguments={requestArgs}
+          disableEditing={disableEditing}
+          identifier={identifier}
+          intervention={intervention}
+          isArgumentsStreaming={isArgumentsStreaming}
+          isToolCalling={isToolCalling}
+          messageId={assistantMessageId}
+          result={result}
+          toolCallId={id}
+          toolMessageId={toolMessageId}
+          type={type}
+        />
+      </SafeBoundary>
+    );
+  }
 
   return (
     <Accordion

@@ -6,7 +6,6 @@
  * - Pre-instantiated runtimes (e.g., WebBrowsing - no per-request context needed)
  * - Per-request runtimes (e.g., CloudSandbox - needs topicId, userId)
  */
-
 import type { ToolExecutionContext } from '../types';
 import { acceptanceEvidenceRuntime } from './acceptanceEvidence';
 import { activatorRuntime } from './activator';
@@ -31,6 +30,7 @@ import { goalSupervisorRuntime } from './goalSupervisor';
 import { groupAgentBuilderRuntime } from './groupAgentBuilder';
 import { groupManagementRuntime } from './groupManagement';
 import { imageGenerationRuntime } from './imageGeneration';
+import { interactiveUIRuntime } from './interactiveUI';
 import { knowledgeBaseRuntime } from './knowledgeBase';
 import { lobeAgentRuntime } from './lobeAgent';
 import { localSystemRuntime } from './localSystem';
@@ -67,6 +67,7 @@ const registerRuntimes = (runtimes: ServerRuntimeRegistration[]) => {
 
 // Register all server runtimes
 registerRuntimes([
+  interactiveUIRuntime,
   acceptanceEvidenceRuntime,
   auvRuntime,
   agentBuilderRuntime,

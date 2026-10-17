@@ -31,6 +31,7 @@ import {
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
+import { InteractiveUIManifest } from '@lobechat/builtin-tool-interactive-ui';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest, resolveLobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import {
@@ -496,6 +497,11 @@ const builtinToolRegistry: LobeBuiltinTool[] = [
     manifest: AgentManagementManifest,
     // Context-aware: hides the `callAgent` API inside sub-agent runs.
     resolveManifest: resolveAgentManagementManifest,
+    type: 'builtin',
+  },
+  {
+    identifier: InteractiveUIManifest.identifier,
+    manifest: InteractiveUIManifest,
     type: 'builtin',
   },
   {

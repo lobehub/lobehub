@@ -165,18 +165,8 @@ const Group = memo<GroupChildrenProps>(
       messageIndex,
     };
 
-    const renderChain = (
-      view: GroupChainView,
-      segments: GroupRenderSegment[],
-      variant: 'process' | 'final',
-    ) => (
-      <MessageAggregationContext
-        key={`${view.id}.${variant}`}
-        value={contextValues[views.indexOf(view)]!}
-      >
-        {segments.map((segment) => renderChainSegment(view, segment, renderOptions))}
-      </MessageAggregationContext>
-    );
+    const renderSegments = (view: GroupChainView, segments: GroupRenderSegment[]) =>
+      segments.map((segment) => renderChainSegment(view, segment, renderOptions));
 
     // Codex-style turn folding: once the turn's op has ended, fold its whole
     // process (reasoning + tools + intermediate prose) under a single "已处理
@@ -185,12 +175,21 @@ const Group = memo<GroupChildrenProps>(
     // that is the turn's payload; only the process collapses. The latest turn
     // is eligible only once its final answer exists (so a tool-only latest turn
     // does not collapse into a lone header); still-generating turns render in
-    // full. Steered continuations fold per turn: every earlier turn's output is
-    // process, only the last turn's final answer stays visible, and each steer
-    // bubble sits between the fold it interrupted and the fold it started.
-    const { processSegments, finalSegments } = splitAssistantGroupFinalAnswer(lastView.segments);
+    // full. Interactive UI deliverables remain stable siblings outside the fold
+    // for every chain, including earlier steered turns. Other earlier output is
+    // process; only the last turn's final answer stays visible. Each steer bubble
+    // sits between the chain it interrupted and the chain it started.
+    const {
+      processSegments,
+      finalSegments,
+    }: {
+      finalSegments: GroupRenderSegment[];
+      processSegments: GroupRenderSegment[];
+    } = splitAssistantGroupFinalAnswer(lastView.segments);
     const processSegmentsOf = (view: GroupChainView) =>
-      view === lastView ? processSegments : view.segments;
+      (view === lastView ? processSegments : view.segments).filter(
+        (segment) => !segment.preserveOutsideProcessFold,
+      );
     const foldProcess = shouldFoldProcess({
       enabled: enableProcessFold,
       hasFinalAnswer: hasRenderableFinalAnswer(finalSegments),
@@ -210,7 +209,7 @@ const Group = memo<GroupChildrenProps>(
           key={view.id}
           stepCount={countAssistantLlmCalls(view.segments)}
         >
-          <Flexbox gap={8}>{renderChain(view, segments, 'process')}</Flexbox>
+          <Flexbox gap={8}>{renderSegments(view, segments)}</Flexbox>
         </ProcessFold>
       );
     };
@@ -220,14 +219,26 @@ const Group = memo<GroupChildrenProps>(
         {views.map((view, index) => (
           <Fragment key={view.id}>
             {view.steerUserId && <SteerMessage id={view.steerUserId} />}
-            {foldProcess ? renderFold(view, index) : renderChain(view, view.segments, 'process')}
+            <MessageAggregationContext value={contextValues[index]!}>
+              {foldProcess && renderFold(view, index)}
+              {view.segments.map((segment) => {
+                // Keep this keyed list and its parent in both states: moving an
+                // iframe into a different wrapper would discard its local state.
+                if (
+                  foldProcess &&
+                  !segment.preserveOutsideProcessFold &&
+                  !(view === lastView && finalSegments.includes(segment))
+                ) {
+                  return null;
+                }
+                return renderChainSegment(view, segment, renderOptions);
+              })}
+            </MessageAggregationContext>
           </Fragment>
         ))}
-        {foldProcess
-          ? renderChain(lastView, finalSegments, 'final')
-          : lastView.showTailRunningIndicator && (
-              <ContentLoading id={lastView.id} startTime={lastBlockCreatedAt} />
-            )}
+        {!foldProcess && lastView.showTailRunningIndicator && (
+          <ContentLoading id={lastView.id} startTime={lastBlockCreatedAt} />
+        )}
       </Flexbox>
     );
   },

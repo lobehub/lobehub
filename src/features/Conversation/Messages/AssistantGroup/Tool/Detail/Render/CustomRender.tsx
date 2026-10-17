@@ -12,6 +12,7 @@ interface CustomRenderProps {
   messageId?: string;
   plugin?: ChatPluginPayload;
   pluginState?: any;
+  readOnly?: boolean;
   /**
    * The tool call ID from the assistant message
    */
@@ -19,7 +20,7 @@ interface CustomRenderProps {
 }
 
 const CustomRender = memo<CustomRenderProps>(
-  ({ content, messageId, plugin, pluginState, toolCallId }) => {
+  ({ content, messageId, plugin, pluginState, toolCallId, readOnly }) => {
     const Render = getBuiltinRender(plugin?.identifier, plugin?.apiName);
 
     if (!Render) return null;
@@ -33,6 +34,7 @@ const CustomRender = memo<CustomRenderProps>(
           identifier={plugin?.identifier}
           messageId={messageId!}
           pluginState={pluginState}
+          readOnly={readOnly}
           toolCallId={toolCallId}
         />
       </Flexbox>

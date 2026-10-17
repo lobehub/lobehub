@@ -6,6 +6,7 @@ import { memo } from 'react';
 import { useToolResultPayload } from '@/hooks/useToolResultPayload';
 
 import { dataSelectors, useConversationStore } from '../../../../../store';
+import { resolveToolResultState } from '../../../toolRenderRules';
 import CustomRender from './CustomRender';
 import { FallbackArgumentRender } from './FallbacktArgumentRender';
 
@@ -14,12 +15,13 @@ interface ToolRenderProps {
   messageId?: string;
   plugin?: ChatPluginPayload;
   pluginState?: any;
+  readOnly?: boolean;
   showCustomToolRender?: boolean;
   toolCallId: string;
 }
 
 const ToolRender = memo<ToolRenderProps>(
-  ({ showCustomToolRender, content, messageId, plugin, pluginState, toolCallId }) => {
+  ({ showCustomToolRender, content, messageId, plugin, pluginState, toolCallId, readOnly }) => {
     const hasCustomRender = !!getBuiltinRender(plugin?.identifier, plugin?.apiName);
 
     // Tools whose card renders the stored body — the read path projected it away
@@ -33,7 +35,11 @@ const ToolRender = memo<ToolRenderProps>(
     const { isLoading, payload } = useToolResultPayload(messageId, needsStoredPayload);
 
     const resolvedContent = payload?.content ?? content;
-    const resolvedState = payload?.pluginState ?? pluginState;
+    const resolvedState = resolveToolResultState(
+      { apiName: plugin?.apiName ?? '', identifier: plugin?.identifier ?? '' },
+      pluginState,
+      payload?.pluginState,
+    );
 
     if (needsStoredPayload && isLoading && !payload) {
       return (
@@ -50,6 +56,7 @@ const ToolRender = memo<ToolRenderProps>(
           messageId={messageId}
           plugin={plugin}
           pluginState={resolvedState}
+          readOnly={readOnly}
           toolCallId={toolCallId}
         />
       );

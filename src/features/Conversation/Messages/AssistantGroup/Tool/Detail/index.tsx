@@ -126,6 +126,7 @@ const Render = memo<RenderProps>(
             content={result.content || ''}
             messageId={toolMessageId}
             pluginState={result.state}
+            readOnly={disableEditing}
             toolCallId={toolCallId}
             plugin={{
               apiName,

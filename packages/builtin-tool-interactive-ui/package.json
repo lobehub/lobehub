@@ -1,0 +1,29 @@
+{
+  "name": "@lobechat/builtin-tool-interactive-ui",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/client/index.ts",
+    "./executionRuntime": "./src/ExecutionRuntime/index.ts",
+    "./executor": "./src/client/executor/index.ts"
+  },
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@lobechat/utils": "workspace:*",
+    "dompurify": "^3.4.11",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@lobechat/types": "workspace:*",
+    "jsdom": "^26.1.0"
+  },
+  "peerDependencies": {
+    "@lobehub/charts": "^5.4.0",
+    "@lobehub/ui": "^5",
+    "antd-style": "*",
+    "react": "*",
+    "react-i18next": "*"
+  }
+}

@@ -24,6 +24,7 @@ import {
 import { GroupAgentBuilderManifest } from '@lobechat/builtin-tool-group-agent-builder';
 import { GroupManagementManifest } from '@lobechat/builtin-tool-group-management';
 import { ImageGenerationManifest } from '@lobechat/builtin-tool-image-generation';
+import { InteractiveUIManifest } from '@lobechat/builtin-tool-interactive-ui';
 import { KnowledgeBaseManifest } from '@lobechat/builtin-tool-knowledge-base';
 import { LobeAgentManifest } from '@lobechat/builtin-tool-lobe-agent';
 import { LocalSystemManifest } from '@lobechat/builtin-tool-local-system';
@@ -40,6 +41,7 @@ import { WebBrowsingManifest } from '@lobechat/builtin-tool-web-browsing';
 import { WebOnboardingManifest } from '@lobechat/builtin-tool-web-onboarding';
 
 export const builtinToolIdentifiers: string[] = [
+  InteractiveUIManifest.identifier,
   AcceptanceEvidenceManifest.identifier,
   AgentBuilderManifest.identifier,
   AgentDocumentsManifest.identifier,

@@ -1,0 +1,266 @@
+{
+  "body": [
+    {
+      "type": "text",
+      "id": "curve-heading",
+      "variant": "heading",
+      "content": {
+        "ref": "derived.formula"
+      }
+    },
+    {
+      "type": "text",
+      "id": "curve-intro",
+      "tone": "secondary",
+      "content": "Stretch, flip, and move the curve. The highlighted point follows your chosen x."
+    },
+    {
+      "type": "grid",
+      "id": "parameters",
+      "columns": 2,
+      "children": [
+        {
+          "type": "slider",
+          "id": "scale-control",
+          "bind": "scale",
+          "label": "Scale"
+        },
+        {
+          "type": "number",
+          "id": "offset-control",
+          "bind": "offset",
+          "label": "Vertical offset"
+        }
+      ]
+    },
+    {
+      "type": "slider",
+      "id": "position-control",
+      "bind": "position",
+      "label": "Point on the curve (x)"
+    },
+    {
+      "type": "chart",
+      "id": "curve",
+      "chartType": "area",
+      "title": "Quadratic curve",
+      "x": {
+        "min": -5,
+        "max": 5,
+        "samples": 101,
+        "label": "x"
+      },
+      "yLabel": "y",
+      "currentX": {
+        "ref": "state.position"
+      },
+      "series": [
+        {
+          "id": "quadratic",
+          "label": "Quadratic",
+          "color": "blue",
+          "y": {
+            "ref": "derived.curve"
+          }
+        }
+      ]
+    },
+    {
+      "type": "grid",
+      "id": "point-summary",
+      "columns": 2,
+      "children": [
+        {
+          "type": "metric",
+          "id": "x-value",
+          "label": "Current x",
+          "value": {
+            "op": "format",
+            "args": [
+              {
+                "ref": "state.position"
+              },
+              1
+            ]
+          }
+        },
+        {
+          "type": "metric",
+          "id": "y-value",
+          "label": "Current y",
+          "value": {
+            "op": "format",
+            "args": [
+              {
+                "ref": "derived.currentY"
+              },
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "select",
+      "id": "focus",
+      "bind": "focus",
+      "label": "What would you like to understand?",
+      "options": [
+        {
+          "value": "shape",
+          "label": "How the shape changes"
+        },
+        {
+          "value": "intercepts",
+          "label": "Where the curve crosses the axes"
+        },
+        {
+          "value": "rate",
+          "label": "How quickly y changes"
+        }
+      ]
+    },
+    {
+      "type": "action",
+      "id": "explain",
+      "action": "propose",
+      "label": "Ask about this curve",
+      "text": {
+        "op": "concat",
+        "args": [
+          "Explain ",
+          {
+            "ref": "state.focus"
+          },
+          " for ",
+          {
+            "ref": "derived.formula"
+          },
+          ". At x = ",
+          {
+            "op": "format",
+            "args": [
+              {
+                "ref": "state.position"
+              },
+              1
+            ]
+          },
+          ", y = ",
+          {
+            "op": "format",
+            "args": [
+              {
+                "ref": "derived.currentY"
+              },
+              2
+            ]
+          },
+          "."
+        ]
+      }
+    }
+  ],
+  "derived": {
+    "curve": {
+      "op": "add",
+      "args": [
+        {
+          "op": "multiply",
+          "args": [
+            {
+              "ref": "state.scale"
+            },
+            {
+              "ref": "x"
+            },
+            {
+              "ref": "x"
+            }
+          ]
+        },
+        {
+          "ref": "state.offset"
+        }
+      ]
+    },
+    "currentY": {
+      "op": "add",
+      "args": [
+        {
+          "op": "multiply",
+          "args": [
+            {
+              "ref": "state.scale"
+            },
+            {
+              "ref": "state.position"
+            },
+            {
+              "ref": "state.position"
+            }
+          ]
+        },
+        {
+          "ref": "state.offset"
+        }
+      ]
+    },
+    "formula": {
+      "op": "concat",
+      "args": [
+        "y = ",
+        {
+          "op": "format",
+          "args": [
+            {
+              "ref": "state.scale"
+            },
+            1
+          ]
+        },
+        " × x² + ",
+        {
+          "op": "format",
+          "args": [
+            {
+              "ref": "state.offset"
+            },
+            1
+          ]
+        }
+      ]
+    }
+  },
+  "fallback": "Explore y = scale × x² + offset. Start with scale 1, offset 0, and x 2, where y is 4. Changing controls updates the curve and the exact point locally. A proposed explanation is reviewed before sending.",
+  "state": {
+    "scale": {
+      "type": "number",
+      "initial": 1,
+      "min": -3,
+      "max": 3,
+      "step": 0.1
+    },
+    "offset": {
+      "type": "number",
+      "initial": 0,
+      "min": -10,
+      "max": 10,
+      "step": 0.5
+    },
+    "position": {
+      "type": "number",
+      "initial": 2,
+      "min": -5,
+      "max": 5,
+      "step": 0.1
+    },
+    "focus": {
+      "type": "string",
+      "initial": "shape",
+      "options": ["shape", "intercepts", "rate"]
+    }
+  },
+  "title": "Explore a quadratic curve",
+  "version": 2
+}

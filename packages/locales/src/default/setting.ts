@@ -1,4 +1,10 @@
 export default {
+  'tools.builtins.lobe-interactive-ui.title': 'Interactive UI',
+  'tools.builtins.lobe-interactive-ui.description':
+    'Native interactive calculators, comparisons, and charts in your conversation.',
+  'tools.builtins.lobe-interactive-ui.readme':
+    'Install this skill, then pin it under Skills in Agent mode. Ask for an interactive calculator, comparison, or chart. Controls update locally; selections are saved to this chat. Sending a follow-up always requires your confirmation.',
+
   'devices.cliUpdate.restart': 'Restart CLI',
   'devices.cliUpdate.update': 'Update and restart',
   'devices.cliUpdate.confirmDesc':

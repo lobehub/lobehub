@@ -9,6 +9,7 @@ import type { AssistantContentBlock } from '@/types/index';
 
 import { areWorkflowToolsComplete } from '../toolDisplayNames';
 import { isImageBearingTool } from '../toolRenderRules';
+import { preserveInteractiveUIDeliverables } from './interactiveUISegments';
 import type { GroupRenderSegment } from './segments';
 import type { RenderableAssistantContentBlock } from './types';
 
@@ -254,7 +255,7 @@ export const buildChainView = (
       ? areWorkflowToolsComplete(chain.blocks.flatMap((block) => block.tools ?? []))
       : undefined,
   });
-  const segments = toRenderSegments(partitioned.segments);
+  const segments = preserveInteractiveUIDeliverables(toRenderSegments(partitioned.segments));
 
   // When the turn ends on an inline single-tool segment whose tool already
   // settled but the run is still generating (waiting on the next step), the

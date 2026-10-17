@@ -1,0 +1,628 @@
+{
+  "body": [
+    {
+      "type": "text",
+      "id": "intro",
+      "tone": "secondary",
+      "content": "Illustrative prices. Change the quantity to update every price, chart marker, and recommendation instantly."
+    },
+    {
+      "type": "grid",
+      "id": "controls",
+      "columns": 2,
+      "children": [
+        {
+          "type": "slider",
+          "id": "quantity-slider",
+          "bind": "quantity",
+          "label": "Monthly quantity",
+          "unit": "units"
+        },
+        {
+          "type": "number",
+          "id": "quantity-number",
+          "bind": "quantity",
+          "label": "Exact quantity",
+          "unit": "units"
+        }
+      ]
+    },
+    {
+      "type": "chart",
+      "id": "cost-curve",
+      "chartType": "line",
+      "title": "Monthly cost by quantity",
+      "description": "The vertical cursor and dots show the exact cost at your current quantity.",
+      "x": {
+        "min": 0,
+        "max": 1500,
+        "samples": 61,
+        "label": "Monthly quantity"
+      },
+      "yLabel": "Monthly cost ($)",
+      "currentX": {
+        "ref": "state.quantity"
+      },
+      "series": [
+        {
+          "id": "A",
+          "label": "Plan A",
+          "color": "blue",
+          "y": {
+            "op": "round",
+            "args": [
+              {
+                "op": "add",
+                "args": [
+                  0,
+                  {
+                    "op": "multiply",
+                    "args": [
+                      0.12,
+                      {
+                        "ref": "x"
+                      }
+                    ]
+                  }
+                ]
+              },
+              2
+            ]
+          }
+        },
+        {
+          "id": "B",
+          "label": "Plan B",
+          "color": "green",
+          "y": {
+            "op": "round",
+            "args": [
+              {
+                "op": "add",
+                "args": [
+                  20,
+                  {
+                    "op": "multiply",
+                    "args": [
+                      0.06,
+                      {
+                        "ref": "x"
+                      }
+                    ]
+                  }
+                ]
+              },
+              2
+            ]
+          }
+        },
+        {
+          "id": "C",
+          "label": "Plan C",
+          "color": "purple",
+          "y": {
+            "op": "round",
+            "args": [
+              {
+                "op": "add",
+                "args": [
+                  50,
+                  {
+                    "op": "multiply",
+                    "args": [
+                      0.03,
+                      {
+                        "ref": "x"
+                      }
+                    ]
+                  }
+                ]
+              },
+              2
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "id": "recommendation",
+      "content": {
+        "ref": "derived.recommendation"
+      }
+    },
+    {
+      "type": "choices",
+      "id": "plan-choice",
+      "bind": "plan",
+      "label": "Choose a plan",
+      "description": "Your selection stays yours as you explore other quantities.",
+      "options": [
+        {
+          "value": "A",
+          "label": "Plan A",
+          "description": "No base fee · $0.12 per unit",
+          "valueLabel": {
+            "op": "concat",
+            "args": [
+              {
+                "op": "concat",
+                "args": [
+                  "$",
+                  {
+                    "op": "format",
+                    "args": [
+                      {
+                        "ref": "derived.costA"
+                      },
+                      2
+                    ]
+                  }
+                ]
+              },
+              " / month"
+            ]
+          },
+          "badge": {
+            "op": "if",
+            "args": [
+              {
+                "op": "equal",
+                "args": [
+                  {
+                    "ref": "derived.costA"
+                  },
+                  {
+                    "ref": "derived.minimumCost"
+                  }
+                ]
+              },
+              "Lowest cost",
+              ""
+            ]
+          }
+        },
+        {
+          "value": "B",
+          "label": "Plan B",
+          "description": "$20 base fee · $0.06 per unit",
+          "valueLabel": {
+            "op": "concat",
+            "args": [
+              {
+                "op": "concat",
+                "args": [
+                  "$",
+                  {
+                    "op": "format",
+                    "args": [
+                      {
+                        "ref": "derived.costB"
+                      },
+                      2
+                    ]
+                  }
+                ]
+              },
+              " / month"
+            ]
+          },
+          "badge": {
+            "op": "if",
+            "args": [
+              {
+                "op": "equal",
+                "args": [
+                  {
+                    "ref": "derived.costB"
+                  },
+                  {
+                    "ref": "derived.minimumCost"
+                  }
+                ]
+              },
+              "Lowest cost",
+              ""
+            ]
+          }
+        },
+        {
+          "value": "C",
+          "label": "Plan C",
+          "description": "$50 base fee · $0.03 per unit",
+          "valueLabel": {
+            "op": "concat",
+            "args": [
+              {
+                "op": "concat",
+                "args": [
+                  "$",
+                  {
+                    "op": "format",
+                    "args": [
+                      {
+                        "ref": "derived.costC"
+                      },
+                      2
+                    ]
+                  }
+                ]
+              },
+              " / month"
+            ]
+          },
+          "badge": {
+            "op": "if",
+            "args": [
+              {
+                "op": "equal",
+                "args": [
+                  {
+                    "ref": "derived.costC"
+                  },
+                  {
+                    "ref": "derived.minimumCost"
+                  }
+                ]
+              },
+              "Lowest cost",
+              ""
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "type": "metric",
+      "id": "selection-summary",
+      "label": "Your selection",
+      "value": {
+        "op": "concat",
+        "args": [
+          "Plan ",
+          {
+            "ref": "state.plan"
+          },
+          " · ",
+          {
+            "op": "concat",
+            "args": [
+              "$",
+              {
+                "op": "format",
+                "args": [
+                  {
+                    "ref": "derived.selectedCost"
+                  },
+                  2
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "detail": {
+        "op": "concat",
+        "args": [
+          {
+            "ref": "state.quantity"
+          },
+          " units per month. Illustrative prices only."
+        ]
+      }
+    },
+    {
+      "type": "action",
+      "id": "continue",
+      "action": "propose",
+      "label": "Continue with this choice",
+      "text": {
+        "op": "concat",
+        "args": [
+          "Use quantity ",
+          {
+            "ref": "state.quantity"
+          },
+          " and plan ",
+          {
+            "ref": "state.plan"
+          },
+          " at ",
+          {
+            "op": "concat",
+            "args": [
+              "$",
+              {
+                "op": "format",
+                "args": [
+                  {
+                    "ref": "derived.selectedCost"
+                  },
+                  2
+                ]
+              }
+            ]
+          },
+          ". Compare the trade-offs using these illustrative monthly prices: A ",
+          {
+            "op": "concat",
+            "args": [
+              "$",
+              {
+                "op": "format",
+                "args": [
+                  {
+                    "ref": "derived.costA"
+                  },
+                  2
+                ]
+              }
+            ]
+          },
+          ", B ",
+          {
+            "op": "concat",
+            "args": [
+              "$",
+              {
+                "op": "format",
+                "args": [
+                  {
+                    "ref": "derived.costB"
+                  },
+                  2
+                ]
+              }
+            ]
+          },
+          ", C ",
+          {
+            "op": "concat",
+            "args": [
+              "$",
+              {
+                "op": "format",
+                "args": [
+                  {
+                    "ref": "derived.costC"
+                  },
+                  2
+                ]
+              }
+            ]
+          },
+          "."
+        ]
+      }
+    }
+  ],
+  "derived": {
+    "costA": {
+      "op": "round",
+      "args": [
+        {
+          "op": "add",
+          "args": [
+            0,
+            {
+              "op": "multiply",
+              "args": [
+                0.12,
+                {
+                  "ref": "state.quantity"
+                }
+              ]
+            }
+          ]
+        },
+        2
+      ]
+    },
+    "costB": {
+      "op": "round",
+      "args": [
+        {
+          "op": "add",
+          "args": [
+            20,
+            {
+              "op": "multiply",
+              "args": [
+                0.06,
+                {
+                  "ref": "state.quantity"
+                }
+              ]
+            }
+          ]
+        },
+        2
+      ]
+    },
+    "costC": {
+      "op": "round",
+      "args": [
+        {
+          "op": "add",
+          "args": [
+            50,
+            {
+              "op": "multiply",
+              "args": [
+                0.03,
+                {
+                  "ref": "state.quantity"
+                }
+              ]
+            }
+          ]
+        },
+        2
+      ]
+    },
+    "minimumCost": {
+      "op": "min",
+      "args": [
+        {
+          "ref": "derived.costA"
+        },
+        {
+          "ref": "derived.costB"
+        },
+        {
+          "ref": "derived.costC"
+        }
+      ]
+    },
+    "selectedCost": {
+      "op": "if",
+      "args": [
+        {
+          "op": "equal",
+          "args": [
+            {
+              "ref": "state.plan"
+            },
+            "A"
+          ]
+        },
+        {
+          "ref": "derived.costA"
+        },
+        {
+          "op": "if",
+          "args": [
+            {
+              "op": "equal",
+              "args": [
+                {
+                  "ref": "state.plan"
+                },
+                "B"
+              ]
+            },
+            {
+              "ref": "derived.costB"
+            },
+            {
+              "ref": "derived.costC"
+            }
+          ]
+        }
+      ]
+    },
+    "recommendation": {
+      "op": "if",
+      "args": [
+        {
+          "op": "equal",
+          "args": [
+            {
+              "ref": "derived.costB"
+            },
+            {
+              "ref": "derived.costC"
+            }
+          ]
+        },
+        {
+          "op": "concat",
+          "args": [
+            "Plans B and C tie at ",
+            {
+              "op": "concat",
+              "args": [
+                "$",
+                {
+                  "op": "format",
+                  "args": [
+                    {
+                      "ref": "derived.minimumCost"
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            " per month."
+          ]
+        },
+        {
+          "op": "concat",
+          "args": [
+            "Plan ",
+            {
+              "op": "if",
+              "args": [
+                {
+                  "op": "equal",
+                  "args": [
+                    {
+                      "ref": "derived.costA"
+                    },
+                    {
+                      "ref": "derived.minimumCost"
+                    }
+                  ]
+                },
+                "A",
+                {
+                  "op": "if",
+                  "args": [
+                    {
+                      "op": "equal",
+                      "args": [
+                        {
+                          "ref": "derived.costB"
+                        },
+                        {
+                          "ref": "derived.minimumCost"
+                        }
+                      ]
+                    },
+                    "B",
+                    "C"
+                  ]
+                }
+              ]
+            },
+            " is lowest at ",
+            {
+              "op": "concat",
+              "args": [
+                "$",
+                {
+                  "op": "format",
+                  "args": [
+                    {
+                      "ref": "derived.minimumCost"
+                    },
+                    2
+                  ]
+                }
+              ]
+            },
+            " per month."
+          ]
+        }
+      ]
+    }
+  },
+  "fallback": "Illustrative monthly costs: at quantity 500, A costs $60, B $50, C $65. At 1000, A costs $120 and B/C tie at $80. A=.12n, B=20+.06n, C=50+.03n. Adjust quantity, select a plan, and review the proposed follow-up before sending.",
+  "state": {
+    "quantity": {
+      "type": "number",
+      "initial": 500,
+      "min": 0,
+      "max": 1500,
+      "step": 10
+    },
+    "plan": {
+      "type": "string",
+      "initial": "B",
+      "options": ["A", "B", "C"]
+    }
+  },
+  "title": "Find your best plan",
+  "version": 2
+}

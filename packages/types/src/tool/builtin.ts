@@ -457,6 +457,8 @@ export interface BuiltinRenderProps<Arguments = any, State = any, Content = any>
   messageId: string;
   pluginError?: any;
   pluginState?: State;
+  /** Host capability: interactive tool results must never send from a read-only surface. */
+  readOnly?: boolean;
   /**
    * The tool call ID from the assistant message
    */
