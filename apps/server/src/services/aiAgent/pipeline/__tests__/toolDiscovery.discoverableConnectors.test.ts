@@ -54,6 +54,8 @@ const connectorTools = [
 ];
 
 interface RunOptions {
+  /** An installed marker with no APIs; the connector owns the real tools. */
+  installedMarker?: boolean;
   /** The agent's own `plugins` config — i.e. what the user pinned. */
   plugins?: string[];
   /** This turn's @-mention picks. */
@@ -83,7 +85,24 @@ const run = (options: RunOptions = {}) => {
         getLobehubSkillManifests: vi.fn().mockResolvedValue([]),
       }),
       messageModel: { update: vi.fn() },
-      pluginModel: { query: vi.fn().mockResolvedValue([]) },
+      pluginModel: {
+        query: vi.fn().mockResolvedValue(
+          options.installedMarker
+            ? [
+                {
+                  identifier: YINGMI,
+                  manifest: {
+                    api: [],
+                    identifier: YINGMI,
+                    meta: { title: 'Installed MCP' },
+                    type: 'mcp',
+                  },
+                  runtimeType: 'mcp',
+                },
+              ]
+            : [],
+        ),
+      },
       userId: 'user-1',
     } as never,
     {
@@ -201,5 +220,48 @@ describe('discoverTools — unpinned custom MCP connectors', () => {
     });
 
     expect(result.toolManifestMap[YINGMI]).toBeUndefined();
+  });
+});
+
+describe('discoverTools — installed marker backed by an unpinned connector', () => {
+  it('activates the connector APIs instead of the empty installed manifest', async () => {
+    const result = await run({ installedMarker: true });
+
+    expect(result.toolsResult.enabledToolIds).not.toContain(YINGMI);
+    expect(availableToolIds(result.toolManifestMap, result.toolsResult.enabledToolIds)).toContain(
+      YINGMI,
+    );
+    expect(result.toolManifestMap[YINGMI].api.map((api) => api.name)).toEqual([
+      'BatchGetFundNavHistory',
+    ]);
+    expect(result.toolSourceMap[YINGMI]).toBe('mcp');
+    expect(result.toolManifestMap[YINGMI]).toMatchObject({
+      mcpParams: { type: 'http', url: customConnector.mcpServerUrl },
+    });
+
+    const { activatorRuntime } =
+      await import('@/server/services/toolExecution/serverRuntimes/activator');
+    const runtime = await activatorRuntime.factory({
+      serverDB: {} as never,
+      toolManifestMap: result.toolManifestMap,
+      userId: 'user-1',
+    });
+    const activation = await runtime.activateTools({ identifiers: [YINGMI] });
+    expect(activation.success).toBe(true);
+    expect(activation.state.activatedTools).toEqual([
+      { apiCount: 1, identifier: YINGMI, name: customConnector.name },
+    ]);
+    expect(activation.content).toContain(`${YINGMI}.BatchGetFundNavHistory`);
+
+    const restored = result.toolsEngine!.generateToolsDetailed({
+      context: { isExplicitActivation: true },
+      model: 'test-model',
+      provider: 'test-provider',
+      skipDefaultTools: true,
+      toolIds: [YINGMI],
+    });
+    expect(restored.tools?.map((tool) => tool.function.name)).toContain(
+      `${YINGMI}____BatchGetFundNavHistory____mcp`,
+    );
   });
 });
