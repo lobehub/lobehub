@@ -1,7 +1,10 @@
 // @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { LobeAgentChatConfig } from '@lobechat/types';
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 
 import type { LobeOpenAICompatibleRuntime } from '../../core/BaseAI';
+import type { ChatStreamPayload } from '../../types';
+import { applyModelExtendParams } from '../../utils/modelExtendParams';
 import { LobeOpenRouterAI, params } from './index';
 
 const loadModelsMock = vi.hoisted(() => vi.fn().mockResolvedValue([]));
@@ -318,6 +321,122 @@ describe('LobeOpenRouterAI - custom features', () => {
       );
     });
 
+    describe('Claude effort and thinking', () => {
+      const getPayload = () =>
+        (instance['client'].chat.completions.create as Mock).mock.calls[0][0];
+
+      it('should send the Claude effort param as reasoning effort instead of forwarding it', async () => {
+        await instance.chat({
+          effort: 'xhigh',
+          messages: [{ content: 'Think hard', role: 'user' }],
+          model: 'anthropic/claude-haiku-5.5',
+          thinking: { type: 'adaptive' },
+        });
+
+        const payload = getPayload();
+        expect(payload.reasoning).toEqual({ effort: 'xhigh' });
+        expect(payload).not.toHaveProperty('effort');
+      });
+
+      it('should enable reasoning for adaptive thinking without an effort', async () => {
+        await instance.chat({
+          messages: [{ content: 'Think', role: 'user' }],
+          model: 'anthropic/claude-haiku-5.5',
+          thinking: { type: 'adaptive' },
+        });
+
+        expect(getPayload().reasoning).toEqual({ enabled: true });
+      });
+
+      it.each(['low', 'medium', 'high'])(
+        'should keep effort %s alongside disabled thinking',
+        async (effort) => {
+          await instance.chat({
+            effort,
+            messages: [{ content: 'Quick answer', role: 'user' }],
+            model: 'anthropic/claude-haiku-5.5',
+            thinking: { type: 'disabled' },
+          });
+
+          const payload = getPayload();
+          expect(payload.reasoning).toEqual({ effort, enabled: false });
+          expect(payload).not.toHaveProperty('effort');
+        },
+      );
+
+      it.each(['xhigh', 'max'])(
+        'should drop effort %s when thinking is disabled, since Claude 5 rejects the pairing',
+        async (effort) => {
+          await instance.chat({
+            effort,
+            messages: [{ content: 'Quick answer', role: 'user' }],
+            model: 'anthropic/claude-haiku-5.5',
+            thinking: { type: 'disabled' },
+          });
+
+          const payload = getPayload();
+          expect(payload.reasoning).toEqual({ enabled: false });
+          expect(payload).not.toHaveProperty('effort');
+        },
+      );
+
+      it('should not disable reasoning on always-thinking Claude models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Quick answer', role: 'user' }],
+          model: 'anthropic/claude-opus-5.5',
+          thinking: { budget_tokens: 0, type: 'disabled' },
+        });
+
+        expect(getPayload()).not.toHaveProperty('reasoning');
+      });
+
+      it('should keep the effort when disabling is requested on always-thinking Claude models', async () => {
+        await instance.chat({
+          effort: 'max',
+          messages: [{ content: 'Quick answer', role: 'user' }],
+          model: 'anthropic/claude-opus-5.5',
+          thinking: { type: 'disabled' },
+        });
+
+        expect(getPayload().reasoning).toEqual({ effort: 'max' });
+      });
+
+      it.each([
+        ['anthropic/claude-haiku-5.5', { enableAdaptiveThinking: false }, { enabled: false }],
+        ['anthropic/claude-haiku-5.5', { enableAdaptiveThinking: true }, {}],
+        ['anthropic/claude-opus-5.5', {}, {}],
+      ])(
+        'should send the effort picked on the %s card with %o',
+        async (modelId, thinkingConfig, expectedReasoning) => {
+          const { openrouter } = await import('model-bank');
+          const card = openrouter.find((m) => m.id === modelId);
+
+          await instance.chat({
+            messages: [{ content: 'Hello', role: 'user' }],
+            model: modelId,
+            ...applyModelExtendParams({
+              chatConfig: { ...thinkingConfig, opus47Effort: 'low' } as LobeAgentChatConfig,
+              extendParams: card?.settings?.extendParams,
+              model: modelId,
+            }),
+          } as ChatStreamPayload);
+
+          expect(getPayload().reasoning).toEqual({ ...expectedReasoning, effort: 'low' });
+        },
+      );
+
+      it('should not attach reasoning effort to disabled thinking on non-Claude models', async () => {
+        await instance.chat({
+          messages: [{ content: 'Quick answer', role: 'user' }],
+          model: 'openai/gpt-5.5',
+          reasoning_effort: 'high',
+          thinking: { type: 'disabled' },
+        });
+
+        expect(getPayload().reasoning).toEqual({ enabled: false });
+      });
+    });
+
     describe('image model handling', () => {
       it('should add modalities for model with -image suffix', async () => {
         await instance.chat({
@@ -544,6 +663,65 @@ describe('LobeOpenRouterAI - custom features', () => {
       expect(geminiFlash?.settings?.extendParams).toEqual(
         expect.arrayContaining(['thinkingLevel']),
       );
+    });
+
+    it('should map Claude 5 reasoning to effort instead of a thinking budget', async () => {
+      const claudeIds = [
+        'anthropic/claude-opus-5.5',
+        'anthropic/claude-sonnet-5.5',
+        'anthropic/claude-fable-5.1',
+        'anthropic/claude-haiku-5.5',
+        'anthropic/claude-haiku-5.5:batch',
+        'anthropic/claude-opus-5',
+        'anthropic/claude-sonnet-5',
+        'anthropic/claude-sonnet-4.5',
+      ];
+
+      vi.stubGlobal(
+        'fetch',
+        vi.fn().mockResolvedValue({
+          ok: true,
+          json: async () => ({
+            data: claudeIds.map((id) => ({
+              architecture: { input_modalities: ['text'] },
+              created: 1_700_000_000,
+              description: 'Test model',
+              id,
+              name: id,
+              pricing: { completion: '0.00001', prompt: '0.00001' },
+              supported_parameters: ['reasoning'],
+              top_provider: { context_length: 8192, max_completion_tokens: 1024 },
+            })),
+          }),
+        } as any),
+      );
+
+      const models = await params.models();
+      const extendParamsOf = (id: string) =>
+        models.find((m) => m.id === id)?.settings?.extendParams;
+
+      // Always thinking: OpenRouter rejects disabling reasoning, so effort is the only control.
+      for (const id of [
+        'anthropic/claude-opus-5.5',
+        'anthropic/claude-sonnet-5.5',
+        'anthropic/claude-fable-5.1',
+      ]) {
+        expect(extendParamsOf(id)).toEqual(['opus47Effort']);
+      }
+
+      for (const id of [
+        'anthropic/claude-haiku-5.5',
+        'anthropic/claude-haiku-5.5:batch',
+        'anthropic/claude-opus-5',
+        'anthropic/claude-sonnet-5',
+      ]) {
+        expect(extendParamsOf(id)).toEqual(['enableAdaptiveThinking', 'opus47Effort']);
+      }
+
+      expect(extendParamsOf('anthropic/claude-sonnet-4.5')).toEqual([
+        'enableReasoning',
+        'reasoningBudgetToken',
+      ]);
     });
   });
 

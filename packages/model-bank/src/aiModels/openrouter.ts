@@ -70,8 +70,12 @@ const openrouterChatModels: AIChatModelCard[] = [
       ],
     },
     releasedAt: '2026-10-07',
-    // Budget tokens are rejected on Haiku 5.5, so no `reasoningBudgetToken` toggle.
-    settings: { extendParams: ['disableContextCaching'], searchImpl: 'params' },
+    // Budget tokens are rejected on Haiku 5.5, so no `reasoningBudgetToken` toggle. Effort is sent
+    // as `reasoning.effort`; thinking can still be disabled at effort `high` or below.
+    settings: {
+      extendParams: ['disableContextCaching', 'enableAdaptiveThinking', 'opus47Effort'],
+      searchImpl: 'params',
+    },
     type: 'chat',
   },
   {
@@ -102,7 +106,8 @@ const openrouterChatModels: AIChatModelCard[] = [
     },
     releasedAt: '2026-09-22',
     // Thinking is always on for Opus 5.5 and budget tokens are not accepted, so no reasoning toggle.
-    settings: { extendParams: ['disableContextCaching'], searchImpl: 'params' },
+    // Effort is sent as `reasoning.effort`.
+    settings: { extendParams: ['disableContextCaching', 'opus47Effort'], searchImpl: 'params' },
     type: 'chat',
   },
   {
