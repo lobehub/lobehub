@@ -581,7 +581,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Delete old canary GitHub releases
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           github-token: ${{ steps.app-token.outputs.token }}
           script: |
