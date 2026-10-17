@@ -8,6 +8,7 @@ import type { TaskDetail, UIChatMessage } from '../message';
 import type { ChatTopic } from '../topic';
 
 export * from './credentialFacts';
+export * from './initRequest';
 export * from './modelFacts';
 
 /**

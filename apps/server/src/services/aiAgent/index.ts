@@ -14,7 +14,12 @@ import type {
   ScheduleAgentRunResult,
   UserInterventionConfig,
 } from '@lobechat/types';
-import { getWorkingDirEffectivePath, RequestTrigger } from '@lobechat/types';
+import {
+  agentShareFileAccessScope,
+  getWorkingDirEffectivePath,
+  ordinaryFileAccessScope,
+  RequestTrigger,
+} from '@lobechat/types';
 import { nanoid } from '@lobechat/utils';
 import { TRPCError } from '@trpc/server';
 import debug from 'debug';
@@ -60,6 +65,7 @@ import type {
   GroupActionMemberBridgeParams,
 } from '@/server/services/agentRuntime/types';
 import { ComposioService } from '@/server/services/composio';
+import { DocumentService } from '@/server/services/document';
 import { MarketService } from '@/server/services/market';
 import { markdownToTxt } from '@/utils/markdownToTxt';
 
@@ -1305,8 +1311,12 @@ export class AiAgentService {
           ? { ...appContext, editingAgentId: turn.editingAgentId }
           : appContext,
       assistantMessageId: turn.assistantMessageId,
+      botContext,
+      botPlatformContext,
       canUseDevice,
       deviceAccessReason,
+      disabledPluginIds,
+      discordContext,
       model,
       parentMessageId,
       persistAgentId,
@@ -1453,13 +1463,9 @@ export class AiAgentService {
       approvalOwnerAssistantId,
       approvedToolEntries,
       attachedFileIds,
-      botContext,
-      botPlatformContext,
       disableLocalSystem,
       disableSelfFeedbackIntentTool: params.disableSelfFeedbackIntentTool,
       disableTools: params.disableTools,
-      disabledPluginIds,
-      discordContext,
       ephemeralUserMessage,
       exclusivePluginIds,
       files,
@@ -1469,7 +1475,6 @@ export class AiAgentService {
       isFixedDeviceTarget: turn.isFixedDeviceTarget,
       localDeviceId,
       mentionedAgents,
-      operationId,
       parentMessageId,
       requestTrigger: requestTriggerMetadata.trigger,
       requestedDeviceId: turn.requestedDeviceId,
@@ -1498,6 +1503,13 @@ export class AiAgentService {
           loadHistoryMessages,
           messageModel: this.messageModel,
           pluginModel: this.pluginModel,
+          readFileContent: async (fileId) =>
+            (
+              await new DocumentService(this.db, this.userId, this.workspaceId).parseFile(
+                fileId,
+                shareGate ? agentShareFileAccessScope(shareGate) : ordinaryFileAccessScope,
+              )
+            ).content ?? undefined,
           throwIfExecutionAborted,
           topicModel: this.topicModel,
           userId: this.userId,
@@ -1505,6 +1517,7 @@ export class AiAgentService {
         },
         runContext,
         initRequest,
+        operationId,
       ),
     );
 

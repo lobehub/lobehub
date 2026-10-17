@@ -114,6 +114,7 @@ import {
   normalizeCompletionMessages,
 } from './CompletionLifecycle';
 import { stepChangedCredentials } from './credentialFacts';
+import { type DeferredInitRunner, runPendingInit } from './deferredInit';
 import { logToolCallPc } from './formalObservation';
 import { type AgentHook, hookDispatcher, parseSerializedHooks } from './hooks';
 import {
@@ -124,8 +125,10 @@ import {
 import { HumanInterventionHandler } from './HumanInterventionHandler';
 import { buildProjectedMessagePatch } from './messagePatch';
 import { OperationTraceRecorder } from './OperationTraceRecorder';
+import { abortShareRun, isShareRunRevoked } from './shareRunGate';
 import { createDefaultSnapshotStore } from './snapshotStore';
 import { buildStepPresentation, formatTokenCount } from './stepPresentation';
+import { loadTerminalDurableStatus } from './terminalStatus';
 import {
   type AgentExecutionParams,
   type AgentExecutionResult,
@@ -467,6 +470,8 @@ export interface AgentRuntimeDelegate {
    * placeholder before resuming the parked parent operation.
    */
   execVirtualSubAgent?: (params: ExecVirtualSubAgentParams) => Promise<ExecSubAgentResult>;
+  /** Run the init an operation was created without (see `DeferredInitRunner`). */
+  runDeferredInit?: DeferredInitRunner;
   /**
    * Re-check that an Agent Share visitor run is STILL authorized to continue,
    * called on EVERY step. Without it, a revocation that lands mid-run (link →
@@ -1154,62 +1159,17 @@ export class AgentRuntimeService {
     }
   }
 
-  /**
-   * Terminate an Agent Share visitor run whose authorization was revoked
-   * mid-flight (see the per-step check in `executeStep`).
-   *
-   * Persists `interrupted` onto the already-loaded state — the same terminal
-   * status a visitor's own Stop produces — so the client's stream settles
-   * normally instead of hanging. Falls back to `interruptOperation` when no
-   * state was readable. A persistence failure is logged, never rethrown: the
-   * run must stop regardless of whether the terminal status could be written.
-   *
-   * The completion lifecycle (`emitSignalEvents` + `dispatchHooks`) must run
-   * here too: this abort short-circuits `executeStep` before `runtime.step()`,
-   * so no downstream path is left to persist the terminal status. Without it
-   * `saveAgentState` would only update the runtime-state cache and publish the
-   * terminal stream event, leaving `agent_operations` stuck on `running` —
-   * which `TopicModel.tryReserveTaskCallback` then reads as a live run and
-   * blocks the visitor's next send on that topic for the abandoned-run TTL.
-   */
-  private async buildShareAbortResult(
-    operationId: string,
-    state: AgentState | null | undefined,
-  ): Promise<AgentExecutionResult> {
-    log('[%s] Aborting share visitor run — the share is no longer authorized', operationId);
-
-    try {
-      if (state) {
-        const interruptedState: AgentState = {
-          ...state,
-          lastModified: new Date().toISOString(),
-          status: 'interrupted',
-        };
-        await this.coordinator.saveAgentState(operationId, interruptedState);
-
-        await this.completionLifecycle.emitSignalEvents(
-          operationId,
-          interruptedState,
-          'interrupted',
-        );
-        await this.completionLifecycle.dispatchHooks(operationId, interruptedState, 'interrupted');
-      } else {
-        await this.interruptOperation(operationId);
-      }
-    } catch (error) {
-      log(
-        '[%s] Failed to persist interrupted state for an aborted share run: %O',
-        operationId,
-        error,
-      );
-    }
-
-    return {
-      nextStepScheduled: false,
-      state: { status: 'interrupted' },
-      stepResult: null,
-      success: false,
-    };
+  /** Terminate a shared run whose authorization was revoked (see `abortShareRun`). */
+  private buildShareAbortResult(operationId: string, state: AgentState | null | undefined) {
+    return abortShareRun(
+      {
+        completionLifecycle: this.completionLifecycle,
+        coordinator: this.coordinator,
+        interruptOperation: (id) => this.interruptOperation(id),
+      },
+      operationId,
+      state,
+    );
   }
 
   // ==================== Operation Management ====================
@@ -1820,32 +1780,26 @@ export class AgentRuntimeService {
     // marked that operation interrupted. ACK it without touching the old
     // topic; otherwise the abandoned attempt can finish concurrently with its
     // replacement and submit a second Acceptance run.
-    try {
-      const durableOperation = await this.agentOperationModel.findById(operationId);
-      if (
-        durableOperation &&
-        ['done', 'error', 'interrupted', 'abandoned'].includes(durableOperation.status)
-      ) {
-        log(
-          '[%s][%d] Skipping delivery for terminal durable operation (%s)',
-          operationId,
-          stepIndex,
-          durableOperation.status,
-        );
-        return {
-          nextStepScheduled: false,
-          state: {
-            status:
-              durableOperation.status === 'abandoned' ? 'interrupted' : durableOperation.status,
-          },
-          stepResult: null,
-          success: true,
-        };
-      }
-    } catch (error) {
-      // Preserve runtime availability when the durable store has a transient
-      // read failure. The step lock and normal persistence path still apply.
-      log('[%s][%d] Durable operation status check failed: %O', operationId, stepIndex, error);
+    const durableTerminalStatus = await loadTerminalDurableStatus(
+      this.agentOperationModel,
+      operationId,
+      stepIndex,
+    );
+    if (durableTerminalStatus) {
+      log(
+        '[%s][%d] Skipping delivery for terminal durable operation (%s)',
+        operationId,
+        stepIndex,
+        durableTerminalStatus,
+      );
+      return {
+        nextStepScheduled: false,
+        state: {
+          status: durableTerminalStatus === 'abandoned' ? 'interrupted' : durableTerminalStatus,
+        },
+        stepResult: null,
+        success: true,
+      };
     }
 
     // Watchdog re-check for a parked async-tool wait: re-run the barrier + CAS
@@ -2078,6 +2032,31 @@ export class AgentRuntimeService {
           throw new Error(`Agent state not found for operation ${operationId}`);
         }
 
+        // A run created without its init still carries the turn's request: run
+        // that init here, after the step claim and before anything is published.
+        let deferredInitContext: AgentRuntimeContext | undefined;
+        if (agentState.request) {
+          const init = await runPendingInit(
+            {
+              abortShareRun: (state) => this.buildShareAbortResult(operationId, state),
+              agentOperationModel: this.agentOperationModel,
+              coordinator: this.coordinator,
+              isShareRunRevoked: (state) =>
+                isShareRunRevoked(
+                  this.delegate.verifyShareRunStillAuthorized,
+                  operationId,
+                  stepIndex,
+                  state,
+                ),
+              runDeferredInit: this.delegate?.runDeferredInit,
+              settleSkippedStep: (state) => this.settleSkippedStep(operationId, state),
+            },
+            { agentState, operationId, request: agentState.request, stepIndex },
+          );
+          if (init.result) return init.result;
+          deferredInitContext = init.context;
+        }
+
         // A parked approval step is already durable before its generic Review
         // is published. When that final Review write fails, the request returns
         // non-2xx and QStash retries this SAME step with `upstash-retried > 0`.
@@ -2182,19 +2161,7 @@ export class AgentRuntimeService {
             agentState.status,
           );
 
-          const reason = this.determineCompletionReason(agentState);
-
-          await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
-
-          // Dispatch completion hooks so consumers (e.g., bot local-mode promise) can finalize
-          await this.completionLifecycle.dispatchHooks(operationId, agentState, reason);
-
-          return {
-            nextStepScheduled: false,
-            state: agentState,
-            stepResult: null,
-            success: true,
-          };
+          return this.settleSkippedStep(operationId, agentState);
         }
 
         // A run parked for a client moves only through its own resume: any other
@@ -2220,31 +2187,15 @@ export class AgentRuntimeService {
         // step boundary. See `AgentShareModel.isRunStillAuthorized`'s JSDoc for
         // why one query covers every revocation path (visibility flip — which
         // is what turning sharing off does — share delete, agent delete).
-        if (this.delegate.verifyShareRunStillAuthorized) {
-          const shareMarker = agentState.principal?.actor?.shareVisitor as
-            { agentId?: string; shareId?: string } | undefined;
-          if (shareMarker?.agentId && shareMarker.shareId) {
-            let stillAuthorized = false;
-            try {
-              stillAuthorized = await this.delegate.verifyShareRunStillAuthorized({
-                agentId: shareMarker.agentId,
-                shareId: shareMarker.shareId,
-              });
-            } catch (error) {
-              // Fail closed: a read failure must not be read as "still
-              // authorized". Falls through to the abort below with
-              // `stillAuthorized` left `false`.
-              log(
-                '[%s][%d] Share run authorization re-check failed: %O',
-                operationId,
-                stepIndex,
-                error,
-              );
-            }
-            if (!stillAuthorized) {
-              return this.buildShareAbortResult(operationId, agentState);
-            }
-          }
+        if (
+          await isShareRunRevoked(
+            this.delegate.verifyShareRunStillAuthorized,
+            operationId,
+            stepIndex,
+            agentState,
+          )
+        ) {
+          return this.buildShareAbortResult(operationId, agentState);
         }
 
         let beforeStepSignalEvents: Array<{ [key: string]: unknown; type: string }> = [];
@@ -2373,7 +2324,17 @@ export class AgentRuntimeService {
         });
 
         // Handle human intervention
-        let currentContext = context;
+        // Step 0 starts from the operation's saved initial context — the same rule
+        // `executeSync` follows. For an ordinary run it is the context that was
+        // queued; for a deferred init it is the one the init assembled, which the
+        // queued placeholder predates, including on a redelivery after the save.
+        const savedInitialContext = (
+          agentState as AgentState & {
+            initialContext?: AgentRuntimeContext;
+          }
+        ).initialContext;
+        let currentContext =
+          deferredInitContext ?? (stepIndex === 0 ? (savedInitialContext ?? context) : context);
         // The wait this step resumes, if any: a resumed call that finds no client
         // again re-parks under the same deadline, so retries never extend it.
         let resumedClientLlmWait: AgentRunClientLlmWait | undefined;
@@ -5249,6 +5210,25 @@ export class AgentRuntimeService {
     }
 
     return undefined;
+  }
+
+  /**
+   * Settle a step that will not run because the operation is already terminal:
+   * emit the completion signals and dispatch the completion hooks so consumers
+   * (e.g. the bot local-mode promise) can finalize. Publishes no step event.
+   */
+  private async settleSkippedStep(operationId: string, agentState: AgentState) {
+    const reason = this.determineCompletionReason(agentState);
+
+    await this.completionLifecycle.emitSignalEvents(operationId, agentState, reason);
+    await this.completionLifecycle.dispatchHooks(operationId, agentState, reason);
+
+    return {
+      nextStepScheduled: false,
+      state: agentState,
+      stepResult: null,
+      success: true,
+    };
   }
 
   /**

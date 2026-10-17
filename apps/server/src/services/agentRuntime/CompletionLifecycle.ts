@@ -549,7 +549,7 @@ export class CompletionLifecycle {
    *   sets the state to `interrupted` once the in-flight step returns), and the
    *   following delivery usually finds the operation already terminal;
    * - `interruptOperation` settles a client-parked run itself, and
-   *   `buildShareAbortResult` settles a revoked share visitor run;
+   *   `abortShareRun` settles a revoked share visitor run;
    * - a loop stopped by `max_steps` / `cost_limit` ends without the agent asking
    *   to finish.
    *
