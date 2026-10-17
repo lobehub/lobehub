@@ -224,7 +224,7 @@ export const useChatItemContextMenu = ({
     const item = getMessage();
     if (!item || item.role !== 'assistant') return;
 
-    openShareMessageModal(item, () => {
+    void openShareMessageModal(item, () => {
       const state = storeApi.getState();
       return createStore({
         context: state.context,

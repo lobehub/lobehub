@@ -16,7 +16,7 @@ export const shareAction = defineAction({
       if (ctx.role === 'user') return null;
       return {
         handleClick: () => {
-          openShareMessageModal(ctx.data, () => {
+          void openShareMessageModal(ctx.data, () => {
             const state = storeApi.getState();
             return createStore({
               context: state.context,

@@ -1,12 +1,12 @@
 import { BRANDING_NAME } from '@lobechat/business-const';
-import type { LoaderFunctionArgs, MetaFunction } from 'react-router';
+import type { ClientLoaderFunctionArgs, LoaderFunctionArgs, MetaFunction } from 'react-router';
 import { useLoaderData } from 'react-router';
 import { SWRConfig, unstable_serialize } from 'swr';
 
 import { shareKeys } from '@/libs/swr/keys';
 import { resolveRequestLocale } from '@/locales/requestLocale';
 
-import SharedTopicView from '../../src/features/topic/SharedTopicView';
+import SharedTopicView, { preloadSharedTopic } from '../../src/features/topic/SharedTopicView';
 import { buildTopicByline } from '../../src/features/topic/topicByline';
 import { loadShareResources } from '../../src/shell/createShareI18n';
 import { cloudflareContext } from '../lib/cloudflareContext';
@@ -34,6 +34,20 @@ export const loader = async ({ context, params, request }: LoaderFunctionArgs) =
     topic,
   };
 };
+
+// Runs as the router initializes on the client, before the hydration render.
+// On that first call `serverLoader()` hands back the data already in the
+// document, so this costs no request; it only starts the conversation's chunks
+// and messages as early as the client can know which conversation it is.
+export const clientLoader = async ({ serverLoader }: ClientLoaderFunctionArgs) => {
+  const data = await serverLoader<typeof loader>();
+  if (data.topic) preloadSharedTopic(data.topic);
+
+  return data;
+};
+
+// No `HydrateFallback`: the route keeps hydrating with its server data.
+clientLoader.hydrate = true as const;
 
 export const meta: MetaFunction<typeof loader> = ({ loaderData }) => {
   const title = loaderData?.topic?.title;

@@ -1,9 +1,7 @@
 import type * as lobechatConstModule from '@lobechat/const';
 import { HeterogeneousAgentSessionErrorCode } from '@lobechat/electron-client-ipc';
-import type * as modelRuntimeModule from '@lobechat/model-runtime';
-import { AgentRuntimeErrorType } from '@lobechat/model-runtime';
 import type * as lobechatTypesModule from '@lobechat/types';
-import { ChatErrorType } from '@lobechat/types';
+import { AgentRuntimeErrorType, ChatErrorType } from '@lobechat/types';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -48,18 +46,6 @@ vi.mock('@lobechat/const', async (importOriginal) => {
   const actual = (await importOriginal()) as typeof lobechatConstModule;
 
   return { ...actual, isDesktop: true };
-});
-
-vi.mock('@lobechat/model-runtime', async (importOriginal) => {
-  const actual = (await importOriginal()) as typeof modelRuntimeModule;
-
-  return {
-    ...actual,
-    AgentRuntimeErrorType: {
-      ...actual.AgentRuntimeErrorType,
-      AgentRuntimeError: 'AgentRuntimeError',
-    },
-  };
 });
 
 vi.mock('@lobechat/types', async (importOriginal) => {

@@ -7,6 +7,8 @@ import { useTranslation } from 'react-i18next';
 
 import { ChatList, ConversationProvider, MessageItem } from '@/features/Conversation';
 
+import { toSharedConversationContext } from './sharedConversation';
+
 interface SharedMessageListProps {
   agentId: string | null;
   groupId: string | null;
@@ -19,12 +21,7 @@ const SharedMessageList = memo<SharedMessageListProps>((props) => {
   const { agentId, groupId, headerSlot, shareId, topicId } = props;
   const { t } = useTranslation('chat');
   const context = useMemo(
-    () => ({
-      agentId: agentId ?? '',
-      groupId: groupId ?? undefined,
-      topicId,
-      topicShareId: shareId,
-    }),
+    () => toSharedConversationContext({ agentId, groupId, shareId, topicId }),
     [agentId, groupId, shareId, topicId],
   );
 

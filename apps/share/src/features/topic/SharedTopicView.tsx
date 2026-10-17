@@ -12,10 +12,12 @@ import { lambdaClient } from '@/libs/trpc/client';
 import { loadRouteWithBuiltinToolSurfaces } from '@/spa/initialize/toolSurfaces';
 import { useGlobalStore } from '@/store/global';
 import { systemStatusSelectors } from '@/store/global/selectors';
+import { type SharedTopicData } from '@/types/topic';
 
 import { clientOnly } from '../../shell/clientOnly';
 import ShareLayout from '../../shell/ShareLayout';
 import ExplainTopic from './ExplainTopic';
+import { primeSharedTopicMessages } from './sharedConversation';
 import TopicAvatar from './TopicAvatar';
 import { buildTopicByline } from './topicByline';
 
@@ -23,6 +25,17 @@ const SharedTopicBody = clientOnly(() =>
   loadRouteWithBuiltinToolSurfaces(() => import('./SharedTopicBody.client')),
 );
 const SharedTopicAside = clientOnly(() => import('./SharedTopicAside.client'));
+
+/**
+ * Everything the conversation needs before it can paint: its chunks and its
+ * newest messages, started together. The route calls this as hydration begins,
+ * where the body would otherwise only request its chunk once hydrated and its
+ * messages once mounted — two downloads in series instead of in parallel.
+ */
+export const preloadSharedTopic = (topic: SharedTopicData) => {
+  SharedTopicBody.preload();
+  primeSharedTopicMessages(topic);
+};
 
 const SharedTopicView = memo(() => {
   const wideScreen = useGlobalStore(systemStatusSelectors.wideScreen);

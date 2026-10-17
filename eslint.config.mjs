@@ -5,53 +5,15 @@ import { eslint } from '@lobehub/lint';
 import { restrictedImports } from '@lobehub/ui/eslint';
 import { flat as mdxFlat } from 'eslint-plugin-mdx';
 
+import {
+  browserBundleRestrictedImportPaths,
+  performanceRestrictedImportPaths,
+  performanceRestrictedImportPatterns,
+} from './eslint.bundleBoundaries.mjs';
+
 const tsconfigRootDir = fileURLToPath(new URL('.', import.meta.url));
 
 const baseRestrictedImportOptions = restrictedImports.rules['no-restricted-imports'][1];
-
-// Shared by every src/** no-restricted-imports block: flat config replaces a
-// rule per file instead of merging it, so a scoped override would otherwise
-// drop these.
-const performanceRestrictedImportPaths = [
-  {
-    allowTypeImports: true,
-    importNames: ['ModelIcon', 'ModelTag', 'ProviderCombine', 'ProviderIcon'],
-    message:
-      'These features statically import every brand icon (~3 MB). Import them from "@/components/LobeIcons", which mounts them through lazy().',
-    name: '@lobehub/icons',
-  },
-  {
-    allowTypeImports: true,
-    message:
-      'Import ProviderIcon / ProviderCombine from "@/components/LobeIcons", which mounts them through lazy().',
-    name: '@/libs/providerIcon',
-  },
-  {
-    allowTypeImports: true,
-    importNames: ['EmojiPicker'],
-    message:
-      'EmojiPicker carries the emoji-mart dataset. Use "@/components/EmojiPicker", which mounts it through lazy().',
-    name: '@lobehub/ui',
-  },
-  {
-    message:
-      'Import the imperative facade from "@/features/ShareModal" so the modal implementation stays outside initial chunks.',
-    name: '@/features/ShareModal/Modal',
-  },
-  {
-    allowTypeImports: true,
-    importNames: ['motion', 'm'],
-    message:
-      'The app runs under <LazyMotion features={domMax}>; `motion` bundles every feature again and `m` from the barrel drags it along. Use `import * as m from "motion/react-m"`.',
-    name: 'motion/react',
-  },
-  {
-    allowTypeImports: true,
-    message:
-      'Do not import the model-bank root barrel; it re-exports the full aiModels catalog (1.4 MB raw). Use a subpath such as "model-bank/aiModel", "model-bank/modelProvider", "model-bank/standardParameters" or "model-bank/utils".',
-    name: 'model-bank',
-  },
-];
 
 // On desktop the shell — every NavPanelPortal sidebar, the titlebar, the command
 // menu — renders as a sibling of TabHost, so React context binds these hooks to
@@ -256,11 +218,13 @@ const createRestrictedImportRule = ({ paths = [], patterns, serverSide = false }
       ...(baseRestrictedImportOptions.paths ?? []),
       ...performanceRestrictedImportPaths,
       ...(serverSide ? [] : browserRuntimeRestrictedImportPaths),
+      ...(serverSide ? [] : browserBundleRestrictedImportPaths),
       ...paths,
     ],
     patterns: [
       ...(baseRestrictedImportOptions.patterns ?? []),
       ...runtimeRestrictedImportPatterns,
+      ...performanceRestrictedImportPatterns,
       ...(serverSide ? [] : browserRuntimeRestrictedImportPatterns),
       ...(patterns ?? []),
     ],
