@@ -63,7 +63,7 @@ const zhipuImageModels: AIImageModelCard[] = [
 
 ### 方式一：使用 OpenAI Compatible Factory
 
-大部分 Provider 都使用 `openaiCompatibleFactory` 来兼容 OpenAI，可以通过传入自定义的 `createImage` 函数（参考 [PR #8534](https://github.com/lobehub/lobehub/pull/8534)）。
+大部分 Provider 都使用 `createOpenAICompatibleRuntime` 来兼容 OpenAI，可以通过传入自定义的 `createImage` 函数（参考 [PR #8534](https://github.com/lobehub/lobehub/pull/8534)）。
 
 **实现步骤**：
 
@@ -111,7 +111,7 @@ export const createProviderImage = async (
 
 ```ts
 // packages/model-runtime/src/providers/<provider-name>/index.ts
-export const LobeProviderAI = openaiCompatibleFactory({
+export const LobeProviderAI = createOpenAICompatibleRuntime({
   constructorOptions: {
     // ... 其他配置
   },
