@@ -472,6 +472,31 @@ describe('file operations', () => {
       expect(fs.readFileSync(filePath, 'utf8')).toBe('price is $XX.XX and $20.00');
     });
 
+    describe.each([false, true])('literal replacements with replace_all=%s', (replaceAll) => {
+      it.each(['$$', '$&', '$`', "$'"])(
+        'writes replacement token %s literally',
+        async (replacement) => {
+          const filePath = path.join(tmpDir, 'literal-replacement.txt');
+          const original = replaceAll ? 'before OLD middle OLD after' : 'before OLD after';
+          const expected = replaceAll
+            ? `before ${replacement} middle ${replacement} after`
+            : `before ${replacement} after`;
+          await writeFile(filePath, original);
+
+          const result = await editLocalFile({
+            file_path: filePath,
+            new_string: replacement,
+            old_string: 'OLD',
+            replace_all: replaceAll,
+          });
+
+          expect(result.success).toBe(true);
+          expect(result.replacements).toBe(replaceAll ? 2 : 1);
+          expect(fs.readFileSync(filePath, 'utf8')).toBe(expected);
+        },
+      );
+    });
+
     it('should handle non-existent file', async () => {
       const result = await editLocalFile({
         file_path: path.join(tmpDir, 'nonexistent.txt'),
