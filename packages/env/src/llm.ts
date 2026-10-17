@@ -77,6 +77,9 @@ export const getLLMConfig = () => {
       ENABLED_FIREWORKSAI: z.boolean(),
       FIREWORKSAI_API_KEY: z.string().optional(),
 
+      ENABLED_FREEAIKEYAPIKEY: z.boolean(),
+      FREEAIKEYAPIKEY_API_KEY: z.string().optional(),
+
       ENABLED_AWS_BEDROCK: z.boolean(),
       AWS_REGION: z.string().optional(),
       AWS_ACCESS_KEY_ID: z.string().optional(),
