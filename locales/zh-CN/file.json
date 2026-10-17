@@ -2,6 +2,7 @@
   "addFolder": "创建文件夹",
   "addLibrary": "添加",
   "addPage": "创建文稿",
+  "chunk.similaritySearch.pageNumber": "第 {{pageNumber}} 页",
   "detail.basic.createdAt": "创建时间",
   "detail.basic.filename": "文件名",
   "detail.basic.size": "文件大小",
