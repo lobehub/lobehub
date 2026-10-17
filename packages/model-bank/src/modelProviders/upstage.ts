@@ -3,7 +3,7 @@ import type { ModelProviderCard } from '../types';
 // ref :https://developers.upstage.ai/docs/getting-started/models
 const Upstage: ModelProviderCard = {
   chatModels: [],
-  checkModel: 'solar-1-mini-chat',
+  checkModel: 'solar-mini4',
   description:
     'Upstage builds AI models for business needs, including Solar LLM and Document AI, with chat APIs that support function calling, translation, embeddings, and domain-specific use cases.',
   id: 'upstage',
