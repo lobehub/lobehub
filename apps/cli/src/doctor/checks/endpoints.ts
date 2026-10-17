@@ -107,7 +107,7 @@ const endpointResolution: DoctorCheck = {
       return {
         detail: `Server is ${shown.serverUrl} but agent streaming still points at the official agent gateway.`,
         evidence,
-        fix: 'Set AGENT_GATEWAY_URL to your own agent gateway, or run agent commands with --sse.',
+        fix: 'Set AGENT_GATEWAY_URL to your own agent gateway configured for this server.',
         status: 'warn',
       };
 

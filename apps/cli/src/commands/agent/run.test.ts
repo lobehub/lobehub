@@ -9,12 +9,8 @@ const { mockExecAgent, mockGetTrpcClient } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../../api/http', () => ({ getAgentStreamAuthInfo: vi.fn() }));
-vi.mock('../../utils/agentStream', () => ({
-  replayAgentEvents: vi.fn(),
-  streamAgentEvents: vi.fn(),
-  streamAgentEventsViaWebSocket: vi.fn(),
-}));
+vi.mock('../../utils/agentStream', () => ({ replayAgentEvents: vi.fn() }));
+vi.mock('./followRun', () => ({ followAgentRun: vi.fn() }));
 vi.mock('../../utils/device', () => ({ resolveLocalDeviceId: vi.fn() }));
 
 const runAgent = async (...args: string[]) => {

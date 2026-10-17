@@ -63,7 +63,6 @@ import { TopicModel } from '@/database/models/topic';
 import { UserModel } from '@/database/models/user';
 import { agentOperations, topics, workspaceMembers } from '@/database/schemas';
 import type { LobeChatDatabase } from '@/database/type';
-import { notShareVisitorTopicRef } from '@/database/utils/shareVisitor';
 import { notTrashed } from '@/database/utils/softDelete';
 import { heteroAuthedProcedure, router } from '@/libs/trpc/lambda';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
@@ -85,6 +84,7 @@ import {
 } from '@/server/routers/lambda/_helpers/conversationResourceGuard';
 import { execAgentClientIdsSchema } from '@/server/routers/lambda/_helpers/execAgentClientIds';
 import { toClientExecAgentResult } from '@/server/routers/lambda/_helpers/groupMemberContinuationResult';
+import { assertOperationVisibleToCaller } from '@/server/routers/lambda/_helpers/operationReadGuard';
 import { assertCanUseWorkspaceAgent } from '@/server/routers/lambda/_helpers/workspaceAgentGuard';
 import {
   GetAgentInterventionReviewBySourceSchema,
@@ -869,63 +869,6 @@ const assertCanUseOperationAgent = async (params: {
     userId,
     workspaceId,
   });
-};
-
-/**
- * Ownership guard for operation-keyed READ endpoints (`getOperationStatus`,
- * `getPendingInterventions`). The runtime coordinator keys operations purely
- * by id and returns the raw operation metadata — including the executing
- * user's full `agentConfig` and `modelRuntimeConfig` — so the id itself must
- * not act as a bearer token.
- *
- * Historically that was inert: an operation id was only ever known to the
- * user who started it. Agent Share breaks the assumption on purpose — a share
- * run executes under the CREATOR's identity while the VISITOR receives the
- * `operationId` (to attach to the Gateway stream, which redacts creator
- * details). Without this guard the visitor could replay that id here and read
- * the unredacted creator config the stream path deliberately hides.
- *
- * Visible to: the operation's owner, or (workspace runs) a member with `use`
- * access to the operation's agent in the SAME workspace as the caller.
- * Everything else — share visitors, AND the creator looking at a visitor's
- * run — resolves as NOT_FOUND so the endpoint does not confirm which ids
- * exist.
- */
-const assertOperationVisibleToCaller = async (params: {
-  db: LobeChatDatabase;
-  operationId: string;
-  userId: string;
-  workspaceId?: string | null;
-}) => {
-  const { db, operationId, userId, workspaceId } = params;
-
-  // Share-visitor runs are ALSO excluded (`notShareVisitorTopicRef`): they
-  // execute under the creator's userId, so the owner shortcut below would
-  // otherwise hand the creator the visitor's run metadata, history and
-  // stream events — the same exclusion `findOwnOperationById` applies to
-  // the trace reads.
-  const [row] = await db
-    .select({
-      agentId: agentOperations.agentId,
-      userId: agentOperations.userId,
-      workspaceId: agentOperations.workspaceId,
-    })
-    .from(agentOperations)
-    .where(
-      and(eq(agentOperations.id, operationId), notShareVisitorTopicRef(agentOperations.topicId)),
-    )
-    .limit(1);
-
-  const notFound = () => new TRPCError({ code: 'NOT_FOUND', message: 'Operation not found' });
-
-  if (!row) throw notFound();
-  if (row.userId === userId) return;
-
-  if (!row.workspaceId || !workspaceId || row.workspaceId !== workspaceId || !row.agentId) {
-    throw notFound();
-  }
-
-  await assertCanUseWorkspaceAgent({ agentId: row.agentId, db, userId, workspaceId });
 };
 
 /**
@@ -3038,6 +2981,32 @@ export const aiAgentRouter = router({
           message: `Failed to execute sub-agent task: ${error.message}`,
         });
       }
+    }),
+
+  getOperationStreamHistory: aiAgentBaseProcedure
+    .input(
+      z.object({
+        cursor: z
+          .string()
+          .regex(/^(0|\d+-\d+)$/)
+          .default('0'),
+        limit: z.number().int().min(1).max(200).default(200),
+        operationId: z.string().min(1),
+      }),
+    )
+    .query(async ({ input, ctx }) => {
+      await assertOperationVisibleToCaller({
+        allowRuntimeOwner: true,
+        db: ctx.serverDB,
+        operationId: input.operationId,
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      });
+      return createStreamEventManager().getStreamHistoryPage(
+        input.operationId,
+        input.cursor,
+        input.limit,
+      );
     }),
 
   getOperationStatus: aiAgentProcedure

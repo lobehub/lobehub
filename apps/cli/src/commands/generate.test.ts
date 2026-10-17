@@ -197,7 +197,7 @@ describe('generate command', () => {
       expect(log.error).not.toHaveBeenCalled();
     });
 
-    it('should output collected SSE as JSON when --json is used without --stream', async () => {
+    it('should output collected SSE as JSON when --json is used', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents)));
 
       const program = createProgram();
@@ -210,24 +210,11 @@ describe('generate command', () => {
       });
     });
 
-    it('should stream Gemini content parts without printing the stop reason', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents)));
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
-
-      const fetchCall = vi.mocked(fetch).mock.calls[0];
-      const body = JSON.parse(fetchCall[1]!.body as string);
-      expect(body.stream).toBe(true);
-
-      expect(writtenText()).toBe('Hello there, how are you?\n');
-    });
-
-    it('should stream only text events from the LobeHub protocol', async () => {
+    it('should collect only text events from the LobeHub protocol', async () => {
       vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(openaiEvents)));
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi']);
 
       expect(writtenText()).toBe('Hello, world\n');
     });
@@ -280,7 +267,7 @@ describe('generate command', () => {
       expect(log.warn).toHaveBeenCalledWith(expect.stringContaining('generate image'));
     });
 
-    it('should stream plain OpenAI chat-completion chunks', async () => {
+    it('should collect plain OpenAI chat-completion chunks', async () => {
       vi.stubGlobal(
         'fetch',
         vi
@@ -294,20 +281,17 @@ describe('generate command', () => {
       );
 
       const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']);
+      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi']);
 
       expect(writtenText()).toBe('Hello\n');
     });
 
-    it('should print each SSE event as a JSON line with --stream --json', async () => {
-      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(sseResponse(geminiEvents.slice(0, 3))));
-
-      const program = createProgram();
-      await program.parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream', '--json']);
-
-      expect(consoleSpy.mock.calls.map(([line]) => JSON.parse(line as string))).toEqual(
-        geminiEvents.slice(0, 3),
-      );
+    it('rejects the removed --stream option without making a request', async () => {
+      vi.stubGlobal('fetch', vi.fn());
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'generate', 'text', 'Hi', '--stream']),
+      ).rejects.toThrow("unknown option '--stream'");
+      expect(fetch).not.toHaveBeenCalled();
     });
 
     it('should exit when the SSE stream reports an error', async () => {

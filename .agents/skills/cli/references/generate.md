@@ -27,12 +27,13 @@ lh generate (alias: gen)
 
 ## `lh generate text <prompt>` / `lh gen text <prompt>`
 
-Generate text completion.
+Generate a complete text response. Incremental streaming is not supported; the agent
+gateway WebSocket handles agent operations, not this single-completion endpoint.
 
 **Source**: `apps/cli/src/commands/generate/text.ts`
 
 ```bash
-lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--stream] [--json] [--pipe]
+lh gen text <prompt> [-m <model>] [-p <provider>] [-s <prompt>] [--temperature <n>] [--max-tokens <n>] [--json] [--pipe]
 ```
 
 ```bash
@@ -46,7 +47,6 @@ echo "context" | lh gen text "summarize" --pipe
 | `-s, --system <prompt>`     | System prompt                      | -                    |
 | `--temperature <n>`         | Temperature (0-2)                  | -                    |
 | `--max-tokens <n>`          | Maximum output tokens              | -                    |
-| `--stream`                  | Enable streaming output            | `false`              |
 | `--json`                    | Output full JSON response          | `false`              |
 | `--pipe`                    | Read additional context from stdin | `false`              |
 

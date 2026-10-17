@@ -60,17 +60,9 @@ const { getTrpcClient: mockGetTrpcClient } = vi.hoisted(() => ({
   getTrpcClient: vi.fn(),
 }));
 
-const { mockStreamAgentEvents } = vi.hoisted(() => ({
-  mockStreamAgentEvents: vi.fn(),
-}));
-
-const { mockReplayAgentEvents, mockStreamAgentEventsViaWebSocket } = vi.hoisted(() => ({
+const { mockFollowAgentRun, mockReplayAgentEvents } = vi.hoisted(() => ({
+  mockFollowAgentRun: vi.fn(),
   mockReplayAgentEvents: vi.fn(),
-  mockStreamAgentEventsViaWebSocket: vi.fn(),
-}));
-
-const { mockGetAgentStreamAuthInfo } = vi.hoisted(() => ({
-  mockGetAgentStreamAuthInfo: vi.fn(),
 }));
 
 const { mockResolveLocalDeviceId } = vi.hoisted(() => ({
@@ -83,12 +75,8 @@ const { mockReadStdinText } = vi.hoisted(() => ({
 
 vi.mock('node:stream/consumers', () => ({ text: mockReadStdinText }));
 vi.mock('../api/client', () => ({ getTrpcClient: mockGetTrpcClient }));
-vi.mock('../api/http', () => ({ getAgentStreamAuthInfo: mockGetAgentStreamAuthInfo }));
-vi.mock('../utils/agentStream', () => ({
-  replayAgentEvents: mockReplayAgentEvents,
-  streamAgentEvents: mockStreamAgentEvents,
-  streamAgentEventsViaWebSocket: mockStreamAgentEventsViaWebSocket,
-}));
+vi.mock('../utils/agentStream', () => ({ replayAgentEvents: mockReplayAgentEvents }));
+vi.mock('./agent/followRun', () => ({ followAgentRun: mockFollowAgentRun }));
 vi.mock('../utils/device', () => ({ resolveLocalDeviceId: mockResolveLocalDeviceId }));
 describe('agent command', () => {
   let exitSpy: ReturnType<typeof vi.spyOn>;
@@ -99,14 +87,9 @@ describe('agent command', () => {
     exitSpy = vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
     consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     mockGetTrpcClient.mockResolvedValue(mockTrpcClient);
-    mockGetAgentStreamAuthInfo.mockResolvedValue({
-      headers: { 'Oidc-Auth': 'test-token' },
-      serverUrl: 'https://example.com',
-    });
-    mockStreamAgentEvents.mockResolvedValue(undefined);
     mockReplayAgentEvents.mockReset();
-    mockStreamAgentEventsViaWebSocket.mockReset();
-    mockStreamAgentEventsViaWebSocket.mockResolvedValue(undefined);
+    mockFollowAgentRun.mockReset();
+    mockFollowAgentRun.mockResolvedValue({ kind: 'completed', status: 'done' });
     mockResolveLocalDeviceId.mockReset();
     mockReadStdinText.mockReset();
     for (const method of Object.values(mockTrpcClient.agent)) {
@@ -702,50 +685,18 @@ describe('agent command', () => {
       expect(mockTrpcClient.aiAgent.execAgent.mutate).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'a1', prompt: 'Hello' }),
       );
-      expect(mockStreamAgentEventsViaWebSocket).toHaveBeenCalledWith(
-        expect.objectContaining({
-          gatewayUrl: expect.any(String),
-          json: undefined,
-          operationId: 'op-123',
-          serverUrl: 'https://example.com',
-          token: undefined,
-          tokenType: undefined,
-          verbose: undefined,
-        }),
-      );
-      expect(mockStreamAgentEvents).not.toHaveBeenCalled();
+      expect(mockFollowAgentRun).toHaveBeenCalledWith('op-123', {
+        json: undefined,
+        onStall: expect.any(Function),
+        verbose: undefined,
+      });
     });
 
-    it('should fall back to SSE when --sse is provided', async () => {
-      mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
-        operationId: 'op-sse',
-        success: true,
-      });
-
-      const program = createProgram();
-      await program.parseAsync([
-        'node',
-        'test',
-        'agent',
-        'run',
-        '--agent-id',
-        'a1',
-        '--prompt',
-        'Hello',
-        '--sse',
-      ]);
-
-      expect(mockStreamAgentEvents).toHaveBeenCalledWith(
-        'https://example.com/api/agent/stream?operationId=op-sse',
-        expect.objectContaining({ 'Oidc-Auth': 'test-token' }),
-        expect.objectContaining({
-          json: undefined,
-          // the SSE stream gets the same quiet-window status probe as WebSocket
-          onStall: expect.any(Function),
-          verbose: undefined,
-        }),
-      );
-      expect(mockStreamAgentEventsViaWebSocket).not.toHaveBeenCalled();
+    it('rejects the removed --sse option before starting a run', async () => {
+      await expect(
+        createProgram().parseAsync(['node', 'test', 'agent', 'run', '--sse']),
+      ).rejects.toThrow("unknown option '--sse'");
+      expect(mockTrpcClient.aiAgent.execAgent.mutate).not.toHaveBeenCalled();
     });
     it('should support --slug option', async () => {
       mockTrpcClient.aiAgent.execAgent.mutate.mockResolvedValue({
@@ -1032,8 +983,9 @@ describe('agent command', () => {
         '--json',
       ]);
 
-      expect(mockStreamAgentEventsViaWebSocket).toHaveBeenCalledWith(
-        expect.objectContaining({ json: true, operationId: 'op-j' }),
+      expect(mockFollowAgentRun).toHaveBeenCalledWith(
+        'op-j',
+        expect.objectContaining({ json: true }),
       );
     });
   });
@@ -1264,7 +1216,7 @@ describe('agent command', () => {
     // ── #19613: live-stream completion ────────────────────────────
 
     it('exits 0 when the stream reports the run done', async () => {
-      mockStreamAgentEventsViaWebSocket.mockResolvedValue({ kind: 'completed', status: 'done' });
+      mockFollowAgentRun.mockResolvedValue({ kind: 'completed', status: 'done' });
       await run();
       expect(process.exitCode).toBeUndefined();
       expect(exitSpy).not.toHaveBeenCalled();
@@ -1275,25 +1227,25 @@ describe('agent command', () => {
       ['failed', 1],
       ['interrupted', 1],
     ] as const)('exits %s → %i from the WebSocket stream', async (kind, code) => {
-      mockStreamAgentEventsViaWebSocket.mockResolvedValue({ kind, status: kind });
+      mockFollowAgentRun.mockResolvedValue({ kind, status: kind });
       await run();
       expect(process.exitCode).toBe(code);
     });
 
-    it('exits 2 for a run parked on human approval over SSE, in --json mode too', async () => {
-      mockStreamAgentEvents.mockResolvedValue({
+    it('exits 2 for a run parked on human approval over WebSocket, in --json mode too', async () => {
+      mockFollowAgentRun.mockResolvedValue({
         kind: 'waiting_for_human',
         status: 'waiting_for_human',
       });
-      await run('--sse', '--json', '--no-headless');
+      await run('--json', '--no-headless');
       expect(process.exitCode).toBe(2);
     });
 
-    it('an SSE stream that cannot be opened falls back to polling the run outcome', async () => {
-      mockStreamAgentEvents.mockRejectedValue(new Error('Agent stream failed: 502 Bad Gateway'));
+    it('a WebSocket stream that cannot be opened falls back to polling the run outcome', async () => {
+      mockFollowAgentRun.mockRejectedValue(new Error('Agent stream failed: 502 Bad Gateway'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(envelope('done'));
 
-      await run('--sse');
+      await run();
 
       expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalled();
       expect(exitSpy).not.toHaveBeenCalled();
@@ -1339,7 +1291,7 @@ describe('agent command', () => {
 
     it('polls the envelope the server returns and stops on currentState.status=done', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(
+      mockFollowAgentRun.mockRejectedValue(
         new Error('Agent gateway WebSocket failed: [object ErrorEvent]'),
       );
       mockTrpcClient.aiAgent.getOperationStatus.query
@@ -1354,7 +1306,7 @@ describe('agent command', () => {
     });
 
     it('falls back to the envelope summary flags when there is no status string', async () => {
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({
         hasError: false,
         isCompleted: true,
@@ -1365,7 +1317,7 @@ describe('agent command', () => {
 
     it('gives up loudly with exit 3 on an answer whose status it cannot read', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({ foo: 1 });
 
       await runWithTimers(60_000);
@@ -1382,7 +1334,7 @@ describe('agent command', () => {
       ['interrupted', 1],
       ['waiting_for_human', 2],
     ] as const)('poll ending in %s exits %i', async (status, code) => {
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(
         envelope(status, status === 'error' ? { error: 'model quota exceeded' } : {}),
       );
@@ -1395,7 +1347,7 @@ describe('agent command', () => {
     it.each(['failed', 'cancelled', 'aborted'])(
       'legacy flat status %s is not reported as success',
       async (status) => {
-        mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+        mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
         mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue({ status });
         await run();
         expect(process.exitCode).toBe(1);
@@ -1403,7 +1355,7 @@ describe('agent command', () => {
     );
 
     it('a missing status result exits 3 without claiming the run finished or expired', async () => {
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(null);
       await run();
       expect(process.exitCode).toBe(3);
@@ -1413,19 +1365,11 @@ describe('agent command', () => {
       expect(out).toContain('outcome cannot be confirmed');
     });
 
-    it('a stream that ends without a terminal event checks the status instead of assuming success', async () => {
-      mockStreamAgentEventsViaWebSocket.mockResolvedValue(undefined); // session_complete only
-      mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(envelope('error'));
-      await run();
-      expect(mockTrpcClient.aiAgent.getOperationStatus.query).toHaveBeenCalled();
-      expect(process.exitCode).toBe(1);
-    });
-
     // ── #19615: timeouts must not cut off an active run ───────────
 
     it('--json no longer throws on a dropped stream; it polls the run to its end', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(
+      mockFollowAgentRun.mockRejectedValue(
         new Error('Agent gateway WebSocket sent no progress for 60s; status check failed: x'),
       );
       mockTrpcClient.aiAgent.getOperationStatus.query
@@ -1442,7 +1386,7 @@ describe('agent command', () => {
     });
 
     it('the WebSocket quiet-window probe keeps waiting on an active run instead of failing it', async () => {
-      mockStreamAgentEventsViaWebSocket.mockImplementation(async (opts: any) => {
+      mockFollowAgentRun.mockImplementation(async (_operationId: string, opts: any) => {
         mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValueOnce(envelope('running'));
         expect(await opts.onStall()).toBeUndefined(); // active → keep streaming
         mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValueOnce(
@@ -1458,7 +1402,7 @@ describe('agent command', () => {
 
     it('bounds an in-flight status request that never answers', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query
         .mockImplementationOnce(() => new Promise(() => {})) // hangs
         .mockResolvedValueOnce(envelope('done'));
@@ -1473,7 +1417,7 @@ describe('agent command', () => {
 
     it('stops after repeated failed status requests with exit 3, not success', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockRejectedValue(new Error('ECONNRESET'));
 
       await runWithTimers(60_000);
@@ -1484,7 +1428,7 @@ describe('agent command', () => {
 
     it('--timeout stops waiting with exit 3 and points at lh agent status', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockImplementation(() => new Promise(() => {}));
+      mockFollowAgentRun.mockImplementation(() => new Promise(() => {}));
 
       await runWithTimers(5_000, '--timeout', '5');
 
@@ -1494,7 +1438,7 @@ describe('agent command', () => {
 
     it('waits on an active run indefinitely by default (no built-in deadline)', async () => {
       vi.useFakeTimers();
-      mockStreamAgentEventsViaWebSocket.mockRejectedValue(new Error('ws down'));
+      mockFollowAgentRun.mockRejectedValue(new Error('ws down'));
       mockTrpcClient.aiAgent.getOperationStatus.query.mockResolvedValue(envelope('running'));
 
       const done = vi.fn();
