@@ -41,6 +41,7 @@ export enum ModelProvider {
   Minimax = 'minimax',
   MinimaxCodingPlan = 'minimaxcodingplan',
   Mistral = 'mistral',
+  Mizumi = 'mizumi',
   ModelScope = 'modelscope',
   Moonshot = 'moonshot',
   Nebius = 'nebius',
