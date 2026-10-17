@@ -339,7 +339,7 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
   private async parseRawEvent(
     data: QQWebhookEventData,
     threadId: string,
-    _eventType: string,
+    eventType: string,
   ): Promise<Message<QQRawMessage>> {
     const content = data.content || '';
     const cleanText = this.formatConverter.cleanMentions(content);
@@ -374,6 +374,9 @@ export class QQAdapter implements Adapter<QQThreadId, QQRawMessage> {
       author,
       formatted,
       id: data.id || '',
+      isMention:
+        eventType === QQ_EVENT_TYPES.GROUP_AT_MESSAGE_CREATE ||
+        eventType === QQ_EVENT_TYPES.AT_MESSAGE_CREATE,
       metadata: {
         dateSent: new Date(data.timestamp || Date.now()),
         edited: false,
