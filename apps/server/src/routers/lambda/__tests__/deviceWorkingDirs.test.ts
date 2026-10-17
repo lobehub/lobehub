@@ -1,7 +1,7 @@
 import type { WorkingDirEntry, WorkspaceInitResult } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { preserveWorkspaceCache } from '../deviceWorkingDirs';
+import { preserveWorkspaceCache, setWorkingDirRepoType } from '../deviceWorkingDirs';
 
 const workspace: WorkspaceInitResult = {
   instructions: [{ content: '# Rules', source: 'AGENTS.md' }],
@@ -71,5 +71,40 @@ describe('preserveWorkspaceCache', () => {
     preserveWorkspaceCache(incoming, stored);
 
     expect(incoming).toEqual(incomingSnapshot);
+  });
+});
+
+describe('setWorkingDirRepoType', () => {
+  it('patches the matching entry in place, keeping order and the server cache', () => {
+    const current: WorkingDirEntry[] = [
+      { path: '/other', repoType: 'git' },
+      { path: '/proj', workspace, workspaceScannedAt: 123 },
+    ];
+
+    expect(setWorkingDirRepoType(current, '/proj', 'github')).toEqual([
+      { path: '/other', repoType: 'git' },
+      { path: '/proj', repoType: 'github', workspace, workspaceScannedAt: 123 },
+    ]);
+  });
+
+  it('matches an entry by its active worktree path', () => {
+    const current: WorkingDirEntry[] = [{ git: { activeWorktree: '/proj-fix' }, path: '/proj' }];
+
+    expect(setWorkingDirRepoType(current, '/proj-fix', 'git')).toEqual([
+      { git: { activeWorktree: '/proj-fix' }, path: '/proj', repoType: 'git' },
+    ]);
+  });
+
+  it('clears the repo type when the dir is no longer a repo', () => {
+    expect(
+      setWorkingDirRepoType([{ path: '/proj', repoType: 'github' }], '/proj', undefined),
+    ).toEqual([{ path: '/proj' }]);
+  });
+
+  it('returns undefined when nothing changes', () => {
+    const current: WorkingDirEntry[] = [{ path: '/proj', repoType: 'github' }];
+
+    expect(setWorkingDirRepoType(current, '/proj', 'github')).toBeUndefined();
+    expect(setWorkingDirRepoType(current, '/missing', 'git')).toBeUndefined();
   });
 });

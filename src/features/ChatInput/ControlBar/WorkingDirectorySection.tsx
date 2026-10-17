@@ -18,7 +18,7 @@ import { useElectronStore } from '@/store/electron';
 import { useTopicId } from '../hooks/useTopicId';
 import GitStatus from './GitStatus';
 import { useActiveProjectDirectoryTopicId } from './useProjectTopicDirectory';
-import { useRepoType } from './useRepoType';
+import { resolveRepoType, useRepoTypeState } from './useRepoType';
 import WorkingDirectoryPicker from './WorkingDirectoryPicker';
 
 interface WorkingDirectorySectionProps {
@@ -51,14 +51,13 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
   const rawEffectiveWorkingDirectory = useEffectiveWorkingDirectory(agentId, { topicId });
   const effectiveWorkingDirectory = getWorkingDirectoryPathString(rawEffectiveWorkingDirectory);
 
-  // Live probes (fs / cached device dirs) can't resolve repoType for a worktree
-  // path that was never registered as a device working dir — so fall back to the
-  // repoType persisted on the topic (the same snapshot the meta hover card reads).
-  // Without this the whole GitStatus is gated out and branch/worktree/PR chips
-  // vanish even though the topic clearly carries git context. The same snapshot
-  // also feeds GitStatus's `fallbackGit`, which covers the harder case: the
-  // recorded worktree directory was DELETED, so the live branch probe reads
-  // nothing and the chips would vanish even with repoType resolved.
+  // When the repoType probe cannot answer — the recorded worktree directory was
+  // DELETED, or the device is offline — fall back to the repoType persisted on
+  // the topic (the same snapshot the meta hover card reads). Without this the
+  // whole GitStatus is gated out and branch/worktree/PR chips vanish even though
+  // the topic clearly carries git context. The same snapshot also feeds
+  // GitStatus's `fallbackGit`, since the live branch probe of a deleted worktree
+  // reads nothing either.
   const topicWorkingDirectoryConfig = useChatStore((s) =>
     topicId ? topicSelectors.getTopicById(topicId)(s)?.metadata?.workingDirectoryConfig : undefined,
   );
@@ -73,17 +72,17 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
     getWorkingDirEffectivePath(topicWorkingDirectoryConfig) === effectiveWorkingDirectory;
   const persistedConfig = topicConfigMatchesEffective ? topicWorkingDirectoryConfig : undefined;
 
-  // Local machine probes the filesystem for repoType; a remote device's repoType
-  // comes from the cached `workingDirs` entry (we can't probe a remote fs here).
-  const localRepoType = useRepoType(isLocalDevice ? effectiveWorkingDirectory : undefined);
+  // Cached repoType of the target device's dir, re-probed in the background —
+  // over IPC locally, through the device's RPC remotely — so a dir that became
+  // a repo after it was registered (cloned into later) is corrected.
+  const live = useRepoTypeState(
+    targetDeviceId ? effectiveWorkingDirectory : undefined,
+    targetDeviceId,
+  );
   const deviceDirs = useDeviceStore(deviceSelectors.getDeviceWorkingDirs(targetDeviceId));
   const currentEntry = effectiveWorkingDirectory
     ? deviceDirs.find((entry) => getEntryEffectivePath(entry) === effectiveWorkingDirectory)
     : undefined;
-  const remoteRepoType =
-    currentEntry?.repoType === 'git' || currentEntry?.repoType === 'github'
-      ? currentEntry.repoType
-      : undefined;
 
   // The SOURCE repo, not the checkout. A persisted-worktree topic has no matching
   // `workingDirs` entry (that's exactly why the repoType probe misses), so without
@@ -95,8 +94,10 @@ const WorkingDirectorySectionInner = memo<WorkingDirectorySectionProps>(({ agent
     getWorkingDirectoryPathString(persistedConfig?.path) ??
     effectiveWorkingDirectory;
 
-  const repoType =
-    (isLocalDevice ? localRepoType : remoteRepoType) ?? getConfigRepoType(persistedConfig);
+  // A probe that answered is authoritative, "not a repo" included (its `.git`
+  // was removed). Only a dir that could not be probed — a deleted worktree, an
+  // offline device — falls back to the topic's persisted snapshot.
+  const repoType = resolveRepoType(live, getConfigRepoType(persistedConfig));
 
   return (
     <>

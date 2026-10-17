@@ -24,10 +24,12 @@ import type {
   DeviceGitUpstreamRef,
   DeviceGitWorkingTreeStatus,
   DeviceGitWorktreeListItem,
+  WorkingDirRepoType,
 } from '@lobechat/types';
 
 import { lambdaClient } from '@/libs/trpc/client';
 import { electronGitService } from '@/services/electron/git';
+import { localFileService } from '@/services/electron/localFileService';
 
 /** Current branch + detached-HEAD state for a working directory (cheap read). */
 export interface GitBranchSummary {
@@ -46,6 +48,14 @@ export interface GitLinkedPRSummary {
 }
 
 /**
+ * A settled repo-type probe: `repoType` absent means the directory exists but is
+ * not a git repo.
+ */
+export interface GitRepoTypeProbe {
+  repoType?: WorkingDirRepoType;
+}
+
+/**
  * Git operations chokepoint. Each call picks its own transport from `deviceId`:
  * a remote / web target (deviceId set) goes through the `device.*` TRPC RPCs;
  * the local desktop talks to Electron over IPC. UI / store / hooks only see this
@@ -53,6 +63,36 @@ export interface GitLinkedPRSummary {
  * symmetric: both transports expose the same granular git operations.
  */
 class GitService {
+  /**
+   * Live repo type of a working directory, read from the filesystem rather than
+   * the cached `workingDirs[].repoType`. Resolves `null` when it cannot be
+   * checked — the device is unreachable, or the path is not an existing
+   * directory — so callers keep their cached value instead of clearing it.
+   */
+  async detectRepoType({
+    deviceId,
+    path,
+  }: {
+    deviceId?: string;
+    path: string;
+  }): Promise<GitRepoTypeProbe | null> {
+    if (!deviceId) {
+      const repoType = await electronGitService.detectRepoType(path);
+      if (repoType) return { repoType };
+      // `undefined` also comes back for a path that is gone or unreadable (an
+      // unmounted volume), so only a path that still stats proves "not a repo".
+      const exists = await localFileService.getLocalFileStats({ path }).then(
+        () => true,
+        () => false,
+      );
+      return exists ? {} : null;
+    }
+
+    const stat = await lambdaClient.device.statPath.query({ deviceId, path });
+    if (!stat?.exists || !stat.isDirectory) return null;
+    return { repoType: stat.repoType };
+  }
+
   /** Local branches of a working directory. */
   listGitBranches({
     deviceId,

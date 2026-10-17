@@ -10,7 +10,7 @@ import {
 import { DeviceModel } from '@/database/models/device';
 import { serverDatabase } from '@/libs/trpc/lambda/middleware';
 
-import { upsertWorkingDir } from './deviceWorkingDirs';
+import { setWorkingDirRepoType, upsertWorkingDir } from './deviceWorkingDirs';
 import { canOperateWorkspaceDevice } from './deviceWorkspaceGuard';
 
 /**
@@ -46,6 +46,27 @@ export const workspaceDeviceWorkingDirProcedures = {
     .mutation(async ({ ctx, input }) => {
       await ctx.workspaceDeviceModel.mutateWorkspaceDeviceWorkingDirs(input.deviceId, (dirs) =>
         upsertWorkingDir(input.entry, dirs),
+      );
+      return { success: true };
+    }),
+
+  /**
+   * Correct one dir's cached `repoType` in place after a live probe disagreed —
+   * e.g. a folder registered while still empty and cloned into afterwards.
+   * Unlike `addWorkspaceDeviceWorkingDir` it neither reorders nor adds entries.
+   */
+  setWorkspaceDeviceWorkingDirRepoType: workingDirProcedure
+    .input(
+      z.object({
+        deviceId: z.string(),
+        path: z.string(),
+        repoType: workingDirConfigSchema.shape.repoType,
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await ctx.workspaceDeviceModel.mutateWorkspaceDeviceWorkingDirs(
+        input.deviceId,
+        (dirs) => setWorkingDirRepoType(dirs, input.path, input.repoType) ?? dirs,
       );
       return { success: true };
     }),

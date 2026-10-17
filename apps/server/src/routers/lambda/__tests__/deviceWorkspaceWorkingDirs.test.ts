@@ -7,7 +7,7 @@ import { workspaceDeviceWorkingDirProcedures } from '../deviceWorkspaceWorkingDi
 
 const mocks = vi.hoisted(() => ({
   findWorkspaceDeviceById: vi.fn(),
-  stored: [] as { path: string; workspace?: unknown }[],
+  stored: [] as { path: string; repoType?: string; workspace?: unknown }[],
 }));
 
 vi.mock('@/business/server/trpc-middlewares/workspaceAuth', async () => {
@@ -80,6 +80,46 @@ describe('workspace device working-dir entries', () => {
     });
 
     expect(mocks.stored).toEqual([{ path: '/b' }]);
+  });
+
+  it('lets a member correct one dir repo type in place without reordering', async () => {
+    withDevice('public');
+
+    await caller('member', 'member').setWorkspaceDeviceWorkingDirRepoType({
+      deviceId: 'device',
+      path: '/b',
+      repoType: 'github',
+    });
+
+    expect(mocks.stored).toEqual([
+      { path: '/a', workspace: { cached: true } },
+      { path: '/b', repoType: 'github' },
+    ]);
+  });
+
+  it('does not add an entry when correcting the repo type of an unknown dir', async () => {
+    withDevice('public');
+
+    await caller('member', 'member').setWorkspaceDeviceWorkingDirRepoType({
+      deviceId: 'device',
+      path: '/c',
+      repoType: 'git',
+    });
+
+    expect(mocks.stored).toEqual([{ path: '/a', workspace: { cached: true } }, { path: '/b' }]);
+  });
+
+  it('rejects a viewer correcting a repo type', async () => {
+    withDevice('public');
+
+    await expect(
+      caller('viewer', 'viewer').setWorkspaceDeviceWorkingDirRepoType({
+        deviceId: 'device',
+        path: '/b',
+        repoType: 'github',
+      }),
+    ).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(mocks.stored).toEqual([{ path: '/a', workspace: { cached: true } }, { path: '/b' }]);
   });
 
   it.each([

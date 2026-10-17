@@ -42,6 +42,13 @@ class DeviceService {
     return lambdaClient.device.addWorkspaceDeviceWorkingDir.mutate(input);
   }
 
+  /** Correct one recent working dir's cached `repoType` in place on a workspace device. */
+  setWorkspaceDeviceWorkingDirRepoType(
+    input: Parameters<DeviceClient['setWorkspaceDeviceWorkingDirRepoType']['mutate']>[0],
+  ) {
+    return lambdaClient.device.setWorkspaceDeviceWorkingDirRepoType.mutate(input);
+  }
+
   /** Remove one recent working dir from a workspace device. */
   removeWorkspaceDeviceWorkingDir(
     input: Parameters<DeviceClient['removeWorkspaceDeviceWorkingDir']['mutate']>[0],

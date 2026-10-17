@@ -1,4 +1,4 @@
-import type { DeviceListItem, WorkingDirEntry } from '@lobechat/types';
+import type { DeviceListItem, WorkingDirEntry, WorkingDirRepoType } from '@lobechat/types';
 import { type SWRResponse } from 'swr';
 
 import { refreshDeviceList } from '@/features/DeviceManager/const';
@@ -6,11 +6,20 @@ import { mutate, useClientDataSWR } from '@/libs/swr';
 import { deviceKeys } from '@/libs/swr/keys';
 import { deviceService } from '@/services/device';
 import { type StoreSetter } from '@/store/types';
+import { isTrpcErrorCode } from '@/utils/trpcError';
 
-import { nextWorkingDirs, removeWorkingDir, WORKING_DIRS_MAX } from './deviceCwd';
+import {
+  nextWorkingDirs,
+  removeWorkingDir,
+  setWorkingDirRepoType,
+  WORKING_DIRS_MAX,
+} from './deviceCwd';
 import { type DeviceStore } from './store';
 
 type Setter = StoreSetter<DeviceStore>;
+
+/** How long a repo-type correction that failed transiently waits before it may be re-sent. */
+const REPO_TYPE_SYNC_RETRY_MS = 60 * 1000;
 
 /**
  * Revalidate both device-list caches: this store's own key and the canonical
@@ -37,6 +46,8 @@ export const deviceSlice = (set: Setter, get: () => DeviceStore, _api?: unknown)
 export class DeviceActionImpl {
   readonly #get: () => DeviceStore;
   readonly #set: Setter;
+  /** `syncWorkingDirRepoType` targets that may not be sent again before the given time. */
+  readonly #repoTypeSyncBlockedUntil = new Map<string, number>();
 
   constructor(set: Setter, get: () => DeviceStore, _api?: unknown) {
     void _api;
@@ -192,6 +203,63 @@ export class DeviceActionImpl {
       await (device.scope === 'workspace'
         ? deviceService.removeWorkspaceDeviceWorkingDir({ deviceId, path })
         : deviceService.updateDevice({ deviceId, workingDirs: updated }));
+    } finally {
+      await revalidateDeviceLists();
+    }
+  };
+
+  /**
+   * Correct a device working dir's cached `repoType` in place after a live probe
+   * disagreed with it — e.g. a folder registered while still empty and cloned
+   * into afterwards. Neither reorders nor adds entries; a no-op when nothing
+   * changes. A failed write must not loop with the revalidation that restores
+   * the stale value, so its target is held back: for the rest of the session
+   * when the server refused it (a viewer cannot edit a shared device), for
+   * `REPO_TYPE_SYNC_RETRY_MS` after a transient failure. A write that succeeds
+   * holds nothing back, so a later legitimate change to the same value is sent.
+   *
+   * Resolves, when the correction was held back, the time it may be sent again
+   * (`Infinity` for never) so a caller can schedule the retry; otherwise
+   * `undefined`.
+   */
+  syncWorkingDirRepoType = async (
+    deviceId: string,
+    path: string,
+    repoType: WorkingDirRepoType | undefined,
+  ): Promise<number | undefined> => {
+    const device = this.#get().devices.find((d) => d.deviceId === deviceId);
+    if (!device) return;
+    const updated = setWorkingDirRepoType(device.workingDirs ?? [], path, repoType);
+    if (!updated) return;
+
+    const syncKey = JSON.stringify([deviceId, path, repoType ?? null]);
+    const blockedUntil = this.#repoTypeSyncBlockedUntil.get(syncKey) ?? 0;
+    if (blockedUntil > Date.now()) return blockedUntil;
+    // Held back while in flight too, so a re-render cannot send it twice.
+    this.#repoTypeSyncBlockedUntil.set(syncKey, Number.POSITIVE_INFINITY);
+
+    this.#set(
+      {
+        devices: this.#get().devices.map((d) =>
+          d.deviceId === deviceId ? { ...d, workingDirs: updated } : d,
+        ) as DeviceListItem[],
+      },
+      false,
+      'syncWorkingDirRepoType',
+    );
+
+    try {
+      await (device.scope === 'workspace'
+        ? deviceService.setWorkspaceDeviceWorkingDirRepoType({ deviceId, path, repoType })
+        : deviceService.updateDevice({ deviceId, workingDirs: updated }));
+      this.#repoTypeSyncBlockedUntil.delete(syncKey);
+    } catch (error) {
+      const refused = isTrpcErrorCode(error, 'FORBIDDEN') || isTrpcErrorCode(error, 'UNAUTHORIZED');
+      this.#repoTypeSyncBlockedUntil.set(
+        syncKey,
+        refused ? Number.POSITIVE_INFINITY : Date.now() + REPO_TYPE_SYNC_RETRY_MS,
+      );
+      throw error;
     } finally {
       await revalidateDeviceLists();
     }

@@ -1,7 +1,7 @@
 import type { WorkingDirEntry } from '@lobechat/types';
 import { describe, expect, it } from 'vitest';
 
-import { nextWorkingDirs, WORKING_DIRS_MAX } from './deviceCwd';
+import { nextWorkingDirs, setWorkingDirRepoType, WORKING_DIRS_MAX } from './deviceCwd';
 
 const entry = (path: string, repoType?: 'git' | 'github'): WorkingDirEntry => ({ path, repoType });
 
@@ -85,5 +85,31 @@ describe('nextWorkingDirs', () => {
 
   it('defaults to an empty current list', () => {
     expect(nextWorkingDirs(entry('/a'))).toEqual([entry('/a')]);
+  });
+});
+
+describe('setWorkingDirRepoType', () => {
+  it('corrects the matching entry in place without reordering', () => {
+    expect(setWorkingDirRepoType([{ path: '/a' }, { path: '/b' }], '/b', 'github')).toEqual([
+      { path: '/a' },
+      { path: '/b', repoType: 'github' },
+    ]);
+  });
+
+  it('matches an entry by its active worktree path', () => {
+    expect(
+      setWorkingDirRepoType([{ git: { activeWorktree: '/a-fix' }, path: '/a' }], '/a-fix', 'git'),
+    ).toEqual([{ git: { activeWorktree: '/a-fix' }, path: '/a', repoType: 'git' }]);
+  });
+
+  it('clears the repo type of a dir that is no longer a repo', () => {
+    expect(setWorkingDirRepoType([{ path: '/a', repoType: 'git' }], '/a', undefined)).toEqual([
+      { path: '/a' },
+    ]);
+  });
+
+  it('returns undefined when no entry changes', () => {
+    expect(setWorkingDirRepoType([{ path: '/a', repoType: 'git' }], '/a', 'git')).toBeUndefined();
+    expect(setWorkingDirRepoType([{ path: '/a' }], '/missing', 'git')).toBeUndefined();
   });
 });

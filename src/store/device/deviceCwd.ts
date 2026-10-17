@@ -1,4 +1,5 @@
-import type { WorkingDirEntry } from '@lobechat/types';
+import type { WorkingDirEntry, WorkingDirRepoType } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 
 /** Max number of working directories persisted per device. Matches the
  * `workingDirs` cap enforced by the `device.updateDevice` tRPC input. */
@@ -36,3 +37,25 @@ export const removeWorkingDir = (
   path: string,
   current: readonly WorkingDirEntry[] = [],
 ): WorkingDirEntry[] => current.filter((d) => d.path !== path);
+
+/**
+ * Correct the cached `repoType` of the entry for `path` (matched by source or
+ * active-worktree path, like the readers) in place — no reordering, no new
+ * entry. `undefined` clears it (the dir is no longer a repo). Returns
+ * `undefined` when no entry changes. Mirrors the server's `setWorkingDirRepoType`.
+ */
+export const setWorkingDirRepoType = (
+  current: readonly WorkingDirEntry[],
+  path: string,
+  repoType: WorkingDirRepoType | undefined,
+): WorkingDirEntry[] | undefined => {
+  let changed = false;
+  const next = current.map((dir) => {
+    if (dir.path !== path && getWorkingDirEffectivePath(dir) !== path) return dir;
+    if (dir.repoType === repoType) return dir;
+    changed = true;
+    const { repoType: _previous, ...rest } = dir;
+    return repoType ? { ...rest, repoType } : rest;
+  });
+  return changed ? next : undefined;
+};

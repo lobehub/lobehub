@@ -1,4 +1,5 @@
-import type { WorkingDirEntry } from '@lobechat/types';
+import type { WorkingDirEntry, WorkingDirRepoType } from '@lobechat/types';
+import { getWorkingDirEffectivePath } from '@lobechat/types';
 
 /**
  * Re-attach the server-owned workspace-init cache (`workspace` /
@@ -46,4 +47,27 @@ export const upsertWorkingDir = (
   if (!path) return [...current];
   const [next] = preserveWorkspaceCache([{ ...entry, path }], current);
   return [next, ...current.filter((dir) => dir.path !== path)].slice(0, WORKING_DIRS_MAX);
+};
+
+/**
+ * Correct the cached `repoType` of the entry for `path` (matched by source or
+ * active-worktree path, like the readers) in place — no reordering, no new
+ * entry, every other field kept. `undefined` clears it (the dir is no longer a
+ * repo). Returns `undefined` when no entry changes. Mirrors the client's
+ * optimistic `setWorkingDirRepoType`.
+ */
+export const setWorkingDirRepoType = (
+  current: readonly WorkingDirEntry[],
+  path: string,
+  repoType: WorkingDirRepoType | undefined,
+): WorkingDirEntry[] | undefined => {
+  let changed = false;
+  const next = current.map((dir) => {
+    if (dir.path !== path && getWorkingDirEffectivePath(dir) !== path) return dir;
+    if (dir.repoType === repoType) return dir;
+    changed = true;
+    const { repoType: _previous, ...rest } = dir;
+    return repoType ? { ...rest, repoType } : rest;
+  });
+  return changed ? next : undefined;
 };

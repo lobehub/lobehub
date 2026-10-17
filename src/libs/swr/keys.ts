@@ -603,7 +603,7 @@ export const deviceKeys = {
     path,
   ]),
   listDevices: def('device:listDevices', () => ['device:listDevices']),
-  repoType: def('device:repoType', (path: string) => ['device:repoType', path]),
+  repoType: def('device:repoType', (id: string, path: string) => ['device:repoType', id, path]),
 };
 
 // ---- user memory --------------------------------------------------------
