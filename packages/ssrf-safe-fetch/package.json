@@ -8,7 +8,8 @@
       "browser": "./index.browser.ts",
       "node": "./index.ts",
       "default": "./index.ts"
-    }
+    },
+    "./policy": "./policy.ts"
   },
   "main": "index.ts",
   "scripts": {
