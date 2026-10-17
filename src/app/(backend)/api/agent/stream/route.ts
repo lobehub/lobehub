@@ -157,6 +157,7 @@ export async function GET(request: NextRequest) {
       const cleanup = () => {
         abortController.abort();
         clearInterval(heartbeatInterval);
+        request.signal?.removeEventListener('abort', cleanup);
         log(`SSE connection closed for operation ${operationId}`);
       };
 
