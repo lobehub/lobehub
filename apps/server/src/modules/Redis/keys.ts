@@ -21,6 +21,11 @@ export const RedisKeyNamespace = {
    */
   AGENT_SIGNAL: 'agent-signal',
   /**
+   * Agent identity keys — replay claims for agent-account provider webhooks,
+   * shared by every instance that may receive a delivery.
+   */
+  AGENT_IDENTITY: 'agent-identity',
+  /**
    * AI generation related keys (agent welcome, placeholders, etc.)
    */
   AI_GENERATION: 'aiGeneration',
@@ -80,6 +85,17 @@ export const RedisKeys = {
       `nightly_topics:v1:${userId}:${localDate}`,
   },
   /**
+   * Agent identity scope — see {@link RedisKeyNamespace.AGENT_IDENTITY}.
+   */
+  agentIdentity: {
+    /**
+     * Replay claim on one provider webhook delivery.
+     * Full key: agent-identity:webhook_event:v1:{provider}:{eventId}
+     */
+    webhookEvent: (provider: string, eventId: string): string =>
+      `webhook_event:v1:${provider}:${eventId}`,
+  },
+  /**
    * AI generation scope - for AI-generated content like welcome messages
    */
   aiGeneration: {
@@ -133,6 +149,7 @@ export const RedisKeys = {
  * land under another scope's prefix. Every scope must be mapped.
  */
 export const RedisKeyScopeNamespace = {
+  agentIdentity: RedisKeyNamespace.AGENT_IDENTITY,
   agentSignal: RedisKeyNamespace.AGENT_SIGNAL,
   aiGeneration: RedisKeyNamespace.AI_GENERATION,
   lobechat: RedisKeyNamespace.LOBEHUB,
