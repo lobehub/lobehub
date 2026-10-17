@@ -242,6 +242,9 @@ export const getLLMConfig = () => {
       ENABLED_STRAICO: z.boolean(),
       STRAICO_API_KEY: z.string().optional(),
 
+      ENABLED_CHEAPERINFERENCE: z.boolean(),
+      CHEAPERINFERENCE_API_KEY: z.string().optional(),
+
       ENABLED_LOBEHUB: z.boolean(),
 
       ENABLED_OPENCODEZEN: z.boolean(),
@@ -501,6 +504,9 @@ export const getLLMConfig = () => {
 
       ENABLED_STRAICO: !!process.env.STRAICO_API_KEY,
       STRAICO_API_KEY: process.env.STRAICO_API_KEY,
+
+      ENABLED_CHEAPERINFERENCE: !!process.env.CHEAPERINFERENCE_API_KEY,
+      CHEAPERINFERENCE_API_KEY: process.env.CHEAPERINFERENCE_API_KEY,
 
       ENABLED_LOBEHUB: !!process.env.ENABLED_LOBEHUB,
 
