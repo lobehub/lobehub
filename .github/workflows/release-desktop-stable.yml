@@ -385,7 +385,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
@@ -431,7 +431,7 @@ jobs:
     # 手动触发时可选择跳过
     if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.skip_s3_upload) }}
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}

@@ -273,7 +273,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
@@ -313,7 +313,7 @@ jobs:
     name: Publish Beta Shell and Core r0
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         with:
           app-id: ${{ vars.LOBEHUB_BOT_APP_ID }}
